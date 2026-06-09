@@ -1,5 +1,5 @@
 import type { AuthResponse } from "@/types/api";
-import { clearAuthStorage, getAuthValue, removeAuthValue, setAuthValue } from "@/lib/storage/auth-storage";
+import { clearAuthStorage, getAuthValue, saveAuthSession } from "@/lib/storage/auth-storage";
 import { getOfflineScope } from "@/lib/offline/context";
 
 export interface ApiErrorData {
@@ -183,11 +183,12 @@ async function refreshAuthSession(refreshToken: string) {
 function persistRefreshedAuth(refreshed: AuthResponse) {
   const token = refreshed.accessToken || refreshed.token;
   if (!token) throw new ApiClientError("Refresh response missing access token", 401);
-  setAuthValue("accessToken", token);
-  setAuthValue("refreshToken", refreshed.refreshToken);
-  setAuthValue("user", JSON.stringify(refreshed.user));
-  if (refreshed.shop) setAuthValue("shop", JSON.stringify(refreshed.shop));
-  else removeAuthValue("shop");
+  saveAuthSession({
+    accessToken: token,
+    refreshToken: refreshed.refreshToken,
+    user: refreshed.user,
+    shop: refreshed.shop ?? null,
+  });
   return token;
 }
 

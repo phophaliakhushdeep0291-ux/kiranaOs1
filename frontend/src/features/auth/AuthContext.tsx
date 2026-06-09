@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { useLocation } from "wouter";
 import { AUTH_SESSION_EXPIRED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type User, type Shop } from "@/lib/api/client";
-import { clearAuthStorage, getAuthValue, migrateAuthFromLocalStorage, removeAuthValue, setAuthValue } from "@/lib/storage/auth-storage";
+import { clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, removeAuthValue, saveAuthSession, setAuthValue } from "@/lib/storage/auth-storage";
 import { writeAuditLog } from "@/features/audit-logs/local-actions";
 import { activateDevice } from "@/features/devices/api";
 import { ensureCurrentDeviceRegistered, writeOfflineLicenseToken } from "@/features/devices/license";
@@ -22,11 +22,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function persistAuth(data: AuthResponse) {
   const token = data.accessToken || data.token;
   if (!token) throw new Error("Login response did not include an access token");
-  setAuthValue("accessToken", token);
-  setAuthValue("refreshToken", data.refreshToken);
-  setAuthValue("user", JSON.stringify(data.user));
-  if (data.shop) setAuthValue("shop", JSON.stringify(data.shop));
-  else removeAuthValue("shop");
+  saveAuthSession({
+    accessToken: token,
+    refreshToken: data.refreshToken,
+    user: data.user,
+    shop: data.shop ?? null,
+  });
   return { token, user: data.user, shop: data.shop ?? null };
 }
 
@@ -70,10 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     migrateAuthFromLocalStorage();
     setAuthTokenGetter(() => getAuthValue("accessToken"));
 
-    const token = getAuthValue("accessToken");
-    const refreshToken = getAuthValue("refreshToken");
-    const storedUser = getAuthValue("user");
-    const storedShop = getAuthValue("shop");
+    const session = loadAuthSession();
+    const token = session.accessToken ?? null;
+    const refreshToken = session.refreshToken ?? null;
+    const storedUser = session.user ?? null;
+    const storedShop = session.shop ?? null;
 
     if (!token && !refreshToken) {
       setIsLoading(false);
@@ -85,16 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token) setAccessToken(token);
 
     if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser) as User;
-        const parsedShop = storedShop ? JSON.parse(storedShop) as Shop : null;
-        setUser(parsedUser);
-        setShop(parsedShop);
-        setIsLoading(false);
-      } catch {
-        removeAuthValue("user");
-        removeAuthValue("shop");
-      }
+      setUser(storedUser);
+      setShop(storedShop);
+      setIsLoading(false);
     }
 
     async function verifyInBackground() {
@@ -105,15 +100,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(current.user);
           setShop(current.shop ?? null);
           setAccessToken(getAuthValue("accessToken"));
-          setAuthValue("user", JSON.stringify(current.user));
-          if (current.shop) setAuthValue("shop", JSON.stringify(current.shop));
-          else removeAuthValue("shop");
+          saveAuthSession({ user: current.user, shop: current.shop ?? null });
           void activateCurrentDeviceSafely();
           setIsLoading(false);
           return;
         }
       } catch (error) {
         if (isTemporaryAuthCheckFailure(error)) {
+          // Network error or server unavailable — keep the user logged in (offline mode).
           if (!storedUser && !isStale()) setIsLoading(false);
           return;
         }
@@ -178,11 +172,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (token: string | undefined | null, refresh: string | undefined | null, userData: User, shopData?: Shop | null) => {
     if (!token || !refresh) throw new Error("Login response missing token or refresh token");
     authGenerationRef.current += 1;
-    setAuthValue("accessToken", token);
-    setAuthValue("refreshToken", refresh);
-    setAuthValue("user", JSON.stringify(userData));
-    if (shopData) setAuthValue("shop", JSON.stringify(shopData));
-    else removeAuthValue("shop");
+    saveAuthSession({
+      accessToken: token,
+      refreshToken: refresh,
+      user: userData,
+      shop: shopData ?? null,
+    });
     setAccessToken(token);
     setUser(userData);
     setShop(shopData ?? null);
