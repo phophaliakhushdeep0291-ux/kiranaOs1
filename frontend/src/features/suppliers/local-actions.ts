@@ -1,0 +1,76 @@
+import { offlineDB } from "@/lib/offline/db";
+import { ownerPinRequiredActionSchema, supplierCreationSchema } from "@/lib/validation";
+import { createLocalId, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
+import { enqueueOutboxOperation } from "@/features/sync/outbox";
+import { makeLocalEntity, parseOrThrow, touchLocalEntity } from "@/lib/offline/actions/utils";
+import type { Supplier } from "@/types/api";
+import { writeAuditLog } from "@/features/audit-logs/local-actions";
+
+const CACHE_KEY = "suppliers";
+
+function toSupplier(data: Partial<Supplier>, id = createLocalId("supplier"), existing?: Supplier): Supplier {
+  const now = new Date().toISOString();
+  return {
+    ...existing,
+    id,
+    name: data.name?.trim() || existing?.name || "Supplier",
+    mobile: data.mobile?.trim() || existing?.mobile || null,
+    address: data.address ?? existing?.address ?? null,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+}
+
+export async function createSupplierLocalFirst(data: Partial<Supplier>): Promise<Supplier> {
+  const validated = parseOrThrow(supplierCreationSchema, { ...data, name: data.name ?? "" }) as unknown as Partial<Supplier>;
+  const supplier = makeLocalEntity(toSupplier(validated), "supplier", "pending_sync");
+  await offlineDB.put("suppliers", supplier);
+  upsertCachedListItem<Supplier>(CACHE_KEY, supplier, 1000);
+  await writeAuditLog({ action: "supplier_created", entityType: "supplier", entityId: supplier.id, entityLabel: supplier.name, newValue: supplier, summary: `Supplier ${supplier.name} created` });
+  await enqueueOutboxOperation({
+    entity_type: "supplier",
+    entity_id: supplier.id,
+    operation_type: "CREATE_SUPPLIER",
+    payload: { localSupplierId: supplier.id, supplier: data },
+  });
+  return supplier;
+}
+
+export async function updateSupplierLocalFirst(id: string, data: Partial<Supplier>): Promise<Supplier> {
+  const existing = await offlineDB.getAll<Supplier>("suppliers").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  const validated = parseOrThrow(supplierCreationSchema, { ...existing, ...data, name: data.name ?? existing?.name ?? "" }) as unknown as Partial<Supplier>;
+  const supplier = touchLocalEntity(toSupplier(validated, id, existing), "pending_sync");
+  await offlineDB.put("suppliers", supplier);
+  upsertCachedListItem<Supplier>(CACHE_KEY, supplier, 1000);
+  await writeAuditLog({ action: "supplier_edited", entityType: "supplier", entityId: id, entityLabel: supplier.name, oldValue: existing ?? null, newValue: supplier, summary: `Supplier ${supplier.name} edited` });
+  await enqueueOutboxOperation({
+    entity_type: "supplier",
+    entity_id: id,
+    operation_type: "UPDATE_SUPPLIER",
+    payload: { supplierId: id, supplier: data },
+  });
+  return supplier;
+}
+
+export interface DeleteSupplierLocalFirstInput {
+  id: string;
+  ownerPin: string;
+  reason?: string;
+}
+
+export async function deleteSupplierLocalFirst(input: DeleteSupplierLocalFirstInput): Promise<{ success: true; pendingSync: true }> {
+  const approval = parseOrThrow(ownerPinRequiredActionSchema, { action: "delete_supplier", ownerPin: input.ownerPin, reason: input.reason, entityId: input.id });
+  const id = input.id;
+  const now = new Date().toISOString();
+  const existing = await offlineDB.getAll<Supplier>("suppliers").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  await offlineDB.put("suppliers", { ...(existing ?? { id, name: "Deleted supplier" }), id, deletedAt: now, deleted_at: now, updatedAt: now, sync_status: "pending_sync" });
+  removeCachedListItem<Supplier>(CACHE_KEY, id);
+  await writeAuditLog({ action: "supplier_deleted", entityType: "supplier", entityId: id, entityLabel: existing?.name ?? id, oldValue: existing ?? null, reason: (input.reason?.trim() || "Moved to recycle bin"), ownerPinProvided: true, summary: `Supplier ${existing?.name ?? id} moved to recycle bin` });
+  await enqueueOutboxOperation({
+    entity_type: "supplier",
+    entity_id: id,
+    operation_type: "DELETE_SUPPLIER_PENDING",
+    payload: { supplierId: id, ownerPin: input.ownerPin, reason: input.reason?.trim(), ownerPinProvided: true },
+  });
+  return { success: true, pendingSync: true };
+}

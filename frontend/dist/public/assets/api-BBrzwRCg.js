@@ -1,0 +1,1 @@
+import{a as t,b as n}from"./index-DRjCWdMp.js";function o(){return t("/inventory")}function i(){return t("/inventory/low-stock")}function u(e){return t(`/inventory/ledger${n(e)}`)}export{i as a,u as b,o as g};

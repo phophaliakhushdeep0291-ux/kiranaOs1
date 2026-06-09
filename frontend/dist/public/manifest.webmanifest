@@ -1,0 +1,20 @@
+{
+  "name": "KiranaOS POS",
+  "short_name": "KiranaOS",
+  "description": "Offline-first kirana POS billing, udhar and inventory app.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "orientation": "any",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

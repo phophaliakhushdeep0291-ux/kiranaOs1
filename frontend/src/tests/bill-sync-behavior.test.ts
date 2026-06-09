@@ -1,0 +1,566 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { BillInputBillType, BillPaymentMode, type BillInput } from "@/types/api";
+
+interface Row extends Record<string, unknown> {
+  id?: string;
+  key?: string;
+  clientEventId?: string;
+  local_id?: string;
+  tenant_id?: string;
+  store_id?: string;
+}
+
+type Predicate = (row: Row) => boolean;
+
+const dbState = vi.hoisted(() => {
+  const scope = {
+    tenant_id: "tenant_sync_test",
+    store_id: "store_sync_test",
+    device_id: "device_sync_test",
+  };
+  const tableNames = [
+    "products",
+    "customers",
+    "bills",
+    "bill_items",
+    "payments",
+    "customer_ledger",
+    "inventory_movements",
+    "suppliers",
+    "settings",
+    "sync_outbox",
+    "sync_cursor",
+    "sync_conflicts",
+    "id_mappings",
+    "local_audit_logs",
+    "subscription_cache",
+    "device_license_cache",
+    "staff_users",
+  ];
+  const tables: Record<string, Row[]> = {};
+  const primaryKey = (table: string) => {
+    if (table === "settings") return "key";
+    if (table === "sync_outbox") return "clientEventId";
+    if (table === "id_mappings") return "local_id";
+    return "id";
+  };
+  const reset = () => {
+    for (const table of tableNames) tables[table] = [];
+  };
+  const rows = (table: string) => {
+    tables[table] ??= [];
+    return tables[table];
+  };
+  const clone = <T>(value: T): T => value === undefined ? value : JSON.parse(JSON.stringify(value)) as T;
+  const matchesScope = (row: Row) =>
+    row.tenant_id === scope.tenant_id && row.store_id === scope.store_id;
+  const putInto = (table: string, value: Row) => {
+    const row = clone(value);
+    const pk = primaryKey(table);
+    const key = row[pk];
+    if (typeof key !== "string") throw new Error(`Missing primary key ${pk} for ${table}`);
+    const list = rows(table);
+    const index = list.findIndex((existing) => existing[pk] === key);
+    if (index >= 0) list[index] = row;
+    else list.push(row);
+  };
+
+  class FakeQuery {
+    private readonly tableName: string;
+    private readonly predicates: Predicate[];
+
+    constructor(tableName: string, predicates: Predicate[]) {
+      this.tableName = tableName;
+      this.predicates = predicates;
+    }
+
+    filter(predicate: Predicate) {
+      return new FakeQuery(this.tableName, [...this.predicates, predicate]);
+    }
+
+    private resultRows() {
+      return clone(rows(this.tableName).filter((row) => this.predicates.every((predicate) => predicate(row))));
+    }
+
+    async toArray() {
+      return this.resultRows();
+    }
+
+    async first() {
+      return this.resultRows()[0];
+    }
+
+    async count() {
+      return this.resultRows().length;
+    }
+
+    async modify(mutator: (row: Row) => void) {
+      for (const row of rows(this.tableName)) {
+        if (!this.predicates.every((predicate) => predicate(row))) continue;
+        mutator(row);
+      }
+    }
+  }
+
+  class FakeWhereClause {
+    private readonly tableName: string;
+    private readonly indexName: string;
+
+    constructor(tableName: string, indexName: string) {
+      this.tableName = tableName;
+      this.indexName = indexName;
+    }
+
+    equals(value: unknown) {
+      return new FakeQuery(this.tableName, [((row: Row) => {
+        if (this.indexName === "[tenant_id+store_id]") {
+          return Array.isArray(value) && row.tenant_id === value[0] && row.store_id === value[1];
+        }
+        return row[this.indexName] === value;
+      })]);
+    }
+  }
+
+  class FakeTable {
+    readonly name: string;
+
+    constructor(name: string) {
+      this.name = name;
+    }
+
+    async get(id: string) {
+      const pk = primaryKey(this.name);
+      return clone(rows(this.name).find((row) => row[pk] === id));
+    }
+
+    async put(value: Row) {
+      putInto(this.name, value);
+    }
+
+    async delete(id: string) {
+      const pk = primaryKey(this.name);
+      tables[this.name] = rows(this.name).filter((row) => row[pk] !== id);
+    }
+
+    async bulkDelete(ids: string[]) {
+      const pk = primaryKey(this.name);
+      const idSet = new Set(ids);
+      tables[this.name] = rows(this.name).filter((row) => !idSet.has(String(row[pk])));
+    }
+
+    where(indexName: string) {
+      return new FakeWhereClause(this.name, indexName);
+    }
+
+    filter(predicate: Predicate) {
+      return new FakeQuery(this.name, [predicate]);
+    }
+
+    async toArray() {
+      return clone(rows(this.name));
+    }
+
+    async sortBy(key: string) {
+      return clone(rows(this.name)).sort((a, b) => String(a[key] ?? "").localeCompare(String(b[key] ?? "")));
+    }
+  }
+
+  const tableInstances = Object.fromEntries(tableNames.map((name) => [name, new FakeTable(name)])) as Record<string, FakeTable>;
+  reset();
+  return { scope, tableNames, tables, rows, reset, clone, matchesScope, putInto, tableInstances };
+});
+
+vi.mock("@/lib/offline/context", () => ({
+  getOfflineScope: () => dbState.scope,
+  nowIso: () => "2026-06-06T09:30:00.000Z",
+}));
+
+vi.mock("@/lib/offline/db", () => {
+  const scopedRows = (table: string) => dbState.rows(table).filter(dbState.matchesScope);
+  const isPendingNow = (event: Row) =>
+    ["PENDING", "FAILED"].includes(String(event.status)) &&
+    (!event.next_retry_at || new Date(String(event.next_retry_at)).getTime() <= Date.now());
+
+  const dexieDB = {
+    open: vi.fn(async () => undefined),
+    table: vi.fn((name: string) => dbState.tableInstances[name]),
+    transaction: vi.fn(async (_mode: string, _tables: unknown, callback: () => Promise<void>) => callback()),
+    ...dbState.tableInstances,
+  };
+
+  const offlineDB = {
+    init: vi.fn(async () => undefined),
+    getAll: vi.fn(async (table: string) => dbState.clone(scopedRows(table))),
+    putRecentCache: vi.fn(async (key: string, value: unknown, days = 30) => {
+      dbState.putInto("settings", {
+        key: `cache:${key}`,
+        value,
+        tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id,
+        updated_at: "2026-06-06T09:30:00.000Z",
+        expires_at: Date.now() + days * 24 * 60 * 60 * 1000,
+      });
+    }),
+    transaction: vi.fn(async (_tables: string[], callback: (tx: {
+      put: (table: string, value: Row) => Promise<void>;
+      putMany: (table: string, values: Row[]) => Promise<void>;
+      enqueueOutboxOperation: (event: Row) => Promise<void>;
+      setSetting: (key: string, value: unknown, expiresAt?: number | null) => Promise<void>;
+    }) => Promise<void>) => {
+      const snapshot = dbState.clone(dbState.tables);
+      const tx = {
+        put: vi.fn(async (table: string, value: Row) => dbState.putInto(table, value)),
+        putMany: vi.fn(async (table: string, values: Row[]) => {
+          for (const value of values) dbState.putInto(table, value);
+        }),
+        enqueueOutboxOperation: vi.fn(async (event: Row) => dbState.putInto("sync_outbox", event)),
+        setSetting: vi.fn(async (key: string, value: unknown, expiresAt?: number | null) => dbState.putInto("settings", {
+          key,
+          value,
+          tenant_id: dbState.scope.tenant_id,
+          store_id: dbState.scope.store_id,
+          updated_at: "2026-06-06T09:30:00.000Z",
+          expires_at: expiresAt ?? null,
+        })),
+      };
+      try {
+        await callback(tx);
+      } catch (error) {
+        dbState.tables = snapshot;
+        throw error;
+      }
+    }),
+    getPendingEvents: vi.fn(async () => dbState.clone(scopedRows("sync_outbox").filter(isPendingNow).sort((a, b) => Number(a.createdAt ?? 0) - Number(b.createdAt ?? 0)))),
+    getPendingCount: vi.fn(async () => scopedRows("sync_outbox").filter((event) => ["PENDING", "FAILED"].includes(String(event.status))).length),
+    updatePendingEventStatus: vi.fn(async (clientEventIds: string[], status: string, errorMessage?: string) => {
+      const idSet = new Set(clientEventIds);
+      for (const event of dbState.rows("sync_outbox")) {
+        if (!idSet.has(String(event.clientEventId)) || !dbState.matchesScope(event)) continue;
+        const retryCount = status === "FAILED" ? Number(event.retry_count ?? 0) + 1 : Number(event.retry_count ?? 0);
+        event.status = status;
+        event.sync_status = status === "SYNCING" ? "syncing" : status === "SYNCED" ? "synced" : status === "FAILED" ? "failed" : status === "CONFLICT" ? "conflict" : event.sync_status;
+        event.retry_count = retryCount;
+        event.attempts = retryCount;
+        event.error_message = status === "SYNCED" ? null : errorMessage ?? null;
+        event.last_error = status === "SYNCED" ? null : errorMessage ?? null;
+        event.last_attempt_at = "2026-06-06T09:30:00.000Z";
+        event.next_retry_at = status === "FAILED" ? "2026-06-06T09:29:00.000Z" : null;
+      }
+    }),
+  };
+
+  return {
+    dexieDB,
+    offlineDB,
+    rowMatchesCurrentScope: (row: Row) => dbState.matchesScope(row),
+    filterRowsForCurrentScope: <T extends Row>(rows: T[]) => rows.filter((row) => dbState.matchesScope(row)),
+  };
+});
+
+vi.mock("@/features/sync/api", () => ({
+  syncPush: vi.fn(),
+  syncPull: vi.fn(async () => ({ changes: [], cursor: "cursor_after_pull" })),
+  getSyncStatus: vi.fn(async () => ({ allowed: true })),
+  requestSyncRetry: vi.fn(),
+}));
+
+vi.mock("@/features/subscription/access", () => ({
+  getCurrentSubscriptionSnapshot: vi.fn(async () => ({ cloudSyncAllowed: true })),
+}));
+
+import { offlineDB } from "@/lib/offline/db";
+import { createBillLocalFirst } from "@/features/billing/local-actions";
+import { syncPush } from "@/features/sync/api";
+import { pushPendingOutboxOperations } from "@/features/sync/engine";
+import {
+  dedupeBillsForDisplay,
+  dedupePaymentsForDisplay,
+  reconcileSyncedBillFromPush,
+} from "@/features/sync/bill-reconciliation";
+
+const mockedSyncPush = vi.mocked(syncPush);
+
+function tableRows(table: string) {
+  return dbState.rows(table);
+}
+
+function scopedRows(table: string) {
+  return tableRows(table).filter(dbState.matchesScope);
+}
+
+function activeRows(table: string) {
+  return scopedRows(table).filter((row) => row.deleted_at == null && row.deletedAt == null);
+}
+
+function markNonBillCreateOutboxAsSynced() {
+  for (const row of scopedRows("sync_outbox")) {
+    if (row.operation_type === "CREATE_BILL") continue;
+    row.status = "SYNCED";
+    row.sync_status = "synced";
+  }
+}
+
+function seedCustomer() {
+  dbState.putInto("customers", {
+    id: "server_customer_1",
+    local_id: "server_customer_1",
+    tenant_id: dbState.scope.tenant_id,
+    store_id: dbState.scope.store_id,
+    device_id: dbState.scope.device_id,
+    name: "Ramesh",
+    type: "regular",
+    udharAmount: 25,
+    totalUdhar: 25,
+    created_at: "2026-06-06T09:00:00.000Z",
+    updated_at: "2026-06-06T09:00:00.000Z",
+    deleted_at: null,
+    version: 1,
+    sync_status: "synced",
+  });
+}
+
+function billInput(overrides: Partial<BillInput> = {}): BillInput {
+  return {
+    billType: BillInputBillType.normal_sale,
+    customerId: "server_customer_1",
+    customerName: "Ramesh",
+    items: [
+      {
+        productId: "server_product_1",
+        name: "Sugar",
+        quantity: 2,
+        enteredUnit: "kg",
+        ratePerRateUnit: 50,
+        gstRate: 0,
+      },
+    ],
+    discount: 0,
+    actualAmount: 100,
+    buyerPaidAmount: 100,
+    payments: [{ mode: BillPaymentMode.cash, amount: 100 }],
+    ...overrides,
+  };
+}
+
+async function createCreditBillForSync() {
+  return createBillLocalFirst(billInput({
+    buyerPaidAmount: 40,
+    payments: [
+      { mode: BillPaymentMode.cash, amount: 40 },
+      { mode: BillPaymentMode.credit, amount: 60 },
+    ],
+  }));
+}
+
+
+function createServerAutoPaidBadResult(event: Row, localBillId: string) {
+  return {
+    clientEventId: String(event.clientEventId),
+    eventId: String(event.clientEventId),
+    idempotency_key: String(event.idempotency_key),
+    success: true,
+    status: "SYNCED",
+    entity_type: "bill",
+    serverBillId: "server_bill_auto_paid_bad",
+    localBillId,
+    bill: {
+      id: "server_bill_auto_paid_bad",
+      local_id: localBillId,
+      billNo: "BILL-BAD-PAID",
+      billNumber: "BILL-BAD-PAID",
+      status: "completed",
+      totalAmount: 100,
+      grandTotal: 100,
+      paidAmount: 100,
+      creditAmount: 0,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      payments: [
+        {
+          id: "server_payment_bad_full",
+          mode: BillPaymentMode.cash,
+          amount: 100,
+          bill_id: "server_bill_auto_paid_bad",
+          tenant_id: dbState.scope.tenant_id,
+          store_id: dbState.scope.store_id,
+        },
+      ],
+    },
+  };
+}
+
+function createServerSuccessResult(event: Row, localBillId: string) {
+  return {
+    clientEventId: String(event.clientEventId),
+    eventId: String(event.clientEventId),
+    idempotency_key: String(event.idempotency_key),
+    success: true,
+    status: "SYNCED",
+    entity_type: "bill",
+    serverBillId: "server_bill_1",
+    localBillId,
+    bill: {
+      id: "server_bill_1",
+      local_id: localBillId,
+      billNo: "BILL-0001",
+      billNumber: "BILL-0001",
+      status: "completed",
+      totalAmount: 100,
+      grandTotal: 100,
+      paidAmount: 40,
+      creditAmount: 60,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      items: [
+        {
+          id: "server_bill_item_1",
+          name: "Sugar",
+          quantity: 2,
+          bill_id: "server_bill_1",
+          tenant_id: dbState.scope.tenant_id,
+          store_id: dbState.scope.store_id,
+        },
+      ],
+      payments: [
+        {
+          id: "server_payment_1",
+          mode: BillPaymentMode.cash,
+          amount: 40,
+          bill_id: "server_bill_1",
+          tenant_id: dbState.scope.tenant_id,
+          store_id: dbState.scope.store_id,
+        },
+      ],
+      customer_ledger: [
+        {
+          id: "server_ledger_1",
+          type: "BILL",
+          amount: 60,
+          bill_id: "server_bill_1",
+          source_id: "server_bill_1",
+          tenant_id: dbState.scope.tenant_id,
+          store_id: dbState.scope.store_id,
+        },
+      ],
+    },
+  };
+}
+
+describe("bill sync behavior", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbState.reset();
+    seedCustomer();
+  });
+
+  it("offline bill creates a stable local_id and CREATE_BILL operation has idempotency_key", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    const storedBill = scopedRows("bills")[0];
+    const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+
+    expect(storedBill).toEqual(expect.objectContaining({ id: bill.id, local_id: bill.id, sync_status: "pending_sync" }));
+    expect((bill as Record<string, unknown>).local_id).toBe(bill.id);
+    expect(createBillOutbox).toBeDefined();
+    expect(createBillOutbox).toEqual(expect.objectContaining({ entity_id: bill.id, operation_type: "CREATE_BILL" }));
+    expect(createBillOutbox?.idempotency_key).toBe(`create-bill:${dbState.scope.tenant_id}:${dbState.scope.store_id}:${dbState.scope.device_id}:${bill.id}`);
+    expect((createBillOutbox?.payload as Record<string, unknown>).localBillId).toBe(bill.id);
+  });
+
+
+  it("CREATE_BILL push payload sends credit as udhar, not as a paid payment", async () => {
+    const bill = await createCreditBillForSync();
+    const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+    expect(createBillOutbox).toBeDefined();
+    markNonBillCreateOutboxAsSynced();
+    mockedSyncPush.mockResolvedValueOnce({ results: [createServerSuccessResult(createBillOutbox!, bill.id)] });
+
+    await pushPendingOutboxOperations();
+
+    const request = mockedSyncPush.mock.calls[0][0] as { operations: Array<{ payload: Record<string, unknown> }> };
+    const payload = request.operations[0].payload;
+    expect(payload.payments).toEqual([{ mode: BillPaymentMode.cash, amount: 40 }]);
+    expect(payload.paymentBreakdown).toEqual([{ mode: BillPaymentMode.cash, amount: 40 }]);
+    expect(payload.paidAmount).toBe(40);
+    expect(payload.buyerPaidAmount).toBe(40);
+    expect(payload.creditAmount).toBe(60);
+    expect(payload.dueAmount).toBe(60);
+    expect(payload.ledgerEntries).toEqual([expect.objectContaining({
+      amount: 60,
+      type: "BILL",
+      source_type: "bill",
+      local_bill_id: bill.id,
+    })]);
+    expect(payload.customerLedgerEntries).toHaveLength(1);
+    expect(payload.udharLedgerEntries).toHaveLength(1);
+  });
+
+  it("does not let a bad backend echo auto-pay offline udhar during reconciliation", async () => {
+    const bill = await createCreditBillForSync();
+    const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+    expect(createBillOutbox).toBeDefined();
+
+    const reconciled = await reconcileSyncedBillFromPush(createBillOutbox as never, createServerAutoPaidBadResult(createBillOutbox!, bill.id) as never);
+
+    expect(reconciled).toBe(true);
+    const syncedBill = activeRows("bills").find((row) => row.id === "server_bill_auto_paid_bad");
+    expect(syncedBill).toEqual(expect.objectContaining({ paidAmount: 40, buyerPaidAmount: 40, creditAmount: 60 }));
+    expect(activeRows("payments")).toEqual([expect.objectContaining({ amount: 40, mode: BillPaymentMode.cash, bill_id: "server_bill_auto_paid_bad" })]);
+    expect(activeRows("customer_ledger")).toEqual([expect.objectContaining({ amount: 60, bill_id: "server_bill_auto_paid_bad" })]);
+  });
+
+  it("server success maps local_id to server_id and updates bill children to server bill id", async () => {
+    const bill = await createCreditBillForSync();
+    const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+    expect(createBillOutbox).toBeDefined();
+
+    const reconciled = await reconcileSyncedBillFromPush(createBillOutbox as never, createServerSuccessResult(createBillOutbox!, bill.id) as never);
+
+    expect(reconciled).toBe(true);
+    expect(scopedRows("id_mappings")).toContainEqual(expect.objectContaining({ entity_type: "bill", local_id: bill.id, server_id: "server_bill_1" }));
+    expect(scopedRows("bills")).toContainEqual(expect.objectContaining({ id: "server_bill_1", local_id: bill.id, server_id: "server_bill_1", sync_status: "synced", status: "completed" }));
+    expect(scopedRows("bills")).toContainEqual(expect.objectContaining({ id: bill.id, merged_into_id: "server_bill_1", deleted_at: expect.any(String) }));
+    expect(activeRows("bill_items")).toEqual([expect.objectContaining({ id: "server_bill_item_1", local_id: expect.stringMatching(/^bill_item_/), server_id: "server_bill_item_1", bill_id: "server_bill_1", billId: "server_bill_1", sync_status: "synced" })]);
+    expect(activeRows("payments")).toEqual([expect.objectContaining({ id: "server_payment_1", local_id: expect.stringMatching(/^payment_/), server_id: "server_payment_1", bill_id: "server_bill_1", billId: "server_bill_1", sync_status: "synced" })]);
+    expect(activeRows("customer_ledger")).toEqual([expect.objectContaining({ id: "server_ledger_1", local_id: expect.stringMatching(/^ledger_/), server_id: "server_ledger_1", bill_id: "server_bill_1", billId: "server_bill_1", sync_status: "synced" })]);
+    expect(activeRows("inventory_movements")).toEqual([expect.objectContaining({ bill_id: "server_bill_1", billId: "server_bill_1", reference_id: "server_bill_1", sync_status: "synced" })]);
+  });
+
+  it("push success turns local pending bill into synced server bill without duplicate bill history or duplicate payment", async () => {
+    const bill = await createCreditBillForSync();
+    const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+    expect(createBillOutbox).toBeDefined();
+    markNonBillCreateOutboxAsSynced();
+    mockedSyncPush.mockResolvedValueOnce({ results: [createServerSuccessResult(createBillOutbox!, bill.id)] });
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual(expect.objectContaining({ pushed: 1, failed: 0, skipped: 0 }));
+    expect(mockedSyncPush).toHaveBeenCalledTimes(1);
+    expect(scopedRows("sync_outbox").find((row) => row.clientEventId === createBillOutbox?.clientEventId)).toEqual(expect.objectContaining({ status: "SYNCED", sync_status: "synced" }));
+
+    const billHistory = dedupeBillsForDisplay(scopedRows("bills"));
+    const paymentHistory = dedupePaymentsForDisplay(scopedRows("payments"));
+    expect(billHistory).toHaveLength(1);
+    expect(billHistory[0]).toEqual(expect.objectContaining({ id: "server_bill_1", local_id: bill.id, sync_status: "synced" }));
+    expect(paymentHistory).toHaveLength(1);
+    expect(paymentHistory[0]).toEqual(expect.objectContaining({ id: "server_payment_1", bill_id: "server_bill_1", sync_status: "synced" }));
+  });
+
+  it("failed sync preserves the local bill, related records, and retryable outbox operation", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+    expect(createBillOutbox).toBeDefined();
+    markNonBillCreateOutboxAsSynced();
+    mockedSyncPush.mockRejectedValueOnce(new Error("backend offline"));
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual(expect.objectContaining({ pushed: 0, failed: 1, skipped: 0 }));
+    expect(scopedRows("bills")).toContainEqual(expect.objectContaining({ id: bill.id, local_id: bill.id, sync_status: "failed", deleted_at: null, isSynced: false }));
+    expect(activeRows("bill_items")).toEqual([expect.objectContaining({ bill_id: bill.id })]);
+    expect(activeRows("payments")).toEqual([expect.objectContaining({ bill_id: bill.id })]);
+    expect(activeRows("inventory_movements")).toEqual([expect.objectContaining({ billId: bill.id, reference_id: bill.id })]);
+    expect(scopedRows("sync_outbox")).toContainEqual(expect.objectContaining({ clientEventId: createBillOutbox?.clientEventId, operation_type: "CREATE_BILL", status: "FAILED", sync_status: "failed", retry_count: 1, entity_id: bill.id }));
+    expect(scopedRows("sync_outbox").find((row) => row.clientEventId === createBillOutbox?.clientEventId)?.payload).toEqual(expect.objectContaining({ localBillId: bill.id }));
+  });
+});

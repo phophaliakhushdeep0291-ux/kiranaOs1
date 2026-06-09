@@ -1,0 +1,73 @@
+import type { Product } from "@/lib/api/client";
+import type { CartItem } from "./billing-types";
+
+export function clampAmount(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(Math.max(value, min), max);
+}
+
+export function roundMoney(value: number): number {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+export function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[०-९]/g, (digit) => String("०१२३४५६७८९".indexOf(digit)))
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+export function productSearchText(product: Product): string {
+  return normalizeSearchText([
+    product.name,
+    product.category ?? "",
+    product.displayUnit ?? "",
+    product.rateUnit ?? "",
+    ...(product.aliases ?? []),
+  ].join(" "));
+}
+
+export function productCostPrice(product: Product): number {
+  return roundMoney(Number(product.averageCostPrice ?? product.costPrice ?? product.costPerRateUnit ?? 0));
+}
+
+export function productSellingPrice(product: Product, quantity = 1): number {
+  const base = Number(product.sellingPrice ?? product.defaultPricePerRateUnit ?? 0);
+  const retail = Number(product.retailPrice ?? product.retailPricePerRateUnit ?? base);
+  const wholesale = Number(product.wholesalePrice ?? product.wholesalePricePerRateUnit ?? base);
+  const retailFrom = Number(product.retailFromQuantity ?? 1);
+  const wholesaleFrom = Number(product.wholesaleFromQuantity ?? 0);
+  if (wholesaleFrom > 0 && quantity >= wholesaleFrom && wholesale > 0) return roundMoney(wholesale);
+  if (retailFrom > 0 && quantity >= retailFrom && retail > 0) return roundMoney(retail);
+  return roundMoney(base);
+}
+
+export function productMinSellingPrice(product: Product): number {
+  return roundMoney(Number(product.minimumSellingPrice ?? product.minPricePerRateUnit ?? 0));
+}
+
+export function cartItemProfit(item: CartItem): number {
+  if (item.isCustom) return 0;
+  return roundMoney((Number(item.rate) - productCostPrice(item.product)) * Number(item.quantity));
+}
+
+export function profitClass(value: number): string {
+  if (value < 0) return "text-destructive";
+  if (value > 0) return "text-emerald-600";
+  return "text-muted-foreground";
+}
+
+export function calculateCartSubtotal(cart: CartItem[]): number {
+  return roundMoney(cart.reduce((sum, item) => sum + item.quantity * item.rate, 0));
+}
+
+export function calculateDiscount(subtotal: number, discount: number): number {
+  return Math.min(Math.max(Number(discount) || 0, 0), subtotal);
+}
+
+export function calculateGrandTotal(subtotal: number, discount: number): number {
+  return roundMoney(Math.max(0, subtotal - calculateDiscount(subtotal, discount)));
+}

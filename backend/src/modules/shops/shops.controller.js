@@ -1,0 +1,15 @@
+import * as shopService from "./shops.service.js";
+
+export async function getShop(req, res, next) {
+  try {
+    const shop = await shopService.getShop(req.shopId);
+    res.json({ success: true, data: shop });
+  } catch (err) { next(err); }
+}
+
+export async function updateShop(req, res, next) {
+  try {
+    const shop = await shopService.updateShop(req.shopId, req.body);
+    res.json({ success: true, data: shop });
+  } catch (err) { next(err); }
+}

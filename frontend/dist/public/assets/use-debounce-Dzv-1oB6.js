@@ -1,0 +1,1 @@
+import{a as o}from"./vendor-data-BIeTPk-A.js";function c(e,t){const[u,n]=o.useState(e);return o.useEffect(()=>{const r=window.setTimeout(()=>{n(e)},t);return()=>{window.clearTimeout(r)}},[e,t]),u}export{c as u};

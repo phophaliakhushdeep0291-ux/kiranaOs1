@@ -1,0 +1,48 @@
+{
+  "name": "kiranaos-backend",
+  "version": "1.0.0",
+  "description": "KiranaOS - Backend for Indian Retail Shop Management SaaS",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:seed": "node prisma/seed.js",
+    "db:reset": "prisma migrate reset",
+    "setup:test-db": "prisma generate && DATABASE_URL=\"file:./prisma/test.db\" prisma db push --force-reset --accept-data-loss",
+    "test:db": "node tests/backend-regression.examples.js",
+    "test:billing": "node tests/billing-calculation.examples.js && node tests/bill-amount-fields.examples.js && node tests/bill-profit.examples.js && node tests/bill-estimate.examples.js && node tests/owner-permission.examples.js && node tests/product-recycle-bin.examples.js && node tests/offline-queue.examples.js && node tests/sync-push.examples.js && node tests/frontend-backend-connection.examples.js && node tests/ai-command.examples.js && node tests/ai-upload.examples.js && node tests/frontend-manual-checklist.examples.js && node tests/backend-regression.examples.js && node tests/deployment-readiness.examples.js && node tests/report-export-permission.examples.js && node tests/bill-counter.examples.js && node tests/audit-log.examples.js && node tests/security-middleware.examples.js && node tests/auth-session.examples.js && node tests/offline-sync-hardening.examples.js && node tests/money-safety.examples.js && node tests/observability.examples.js && node tests/final-gap-audit-permission.examples.js && node tests/phase1-security.examples.js && node tests/phase2-rbac.examples.js && node tests/phase3-migration-runtime.examples.js && node tests/phase4a-sync-pull-pagination.examples.js && node tests/phase4c-sync-push-limits.examples.js && node tests/phase4e-sync-logging.examples.js && node tests/phase4f-sync-indexes.examples.js && node tests/phase4g-sync-docs.examples.js && node tests/phase47-supplier-sync-soft-delete.examples.js && node tests/phase48-sellable-hardening.examples.js && node tests/final-production-check.examples.js",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "test": "npm run test:billing",
+    "test:regression": "node tests/backend-regression.examples.js",
+    "test:frontend-checklist": "node tests/frontend-manual-checklist.examples.js",
+    "seed": "node prisma/seed.js",
+    "prod:check": "node scripts/production-check.js",
+    "prisma:generate:postgres": "prisma generate --schema prisma-postgres/schema.prisma",
+    "prisma:migrate:postgres": "prisma migrate dev --schema prisma-postgres/schema.prisma",
+    "prisma:deploy:postgres": "prisma migrate deploy --schema prisma-postgres/schema.prisma",
+    "prisma:push:postgres": "prisma db push --schema prisma-postgres/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "5.14.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^4.52.7",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "prisma": "5.14.0"
+  }
+}

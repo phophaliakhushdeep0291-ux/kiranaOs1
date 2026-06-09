@@ -1,0 +1,1005 @@
+{
+  "version": "v1",
+  "service": "KiranaOS Backend",
+  "basePath": "/api",
+  "updatedForPhase": "48-production-sellable-hardening",
+  "clientRules": {
+    "authHeader": "Authorization: Bearer <accessToken>",
+    "deviceHeader": "x-device-id: <activatedDeviceId>",
+    "ownerPinHeader": "x-owner-pin: <4-digit owner PIN>",
+    "jsonContentType": "application/json",
+    "moneyPrecision": "Money values are accepted only as finite numbers with max 2 decimal places unless a field explicitly uses integer paise.",
+    "syncPagination": "New clients must persist response.sync.entityCursors and send them back as the cursors query JSON on the next pull.",
+    "tenantScope": "The frontend must never send or trust body.shopId for tenant selection. Tenant context comes from the authenticated token; x-shop-id is reserved for future platform/admin flows.",
+    "deviceActivationFlow": [
+      "POST /api/auth/login",
+      "POST /api/devices/activate with Authorization header",
+      "Use returned deviceId in x-device-id for protected shop APIs",
+      "GET /api/devices/license with Authorization + x-device-id when offline license is needed"
+    ],
+    "offlineSyncFlow": [
+      "Create local outbox records while offline",
+      "When online, POST /api/sync/push in batches not exceeding PUSH_MAX_BATCH_SIZE",
+      "Then GET /api/sync/pull with per-entity cursors",
+      "Persist serverVersion/entityCursors before applying UI refresh"
+    ]
+  },
+  "standardErrors": {
+    "401": [
+      "INVALID_TOKEN_PAYLOAD",
+      "USER_SESSION_INACTIVE"
+    ],
+    "402": [
+      "SYNC_SUBSCRIPTION_INACTIVE",
+      "PREMIUM_SUBSCRIPTION_INACTIVE"
+    ],
+    "403": [
+      "DEVICE_BLOCKED",
+      "DEVICE_REMOVED",
+      "DEVICE_NOT_ACTIVE",
+      "FEATURE_NOT_INCLUDED",
+      "PLAN_TOO_LOW"
+    ],
+    "409": [
+      "CONCURRENT_STOCK_MODIFICATION_RETRY",
+      "UDHAR_PAYMENT_CONCURRENT_MODIFICATION",
+      "PRODUCT_NAME_DUPLICATE"
+    ]
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "public liveness"
+    },
+    {
+      "method": "GET",
+      "path": "/health/ready",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "deployment readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "API health"
+    },
+    {
+      "method": "GET",
+      "path": "/api/plans",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "public plan catalogue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/subscription/plans",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "public plan catalogue alias"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "owner/shop registration"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "login and receive access/refresh token"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "refresh access token with replay protection"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "logout refresh session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "authRequired": true,
+      "deviceRequired": false,
+      "purpose": "current authenticated user"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/pin/set",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner"
+      ],
+      "purpose": "set owner PIN"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/pin/verify",
+      "authRequired": true,
+      "deviceRequired": false,
+      "purpose": "verify owner PIN"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/pin/check",
+      "authRequired": true,
+      "deviceRequired": false,
+      "purpose": "PIN setup status"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/staff",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner"
+      ],
+      "feature": "staff_login",
+      "purpose": "list staff"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/staff",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner"
+      ],
+      "feature": "staff_login",
+      "purpose": "invite staff/admin"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/auth/staff/:id/role",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner"
+      ],
+      "feature": "staff_login",
+      "purpose": "change staff role, owner role excluded"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/staff/:id",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner"
+      ],
+      "feature": "staff_login",
+      "purpose": "soft-disable staff"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/change-password",
+      "authRequired": true,
+      "deviceRequired": false,
+      "purpose": "change password and revoke sessions"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices",
+      "authRequired": true,
+      "deviceRequired": false,
+      "purpose": "list shop devices"
+    },
+    {
+      "method": "POST",
+      "path": "/api/devices/activate",
+      "authRequired": true,
+      "deviceRequired": false,
+      "purpose": "activate current device"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/devices/:deviceId",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "remove device"
+    },
+    {
+      "method": "POST",
+      "path": "/api/devices/:deviceId/block",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "block device"
+    },
+    {
+      "method": "POST",
+      "path": "/api/devices/:deviceId/unblock",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "unblock device"
+    },
+    {
+      "method": "POST",
+      "path": "/api/devices/heartbeat",
+      "authRequired": true,
+      "deviceRequired": false,
+      "purpose": "device heartbeat"
+    },
+    {
+      "method": "GET",
+      "path": "/api/devices/license",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "signed offline license"
+    },
+    {
+      "method": "GET",
+      "path": "/api/subscription/current",
+      "authRequired": true,
+      "deviceRequired": false,
+      "purpose": "current plan/subscription state"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/checkout",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "create Razorpay checkout transaction"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/verify-payment",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "paymentVerification": [
+        "signature",
+        "orderId",
+        "paymentId",
+        "amount",
+        "currency",
+        "localTransaction"
+      ],
+      "purpose": "verify payment before entitlement"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/manual-activate",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "disabledByDefault": true,
+      "purpose": "manual activation behind env gate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/change-plan",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "change current plan"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/cancel",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "cancel subscription"
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription/extend-grace",
+      "authRequired": true,
+      "deviceRequired": false,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "admin/owner grace extension"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-provider/razorpay/webhook",
+      "authRequired": false,
+      "deviceRequired": false,
+      "rawBodySignature": true,
+      "purpose": "Razorpay webhook"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payment-provider/events",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "list sanitized payment provider events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-provider/events/:id/retry",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "retry failed/stuck payment webhook"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payment-provider/manual/activate",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "disabledByDefault": true,
+      "purpose": "manual provider activation behind env gate"
+    },
+    {
+      "method": "GET",
+      "path": "/api/shops",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "get shop profile"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/shops",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "purpose": "update shop profile"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "list products"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/recycle-bin",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "list soft-deleted products"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/products/recycle-bin/empty",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "purpose": "empty recycle bin"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products/:id/restore",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "purpose": "restore product"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/products/:id/permanent",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "purpose": "permanent product delete"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "get product"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "basic_products",
+      "conditionalOwnerPin": [
+        "costPrice",
+        "sellingPrice",
+        "minPrice",
+        "taxRate",
+        "hsnCode"
+      ],
+      "purpose": "create product"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/products/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "basic_products",
+      "conditionalOwnerPin": [
+        "costPrice",
+        "sellingPrice",
+        "minPrice",
+        "taxRate",
+        "hsnCode"
+      ],
+      "purpose": "update product"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/products/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "purpose": "soft-delete product"
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "list customers"
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "get customer"
+    },
+    {
+      "method": "GET",
+      "path": "/api/customers/:id/khata",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "customer ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/api/customers",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "customer_ledger",
+      "purpose": "create customer"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/customers/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "update customer"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/customers/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "purpose": "delete customer"
+    },
+    {
+      "method": "POST",
+      "path": "/api/customers/:id/udhar-payment",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "record_payment",
+      "purpose": "record udhar payment atomically"
+    },
+    {
+      "method": "POST",
+      "path": "/api/customers/:id/udhar-payment/:ledgerId/reverse",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "feature": "record_payment",
+      "purpose": "reverse an incorrect udhar payment without deleting ledger history"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bills",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "list bills"
+    },
+    {
+      "method": "GET",
+      "path": "/api/bills/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "get bill"
+    },
+    {
+      "method": "POST",
+      "path": "/api/bills/confirm",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "basic_billing",
+      "purpose": "create confirmed bill with stock guard"
+    },
+    {
+      "method": "POST",
+      "path": "/api/bills/:id/cancel",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "purpose": "cancel bill"
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "inventory summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/low-stock",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "low stock"
+    },
+    {
+      "method": "GET",
+      "path": "/api/inventory/ledger",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "stock ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/api/inventory/purchase",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "purchase_entry",
+      "conditionalOwnerPin": [
+        "costPrice",
+        "sellingPrice",
+        "minPrice",
+        "taxRate",
+        "hsnCode"
+      ],
+      "requestFields": [
+        "productId",
+        "supplierId",
+        "supplierName",
+        "invoiceNumber",
+        "purchaseBillNo",
+        "supplierBillNo",
+        "quantity",
+        "enteredUnit",
+        "billAmount",
+        "purchasePaymentStatus",
+        "purchasePaymentMode",
+        "purchasePaidAmount",
+        "purchaseDueAmount",
+        "purchaseDueDate",
+        "updateCost",
+        "updateMinPrice"
+      ],
+      "responseFields": [
+        "productId",
+        "qtyAdded",
+        "newStock",
+        "newCost",
+        "pricePerRateUnit",
+        "stockLedgerId",
+        "purchaseHistoryId",
+        "invoiceNumber",
+        "purchasePaymentStatus",
+        "purchasePaymentMode",
+        "purchasePaidAmount",
+        "purchaseDueAmount",
+        "purchaseDueDate"
+      ],
+      "purpose": "purchase stock-in"
+    },
+    {
+      "method": "POST",
+      "path": "/api/inventory/damage",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "stock_adjustment",
+      "ownerPinRequired": true,
+      "purpose": "damage/loss stock-out"
+    },
+    {
+      "method": "POST",
+      "path": "/api/inventory/correction",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "stock_adjustment",
+      "ownerPinRequired": true,
+      "purpose": "manual stock correction"
+    },
+    {
+      "method": "GET",
+      "path": "/api/udhar",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "udhar ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/api/udhar/summary",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "udhar summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/suppliers",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "list suppliers"
+    },
+    {
+      "method": "GET",
+      "path": "/api/suppliers/best-price/:productId",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "supplier best price"
+    },
+    {
+      "method": "POST",
+      "path": "/api/suppliers",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "supplier_entry",
+      "purpose": "create supplier"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/suppliers/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "supplier_entry",
+      "purpose": "update supplier"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/daily-closing",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "daily closing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/sales-summary",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "sales summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/payment-modes",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "payment mode summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/udhar-ageing",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "udhar ageing"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/top-products",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner"
+      ],
+      "purpose": "top products"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/inventory-health",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "inventory health"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/staff-sales",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "staff sales"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/pnl",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner"
+      ],
+      "feature": "profit_estimate",
+      "purpose": "profit/loss"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/monthly-breakdown",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner"
+      ],
+      "purpose": "monthly report"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reports/exports",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "feature": "csv_import_export",
+      "ownerPinRequired": true,
+      "purpose": "create export job"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/exports",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "list export jobs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/exports/:jobId/download",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "download export"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/status",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "cloud_backup or auto_two_way_sync",
+      "responseMustInclude": [
+        "allowed",
+        "serverTime",
+        "server_version",
+        "cursor"
+      ],
+      "purpose": "check server sync availability without logging 404 noise"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/retry",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "acknowledge frontend retry request; local outbox remains source of truth"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/resolve-conflict",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "acknowledge frontend conflict resolution request"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/pull",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "cloud_backup or auto_two_way_sync",
+      "responseMustInclude": [
+        "sync.entityCursors",
+        "sync.hasMoreByEntity"
+      ],
+      "purpose": "pull server changes"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/push",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "cloud_backup or auto_two_way_sync",
+      "batchLimit": "PUSH_MAX_BATCH_SIZE",
+      "purpose": "push offline changes",
+      "requestMustSupport": [
+        "events[].clientEventId or events[].eventId",
+        "events[].payload.bill.items[].localProductId for offline bills that reference local products",
+        "events[].payload.bill.localCustomerId for offline credit bills that reference local customers",
+        "events[].payload.localProductId/localCustomerId/localBillId for offline-created records"
+      ],
+      "responseMustInclude": [
+        "data.idMappings.bills",
+        "data.idMappings.customers",
+        "data.idMappings.products",
+        "idMappings",
+        "results",
+        "serverTime",
+        "summary"
+      ],
+      "syncGuarantees": [
+        "CREATE_BILL resolves local product/customer IDs before confirming bill",
+        "duplicate concurrent eventId returns SYNC_EVENT_IN_PROGRESS instead of double-applying business logic",
+        "duplicate synced event returns cached result and mapping as success",
+        "localId to serverId mappings are persisted in SyncIdMapping"
+      ],
+      "errorCodes": [
+        "SYNC_BATCH_TOO_LARGE",
+        "SYNC_DEPENDENCY_PENDING",
+        "SYNC_EVENT_IN_PROGRESS"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/status",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "queue + worker status"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/workers",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "worker heartbeat readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/failed",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "failed job summary"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reminders/templates",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "whatsapp_reminders",
+      "purpose": "list WhatsApp templates"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reminders/templates",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "feature": "whatsapp_reminders",
+      "purpose": "create WhatsApp template"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reminders/logs",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "whatsapp_reminders",
+      "purpose": "message logs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reminders/send",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "whatsapp_reminders",
+      "purpose": "send reminder"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reminders/send-statement",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "whatsapp_reminders",
+      "purpose": "send customer statement"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ai/parse-command",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "parse AI command"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ai/transcribe",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "transcribe voice/audio"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ai/log-action",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "log AI action"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/suppliers/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "supplier_entry",
+      "ownerPinRequired": true,
+      "purpose": "soft delete supplier"
+    },
+    {
+      "method": "POST",
+      "path": "/api/suppliers/:id/restore",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "supplier_entry",
+      "ownerPinRequired": true,
+      "purpose": "restore soft-deleted supplier"
+    }
+  ],
+  "latestPatch": "phase48 owner-pin hardening, udhar reversal, timezone reports, unit validation"
+}

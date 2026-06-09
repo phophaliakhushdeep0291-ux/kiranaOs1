@@ -1,0 +1,98 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  production-checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kiranaos
+          POSTGRES_PASSWORD: kiranaos
+          POSTGRES_DB: kiranaos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U kiranaos -d kiranaos_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://kiranaos:kiranaos@localhost:5432/kiranaos_test?schema=public
+      TEST_DATABASE_URL: postgresql://kiranaos:kiranaos@localhost:5432/kiranaos_test?schema=public
+      POSTGRES_TEST_DATABASE_URL: postgresql://kiranaos:kiranaos@localhost:5432/kiranaos_test?schema=public
+      ALLOW_POSTGRES_TEST_DB: "true"
+      JWT_SECRET: ci-jwt-secret-change-me-at-least-32-characters
+      LICENSE_SIGNING_SECRET: ci-license-signing-secret-change-me-at-least-32-characters
+      REDIS_URL: redis://localhost:6379
+      QUEUES_ENABLED: "false"
+      RAZORPAY_ENABLED: "false"
+      STORAGE_PROVIDER: local
+      METRICS_ENABLED: "true"
+      METRICS_REQUIRE_TOKEN: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+      - name: Generate PostgreSQL Prisma client
+        run: npm run prisma:generate:postgres
+      - name: Validate SQLite Prisma schema
+        run: npx prisma validate
+      - name: Validate PostgreSQL Prisma schema
+        run: npx prisma validate --schema prisma-postgres/schema.prisma
+      - name: Deploy PostgreSQL migrations
+        run: npm run prisma:deploy:postgres
+      - name: Run static tests
+        run: npm test 2>&1 | tee npm-test.log
+      - name: Run DB integration tests
+        run: npm run test:db
+      - name: Run migration safety check
+        run: npm run migration:safety
+      - name: Run release gate
+        run: npm run release:gate
+      - name: Run API contract check
+        run: npm run contract:check
+      - name: Verify worker runtime path
+        run: npm run worker:verify
+      - name: Run Razorpay fixture proof
+        run: npm run razorpay:fixtures
+      - name: Verify local object storage adapter
+        run: npm run storage:verify
+      - name: Run operational proof suite
+        run: npm run proof:ops
+      - name: Run production checks
+        run: npm run prod:check 2>&1 | tee prod-check.log
+      - name: Build Docker image
+        run: docker build .
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-ci-logs
+          path: |
+            npm-test.log
+            prod-check.log

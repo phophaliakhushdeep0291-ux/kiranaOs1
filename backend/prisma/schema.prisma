@@ -1,0 +1,750 @@
+// KiranaOS Prisma Schema
+// SQLite for dev, PostgreSQL-compatible for production
+// Switch provider to "postgresql" and update DATABASE_URL when deploying
+
+generator client {
+  provider      = "prisma-client-js"
+  // Include both the developer's native platform and the Linux target used in Docker.
+  // Without this, a client generated on Windows/macOS will fail on debian-based containers.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// SHOP — top-level tenant. All data is shopId-scoped.
+// ─────────────────────────────────────────────
+model Shop {
+  id          String   @id @default(cuid())
+  name        String
+  ownerName   String
+  city        String
+  address     String
+  gstNumber   String?
+  phone       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users            User[]
+  products         Product[]
+  customers        Customer[]
+  bills            Bill[]
+  stockLedger      StockLedger[]
+  udharLedger      UdharLedger[]
+  suppliers        Supplier[]
+  purchaseHistory  PurchaseHistory[]
+  aiActionLogs     AiActionLog[]
+  auditLogs        AuditLog[]
+  sessions         Session[]
+  offlineSyncEvents OfflineSyncEvent[]
+  syncIdMappings   SyncIdMapping[]
+  billCounter      BillCounter?
+  subscriptions    Subscription[]
+  paymentTransactions PaymentTransaction[]
+  devices          Device[]
+  deviceLicenses   DeviceLicense[]
+  reportExportJobs ReportExportJob[]
+  reminderTemplates ReminderTemplate[]
+  reminderLogs      ReminderLog[]
+  dailyClosingSnapshots DailyClosingSnapshot[]
+}
+
+// ─────────────────────────────────────────────
+// BILL COUNTER — transaction-safe per-shop bill number counter
+// ─────────────────────────────────────────────
+model BillCounter {
+  id         String   @id @default(cuid())
+  shopId     String   @unique
+  lastNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// USER — owner / staff / admin
+// ─────────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  shopId       String
+  name         String
+  mobile       String?
+  email        String?
+  passwordHash String
+  role         String   @default("staff")  // owner | staff | admin
+  pinHash      String?                     // 4-digit PIN for owner actions
+  disabledAt   DateTime?                    // staff deactivation; never hard-delete audited users
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shop         Shop     @relation(fields: [shopId], references: [id])
+  aiActionLogs AiActionLog[]
+  auditLogs    AuditLog[]
+  sessions     Session[]
+  devices      Device[]
+  reportExportJobs ReportExportJob[]
+
+  @@unique([shopId, mobile])
+  @@unique([shopId, email])
+}
+
+// ─────────────────────────────────────────────
+// SESSION — refresh token sessions for logout/revocation
+// ─────────────────────────────────────────────
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  shopId           String
+  refreshTokenHash String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revokedReason    String?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([userId, revokedAt])
+  @@index([shopId, revokedAt])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────
+// PRODUCT
+// Unit handling:
+//   kg item  → displayUnit=kg,  baseUnit=g,  rateUnit=kg
+//   ltr item → displayUnit=ltr, baseUnit=ml, rateUnit=ltr
+//   piece    → all three = piece
+//   packet   → all three = packet
+// stockBaseQty is always in baseUnit
+// ─────────────────────────────────────────────
+model Product {
+  id                    String    @id @default(cuid())
+  shopId                String
+  name                  String
+  category              String    @default("general")
+  aliasesJson           String    @default("[]")  // JSON array of alternate names/spellings
+  displayUnit           String    @default("piece")
+  baseUnit              String    @default("piece")
+  rateUnit              String    @default("piece")
+  stockBaseQty          Float     @default(0)
+  costPerRateUnit       Float     @default(0)   // weighted average buy price
+  costPerRateUnitPaise  BigInt?                 // Phase 27 shadow integer paise column
+  minPricePerRateUnit   Float     @default(0)   // never sell below this
+  minPricePerRateUnitPaise BigInt?              // Phase 27 shadow integer paise column
+  defaultPricePerRateUnit Float   @default(0)   // default sell price
+  defaultPricePerRateUnitPaise BigInt?          // Phase 27 shadow integer paise column
+  gstRate               Float     @default(0)   // e.g. 5, 12, 18
+  hsn                   String?
+  lowStockThreshold     Float     @default(0)   // alert when stock <= this
+  deletedAt             DateTime?               // soft delete
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  shop             Shop              @relation(fields: [shopId], references: [id])
+  billItems        BillItem[]
+  stockLedger      StockLedger[]
+  purchaseHistory  PurchaseHistory[]
+
+  @@index([shopId, deletedAt])
+  // Sync pull keyset pagination: WHERE shopId=X AND updatedAt>=since ORDER BY updatedAt ASC, id ASC
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMER / KHATA
+// Matching is by mobile number, not name
+// ─────────────────────────────────────────────
+model Customer {
+  id                     String    @id @default(cuid())
+  shopId                 String
+  name                   String
+  mobile                 String?
+  type                   String    @default("regular")  // regular | udhar
+  udharAmount            Float     @default(0)           // current outstanding
+  udharAmountPaise      BigInt?                         // Phase 27 shadow integer paise column
+  reminderOverrideUntil  DateTime?
+  deletedAt              DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  shop        Shop          @relation(fields: [shopId], references: [id])
+  bills       Bill[]
+  udharLedger UdharLedger[]
+  reminderLogs ReminderLog[]
+
+  @@unique([shopId, mobile])
+  @@index([shopId, deletedAt])
+  // Sync pull keyset pagination
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// BILL
+// ─────────────────────────────────────────────
+model Bill {
+  id               String    @id @default(cuid())
+  shopId           String
+  billNo           String                               // e.g. KOS-2026-0001
+  billType         String    @default("normal_sale")   // estimate | normal_sale | gst_invoice | udhar_entry
+  status           String    @default("active")        // active | cancelled
+  customerId       String?
+  customerName     String    @default("Walk-in")
+  subtotal         Float     @default(0)
+  subtotalPaise    BigInt?
+  discount         Float     @default(0)
+  discountPaise    BigInt?
+  gst              Float     @default(0)
+  gstPaise         BigInt?
+  grandTotal       Float     @default(0)
+  grandTotalPaise  BigInt?
+  actualAmount     Float     @default(0)              // frontend actual bill amount before let-go handling
+  actualAmountPaise BigInt?
+  buyerPaidAmount  Float     @default(0)              // amount entered/received from buyer
+  buyerPaidAmountPaise BigInt?
+  waivedAmount     Float     @default(0)              // let-go amount absorbed by shop
+  waivedAmountPaise BigInt?
+  grossProfit      Float     @default(0)
+  grossProfitPaise BigInt?
+  paidAmount       Float     @default(0)
+  paidAmountPaise  BigInt?
+  creditAmount     Float     @default(0)              // went to udhar
+  creditAmountPaise BigInt?
+  createdByUserId  String?                              // authenticated user who created the bill; nullable for legacy/offline imports
+  deviceId         String?                              // client device id at bill creation, if available
+  cancelledAt      DateTime?
+  cancelledReason  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  shop        Shop          @relation(fields: [shopId], references: [id])
+  customer    Customer?     @relation(fields: [customerId], references: [id])
+  items       BillItem[]
+  payments    Payment[]
+  udharLedger UdharLedger[]
+  stockLedger StockLedger[]
+
+  @@unique([shopId, billNo])
+  @@index([shopId, createdByUserId, createdAt])
+  @@index([shopId, status, createdAt])
+  // Sync pull keyset pagination
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// BILL ITEM — line items inside a bill
+// ─────────────────────────────────────────────
+model BillItem {
+  id                String  @id @default(cuid())
+  billId            String
+  productId         String?
+  name              String
+  quantity          Float
+  enteredUnit       String
+  baseUnit          String
+  quantityInBaseUnit Float
+  rateUnit          String
+  ratePerRateUnit   Float
+  ratePerRateUnitPaise BigInt?
+  costPerRateUnit   Float
+  costPerRateUnitPaise BigInt?
+  gstRate           Float   @default(0)
+  lineTotal         Float
+  lineTotalPaise    BigInt?
+  lineCost          Float
+  lineCostPaise     BigInt?
+  lineProfit        Float
+  lineProfitPaise   BigInt?
+
+  bill    Bill     @relation(fields: [billId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([billId])
+}
+
+// ─────────────────────────────────────────────
+// PAYMENT — one bill can have multiple payment modes
+// ─────────────────────────────────────────────
+model Payment {
+  id        String   @id @default(cuid())
+  billId    String
+  mode      String   // cash | upi | credit
+  amount    Float
+  amountPaise BigInt?
+  createdAt DateTime @default(now())
+
+  bill Bill @relation(fields: [billId], references: [id])
+
+  @@index([billId])
+}
+
+// ─────────────────────────────────────────────
+// STOCK LEDGER — every stock change is logged
+// ─────────────────────────────────────────────
+model StockLedger {
+  id                 String   @id @default(cuid())
+  shopId             String
+  productId          String
+  productName        String
+  action             String   // sale | purchase | damage | correction | cancel_reversal
+  changeBaseQty      Float    // positive = stock in, negative = stock out
+  oldStockBaseQty    Float
+  newStockBaseQty    Float
+  purchaseBillAmount Float    @default(0)  // total bill amount if it's a purchase
+  purchaseBillAmountPaise BigInt?
+  calculatedBuyRate  Float    @default(0)  // per rateUnit cost computed from purchase
+  calculatedBuyRatePaise BigInt?
+  invoiceNumber      String?
+  purchasePaymentStatus String @default("paid") // paid | partial | due
+  purchasePaymentMode String?
+  purchasePaidAmount Float    @default(0)
+  purchasePaidAmountPaise BigInt?
+  purchaseDueAmount  Float    @default(0)
+  purchaseDueAmountPaise BigInt?
+  purchaseDueDate    DateTime?
+  supplierName       String?
+  damageLossValue    Float    @default(0)  // cost value of damage, affects P&L
+  damageLossValuePaise BigInt?
+  billId             String?
+  note               String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  shop    Shop    @relation(fields: [shopId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  bill    Bill?   @relation(fields: [billId], references: [id])
+
+  @@index([shopId, createdAt])
+  @@index([productId])
+  // Sync pull keyset pagination (updatedAt == createdAt for append-only ledger)
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// UDHAR LEDGER — every udhar/payment event
+// ─────────────────────────────────────────────
+model UdharLedger {
+  id           String   @id @default(cuid())
+  shopId       String
+  customerId   String
+  customerName String
+  type         String   // debit | payment
+  amount       Float
+  amountPaise  BigInt?
+  mode         String   // cash | upi | reversal | credit
+  billId       String?
+  billNo       String?
+  note         String?
+  reversedAt   DateTime?
+  reversedReason String?
+  reversalOfLedgerId String?
+  reversedByUserId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shop     Shop     @relation(fields: [shopId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  bill     Bill?    @relation(fields: [billId], references: [id])
+
+  @@index([shopId, customerId, createdAt])
+  @@index([shopId, reversalOfLedgerId])
+  // Sync pull keyset pagination
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// SUPPLIER
+// ─────────────────────────────────────────────
+model Supplier {
+  id        String    @id @default(cuid())
+  shopId    String
+  name      String
+  mobile    String?
+  address   String?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop            Shop              @relation(fields: [shopId], references: [id])
+  purchaseHistory PurchaseHistory[]
+
+  @@index([shopId])
+  @@index([shopId, deletedAt])
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// PURCHASE HISTORY — dealer/supplier price tracking
+// ─────────────────────────────────────────────
+model PurchaseHistory {
+  id               String   @id @default(cuid())
+  shopId           String
+  productId        String
+  supplierId       String?
+  supplierName     String
+  qtyBase          Float    // quantity in baseUnit
+  pricePerRateUnit Float    // computed: totalCost / (qtyBase / conversionFactor)
+  pricePerRateUnitPaise BigInt?
+  totalCost        Float
+  totalCostPaise   BigInt?
+  billAmount       Float    // what was written on the supplier's bill
+  billAmountPaise  BigInt?
+  invoiceNumber    String?
+  purchasePaymentStatus String @default("paid") // paid | partial | due
+  purchasePaymentMode String?
+  purchasePaidAmount Float    @default(0)
+  purchasePaidAmountPaise BigInt?
+  purchaseDueAmount  Float    @default(0)
+  purchaseDueAmountPaise BigInt?
+  purchaseDueDate    DateTime?
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  shop     Shop      @relation(fields: [shopId], references: [id])
+  product  Product   @relation(fields: [productId], references: [id])
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+
+  @@index([shopId, productId, createdAt])
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// AI ACTION LOG
+// ─────────────────────────────────────────────
+model AiActionLog {
+  id               String   @id @default(cuid())
+  shopId           String
+  userId           String?
+  transcript       String
+  parsedActionJson String   // JSON string of the parsed command
+  permissionLevel  String   // safe | confirm | owner_pin | blocked
+  status           String   // parsed | executed | rejected | failed
+  error            String?
+  createdAt        DateTime @default(now())
+
+  shop Shop  @relation(fields: [shopId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([shopId, createdAt])
+}
+
+
+// ─────────────────────────────────────────────
+// AUDIT LOG — central security/action audit trail
+// ─────────────────────────────────────────────
+model AuditLog {
+  id           String   @id @default(cuid())
+  shopId       String
+  userId       String?
+  action       String
+  entityType   String?
+  entityId     String?
+  beforeJson   String?
+  afterJson    String?
+  metadataJson String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  shop Shop  @relation(fields: [shopId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([shopId, createdAt])
+  @@index([shopId, action, createdAt])
+}
+
+
+// ─────────────────────────────────────────────
+// DAILY CLOSING SNAPSHOT — persisted report snapshot per shop/day
+// ─────────────────────────────────────────────
+model DailyClosingSnapshot {
+  id                     String    @id @default(cuid())
+  shopId                 String
+  storeId                String?
+  date                   DateTime
+  totalSalesPaise        Int       @default(0)
+  cashReceivedPaise      Int       @default(0)
+  upiReceivedPaise       Int       @default(0)
+  udharGivenPaise        Int       @default(0)
+  oldUdharRecoveredPaise Int       @default(0)
+  expectedCashPaise      Int       @default(0)
+  totalBills             Int       @default(0)
+  cancelledBills         Int       @default(0)
+  roughBills             Int       @default(0)
+  pendingSyncCount       Int       @default(0)
+  topProductsJson        String    @default("[]")
+  lowStockJson           String    @default("[]")
+  generatedByUserId      String?
+  generatedAt            DateTime  @default(now())
+  lockedAt               DateTime?
+  lockedByUserId         String?
+  source                 String    @default("live") // live | worker | manual
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, date])
+  @@index([shopId, date])
+  @@index([shopId, lockedAt])
+}
+
+
+
+// ─────────────────────────────────────────────
+// REPORT EXPORT JOB — persistent async report export tracking
+// ─────────────────────────────────────────────
+model ReportExportJob {
+  id                String    @id @default(cuid())
+  shopId            String
+  requestedByUserId String
+  reportType        String
+  status            String    @default("queued") // queued | processing | completed | failed | cancelled
+  paramsJson        String    @default("{}")
+  fileName          String?
+  filePath          String?
+  fileUrl           String?
+  mimeType          String?
+  sizeBytes         Int?
+  error             String?
+  requestedAt       DateTime  @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  shop        Shop @relation(fields: [shopId], references: [id])
+  requestedBy User @relation(fields: [requestedByUserId], references: [id])
+
+  @@index([shopId, status, createdAt])
+  @@index([shopId, reportType, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────
+// REMINDER TEMPLATES / LOGS — WhatsApp udhar reminders foundation
+// ─────────────────────────────────────────────
+model ReminderTemplate {
+  id              String    @id @default(cuid())
+  shopId          String
+  name            String
+  channel         String    @default("whatsapp") // whatsapp | sms | email
+  templateText    String
+  active          Boolean   @default(true)
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, active])
+  @@index([shopId, channel])
+  @@index([shopId, deletedAt])
+}
+
+model ReminderLog {
+  id                String    @id @default(cuid())
+  shopId            String
+  customerId        String
+  channel           String    @default("whatsapp") // whatsapp | sms | email
+  templateId        String?
+  message           String
+  status            String    @default("queued") // queued | sent | failed | skipped
+  provider          String    @default("disabled")
+  providerMessageId String?
+  error             String?
+  sentAt            DateTime?
+  requestedByUserId String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  shop     Shop     @relation(fields: [shopId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([shopId, customerId, createdAt])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, channel, createdAt])
+}
+
+
+// ─────────────────────────────────────────────
+// OFFLINE SYNC EVENT — idempotency log for IndexedDB queue replay
+// ─────────────────────────────────────────────
+model OfflineSyncEvent {
+  id          String   @id @default(cuid())
+  shopId      String
+  eventId     String
+  type        String
+  status      String   @default("processing") // processing | synced | failed | conflict
+  attempts    Int      @default(0)
+  requestJson String   @default("{}")
+  resultJson  String?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, eventId])
+  @@index([shopId, status, createdAt])
+}
+
+
+// ─────────────────────────────────────────────
+// SYNC ID MAPPING — resolves frontend local IDs to server IDs
+// ─────────────────────────────────────────────
+model SyncIdMapping {
+  id            String   @id @default(cuid())
+  shopId        String
+  entityType    String   // product | customer | bill | supplier
+  localId       String
+  serverId      String
+  sourceEventId String?
+  deviceId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, entityType, localId])
+  @@index([shopId, entityType, serverId])
+  @@index([shopId, updatedAt, id])
+}
+
+
+// ─────────────────────────────────────────────
+// SAAS PLANS / SUBSCRIPTIONS — Phase 6 foundation
+// ─────────────────────────────────────────────
+model Plan {
+  id                 String   @id @default(cuid())
+  code               String   @unique // starter | standard | growth | pro
+  name               String
+  priceMonthlyPaise  Int
+  priceYearlyPaise   Int
+  maxDevices         Int
+  maxStores          Int
+  maxStaff           Int
+  featuresJson       String   @default("[]")
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Subscription {
+  id                     String    @id @default(cuid())
+  shopId                 String    @unique
+  planCode               String
+  status                 String    @default("trial") // trial | active | grace | expired | cancelled | payment_failed
+  provider               String    @default("manual") // manual | razorpay | admin
+  providerSubscriptionId String?
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  trialEndsAt            DateTime?
+  graceEndsAt            DateTime?
+  cancelledAt            DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  shop                Shop                 @relation(fields: [shopId], references: [id])
+  paymentTransactions PaymentTransaction[]
+
+  @@index([shopId, status])
+  @@index([planCode])
+}
+
+model PaymentTransaction {
+  id                String    @id @default(cuid())
+  shopId            String
+  subscriptionId    String?
+  provider          String    @default("manual") // manual | razorpay | admin
+  providerPaymentId String?
+  amountPaise       Int
+  currency          String    @default("INR")
+  status            String    @default("created") // created | paid | failed | refunded
+  paidAt            DateTime?
+  failureReason     String?
+  rawPayloadJson    String?
+  createdAt         DateTime  @default(now())
+
+  shop         Shop          @relation(fields: [shopId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([shopId, createdAt])
+  @@index([subscriptionId])
+  @@index([provider, providerPaymentId])
+}
+
+model PaymentProviderEvent {
+  id                  String    @id @default(cuid())
+  shopId              String?
+  provider            String
+  eventId             String
+  eventType           String
+  payloadJson         String
+  signatureVerified   Boolean   @default(false)
+  processingStatus    String    @default("received") // received | processing | processed | failed | ignored | duplicate
+  processingAttempts  Int       @default(0)
+  processingError     String?
+  processedResultJson String?
+  lastAttemptAt       DateTime?
+  processedAt         DateTime?
+  createdAt           DateTime  @default(now())
+
+  @@unique([provider, eventId])
+  @@index([shopId, createdAt])
+  @@index([provider, eventType, createdAt])
+  @@index([processingStatus, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// DEVICE FOUNDATION — backend remains final authority
+// ─────────────────────────────────────────────
+model Device {
+  id              String    @id @default(cuid())
+  shopId          String
+  userId          String?
+  deviceId        String
+  deviceName      String?
+  platform        String?
+  fingerprintHash String?
+  status          String    @default("active") // active | removed | blocked
+  activatedAt     DateTime?
+  lastActiveAt    DateTime?
+  removedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop Shop  @relation(fields: [shopId], references: [id])
+  user User? @relation(fields: [userId], references: [id])
+
+  @@unique([shopId, deviceId])
+  @@index([shopId, status])
+  @@index([userId])
+}
+
+model DeviceLicense {
+  id                String    @id @default(cuid())
+  shopId            String
+  deviceId          String
+  planCode          String
+  featuresJson      String    @default("[]")
+  validUntil        DateTime
+  offlineGraceUntil DateTime
+  signatureHash     String?
+  issuedAt          DateTime  @default(now())
+  revokedAt         DateTime?
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, deviceId])
+  @@index([validUntil])
+}

@@ -1,0 +1,27 @@
+node_modules
+npm-debug.log
+.env
+.env.*
+!.env.example
+prisma/dev.db
+prisma/dev.db-journal
+dev.db
+dev.db-journal
+uploads
+logs
+coverage
+.DS_Store
+.git
+*.zip
+
+*.db
+*.db-journal
+prisma/test.db
+prisma/test.db-journal
+
+storage
+
+# Release proof artifacts
+release-artifacts
+backups
+*.dump

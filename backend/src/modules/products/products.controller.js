@@ -1,0 +1,157 @@
+import * as svc from "./products.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
+
+export async function list(req, res, next) {
+  try {
+    const products = await svc.listProducts(req.shopId, req.query);
+    res.json({ success: true, data: products });
+  } catch (err) { next(err); }
+}
+
+export async function get(req, res, next) {
+  try {
+    const product = await svc.getProduct(req.shopId, req.params.id);
+    res.json({ success: true, data: product });
+  } catch (err) { next(err); }
+}
+
+const SENSITIVE_PRODUCT_FIELDS = [
+  "defaultPricePerRateUnit",
+  "costPerRateUnit",
+  "minPricePerRateUnit",
+  "gstRate",
+  "hsn",
+];
+
+export async function create(req, res, next) {
+  try {
+    const product = await svc.createProduct(req.shopId, req.body);
+
+    // Audit log whenever a product is created with sensitive pricing/cost data.
+    const sensitiveFieldsPresent = SENSITIVE_PRODUCT_FIELDS.filter(
+      (f) => Object.prototype.hasOwnProperty.call(req.body, f)
+    );
+    if (sensitiveFieldsPresent.length > 0) {
+      await createAuditLog({
+        shopId: req.shopId,
+        userId: req.user?.userId,
+        action: "PRODUCT_CREATED_WITH_SENSITIVE_FIELDS",
+        entityType: "Product",
+        entityId: product.id,
+        after: {
+          id: product.id,
+          name: product.name,
+          defaultPricePerRateUnit: product.defaultPricePerRateUnit,
+          costPerRateUnit: product.costPerRateUnit,
+          gstRate: product.gstRate,
+        },
+        metadata: { sensitiveFields: sensitiveFieldsPresent },
+        req,
+      });
+    }
+
+    res.status(201).json({ success: true, data: product });
+  } catch (err) { next(err); }
+}
+
+export async function update(req, res, next) {
+  try {
+    const product = await svc.updateProduct(req.shopId, req.params.id, req.body);
+    res.json({ success: true, data: product });
+  } catch (err) { next(err); }
+}
+
+export async function remove(req, res, next) {
+  try {
+    const product = await svc.softDeleteProduct(req.shopId, req.params.id);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "PRODUCT_DELETED",
+      entityType: "Product",
+      entityId: product.id,
+      after: { id: product.id, name: product.name, deletedAt: product.deletedAt },
+      metadata: { softDelete: true },
+      req,
+    });
+    res.json({
+      success: true,
+      message: "Product moved to recycle bin",
+      data: product,
+    });
+  } catch (err) { next(err); }
+}
+
+export async function listDeleted(req, res, next) {
+  try {
+    const products = await svc.listDeletedProducts(req.shopId, req.query);
+    res.json({ success: true, data: products });
+  } catch (err) { next(err); }
+}
+
+export async function restore(req, res, next) {
+  try {
+    const product = await svc.restoreDeletedProduct(req.shopId, req.params.id);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "PRODUCT_RESTORED",
+      entityType: "Product",
+      entityId: product.id,
+      before: { id: product.id, deletedAt: product.deletedAt ?? "previously deleted" },
+      after: { id: product.id, name: product.name, deletedAt: null },
+      metadata: { name: product.name, category: product.category },
+      req,
+    });
+    res.json({
+      success: true,
+      message: "Product restored from recycle bin",
+      data: product,
+    });
+  } catch (err) { next(err); }
+}
+
+export async function permanentRemove(req, res, next) {
+  try {
+    const product = await svc.permanentlyDeleteProduct(req.shopId, req.params.id);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "PRODUCT_PERMANENTLY_DELETED",
+      entityType: "Product",
+      entityId: product.id,
+      before: { id: product.id, name: product.name, category: product.category, deletedAt: product.deletedAt },
+      metadata: { name: product.name, category: product.category, hardDelete: true },
+      req,
+    });
+    res.json({
+      success: true,
+      message: "Product permanently deleted",
+      data: product,
+    });
+  } catch (err) { next(err); }
+}
+
+export async function emptyRecycleBin(req, res, next) {
+  try {
+    const result = await svc.emptyProductRecycleBin(req.shopId);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "PRODUCT_RECYCLE_BIN_EMPTIED",
+      entityType: "Product",
+      metadata: {
+        deletedCount: result.deletedCount,
+        blockedCount: result.blockedCount,
+        deleted: result.deleted,
+        blocked: result.blocked,
+      },
+      req,
+    });
+    res.json({
+      success: true,
+      message: "Product recycle bin processed",
+      data: result,
+    });
+  } catch (err) { next(err); }
+}
