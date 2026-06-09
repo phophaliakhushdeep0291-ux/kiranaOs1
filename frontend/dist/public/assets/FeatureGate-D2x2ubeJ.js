@@ -1,1 +1,0 @@
-import{j as r}from"./vendor-data-BIeTPk-A.js";import{U as s}from"./UpgradePrompt-CPShqr9L.js";import{n as a}from"./index-DRjCWdMp.js";function p({featureName:e,children:n,fallback:o}){const t=a(e);return t.loading?null:t.allowed?r.jsx(r.Fragment,{children:n}):r.jsx(r.Fragment,{children:o??r.jsx(s,{featureName:e,description:t.reason})})}export{p as F};

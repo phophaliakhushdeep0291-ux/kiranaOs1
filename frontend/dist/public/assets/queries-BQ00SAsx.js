@@ -1,1 +1,0 @@
-import{c as n}from"./vendor-data-BIeTPk-A.js";import{g as r}from"./query-options-BG4HmPQk.js";import{l as i,r as s}from"./index-DRjCWdMp.js";function m(t){return n({...r(t),mutationFn:({data:o})=>i(o)})}function g(t){return n({...r(t),mutationFn:({data:o})=>s(o)})}export{g as a,m as u};
