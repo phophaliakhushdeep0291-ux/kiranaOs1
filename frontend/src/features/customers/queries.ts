@@ -73,6 +73,15 @@ function readCachedCustomers(params?: ListCustomersParams): Customer[] {
   return filterCachedCustomers(readInstantCache<Customer[]>(CUSTOMERS_CACHE_KEY, []), params).map(normaliseCustomerForCache);
 }
 
+async function readCustomersFromIndexedDB(params?: ListCustomersParams): Promise<Customer[]> {
+  try {
+    const rows = await offlineDB.getAll<Customer>("customers");
+    return filterCachedCustomers(rows, params).map(normaliseCustomerForCache);
+  } catch {
+    return [];
+  }
+}
+
 export function useListCustomers(
   params?: ListCustomersParams,
   options?: QueryHookOptions<ListCustomersResponse, ListCustomersQueryKey>,
@@ -92,7 +101,12 @@ export function useListCustomers(
         void cacheCustomers(cacheSource.map(normaliseCustomerForCache));
         return fresh;
       } catch (error) {
-        if (liveCached.length > 0 || isNetworkLikeError(error)) return liveCached;
+        if (liveCached.length > 0) return liveCached;
+        if (isNetworkLikeError(error)) {
+          const fromDB = await readCustomersFromIndexedDB(params);
+          if (fromDB.length > 0) { void cacheCustomers(fromDB); return fromDB; }
+        }
+        if (isNetworkLikeError(error)) return liveCached;
         throw error;
       }
     },

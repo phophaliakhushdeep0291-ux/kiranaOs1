@@ -64,6 +64,19 @@ function readCachedBills(): Bill[] {
   return dedupeBillsForDisplay(readInstantCache<Bill[]>(BILLS_CACHE_KEY, []).map(withBillAliases)) as unknown as Bill[];
 }
 
+async function readBillsFromIndexedDB(params?: ListBillsParams): Promise<Bill[]> {
+  try {
+    const rows = await offlineDB.getAll<Bill>("bills");
+    const q = String(params?.search ?? "").trim().toLowerCase();
+    const recent = rows.filter((b) => (b as { deletedAt?: unknown }).deletedAt == null);
+    const filtered = q ? recent.filter((b) => String((b as { billNumber?: unknown }).billNumber ?? "").includes(q)) : recent;
+    const limit = Number(params?.limit ?? filtered.length);
+    return dedupeBillsForDisplay(filtered.slice(0, Number.isFinite(limit) && limit > 0 ? limit : filtered.length).map(withBillAliases)) as unknown as Bill[];
+  } catch {
+    return [];
+  }
+}
+
 export function useListBills(
   params?: ListBillsParams,
   options?: QueryHookOptions<ListBillsResponse, ListBillsQueryKey>,
@@ -90,7 +103,12 @@ export function useListBills(
         void cacheBills(visibleBills);
         return { ...data, bills: visibleBills, total: visibleBills.length };
       } catch (error) {
-        if (liveCachedBills.length > 0 || isNetworkLikeError(error)) return { bills: liveCachedBills, total: liveCachedBills.length };
+        if (liveCachedBills.length > 0) return { bills: liveCachedBills, total: liveCachedBills.length };
+        if (isNetworkLikeError(error)) {
+          const fromDB = await readBillsFromIndexedDB(params);
+          if (fromDB.length > 0) { void cacheBills(fromDB); return { bills: fromDB, total: fromDB.length }; }
+        }
+        if (isNetworkLikeError(error)) return { bills: liveCachedBills, total: liveCachedBills.length };
         throw error;
       }
     },

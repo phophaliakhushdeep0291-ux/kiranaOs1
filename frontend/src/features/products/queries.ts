@@ -55,6 +55,15 @@ function readCachedProducts(params?: ListProductsParams): ProductWithProductId[]
   return filterCachedProducts(readInstantCache<Product[]>(PRODUCTS_CACHE_KEY, []), params).map(withProductId);
 }
 
+async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<ProductWithProductId[]> {
+  try {
+    const rows = await offlineDB.getAll<Product>("products");
+    return filterCachedProducts(rows, params).map(withProductId);
+  } catch {
+    return [];
+  }
+}
+
 export function useListProducts(
   params?: ListProductsParams,
   options?: QueryHookOptions<ListProductsResponse, ListProductsQueryKey>,
@@ -74,7 +83,12 @@ export function useListProducts(
         void cacheProducts(cacheSource.map(withProductId));
         return fresh;
       } catch (error) {
-        if (liveCached.length > 0 || isNetworkLikeError(error)) return liveCached;
+        if (liveCached.length > 0) return liveCached;
+        if (isNetworkLikeError(error)) {
+          const fromDB = await readProductsFromIndexedDB(params);
+          if (fromDB.length > 0) { void cacheProducts(fromDB); return fromDB; }
+        }
+        if (isNetworkLikeError(error)) return liveCached;
         throw error;
       }
     },
