@@ -129,6 +129,11 @@ export default function Billing() {
   const subtotal = useMemo(() => roundMoney(cart.reduce((sum, item) => sum + item.quantity * item.rate, 0)), [cart]);
   const safeDiscount = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
   const grandTotal = roundMoney(Math.max(0, subtotal - safeDiscount));
+  const totalGst = useMemo(() => cart.reduce((sum, item) => {
+    const rate = item.product.gstRate ?? 0;
+    if (rate <= 0) return sum;
+    return sum + Math.round(item.quantity * item.rate * rate) / 100;
+  }, 0), [cart]);
   const typedCustomerName = customerName.trim();
   const typedCustomerMobile = customerMobile.replace(/\D/g, "").trim();
   const selectedCustomerBackendId = selectedCustomerId === "walk_in" ? "" : selectedCustomerId;
@@ -835,6 +840,11 @@ export default function Billing() {
           onToggleVoice={() => setVoiceVisible((v) => !v)}
           recentProducts={recentProducts}
           onHoldBill={holdCurrentBill}
+          cartItemCount={cart.length}
+          cartSubtotal={subtotal}
+          cartTax={totalGst}
+          cartDiscount={safeDiscount}
+          cartGrandTotal={grandTotal}
         />
         {voiceVisible && (
           <div className="shrink-0 border-t">

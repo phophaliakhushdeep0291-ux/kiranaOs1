@@ -1,4 +1,4 @@
-import type { Dispatch, MouseEvent as ReactMouseEvent, RefObject, SetStateAction } from "react";
+import { useState, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -140,6 +140,8 @@ export function BillingSummary({
   onUpdateUnit,
   onRemoveItem,
 }: BillingSummaryProps) {
+  const [showCustomerOptions, setShowCustomerOptions] = useState(false);
+
   /* GST calculation (informational — grandTotal unchanged) */
   const totalGst = cart.reduce((sum, item) => {
     const rate = item.product.gstRate ?? 0;
@@ -153,6 +155,12 @@ export function BillingSummary({
     }
     return customerName.trim() || "Walk-in Customer";
   })();
+
+  /* Auto-show options when a non-default state is active */
+  const needsOptionsVisible =
+    billType !== BillInputBillType.normal_sale ||
+    selectedCustomerId !== "walk_in" ||
+    creditAmount > 0;
 
   return (
     <div
@@ -171,23 +179,25 @@ export function BillingSummary({
       {/* ── Scrollable body ── */}
       <ScrollArea className="flex-1">
         <div className="divide-y">
-          {/* Customer row */}
+          {/* Customer row — clean single row matching reference */}
           <div className="flex items-center gap-3 px-4 py-3">
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
               <User size={15} />
             </span>
             <div className="min-w-0 flex-1">
-              {selectedCustomerId === "walk_in" && !customerName ? (
-                <p className="text-sm font-semibold text-foreground">Walk-in Customer</p>
-              ) : (
-                <p className="truncate text-sm font-semibold text-foreground">{selectedCustomerName}</p>
-              )}
-              <p className="text-[11px] text-muted-foreground">
-                {selectedCustomerId === "walk_in" ? "No customer linked" : "Saved customer"}
+              <p className="truncate text-sm font-semibold text-foreground">
+                {selectedCustomerId === "walk_in" && !customerName
+                  ? "Walk-in Customer"
+                  : selectedCustomerName}
               </p>
+              {billType !== BillInputBillType.normal_sale && (
+                <p className="text-[11px] capitalize text-muted-foreground">
+                  {billType.replace(/_/g, " ")}
+                </p>
+              )}
             </div>
             <button
-              onClick={() => {}}
+              onClick={() => setShowCustomerOptions((v) => !v)}
               className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-primary hover:underline"
             >
               Change <ChevronRight size={12} />
@@ -201,30 +211,32 @@ export function BillingSummary({
             </div>
           )}
 
-          {/* Bill type selector */}
-          <div className="flex items-center gap-3 px-4 py-2.5">
-            <span className="shrink-0 text-xs font-medium text-muted-foreground">Bill type</span>
-            <Select
-              value={billType}
-              onValueChange={(v) => setBillType(v as BillTypeSelection)}
-            >
-              <SelectTrigger
-                data-testid="select-bill-type"
-                className="h-8 flex-1 text-xs font-semibold"
+          {/* Bill type selector — only shown when options expanded or non-default */}
+          {(showCustomerOptions || needsOptionsVisible) && (
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">Bill type</span>
+              <Select
+                value={billType}
+                onValueChange={(v) => setBillType(v as BillTypeSelection)}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={BillInputBillType.normal_sale}>Normal Sale</SelectItem>
-                <SelectItem value={BillInputBillType.udhar_entry}>Udhar</SelectItem>
-                <SelectItem value={BillInputBillType.gst_invoice}>GST Invoice</SelectItem>
-                <SelectItem value={BillInputBillType.estimate}>Estimate</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+                <SelectTrigger
+                  data-testid="select-bill-type"
+                  className="h-8 flex-1 text-xs font-semibold"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={BillInputBillType.normal_sale}>Normal Sale</SelectItem>
+                  <SelectItem value={BillInputBillType.udhar_entry}>Udhar</SelectItem>
+                  <SelectItem value={BillInputBillType.gst_invoice}>GST Invoice</SelectItem>
+                  <SelectItem value={BillInputBillType.estimate}>Estimate</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-          {/* Customer name/mobile inputs (walk-in only) */}
-          {selectedCustomerId === "walk_in" && (
+          {/* Customer name/mobile inputs — only when options expanded or udhar/credit needed */}
+          {selectedCustomerId === "walk_in" && (showCustomerOptions || needsOptionsVisible) && (
             <div className="space-y-2 px-4 py-3">
               <Select
                 value={selectedCustomerId}
@@ -309,22 +321,19 @@ export function BillingSummary({
           {/* Order summary */}
           <div className="space-y-2 px-4 py-3">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal ({cart.length})</span>
-              <span data-testid="text-subtotal">{fmtRs(subtotal)}</span>
+              <span className="text-muted-foreground">Subtotal</span>
+              <span data-testid="text-subtotal" className="font-semibold">{fmtRs(subtotal)}</span>
             </div>
 
-            {/* Discount row */}
+            {/* Discount row — matches reference: left label + right value + Apply link */}
             <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span>Discount</span>
-                <kbd className="rounded border bg-muted px-1 py-0.5 text-[9px] font-semibold">F4</kbd>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {safeDiscount > 0 ? (
-                  <span className="text-sm font-semibold text-emerald-600">
-                    − {fmtRs(safeDiscount)}
+              <span className="text-muted-foreground">Discount</span>
+              <div className="flex items-center gap-2">
+                {safeDiscount > 0 && (
+                  <span className="font-semibold text-emerald-600">
+                    −{fmtRs(safeDiscount)}
                   </span>
-                ) : null}
+                )}
                 <input
                   data-testid="input-discount"
                   type="number"
@@ -339,22 +348,20 @@ export function BillingSummary({
                   }`}
                   placeholder="₹ 0"
                 />
-                {safeDiscount > 0 && (
-                  <button
-                    onClick={() => setDiscount(0)}
-                    className="text-xs font-semibold text-primary hover:underline"
-                  >
-                    Edit
-                  </button>
-                )}
+                <button
+                  onClick={() => setDiscount(0)}
+                  className="text-xs font-semibold text-primary hover:underline"
+                >
+                  Apply
+                </button>
               </div>
             </div>
 
             {/* GST row (informational, only if > 0) */}
             {totalGst > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Tax (GST)</span>
-                <span>{fmtRs(Math.round(totalGst * 100) / 100)}</span>
+                <span className="text-muted-foreground">Tax (GST 5%)</span>
+                <span className="font-semibold">{fmtRs(Math.round(totalGst * 100) / 100)}</span>
               </div>
             )}
 

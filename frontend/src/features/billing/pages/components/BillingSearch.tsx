@@ -1,12 +1,24 @@
 import { useState, type RefObject } from "react";
-import { ChevronDown, ChevronRight, ChevronUp, Clock, ScanLine, Search, Zap } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Clock,
+  PauseCircle,
+  Percent,
+  ReceiptText,
+  ScanLine,
+  Search,
+  Ticket,
+  Users,
+  Zap,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Link } from "wouter";
 import { useListBills } from "@/features/bills/queries";
 import type { Bill, Product } from "@/lib/api/client";
 import { productSellingPrice } from "../billing-calculations";
 import { BillingDraftRestore } from "./BillingDraftRestore";
-import { SyncBadge } from "@/components/shared";
 
 /* ─── deterministic product placeholder colour ─── */
 const PLACEHOLDER_COLORS = [
@@ -63,6 +75,8 @@ export function getProductEmoji(name: string, category?: string | null): string 
   return "📦";
 }
 
+const CATEGORY_LIMIT = 8;
+
 /* ─── props ─── */
 interface BillingSearchProps {
   isOnline: boolean;
@@ -82,6 +96,12 @@ interface BillingSearchProps {
   voiceVisible: boolean;
   onToggleVoice: () => void;
   onHoldBill: () => void;
+  /* order summary bar */
+  cartItemCount: number;
+  cartSubtotal: number;
+  cartTax: number;
+  cartDiscount: number;
+  cartGrandTotal: number;
 }
 
 /* ─── main component ─── */
@@ -100,96 +120,121 @@ export function BillingSearch({
   selectedCategory,
   onSelectedCategoryChange,
   recentProducts,
-  voiceVisible,
-  onToggleVoice,
   onHoldBill,
+  cartItemCount,
+  cartSubtotal,
+  cartTax,
+  cartDiscount,
+  cartGrandTotal,
 }: BillingSearchProps) {
   const [showAll, setShowAll] = useState(false);
   const displayedProducts = showAll ? filteredProducts : filteredProducts.slice(0, 10);
+  const visibleCategories = categories.slice(0, CATEGORY_LIMIT);
+  const hasMoreCategories = categories.length > CATEGORY_LIMIT;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* ── Sticky header ── */}
-      <div className="shrink-0 border-b bg-card/95 px-4 pb-3 pt-3 shadow-sm backdrop-blur">
-        {!isOnline && (
-          <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
-            <SyncBadge status="offline" label="Offline" />
-            <span>Billing continues offline.</span>
+
+      {/* ── Offline banner ── */}
+      {!isOnline && (
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
+          Offline — changes save locally and sync when back online.
+        </div>
+      )}
+
+      {/* ── Draft restored banner ── */}
+      {draftRestored && (
+        <div className="shrink-0 border-b bg-blue-50 px-4 py-2 dark:bg-blue-950/30">
+          <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-400">
+            <span>Draft restored ({cartLength} item{cartLength !== 1 ? "s" : ""})</span>
+            <button
+              onClick={onHideDraftRestored}
+              className="ml-auto text-blue-500 hover:underline"
+            >
+              Dismiss
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        <BillingDraftRestore
-          draftRestored={draftRestored}
-          cartLength={cartLength}
-          onHideDraftRestored={onHideDraftRestored}
-        />
+      {/* ── Sticky header: Search + Recent Products ── */}
+      <div className="shrink-0 border-b bg-background px-4 pb-3 pt-4">
+        <div className="flex items-start gap-4">
 
-        {/* Search + Recent Products strip */}
-        <div className="flex items-end gap-4">
-          {/* Search */}
-          <div className="relative min-w-0 flex-1">
-            <Search
-              size={16}
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-              aria-hidden="true"
-            />
-            <Input
-              ref={searchInputRef}
-              data-testid="input-product-search"
-              className="h-11 rounded-xl border-2 bg-background pl-10 pr-24 font-medium transition-colors focus-visible:border-primary focus-visible:ring-0"
-              placeholder="Search by product name, barcode or SKU"
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-            <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-              <kbd className="hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:inline">
+          {/* Left: Search input + barcode scan button */}
+          <div className="min-w-0 flex-1">
+            <div className="relative">
+              <Search
+                size={15}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                ref={searchInputRef}
+                data-testid="input-product-search"
+                className="h-11 rounded-xl border-2 bg-background pl-9 pr-16 font-medium transition-colors focus-visible:border-primary focus-visible:ring-0"
+                placeholder="Search by product name, barcode or SKU"
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+              />
+              <kbd className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:block">
                 ⌘ K
               </kbd>
-              <ScanLine size={15} className="text-muted-foreground" aria-hidden="true" />
             </div>
+            {/* Barcode scan — separate button below search, matching reference */}
+            <button
+              type="button"
+              className="mt-1.5 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ScanLine size={13} aria-hidden="true" />
+              Scan barcode
+            </button>
           </div>
 
-          {/* Recent Products */}
+          {/* Right: Recent Products */}
           {recentProducts.length > 0 && !search && (
             <div className="hidden shrink-0 lg:block">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Recent Products
               </p>
-              <div className="flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none]">
-                {recentProducts.slice(0, 5).map((p) => {
+              <div className="flex items-center gap-2">
+                {recentProducts.slice(0, 3).map((p) => {
                   const price = productSellingPrice(p, 1);
                   const color = productPlaceholderColor(p.name);
                   return (
                     <button
                       key={p.id}
                       onClick={() => onAddProduct(p)}
-                      className="flex w-[92px] shrink-0 flex-col items-center gap-1 rounded-xl border bg-card p-2 transition-all hover:border-primary/50 hover:shadow-sm active:scale-[0.97]"
+                      className="flex w-[80px] shrink-0 flex-col items-center gap-1 rounded-xl border bg-card p-2 text-center transition-all hover:border-primary/50 hover:shadow-sm active:scale-[0.97]"
                     >
-                      <span
-                        className={`grid h-8 w-full place-items-center rounded-lg text-xl ${color}`}
-                      >
+                      <span className={`grid h-9 w-full place-items-center rounded-lg text-xl ${color}`}>
                         {getProductEmoji(p.name, undefined)}
                       </span>
-                      <p className="line-clamp-1 w-full text-center text-[11px] font-semibold leading-tight">
+                      <p className="line-clamp-1 w-full text-[10px] font-semibold leading-tight">
                         {p.name.split(" ")[0]}
                       </p>
-                      <span className="text-[11px] font-black text-primary">₹{price}</span>
+                      <span className="text-[11px] font-bold text-primary">₹{price}</span>
                     </button>
                   );
                 })}
+                {recentProducts.length > 3 && (
+                  <button className="flex h-[76px] w-7 flex-col items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted">
+                    <ChevronRight size={13} />
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Category chips */}
+        {/* Category chips — pill style matching reference */}
         <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none]">
           <CategoryChip
             label="All"
             active={selectedCategory === "all"}
             onClick={() => onSelectedCategoryChange("all")}
           />
-          {categories.map((cat) => (
+          {visibleCategories.map((cat) => (
             <CategoryChip
               key={cat}
               label={cat}
@@ -197,6 +242,11 @@ export function BillingSearch({
               onClick={() => onSelectedCategoryChange(cat)}
             />
           ))}
+          {hasMoreCategories && (
+            <button className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted">
+              More ▾
+            </button>
+          )}
         </div>
       </div>
 
@@ -204,12 +254,12 @@ export function BillingSearch({
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {productsLoading && filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-            <Zap size={22} className="animate-pulse text-primary/60" />
+            <Search size={22} className="animate-pulse text-primary/60" />
             <p className="text-sm">Loading products…</p>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-muted text-2xl font-black text-muted-foreground">
+            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-muted text-2xl text-muted-foreground">
               ?
             </span>
             <div>
@@ -231,7 +281,7 @@ export function BillingSearch({
               </p>
             )}
 
-            {/* Product grid */}
+            {/* Product grid — 5 columns matching reference */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {displayedProducts.map((product) => (
                 <ProductCard
@@ -242,19 +292,19 @@ export function BillingSearch({
               ))}
             </div>
 
-            {/* View all / collapse */}
+            {/* View all products button */}
             {filteredProducts.length > 10 && (
               <button
                 onClick={() => setShowAll((v) => !v)}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
               >
                 {showAll ? (
                   <>
-                    <ChevronUp size={14} /> Show less
+                    <ChevronUp size={14} aria-hidden="true" /> Show less
                   </>
                 ) : (
                   <>
-                    <ChevronDown size={14} /> View all products ({filteredProducts.length})
+                    View all products <ChevronDown size={14} aria-hidden="true" />
                   </>
                 )}
               </button>
@@ -262,15 +312,58 @@ export function BillingSearch({
           </>
         )}
 
-        {/* Bottom info panels */}
+        {/* ── Bottom 3-column info section ── */}
         {!search && (
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <RecentBillsPanel />
-            <QuickActionsPanel onHoldBill={onHoldBill} onToggleVoice={onToggleVoice} />
+            <QuickActionsPanel onHoldBill={onHoldBill} />
             <BillingTipsPanel />
           </div>
         )}
       </div>
+
+      {/* ── Order Summary bar — sticky bottom, matches reference ── */}
+      {cartItemCount > 0 && (
+        <div className="shrink-0 border-t bg-muted/40 px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+              <ReceiptText size={13} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+              {cartItemCount} {cartItemCount === 1 ? "Item" : "Items"}
+            </span>
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Percent size={11} className="shrink-0" aria-hidden="true" />
+              <strong className="font-semibold text-foreground">
+                ₹{cartSubtotal.toLocaleString("en-IN")}
+              </strong>
+              &nbsp;Subtotal
+            </span>
+            {cartTax > 0 && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Percent size={11} className="shrink-0" aria-hidden="true" />
+                <strong className="font-semibold text-foreground">
+                  ₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}
+                </strong>
+                &nbsp;Tax (5%)
+              </span>
+            )}
+            {cartDiscount > 0 && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Percent size={11} className="shrink-0" aria-hidden="true" />
+                <strong className="font-semibold text-foreground">
+                  ₹{cartDiscount.toLocaleString("en-IN")}
+                </strong>
+                &nbsp;Discount
+              </span>
+            )}
+            <div className="ml-auto flex items-baseline gap-1.5">
+              <span className="text-base font-black text-foreground">
+                ₹{cartGrandTotal.toLocaleString("en-IN")}
+              </span>
+              <span className="text-xs font-semibold text-muted-foreground">Grand Total</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -287,13 +380,13 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
     <button
       data-testid={`product-card-${product.id}`}
       onClick={onAdd}
-      className="group flex flex-col items-start gap-2 rounded-xl border bg-card p-2.5 text-left shadow-xs transition-all duration-150 hover:border-primary/40 hover:shadow-md active:scale-[0.97]"
+      className="group flex flex-col items-start gap-2 rounded-xl border bg-card p-2.5 text-left shadow-sm transition-all duration-150 hover:border-primary/40 hover:shadow-md active:scale-[0.97]"
     >
-      {/* Image placeholder with emoji */}
+      {/* Image area — blank/emoji placeholder */}
       <div
         className={`relative flex h-24 w-full items-center justify-center overflow-hidden rounded-lg ${color}`}
       >
-        <span className="text-4xl leading-none">{emoji}</span>
+        <span className="text-4xl leading-none" aria-hidden="true">{emoji}</span>
         {stock <= 0 ? (
           <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">
             Out
@@ -305,9 +398,9 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
         ) : null}
       </div>
 
-      {/* Name + category */}
+      {/* Product name */}
       <div className="min-w-0 w-full">
-        <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">
+        <p className="line-clamp-2 text-xs font-bold leading-snug text-foreground">
           {product.name}
         </p>
         {product.category && (
@@ -315,13 +408,13 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
         )}
       </div>
 
-      {/* Price + add */}
+      {/* Price + add button */}
       <div className="flex w-full items-center justify-between gap-1">
-        <span className="text-sm font-black text-foreground">
+        <span className="text-sm font-bold text-foreground">
           ₹{price}
           <span className="text-[10px] font-normal text-muted-foreground">/{unit}</span>
         </span>
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-primary text-[13px] font-black text-primary-foreground shadow-sm transition-transform group-hover:scale-110">
+        <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-sm font-black text-primary-foreground shadow-sm transition-transform group-hover:scale-110">
           +
         </span>
       </div>
@@ -329,12 +422,20 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
   );
 }
 
-/* ─── Category chip ─── */
-function CategoryChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+/* ─── Category chip — pill style matching reference ─── */
+function CategoryChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-lg border px-3 py-1 text-xs font-semibold transition-colors ${
+      className={`shrink-0 rounded-full border px-3.5 py-1 text-xs font-semibold transition-colors ${
         active
           ? "border-primary bg-primary text-primary-foreground shadow-sm"
           : "border-border bg-background text-foreground hover:bg-muted"
@@ -364,14 +465,16 @@ function RecentBillsPanel() {
     if (mode === "upi") return "UPI";
     if (mode === "credit") return "Udhar";
     if (mode === "bank") return "Bank";
+    if (mode === "card") return "Card";
     return mode.charAt(0).toUpperCase() + mode.slice(1);
   }
 
   function badgeClass(label: string): string {
-    if (label === "UPI") return "bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-400";
-    if (label === "Udhar") return "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400";
-    if (label === "Bank") return "bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-400";
-    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400";
+    if (label === "UPI") return "bg-purple-100 text-purple-700";
+    if (label === "Udhar") return "bg-amber-100 text-amber-700";
+    if (label === "Bank") return "bg-blue-100 text-blue-700";
+    if (label === "Card") return "bg-slate-100 text-slate-700";
+    return "bg-emerald-100 text-emerald-700";
   }
 
   return (
@@ -430,13 +533,41 @@ function RecentBillsPanel() {
   );
 }
 
-/* ─── Quick Actions panel ─── */
-function QuickActionsPanel({ onHoldBill, onToggleVoice }: { onHoldBill: () => void; onToggleVoice: () => void }) {
+/* ─── Quick Actions panel — matches reference icons ─── */
+function QuickActionsPanel({ onHoldBill }: { onHoldBill: () => void }) {
   const actions = [
-    { icon: "🏷️", title: "Apply Discount", description: "Give flat or % discount", hint: "F4", onClick: undefined },
-    { icon: "🎟️", title: "Coupons", description: "Apply promo code", hint: null, onClick: undefined },
-    { icon: "🎙️", title: "Voice Billing", description: "Speak items to add", hint: null, onClick: onToggleVoice },
-    { icon: "⏸️", title: "Hold Current Bill", description: "Save and resume later", hint: "F9", onClick: onHoldBill },
+    {
+      iconEl: <Zap size={14} className="text-yellow-600" />,
+      iconBg: "bg-yellow-100",
+      title: "Apply Discount",
+      description: "Give flat or % discount",
+      hint: "F4",
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      iconEl: <Ticket size={14} className="text-purple-600" />,
+      iconBg: "bg-purple-100",
+      title: "Coupons",
+      description: "Apply promo code",
+      hint: null as string | null,
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      iconEl: <Users size={14} className="text-orange-600" />,
+      iconBg: "bg-orange-100",
+      title: "Recent Customers",
+      description: "Select from history",
+      hint: null as string | null,
+      onClick: undefined as (() => void) | undefined,
+    },
+    {
+      iconEl: <PauseCircle size={14} className="text-blue-600" />,
+      iconBg: "bg-blue-100",
+      title: "Hold Current Bill",
+      description: "Save and resume later",
+      hint: "F9",
+      onClick: onHoldBill,
+    },
   ];
 
   return (
@@ -449,7 +580,11 @@ function QuickActionsPanel({ onHoldBill, onToggleVoice }: { onHoldBill: () => vo
             onClick={action.onClick}
             className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60"
           >
-            <span className="text-base leading-none">{action.icon}</span>
+            <span
+              className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${action.iconBg}`}
+            >
+              {action.iconEl}
+            </span>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-foreground">{action.title}</p>
               <p className="text-[10px] text-muted-foreground">{action.description}</p>
@@ -469,11 +604,11 @@ function QuickActionsPanel({ onHoldBill, onToggleVoice }: { onHoldBill: () => vo
 /* ─── Billing Tips panel ─── */
 function BillingTipsPanel() {
   const tips = [
-    { action: "Scan barcode or press F2", detail: "to search fast" },
-    { action: "Use F4", detail: "to apply discount" },
-    { action: "Use F6", detail: "to add customer" },
-    { action: "Use F9", detail: "to hold the bill" },
-    { action: "Press Ctrl+S", detail: "to save bill" },
+    { action: "Scan barcode or press", key: "F2", detail: "to search fast" },
+    { action: "Use", key: "F4", detail: "to apply discount" },
+    { action: "Use", key: "F6", detail: "to add customer" },
+    { action: "Use", key: "F9", detail: "to hold the bill" },
+    { action: "Press", key: "Ctrl + S", detail: "to save bill" },
   ];
 
   return (
@@ -484,18 +619,19 @@ function BillingTipsPanel() {
       </div>
       <div className="space-y-2">
         {tips.map((tip) => (
-          <div key={tip.action} className="flex items-start gap-1.5 text-xs">
+          <div key={tip.key} className="flex items-start gap-1.5 text-xs">
             <span className="mt-0.5 font-bold text-primary">✓</span>
-            <span>
-              <span className="font-semibold text-foreground">{tip.action}</span>{" "}
-              <span className="text-muted-foreground">{tip.detail}</span>
+            <span className="text-muted-foreground">
+              {tip.action}{" "}
+              <span className="font-semibold text-foreground">{tip.key}</span>{" "}
+              {tip.detail}
             </span>
           </div>
         ))}
+        <button className="mt-1 flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline">
+          View all shortcuts <ChevronRight size={11} />
+        </button>
       </div>
-      <button className="mt-3 flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-        View all shortcuts <ChevronRight size={12} />
-      </button>
     </div>
   );
 }

@@ -68,6 +68,15 @@ const COLLAPSED_WIDTH = 72;
 
 // ── page title map ────────────────────────────────────────────────────────────
 
+const PAGE_SUBTITLES: Record<string, string> = {
+  "/billing": "Create fast bills and collect payments",
+  "/dashboard": "Your business at a glance",
+  "/products": "Manage your product catalog",
+  "/inventory": "Track stock levels",
+  "/customers": "Customers and credit ledger",
+  "/reports": "Sales insights and analytics",
+};
+
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/billing": "Billing",
@@ -380,7 +389,12 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         {/* Desktop topbar */}
         <header className="sticky top-0 z-40 hidden h-14 items-center gap-4 border-b border-border bg-background/95 px-5 backdrop-blur lg:flex">
-          <h1 className="min-w-0 flex-1 text-base font-bold text-foreground">{getPageTitle(loc)}</h1>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-base font-bold text-foreground leading-tight">{getPageTitle(loc)}</h1>
+            {PAGE_SUBTITLES[loc] && (
+              <p className="text-[11px] text-muted-foreground leading-none mt-0.5">{PAGE_SUBTITLES[loc]}</p>
+            )}
+          </div>
 
           <div className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold",
             isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
