@@ -252,11 +252,8 @@ export function BillingSearch({
           </div>
         </div>
 
-        {/* Divider connecting header to product grid (one continuous card) */}
-        <div className="mx-4 border-t border-[#eef1f6]" />
-
         {/* Product grid — scrollable */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-4">
+        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1">
           {productsLoading && filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#536383]">
               <Search size={22} className="animate-pulse text-[#0057ff]/60" />
