@@ -30,9 +30,9 @@ const MAX_RECENT_PRODUCTS = 18;
 function readBillSummaryWidth() {
   try {
     const raw = Number(localStorage.getItem(BILL_SUMMARY_WIDTH_KEY));
-    return Number.isFinite(raw) && raw >= MIN_SUMMARY_WIDTH ? Math.min(raw, MAX_SUMMARY_WIDTH) : 380;
+    return Number.isFinite(raw) && raw >= MIN_SUMMARY_WIDTH ? Math.min(raw, MAX_SUMMARY_WIDTH) : 376;
   } catch {
-    return 380;
+    return 376;
   }
 }
 
@@ -819,9 +819,10 @@ export default function Billing() {
   }, [search]);
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] flex-col bg-background lg:flex-row">
+    <div className="h-[calc(100dvh-56px)] overflow-hidden bg-[#f7f9fd]">
+      <div className="flex h-full flex-col gap-3.5 px-3 py-3.5 lg:flex-row">
       {/* ── LEFT PANEL: product search + grid ── */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden lg:border-r">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <BillingSearch
           isOnline={isOnline}
           draftRestored={draftRestored}
@@ -919,6 +920,7 @@ export default function Billing() {
         onUpdateUnit={updateUnit}
         onRemoveItem={removeItem}
       />
+      </div>
 
       <OwnerPinModal
         open={sensitivePinOpen}

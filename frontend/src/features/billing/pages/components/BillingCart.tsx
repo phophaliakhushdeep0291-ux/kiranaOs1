@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Minus, Plus, ShoppingCart } from "lucide-react";
+import { ShoppingCart, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productMinSellingPrice, roundMoney } from "../billing-calculations";
 import type { CartItem } from "../billing-types";
@@ -17,20 +17,20 @@ interface BillingCartProps {
 export function BillingCart({ cart, onUpdateQty, onUpdateRate, onRemoveItem }: BillingCartProps) {
   if (cart.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-        <span className="grid h-12 w-12 place-items-center rounded-xl bg-muted text-muted-foreground">
+      <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+        <span className="grid h-12 w-12 place-items-center rounded-xl bg-[#f7f9fd] text-[#536383]">
           <ShoppingCart size={20} aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-semibold text-foreground">Cart is empty</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">Click products on the left to add</p>
+          <p className="text-sm font-bold text-[#13274d]">Cart is empty</p>
+          <p className="mt-0.5 text-xs text-[#536383]">Click products on the left to add</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="divide-y">
+    <div>
       {cart.map((item) => (
         <CartRow
           key={item.product.id}
@@ -67,27 +67,27 @@ function CartRow({
   return (
     <div
       data-testid={`cart-item-${item.product.id}`}
-      className="flex items-center gap-2.5 px-1 py-2.5"
+      className="grid grid-cols-[34px_1fr_84px_60px_22px] items-center gap-[9px] border-b border-[#edf1f6] px-2.5 py-3 last:border-b-0"
     >
       {/* Thumbnail */}
-      <div
-        className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-xl ${color}`}
-      >
+      <div className={`grid h-[34px] w-[34px] shrink-0 place-items-center rounded-lg text-lg ${color}`}>
         {emoji}
       </div>
 
       {/* Name + rate */}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold leading-tight">{item.product.name}</p>
+      <div className="min-w-0">
+        <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#13274d]">
+          {item.product.name}
+        </p>
         <button
           onClick={() => setEditingRate((v) => !v)}
           className={cn(
-            "mt-0.5 text-xs leading-none",
+            "mt-[5px] text-[11px] font-bold leading-none",
             editingRate
-              ? "font-semibold text-primary"
+              ? "text-[#0057ff]"
               : isBelowMin
-                ? "font-semibold text-destructive"
-                : "text-muted-foreground hover:text-foreground",
+                ? "text-red-600"
+                : "text-[#2d4268] hover:text-[#0057ff]",
           )}
         >
           {editingRate ? "✓ done" : `₹${item.rate}/${item.unit}${isBelowMin ? " · below min" : ""}`}
@@ -105,48 +105,48 @@ function CartRow({
         )}
       </div>
 
-      {/* Qty controls */}
-      <div className="flex shrink-0 items-center gap-1">
+      {/* Qty stepper — 84px, 3 columns */}
+      <div className="grid h-[30px] w-[84px] grid-cols-3 overflow-hidden rounded-[8px] border border-[#dfe8f5]">
         <button
           data-testid={`button-dec-${item.product.id}`}
           onClick={() => onUpdateQty(item.product.id, item.quantity - 1)}
-          className="grid h-7 w-7 place-items-center rounded-lg border bg-background text-sm hover:bg-muted"
+          className="bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
           aria-label={`Decrease ${item.product.name}`}
         >
-          <Minus size={11} />
+          −
         </button>
-        <Input
+        <input
           data-testid={`qty-${item.product.id}`}
           type="number"
           inputMode="decimal"
           value={item.quantity}
           onChange={(e) => onUpdateQty(item.product.id, Number(e.target.value) || 0)}
-          className="h-7 w-12 px-1 text-center text-sm font-semibold"
+          className="border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <button
           data-testid={`button-inc-${item.product.id}`}
           onClick={() => onUpdateQty(item.product.id, item.quantity + 1)}
-          className="grid h-7 w-7 place-items-center rounded-lg border bg-background text-sm hover:bg-muted"
+          className="bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
           aria-label={`Increase ${item.product.name}`}
         >
-          <Plus size={11} />
+          +
         </button>
       </div>
 
-      {/* Line total + remove */}
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="min-w-[52px] text-right text-sm font-black tabular-nums">
-          ₹{lineTotal.toLocaleString("en-IN")}
-        </span>
-        <button
-          data-testid={`button-remove-${item.product.id}`}
-          onClick={() => onRemoveItem(item.product.id)}
-          className="grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          aria-label={`Remove ${item.product.name}`}
-        >
-          ✕
-        </button>
-      </div>
+      {/* Line total */}
+      <span className="text-right text-[12px] font-black text-[#13274d] tabular-nums">
+        ₹{lineTotal.toLocaleString("en-IN")}
+      </span>
+
+      {/* Remove */}
+      <button
+        data-testid={`button-remove-${item.product.id}`}
+        onClick={() => onRemoveItem(item.product.id)}
+        className="grid h-[22px] w-[22px] place-items-center rounded text-[#536383] transition-colors hover:bg-red-50 hover:text-red-600"
+        aria-label={`Remove ${item.product.name}`}
+      >
+        <X size={15} />
+      </button>
     </div>
   );
 }

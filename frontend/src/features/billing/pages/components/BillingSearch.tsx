@@ -18,7 +18,6 @@ import { Link } from "wouter";
 import { useListBills } from "@/features/bills/queries";
 import type { Bill, Product } from "@/lib/api/client";
 import { productSellingPrice } from "../billing-calculations";
-import { BillingDraftRestore } from "./BillingDraftRestore";
 
 /* ─── deterministic product placeholder colour ─── */
 const PLACEHOLDER_COLORS = [
@@ -44,7 +43,7 @@ export function getProductEmoji(name: string, category?: string | null): string 
   const t = ((category ?? "") + " " + name).toLowerCase();
   if (t.match(/atta|flour|wheat|aashirvaad|pillsbury/)) return "🌾";
   if (t.match(/rice|basmati|india gate/)) return "🍚";
-  if (t.match(/oil|ghee|dalda|vanaspati|sunflite|fortune/)) return "🫙";
+  if (t.match(/oil|ghee|dalda|vanaspati|sunlite|fortune/)) return "🫙";
   if (t.match(/salt|namak|iodiz/)) return "🧂";
   if (t.match(/sugar|chini/)) return "🍬";
   if (t.match(/dal|pulse|lentil|chana|moong|toor|masoor/)) return "🫘";
@@ -96,7 +95,6 @@ interface BillingSearchProps {
   voiceVisible: boolean;
   onToggleVoice: () => void;
   onHoldBill: () => void;
-  /* order summary bar */
   cartItemCount: number;
   cartSubtotal: number;
   cartTax: number;
@@ -133,247 +131,258 @@ export function BillingSearch({
   const hasMoreCategories = categories.length > CATEGORY_LIMIT;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col gap-3.5 overflow-hidden">
 
-      {/* ── Offline banner ── */}
+      {/* ── Offline / draft banners ── */}
       {!isOnline && (
-        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
+        <div className="shrink-0 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">
           Offline — changes save locally and sync when back online.
         </div>
       )}
-
-      {/* ── Draft restored banner ── */}
       {draftRestored && (
-        <div className="shrink-0 border-b bg-blue-50 px-4 py-2 dark:bg-blue-950/30">
-          <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-400">
+        <div className="shrink-0 rounded-[10px] border border-blue-200 bg-blue-50 px-4 py-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
             <span>Draft restored ({cartLength} item{cartLength !== 1 ? "s" : ""})</span>
-            <button
-              onClick={onHideDraftRestored}
-              className="ml-auto text-blue-500 hover:underline"
-            >
+            <button onClick={onHideDraftRestored} className="ml-auto text-blue-500 hover:underline">
               Dismiss
             </button>
           </div>
         </div>
       )}
 
-      {/* ── Sticky header: Search + Recent Products ── */}
-      <div className="shrink-0 border-b bg-background px-4 pb-3 pt-4">
-        <div className="flex items-start gap-4">
+      {/* ── 1. Product Browser Card ── */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.045)]">
 
-          {/* Left: Search input + barcode scan button */}
-          <div className="min-w-0 flex-1">
-            <div className="relative">
-              <Search
-                size={15}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                ref={searchInputRef}
-                data-testid="input-product-search"
-                className="h-11 rounded-xl border-2 bg-background pl-9 pr-16 font-medium transition-colors focus-visible:border-primary focus-visible:ring-0"
-                placeholder="Search by product name, barcode or SKU"
-                value={search}
-                onChange={(e) => onSearchChange(e.target.value)}
-              />
-              <kbd className="absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:block">
-                ⌘ K
-              </kbd>
-            </div>
-            {/* Scan + Voice buttons below search */}
-            <div className="mt-1.5 flex items-center gap-3">
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <ScanLine size={13} aria-hidden="true" />
-                Scan barcode
-              </button>
-              <span className="text-muted-foreground/30 select-none">|</span>
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <Mic size={13} aria-hidden="true" />
-                Voice
-              </button>
-            </div>
-          </div>
+        {/* Top section: search + recent products */}
+        <div className="shrink-0 px-4 pt-4">
+          <div className="flex items-start gap-7">
 
-          {/* Right: Recent Products */}
-          {recentProducts.length > 0 && !search && (
-            <div className="hidden shrink-0 lg:block">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Recent Products
-              </p>
-              <div className="flex items-center gap-2">
-                {recentProducts.slice(0, 3).map((p) => {
-                  const price = productSellingPrice(p, 1);
-                  const color = productPlaceholderColor(p.name);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => onAddProduct(p)}
-                      className="flex w-[80px] shrink-0 flex-col items-center gap-1 rounded-xl border bg-card p-2 text-center transition-all hover:border-primary/50 hover:shadow-sm active:scale-[0.97]"
-                    >
-                      <span className={`grid h-9 w-full place-items-center rounded-lg text-xl ${color}`}>
-                        {getProductEmoji(p.name, undefined)}
-                      </span>
-                      <p className="line-clamp-1 w-full text-[10px] font-semibold leading-tight">
-                        {p.name.split(" ")[0]}
-                      </p>
-                      <span className="text-[11px] font-bold text-primary">₹{price}</span>
-                    </button>
-                  );
-                })}
-                {recentProducts.length > 3 && (
-                  <button className="flex h-[76px] w-7 flex-col items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:bg-muted">
-                    <ChevronRight size={13} />
-                  </button>
-                )}
+            {/* Search box */}
+            <div className="min-w-0 flex-1 max-w-[356px]">
+              <div className="relative flex h-12 items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-white px-4">
+                <Search size={15} className="shrink-0 text-[#6b7a9a]" aria-hidden="true" />
+                <Input
+                  ref={searchInputRef}
+                  data-testid="input-product-search"
+                  className="h-full flex-1 border-0 bg-transparent p-0 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
+                  placeholder="Search by product name, barcode or SKU"
+                  value={search}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                />
+                <kbd className="ml-auto flex shrink-0 items-center gap-1 rounded-[6px] border border-[#e1e8f2] bg-[#f4f7fb] px-1.5 py-0.5 text-[11px] font-bold text-[#45577a]">
+                  ⌘ K
+                </kbd>
+              </div>
+              {/* Scan + Voice */}
+              <div className="mt-1.5 flex items-center gap-3">
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#6b7a9a] transition-colors hover:text-[#0b1b3f]"
+                >
+                  <ScanLine size={12} aria-hidden="true" />
+                  Scan barcode
+                </button>
+                <span className="text-[#d5dde8] select-none">|</span>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#6b7a9a] transition-colors hover:text-[#0b1b3f]"
+                >
+                  <Mic size={12} aria-hidden="true" />
+                  Voice
+                </button>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* Category chips — pill style matching reference */}
-        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none]">
-          <CategoryChip
-            label="All"
-            active={selectedCategory === "all"}
-            onClick={() => onSelectedCategoryChange("all")}
-          />
-          {visibleCategories.map((cat) => (
-            <CategoryChip
-              key={cat}
-              label={cat}
-              active={selectedCategory === cat}
-              onClick={() => onSelectedCategoryChange(cat)}
-            />
-          ))}
-          {hasMoreCategories && (
-            <button className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted">
-              More ▾
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Scrollable content ── */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        {productsLoading && filteredProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-            <Search size={22} className="animate-pulse text-primary/60" />
-            <p className="text-sm">Loading products…</p>
-          </div>
-        ) : filteredProducts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
-            <span className="grid h-16 w-16 place-items-center rounded-2xl bg-muted text-2xl text-muted-foreground">
-              ?
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                {search ? `No results for "${search}"` : "No products yet"}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {search
-                  ? "Try a different term or clear search."
-                  : "Add products from the Products page."}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <>
-            {search && (
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {filteredProducts.length} result{filteredProducts.length !== 1 ? "s" : ""}
-              </p>
-            )}
-
-            {/* Product grid */}
-            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 xl:grid-cols-5">
-              {displayedProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onAdd={() => onAddProduct(product)}
-                />
-              ))}
-            </div>
-
-            {/* View all products button — always visible */}
-            <button
-              onClick={() => setShowAll((v) => !v)}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
-            >
-              {showAll ? (
-                <>
-                  <ChevronUp size={13} aria-hidden="true" /> Show less
-                </>
-              ) : (
-                <>
-                  View all products
-                  {filteredProducts.length > 10 && (
-                    <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-                      {filteredProducts.length}
-                    </span>
+            {/* Recent products strip */}
+            {recentProducts.length > 0 && !search && (
+              <div className="hidden shrink-0 lg:block">
+                <p className="mb-2 text-[12px] font-bold text-[#536383]">Recent Products</p>
+                <div className="flex items-center gap-4">
+                  {recentProducts.slice(0, 3).map((p) => {
+                    const price = productSellingPrice(p, 1);
+                    const color = productPlaceholderColor(p.name);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => onAddProduct(p)}
+                        className="flex min-w-[118px] items-center gap-2 transition-opacity hover:opacity-80"
+                      >
+                        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-lg ${color}`}>
+                          {getProductEmoji(p.name, p.category)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-[10.5px] font-bold leading-[1.15] text-[#14284e]">
+                            {p.name.split(" ")[0]}
+                          </p>
+                          <p className="mt-0.5 text-[11px] font-extrabold text-[#14284e]">₹{price}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {recentProducts.length > 3 && (
+                    <button className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#f7f9fd]">
+                      <ChevronRight size={13} className="text-[#536383]" />
+                    </button>
                   )}
-                  <ChevronDown size={13} aria-hidden="true" />
-                </>
-              )}
-            </button>
-          </>
-        )}
-
-        {/* ── Bottom 3-column info section ── */}
-        {!search && (
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <RecentBillsPanel />
-            <QuickActionsPanel onHoldBill={onHoldBill} />
-            <BillingTipsPanel />
+                </div>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Category chips — rounded-[8px] matching spec */}
+          <div className="mt-[18px] flex items-center gap-2.5 overflow-x-auto pb-4 [-ms-overflow-style:none] [scrollbar-width:none]">
+            <CategoryChip
+              label="All"
+              active={selectedCategory === "all"}
+              onClick={() => onSelectedCategoryChange("all")}
+            />
+            {visibleCategories.map((cat) => (
+              <CategoryChip
+                key={cat}
+                label={cat}
+                active={selectedCategory === cat}
+                onClick={() => onSelectedCategoryChange(cat)}
+              />
+            ))}
+            {hasMoreCategories && (
+              <button className="shrink-0 h-[34px] rounded-[8px] border border-[#e1e8f2] bg-white px-4 text-[12px] font-bold text-[#23365f] transition-colors hover:bg-[#f7f9fd]">
+                More ▾
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Product grid — scrollable */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          {productsLoading && filteredProducts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#536383]">
+              <Search size={22} className="animate-pulse text-[#0057ff]/60" />
+              <p className="text-sm">Loading products…</p>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+              <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[#f7f9fd] text-2xl text-[#536383]">?</span>
+              <div>
+                <p className="text-sm font-bold text-[#13274d]">
+                  {search ? `No results for "${search}"` : "No products yet"}
+                </p>
+                <p className="mt-1 text-xs text-[#536383]">
+                  {search ? "Try a different term or clear search." : "Add products from the Products page."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {search && (
+                <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#536383]">
+                  {filteredProducts.length} result{filteredProducts.length !== 1 ? "s" : ""}
+                </p>
+              )}
+
+              {/* 5-column grid */}
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-5">
+                {displayedProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAdd={() => onAddProduct(product)}
+                  />
+                ))}
+              </div>
+
+              {/* View all products */}
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => setShowAll((v) => !v)}
+                  className="flex h-[34px] w-[176px] items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white text-[12px] font-extrabold text-[#0057ff] transition-colors hover:bg-[#f5f9ff]"
+                >
+                  {showAll ? (
+                    <>Show less <ChevronUp size={13} /></>
+                  ) : (
+                    <>View all products <ChevronDown size={13} /></>
+                  )}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* ── Order Summary sticky bar ── */}
+      {/* ── 2. Bottom 3-column info section ── */}
+      {!search && (
+        <div className="shrink-0 grid grid-cols-3 gap-3.5" style={{ height: "260px" }}>
+          <RecentBillsPanel />
+          <QuickActionsPanel onHoldBill={onHoldBill} />
+          <BillingTipsPanel />
+        </div>
+      )}
+
+      {/* ── 3. Order Summary Card ── */}
       {cartItemCount > 0 && (
-        <div className="shrink-0 border-t bg-background/95 px-4 py-2">
-          <div className="flex items-center gap-4">
-            {/* Items count */}
-            <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-              <ReceiptText size={13} className="shrink-0 text-muted-foreground" aria-hidden="true" />
-              {cartItemCount} {cartItemCount === 1 ? "Item" : "Items"}
-            </span>
-            {/* Divider */}
-            <span className="text-muted-foreground/30">|</span>
-            {/* Subtotal */}
-            <span className="text-xs text-muted-foreground">
-              Subtotal&nbsp;<strong className="font-semibold text-foreground">₹{cartSubtotal.toLocaleString("en-IN")}</strong>
-            </span>
-            {/* Tax */}
-            {cartTax > 0 && (
-              <>
-                <span className="text-muted-foreground/30">|</span>
-                <span className="text-xs text-muted-foreground">
-                  Tax (5%)&nbsp;<strong className="font-semibold text-foreground">₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}</strong>
+        <div className="shrink-0 flex items-center rounded-[13px] border border-[#e6ecf4] bg-white px-[22px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]" style={{ height: "86px" }}>
+          <div className="min-w-0 flex-1">
+            <p className="mb-2 text-[12px] font-bold text-[#5b6b89]">Order Summary</p>
+            <div className="flex items-center gap-[30px]">
+              {/* Items */}
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[8px] bg-blue-50">
+                  <ReceiptText size={14} className="text-[#0057ff]" />
                 </span>
-              </>
-            )}
-            {/* Discount */}
-            {cartDiscount > 0 && (
-              <>
-                <span className="text-muted-foreground/30">|</span>
-                <span className="text-xs text-muted-foreground">
-                  Discount&nbsp;<strong className="font-semibold text-emerald-600">−₹{cartDiscount.toLocaleString("en-IN")}</strong>
+                <div>
+                  <p className="text-[13px] font-black text-[#13274d]">
+                    {cartItemCount} {cartItemCount === 1 ? "Item" : "Items"}
+                  </p>
+                  <p className="text-[10px] text-[#7a89a3]">Products</p>
+                </div>
+              </div>
+              {/* Subtotal */}
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[8px] bg-emerald-50 text-[13px] font-black text-emerald-600">
+                  ₹
                 </span>
-              </>
-            )}
-            {/* Grand Total — right aligned */}
-            <div className="ml-auto flex items-baseline gap-1.5">
-              <span className="text-xs font-semibold text-muted-foreground">Grand Total</span>
-              <span className="text-base font-black text-foreground">₹{cartGrandTotal.toLocaleString("en-IN")}</span>
+                <div>
+                  <p className="text-[13px] font-black text-[#13274d]">
+                    ₹{cartSubtotal.toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-[10px] text-[#7a89a3]">Subtotal</p>
+                </div>
+              </div>
+              {/* Tax */}
+              {cartTax > 0 && (
+                <div className="flex items-center gap-2.5">
+                  <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[8px] bg-purple-50 text-xs font-black text-purple-600">
+                    %
+                  </span>
+                  <div>
+                    <p className="text-[13px] font-black text-[#13274d]">
+                      ₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}
+                    </p>
+                    <p className="text-[10px] text-[#7a89a3]">Tax (5%)</p>
+                  </div>
+                </div>
+              )}
+              {/* Discount */}
+              {cartDiscount > 0 && (
+                <div className="flex items-center gap-2.5">
+                  <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[8px] bg-amber-50 text-xs font-black text-amber-600">
+                    −
+                  </span>
+                  <div>
+                    <p className="text-[13px] font-black text-emerald-600">
+                      −₹{cartDiscount.toLocaleString("en-IN")}
+                    </p>
+                    <p className="text-[10px] text-[#7a89a3]">Discount</p>
+                  </div>
+                </div>
+              )}
             </div>
+          </div>
+          {/* Grand total — right aligned */}
+          <div className="ml-auto shrink-0 text-right">
+            <p className="text-[20px] font-black text-[#0f1e3d]">
+              ₹{cartGrandTotal.toLocaleString("en-IN")}
+            </p>
+            <p className="mt-1 text-[12px] text-[#536383]">Grand Total</p>
           </div>
         </div>
       )}
@@ -381,7 +390,7 @@ export function BillingSearch({
   );
 }
 
-/* ─── Product card ─── */
+/* ─── Product card — spec: 176px height, absolute price + add button ─── */
 function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }) {
   const price = productSellingPrice(product, 1);
   const unit = product.rateUnit ?? product.displayUnit ?? "pc";
@@ -393,65 +402,49 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
     <button
       data-testid={`product-card-${product.id}`}
       onClick={onAdd}
-      className="group flex flex-col items-start gap-2 rounded-xl border bg-card p-2.5 text-left shadow-sm transition-all duration-150 hover:border-primary/40 hover:shadow-md active:scale-[0.97]"
+      className="group relative h-[176px] overflow-hidden rounded-[10px] border border-[#e5ebf4] bg-white p-[12px_10px_44px] text-left transition-all duration-150 hover:-translate-y-px hover:border-[#bcd0ff] hover:shadow-[0_10px_24px_rgba(15,23,42,0.07)]"
     >
-      {/* Image area — blank/emoji placeholder */}
-      <div
-        className={`relative flex h-24 w-full items-center justify-center overflow-hidden rounded-lg ${color}`}
-      >
-        <span className="text-4xl leading-none" aria-hidden="true">{emoji}</span>
+      {/* Image area — 72px */}
+      <div className={`relative mb-[9px] flex h-[72px] items-center justify-center overflow-hidden rounded-lg ${color}`}>
+        <span className="text-3xl leading-none" aria-hidden="true">{emoji}</span>
         {stock <= 0 ? (
-          <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">
-            Out
-          </span>
+          <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">Out</span>
         ) : stock <= 5 ? (
-          <span className="absolute bottom-1 right-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">
-            Low
-          </span>
+          <span className="absolute bottom-1 right-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">Low</span>
         ) : null}
       </div>
 
-      {/* Product name */}
-      <div className="min-w-0 w-full">
-        <p className="line-clamp-2 text-xs font-bold leading-snug text-foreground">
-          {product.name}
-        </p>
-        {product.category && (
-          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{product.category}</p>
-        )}
-      </div>
+      {/* Name + unit */}
+      <p className="line-clamp-2 min-h-[31px] text-[12px] font-extrabold leading-[1.25] text-[#14284e]">
+        {product.name}
+      </p>
+      {product.category && (
+        <p className="mt-0.5 truncate text-[11px] font-medium text-[#687895]">{product.category}</p>
+      )}
 
-      {/* Price + add button */}
-      <div className="flex w-full items-center justify-between gap-1">
-        <span className="text-sm font-bold text-foreground">
-          ₹{price}
-          <span className="text-[10px] font-normal text-muted-foreground">/{unit}</span>
-        </span>
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-primary text-sm font-black text-primary-foreground shadow-sm transition-transform group-hover:scale-110">
-          +
-        </span>
-      </div>
+      {/* Price — absolute bottom-left */}
+      <span className="absolute bottom-[13px] left-2.5 text-[14px] font-black text-[#0f1e3d]">
+        ₹{price}
+        <span className="text-[10px] font-medium text-[#687895]">/{unit}</span>
+      </span>
+
+      {/* Add button — absolute bottom-right, rounded-[8px] matching spec */}
+      <span className="absolute bottom-2.5 right-2.5 grid h-7 w-7 place-items-center rounded-[8px] border border-[#dfe8f5] bg-white text-lg font-bold text-[#0057ff] transition-transform group-hover:scale-110">
+        +
+      </span>
     </button>
   );
 }
 
-/* ─── Category chip — pill style matching reference ─── */
-function CategoryChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+/* ─── Category chip — rounded-[8px] per spec ─── */
+function CategoryChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full border px-3.5 py-1 text-xs font-semibold transition-colors ${
+      className={`shrink-0 h-[34px] rounded-[8px] border px-4 text-[12px] font-bold transition-all ${
         active
-          ? "border-primary bg-primary text-primary-foreground shadow-sm"
-          : "border-border bg-background text-foreground hover:bg-muted"
+          ? "border-[#0057ff] bg-[#0057ff] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
+          : "border-[#e1e8f2] bg-white text-[#23365f] hover:bg-[#f7f9fd]"
       }`}
     >
       {label}
@@ -483,58 +476,51 @@ function RecentBillsPanel() {
   }
 
   function badgeClass(label: string): string {
-    if (label === "UPI") return "bg-purple-100 text-purple-700";
-    if (label === "Udhar") return "bg-amber-100 text-amber-700";
-    if (label === "Bank") return "bg-blue-100 text-blue-700";
-    if (label === "Card") return "bg-slate-100 text-slate-700";
-    return "bg-emerald-100 text-emerald-700";
+    if (label === "UPI") return "bg-[#eef4ff] text-[#2563eb]";
+    if (label === "Udhar") return "bg-amber-50 text-amber-700";
+    if (label === "Bank") return "bg-blue-50 text-blue-700";
+    if (label === "Card") return "bg-[#f3e8ff] text-[#7c3aed]";
+    return "bg-[#e9fff0] text-[#16a34a]";
   }
 
   return (
-    <div className="rounded-xl border bg-card p-3">
-      <div className="mb-2.5 flex items-center justify-between">
-        <h3 className="text-xs font-bold">Recent Bills</h3>
+    <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <div className="mb-[14px] flex items-center justify-between">
+        <h3 className="text-[14px] font-extrabold text-[#13274d]">Recent Bills</h3>
         <Link
           to="/bills"
-          className="flex items-center gap-0.5 text-xs font-semibold text-primary hover:underline"
+          className="flex items-center gap-0.5 text-[12px] font-extrabold text-[#0057ff] hover:underline"
         >
           View all <ChevronRight size={12} />
         </Link>
       </div>
 
       {bills.length === 0 ? (
-        <p className="py-4 text-center text-xs text-muted-foreground">No bills today yet</p>
+        <p className="py-4 text-center text-xs text-[#536383]">No bills today yet</p>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-0">
           {bills.map((bill, i) => {
             const billNo = bill.billNo ?? bill.billNumber ?? `#${i + 1}`;
             const time = bill.createdAt
-              ? new Date(bill.createdAt).toLocaleTimeString("en-IN", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
+              ? new Date(bill.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
               : "";
             const amount = bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0;
             const customer =
-              bill.customerName && bill.customerName !== "Walk-in"
-                ? bill.customerName
-                : "Walk-in Customer";
+              bill.customerName && bill.customerName !== "Walk-in" ? bill.customerName : "Walk-in";
             const pmtLabel = paymentLabel(bill);
 
             return (
               <div
                 key={billNo + i}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted/60"
+                className="flex h-[38px] items-center gap-2 text-[11px]"
               >
-                <span className="w-14 shrink-0 truncate font-mono text-[11px] font-bold text-foreground">
-                  {billNo}
-                </span>
-                <span className="w-12 shrink-0 text-[10px] text-muted-foreground">{time}</span>
-                <span className="min-w-0 flex-1 truncate text-muted-foreground">{customer}</span>
-                <span className="shrink-0 font-semibold tabular-nums">
+                <span className="w-[70px] shrink-0 truncate font-extrabold text-[#13274d]">{billNo}</span>
+                <span className="w-[60px] shrink-0 font-semibold text-[#6d7c98]">{time}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-[#6d7c98]">{customer}</span>
+                <span className="shrink-0 text-right font-black text-[#13274d] tabular-nums">
                   ₹{amount.toLocaleString("en-IN")}
                 </span>
-                <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${badgeClass(pmtLabel)}`}>
+                <span className={`shrink-0 inline-flex h-[22px] items-center justify-center rounded-[7px] px-2 text-[10px] font-extrabold ${badgeClass(pmtLabel)}`}>
                   {pmtLabel}
                 </span>
               </div>
@@ -546,36 +532,36 @@ function RecentBillsPanel() {
   );
 }
 
-/* ─── Quick Actions panel — matches reference icons ─── */
+/* ─── Quick Actions panel ─── */
 function QuickActionsPanel({ onHoldBill }: { onHoldBill: () => void }) {
   const actions = [
     {
-      iconEl: <Zap size={14} className="text-yellow-600" />,
-      iconBg: "bg-yellow-100",
+      iconEl: <Zap size={15} />,
+      iconBg: "bg-[#e9fff0] text-[#16a34a]",
       title: "Apply Discount",
       description: "Give flat or % discount",
       hint: "F4",
       onClick: undefined as (() => void) | undefined,
     },
     {
-      iconEl: <Ticket size={14} className="text-purple-600" />,
-      iconBg: "bg-purple-100",
+      iconEl: <Ticket size={15} />,
+      iconBg: "bg-[#f3e8ff] text-[#7c3aed]",
       title: "Coupons",
       description: "Apply promo code",
       hint: null as string | null,
       onClick: undefined as (() => void) | undefined,
     },
     {
-      iconEl: <Users size={14} className="text-orange-600" />,
-      iconBg: "bg-orange-100",
+      iconEl: <Users size={15} />,
+      iconBg: "bg-[#fff3e4] text-[#f97316]",
       title: "Recent Customers",
       description: "Select from history",
       hint: null as string | null,
       onClick: undefined as (() => void) | undefined,
     },
     {
-      iconEl: <PauseCircle size={14} className="text-blue-600" />,
-      iconBg: "bg-blue-100",
+      iconEl: <PauseCircle size={15} />,
+      iconBg: "bg-[#eef4ff] text-[#2563eb]",
       title: "Hold Current Bill",
       description: "Save and resume later",
       hint: "F9",
@@ -584,26 +570,24 @@ function QuickActionsPanel({ onHoldBill }: { onHoldBill: () => void }) {
   ];
 
   return (
-    <div className="rounded-xl border bg-card p-3">
-      <h3 className="mb-2.5 text-xs font-bold">Quick Actions</h3>
-      <div className="space-y-1">
+    <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <h3 className="mb-[14px] text-[14px] font-extrabold text-[#13274d]">Quick Actions</h3>
+      <div className="space-y-0">
         {actions.map((action) => (
           <button
             key={action.title}
             onClick={action.onClick}
-            className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted/60"
+            className="flex h-[48px] w-full items-center gap-3 rounded-lg px-1 text-left transition-colors hover:bg-[#f7f9fd]"
           >
-            <span
-              className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${action.iconBg}`}
-            >
+            <span className={`grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] ${action.iconBg}`}>
               {action.iconEl}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-foreground">{action.title}</p>
-              <p className="text-[10px] text-muted-foreground">{action.description}</p>
+              <p className="text-[12px] font-extrabold text-[#13274d]">{action.title}</p>
+              <p className="text-[10.5px] text-[#6d7c98]">{action.description}</p>
             </div>
             {action.hint && (
-              <kbd className="shrink-0 rounded border bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+              <kbd className="shrink-0 inline-flex h-[22px] min-w-[28px] items-center justify-center rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 text-[10px] font-extrabold text-[#536383]">
                 {action.hint}
               </kbd>
             )}
@@ -625,24 +609,28 @@ function BillingTipsPanel() {
   ];
 
   return (
-    <div className="rounded-xl border bg-card p-3">
-      <div className="mb-2.5 flex items-center gap-2">
-        <h3 className="text-xs font-bold">Billing Tips</h3>
-        <Clock size={13} className="text-muted-foreground" />
+    <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <div className="mb-[14px] flex items-center gap-2">
+        <h3 className="text-[14px] font-extrabold text-[#13274d]">Billing Tips</h3>
+        <Clock size={13} className="text-[#536383]" />
       </div>
-      <div className="space-y-2">
+      <div className="space-y-0">
         {tips.map((tip) => (
-          <div key={tip.key} className="flex items-start gap-1.5 text-xs">
-            <span className="mt-0.5 font-bold text-primary">✓</span>
-            <span className="text-muted-foreground">
+          <div key={tip.key} className="flex min-h-[32px] items-center gap-2 text-[11px] font-semibold text-[#5d6f8d]">
+            <span className="h-[13px] w-[13px] shrink-0 text-[#16a34a]">✓</span>
+            <span>
               {tip.action}{" "}
-              <span className="font-semibold text-foreground">{tip.key}</span>{" "}
+              <span className="inline-flex h-5 min-w-[26px] items-center justify-center rounded-[5px] bg-[#edf4ff] px-1.5 text-[10px] font-black text-[#0057ff]">
+                {tip.key}
+              </span>{" "}
               {tip.detail}
             </span>
           </div>
         ))}
-        <button className="mt-1 flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline">
-          View all shortcuts <ChevronRight size={11} />
+      </div>
+      <div className="mt-[18px] flex justify-center">
+        <button className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#0057ff] hover:underline">
+          View all shortcuts <ChevronRight size={12} />
         </button>
       </div>
     </div>

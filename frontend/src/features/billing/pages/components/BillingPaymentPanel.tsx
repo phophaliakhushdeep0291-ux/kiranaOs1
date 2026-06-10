@@ -55,58 +55,40 @@ export function BillingPaymentPanel({
   return (
     <div className="space-y-3">
       {/* Payment method header */}
-      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Payment Method
-      </p>
+      <p className="text-[12px] font-extrabold text-[#13274d]">Payment Method</p>
 
       {showPaymentMode ? (
         <div className="grid grid-cols-4 gap-2">
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.cash}`}
-            icon={
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-2xl font-black text-emerald-600 dark:bg-emerald-950/40">
-                ₹
-              </span>
-            }
+            icon={<span className="text-xl font-black">₹</span>}
             label="Cash"
             selected={paymentMode === BillPaymentMode.cash}
-            activeClass="border-emerald-400 bg-emerald-50 dark:bg-emerald-950/20"
+            activeClass="border-[#b9f0cb] bg-[#effff5] text-[#16a34a]"
             onClick={() => setPaymentMode(BillPaymentMode.cash)}
           />
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.upi}`}
-            icon={
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 dark:bg-purple-950/40">
-                <UpiIcon />
-              </span>
-            }
+            icon={<UpiIcon />}
             label="UPI"
             selected={paymentMode === BillPaymentMode.upi}
-            activeClass="border-purple-400 bg-purple-50 dark:bg-purple-950/20"
+            activeClass="border-[#e6d5ff] bg-[#faf5ff] text-[#7c3aed]"
             onClick={() => setPaymentMode(BillPaymentMode.upi)}
           />
           <PayModeBtn
             testId={`button-payment-${SPLIT_PAYMENT}`}
-            icon={
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950/40">
-                <SplitIcon />
-              </span>
-            }
+            icon={<SplitIcon />}
             label="Split"
             selected={paymentMode === SPLIT_PAYMENT}
-            activeClass="border-blue-400 bg-blue-50 dark:bg-blue-950/20"
+            activeClass="border-[#cfe0ff] bg-[#f4f8ff] text-[#2563eb]"
             onClick={() => setPaymentMode(SPLIT_PAYMENT)}
           />
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.credit}`}
-            icon={
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-950/40">
-                <UdharIcon />
-              </span>
-            }
+            icon={<UdharIcon />}
             label="Udhar"
             selected={paymentMode === BillPaymentMode.credit}
-            activeClass="border-orange-400 bg-orange-50 dark:bg-orange-950/20"
+            activeClass="border-[#fed7aa] bg-[#fff7ed] text-[#f97316]"
             onClick={() => setPaymentMode(BillPaymentMode.credit)}
           />
         </div>
@@ -272,8 +254,8 @@ function PayModeBtn({
     <button
       data-testid={testId}
       onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 py-3.5 text-xs font-bold transition-all ${
-        selected ? activeClass : "border-border bg-card hover:bg-muted"
+      className={`flex h-[62px] flex-col items-center justify-center gap-1.5 rounded-[10px] border text-[12px] font-extrabold transition-all ${
+        selected ? activeClass : "border-[#dfe8f5] bg-white text-[#536383] hover:bg-[#f7f9fd]"
       }`}
     >
       {icon}
@@ -284,7 +266,7 @@ function PayModeBtn({
 
 function UpiIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-7 w-7 fill-purple-600" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] fill-current" aria-hidden="true">
       <rect x="3" y="3" width="7" height="7" rx="1" />
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -298,7 +280,7 @@ function UpiIcon() {
 
 function SplitIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-7 w-7 stroke-blue-600" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] stroke-current" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M16 3h5v5" />
       <path d="M8 3H3v5" />
       <path d="M21 3l-7 7-4-4-7 7" />
@@ -308,7 +290,7 @@ function SplitIcon() {
 
 function UdharIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-7 w-7 stroke-orange-600" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] stroke-current" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="7" r="4" />
       <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
     </svg>
