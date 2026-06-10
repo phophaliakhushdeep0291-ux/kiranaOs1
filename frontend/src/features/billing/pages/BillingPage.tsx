@@ -10,7 +10,6 @@ import { usePermission } from "@/features/staff/permissions";
 import { useDebounce } from "@/hooks/use-debounce";
 import { offlineDB } from "@/lib/offline/db";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { BillingCart } from "./components/BillingCart";
 import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
@@ -115,6 +114,7 @@ export default function Billing() {
   const [voiceDraft, setVoiceDraft] = useState<VoiceParsedDraft | null>(null);
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceMicMessage, setVoiceMicMessage] = useState("Click mic and speak slowly. You can also type the same command.");
+  const [voiceVisible, setVoiceVisible] = useState(false);
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const debouncedSearch = useDebounce(search.trim(), 90);
@@ -176,10 +176,10 @@ export default function Billing() {
   const filteredProducts = useMemo(() => {
     const q = normalizeSearchText(deferredSearch);
     const categoryFiltered = selectedCategory === "all" ? productSearchIndex : productSearchIndex.filter((entry) => entry.category === selectedCategory);
-    if (!q) return categoryFiltered.slice(0, 10).map((entry) => entry.product);
+    if (!q) return categoryFiltered.slice(0, 30).map((entry) => entry.product);
     const starts = categoryFiltered.filter((entry) => entry.searchText.startsWith(q));
     const contains = categoryFiltered.filter((entry) => !entry.searchText.startsWith(q) && entry.searchText.includes(q));
-    return [...starts, ...contains].slice(0, 14).map((entry) => entry.product);
+    return [...starts, ...contains].slice(0, 30).map((entry) => entry.product);
   }, [deferredSearch, productSearchIndex, selectedCategory]);
 
 
@@ -805,46 +805,43 @@ export default function Billing() {
   }, [search]);
 
   return (
-    <div className="flex min-h-[calc(100vh-96px)] flex-col bg-background lg:h-[calc(100vh-0px)] lg:flex-row">
-      <div className="flex min-w-0 flex-1 flex-col lg:border-r">
-        <div className="sticky top-0 z-20 space-y-3 border-b bg-card/95 p-3 shadow-sm backdrop-blur sm:p-4 lg:top-0">
-          <BillingSearch
-            isOnline={isOnline}
-            draftRestored={draftRestored}
-            cartLength={cart.length}
-            onHideDraftRestored={() => setDraftRestored(false)}
-            search={search}
-            onSearchChange={setSearch}
-            searchInputRef={searchInputRef}
-            productsLoading={products.isLoading || products.isFetching}
-            filteredProducts={filteredProducts}
-            onAddProduct={addToCart}
-            categories={categories}
-            selectedCategory={selectedCategory}
-            onSelectedCategoryChange={setSelectedCategory}
-          />
-
-          <BillingVoicePanel
-            voiceCommand={voiceCommand}
-            onVoiceCommandChange={setVoiceCommand}
-            voiceListening={voiceListening}
-            voiceMicMessage={voiceMicMessage}
-            voiceDraft={voiceDraft}
-            onStartVoiceListening={() => void startVoiceListening()}
-            onParseVoiceDraft={() => parseVoiceDraft()}
-            onAddVoiceDraftToCart={addVoiceDraftToCart}
-          />
-        </div>
-
-        <BillingCart
-          cart={cart}
-          onUpdateQty={updateQty}
-          onUpdateRate={updateRate}
-          onUpdateUnit={updateUnit}
-          onRemoveItem={removeItem}
+    <div className="flex h-[calc(100dvh-56px)] flex-col bg-background lg:flex-row">
+      {/* ── LEFT PANEL: product search + grid ── */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden lg:border-r">
+        <BillingSearch
+          isOnline={isOnline}
+          draftRestored={draftRestored}
+          cartLength={cart.length}
+          onHideDraftRestored={() => setDraftRestored(false)}
+          search={search}
+          onSearchChange={setSearch}
+          searchInputRef={searchInputRef}
+          productsLoading={products.isLoading || products.isFetching}
+          filteredProducts={filteredProducts}
+          onAddProduct={addToCart}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          onSelectedCategoryChange={setSelectedCategory}
+          voiceVisible={voiceVisible}
+          onToggleVoice={() => setVoiceVisible((v) => !v)}
         />
+        {voiceVisible && (
+          <div className="shrink-0 border-t">
+            <BillingVoicePanel
+              voiceCommand={voiceCommand}
+              onVoiceCommandChange={setVoiceCommand}
+              voiceListening={voiceListening}
+              voiceMicMessage={voiceMicMessage}
+              voiceDraft={voiceDraft}
+              onStartVoiceListening={() => void startVoiceListening()}
+              onParseVoiceDraft={() => parseVoiceDraft()}
+              onAddVoiceDraftToCart={addVoiceDraftToCart}
+            />
+          </div>
+        )}
       </div>
 
+      {/* ── RIGHT PANEL: cart + customer + payment ── */}
       <BillingSummary
         summaryWidth={summaryWidth}
         onStartSummaryResize={startSummaryResize}
@@ -896,6 +893,10 @@ export default function Billing() {
         onPrintBill={() => printBillSnapshot()}
         onSharePdf={() => void sharePdfArchitecture()}
         onClearCart={clearCartWithConfirmation}
+        onUpdateQty={updateQty}
+        onUpdateRate={updateRate}
+        onUpdateUnit={updateUnit}
+        onRemoveItem={removeItem}
       />
 
       <OwnerPinModal
