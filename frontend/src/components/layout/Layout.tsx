@@ -189,7 +189,7 @@ function initials(name: string) {
 // ── Layout ────────────────────────────────────────────────────────────────────
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, shop } = useAuth();
   const [loc] = useLocation();
   const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
@@ -256,7 +256,8 @@ export function Layout({ children }: { children: ReactNode }) {
     window.addEventListener("pointerup", onUp, { once: true });
   }, [collapsed, sidebarWidth]);
 
-  const storeName = user?.name ?? "My Store";
+  const storeName = shop?.name ?? user?.name ?? "My Store";
+  const storeLocation = [shop?.city, shop?.address].filter(Boolean)[0] ?? user?.email ?? "Owner";
 
   // apply business-type nav label overrides
   const labelOverrides: Record<string, string> = {
@@ -388,11 +389,11 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
       >
         {/* Desktop topbar */}
-        <header className="sticky top-0 z-40 hidden h-14 items-center gap-4 border-b border-border bg-background/95 px-5 backdrop-blur lg:flex">
+        <header className="sticky top-0 z-40 hidden h-[76px] items-center gap-4 border-b border-border bg-background/95 px-5 backdrop-blur lg:flex">
           <div className="min-w-0 flex-1">
-            <h1 className="text-base font-bold text-foreground leading-tight">{getPageTitle(loc)}</h1>
+            <h1 className="font-display text-[20px] font-black tracking-tight text-foreground leading-tight">{getPageTitle(loc)}</h1>
             {PAGE_SUBTITLES[loc] && (
-              <p className="text-[11px] text-muted-foreground leading-none mt-0.5">{PAGE_SUBTITLES[loc]}</p>
+              <p className="text-[12px] font-medium text-muted-foreground leading-none mt-1">{PAGE_SUBTITLES[loc]}</p>
             )}
           </div>
 
@@ -421,13 +422,13 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm transition-colors hover:border-primary/40">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
-                  {initials(storeName)}
+              <button className="flex items-center gap-2.5 rounded-xl border bg-background px-2.5 py-1.5 text-sm transition-colors hover:border-primary/40">
+                <div className="hidden text-right xl:block">
+                  <div className="text-[13px] font-extrabold leading-tight text-foreground">{storeName}</div>
+                  <div className="text-[11px] leading-tight text-muted-foreground">{storeLocation}</div>
                 </div>
-                <div className="hidden text-left xl:block">
-                  <div className="text-xs font-bold leading-tight">{storeName}</div>
-                  {user?.email && <div className="text-[10px] leading-tight text-muted-foreground">{user.email.split("@")[0]}</div>}
+                <div className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                  {initials(storeName)}
                 </div>
                 <ChevronDown size={13} className="text-muted-foreground" aria-hidden="true" />
               </button>
