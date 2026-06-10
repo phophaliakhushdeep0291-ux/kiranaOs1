@@ -11,13 +11,26 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Barcode, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  Package,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
 import {
   findDuplicateProductWarnings,
   getLocalProductAliasSuggestions,
@@ -34,9 +47,7 @@ import {
   isLowStock,
   needsOwnerPinForPrices,
   productDisplayUnit,
-  productMinimumPrice,
   productRetailPrice,
-  productWholesalePrice,
 } from "./product-pricing";
 import {
   findDraftProduct,
@@ -49,10 +60,28 @@ import {
 } from "./product-form-state";
 import { fetchGroqAliasSuggestions } from "./product-aliases";
 import { ProductFormModal } from "./components/ProductFormModal";
-import { DataTableCard, EmptyState, FilterBar, PageHeader, PageShell, SearchInputWithIcon, StatCard, StatsGrid } from "@/components/shared";
 
-function price(value: number | undefined | null) {
-  return `Rs ${Number(value ?? 0).toLocaleString("en-IN")}`;
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
+
+function rs(value: number | undefined | null) {
+  return `₹${Number(value ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/* deterministic soft badge colour per category */
+const CATEGORY_BADGE = [
+  "bg-blue-50 text-blue-700",
+  "bg-emerald-50 text-emerald-700",
+  "bg-purple-50 text-purple-700",
+  "bg-amber-50 text-amber-700",
+  "bg-rose-50 text-rose-700",
+  "bg-cyan-50 text-cyan-700",
+  "bg-indigo-50 text-indigo-700",
+  "bg-teal-50 text-teal-700",
+];
+function categoryBadge(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return CATEGORY_BADGE[h % CATEGORY_BADGE.length];
 }
 
 export default function ProductsPage() {
@@ -63,6 +92,8 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [statusFilter, setStatusFilter] = useState("active");
+  const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [pendingValues, setPendingValues] = useState<ProductFormData | null>(null);
@@ -162,13 +193,23 @@ export default function ProductsPage() {
 
   const stats = useMemo(() => {
     const all = (products.data ?? []).filter((product) => !isDeletedProduct(product));
+    const categories = new Set<string>();
+    all.forEach((product) => categories.add((product.category ?? "general").trim() || "general"));
     return {
       total: all.length,
-      active: all.filter((product) => !isInactiveProduct(product)).length,
-      lowStock: all.filter(isLowStock).length,
-      inactive: all.filter(isInactiveProduct).length,
+      lowStock: all.filter((p) => isLowStock(p) && Number(p.stockBaseQty ?? 0) > 0).length,
+      outOfStock: all.filter((p) => Number(p.stockBaseQty ?? 0) <= 0).length,
+      categories: categories.size,
     };
   }, [products.data]);
+
+  /* pagination */
+  const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+  useEffect(() => { setPage(1); }, [debouncedSearch, category, statusFilter, rowsPerPage]);
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = rows.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
+  const firstRow = rows.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
+  const lastRow = Math.min(safePage * rowsPerPage, rows.length);
 
   const watchedName = form.watch("name");
   const watchedCategory = form.watch("category");
@@ -282,99 +323,218 @@ export default function ProductsPage() {
   };
 
   return (
-    <PageShell className="space-y-5">
-      <PageHeader
-        title="Products"
-        description="Simple offline-ready product catalogue with prices, aliases and always-on stock tracking."
-        actions={<Button data-testid="button-add-product" onClick={openAdd} disabled={!manageProducts.allowed}><Plus size={16} className="mr-1.5" />Add product</Button>}
-      />
+    <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
+      {/* ── Stat cards ── */}
+      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+        <StatCard
+          icon={<Package size={18} />}
+          iconClass="bg-blue-50 text-blue-600"
+          label="Total Products"
+          value={stats.total.toLocaleString("en-IN")}
+          sub="Active listings"
+        />
+        <StatCard
+          icon={<AlertTriangle size={18} />}
+          iconClass="bg-amber-50 text-amber-600"
+          label="Low Stock"
+          value={stats.lowStock.toLocaleString("en-IN")}
+          sub="Needs attention"
+        />
+        <StatCard
+          icon={<XCircle size={18} />}
+          iconClass="bg-rose-50 text-rose-600"
+          label="Out of Stock"
+          value={stats.outOfStock.toLocaleString("en-IN")}
+          sub="Unavailable"
+        />
+        <StatCard
+          icon={<Layers size={18} />}
+          iconClass="bg-violet-50 text-violet-600"
+          label="Categories"
+          value={stats.categories.toLocaleString("en-IN")}
+          sub="Active categories"
+        />
+      </div>
 
-      <StatsGrid>
-        <StatCard label="Total products" value={stats.total} />
-        <StatCard label="Active products" value={stats.active} tone="green" />
-        <StatCard label="Low stock alerts" value={stats.lowStock} tone="amber" />
-        <StatCard label="Inactive" value={stats.inactive} tone="red" />
-      </StatsGrid>
-
-      <FilterBar>
-        <SearchInputWithIcon id="input-search" label="Search products" placeholder="Search product, alias, barcode or category..." value={search} onChange={(event) => setSearch(event.target.value)} />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full md:w-44"><SelectValue /></SelectTrigger>
+      {/* ── Toolbar ── */}
+      <div className="mt-3.5 flex flex-col gap-3 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:flex-row md:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" aria-hidden="true" />
+          <Input
+            data-testid="input-search"
+            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[#0057ff] focus-visible:bg-white focus-visible:ring-0"
+            placeholder="Search by product name, barcode or SKU"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-52" data-testid="select-category">
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
           <SelectContent>
-            <SelectItem value="active">Active only</SelectItem>
-            <SelectItem value="inactive">Inactive only</SelectItem>
+            <SelectItem value="all">All Categories</SelectItem>
+            {CATEGORIES.filter((c) => c !== "all").map((item) => (
+              <SelectItem key={item} value={item} className="capitalize">{item.replace(/_/g, " ")}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="h-11 w-full gap-2 rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-36" data-testid="select-status">
+            <SlidersHorizontal size={14} className="text-[#6b7a9a]" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
             <SelectItem value="all">All status</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="w-full md:w-52"><SelectValue /></SelectTrigger>
-          <SelectContent>
-          {CATEGORIES.map((item) => (
-              <SelectItem key={item} value={item} className="capitalize">{item.replace("_", " ")}</SelectItem>
-          ))}
-          </SelectContent>
-        </Select>
-      </FilterBar>
+        <Button
+          data-testid="button-add-product"
+          onClick={openAdd}
+          disabled={!manageProducts.allowed}
+          className="h-11 shrink-0 gap-1.5 rounded-[10px] px-5 text-[13px] font-bold shadow-[0_8px_18px_rgba(0,77,255,0.22)]"
+        >
+          <Plus size={16} /> Add Product
+        </Button>
+      </div>
 
-      <DataTableCard title={`${rows.length} products`} loading={products.isLoading} empty={!products.isLoading && rows.length === 0} emptyState={<EmptyState title="No products found" description="Add a product or clear filters to see your catalogue." />}>
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60 border-b">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Product</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Stock</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Prices</th>
-                <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
-                <th className="px-4 py-3 text-center font-medium text-muted-foreground">Actions</th>
+      {/* ── Products table ── */}
+      <div className="mt-3.5 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px] text-left text-[13px]">
+            <thead>
+              <tr className="border-b border-[#eef1f6] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
+                <th className="px-4 py-3 font-bold">Product</th>
+                <th className="px-3 py-3 font-bold">Category</th>
+                <th className="px-3 py-3 font-bold">SKU / Barcode</th>
+                <th className="px-3 py-3 font-bold">Unit</th>
+                <th className="px-3 py-3 text-right font-bold">MRP</th>
+                <th className="px-3 py-3 text-right font-bold">Cost Price</th>
+                <th className="px-3 py-3 text-right font-bold">Selling Price</th>
+                <th className="px-3 py-3 text-right font-bold">Stock</th>
+                <th className="px-3 py-3 text-center font-bold">Status</th>
+                <th className="px-3 py-3" />
               </tr>
             </thead>
             <tbody>
-              {rows.map((product) => {
-                const unit = productDisplayUnit(product);
-                const lowStock = isLowStock(product);
-                const stock = fromBaseQty(product.stockBaseQty, unit);
-                const retailQty = product.retailFromQuantity ?? 1;
-                const wholesaleQty = product.wholesaleFromQuantity ?? 10;
-                return (
-                  <tr key={product.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="px-4 py-3 min-w-[260px]">
-                      <div className="font-semibold text-foreground flex items-center gap-2">
-                        {product.name}
-                        {lowStock ? <AlertTriangle size={14} className="text-orange-600" /> : null}
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        <Badge variant="outline" className="capitalize text-[10px]">{product.category ?? "general"}</Badge>
-                        {product.barcode ? <Badge variant="secondary" className="text-[10px]"><Barcode size={10} className="mr-1" />{product.barcode}</Badge> : null}
-                        {(product.aliases ?? []).slice(0, 3).map((alias) => <Badge key={alias} variant="outline" className="text-[10px]">{alias}</Badge>)}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <p className="font-semibold">{stock} {unit}</p>
-                      {lowStock ? <p className="text-[10px] font-medium text-orange-600">Low stock</p> : <p className="text-[10px] text-muted-foreground">In stock</p>}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <p className="font-semibold">{price(productRetailPrice(product))}</p>
-                      <p className="text-[10px] text-muted-foreground">Wholesale {price(productWholesalePrice(product))} from {wholesaleQty} {unit}</p>
-                      <p className="text-[10px] text-muted-foreground">Min {price(productMinimumPrice(product))} - Avg cost {price(averageCost(product))} - Retail from {retailQty}</p>
-                    </td>
-                    <td className="px-4 py-3 text-center"><Badge variant={isInactiveProduct(product) ? "secondary" : "default"}>{isInactiveProduct(product) ? "Inactive" : "Active"}</Badge></td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-center gap-2">
-                        <Button size="icon" variant="ghost" onClick={() => openEdit(product)}><Pencil size={14} /></Button>
-                        <Button size="icon" variant="ghost" className="text-destructive" onClick={() => {
-                          if (!manageProducts.allowed) {
-                            toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" });
-                            return;
-                          }
-                          setDeleteTarget(product);
-                        }}><Trash2 size={14} /></Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {products.isLoading && rows.length === 0 ? (
+                <tr><td colSpan={10} className="px-4 py-16 text-center text-sm text-[#536383]">Loading products…</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={10} className="px-4 py-16 text-center">
+                  <p className="text-sm font-bold text-[#13274d]">No products found</p>
+                  <p className="mt-1 text-xs text-[#536383]">Add a product or clear filters to see your catalogue.</p>
+                </td></tr>
+              ) : (
+                pagedRows.map((product) => {
+                  const unit = productDisplayUnit(product);
+                  const stockBase = Number(product.stockBaseQty ?? 0);
+                  const stock = fromBaseQty(product.stockBaseQty, unit);
+                  const outOfStock = stockBase <= 0;
+                  const low = isLowStock(product) && !outOfStock;
+                  const cat = (product.category ?? "general").trim() || "general";
+                  const brandLine = product.aliases?.[0] ?? "";
+                  return (
+                    <tr key={product.id} className="border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe]" data-testid={`row-product-${product.id}`}>
+                      {/* Product */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#f4f7fb] text-lg">
+                            {getProductEmoji(product.name, product.category)}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate font-extrabold text-[#14284e]">{product.name}</p>
+                            {brandLine && <p className="truncate text-[11px] text-[#8a97ad]">{brandLine}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      {/* Category */}
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${categoryBadge(cat)}`}>
+                          {cat.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      {/* SKU / Barcode */}
+                      <td className="px-3 py-3">
+                        <span className="font-mono text-[12px] text-[#45577a]">{product.barcode ?? product.sku ?? "—"}</span>
+                      </td>
+                      {/* Unit */}
+                      <td className="px-3 py-3 capitalize text-[#45577a]">{unit}</td>
+                      {/* MRP */}
+                      <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(productRetailPrice(product))}</td>
+                      {/* Cost */}
+                      <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(averageCost(product))}</td>
+                      {/* Selling */}
+                      <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{rs(product.sellingPrice ?? product.defaultPricePerRateUnit)}</td>
+                      {/* Stock */}
+                      <td className="px-3 py-3 text-right">
+                        <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
+                      </td>
+                      {/* Status */}
+                      <td className="px-3 py-3 text-center">
+                        {outOfStock ? (
+                          <StatusPill className="bg-rose-50 text-rose-600">Out of Stock</StatusPill>
+                        ) : low ? (
+                          <StatusPill className="bg-amber-50 text-amber-700">Low Stock</StatusPill>
+                        ) : (
+                          <StatusPill className="bg-emerald-50 text-emerald-700">In Stock</StatusPill>
+                        )}
+                      </td>
+                      {/* Actions */}
+                      <td className="px-3 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => openEdit(product)}
+                            className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#eef4ff] hover:text-[#0057ff]"
+                            aria-label={`Edit ${product.name}`}
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!manageProducts.allowed) {
+                                toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" });
+                                return;
+                              }
+                              setDeleteTarget(product);
+                            }}
+                            className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-rose-50 hover:text-rose-600"
+                            aria-label={`Delete ${product.name}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
-        </DataTableCard>
+        </div>
+
+        {/* Pagination */}
+        {rows.length > 0 && (
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-[#eef1f6] px-4 py-3 sm:flex-row">
+            <p className="text-[12px] text-[#6d7c98]">
+              Showing <span className="font-bold text-[#13274d]">{firstRow}</span> to <span className="font-bold text-[#13274d]">{lastRow}</span> of <span className="font-bold text-[#13274d]">{rows.length.toLocaleString("en-IN")}</span> products
+            </p>
+            <div className="flex items-center gap-3">
+              <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] text-[#6d7c98]">Rows per page</span>
+                <Select value={String(rowsPerPage)} onValueChange={(v) => setRowsPerPage(Number(v))}>
+                  <SelectTrigger className="h-8 w-[68px] rounded-lg border-[#e3eaf3] text-[12px] font-semibold"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ROWS_PER_PAGE_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <ProductFormModal
         open={open}
@@ -418,6 +578,73 @@ export default function ProductsPage() {
           submitValues(pendingValues, ownerPin, reason);
         }}
       />
-    </PageShell>
+    </div>
+  );
+}
+
+/* ── Stat card ── */
+function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNode; iconClass: string; label: string; value: string; sub: string }) {
+  return (
+    <div className="flex items-center gap-3.5 rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[12px] ${iconClass}`}>{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[12px] font-semibold text-[#6d7c98]">{label}</p>
+        <p className="font-display text-[22px] font-black leading-tight tracking-tight text-[#0f1e3d]">{value}</p>
+        <p className="text-[11px] text-[#9aa6bb]">{sub}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ children, className }: { children: React.ReactNode; className: string }) {
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${className}`}>{children}</span>;
+}
+
+/* ── Pagination ── */
+function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const pages: (number | "…")[] = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (page > 3) pages.push("…");
+    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i);
+    if (page < totalPages - 2) pages.push("…");
+    pages.push(totalPages);
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onChange(Math.max(1, page - 1))}
+        disabled={page <= 1}
+        className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40"
+        aria-label="Previous page"
+      >
+        <ChevronLeft size={15} />
+      </button>
+      {pages.map((p, i) =>
+        p === "…" ? (
+          <span key={`e${i}`} className="px-1.5 text-[12px] text-[#9aa6bb]">…</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onChange(p)}
+            className={`grid h-8 min-w-8 place-items-center rounded-lg px-2 text-[12px] font-bold transition-colors ${
+              p === page ? "bg-[#0057ff] text-white shadow-[0_4px_10px_rgba(0,87,255,0.25)]" : "border border-[#e3eaf3] text-[#45577a] hover:bg-[#f7f9fd]"
+            }`}
+          >
+            {p}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+        disabled={page >= totalPages}
+        className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40"
+        aria-label="Next page"
+      >
+        <ChevronRight size={15} />
+      </button>
+    </div>
   );
 }
