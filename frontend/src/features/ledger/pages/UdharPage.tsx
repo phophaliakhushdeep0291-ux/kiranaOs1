@@ -5,8 +5,6 @@ import { AlertTriangle, CreditCard, MessageCircle, RotateCcw, Search } from "luc
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -161,44 +159,180 @@ export default function UdharPage() {
         </Select>
       </FilterBar>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_0.9fr]">
-        <Card>
-          <CardHeader><CardTitle>Customers with udhar</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            {isLoading ? <p className="text-sm text-muted-foreground">Loading local ledger...</p> : null}
-            {!isLoading && filtered.length === 0 ? <p className="text-center py-8 text-muted-foreground">No udhar customers found.</p> : null}
-            {filtered.map((customer) => <div key={customer.id} className="rounded-xl border p-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2"><Link href={`/customers/${customer.id}`}><span className="font-semibold hover:underline cursor-pointer">{customer.name}</span></Link><Badge variant="destructive">{formatMoney(customer.ledgerBalance)}</Badge>{customer.ledgerMetrics.isBadCustomer ? <Badge variant="destructive"><AlertTriangle size={12} className="mr-1" />Warning</Badge> : <Badge variant="outline">Trust {customer.ledgerMetrics.trustScore}</Badge>}</div>
-                  <p className="text-sm text-muted-foreground mt-1">{customer.mobile || "No phone"} • Due {formatShortDate(customer.dueDate)} • Promise {formatShortDate(customer.promiseToPayDate)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">0–7: {formatMoney(customer.ledgerMetrics.ageing.zeroToSeven)} • 7–30: {formatMoney(customer.ledgerMetrics.ageing.sevenToThirty)} • 30+: {formatMoney(customer.ledgerMetrics.ageing.thirtyPlus)}</p>
-                </div>
-                <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openPayment(customer)}>Pay</Button><Link href={`/customers/${customer.id}`}><Button size="sm">Ledger</Button></Link></div>
-              </div>
-              {customer.ledgerMetrics.warning ? <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{customer.ledgerMetrics.warning}</p> : null}
-            </div>)}
-          </CardContent>
-        </Card>
+      <div className="grid gap-5 xl:grid-cols-[1fr_0.85fr]">
 
-        <Card>
-          <CardHeader><CardTitle>Payment history / ledger feed</CardTitle></CardHeader>
-          <CardContent className="space-y-2 max-h-[640px] overflow-auto">
-            {ledger.slice(0, 80).map((entry) => {
-              const type = normaliseLedgerType(entry.type, entry.source_type);
-              const customer = customers.find((row) => row.id === entry.customerId || row.id === entry.customer_id);
-              const linkedPayment = payments.find((paymentRow) => String(paymentRow.id) === String(entry.paymentId ?? entry.payment_id ?? entry.source_id));
-              return <div key={entry.id} className="rounded-lg border p-3">
-                <div className="flex justify-between gap-3">
-                  <div><p className="font-medium">{customer?.name ?? "Customer"} • {ledgerEntryLabel(type)}</p><p className="text-xs text-muted-foreground">{formatDateTime(entry.display_date)} {entry.note ? `• ${entry.note}` : ""}</p></div>
-                  <div className="text-right"><p className={`font-bold ${entry.signed_amount < 0 ? "text-emerald-600" : "text-destructive"}`}>{entry.signed_amount < 0 ? "-" : "+"}{formatMoney(Math.abs(entry.signed_amount))}</p><p className="text-xs text-muted-foreground">Bal {formatMoney(entry.running_balance)}</p></div>
+        {/* ── Panel 1: Outstanding Udhar (accounts-receivable list) ─────────── */}
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b px-5 py-4">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-destructive/10 text-destructive">
+                <AlertTriangle size={17} />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-display text-base font-black tracking-tight">Outstanding Udhar</h2>
+                  <span className="rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-bold text-destructive">{filtered.length}</span>
                 </div>
-                {type === "PAYMENT" && linkedPayment && !linkedPayment.reversed_at && !linkedPayment.reversedAt ? <Button size="sm" variant="outline" className="mt-2" onClick={() => { if (!reversePaymentPermission.allowed) { toast({ title: "Permission denied", description: reversePaymentPermission.reason, variant: "destructive" }); return; } setReverse({ paymentId: String(linkedPayment.id) }); setReverseOpen(true); }}><RotateCcw size={13} className="mr-1" />Reverse with PIN</Button> : null}
-              </div>;
+                <p className="text-[11px] text-muted-foreground">Customers who owe you money right now</p>
+              </div>
+            </div>
+          </div>
+
+          {isLoading && (
+            <div className="px-5 py-8 text-sm text-muted-foreground">Loading local ledger…</div>
+          )}
+
+          {!isLoading && filtered.length === 0 && (
+            <div className="flex flex-col items-center gap-3 py-16 text-center text-muted-foreground">
+              <span className="grid h-14 w-14 place-items-center rounded-xl bg-muted">
+                <AlertTriangle size={24} />
+              </span>
+              <p className="font-semibold text-foreground">All clear</p>
+              <p className="text-sm">No outstanding udhar found.</p>
+            </div>
+          )}
+
+          <div className="divide-y">
+            {filtered.map((customer) => {
+              const ageColor =
+                customer.ledgerMetrics.ageing.thirtyPlus > 0
+                  ? "border-l-red-500"
+                  : customer.ledgerMetrics.ageing.sevenToThirty > 0
+                    ? "border-l-amber-500"
+                    : "border-l-emerald-500";
+              return (
+                <div key={customer.id} className={`border-l-[3px] px-5 py-4 ${ageColor}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-sm font-black text-foreground uppercase">
+                        {customer.name[0] ?? "?"}
+                      </div>
+                      <div className="min-w-0">
+                        <Link href={`/customers/${customer.id}`}>
+                          <p className="truncate font-bold hover:underline cursor-pointer">{customer.name}</p>
+                        </Link>
+                        <p className="text-xs text-muted-foreground">{customer.mobile || "No phone"} · Due {formatShortDate(customer.dueDate)}</p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-display text-xl font-black text-destructive tabular-nums">{formatMoney(customer.ledgerBalance)}</p>
+                      {customer.ledgerMetrics.isBadCustomer
+                        ? <span className="text-[11px] font-bold text-destructive">⚠ Warning</span>
+                        : <span className="text-[11px] text-muted-foreground">Trust {customer.ledgerMetrics.trustScore}</span>
+                      }
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {customer.ledgerMetrics.ageing.zeroToSeven > 0 && (
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900">
+                          0–7d: {formatMoney(customer.ledgerMetrics.ageing.zeroToSeven)}
+                        </span>
+                      )}
+                      {customer.ledgerMetrics.ageing.sevenToThirty > 0 && (
+                        <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
+                          7–30d: {formatMoney(customer.ledgerMetrics.ageing.sevenToThirty)}
+                        </span>
+                      )}
+                      {customer.ledgerMetrics.ageing.thirtyPlus > 0 && (
+                        <span className="rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-200/60 dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900">
+                          30+d: {formatMoney(customer.ledgerMetrics.ageing.thirtyPlus)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => openPayment(customer)}>Collect</Button>
+                      <Link href={`/customers/${customer.id}`}><Button size="sm">Ledger →</Button></Link>
+                    </div>
+                  </div>
+
+                  {customer.ledgerMetrics.warning && (
+                    <p className="mt-2 rounded-lg bg-destructive/8 px-3 py-2 text-xs text-destructive">
+                      {customer.ledgerMetrics.warning}
+                    </p>
+                  )}
+                </div>
+              );
             })}
-            {ledger.length === 0 ? <p className="text-center py-8 text-muted-foreground">No ledger entries yet.</p> : null}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* ── Panel 2: Ledger Feed (timeline activity log) ──────────────────── */}
+        <div className="overflow-hidden rounded-2xl border bg-muted/25 shadow-sm">
+          <div className="flex items-center justify-between border-b bg-card/70 px-5 py-4 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <CreditCard size={17} />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-display text-base font-black tracking-tight">Ledger Feed</h2>
+                  <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-bold text-muted-foreground">{Math.min(ledger.length, 80)}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">All credit &amp; payment transactions</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-h-[680px] overflow-auto p-4">
+            {ledger.length === 0 ? (
+              <p className="py-14 text-center text-sm text-muted-foreground">No ledger entries yet.</p>
+            ) : (
+              <div className="relative space-y-2 pl-6">
+                <div className="absolute left-2 top-1 bottom-1 w-px bg-border" />
+                {ledger.slice(0, 80).map((entry) => {
+                  const type = normaliseLedgerType(entry.type, entry.source_type);
+                  const isCredit = entry.signed_amount < 0;
+                  const customer = customers.find((row) => row.id === entry.customerId || row.id === entry.customer_id);
+                  const linkedPayment = payments.find((paymentRow) => String(paymentRow.id) === String(entry.paymentId ?? entry.payment_id ?? entry.source_id));
+                  return (
+                    <div key={entry.id} className="relative">
+                      <div className={`absolute left-[-1.35rem] top-3.5 h-2.5 w-2.5 rounded-full ring-2 ring-muted/25 ${isCredit ? "bg-emerald-500" : "bg-orange-400"}`} />
+                      <div className="rounded-xl border bg-card p-3 shadow-xs">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold">{customer?.name ?? "Customer"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              <span className={`mr-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${isCredit ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700"}`}>
+                                {ledgerEntryLabel(type)}
+                              </span>
+                              {formatDateTime(entry.display_date)}
+                            </p>
+                            {entry.note ? <p className="mt-0.5 text-xs italic text-muted-foreground">"{entry.note}"</p> : null}
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className={`font-display text-base font-black tabular-nums ${isCredit ? "text-emerald-600" : "text-orange-600"}`}>
+                              {isCredit ? "−" : "+"}{formatMoney(Math.abs(entry.signed_amount))}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">Bal {formatMoney(entry.running_balance)}</p>
+                          </div>
+                        </div>
+                        {type === "PAYMENT" && linkedPayment && !linkedPayment.reversed_at && !linkedPayment.reversedAt ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 h-7 text-xs"
+                            onClick={() => {
+                              if (!reversePaymentPermission.allowed) {
+                                toast({ title: "Permission denied", description: reversePaymentPermission.reason, variant: "destructive" });
+                                return;
+                              }
+                              setReverse({ paymentId: String(linkedPayment.id) });
+                              setReverseOpen(true);
+                            }}
+                          >
+                            <RotateCcw size={11} className="mr-1" />Reverse
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Record udhar payment</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Customer *</Label><Select value={payment.customerId} onValueChange={(value) => setPayment((form) => ({ ...form, customerId: value }))}><SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger><SelectContent>{customers.map((customer) => <SelectItem key={customer.id} value={customer.id}>{customer.name} • {formatMoney(customer.ledgerBalance)}</SelectItem>)}</SelectContent></Select></div><div><Label>Amount *</Label><Input type="number" className="mt-1" value={payment.amount} onChange={(event) => setPayment((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Mode</Label><Select value={payment.mode} onValueChange={(value) => setPayment((form) => ({ ...form, mode: value as "cash" | "upi" }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI</SelectItem></SelectContent></Select></div><div><Label>Note</Label><Input className="mt-1" value={payment.note} onChange={(event) => setPayment((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void savePayment()}>{saving ? "Saving..." : "Save offline"}</Button></div></DialogContent></Dialog>
