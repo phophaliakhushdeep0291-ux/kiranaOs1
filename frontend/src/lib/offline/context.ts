@@ -1,3 +1,5 @@
+import { loadAuthSession } from "@/lib/storage/auth-storage";
+
 export interface OfflineScope {
   tenant_id: string;
   store_id: string;
@@ -30,17 +32,6 @@ function safeStorageSet(key: string, value: string): void {
   }
 }
 
-function readJsonRecord(key: string): Record<string, unknown> | null {
-  const raw = safeStorageGet(key);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
-  } catch {
-    return null;
-  }
-}
-
 function ensureDeviceId(): string {
   const existing = safeStorageGet(DEVICE_ID_KEY);
   if (existing) return existing;
@@ -50,8 +41,9 @@ function ensureDeviceId(): string {
 }
 
 export function getOfflineScope(): OfflineScope {
-  const shop = readJsonRecord("shop");
-  const user = readJsonRecord("user");
+  const session = loadAuthSession();
+  const shop = session.shop;
+  const user = session.user;
   const shopId = typeof shop?.id === "string" ? shop.id : undefined;
   const userShopId = typeof user?.shopId === "string" ? user.shopId : undefined;
   const tenantId = shopId ?? userShopId ?? DEFAULT_TENANT_ID;

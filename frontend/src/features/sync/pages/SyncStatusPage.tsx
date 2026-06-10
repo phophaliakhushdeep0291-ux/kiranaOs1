@@ -27,7 +27,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { getApiBaseUrl } from "@/lib/api/http";
+import { getApiBaseUrl, setApiBaseUrl } from "@/lib/api/http";
 import { probeBackendConnection, readBackendConnectionSnapshot } from "@/features/sync/backend-health";
 import {
   dexieDB,
@@ -587,6 +587,54 @@ function ConflictList({
   );
 }
 
+function ServerUrlEditor({ currentUrl, onSaved }: { currentUrl: string; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(currentUrl);
+  const { toast } = useToast();
+
+  function save() {
+    const trimmed = value.trim().replace(/\/$/, "");
+    if (!trimmed) return;
+    setApiBaseUrl(trimmed);
+    onSaved();
+    setEditing(false);
+    toast({ title: "Server URL saved", description: "Reload the page for changes to take full effect." });
+  }
+
+  return (
+    <div className="rounded-xl border bg-background p-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <Cloud className="h-4 w-4" /> Server URL
+        </div>
+        {!editing && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setValue(currentUrl); setEditing(true); }}>
+            Edit
+          </Button>
+        )}
+      </div>
+      {editing ? (
+        <div className="mt-3 flex gap-2">
+          <input
+            className="flex-1 rounded-lg border bg-background px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="https://your-backend.example.com/api"
+            onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+            autoFocus
+          />
+          <Button size="sm" className="h-9 text-xs" onClick={save}>Save</Button>
+          <Button size="sm" variant="ghost" className="h-9 text-xs" onClick={() => setEditing(false)}>Cancel</Button>
+        </div>
+      ) : (
+        <div className="mt-3 min-h-11 rounded-xl bg-muted/70 p-3 font-mono text-xs leading-relaxed break-all">
+          {currentUrl}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SyncStatusPage() {
   const { toast } = useToast();
   const [snapshot, setSnapshot] = useState<SyncStatusSnapshot>(initialSnapshot);
@@ -1003,14 +1051,7 @@ export default function SyncStatusPage() {
                 {snapshot.deviceId}
               </div>
             </div>
-            <div className="rounded-xl border bg-background p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <Cloud className="h-4 w-4" /> Server URL
-              </div>
-              <div className="mt-3 min-h-11 rounded-xl bg-muted/70 p-3 font-mono text-xs leading-relaxed break-all">
-                {snapshot.apiBaseUrl}
-              </div>
-            </div>
+            <ServerUrlEditor currentUrl={snapshot.apiBaseUrl} onSaved={() => setSnapshot((prev) => ({ ...prev, apiBaseUrl: getApiBaseUrl() }))} />
             <div className="rounded-xl border bg-background p-4 lg:col-span-2">
               <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <ShieldCheck className="h-4 w-4" /> Subscription sync
