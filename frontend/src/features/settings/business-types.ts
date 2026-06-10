@@ -60,7 +60,7 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     voiceExample: "name aata, cost 40, selling 45, stock 10 kg, category grocery",
     defaultAccent: "emerald",
     dashboardVariant: "general",
-    navConfig: { billing: "New Bill", products: "Products", inventory: "Inventory", udhar: "Udhar", tagline: "Kirana Counter" },
+    navConfig: { billing: "Billing", products: "Products", inventory: "Inventory", udhar: "Udhar", tagline: "Kirana Counter" },
     dashboard: {
       heroTitle: "Today's counter",
       heroSubtitle: "Sales, cash, udhar, and stock at a glance.",

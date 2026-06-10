@@ -141,6 +141,7 @@ export function BillingSummary({
   onRemoveItem,
 }: BillingSummaryProps) {
   const [showCustomerOptions, setShowCustomerOptions] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState(false);
 
   /* GST calculation (informational — grandTotal unchanged) */
   const totalGst = cart.reduce((sum, item) => {
@@ -159,8 +160,7 @@ export function BillingSummary({
   /* Auto-show options when a non-default state is active */
   const needsOptionsVisible =
     billType !== BillInputBillType.normal_sale ||
-    selectedCustomerId !== "walk_in" ||
-    creditAmount > 0;
+    selectedCustomerId !== "walk_in";
 
   return (
     <div
@@ -325,34 +325,43 @@ export function BillingSummary({
               <span data-testid="text-subtotal" className="font-semibold">{fmtRs(subtotal)}</span>
             </div>
 
-            {/* Discount row — matches reference: left label + right value + Apply link */}
+            {/* Discount row */}
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Discount</span>
               <div className="flex items-center gap-2">
-                {safeDiscount > 0 && (
+                {safeDiscount > 0 && !editingDiscount && (
                   <span className="font-semibold text-emerald-600">
                     −{fmtRs(safeDiscount)}
                   </span>
                 )}
-                <input
-                  data-testid="input-discount"
-                  type="number"
-                  min={0}
-                  max={subtotal}
-                  value={safeDiscount === 0 ? "" : safeDiscount}
-                  onChange={(e) =>
-                    setDiscount(clampAmount(Number(e.target.value) || 0, 0, subtotal))
-                  }
-                  className={`w-16 rounded border bg-background px-2 py-1 text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary ${
-                    safeDiscount > 0 ? "hidden" : ""
-                  }`}
-                  placeholder="₹ 0"
-                />
+                {editingDiscount && (
+                  <input
+                    data-testid="input-discount"
+                    type="number"
+                    min={0}
+                    max={subtotal}
+                    autoFocus
+                    value={safeDiscount === 0 ? "" : safeDiscount}
+                    onChange={(e) =>
+                      setDiscount(clampAmount(Number(e.target.value) || 0, 0, subtotal))
+                    }
+                    onBlur={() => setEditingDiscount(false)}
+                    onKeyDown={(e) => e.key === "Enter" && setEditingDiscount(false)}
+                    className="w-16 rounded border bg-background px-2 py-1 text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                    placeholder="₹ 0"
+                  />
+                )}
                 <button
-                  onClick={() => setDiscount(0)}
+                  onClick={() => {
+                    if (editingDiscount) {
+                      setEditingDiscount(false);
+                    } else {
+                      setEditingDiscount(true);
+                    }
+                  }}
                   className="text-xs font-semibold text-primary hover:underline"
                 >
-                  Apply
+                  {safeDiscount > 0 && !editingDiscount ? "Edit" : "Apply"}
                 </button>
               </div>
             </div>
