@@ -12,9 +12,14 @@ function isDevelopmentMultiDeviceOverrideEnabled() {
   return env.NODE_ENV !== "production" && env.DEV_MAX_ACTIVE_DEVICES > 0;
 }
 
-function getRuntimeDeviceLimit(planMaxDevices) {
+function getRuntimeDeviceLimit(planMaxDevices, subscription = null) {
   if (isDevelopmentMultiDeviceOverrideEnabled()) {
     return Math.max(Number(planMaxDevices) || 1, env.DEV_MAX_ACTIVE_DEVICES);
+  }
+  // During trial, allow at least 5 devices so users can test cross-device sync
+  // before committing to a paid plan.
+  if (subscription?.status === "trial") {
+    return Math.max(Number(planMaxDevices) || 1, 5);
   }
   return Number(planMaxDevices) || 1;
 }
@@ -57,7 +62,7 @@ export async function activateDevice(shopId, user, input, req = null) {
 
   const effective = await getEffectivePlan(shopId);
   const activeCount = await db.device.count({ where: { shopId, status: "active" } });
-  const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices);
+  const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
   if (activeCount >= allowedMaxDevices) {
     const err = new AppError("Device limit exceeded", 403);
     err.code = "DEVICE_LIMIT_EXCEEDED";

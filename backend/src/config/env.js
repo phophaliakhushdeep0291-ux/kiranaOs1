@@ -6,7 +6,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(16),
-  JWT_EXPIRES_IN: z.string().default("15m"),
+  JWT_EXPIRES_IN: z.string().default("1d"),
   // Groq — free tier, recommended (https://console.groq.com)
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default("llama3-8b-8192"),

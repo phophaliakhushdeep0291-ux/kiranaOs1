@@ -3,6 +3,7 @@ import app from "./app.js";
 import db from "./db.js";
 import { initErrorTracking, captureException } from "./lib/errorTracking.js";
 import { closeRedis } from "./lib/redis.js";
+import { seedPlans } from "./modules/subscription/subscription.service.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 let httpServer = null;
@@ -13,6 +14,15 @@ async function main() {
   // Test database connection before accepting traffic
   await db.$connect();
   console.log(JSON.stringify({ type: "startup", message: "Database connected", time: new Date().toISOString() }));
+
+  // Sync plan configs (device limits, features) to DB on every start so deployments
+  // pick up plan changes without a separate migration step.
+  try {
+    await seedPlans();
+    console.log(JSON.stringify({ type: "startup", message: "Plans seeded/updated", time: new Date().toISOString() }));
+  } catch (err) {
+    console.error(JSON.stringify({ type: "startup_warn", message: "Plan seed failed (non-fatal)", error: err.message, time: new Date().toISOString() }));
+  }
 
   httpServer = app.listen(env.PORT, () => {
     console.log(
