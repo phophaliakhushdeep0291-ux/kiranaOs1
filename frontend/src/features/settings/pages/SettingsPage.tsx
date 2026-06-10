@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Archive,
   Bell,
+  Check,
   Cloud,
   CreditCard,
   Languages,
@@ -22,6 +23,7 @@ import {
   LifeBuoy,
   Loader2,
   MonitorSmartphone,
+  Palette,
   ReceiptText,
   Recycle,
   Shield,
@@ -31,6 +33,8 @@ import {
   UserCircle,
   UsersRound,
 } from "lucide-react";
+import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/settings/theme";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { usePermission } from "@/features/staff/permissions";
@@ -81,6 +85,7 @@ export default function Settings() {
   const { toast } = useToast();
   const { user } = useAuth();
   const { language, setLanguage, t } = useAppLanguage();
+  const { accent, setAccent } = useAppTheme();
   const changeSettingsPermission = usePermission("change_settings");
   const queryClient = useQueryClient();
   const [settingsPinOpen, setSettingsPinOpen] = useState(false);
@@ -163,10 +168,11 @@ export default function Settings() {
       <PageHeader title={t("settings.title")} description={t("settings.subtitle")} />
 
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 bg-muted/60 p-1 sm:grid-cols-5 lg:max-w-4xl">
+        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 bg-muted/60 p-1 sm:grid-cols-6 lg:max-w-5xl">
           <TabsTrigger value="profile" data-testid="tab-profile"><UserCircle size={14} className="mr-1.5" />{t("settings.profile")}</TabsTrigger>
           <TabsTrigger value="shop" data-testid="tab-shop"><Store size={14} className="mr-1.5" />{t("settings.shop")}</TabsTrigger>
           <TabsTrigger value="language" data-testid="tab-language"><Languages size={14} className="mr-1.5" />{t("settings.language")}</TabsTrigger>
+          <TabsTrigger value="appearance" data-testid="tab-appearance"><Palette size={14} className="mr-1.5" />Appearance</TabsTrigger>
           <TabsTrigger value="advanced" data-testid="tab-advanced"><LayoutGrid size={14} className="mr-1.5" />{t("settings.advanced")}</TabsTrigger>
           <TabsTrigger value="security" data-testid="tab-security"><Shield size={14} className="mr-1.5" />{t("settings.security")}</TabsTrigger>
         </TabsList>
@@ -279,6 +285,87 @@ export default function Settings() {
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">Shopkeeper-friendly Hindi/Hinglish labels.</p>
               </button>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="appearance">
+          <div className="space-y-5">
+            <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+              <div className="border-b px-5 py-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
+                    <Palette size={16} />
+                  </span>
+                  <div>
+                    <h2 className="font-display text-base font-black tracking-tight">Accent colour</h2>
+                    <p className="text-[11px] text-muted-foreground">Changes buttons, sidebar, highlights and focus rings across the entire app. Applied instantly.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-3 p-5 sm:grid-cols-8">
+                {(Object.entries(ACCENT_COLORS) as [AccentColor, typeof ACCENT_COLORS[AccentColor]][]).map(([key, def]) => {
+                  const active = accent === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setAccent(key);
+                        toast({ title: `${def.label} theme applied` });
+                      }}
+                      className={cn(
+                        "group flex flex-col items-center gap-2.5 rounded-xl border-2 p-3 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        active
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-transparent hover:border-muted-foreground/20 hover:bg-muted/40"
+                      )}
+                    >
+                      <div className="relative">
+                        <div
+                          className="h-11 w-11 rounded-full shadow-md transition-transform duration-150 group-hover:scale-105"
+                          style={{ backgroundColor: def.swatch }}
+                        />
+                        {active && (
+                          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-background shadow ring-2 ring-primary">
+                            <Check size={11} className="text-primary" />
+                          </span>
+                        )}
+                      </div>
+                      <p className={cn("text-xs font-bold", active ? "text-primary" : "text-foreground")}>{def.label}</p>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="border-t bg-muted/30 px-5 py-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Saved to this browser. Each device can have its own colour preference.
+                </p>
+              </div>
+            </div>
+
+            {/* Live preview card */}
+            <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+              <div className="border-b px-5 py-4">
+                <h2 className="font-display text-base font-black tracking-tight">Preview</h2>
+                <p className="text-[11px] text-muted-foreground">See how the selected accent looks across UI elements.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 p-5">
+                <button type="button" className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition hover:opacity-90">
+                  Primary button
+                </button>
+                <button type="button" className="rounded-xl border border-primary px-4 py-2 text-sm font-bold text-primary transition hover:bg-primary/10">
+                  Outline button
+                </button>
+                <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary">Badge</span>
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded border-2 border-primary bg-primary" />
+                  <span className="text-sm text-muted-foreground">Checkbox</span>
+                </div>
+                <div className="h-2 w-32 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full w-3/5 rounded-full bg-primary transition-all duration-500" />
+                </div>
+              </div>
             </div>
           </div>
         </TabsContent>

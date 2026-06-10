@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { activateWaitingServiceWorker } from "@/lib/pwa/registerServiceWorker";
 import { AppLanguageProvider } from "@/features/settings/i18n";
+import { AppThemeProvider } from "@/features/settings/theme";
 import { useRealtimeRefreshBridge } from "@/lib/realtime/useRealtimeRefreshBridge";
 import { CloudDataBootstrap } from "@/features/sync/CloudDataBootstrap";
 import { useMultiDeviceSync } from "@/lib/realtime/useMultiDeviceSync";
@@ -93,6 +94,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <AppThemeProvider>
           <AppLanguageProvider>
             <AuthProvider>
               <RealtimeRefreshBridge />
@@ -100,6 +102,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
               {children}
             </AuthProvider>
           </AppLanguageProvider>
+          </AppThemeProvider>
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
