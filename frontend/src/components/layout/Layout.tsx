@@ -23,6 +23,7 @@ import {
   FolderOpen,
   LayoutDashboard,
   LogOut,
+  Menu,
   MessageCircle,
   Package,
   PercentSquare,
@@ -390,10 +391,18 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         {/* Desktop topbar */}
         <header className="sticky top-0 z-40 hidden h-[76px] items-center gap-4 border-b border-border bg-background/95 px-5 backdrop-blur lg:flex">
+          <button
+            type="button"
+            aria-label="Toggle sidebar"
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground/70 shadow-sm transition-colors hover:border-primary/40 hover:text-primary"
+          >
+            <Menu size={19} aria-hidden="true" />
+          </button>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-[20px] font-black tracking-tight text-foreground leading-tight">{getPageTitle(loc)}</h1>
+            <h1 className="font-display text-[26px] font-black tracking-tight text-foreground leading-none">{getPageTitle(loc)}</h1>
             {PAGE_SUBTITLES[loc] && (
-              <p className="text-[12px] font-medium text-muted-foreground leading-none mt-1">{PAGE_SUBTITLES[loc]}</p>
+              <p className="text-[12.5px] font-medium text-muted-foreground leading-none mt-1.5">{PAGE_SUBTITLES[loc]}</p>
             )}
           </div>
 

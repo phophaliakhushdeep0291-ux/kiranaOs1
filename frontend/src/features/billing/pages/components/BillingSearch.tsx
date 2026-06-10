@@ -159,36 +159,35 @@ export function BillingSearch({
 
             {/* Search box */}
             <div className="min-w-0 flex-1">
-              <div className="relative flex h-12 items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-[#f8fafd] px-4 transition-colors focus-within:border-[#0057ff] focus-within:bg-white">
-                <Search size={16} className="shrink-0 text-[#6b7a9a]" aria-hidden="true" />
+              <div className="relative flex h-[52px] items-center gap-3 rounded-[14px] border border-[#e3eaf3] bg-white px-4 transition-colors focus-within:border-[#0057ff]">
+                <Search size={18} className="shrink-0 text-[#6b7a9a]" aria-hidden="true" />
                 <Input
                   ref={searchInputRef}
                   data-testid="input-product-search"
-                  className="h-full flex-1 border-0 bg-transparent p-0 text-[13px] font-semibold text-[#0f2147] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="h-full flex-1 border-0 bg-transparent p-0 text-[14px] font-semibold text-[#0f2147] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
                   placeholder="Search by product name, barcode or SKU"
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
                 />
-                <kbd className="ml-auto flex shrink-0 items-center gap-1 rounded-[6px] border border-[#e1e8f2] bg-white px-1.5 py-0.5 text-[11px] font-bold text-[#45577a]">
+                <kbd className="ml-auto flex shrink-0 items-center gap-1 rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 py-1 text-[11px] font-bold text-[#45577a]">
                   ⌘ K
                 </kbd>
               </div>
-              {/* Scan + Voice */}
-              <div className="mt-2 flex items-center gap-3">
+              {/* Scan + Voice — circular icon buttons */}
+              <div className="mt-2.5 flex items-center gap-2.5">
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 text-[11px] font-bold text-[#6b7a9a] transition-colors hover:text-[#0057ff]"
+                  title="Scan barcode"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff]"
                 >
-                  <ScanLine size={13} aria-hidden="true" />
-                  Scan barcode
+                  <ScanLine size={16} aria-hidden="true" />
                 </button>
-                <span className="text-[#d5dde8] select-none">|</span>
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 text-[11px] font-bold text-[#6b7a9a] transition-colors hover:text-[#0057ff]"
+                  title="Voice billing"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff]"
                 >
-                  <Mic size={13} aria-hidden="true" />
-                  Voice
+                  <Mic size={16} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -207,12 +206,12 @@ export function BillingSearch({
                         onClick={() => onAddProduct(p)}
                         className="flex min-w-[104px] items-center gap-2 rounded-lg border border-transparent bg-white px-2 py-1.5 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition-all hover:border-[#cfe0ff]"
                       >
-                        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-lg ${color}`}>
+                        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-lg ${color}`}>
                           {getProductEmoji(p.name, p.category)}
                         </span>
                         <div className="min-w-0 text-left">
-                          <p className="truncate text-[10.5px] font-extrabold leading-[1.15] text-[#14284e]">
-                            {p.name.split(" ")[0]}
+                          <p className="max-w-[120px] truncate text-[11px] font-extrabold leading-[1.15] text-[#14284e]">
+                            {p.name}
                           </p>
                           <p className="mt-0.5 text-[11px] font-black text-[#14284e]">₹{price}</p>
                         </div>
@@ -245,7 +244,7 @@ export function BillingSearch({
               />
             ))}
             {hasMoreCategories && (
-              <button className="shrink-0 h-[34px] rounded-[8px] border border-[#e1e8f2] bg-white px-4 text-[12px] font-bold text-[#23365f] transition-colors hover:bg-[#f7f9fd]">
+              <button className="shrink-0 h-[36px] rounded-full border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-bold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd]">
                 More ▾
               </button>
             )}
@@ -294,7 +293,7 @@ export function BillingSearch({
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={() => setShowAll((v) => !v)}
-                  className="flex h-[34px] w-[176px] items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white text-[12px] font-extrabold text-[#0057ff] transition-colors hover:bg-[#f5f9ff]"
+                  className="flex h-[38px] items-center justify-center gap-2 rounded-full border border-[#dfe8f5] bg-white px-7 text-[12.5px] font-extrabold text-[#0057ff] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff]"
                 >
                   {showAll ? (
                     <>Show less <ChevronUp size={13} /></>
@@ -395,18 +394,20 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
   const price = productSellingPrice(product, 1);
   const unit = product.rateUnit ?? product.displayUnit ?? "pc";
   const stock = product.stockBaseQty ?? 0;
-  const color = productPlaceholderColor(product.name);
   const emoji = getProductEmoji(product.name, product.category);
+
+  const priceLabel = price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const subtitle = product.category?.trim() || `per ${unit}`;
 
   return (
     <button
       data-testid={`product-card-${product.id}`}
       onClick={onAdd}
-      className="group relative h-[176px] overflow-hidden rounded-[10px] border border-[#e5ebf4] bg-white p-[12px_10px_44px] text-left transition-all duration-150 hover:-translate-y-px hover:border-[#bcd0ff] hover:shadow-[0_10px_24px_rgba(15,23,42,0.07)]"
+      className="group relative h-[182px] overflow-hidden rounded-[16px] border border-[#e8edf5] bg-white p-3 pb-[46px] text-left transition-all duration-150 hover:-translate-y-px hover:border-[#bcd0ff] hover:shadow-[0_10px_24px_rgba(15,23,42,0.07)]"
     >
-      {/* Image area — 72px */}
-      <div className={`relative mb-[9px] flex h-[72px] items-center justify-center overflow-hidden rounded-lg ${color}`}>
-        <span className="text-3xl leading-none" aria-hidden="true">{emoji}</span>
+      {/* Image area — neutral photo placeholder */}
+      <div className="relative mb-2.5 flex h-[78px] items-center justify-center overflow-hidden rounded-[12px] bg-[#f7f9fc]">
+        <span className="text-[40px] leading-none" aria-hidden="true">{emoji}</span>
         {stock <= 0 ? (
           <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">Out</span>
         ) : stock <= 5 ? (
@@ -414,22 +415,19 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
         ) : null}
       </div>
 
-      {/* Name + unit */}
-      <p className="line-clamp-2 min-h-[31px] text-[12px] font-extrabold leading-[1.25] text-[#14284e]">
+      {/* Name + size/category */}
+      <p className="line-clamp-1 text-[13px] font-extrabold leading-[1.2] text-[#14284e]">
         {product.name}
       </p>
-      {product.category && (
-        <p className="mt-0.5 truncate text-[11px] font-medium text-[#687895]">{product.category}</p>
-      )}
+      <p className="mt-1 truncate text-[12px] font-medium text-[#687895]">{subtitle}</p>
 
-      {/* Price — absolute bottom-left */}
-      <span className="absolute bottom-[13px] left-2.5 text-[14px] font-black text-[#0f1e3d]">
-        ₹{price}
-        <span className="text-[10px] font-medium text-[#687895]">/{unit}</span>
+      {/* Price — absolute bottom-left, ₹X.00 */}
+      <span className="absolute bottom-3 left-3 text-[15px] font-black text-[#0f1e3d]">
+        ₹{priceLabel}
       </span>
 
-      {/* Add button — absolute bottom-right, rounded-[8px] matching spec */}
-      <span className="absolute bottom-2.5 right-2.5 grid h-7 w-7 place-items-center rounded-[8px] border border-[#dfe8f5] bg-white text-lg font-bold text-[#0057ff] transition-transform group-hover:scale-110">
+      {/* Add button — bottom-right, white with border, blue + */}
+      <span className="absolute bottom-2.5 right-2.5 grid h-7 w-7 place-items-center rounded-[10px] border border-[#dfe8f5] bg-white text-lg font-bold text-[#0057ff] transition-all group-hover:border-[#0057ff] group-hover:bg-[#f5f9ff]">
         +
       </span>
     </button>
@@ -441,10 +439,10 @@ function CategoryChip({ label, active, onClick }: { label: string; active: boole
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 h-[34px] rounded-[8px] border px-4 text-[12px] font-bold transition-all ${
+      className={`shrink-0 h-[36px] rounded-full border px-5 text-[12.5px] font-bold capitalize transition-all ${
         active
           ? "border-[#0057ff] bg-[#0057ff] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
-          : "border-[#e1e8f2] bg-white text-[#23365f] hover:bg-[#f7f9fd]"
+          : "border-[#e6ecf4] bg-white text-[#3a4a6b] hover:bg-[#f7f9fd]"
       }`}
     >
       {label}
