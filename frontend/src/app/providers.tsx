@@ -8,6 +8,8 @@ import { useEffect } from "react";
 import { ApiClientError } from "@/lib/api/http";
 import { initializeOfflineStorage } from "@/lib/offline/migrations";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import { activateWaitingServiceWorker } from "@/lib/pwa/registerServiceWorker";
 import { AppLanguageProvider } from "@/features/settings/i18n";
 import { useRealtimeRefreshBridge } from "@/lib/realtime/useRealtimeRefreshBridge";
 import { CloudDataBootstrap } from "@/features/sync/CloudDataBootstrap";
@@ -64,7 +66,12 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const onUpdateReady = () => {
       toast({
         title: "App update ready",
-        description: "A fresh version is available. Finish the current bill, then refresh when convenient.",
+        description: "A fresh version is available. Finish the current bill, then refresh.",
+        action: (
+          <ToastAction altText="Refresh now" onClick={activateWaitingServiceWorker}>
+            Refresh now
+          </ToastAction>
+        ),
       });
     };
     const onRegistrationFailed = (event: Event) => {

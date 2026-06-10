@@ -28,6 +28,8 @@ export function CloudDataBootstrap() {
     const shopId = shop?.id ?? user.shopId ?? "unknown-shop";
     const bootstrapKey = `${getApiBaseUrl()}::${shopId}::${user.id}`;
     if (bootstrappedKeyRef.current === bootstrapKey) return;
+    // Mark as in-progress immediately to prevent concurrent runs from a second render.
+    // On failure we reset this so the next navigation/remount will retry.
     bootstrappedKeyRef.current = bootstrapKey;
 
     let cancelled = false;
@@ -56,7 +58,10 @@ export function CloudDataBootstrap() {
           // We intentionally avoid queryClient.refetchQueries() here because two open POS windows
           // can otherwise create a request storm. Active pages refresh from local IndexedDB events.
         } catch {
-          // Bootstrap is best-effort. Normal sync/status UI still shows any real issue.
+          // Reset so the next navigation or remount can retry. Without this, a failed
+          // first-run (e.g. backend unreachable on fresh device) would permanently skip
+          // hydration for the entire session.
+          if (!cancelled) bootstrappedKeyRef.current = null;
         }
       }, delayMs);
       timers.push(timer);
