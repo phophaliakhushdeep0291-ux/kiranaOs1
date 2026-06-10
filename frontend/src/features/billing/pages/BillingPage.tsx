@@ -173,6 +173,15 @@ export default function Billing() {
   })), [allProducts]);
 
 
+  const recentProducts = useMemo(
+    () =>
+      recentProductIds
+        .slice(0, 8)
+        .map((id) => productById.get(id))
+        .filter((p): p is Product => p != null),
+    [recentProductIds, productById],
+  );
+
   const filteredProducts = useMemo(() => {
     const q = normalizeSearchText(deferredSearch);
     const categoryFiltered = selectedCategory === "all" ? productSearchIndex : productSearchIndex.filter((entry) => entry.category === selectedCategory);
@@ -824,6 +833,8 @@ export default function Billing() {
           onSelectedCategoryChange={setSelectedCategory}
           voiceVisible={voiceVisible}
           onToggleVoice={() => setVoiceVisible((v) => !v)}
+          recentProducts={recentProducts}
+          onHoldBill={holdCurrentBill}
         />
         {voiceVisible && (
           <div className="shrink-0 border-t">
