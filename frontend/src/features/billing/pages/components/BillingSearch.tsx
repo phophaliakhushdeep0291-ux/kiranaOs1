@@ -4,8 +4,8 @@ import {
   ChevronRight,
   ChevronUp,
   Clock,
+  Mic,
   PauseCircle,
-  Percent,
   ReceiptText,
   ScanLine,
   Search,
@@ -181,14 +181,24 @@ export function BillingSearch({
                 ⌘ K
               </kbd>
             </div>
-            {/* Barcode scan — separate button below search, matching reference */}
-            <button
-              type="button"
-              className="mt-1.5 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ScanLine size={13} aria-hidden="true" />
-              Scan barcode
-            </button>
+            {/* Scan + Voice buttons below search */}
+            <div className="mt-1.5 flex items-center gap-3">
+              <button
+                type="button"
+                className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ScanLine size={13} aria-hidden="true" />
+                Scan barcode
+              </button>
+              <span className="text-muted-foreground/30 select-none">|</span>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Mic size={13} aria-hidden="true" />
+                Voice
+              </button>
+            </div>
           </div>
 
           {/* Right: Recent Products */}
@@ -281,8 +291,8 @@ export function BillingSearch({
               </p>
             )}
 
-            {/* Product grid — 5 columns matching reference */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {/* Product grid */}
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4 xl:grid-cols-5">
               {displayedProducts.map((product) => (
                 <ProductCard
                   key={product.id}
@@ -292,29 +302,33 @@ export function BillingSearch({
               ))}
             </div>
 
-            {/* View all products button */}
-            {filteredProducts.length > 10 && (
-              <button
-                onClick={() => setShowAll((v) => !v)}
-                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-              >
-                {showAll ? (
-                  <>
-                    <ChevronUp size={14} aria-hidden="true" /> Show less
-                  </>
-                ) : (
-                  <>
-                    View all products <ChevronDown size={14} aria-hidden="true" />
-                  </>
-                )}
-              </button>
-            )}
+            {/* View all products button — always visible */}
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-border py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
+            >
+              {showAll ? (
+                <>
+                  <ChevronUp size={13} aria-hidden="true" /> Show less
+                </>
+              ) : (
+                <>
+                  View all products
+                  {filteredProducts.length > 10 && (
+                    <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                      {filteredProducts.length}
+                    </span>
+                  )}
+                  <ChevronDown size={13} aria-hidden="true" />
+                </>
+              )}
+            </button>
           </>
         )}
 
         {/* ── Bottom 3-column info section ── */}
         {!search && (
-          <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-3 gap-3">
             <RecentBillsPanel />
             <QuickActionsPanel onHoldBill={onHoldBill} />
             <BillingTipsPanel />
@@ -322,44 +336,43 @@ export function BillingSearch({
         )}
       </div>
 
-      {/* ── Order Summary bar — sticky bottom, matches reference ── */}
+      {/* ── Order Summary sticky bar ── */}
       {cartItemCount > 0 && (
-        <div className="shrink-0 border-t bg-muted/40 px-4 py-2.5">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        <div className="shrink-0 border-t bg-background/95 px-4 py-2">
+          <div className="flex items-center gap-4">
+            {/* Items count */}
             <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
               <ReceiptText size={13} className="shrink-0 text-muted-foreground" aria-hidden="true" />
               {cartItemCount} {cartItemCount === 1 ? "Item" : "Items"}
             </span>
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Percent size={11} className="shrink-0" aria-hidden="true" />
-              <strong className="font-semibold text-foreground">
-                ₹{cartSubtotal.toLocaleString("en-IN")}
-              </strong>
-              &nbsp;Subtotal
+            {/* Divider */}
+            <span className="text-muted-foreground/30">|</span>
+            {/* Subtotal */}
+            <span className="text-xs text-muted-foreground">
+              Subtotal&nbsp;<strong className="font-semibold text-foreground">₹{cartSubtotal.toLocaleString("en-IN")}</strong>
             </span>
+            {/* Tax */}
             {cartTax > 0 && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Percent size={11} className="shrink-0" aria-hidden="true" />
-                <strong className="font-semibold text-foreground">
-                  ₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}
-                </strong>
-                &nbsp;Tax (5%)
-              </span>
+              <>
+                <span className="text-muted-foreground/30">|</span>
+                <span className="text-xs text-muted-foreground">
+                  Tax (5%)&nbsp;<strong className="font-semibold text-foreground">₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}</strong>
+                </span>
+              </>
             )}
+            {/* Discount */}
             {cartDiscount > 0 && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Percent size={11} className="shrink-0" aria-hidden="true" />
-                <strong className="font-semibold text-foreground">
-                  ₹{cartDiscount.toLocaleString("en-IN")}
-                </strong>
-                &nbsp;Discount
-              </span>
+              <>
+                <span className="text-muted-foreground/30">|</span>
+                <span className="text-xs text-muted-foreground">
+                  Discount&nbsp;<strong className="font-semibold text-emerald-600">−₹{cartDiscount.toLocaleString("en-IN")}</strong>
+                </span>
+              </>
             )}
+            {/* Grand Total — right aligned */}
             <div className="ml-auto flex items-baseline gap-1.5">
-              <span className="text-base font-black text-foreground">
-                ₹{cartGrandTotal.toLocaleString("en-IN")}
-              </span>
               <span className="text-xs font-semibold text-muted-foreground">Grand Total</span>
+              <span className="text-base font-black text-foreground">₹{cartGrandTotal.toLocaleString("en-IN")}</span>
             </div>
           </div>
         </div>
@@ -478,9 +491,9 @@ function RecentBillsPanel() {
   }
 
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold">Recent Bills</h3>
+    <div className="rounded-xl border bg-card p-3">
+      <div className="mb-2.5 flex items-center justify-between">
+        <h3 className="text-xs font-bold">Recent Bills</h3>
         <Link
           to="/bills"
           className="flex items-center gap-0.5 text-xs font-semibold text-primary hover:underline"
@@ -571,8 +584,8 @@ function QuickActionsPanel({ onHoldBill }: { onHoldBill: () => void }) {
   ];
 
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <h3 className="mb-3 text-sm font-bold">Quick Actions</h3>
+    <div className="rounded-xl border bg-card p-3">
+      <h3 className="mb-2.5 text-xs font-bold">Quick Actions</h3>
       <div className="space-y-1">
         {actions.map((action) => (
           <button
@@ -612,9 +625,9 @@ function BillingTipsPanel() {
   ];
 
   return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <h3 className="text-sm font-bold">Billing Tips</h3>
+    <div className="rounded-xl border bg-card p-3">
+      <div className="mb-2.5 flex items-center gap-2">
+        <h3 className="text-xs font-bold">Billing Tips</h3>
         <Clock size={13} className="text-muted-foreground" />
       </div>
       <div className="space-y-2">

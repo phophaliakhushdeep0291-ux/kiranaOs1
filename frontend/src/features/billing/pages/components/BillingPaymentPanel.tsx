@@ -228,27 +228,27 @@ export function BillingPaymentPanel({
         </div>
       ) : null}
 
-      {/* Paid / Udhar summary */}
-      <div className="space-y-1.5 rounded-xl border bg-background/70 px-3 py-2.5 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Paid</span>
-          <span className="font-semibold">{fmtRs(effectivePaidAmount)}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Udhar</span>
-          <span
-            className={creditAmount > 0 ? "font-semibold text-amber-600" : "font-semibold text-emerald-600"}
-          >
-            {fmtRs(creditAmount)}
-          </span>
-        </div>
-        {advanceAmount > 0 && (
+      {/* Paid / Udhar summary — only when there is credit or advance */}
+      {(creditAmount > 0 || advanceAmount > 0) && (
+        <div className="space-y-1.5 rounded-xl border bg-background/70 px-3 py-2.5 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Advance</span>
-            <span className="font-semibold text-blue-600">{fmtRs(advanceAmount)}</span>
+            <span className="text-muted-foreground">Paid</span>
+            <span className="font-semibold">{fmtRs(effectivePaidAmount)}</span>
           </div>
-        )}
-      </div>
+          {creditAmount > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Udhar</span>
+              <span className="font-semibold text-amber-600">{fmtRs(creditAmount)}</span>
+            </div>
+          )}
+          {advanceAmount > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Advance</span>
+              <span className="font-semibold text-blue-600">{fmtRs(advanceAmount)}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

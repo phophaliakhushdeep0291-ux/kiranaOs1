@@ -176,6 +176,21 @@ export function BillingSummary({
         className="absolute left-0 top-0 z-20 hidden h-full w-2 -translate-x-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 lg:block"
       />
 
+      {/* ── Bill header ── */}
+      <div className="shrink-0 flex items-center justify-between border-b px-4 py-2.5 bg-muted/30">
+        <div>
+          <p className="text-sm font-black leading-tight">New Bill</p>
+          <p className="mt-0.5 text-[10px] leading-none text-muted-foreground">
+            {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+          </p>
+        </div>
+        {cart.length > 0 && (
+          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
+            {cart.length} item{cart.length !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+
       {/* ── Scrollable body ── */}
       <ScrollArea className="flex-1">
         <div className="divide-y">
