@@ -103,4 +103,12 @@ export type SpeechRecognitionLike = {
 
 export type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
-export const UNIT_OPTIONS = ["piece", "kg", "g", "litre", "ml", "packet", "box", "dozen", "custom"] as const;
+export const UNIT_OPTIONS = [
+  "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
+  "kg", "gram", "g", "litre", "ml",
+  "meter", "yard",
+  "packet", "box",
+  "strip", "tablet", "bottle", "tube",
+  "plate", "glass",
+  "custom",
+] as const;

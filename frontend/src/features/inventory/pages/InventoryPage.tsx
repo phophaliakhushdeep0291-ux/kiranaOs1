@@ -41,7 +41,15 @@ import {
 } from "@/features/inventory/calculations";
 import { FilterBar, PageHeader, PageShell, SearchInputWithIcon, StatCard, StatsGrid } from "@/components/shared";
 
-const UNITS = ["kg", "gram", "litre", "ml", "piece", "packet", "box", "custom"];
+const UNITS = [
+  "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
+  "kg", "gram", "litre", "ml",
+  "meter", "yard",
+  "packet", "box",
+  "strip", "tablet", "bottle", "tube",
+  "plate", "glass",
+  "custom",
+];
 
 type MovementType = "purchase" | "sale" | "damage" | "correction";
 

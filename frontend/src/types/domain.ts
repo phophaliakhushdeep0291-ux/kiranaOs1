@@ -28,7 +28,15 @@ export type Money = number;
 export type Quantity = number;
 export type Percentage = number;
 
-export type ProductUnit = "piece" | "kg" | "g" | "litre" | "ml" | "packet" | "box" | "dozen" | "custom";
+export type ProductUnit =
+  | "piece" | "dozen" | "set" | "pair" | "bundle" | "roll" | "sheet"
+  | "kg" | "g" | "gram"
+  | "litre" | "ml"
+  | "meter" | "yard"
+  | "packet" | "box"
+  | "strip" | "tablet" | "bottle" | "tube"
+  | "plate" | "glass"
+  | "custom";
 
 export interface Product extends LocalEntityMeta {
   name: string;
