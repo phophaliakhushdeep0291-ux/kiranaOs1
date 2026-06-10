@@ -2,17 +2,10 @@ import { useCallback, useState } from "react";
 import type { AccentColor } from "./theme";
 
 export type BusinessType =
-  | "kirana"
-  | "clothing"
-  | "footwear"
-  | "auto_parts"
-  | "electronics"
-  | "pharmacy"
-  | "stationery"
-  | "furniture"
-  | "cosmetics"
-  | "restaurant"
-  | "other";
+  | "kirana" | "clothing" | "footwear" | "auto_parts" | "electronics"
+  | "pharmacy" | "stationery" | "furniture" | "cosmetics" | "restaurant" | "other";
+
+export type DashboardVariant = "general" | "restaurant" | "technical" | "medical";
 
 export type QuickActionIconKey =
   | "billing" | "payment" | "purchase" | "closing"
@@ -28,11 +21,19 @@ export interface QuickAction {
   color: QuickActionColorKey;
 }
 
+export interface NavConfig {
+  billing: string;    // label for /billing nav item
+  products: string;   // label for /products nav item
+  inventory: string;  // label for /inventory nav item
+  udhar: string;      // label for /udhar nav item
+  tagline: string;    // sidebar brand tagline
+}
+
 export interface DashboardConfig {
   heroTitle: string;
   heroSubtitle: string;
   kpi: { revenue: string; profit: string; credit: string; cash: string; };
-  creditLabel: string;          // "Udhar" | "Credit" | "Dues" | "Khata"
+  creditLabel: string;
   quickActions: [QuickAction, QuickAction, QuickAction, QuickAction];
 }
 
@@ -44,6 +45,8 @@ export interface BusinessTypeDefinition {
   primaryUnits: string[];
   voiceExample: string;
   defaultAccent: AccentColor;
+  dashboardVariant: DashboardVariant;
+  navConfig: NavConfig;
   dashboard: DashboardConfig;
 }
 
@@ -56,16 +59,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "kg", "gram", "litre", "ml", "packet", "box", "dozen"],
     voiceExample: "name aata, cost 40, selling 45, stock 10 kg, category grocery",
     defaultAccent: "emerald",
+    dashboardVariant: "general",
+    navConfig: { billing: "New Bill", products: "Products", inventory: "Inventory", udhar: "Udhar", tagline: "Kirana Counter" },
     dashboard: {
       heroTitle: "Today's counter",
       heroSubtitle: "Sales, cash, udhar, and stock at a glance.",
       kpi: { revenue: "Today's Sales", profit: "Gross Profit", credit: "Udhar Outstanding", cash: "Cash Collected" },
       creditLabel: "Udhar",
       quickActions: [
-        { label: "New Bill",    href: "/billing",        icon: "billing",   color: "primary" },
-        { label: "Collect",     href: "/udhar",          icon: "payment",   color: "sky"     },
-        { label: "Purchase",    href: "/purchase-bills", icon: "purchase",  color: "amber"   },
-        { label: "Close Day",   href: "/daily-closing",  icon: "closing",   color: "violet"  },
+        { label: "New Bill",  href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "Collect",   href: "/udhar",          icon: "payment",   color: "sky"     },
+        { label: "Purchase",  href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "Close Day", href: "/daily-closing",  icon: "closing",   color: "violet"  },
       ],
     },
   },
@@ -78,16 +83,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "meter", "yard", "set", "dozen", "roll", "bundle"],
     voiceExample: "name cotton shirt, cost 200, selling 350, stock 20 piece, category men",
     defaultAccent: "violet",
+    dashboardVariant: "general",
+    navConfig: { billing: "New Bill", products: "Catalogue", inventory: "Stock", udhar: "Credit", tagline: "Fashion Counter" },
     dashboard: {
       heroTitle: "Fashion counter",
       heroSubtitle: "Today's sales, stock, and customer credit.",
       kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
       creditLabel: "Credit",
       quickActions: [
-        { label: "New Bill",   href: "/billing",        icon: "billing",   color: "primary" },
-        { label: "Collect",    href: "/udhar",          icon: "payment",   color: "sky"     },
-        { label: "Products",   href: "/products",       icon: "products",  color: "violet"  },
-        { label: "Reports",    href: "/reports",        icon: "reports",   color: "amber"   },
+        { label: "New Bill",  href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "Collect",   href: "/udhar",          icon: "payment",   color: "sky"     },
+        { label: "Catalogue", href: "/products",       icon: "products",  color: "violet"  },
+        { label: "Reports",   href: "/reports",        icon: "reports",   color: "amber"   },
       ],
     },
   },
@@ -100,16 +107,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["pair", "piece", "dozen", "box", "set"],
     voiceExample: "name sports shoes, cost 400, selling 650, stock 10 pair, category sports",
     defaultAccent: "rose",
+    dashboardVariant: "general",
+    navConfig: { billing: "New Bill", products: "Catalogue", inventory: "Stock", udhar: "Dues", tagline: "Footwear Counter" },
     dashboard: {
       heroTitle: "Footwear counter",
       heroSubtitle: "Today's billing and inventory overview.",
       kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Dues", cash: "Cash In Hand" },
       creditLabel: "Dues",
       quickActions: [
-        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Inventory",  href: "/inventory",     icon: "inventory", color: "rose"    },
-        { label: "Close Day",  href: "/daily-closing", icon: "closing",   color: "amber"   },
+        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Stock",     href: "/inventory",     icon: "inventory", color: "rose"    },
+        { label: "Close Day", href: "/daily-closing", icon: "closing",   color: "amber"   },
       ],
     },
   },
@@ -122,16 +131,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "set", "box", "litre", "kg", "dozen", "bundle", "sheet"],
     voiceExample: "name oil filter, cost 120, selling 180, stock 15 piece, category filters",
     defaultAccent: "slate",
+    dashboardVariant: "technical",
+    navConfig: { billing: "New Bill", products: "Parts", inventory: "Godown", udhar: "Khata", tagline: "Parts & Hardware" },
     dashboard: {
       heroTitle: "Parts & hardware",
       heroSubtitle: "Sales, supplier dues, and credit outstanding.",
       kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Party Credit", cash: "Cash Collected" },
       creditLabel: "Party Credit",
       quickActions: [
-        { label: "New Bill",   href: "/billing",        icon: "billing",   color: "primary" },
-        { label: "Purchase",   href: "/purchase-bills", icon: "purchase",  color: "amber"   },
-        { label: "Suppliers",  href: "/suppliers",      icon: "suppliers", color: "sky"     },
-        { label: "Reports",    href: "/reports",        icon: "reports",   color: "violet"  },
+        { label: "New Bill",  href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "Purchase",  href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "Suppliers", href: "/suppliers",      icon: "suppliers", color: "sky"     },
+        { label: "Reports",   href: "/reports",        icon: "reports",   color: "violet"  },
       ],
     },
   },
@@ -144,16 +155,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "set", "box", "dozen"],
     voiceExample: "name earphones, cost 300, selling 550, stock 8 piece, category accessories",
     defaultAccent: "blue",
+    dashboardVariant: "general",
+    navConfig: { billing: "New Bill", products: "Products", inventory: "Stock", udhar: "Credit", tagline: "Electronics Counter" },
     dashboard: {
       heroTitle: "Electronics sales",
       heroSubtitle: "Today's billing and payment tracking.",
       kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash Collected" },
       creditLabel: "Credit",
       quickActions: [
-        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Inventory",  href: "/inventory",     icon: "inventory", color: "teal"    },
-        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Inventory", href: "/inventory",     icon: "inventory", color: "teal"    },
+        { label: "Reports",   href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
@@ -166,16 +179,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["strip", "tablet", "bottle", "tube", "piece", "box", "ml", "gram"],
     voiceExample: "name paracetamol, cost 12, selling 15, stock 50 strip, category tablets",
     defaultAccent: "teal",
+    dashboardVariant: "medical",
+    navConfig: { billing: "Counter", products: "Medicines", inventory: "Stock", udhar: "Accounts", tagline: "Pharmacy Counter" },
     dashboard: {
       heroTitle: "Pharmacy counter",
-      heroSubtitle: "Dispensing, stock, and patient credit.",
-      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Patient Credit", cash: "Cash Collected" },
-      creditLabel: "Patient Credit",
+      heroSubtitle: "Dispensing, stock, and patient accounts.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Patient Accounts", cash: "Cash Collected" },
+      creditLabel: "Patient Accounts",
       quickActions: [
-        { label: "New Bill",   href: "/billing",        icon: "billing",   color: "primary" },
-        { label: "Inventory",  href: "/inventory",      icon: "inventory", color: "teal"    },
-        { label: "Purchase",   href: "/purchase-bills", icon: "purchase",  color: "amber"   },
-        { label: "Close Day",  href: "/daily-closing",  icon: "closing",   color: "violet"  },
+        { label: "Counter",   href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "Medicines", href: "/inventory",      icon: "inventory", color: "teal"    },
+        { label: "Purchase",  href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "Close Day", href: "/daily-closing",  icon: "closing",   color: "violet"  },
       ],
     },
   },
@@ -188,16 +203,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "box", "dozen", "packet", "roll", "bundle"],
     voiceExample: "name ball pen, cost 5, selling 10, stock 100 dozen, category pens",
     defaultAccent: "amber",
+    dashboardVariant: "general",
+    navConfig: { billing: "New Bill", products: "Products", inventory: "Stock", udhar: "Credit", tagline: "Stationery Counter" },
     dashboard: {
       heroTitle: "Stationery counter",
       heroSubtitle: "Today's sales and stock overview.",
       kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
       creditLabel: "Credit",
       quickActions: [
-        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Products",   href: "/products",      icon: "products",  color: "amber"   },
-        { label: "Inventory",  href: "/inventory",     icon: "inventory", color: "sky"     },
-        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Products",  href: "/products",      icon: "products",  color: "amber"   },
+        { label: "Inventory", href: "/inventory",     icon: "inventory", color: "sky"     },
+        { label: "Reports",   href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
@@ -210,16 +227,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "set", "pair", "box"],
     voiceExample: "name study chair, cost 2500, selling 3800, stock 5 piece, category bedroom",
     defaultAccent: "orange",
+    dashboardVariant: "general",
+    navConfig: { billing: "New Bill", products: "Products", inventory: "Stock", udhar: "Dues", tagline: "Furniture Showroom" },
     dashboard: {
       heroTitle: "Furniture showroom",
-      heroSubtitle: "Sales, dues, and delivery tracking.",
+      heroSubtitle: "Sales, customer dues, and delivery.",
       kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Dues", cash: "Cash Collected" },
       creditLabel: "Dues",
       quickActions: [
-        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Products",   href: "/products",      icon: "products",  color: "orange"  },
-        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "New Bill", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",  href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Products", href: "/products",      icon: "products",  color: "orange"  },
+        { label: "Reports",  href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
@@ -232,16 +251,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "bottle", "tube", "ml", "gram", "box", "set"],
     voiceExample: "name face cream, cost 80, selling 150, stock 20 piece, category skincare",
     defaultAccent: "rose",
+    dashboardVariant: "general",
+    navConfig: { billing: "New Bill", products: "Products", inventory: "Stock", udhar: "Credit", tagline: "Beauty Counter" },
     dashboard: {
       heroTitle: "Beauty counter",
       heroSubtitle: "Today's sales and customer care.",
       kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
       creditLabel: "Credit",
       quickActions: [
-        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "rose"    },
-        { label: "Products",   href: "/products",      icon: "products",  color: "sky"     },
-        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "rose"    },
+        { label: "Products",  href: "/products",      icon: "products",  color: "sky"     },
+        { label: "Reports",   href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
@@ -254,16 +275,18 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "plate", "glass", "bottle", "kg", "litre"],
     voiceExample: "name dal makhani, cost 60, selling 120, stock 10 kg, category main_course",
     defaultAccent: "amber",
+    dashboardVariant: "restaurant",
+    navConfig: { billing: "New Order", products: "Menu", inventory: "Kitchen", udhar: "Tabs", tagline: "Restaurant & Café" },
     dashboard: {
       heroTitle: "Restaurant billing",
       heroSubtitle: "Orders, revenue, and daily closing.",
-      kpi: { revenue: "Revenue Today", profit: "Gross Margin", credit: "Pending Dues", cash: "Cash Collected" },
-      creditLabel: "Dues",
+      kpi: { revenue: "Revenue Today", profit: "Gross Margin", credit: "Pending Tabs", cash: "Cash Collected" },
+      creditLabel: "Tabs",
       quickActions: [
-        { label: "New Order",  href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Menu",       href: "/products",      icon: "products",  color: "amber"   },
-        { label: "Close Day",  href: "/daily-closing", icon: "closing",   color: "violet"  },
+        { label: "New Order", href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Menu",      href: "/products",      icon: "products",  color: "amber"   },
+        { label: "Close Day", href: "/daily-closing", icon: "closing",   color: "violet"  },
       ],
     },
   },
@@ -276,22 +299,22 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     primaryUnits: ["piece", "box", "set", "bundle", "dozen"],
     voiceExample: "name product, cost 100, selling 150, stock 10 piece, category general",
     defaultAccent: "blue",
+    dashboardVariant: "general",
+    navConfig: { billing: "New Bill", products: "Products", inventory: "Inventory", udhar: "Credit", tagline: "Retail Counter" },
     dashboard: {
       heroTitle: "Business counter",
       heroSubtitle: "Sales, stock, and daily management.",
       kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash Collected" },
       creditLabel: "Credit",
       quickActions: [
-        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
-        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
-        { label: "Inventory",  href: "/inventory",     icon: "inventory", color: "amber"   },
-        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+        { label: "New Bill",  href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",   href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Inventory", href: "/inventory",     icon: "inventory", color: "amber"   },
+        { label: "Reports",   href: "/reports",       icon: "reports",   color: "violet"  },
       ],
     },
   },
 };
-
-// ── Persistence (localStorage-first for zero flicker) ──────────────────────
 
 const LS_KEY = "kirana-os:ui-business-type:v1";
 

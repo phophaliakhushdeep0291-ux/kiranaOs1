@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/features/subscription";
 import { StatusBadge } from "@/components/shared";
 import { useAppLanguage } from "@/features/settings/i18n";
+import { useBusinessType } from "@/features/settings/business-types";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
 import { getApiBaseUrl } from "@/lib/api/http";
 
@@ -118,6 +119,13 @@ export function Layout({ children }: { children: ReactNode }) {
   const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
   const { t } = useAppLanguage();
+  const { def: btDef } = useBusinessType();
+  const navLabelOverrides: Record<string, string> = {
+    "/billing":   btDef.navConfig.billing,
+    "/products":  btDef.navConfig.products,
+    "/inventory": btDef.navConfig.inventory,
+    "/udhar":     btDef.navConfig.udhar,
+  };
   const attentionCount = pendingCount + failedCount + conflictCount;
   const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readStoredSidebarCollapsed);
@@ -239,7 +247,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 }`}
               >
                 <h1 className="font-display text-xl font-black tracking-tight text-white">KiranaOS</h1>
-                <p className="truncate text-[11px] font-medium uppercase tracking-widest text-sidebar-foreground/55">Retail Command Center</p>
+                <p className="truncate text-[11px] font-medium uppercase tracking-widest text-sidebar-foreground/55">{btDef.navConfig.tagline}</p>
               </div>
             </Link>
             <div className={`flex shrink-0 items-center gap-2 ${sidebarCollapsed ? "flex-col" : ""}`}>
@@ -285,7 +293,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
 
         <nav aria-label="Main navigation" className={`flex-1 space-y-4 overflow-y-auto ${sidebarCollapsed ? "p-2" : "p-3"}`}>
-          <NavSection title="Daily counter" links={dailyLinks} location={location} t={t} collapsed={sidebarCollapsed} />
+          <NavSection title="Daily counter" links={dailyLinks} location={location} t={t} collapsed={sidebarCollapsed} labelOverrides={navLabelOverrides} />
           <NavSection title="Owner view" links={businessLinks} location={location} t={t} collapsed={sidebarCollapsed} />
           <NavSection title="Admin" links={adminLinks} location={location} t={t} quiet collapsed={sidebarCollapsed} />
         </nav>
@@ -336,7 +344,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <Link key={link.href} href={link.href}>
                   <div className={`flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${active ? "border-primary bg-primary text-primary-foreground shadow-sm" : "bg-background text-foreground hover:bg-accent"}`}>
                     <Icon size={15} aria-hidden="true" />
-                    {"key" in link ? t(link.key) : link.label}
+                    {navLabelOverrides[link.href] ?? ("key" in link ? t(link.key) : link.label)}
                   </div>
                 </Link>
               );
@@ -366,6 +374,7 @@ function NavSection({
   t,
   quiet = false,
   collapsed = false,
+  labelOverrides = {},
 }: {
   title: string;
   links: readonly NavigationLink[];
@@ -373,6 +382,7 @@ function NavSection({
   t: (key: Extract<NavigationLink, { key: string }>["key"]) => string;
   quiet?: boolean;
   collapsed?: boolean;
+  labelOverrides?: Record<string, string>;
 }) {
   return (
     <section className="space-y-1.5" aria-label={title}>
@@ -380,7 +390,7 @@ function NavSection({
       {links.map((link) => {
         const Icon = link.icon;
         const active = isActiveLink(location, link.href);
-        const label = "key" in link ? t(link.key) : link.label;
+        const label = labelOverrides[link.href] ?? ("key" in link ? t(link.key) : link.label);
         return (
           <Link key={link.href} href={link.href}>
             <div

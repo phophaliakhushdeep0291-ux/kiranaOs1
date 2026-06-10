@@ -34,7 +34,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/settings/theme";
-import { useBusinessType, BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/settings/business-types";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
@@ -87,7 +86,6 @@ export default function Settings() {
   const { user } = useAuth();
   const { language, setLanguage, t } = useAppLanguage();
   const { accent, setAccent } = useAppTheme();
-  const { businessType, setBusinessType } = useBusinessType();
   const changeSettingsPermission = usePermission("change_settings");
   const queryClient = useQueryClient();
   const [settingsPinOpen, setSettingsPinOpen] = useState(false);
@@ -220,52 +218,6 @@ export default function Settings() {
         </TabsContent>
 
         <TabsContent value="shop">
-          {/* Business type */}
-          <div className="overflow-hidden rounded-2xl border bg-card shadow-sm mb-4">
-            <div className="border-b px-5 py-4">
-              <div className="flex items-center gap-2.5">
-                <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
-                  <Store size={16} />
-                </span>
-                <div>
-                  <h2 className="font-display text-base font-black tracking-tight">Business type</h2>
-                  <p className="text-[11px] text-muted-foreground">Tailors product categories, units, and voice hints for your shop type.</p>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3 lg:grid-cols-4">
-              {(Object.entries(BUSINESS_TYPE_DEFS) as [BusinessType, typeof BUSINESS_TYPE_DEFS[BusinessType]][]).map(([key, def]) => {
-                const active = businessType === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={async () => {
-                      await setBusinessType(key);
-                      toast({ title: `Business type set to ${def.label}` });
-                    }}
-                    className={cn(
-                      "flex items-start gap-2.5 rounded-xl border-2 p-3 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      active
-                        ? "border-primary bg-primary/5"
-                        : "border-transparent hover:border-muted-foreground/20 hover:bg-muted/40"
-                    )}
-                  >
-                    <span className="mt-0.5 text-lg leading-none">{def.emoji}</span>
-                    <div className="min-w-0">
-                      <p className={cn("text-xs font-bold leading-snug", active ? "text-primary" : "text-foreground")}>{def.label}</p>
-                      <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">{def.description}</p>
-                    </div>
-                    {active && <Check size={13} className="ml-auto shrink-0 text-primary" />}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="border-t bg-muted/30 px-5 py-2.5">
-              <p className="text-[11px] text-muted-foreground">Saved locally on this device. Does not affect your account data.</p>
-            </div>
-          </div>
-
           <div className="rounded-lg border bg-card p-5">
             <h2 className="font-semibold mb-4">Shop Profile</h2>
             {shop.isLoading ? (
