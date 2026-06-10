@@ -64,7 +64,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.cash}`}
             icon={
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-lg font-black text-emerald-600 dark:bg-emerald-950/40">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-2xl font-black text-emerald-600 dark:bg-emerald-950/40">
                 ₹
               </span>
             }
@@ -76,7 +76,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.upi}`}
             icon={
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-100 dark:bg-purple-950/40">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 dark:bg-purple-950/40">
                 <UpiIcon />
               </span>
             }
@@ -88,7 +88,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${SPLIT_PAYMENT}`}
             icon={
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950/40">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950/40">
                 <SplitIcon />
               </span>
             }
@@ -100,7 +100,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.credit}`}
             icon={
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-950/40">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-100 dark:bg-orange-950/40">
                 <UdharIcon />
               </span>
             }
@@ -272,7 +272,7 @@ function PayModeBtn({
     <button
       data-testid={testId}
       onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 py-2.5 text-xs font-bold transition-all ${
+      className={`flex flex-col items-center justify-center gap-2 rounded-xl border-2 py-3.5 text-xs font-bold transition-all ${
         selected ? activeClass : "border-border bg-card hover:bg-muted"
       }`}
     >
@@ -284,7 +284,7 @@ function PayModeBtn({
 
 function UpiIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-purple-600" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-7 w-7 fill-purple-600" aria-hidden="true">
       <rect x="3" y="3" width="7" height="7" rx="1" />
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -298,7 +298,7 @@ function UpiIcon() {
 
 function SplitIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 stroke-blue-600" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-7 w-7 stroke-blue-600" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M16 3h5v5" />
       <path d="M8 3H3v5" />
       <path d="M21 3l-7 7-4-4-7 7" />
@@ -308,7 +308,7 @@ function SplitIcon() {
 
 function UdharIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5 stroke-orange-600" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="h-7 w-7 stroke-orange-600" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="7" r="4" />
       <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
     </svg>

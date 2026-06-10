@@ -28,6 +28,41 @@ export function productPlaceholderColor(name: string): string {
   return PLACEHOLDER_COLORS[hash % PLACEHOLDER_COLORS.length];
 }
 
+export function getProductEmoji(name: string, category?: string | null): string {
+  const t = ((category ?? "") + " " + name).toLowerCase();
+  if (t.match(/atta|flour|wheat|aashirvaad|pillsbury/)) return "🌾";
+  if (t.match(/rice|basmati|india gate/)) return "🍚";
+  if (t.match(/oil|ghee|dalda|vanaspati|sunflite|fortune/)) return "🫙";
+  if (t.match(/salt|namak|iodiz/)) return "🧂";
+  if (t.match(/sugar|chini/)) return "🍬";
+  if (t.match(/dal|pulse|lentil|chana|moong|toor|masoor/)) return "🫘";
+  if (t.match(/tea|chai|brooke|red label/)) return "🍵";
+  if (t.match(/coffee|nescafe|bru/)) return "☕";
+  if (t.match(/milk|doodh|butter|cream|curd|dahi|cheese|paneer|lassi|dairy/)) return "🥛";
+  if (t.match(/biscuit|parle|marie|bourbon|cookie|hide.seek/)) return "🍪";
+  if (t.match(/chips|lays|kurkure|namkeen|snack|bhuja|wafer|bingo/)) return "🍟";
+  if (t.match(/chocolate|cadbury|kitkat|five star|dairy milk/)) return "🍫";
+  if (t.match(/juice|frooti|maaza|slice|tropicana|real juice/)) return "🥤";
+  if (t.match(/water|bisleri|kinley|aquafina/)) return "💧";
+  if (t.match(/cola|pepsi|coke|sprite|7up|soda|soft drink/)) return "🥤";
+  if (t.match(/masala|spice|jeera|turmeric|haldi|chilli|mirch|garam|cardamom|coriander/)) return "🌶️";
+  if (t.match(/soap|dove|lux|lifebuoy|dettol|bath bar/)) return "🧼";
+  if (t.match(/shampoo|pantene|head.shoulders|sunsilk/)) return "🧴";
+  if (t.match(/toothpaste|colgate|pepsodent|closeup|oral/)) return "🪥";
+  if (t.match(/detergent|washing|surf|ariel|tide|rin powder|nirma/)) return "🫧";
+  if (t.match(/floor|phenyl|lizol|colin|wiper|mop/)) return "🧹";
+  if (t.match(/bread|roti|pav|bun|toast/)) return "🍞";
+  if (t.match(/egg|anda/)) return "🥚";
+  if (t.match(/noodle|maggi|yippee/)) return "🍜";
+  if (t.match(/sauce|ketchup/)) return "🍅";
+  if (t.match(/honey|jam|jelly|spread/)) return "🍯";
+  if (t.match(/horlicks|bournvita|complan|health drink/)) return "💪";
+  if (t.match(/sanitizer|handwash|hand wash/)) return "🤲";
+  if (t.match(/candle|agarbatti|incense/)) return "🕯️";
+  if (t.match(/match|lighter/)) return "🔥";
+  return "📦";
+}
+
 /* ─── props ─── */
 interface BillingSearchProps {
   isOnline: boolean;
@@ -131,9 +166,9 @@ export function BillingSearch({
                       className="flex w-[92px] shrink-0 flex-col items-center gap-1 rounded-xl border bg-card p-2 transition-all hover:border-primary/50 hover:shadow-sm active:scale-[0.97]"
                     >
                       <span
-                        className={`grid h-8 w-full place-items-center rounded-lg text-sm font-black ${color}`}
+                        className={`grid h-8 w-full place-items-center rounded-lg text-xl ${color}`}
                       >
-                        {p.name.slice(0, 2).toUpperCase()}
+                        {getProductEmoji(p.name, undefined)}
                       </span>
                       <p className="line-clamp-1 w-full text-center text-[11px] font-semibold leading-tight">
                         {p.name.split(" ")[0]}
@@ -246,6 +281,7 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
   const unit = product.rateUnit ?? product.displayUnit ?? "pc";
   const stock = product.stockBaseQty ?? 0;
   const color = productPlaceholderColor(product.name);
+  const emoji = getProductEmoji(product.name, product.category);
 
   return (
     <button
@@ -253,11 +289,11 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
       onClick={onAdd}
       className="group flex flex-col items-start gap-2 rounded-xl border bg-card p-2.5 text-left shadow-xs transition-all duration-150 hover:border-primary/40 hover:shadow-md active:scale-[0.97]"
     >
-      {/* Image placeholder */}
+      {/* Image placeholder with emoji */}
       <div
-        className={`relative flex h-20 w-full items-center justify-center overflow-hidden rounded-lg text-xl font-black ${color}`}
+        className={`relative flex h-24 w-full items-center justify-center overflow-hidden rounded-lg ${color}`}
       >
-        {product.name.slice(0, 2).toUpperCase()}
+        <span className="text-4xl leading-none">{emoji}</span>
         {stock <= 0 ? (
           <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">
             Out

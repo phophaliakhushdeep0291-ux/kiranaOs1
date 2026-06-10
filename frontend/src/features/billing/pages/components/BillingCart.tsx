@@ -4,7 +4,7 @@ import { Minus, Plus, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productMinSellingPrice, roundMoney } from "../billing-calculations";
 import type { CartItem } from "../billing-types";
-import { productPlaceholderColor } from "./BillingSearch";
+import { getProductEmoji, productPlaceholderColor } from "./BillingSearch";
 
 interface BillingCartProps {
   cart: CartItem[];
@@ -62,7 +62,7 @@ function CartRow({
     productMinSellingPrice(item.product) > 0 &&
     item.rate < productMinSellingPrice(item.product);
   const color = productPlaceholderColor(item.product.name);
-  const initials = item.product.name.slice(0, 2).toUpperCase();
+  const emoji = getProductEmoji(item.product.name, item.product.category);
 
   return (
     <div
@@ -71,9 +71,9 @@ function CartRow({
     >
       {/* Thumbnail */}
       <div
-        className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-xs font-black ${color}`}
+        className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-xl ${color}`}
       >
-        {initials}
+        {emoji}
       </div>
 
       {/* Name + rate */}
