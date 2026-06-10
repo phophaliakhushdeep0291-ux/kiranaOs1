@@ -35,6 +35,24 @@ import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/
 import { StatusBadge } from "@/components/shared";
 import { useAppLanguage } from "@/features/settings/i18n";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
+import { getApiBaseUrl } from "@/lib/api/http";
+
+function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
+  const isLocalhost = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
+  return (
+    <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+      <WifiOff size={15} className="shrink-0 text-amber-600" aria-hidden="true" />
+      <span className="flex-1 leading-tight">
+        {isLocalhost
+          ? "Backend is set to localhost — not accessible on this device. "
+          : "Backend server is not reachable. "}
+        <Link href="/sync-status" className="font-semibold underline underline-offset-2">
+          Fix Server URL →
+        </Link>
+      </span>
+    </div>
+  );
+}
 
 const dailyLinks = [
   { href: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
@@ -97,7 +115,7 @@ function readStoredSidebarCollapsed() {
 export function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const [location] = useLocation();
-  const { isOnline, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
+  const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
   const { t } = useAppLanguage();
   const attentionCount = pendingCount + failedCount + conflictCount;
@@ -327,6 +345,9 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         <SubscriptionStatusBanner />
+        {backendStatus.browserOnline && !backendStatus.backendReachable && backendStatus.checkedAt && (
+          <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
+        )}
         <main id="main-content" className="min-w-0 flex-1 overflow-auto">
           {children}
         </main>
