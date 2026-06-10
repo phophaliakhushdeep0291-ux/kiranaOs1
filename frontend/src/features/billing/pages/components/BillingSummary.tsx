@@ -7,17 +7,18 @@ import { FeatureGate } from "@/features/subscription";
 import { BillInputBillType, type Customer } from "@/lib/api/client";
 import {
   CheckCircle,
+  ChevronRight,
   CreditCard,
   FileText,
   Loader2,
   PauseCircle,
   Printer,
   Smartphone,
+  Tag,
   User,
 } from "lucide-react";
 import { clampAmount } from "../billing-calculations";
 import type { BillTypeSelection, CartItem, HeldBill, PaymentSelection } from "../billing-types";
-import { SPLIT_PAYMENT } from "../billing-types";
 import { BillingCart } from "./BillingCart";
 import { BillingDraftRestore } from "./BillingDraftRestore";
 import { BillingPaymentPanel } from "./BillingPaymentPanel";
@@ -73,7 +74,6 @@ interface BillingSummaryProps {
   onPrintBill: () => void;
   onSharePdf: () => void;
   onClearCart: () => void;
-  /* cart item callbacks (for integrated cart view) */
   onUpdateQty: (productId: string, qty: number) => void;
   onUpdateRate: (productId: string, rate: number) => void;
   onUpdateUnit: (productId: string, unit: string) => void;
@@ -140,6 +140,20 @@ export function BillingSummary({
   onUpdateUnit,
   onRemoveItem,
 }: BillingSummaryProps) {
+  /* GST calculation (informational — grandTotal unchanged) */
+  const totalGst = cart.reduce((sum, item) => {
+    const rate = item.product.gstRate ?? 0;
+    if (rate <= 0) return sum;
+    return sum + Math.round(item.quantity * item.rate * rate) / 100;
+  }, 0);
+
+  const selectedCustomerName = (() => {
+    if (selectedCustomerId !== "walk_in") {
+      return customers.find((c) => c.id === selectedCustomerId)?.name ?? "Customer";
+    }
+    return customerName.trim() || "Walk-in Customer";
+  })();
+
   return (
     <div
       className="relative flex w-full shrink-0 flex-col border-t bg-card lg:h-full lg:w-auto lg:border-l lg:border-t-0"
@@ -154,29 +168,49 @@ export function BillingSummary({
         className="absolute left-0 top-0 z-20 hidden h-full w-2 -translate-x-1 cursor-col-resize bg-transparent hover:bg-primary/20 active:bg-primary/30 lg:block"
       />
 
-      {/* ── HEADER: total + bill type ── */}
-      <div className="shrink-0 border-b bg-[hsl(var(--sidebar-bg))] p-4 text-white">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest opacity-70">Bill Total</p>
-            <p
-              className="mt-0.5 text-3xl font-black tracking-tight tabular-nums"
-              data-testid="text-total"
+      {/* ── Scrollable body ── */}
+      <ScrollArea className="flex-1">
+        <div className="divide-y">
+          {/* Customer row */}
+          <div className="flex items-center gap-3 px-4 py-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+              <User size={15} />
+            </span>
+            <div className="min-w-0 flex-1">
+              {selectedCustomerId === "walk_in" && !customerName ? (
+                <p className="text-sm font-semibold text-foreground">Walk-in Customer</p>
+              ) : (
+                <p className="truncate text-sm font-semibold text-foreground">{selectedCustomerName}</p>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {selectedCustomerId === "walk_in" ? "No customer linked" : "Saved customer"}
+              </p>
+            </div>
+            <button
+              onClick={() => {}}
+              className="flex shrink-0 items-center gap-0.5 text-xs font-semibold text-primary hover:underline"
             >
-              {fmtRs(grandTotal)}
-            </p>
-            <p className="mt-0.5 text-xs opacity-60">
-              {cart.length} item{cart.length !== 1 ? "s" : ""} · {isOnline ? "Cloud ready" : "Local safe"}
-            </p>
+              Change <ChevronRight size={12} />
+            </button>
           </div>
-          <div className="shrink-0">
+
+          {/* Held bills restore */}
+          {heldBills.length > 0 && (
+            <div className="px-4 py-2">
+              <BillingDraftRestore heldBills={heldBills} onResumeHeldBill={onResumeHeldBill} />
+            </div>
+          )}
+
+          {/* Bill type selector */}
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <span className="shrink-0 text-xs font-medium text-muted-foreground">Bill type</span>
             <Select
               value={billType}
               onValueChange={(v) => setBillType(v as BillTypeSelection)}
             >
               <SelectTrigger
                 data-testid="select-bill-type"
-                className="h-8 border-white/20 bg-white/10 text-xs font-semibold text-white hover:bg-white/20"
+                className="h-8 flex-1 text-xs font-semibold"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -188,67 +222,45 @@ export function BillingSummary({
               </SelectContent>
             </Select>
           </div>
-        </div>
-      </div>
 
-      {/* ── SCROLLABLE BODY: customer + held bills + cart + totals + payment ── */}
-      <ScrollArea className="flex-1">
-        <div className="space-y-0 divide-y">
-          {/* Held bills restore */}
-          {heldBills.length > 0 && (
-            <div className="p-3">
-              <BillingDraftRestore heldBills={heldBills} onResumeHeldBill={onResumeHeldBill} />
-            </div>
-          )}
-
-          {/* Customer section */}
-          <div className="p-3">
-            <div className="mb-2 flex items-center gap-2">
-              <User size={13} className="text-muted-foreground" />
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Customer
-              </span>
-              <kbd className="ml-auto rounded border bg-muted px-1 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                F6
-              </kbd>
-            </div>
-            <Select
-              value={selectedCustomerId}
-              onValueChange={(value) => {
-                setSelectedCustomerId(value);
-                if (value === "walk_in") {
-                  setCustomerName("");
-                  setCustomerMobile("");
-                  return;
-                }
-                const customer = customers.find((c) => c.id === value);
-                if (customer) {
-                  setCustomerName(customer.name);
-                  setCustomerMobile(customer.mobile ?? "");
-                }
-              }}
-            >
-              <SelectTrigger data-testid="select-customer" className="h-9 text-sm">
-                <SelectValue placeholder="Walk-in customer" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="walk_in">Walk-in customer</SelectItem>
-                {customers.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                    {c.mobile ? ` · ${c.mobile}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {selectedCustomerId === "walk_in" && (
-              <div className="mt-2 space-y-2">
+          {/* Customer name/mobile inputs (walk-in only) */}
+          {selectedCustomerId === "walk_in" && (
+            <div className="space-y-2 px-4 py-3">
+              <Select
+                value={selectedCustomerId}
+                onValueChange={(value) => {
+                  setSelectedCustomerId(value);
+                  if (value === "walk_in") {
+                    setCustomerName("");
+                    setCustomerMobile("");
+                    return;
+                  }
+                  const c = customers.find((x) => x.id === value);
+                  if (c) {
+                    setCustomerName(c.name);
+                    setCustomerMobile(c.mobile ?? "");
+                  }
+                }}
+              >
+                <SelectTrigger data-testid="select-customer" className="h-9 text-sm">
+                  <SelectValue placeholder="Walk-in customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="walk_in">Walk-in customer</SelectItem>
+                  {customers.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                      {c.mobile ? ` · ${c.mobile}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="grid grid-cols-2 gap-2">
                 <Input
                   ref={customerNameInputRef}
                   data-testid="input-customer-name"
                   className="h-9 text-sm"
-                  placeholder="Customer name (for udhar)"
+                  placeholder="Name (udhar)"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
                 />
@@ -256,40 +268,29 @@ export function BillingSummary({
                   data-testid="input-customer-mobile"
                   className="h-9 text-sm"
                   inputMode="numeric"
-                  placeholder="Mobile number"
+                  placeholder="Mobile"
                   value={customerMobile}
                   onChange={(e) =>
                     setCustomerMobile(e.target.value.replace(/\D/g, "").slice(0, 15))
                   }
                 />
-                {matchingMobileCustomer && (
-                  <p
-                    data-testid="text-mobile-customer-match"
-                    className="text-xs text-blue-600"
-                  >
-                    Matches {matchingMobileCustomer.name}
+              </div>
+              {matchingMobileCustomer && (
+                <p data-testid="text-mobile-customer-match" className="text-xs text-blue-600">
+                  Matches {matchingMobileCustomer.name}
+                </p>
+              )}
+              {(creditAmount > 0 || billType === BillInputBillType.udhar_entry) &&
+                !hasCreditCustomerIdentity && (
+                  <p className="text-xs text-amber-600">
+                    Name + mobile required for udhar billing.
                   </p>
                 )}
-                {(creditAmount > 0 || billType === BillInputBillType.udhar_entry) &&
-                  !hasCreditCustomerIdentity && (
-                    <p className="text-xs text-amber-600">
-                      Name + mobile required for udhar billing.
-                    </p>
-                  )}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Cart items */}
-          <div className="px-3 py-2">
-            <div className="mb-1 flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Items
-              </span>
-              <span className="ml-auto rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-                {cart.length}
-              </span>
-            </div>
+          <div className="px-4 py-3">
             <BillingCart
               cart={cart}
               onUpdateQty={onUpdateQty}
@@ -297,18 +298,33 @@ export function BillingSummary({
               onUpdateUnit={onUpdateUnit}
               onRemoveItem={onRemoveItem}
             />
+            {cart.length > 0 && (
+              <button className="mt-2 flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                + Add more items
+                <span className="ml-auto text-muted-foreground">{cart.length} Item{cart.length !== 1 ? "s" : ""}</span>
+              </button>
+            )}
           </div>
 
-          {/* Totals + discount */}
-          <div className="space-y-2 p-3">
-            <TotalRow label={`Subtotal (${cart.length})`} value={subtotal} testId="text-subtotal" />
+          {/* Order summary */}
+          <div className="space-y-2 px-4 py-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal ({cart.length})</span>
+              <span data-testid="text-subtotal">{fmtRs(subtotal)}</span>
+            </div>
+
+            {/* Discount row */}
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span>Discount</span>
-                <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-semibold">F4</kbd>
+                <kbd className="rounded border bg-muted px-1 py-0.5 text-[9px] font-semibold">F4</kbd>
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-muted-foreground">₹</span>
+              <div className="flex items-center gap-1.5">
+                {safeDiscount > 0 ? (
+                  <span className="text-sm font-semibold text-emerald-600">
+                    − {fmtRs(safeDiscount)}
+                  </span>
+                ) : null}
                 <input
                   data-testid="input-discount"
                   type="number"
@@ -318,19 +334,53 @@ export function BillingSummary({
                   onChange={(e) =>
                     setDiscount(clampAmount(Number(e.target.value) || 0, 0, subtotal))
                   }
-                  className="w-20 rounded border bg-background px-2 py-1 text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="0"
+                  className={`w-16 rounded border bg-background px-2 py-1 text-right text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary ${
+                    safeDiscount > 0 ? "hidden" : ""
+                  }`}
+                  placeholder="₹ 0"
                 />
+                {safeDiscount > 0 && (
+                  <button
+                    onClick={() => setDiscount(0)}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    Edit
+                  </button>
+                )}
               </div>
             </div>
-            <div className="flex justify-between border-t pt-2">
-              <span className="text-base font-black">Total</span>
-              <span className="text-base font-black text-primary">{fmtRs(grandTotal)}</span>
+
+            {/* GST row (informational, only if > 0) */}
+            {totalGst > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Tax (GST)</span>
+                <span>{fmtRs(Math.round(totalGst * 100) / 100)}</span>
+              </div>
+            )}
+
+            {/* Grand total */}
+            <div className="flex items-center justify-between border-t pt-2">
+              <span className="text-base font-black">Grand Total</span>
+              <span
+                className="text-xl font-black text-foreground"
+                data-testid="text-total"
+              >
+                {fmtRs(grandTotal)}
+              </span>
             </div>
           </div>
 
+          {/* Coupon code (visual only) */}
+          <div className="px-4 py-2">
+            <button className="flex w-full items-center gap-2 rounded-xl border px-4 py-2.5 transition-colors hover:bg-muted/60">
+              <Tag size={15} className="text-muted-foreground" />
+              <span className="flex-1 text-left text-sm text-muted-foreground">Apply Coupon Code</span>
+              <ChevronRight size={15} className="text-muted-foreground" />
+            </button>
+          </div>
+
           {/* Payment panel */}
-          <div className="p-3">
+          <div className="px-4 py-3">
             <BillingPaymentPanel
               billType={billType}
               paymentMode={paymentMode}
@@ -353,9 +403,9 @@ export function BillingSummary({
             />
           </div>
 
-          {/* Last bill saved badge */}
+          {/* Last bill saved */}
           {lastBillNo && (
-            <div className="flex items-center gap-2 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">
+            <div className="flex items-center gap-2 px-4 py-2 text-sm text-emerald-700 dark:text-emerald-400">
               <CheckCircle size={14} />
               <span>Last bill: {lastBillNo}</span>
             </div>
@@ -363,18 +413,18 @@ export function BillingSummary({
         </div>
       </ScrollArea>
 
-      {/* ── STICKY ACTION BAR ── */}
-      <div className="shrink-0 space-y-2 border-t bg-card p-3 shadow-[0_-8px_20px_rgba(0,0,0,0.06)]">
+      {/* ── Sticky action bar ── */}
+      <div className="shrink-0 border-t bg-card px-4 pb-2 pt-3 shadow-[0_-6px_16px_rgba(0,0,0,0.06)]">
         {!newBillingAllowed && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            {newBillingReason} Old bills remain viewable.
+          <div className="mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {newBillingReason}
           </div>
         )}
 
-        {/* Primary save button */}
+        {/* Save Bill button */}
         <Button
           data-testid="button-confirm-bill"
-          className="h-14 w-full gap-2 text-base font-black shadow-md"
+          className="h-14 w-full gap-2 rounded-xl text-base font-black shadow-md"
           onClick={onConfirmBill}
           disabled={
             confirmBillPending || cart.length === 0 || !newBillingAllowed || !createBillAllowed
@@ -388,30 +438,30 @@ export function BillingSummary({
           ) : (
             <>
               <CreditCard size={18} />
-              Save Bill · {fmtRs(grandTotal)}
+              Save Bill
+              <kbd className="ml-auto rounded border border-primary-foreground/30 bg-primary-foreground/10 px-2 py-0.5 text-xs font-semibold">
+                F12
+              </kbd>
             </>
           )}
         </Button>
-        <p className="text-center text-[10px] text-muted-foreground">
-          Ctrl+S or F12 to save
-        </p>
 
         {/* Secondary actions */}
-        <div className="grid grid-cols-4 gap-1.5">
-          <SecondaryBtn
+        <div className="mt-2 grid grid-cols-4 gap-1.5">
+          <SecBtn
             onClick={onSaveEstimate}
             disabled={confirmBillPending || cart.length === 0}
             icon={<FileText size={13} />}
             label="Estimate"
           />
-          <SecondaryBtn
+          <SecBtn
             onClick={onHoldBill}
             disabled={cart.length === 0}
             icon={<PauseCircle size={13} />}
             label="Hold"
             shortcut="F9"
           />
-          <SecondaryBtn
+          <SecBtn
             onClick={onPrintBill}
             disabled={cart.length === 0 && !hasLastPrintableBill}
             icon={<Printer size={13} />}
@@ -419,11 +469,9 @@ export function BillingSummary({
           />
           <FeatureGate
             featureName="pdf_bill_share"
-            fallback={
-              <SecondaryBtn disabled icon={<Smartphone size={13} />} label="Share" />
-            }
+            fallback={<SecBtn disabled icon={<Smartphone size={13} />} label="Share" />}
           >
-            <SecondaryBtn
+            <SecBtn
               onClick={onSharePdf}
               disabled={cart.length === 0 && !hasLastPrintableBill}
               icon={<Smartphone size={13} />}
@@ -436,34 +484,35 @@ export function BillingSummary({
           <button
             data-testid="button-clear-cart"
             onClick={onClearCart}
-            className="w-full rounded-lg py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            className="mt-1 w-full rounded-lg py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           >
             Clear cart
           </button>
         )}
+
+        {/* Keyboard shortcuts bar */}
+        <div className="mt-2 grid grid-cols-5 gap-1 border-t pt-2 text-center">
+          {[
+            { key: "F2", label: "Search" },
+            { key: "F4", label: "Discount" },
+            { key: "F6", label: "Customer" },
+            { key: "F9", label: "Hold" },
+            { key: "Ctrl+S", label: "Save" },
+          ].map(({ key, label }) => (
+            <div key={key} className="flex flex-col items-center gap-0.5">
+              <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-[8px] font-bold text-muted-foreground">
+                {key}
+              </kbd>
+              <span className="text-[9px] text-muted-foreground">{label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function TotalRow({
-  label,
-  value,
-  testId,
-}: {
-  label: string;
-  value: number;
-  testId?: string;
-}) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span data-testid={testId}>{fmtRs(value)}</span>
-    </div>
-  );
-}
-
-function SecondaryBtn({
+function SecBtn({
   onClick,
   disabled,
   icon,
@@ -480,7 +529,7 @@ function SecondaryBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex flex-col items-center gap-1 rounded-lg border bg-background py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+      className="flex flex-col items-center gap-1 rounded-xl border bg-background py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
     >
       {icon}
       <span>{label}</span>
@@ -490,4 +539,3 @@ function SecondaryBtn({
     </button>
   );
 }
-
