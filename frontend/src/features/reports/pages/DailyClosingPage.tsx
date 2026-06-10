@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, CalendarDays, Printer, RefreshCw, Wallet } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, CreditCard, Printer, RefreshCw, ShieldAlert, TrendingUp, Wallet, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buildDailyClosingReport, toDateInputValue, type DailyClosingReport } from "@/features/reports/local-reporting";
+import { cn } from "@/lib/utils";
 
 function fmt(value: number | undefined) {
   return "₹" + Math.round(value ?? 0).toLocaleString("en-IN");
@@ -47,11 +47,8 @@ export default function DailyClosingPage() {
 
   const load = async () => {
     setLoading(true);
-    try {
-      setReport(await buildDailyClosingReport(date));
-    } finally {
-      setLoading(false);
-    }
+    try { setReport(await buildDailyClosingReport(date)); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -65,67 +62,244 @@ export default function DailyClosingPage() {
     };
   }, [date]);
 
+  const totalCashIn = (report?.cashReceived ?? 0) + (report?.oldUdharPaymentReceived ?? 0);
+  const cashPct = totalCashIn > 0 ? Math.round(((report?.cashReceived ?? 0) / totalCashIn) * 100) : 0;
+  const upiPct = totalCashIn > 0 ? 100 - cashPct : 0;
+
   return (
-    <div className="p-6 w-full max-w-none space-y-6">
+    <div className="mx-auto w-full max-w-[1400px] space-y-5 p-4 sm:p-5 lg:p-6">
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Daily Closing</h1>
-          <p className="text-sm text-muted-foreground mt-1">Cash drawer and daily business summary from local IndexedDB.</p>
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+              <CalendarDays size={20} />
+            </span>
+            <div>
+              <h1 className="font-display text-2xl font-black tracking-tight sm:text-3xl">Daily Closing</h1>
+              <p className="text-sm text-muted-foreground">Cash drawer and business summary from local data.</p>
+            </div>
+          </div>
           {report?.isLocalEstimate && (
-            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Local estimate — {report.pendingSyncCount} changes pending cloud backup. Billing still works.
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+              <AlertTriangle size={15} className="shrink-0" />
+              Local estimate — {report.pendingSyncCount} changes pending cloud backup.
             </div>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/reports"><Button variant="outline">Back to reports</Button></Link>
-          <Button variant="outline" onClick={() => report && printClosing(report)} disabled={!report}><Printer size={16} className="mr-2" /> Print</Button>
-          <Button onClick={load} disabled={loading}><RefreshCw size={16} className="mr-2" /> Refresh</Button>
+          <Link href="/reports"><Button variant="outline" className="rounded-xl"><CalendarDays size={15} className="mr-1.5" />Reports</Button></Link>
+          <Button variant="outline" className="rounded-xl" onClick={() => report && printClosing(report)} disabled={!report}><Printer size={15} className="mr-1.5" />Print</Button>
+          <Button onClick={load} disabled={loading} className="rounded-xl"><RefreshCw size={15} className="mr-1.5" />Refresh</Button>
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-4 w-full sm:w-72">
-        <Label className="text-xs text-muted-foreground">Closing date</Label>
-        <Input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-1" />
+      {/* ── Date picker ─────────────────────────────────────────────────── */}
+      <div className="flex items-end gap-4">
+        <div className="w-full max-w-xs space-y-1.5">
+          <Label className="app-muted-label">Closing date</Label>
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 rounded-xl" />
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <ClosingCard title="Total sales" value={fmt(report?.totalSales)} loading={loading} />
-        <ClosingCard title="Cash received" value={fmt(report?.cashReceived)} loading={loading} />
-        <ClosingCard title="UPI received" value={fmt(report?.upiReceived)} loading={loading} />
-        <ClosingCard title="Udhar given" value={fmt(report?.udharGiven)} loading={loading} />
-        <ClosingCard title="Old udhar payment received" value={fmt(report?.oldUdharPaymentReceived)} loading={loading} />
-        <ClosingCard title="Supplier paid" value={fmt(report?.purchasePaid)} loading={loading} />
-        <ClosingCard title="Supplier due" value={fmt(report?.purchaseDue)} loading={loading} />
-        <ClosingCard title="Expected cash in drawer" value={fmt(report?.expectedCashInDrawer)} loading={loading} important />
-        <ClosingCard title="Expected UPI/bank net" value={fmt(report?.expectedUpiInBank)} loading={loading} />
+      {/* ── Hero: Expected Cash in Drawer ───────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border-2 border-primary/25 bg-card shadow-md">
+        <div className="border-b border-primary/15 bg-primary/[0.04] px-5 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <Wallet size={16} className="text-primary" />
+            <p className="app-muted-label text-primary/80">Expected cash in drawer tonight</p>
+          </div>
+        </div>
+        <div className="grid gap-0 lg:grid-cols-[1fr_1px_0.9fr]">
+          <div className="p-5 sm:p-6">
+            {loading ? (
+              <Skeleton className="h-16 w-48" />
+            ) : (
+              <>
+                <p className="font-display text-5xl font-black tracking-tight text-foreground tabular-nums sm:text-6xl">
+                  {fmt(report?.expectedCashInDrawer)}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Cash sales + udhar cash recovery − supplier cash paid
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                    <ArrowUpRight size={13} />Cash {fmt(report?.cashReceived)}
+                  </span>
+                  <span className="flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300">
+                    <CreditCard size={13} />UPI net {fmt(report?.expectedUpiInBank)}
+                  </span>
+                  {(report?.purchasePaid ?? 0) > 0 && (
+                    <span className="flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 ring-1 ring-orange-200/60 dark:bg-orange-950/40 dark:text-orange-300">
+                      <ArrowDownRight size={13} />Supplier −{fmt(report?.purchasePaid)}
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <div className="hidden lg:block bg-border" />
+          <div className="border-t p-5 sm:p-6 lg:border-t-0">
+            <p className="app-muted-label">Cash vs UPI split</p>
+            {loading ? (
+              <Skeleton className="mt-3 h-24 w-full" />
+            ) : (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">Cash received</span>
+                    <span className="font-black tabular-nums">{fmt(report?.cashReceived)}</span>
+                  </div>
+                  <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${cashPct}%` }} />
+                  </div>
+                  <p className="mt-0.5 text-right text-[11px] text-muted-foreground">{cashPct}%</p>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-semibold text-sky-700 dark:text-sky-400">UPI received</span>
+                    <span className="font-black tabular-nums">{fmt(report?.upiReceived)}</span>
+                  </div>
+                  <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-sky-500 transition-all duration-500" style={{ width: `${upiPct}%` }} />
+                  </div>
+                  <p className="mt-0.5 text-right text-[11px] text-muted-foreground">{upiPct}%</p>
+                </div>
+                {(report?.oldUdharPaymentReceived ?? 0) > 0 && (
+                  <div className="rounded-xl border bg-amber-50/50 p-3 text-sm dark:bg-amber-950/20">
+                    <span className="text-muted-foreground">Old udhar recovered </span>
+                    <span className="font-bold text-amber-700 dark:text-amber-400">{fmt(report?.oldUdharPaymentReceived)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
-        <h2 className="font-semibold flex items-center gap-2"><Wallet size={18} /> Drawer check</h2>
-        <p className="text-sm text-muted-foreground mt-2">Expected cash now means cash sales + customer udhar cash recovery - supplier purchase cash paid today. Opening cash, owner withdrawal, rent, salary and other expenses are not guessed yet.</p>
+      {/* ── Income & Outgoing Flow ───────────────────────────────────────── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+
+        {/* Income */}
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="border-b px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <TrendingUp size={16} />
+              </span>
+              <div>
+                <h2 className="font-display text-base font-black tracking-tight">Income today</h2>
+                <p className="text-[11px] text-muted-foreground">Everything that came in</p>
+              </div>
+            </div>
+          </div>
+          {loading ? (
+            <div className="p-5"><Skeleton className="h-40 w-full" /></div>
+          ) : (
+            <div className="divide-y">
+              <FlowRow
+                label="Total sales"
+                value={fmt(report?.totalSales)}
+                direction="in"
+                highlight
+                hint="All bills for the day"
+              />
+              <FlowRow label="Cash sales" value={fmt(report?.cashReceived)} direction="in" />
+              <FlowRow label="UPI / digital sales" value={fmt(report?.upiReceived)} direction="in" />
+              <FlowRow
+                label="Old udhar recovered"
+                value={fmt(report?.oldUdharPaymentReceived)}
+                direction="in"
+                hint="Payments received on older dues"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Outgoing */}
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="border-b px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
+                <ArrowDownRight size={16} />
+              </span>
+              <div>
+                <h2 className="font-display text-base font-black tracking-tight">Credit & outgoing</h2>
+                <p className="text-[11px] text-muted-foreground">What went out or remains due</p>
+              </div>
+            </div>
+          </div>
+          {loading ? (
+            <div className="p-5"><Skeleton className="h-40 w-full" /></div>
+          ) : (
+            <div className="divide-y">
+              <FlowRow
+                label="Udhar given today"
+                value={fmt(report?.udharGiven)}
+                direction="out"
+                hint="Credit extended to customers"
+              />
+              <FlowRow label="Supplier cash paid" value={fmt(report?.purchasePaid)} direction="out" />
+              <FlowRow
+                label="Supplier due (unpaid)"
+                value={fmt(report?.purchaseDue)}
+                direction="pending"
+                hint="Purchase bills not yet paid"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <TableCard title="Top sold products" empty="No product sales for this date" loading={loading} headers={["Product", "Qty", "Sales"]}>
-          {report?.topSoldProducts.map((row) => (
-            <tr key={row.productId} className="border-b last:border-0"><td className="px-3 py-2 font-medium">{row.name}</td><td className="px-3 py-2 text-right">{row.quantitySold}</td><td className="px-3 py-2 text-right font-medium">{fmt(row.revenue)}</td></tr>
+      {/* ── Tables: Top products + Low stock ────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ClosingTable title="Top sold products" icon={<TrendingUp size={15} className="text-emerald-600" />} empty="No product sales for this date" loading={loading} headers={["Product", "Qty", "Sales"]}>
+          {report?.topSoldProducts.map((row, index) => (
+            <tr key={row.productId} className="border-b transition-colors last:border-0 hover:bg-muted/30">
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-black", index === 0 ? "bg-amber-50 text-amber-700" : "bg-muted text-muted-foreground")}>{index + 1}</span>
+                  <span className="font-semibold">{row.name}</span>
+                </div>
+              </td>
+              <td className="px-4 py-3 text-right text-muted-foreground">{row.quantitySold}</td>
+              <td className="px-4 py-3 text-right font-bold">{fmt(row.revenue)}</td>
+            </tr>
           ))}
-        </TableCard>
-        <TableCard title="Low-stock items" empty="No low-stock items" loading={loading} headers={["Product", "Stock", "Alert"]}>
+        </ClosingTable>
+
+        <ClosingTable title="Low-stock items" icon={<AlertTriangle size={15} className="text-amber-600" />} empty="No low-stock items" loading={loading} headers={["Product", "Stock", "Alert"]}>
           {report?.lowStockItems.map((row) => (
-            <tr key={row.productId} className="border-b last:border-0"><td className="px-3 py-2 font-medium">{row.name}</td><td className="px-3 py-2 text-right text-destructive">{row.stock} {row.unit ?? ""}</td><td className="px-3 py-2 text-right">{row.threshold}</td></tr>
+            <tr key={row.productId} className="border-b transition-colors last:border-0 hover:bg-muted/30">
+              <td className="px-4 py-3 font-semibold">{row.name}</td>
+              <td className="px-4 py-3 text-right font-bold text-destructive">{row.stock} {row.unit ?? ""}</td>
+              <td className="px-4 py-3 text-right text-muted-foreground">{row.threshold}</td>
+            </tr>
           ))}
-        </TableCard>
+        </ClosingTable>
       </div>
 
-      <div className="rounded-xl border bg-card p-5">
-        <h2 className="font-semibold flex items-center gap-2"><AlertTriangle size={18} /> Sync check before closing</h2>
-        {loading ? <Skeleton className="h-16 w-full mt-3" /> : (
-          <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-            <div className="rounded-lg border p-3"><div className="text-muted-foreground">Pending</div><Badge variant={report?.pendingSyncCount ? "secondary" : "outline"}>{report?.pendingSyncCount ?? 0}</Badge></div>
-            <div className="rounded-lg border p-3"><div className="text-muted-foreground">Failed</div><Badge variant={report?.failedSyncCount ? "destructive" : "outline"}>{report?.failedSyncCount ?? 0}</Badge></div>
-            <div className="rounded-lg border p-3"><div className="text-muted-foreground">Conflicts</div><Badge variant={report?.conflictCount ? "destructive" : "outline"}>{report?.conflictCount ?? 0}</Badge></div>
+      {/* ── Sync check ──────────────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <div className="border-b px-5 py-4">
+          <div className="flex items-center gap-2">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+              <ShieldAlert size={16} />
+            </span>
+            <div>
+              <h2 className="font-display text-base font-black tracking-tight">Sync check before closing</h2>
+              <p className="text-[11px] text-muted-foreground">Ensure all data is backed up to the cloud</p>
+            </div>
+          </div>
+        </div>
+        {loading ? (
+          <div className="p-5"><Skeleton className="h-16 w-full" /></div>
+        ) : (
+          <div className="grid grid-cols-3 gap-px bg-border">
+            <SyncCell label="Pending backup" count={report?.pendingSyncCount ?? 0} />
+            <SyncCell label="Failed sync" count={report?.failedSyncCount ?? 0} critical />
+            <SyncCell label="Conflicts" count={report?.conflictCount ?? 0} critical />
           </div>
         )}
       </div>
@@ -133,11 +307,68 @@ export default function DailyClosingPage() {
   );
 }
 
-function ClosingCard({ title, value, loading, important }: { title: string; value: string; loading: boolean; important?: boolean }) {
-  return <div className={`rounded-xl border bg-card p-4 ${important ? "ring-1 ring-primary/30" : ""}`}><p className="text-xs text-muted-foreground uppercase tracking-wide">{title}</p>{loading ? <Skeleton className="h-8 w-28 mt-2" /> : <p className="text-2xl font-bold mt-1">{value}</p>}</div>;
+/* ── Local components ────────────────────────────────────────────────────── */
+
+function FlowRow({ label, value, direction, hint, highlight }: { label: string; value: string; direction: "in" | "out" | "pending"; hint?: string; highlight?: boolean }) {
+  const dirIcon = direction === "in"
+    ? <ArrowUpRight size={15} className="text-emerald-500" />
+    : direction === "out"
+      ? <ArrowDownRight size={15} className="text-orange-500" />
+      : <span className="h-3.5 w-3.5 rounded-full border-2 border-amber-400" />;
+  const valueColor = direction === "in" ? "text-emerald-700 dark:text-emerald-400" : direction === "out" ? "text-orange-600 dark:text-orange-400" : "text-amber-600 dark:text-amber-400";
+  return (
+    <div className={cn("flex items-center justify-between gap-4 px-5 py-3.5", highlight && "bg-primary/[0.04]")}>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="shrink-0">{dirIcon}</span>
+        <div className="min-w-0">
+          <p className={cn("text-sm font-semibold", highlight && "font-black")}>{label}</p>
+          {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+        </div>
+      </div>
+      <p className={cn("font-display shrink-0 font-black tabular-nums", highlight ? "text-xl text-foreground" : `text-base ${valueColor}`)}>{value}</p>
+    </div>
+  );
 }
 
-function TableCard({ title, empty, headers, loading, children }: { title: string; empty: string; headers: string[]; loading: boolean; children?: React.ReactNode }) {
-  const hasRows = Boolean(children && (!Array.isArray(children) || children.length > 0));
-  return <div className="rounded-xl border bg-card overflow-hidden"><div className="px-4 py-3 border-b font-semibold">{title}</div>{loading ? <div className="p-4"><Skeleton className="h-32 w-full" /></div> : !hasRows ? <div className="p-8 text-sm text-center text-muted-foreground">{empty}</div> : <table className="w-full text-sm"><thead className="bg-muted/60"><tr>{headers.map((header, index) => <th key={header} className={`px-3 py-2 font-medium text-muted-foreground ${index === 0 ? "text-left" : "text-right"}`}>{header}</th>)}</tr></thead><tbody>{children}</tbody></table>}</div>;
+function SyncCell({ label, count, critical }: { label: string; count: number; critical?: boolean }) {
+  const ok = count === 0;
+  return (
+    <div className="flex flex-col items-center gap-1.5 bg-card p-5 text-center">
+      {ok
+        ? <CheckCircle2 size={22} className="text-emerald-500" />
+        : critical
+          ? <XCircle size={22} className="text-destructive" />
+          : <AlertTriangle size={22} className="text-amber-500" />}
+      <p className={cn("font-display text-2xl font-black tabular-nums", ok ? "text-emerald-600" : critical ? "text-destructive" : "text-amber-600")}>{count}</p>
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function ClosingTable({ title, icon, empty, headers, loading, children }: { title: string; icon?: React.ReactNode; empty: string; headers: string[]; loading: boolean; children?: React.ReactNode }) {
+  const hasRows = Boolean(children && (!Array.isArray(children) || (children as React.ReactNode[]).filter(Boolean).length > 0));
+  return (
+    <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="flex items-center gap-2.5 border-b px-5 py-4">
+        {icon && <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted">{icon}</span>}
+        <h2 className="font-display text-base font-black tracking-tight">{title}</h2>
+      </div>
+      {loading ? (
+        <div className="p-5"><Skeleton className="h-28 w-full" /></div>
+      ) : !hasRows ? (
+        <div className="py-10 text-center text-sm text-muted-foreground">{empty}</div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/40">
+              {headers.map((header, index) => (
+                <th key={header} className={cn("px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground", index === 0 ? "text-left" : "text-right")}>{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>{children}</tbody>
+        </table>
+      )}
+    </div>
+  );
 }
