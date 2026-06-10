@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
-import { Loader2, ShieldCheck, Store } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Loader2, ShieldCheck, Store } from "lucide-react";
+import { BUSINESS_TYPE_DEFS, saveBusinessType, type BusinessType } from "@/features/settings/business-types";
+import { applyAccent } from "@/features/settings/theme";
+import { cn } from "@/lib/utils";
 
 function normalizeIndianMobile(value: unknown) {
   if (typeof value !== "string") return value;
@@ -35,9 +38,14 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+const BUSINESS_TYPES = Object.entries(BUSINESS_TYPE_DEFS) as [BusinessType, typeof BUSINESS_TYPE_DEFS[BusinessType]][];
+
 export default function Register() {
   const [, setLocation] = useLocation();
   const auth = useAuth();
+  const [step, setStep] = useState<1 | 2>(1);
+  const [selectedType, setSelectedType] = useState<BusinessType>("kirana");
+  const [hoveredType, setHoveredType] = useState<BusinessType | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<FormData>({
@@ -48,76 +56,103 @@ export default function Register() {
   const registerMutation = useRegister({
     mutation: {
       onSuccess: async (data: AuthResponse) => {
+        saveBusinessType(selectedType);
+        const accent = BUSINESS_TYPE_DEFS[selectedType].defaultAccent;
+        localStorage.setItem("kirana-os:ui-theme:v1", accent);
+        applyAccent(accent);
         auth.login(data.accessToken || data.token, data.refreshToken, data.user, data.shop);
         setLocation("/dashboard");
       },
       onError: (err: unknown) => {
         const data = (err as { data?: { message?: string; error?: string; details?: Record<string, string[]> } })?.data;
         const details = data?.details
-          ? Object.entries(data.details)
-              .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`))
-              .join(" | ")
+          ? Object.entries(data.details).flatMap(([field, messages]) => messages.map((msg) => `${field}: ${msg}`)).join(" | ")
           : "";
-        const msg = details || data?.message || data?.error || (err as { message?: string })?.message || "Registration failed";
-        setServerError(msg);
+        setServerError(details || data?.message || data?.error || (err as { message?: string })?.message || "Registration failed");
+        setStep(1);
       },
     },
   });
+
+  const goToStep2 = async () => {
+    const valid = await form.trigger();
+    if (!valid) return;
+    // Preview the currently selected type's accent
+    applyAccent(BUSINESS_TYPE_DEFS[selectedType].defaultAccent);
+    setStep(2);
+  };
+
+  const handleTypeHover = (type: BusinessType | null) => {
+    setHoveredType(type);
+    const previewType = type ?? selectedType;
+    applyAccent(BUSINESS_TYPE_DEFS[previewType].defaultAccent);
+  };
+
+  const handleTypeSelect = (type: BusinessType) => {
+    setSelectedType(type);
+    applyAccent(BUSINESS_TYPE_DEFS[type].defaultAccent);
+  };
 
   const onSubmit = (values: FormData) => {
     setServerError(null);
     registerMutation.mutate({ data: values });
   };
 
+  const def = BUSINESS_TYPE_DEFS[hoveredType ?? selectedType];
+
   return (
-    <div className="app-shell flex min-h-screen items-center justify-center bg-background px-4 py-8">
-      <div className="grid w-full max-w-6xl overflow-hidden rounded-lg border bg-card shadow-xl lg:grid-cols-[minmax(0,1fr)_460px]">
-        <section className="hidden bg-sidebar p-8 text-sidebar-foreground lg:flex lg:flex-col lg:justify-between">
-          <div>
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md ring-1 ring-white/10">
-              <Store size={24} aria-hidden="true" />
-            </div>
-            <h1 className="mt-6 text-3xl font-black text-white">Open your KiranaOS counter</h1>
-            <p className="mt-3 max-w-md text-sm leading-6 text-sidebar-foreground/75">
-              Set up billing, inventory, udhar, and owner controls for a real shop workflow from day one.
-            </p>
-          </div>
-          <div className="grid gap-3 text-sm">
-            {["Owner PIN protects sensitive actions", "Offline billing works on this device", "Reports stay tied to saved shop data"].map((item) => (
-              <div key={item} className="rounded-lg bg-white/10 px-3 py-2 font-semibold ring-1 ring-white/10">
-                {item}
+    <div className="app-shell flex min-h-screen items-center justify-center bg-background px-4 py-8 transition-all duration-500">
+      {/* ── STEP 1: Shop details ──────────────────────────────────────────── */}
+      {step === 1 && (
+        <div className="grid w-full max-w-6xl overflow-hidden rounded-2xl border bg-card shadow-xl lg:grid-cols-[minmax(0,1fr)_480px]">
+          <section className="hidden bg-sidebar p-8 text-sidebar-foreground lg:flex lg:flex-col lg:justify-between">
+            <div>
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-md ring-1 ring-white/10">
+                <Store size={24} />
               </div>
-            ))}
-          </div>
-        </section>
+              <h1 className="mt-6 font-display text-3xl font-black text-white">Set up your shop counter</h1>
+              <p className="mt-3 max-w-md text-sm leading-6 text-sidebar-foreground/75">
+                Billing, inventory, credit management, and owner controls — all in one place, from day one.
+              </p>
+            </div>
+            <div className="grid gap-3 text-sm">
+              {[
+                "Works offline — bills even without internet",
+                "Owner PIN protects discounts and cancellations",
+                "Built for any type of retail shop",
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-2.5 rounded-xl bg-white/10 px-3 py-2.5 font-semibold ring-1 ring-white/10">
+                  <CheckCircle2 size={15} className="shrink-0 text-sidebar-primary" />
+                  {item}
+                </div>
+              ))}
+            </div>
+          </section>
 
-        <div className="w-full p-6 sm:p-8">
-          <div className="mb-6 text-center lg:text-left">
-            <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-lg bg-primary text-primary-foreground lg:hidden">
-              <Store className="text-primary-foreground" size={28} />
+          <div className="w-full p-6 sm:p-8">
+            <div className="mb-6">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-primary text-primary-foreground lg:hidden">
+                <Store size={28} />
+              </div>
+              <div className="hidden items-center gap-2 text-sm font-bold text-primary lg:flex">
+                <ShieldCheck size={15} />Step 1 of 2 — Shop details
+              </div>
+              <h1 className="mt-1 font-display text-2xl font-black tracking-tight text-foreground sm:text-3xl">Register your shop</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Create the owner account and security PIN.</p>
             </div>
-            <div className="hidden items-center gap-2 text-sm font-bold text-primary lg:flex">
-              <ShieldCheck size={16} aria-hidden="true" />
-              Shop setup
-            </div>
-            <h1 className="text-3xl font-black text-foreground lg:mt-3">Register your shop</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Create the owner account and local security PIN.</p>
-          </div>
 
-          <div className="rounded-lg border bg-background/70 p-5 shadow-sm">
-            <h2 className="mb-5 text-lg font-bold">Create shop account</h2>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-              <div>
-                <Label htmlFor="shopName">Shop Name</Label>
-                <Input id="shopName" data-testid="input-shopName" className="mt-1 h-11" placeholder="Sharma General Store" {...form.register("shopName")} />
-                {form.formState.errors.shopName && <p className="mt-1 text-xs text-destructive">{form.formState.errors.shopName.message}</p>}
-              </div>
-              <div>
-                <Label htmlFor="ownerName">Owner Name</Label>
-                <Input id="ownerName" data-testid="input-ownerName" className="mt-1 h-11" placeholder="Ramesh Sharma" {...form.register("ownerName")} />
-                {form.formState.errors.ownerName && <p className="mt-1 text-xs text-destructive">{form.formState.errors.ownerName.message}</p>}
-              </div>
+            <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
               <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="shopName">Shop Name</Label>
+                  <Input id="shopName" data-testid="input-shopName" className="mt-1 h-11" placeholder="Sharma General Store" {...form.register("shopName")} />
+                  {form.formState.errors.shopName && <p className="mt-1 text-xs text-destructive">{form.formState.errors.shopName.message}</p>}
+                </div>
+                <div>
+                  <Label htmlFor="ownerName">Owner Name</Label>
+                  <Input id="ownerName" data-testid="input-ownerName" className="mt-1 h-11" placeholder="Ramesh Sharma" {...form.register("ownerName")} />
+                  {form.formState.errors.ownerName && <p className="mt-1 text-xs text-destructive">{form.formState.errors.ownerName.message}</p>}
+                </div>
                 <div>
                   <Label htmlFor="city">City</Label>
                   <Input id="city" data-testid="input-city" className="mt-1 h-11" placeholder="Mumbai" {...form.register("city")} />
@@ -142,27 +177,113 @@ export default function Register() {
               <div>
                 <Label htmlFor="ownerPin">4-Digit Owner PIN</Label>
                 <Input id="ownerPin" data-testid="input-ownerPin" type="password" inputMode="numeric" maxLength={4} className="mt-1 h-11" placeholder="e.g. 1234" {...form.register("ownerPin")} />
-                <p className="mt-1 text-xs text-muted-foreground">Used to authorise sensitive actions like discounts and cancellations</p>
+                <p className="mt-1 text-xs text-muted-foreground">Used to authorise discounts, cancellations, and sensitive settings.</p>
                 {form.formState.errors.ownerPin && <p className="mt-1 text-xs text-destructive">{form.formState.errors.ownerPin.message}</p>}
               </div>
-
               {serverError && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="status-error">{serverError}</div>
+                <div className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="status-error">{serverError}</div>
               )}
-
-              <Button type="submit" className="mt-2 w-full" data-testid="button-register" disabled={registerMutation.isPending}>
-                {registerMutation.isPending ? <><Loader2 size={16} className="mr-2 animate-spin" />Creating...</> : "Create Account"}
+              <Button type="button" className="mt-2 w-full h-11 text-base rounded-xl" onClick={() => void goToStep2()}>
+                Continue <ArrowRight size={16} className="ml-2" />
               </Button>
             </form>
             <p className="mt-4 text-center text-sm text-muted-foreground">
               Already have an account?{" "}
               <Link href="/login">
-                <span className="cursor-pointer font-medium text-primary hover:underline" data-testid="link-login">Sign in</span>
+                <span className="cursor-pointer font-bold text-primary hover:underline" data-testid="link-login">Sign in</span>
               </Link>
             </p>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ── STEP 2: Business type ─────────────────────────────────────────── */}
+      {step === 2 && (
+        <div className="w-full max-w-4xl">
+          <button
+            type="button"
+            onClick={() => { setStep(1); applyAccent("emerald"); }}
+            className="mb-5 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft size={15} /> Back to shop details
+          </button>
+
+          <div className="overflow-hidden rounded-2xl border bg-card shadow-xl">
+            {/* Header */}
+            <div className="border-b bg-primary/5 px-6 py-5">
+              <div className="flex items-center gap-2 text-sm font-bold text-primary">
+                <ShieldCheck size={15} /> Step 2 of 2 — Choose your business type
+              </div>
+              <h1 className="mt-1 font-display text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+                What kind of shop is this?
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                We'll set up the right dashboard, product categories, units, and colour theme for you.
+              </p>
+            </div>
+
+            {/* Business type grid */}
+            <div className="grid grid-cols-2 gap-2 p-5 sm:grid-cols-3 lg:grid-cols-4">
+              {BUSINESS_TYPES.map(([key, typeDef]) => {
+                const active = selectedType === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onMouseEnter={() => handleTypeHover(key)}
+                    onMouseLeave={() => handleTypeHover(null)}
+                    onClick={() => handleTypeSelect(key)}
+                    className={cn(
+                      "group relative flex flex-col items-start gap-2 rounded-xl border-2 p-3.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      active
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-transparent bg-muted/30 hover:border-muted-foreground/25 hover:bg-muted/50"
+                    )}
+                  >
+                    <span className="text-2xl leading-none">{typeDef.emoji}</span>
+                    <div className="min-w-0">
+                      <p className={cn("text-sm font-black leading-tight", active ? "text-primary" : "text-foreground")}>{typeDef.label}</p>
+                      <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{typeDef.description}</p>
+                    </div>
+                    {active && (
+                      <span className="absolute right-2 top-2">
+                        <CheckCircle2 size={16} className="text-primary" />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected preview bar */}
+            <div className="border-t bg-muted/30 px-6 py-4">
+              <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl leading-none">{def.emoji}</span>
+                  <div>
+                    <p className="font-black text-foreground">{def.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Dashboard: <span className="font-semibold">{def.dashboard.heroTitle}</span> · Color: <span className="font-semibold capitalize">{def.defaultAccent}</span>
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  className="h-11 min-w-[160px] rounded-xl text-base"
+                  onClick={form.handleSubmit(onSubmit)}
+                  disabled={registerMutation.isPending}
+                  data-testid="button-register"
+                >
+                  {registerMutation.isPending
+                    ? <><Loader2 size={16} className="mr-2 animate-spin" />Creating…</>
+                    : <>Set up my shop <ArrowRight size={16} className="ml-2" /></>
+                  }
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

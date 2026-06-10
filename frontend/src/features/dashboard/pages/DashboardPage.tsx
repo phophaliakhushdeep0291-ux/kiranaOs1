@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { ShoppingCart, AlertTriangle, TrendingUp, Wallet, CreditCard, Smartphone, CalendarCheck, Sparkles, HandCoins, ReceiptText, Truck } from "lucide-react";
+import {
+  ShoppingCart, AlertTriangle, TrendingUp, Wallet, CreditCard, Smartphone,
+  CalendarCheck, Sparkles, HandCoins, ReceiptText, Truck, PackagePlus,
+  Layers, BarChart3, Building2,
+} from "lucide-react";
 import { useAuth } from "@/features/auth/AuthContext";
 import { getLocalDashboardSnapshot, useGetPaymentSummary, useGetPnL, useGetUdharSummary, useListBills, warmRecentLocalCache, type LocalDashboardSnapshot } from "@/lib/api/client";
 import { buildLocalReportSnapshot, type LocalReportSnapshot } from "@/features/reports/local-reporting";
@@ -12,6 +16,29 @@ import { useFeature } from "@/features/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useBusinessType, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
+
+const ACTION_ICON: Record<QuickActionIconKey, ReactNode> = {
+  billing:   <ShoppingCart size={22} aria-hidden="true" />,
+  payment:   <HandCoins    size={22} aria-hidden="true" />,
+  purchase:  <Truck        size={22} aria-hidden="true" />,
+  closing:   <CalendarCheck size={22} aria-hidden="true" />,
+  inventory: <PackagePlus  size={22} aria-hidden="true" />,
+  products:  <Layers       size={22} aria-hidden="true" />,
+  reports:   <BarChart3    size={22} aria-hidden="true" />,
+  suppliers: <Building2    size={22} aria-hidden="true" />,
+};
+
+const ACTION_ICON_BG: Record<QuickActionColorKey, string> = {
+  primary: "bg-primary/10 text-primary",
+  sky:     "bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
+  amber:   "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  violet:  "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  emerald: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  rose:    "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
+  orange:  "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
+  teal:    "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
+};
 
 function money(n: number | undefined | null) {
   const value = Number(n ?? 0);
@@ -29,6 +56,8 @@ function fmt(n: number | undefined | null) {
 export default function Dashboard() {
   const { user } = useAuth();
   const { t } = useAppLanguage();
+  const { def: btDef } = useBusinessType();
+  const dbCfg = btDef.dashboard;
   const { toast } = useToast();
   const today = format(new Date(), "yyyy-MM-dd");
   const [localSnapshot, setLocalSnapshot] = useState<LocalDashboardSnapshot>(() => getLocalDashboardSnapshot());
@@ -189,10 +218,10 @@ export default function Dashboard() {
               ) : null}
             </div>
             <h2 className="mt-5 max-w-2xl font-display text-3xl font-black tracking-tight text-foreground sm:text-4xl">
-              Today, at a glance.
+              {dbCfg.heroTitle}
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              Sales, cash, udhar, and owner alerts for today&apos;s closing decisions.
+              {dbCfg.heroSubtitle}
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 ring-1 ${attentionCount > 0 ? "bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900" : "bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"}`}>
@@ -205,40 +234,18 @@ export default function Dashboard() {
           </div>
           <div className="border-t bg-background/40 p-5 sm:p-6 lg:border-l lg:border-t-0">
             <p className="app-muted-label">Quick actions</p>
-            <p className="mt-3 font-display text-xl font-black tracking-tight text-foreground">Run the counter.</p>
+            <p className="mt-3 font-display text-xl font-black tracking-tight text-foreground">{btDef.label}</p>
             <div className="mt-4 grid grid-cols-2 gap-2.5">
-              <Link href="/billing">
-                <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md active:translate-y-0">
-                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <ShoppingCart size={22} aria-hidden="true" />
+              {dbCfg.quickActions.map((action) => (
+                <Link key={action.href + action.label} href={action.href}>
+                  <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0">
+                    <div className={`grid h-11 w-11 place-items-center rounded-xl ${ACTION_ICON_BG[action.color]}`}>
+                      {ACTION_ICON[action.icon]}
+                    </div>
+                    <span className="text-sm font-bold">{action.label}</span>
                   </div>
-                  <span className="text-sm font-bold">New Bill</span>
-                </div>
-              </Link>
-              <Link href="/udhar">
-                <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-400/40 hover:shadow-md active:translate-y-0">
-                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-                    <HandCoins size={22} aria-hidden="true" />
-                  </div>
-                  <span className="text-sm font-bold">Payment</span>
-                </div>
-              </Link>
-              <Link href="/purchase-bills">
-                <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-400/40 hover:shadow-md active:translate-y-0">
-                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                    <Truck size={22} aria-hidden="true" />
-                  </div>
-                  <span className="text-sm font-bold">Purchase</span>
-                </div>
-              </Link>
-              <Link href="/daily-closing">
-                <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-400/40 hover:shadow-md active:translate-y-0">
-                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                    <CalendarCheck size={22} aria-hidden="true" />
-                  </div>
-                  <span className="text-sm font-bold">Close Day</span>
-                </div>
-              </Link>
+                </Link>
+              ))}
             </div>
             {!dashboard.hasBusinessData ? (
               <button
@@ -257,9 +264,9 @@ export default function Dashboard() {
 
       <StatsGrid className="mb-6">
         <StatCard
-          label={t("dashboard.todayRevenue")}
+          label={dbCfg.kpi.revenue}
           value={fmt(dashboard.revenue)}
-          description={`${dashboard.billCount} bills - details`}
+          description={`${dashboard.billCount} bills · tap for details`}
           icon={<TrendingUp size={20} aria-hidden="true" />}
           loading={isLoading}
           tone="green"
@@ -271,7 +278,7 @@ export default function Dashboard() {
           onKeyDown={drilldownKeyHandler("revenue")}
         />
         <StatCard
-          label={t("dashboard.todayProfit")}
+          label={dbCfg.kpi.profit}
           value={fmt(dashboard.grossProfit)}
           description={`${Math.round(dashboard.grossMarginPct)}% margin`}
           icon={<Wallet size={20} aria-hidden="true" />}
@@ -285,9 +292,9 @@ export default function Dashboard() {
         />
         <Link href="/udhar?filter=outstanding">
           <StatCard
-            label={t("dashboard.totalUdhar")}
+            label={dbCfg.kpi.credit}
             value={fmt(dashboard.totalOutstanding)}
-            description={`${dashboard.outstandingCustomers.length} customers`}
+            description={`${dashboard.outstandingCustomers.length} ${dbCfg.creditLabel.toLowerCase()} accounts`}
             icon={<AlertTriangle size={20} aria-hidden="true" />}
             loading={isLoading}
             tone="amber"
@@ -295,7 +302,7 @@ export default function Dashboard() {
           />
         </Link>
         <StatCard
-          label={t("dashboard.cashCollected")}
+          label={dbCfg.kpi.cash}
           value={fmt(dashboard.cashCollected)}
           description={`Drawer ${fmt(cashInDrawer)}`}
           icon={<CreditCard size={20} aria-hidden="true" />}
@@ -343,10 +350,10 @@ export default function Dashboard() {
         </DataTableCard>
 
         <DataTableCard
-          title={t("dashboard.udharOutstanding")}
+          title={`${dbCfg.creditLabel} Outstanding`}
           loading={isLoading}
           empty={dashboard.outstandingCustomers.length === 0}
-          emptyState={<EmptyState title={t("dashboard.noUdhar")} description="No customer has pending udhar right now." />}
+          emptyState={<EmptyState title={`No ${dbCfg.creditLabel.toLowerCase()} outstanding`} description={`No customer has pending ${dbCfg.creditLabel.toLowerCase()} right now.`} />}
           actions={(
             <Link href="/udhar">
               <span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.viewAll")}</span>

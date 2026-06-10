@@ -28,7 +28,7 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue>({ accent: "emerald", setAccent: () => {} });
 
-function applyAccent(accent: AccentColor) {
+export function applyAccent(accent: AccentColor) {
   if (accent === "emerald") {
     document.documentElement.removeAttribute("data-accent");
   } else {

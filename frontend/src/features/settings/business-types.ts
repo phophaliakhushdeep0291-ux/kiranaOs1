@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { offlineDB } from "@/lib/offline/db";
+import { useCallback, useState } from "react";
+import type { AccentColor } from "./theme";
 
 export type BusinessType =
   | "kirana"
@@ -14,16 +14,37 @@ export type BusinessType =
   | "restaurant"
   | "other";
 
+export type QuickActionIconKey =
+  | "billing" | "payment" | "purchase" | "closing"
+  | "inventory" | "products" | "reports" | "suppliers";
+
+export type QuickActionColorKey =
+  | "primary" | "sky" | "amber" | "violet" | "emerald" | "rose" | "orange" | "teal";
+
+export interface QuickAction {
+  label: string;
+  href: string;
+  icon: QuickActionIconKey;
+  color: QuickActionColorKey;
+}
+
+export interface DashboardConfig {
+  heroTitle: string;
+  heroSubtitle: string;
+  kpi: { revenue: string; profit: string; credit: string; cash: string; };
+  creditLabel: string;          // "Udhar" | "Credit" | "Dues" | "Khata"
+  quickActions: [QuickAction, QuickAction, QuickAction, QuickAction];
+}
+
 export interface BusinessTypeDefinition {
   label: string;
   emoji: string;
   description: string;
-  /** Product categories shown as quick-picks in the product form */
   categories: string[];
-  /** Units shown at the top of the unit dropdown for this shop type */
   primaryUnits: string[];
-  /** Example product for the voice fill hint in the product form */
   voiceExample: string;
+  defaultAccent: AccentColor;
+  dashboard: DashboardConfig;
 }
 
 export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = {
@@ -34,7 +55,21 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["grocery", "dairy", "beverages", "snacks", "household", "personal_care", "stationery", "other"],
     primaryUnits: ["piece", "kg", "gram", "litre", "ml", "packet", "box", "dozen"],
     voiceExample: "name aata, cost 40, selling 45, stock 10 kg, category grocery",
+    defaultAccent: "emerald",
+    dashboard: {
+      heroTitle: "Today's counter",
+      heroSubtitle: "Sales, cash, udhar, and stock at a glance.",
+      kpi: { revenue: "Today's Sales", profit: "Gross Profit", credit: "Udhar Outstanding", cash: "Cash Collected" },
+      creditLabel: "Udhar",
+      quickActions: [
+        { label: "New Bill",    href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "Collect",     href: "/udhar",          icon: "payment",   color: "sky"     },
+        { label: "Purchase",    href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "Close Day",   href: "/daily-closing",  icon: "closing",   color: "violet"  },
+      ],
+    },
   },
+
   clothing: {
     label: "Clothing & Fashion",
     emoji: "👕",
@@ -42,15 +77,43 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["men", "women", "kids", "sarees", "fabric", "accessories", "innerwear", "other"],
     primaryUnits: ["piece", "meter", "yard", "set", "dozen", "roll", "bundle"],
     voiceExample: "name cotton shirt, cost 200, selling 350, stock 20 piece, category men",
+    defaultAccent: "violet",
+    dashboard: {
+      heroTitle: "Fashion counter",
+      heroSubtitle: "Today's sales, stock, and customer credit.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
+      creditLabel: "Credit",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "Collect",    href: "/udhar",          icon: "payment",   color: "sky"     },
+        { label: "Products",   href: "/products",       icon: "products",  color: "violet"  },
+        { label: "Reports",    href: "/reports",        icon: "reports",   color: "amber"   },
+      ],
+    },
   },
+
   footwear: {
     label: "Footwear & Shoes",
     emoji: "👟",
-    description: "Shoes, sandals, chappals, sports",
+    description: "Shoes, sandals, chappals, sports footwear",
     categories: ["mens", "womens", "kids", "sandals", "sports", "formal", "casual", "other"],
     primaryUnits: ["pair", "piece", "dozen", "box", "set"],
     voiceExample: "name sports shoes, cost 400, selling 650, stock 10 pair, category sports",
+    defaultAccent: "rose",
+    dashboard: {
+      heroTitle: "Footwear counter",
+      heroSubtitle: "Today's billing and inventory overview.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Dues", cash: "Cash In Hand" },
+      creditLabel: "Dues",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Inventory",  href: "/inventory",     icon: "inventory", color: "rose"    },
+        { label: "Close Day",  href: "/daily-closing", icon: "closing",   color: "amber"   },
+      ],
+    },
   },
+
   auto_parts: {
     label: "Auto Parts & Hardware",
     emoji: "🔧",
@@ -58,7 +121,21 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["engine_parts", "filters", "electrical", "body_parts", "tools", "lubricants", "hardware", "fasteners", "other"],
     primaryUnits: ["piece", "set", "box", "litre", "kg", "dozen", "bundle", "sheet"],
     voiceExample: "name oil filter, cost 120, selling 180, stock 15 piece, category filters",
+    defaultAccent: "slate",
+    dashboard: {
+      heroTitle: "Parts & hardware",
+      heroSubtitle: "Sales, supplier dues, and credit outstanding.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Party Credit", cash: "Cash Collected" },
+      creditLabel: "Party Credit",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "Purchase",   href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "Suppliers",  href: "/suppliers",      icon: "suppliers", color: "sky"     },
+        { label: "Reports",    href: "/reports",        icon: "reports",   color: "violet"  },
+      ],
+    },
   },
+
   electronics: {
     label: "Electronics & Mobiles",
     emoji: "📱",
@@ -66,7 +143,21 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["mobiles", "accessories", "appliances", "computers", "cables", "batteries", "networking", "other"],
     primaryUnits: ["piece", "set", "box", "dozen"],
     voiceExample: "name earphones, cost 300, selling 550, stock 8 piece, category accessories",
+    defaultAccent: "blue",
+    dashboard: {
+      heroTitle: "Electronics sales",
+      heroSubtitle: "Today's billing and payment tracking.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash Collected" },
+      creditLabel: "Credit",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Inventory",  href: "/inventory",     icon: "inventory", color: "teal"    },
+        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+      ],
+    },
   },
+
   pharmacy: {
     label: "Pharmacy & Medical",
     emoji: "💊",
@@ -74,7 +165,21 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["tablets", "syrups", "injections", "equipment", "vitamins", "topical", "surgical", "other"],
     primaryUnits: ["strip", "tablet", "bottle", "tube", "piece", "box", "ml", "gram"],
     voiceExample: "name paracetamol, cost 12, selling 15, stock 50 strip, category tablets",
+    defaultAccent: "teal",
+    dashboard: {
+      heroTitle: "Pharmacy counter",
+      heroSubtitle: "Dispensing, stock, and patient credit.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Patient Credit", cash: "Cash Collected" },
+      creditLabel: "Patient Credit",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",        icon: "billing",   color: "primary" },
+        { label: "Inventory",  href: "/inventory",      icon: "inventory", color: "teal"    },
+        { label: "Purchase",   href: "/purchase-bills", icon: "purchase",  color: "amber"   },
+        { label: "Close Day",  href: "/daily-closing",  icon: "closing",   color: "violet"  },
+      ],
+    },
   },
+
   stationery: {
     label: "Stationery & Books",
     emoji: "📚",
@@ -82,7 +187,21 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["books", "pens", "notebooks", "art_supplies", "office", "files", "other"],
     primaryUnits: ["piece", "box", "dozen", "packet", "roll", "bundle"],
     voiceExample: "name ball pen, cost 5, selling 10, stock 100 dozen, category pens",
+    defaultAccent: "amber",
+    dashboard: {
+      heroTitle: "Stationery counter",
+      heroSubtitle: "Today's sales and stock overview.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
+      creditLabel: "Credit",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Products",   href: "/products",      icon: "products",  color: "amber"   },
+        { label: "Inventory",  href: "/inventory",     icon: "inventory", color: "sky"     },
+        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+      ],
+    },
   },
+
   furniture: {
     label: "Furniture & Home",
     emoji: "🪑",
@@ -90,15 +209,43 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["bedroom", "living_room", "kitchen", "decor", "lighting", "bedding", "storage", "other"],
     primaryUnits: ["piece", "set", "pair", "box"],
     voiceExample: "name study chair, cost 2500, selling 3800, stock 5 piece, category bedroom",
+    defaultAccent: "orange",
+    dashboard: {
+      heroTitle: "Furniture showroom",
+      heroSubtitle: "Sales, dues, and delivery tracking.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Dues", cash: "Cash Collected" },
+      creditLabel: "Dues",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Products",   href: "/products",      icon: "products",  color: "orange"  },
+        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+      ],
+    },
   },
+
   cosmetics: {
     label: "Beauty & Cosmetics",
     emoji: "💄",
-    description: "Skincare, makeup, haircare, salon",
+    description: "Skincare, makeup, haircare, salon products",
     categories: ["skincare", "makeup", "haircare", "fragrances", "nailcare", "grooming", "other"],
     primaryUnits: ["piece", "bottle", "tube", "ml", "gram", "box", "set"],
     voiceExample: "name face cream, cost 80, selling 150, stock 20 piece, category skincare",
+    defaultAccent: "rose",
+    dashboard: {
+      heroTitle: "Beauty counter",
+      heroSubtitle: "Today's sales and customer care.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash In Hand" },
+      creditLabel: "Credit",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "rose"    },
+        { label: "Products",   href: "/products",      icon: "products",  color: "sky"     },
+        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+      ],
+    },
   },
+
   restaurant: {
     label: "Restaurant & Café",
     emoji: "🍽️",
@@ -106,31 +253,62 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["starters", "main_course", "beverages", "snacks", "desserts", "thali", "other"],
     primaryUnits: ["piece", "plate", "glass", "bottle", "kg", "litre"],
     voiceExample: "name dal makhani, cost 60, selling 120, stock 10 kg, category main_course",
+    defaultAccent: "amber",
+    dashboard: {
+      heroTitle: "Restaurant billing",
+      heroSubtitle: "Orders, revenue, and daily closing.",
+      kpi: { revenue: "Revenue Today", profit: "Gross Margin", credit: "Pending Dues", cash: "Cash Collected" },
+      creditLabel: "Dues",
+      quickActions: [
+        { label: "New Order",  href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Menu",       href: "/products",      icon: "products",  color: "amber"   },
+        { label: "Close Day",  href: "/daily-closing", icon: "closing",   color: "violet"  },
+      ],
+    },
   },
+
   other: {
     label: "Other / Custom",
     emoji: "🏪",
-    description: "Any other type of retail business",
+    description: "Any other retail business",
     categories: ["general", "category_a", "category_b", "other"],
     primaryUnits: ["piece", "box", "set", "bundle", "dozen"],
     voiceExample: "name product, cost 100, selling 150, stock 10 piece, category general",
+    defaultAccent: "blue",
+    dashboard: {
+      heroTitle: "Business counter",
+      heroSubtitle: "Sales, stock, and daily management.",
+      kpi: { revenue: "Sales Today", profit: "Gross Margin", credit: "Customer Credit", cash: "Cash Collected" },
+      creditLabel: "Credit",
+      quickActions: [
+        { label: "New Bill",   href: "/billing",       icon: "billing",   color: "primary" },
+        { label: "Collect",    href: "/udhar",         icon: "payment",   color: "sky"     },
+        { label: "Inventory",  href: "/inventory",     icon: "inventory", color: "amber"   },
+        { label: "Reports",    href: "/reports",       icon: "reports",   color: "violet"  },
+      ],
+    },
   },
 };
 
-const BT_KEY = "ui:business-type:v1";
+// ── Persistence (localStorage-first for zero flicker) ──────────────────────
+
+const LS_KEY = "kirana-os:ui-business-type:v1";
+
+export function getStoredBusinessType(): BusinessType {
+  return (localStorage.getItem(LS_KEY) as BusinessType) ?? "kirana";
+}
+
+export function saveBusinessType(bt: BusinessType) {
+  localStorage.setItem(LS_KEY, bt);
+}
 
 export function useBusinessType() {
-  const [businessType, setBusinessTypeState] = useState<BusinessType>("kirana");
+  const [businessType, setBusinessTypeState] = useState<BusinessType>(getStoredBusinessType);
 
-  useEffect(() => {
-    void offlineDB.getSetting<BusinessType>(BT_KEY).then((saved) => {
-      if (saved) setBusinessTypeState(saved);
-    });
-  }, []);
-
-  const setBusinessType = useCallback(async (bt: BusinessType) => {
+  const setBusinessType = useCallback((bt: BusinessType) => {
     setBusinessTypeState(bt);
-    await offlineDB.setSetting(BT_KEY, bt);
+    saveBusinessType(bt);
   }, []);
 
   return { businessType, setBusinessType, def: BUSINESS_TYPE_DEFS[businessType] };
