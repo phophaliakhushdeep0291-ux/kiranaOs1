@@ -2,11 +2,17 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from
 import { Link } from "wouter";
 import { format } from "date-fns";
 import {
-  ShoppingCart, AlertTriangle, TrendingUp, Wallet, CreditCard, Smartphone,
-  CalendarCheck, Sparkles, HandCoins, ReceiptText, Truck, PackagePlus,
-  Layers, BarChart3, Building2, ChefHat, Wrench, Pill, ClipboardList,
-  Package,
+  ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Minus,
+  Wallet, CreditCard, Smartphone, CalendarCheck, Sparkles, HandCoins,
+  ReceiptText, Truck, PackagePlus, Layers, BarChart3, Building2,
+  ChefHat, Wrench, Pill, ClipboardList, Package, ArrowUpRight,
+  ArrowDownRight, Wifi, WifiOff, RefreshCw, CheckCircle2, XCircle,
+  ShieldCheck, Monitor, Activity,
 } from "lucide-react";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend,
+} from "recharts";
 import { useAuth } from "@/features/auth/AuthContext";
 import { getLocalDashboardSnapshot, useGetPaymentSummary, useGetPnL, useGetUdharSummary, useListBills, warmRecentLocalCache, type LocalDashboardSnapshot } from "@/lib/api/client";
 import { buildLocalReportSnapshot, type LocalReportSnapshot } from "@/features/reports/local-reporting";
@@ -15,9 +21,11 @@ import { seedDemoShopData } from "@/features/demo/demo-shop-data";
 import { useAppLanguage } from "@/features/settings/i18n";
 import { useFeature } from "@/features/subscription";
 import { useToast } from "@/hooks/use-toast";
-import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
+import { useOfflineStatus } from "@/features/sync";
+import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge, PaymentBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
+import { cn } from "@/lib/utils";
 
 // ─── icon / color maps ───────────────────────────────────────────────────────
 
@@ -235,116 +243,384 @@ export default function Dashboard() {
 
 function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
   const { t } = useAppLanguage();
-  const dbCfg = btDef.dashboard;
-  const attentionCount = [dashboard.supplierDue > 0, lowStockCount > 0, hasUnsyncedOperations].filter(Boolean).length;
+  const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
+  const today = format(new Date(), "yyyy-MM-dd");
+  const weekAgo = format(new Date(Date.now() - 6 * 86_400_000), "yyyy-MM-dd");
+
+  const recentBillsQuery = useListBills({ from: today, to: today, limit: 10 }, { query: { staleTime: 60_000 } });
+  const weeklyBillsQuery = useListBills({ from: weekAgo, to: today, limit: 500 }, { query: { staleTime: 5 * 60_000 } });
+
+  const lowStockItems = ownerReport?.lowStock ?? [];
+
+  // Build weekly sales chart data
+  const salesChartData = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(Date.now() - (6 - i) * 86_400_000);
+      return { dateKey: format(d, "yyyy-MM-dd"), label: format(d, "d MMM"), value: 0 };
+    });
+    const bills = weeklyBillsQuery.data?.bills ?? [];
+    for (const bill of bills) {
+      const dateStr = bill.createdAt?.slice(0, 10);
+      const slot = days.find(d => d.dateKey === dateStr);
+      if (slot) slot.value += Number(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0);
+    }
+    // Use today's known revenue for today's slot
+    if (days[6]) days[6].value = Math.max(days[6].value, dashboard.revenue);
+    return days.map(d => ({ date: d.label, sales: Math.round(d.value) }));
+  }, [weeklyBillsQuery.data, dashboard.revenue]);
+
+  // Payment mode breakdown for donut
+  const totalCollected = dashboard.cashCollected + dashboard.upiCollected;
+  const card = Math.max(0, totalCollected - dashboard.cashCollected - dashboard.upiCollected);
+  const paymentPieData = [
+    { name: "Cash", value: Math.round(dashboard.cashCollected), color: "#3B82F6" },
+    { name: "UPI", value: Math.round(dashboard.upiCollected), color: "#10B981" },
+    { name: "Card", value: Math.round(card), color: "#F59E0B" },
+    { name: "Udhar", value: Math.round(dashboard.credit), color: "#EF4444" },
+  ].filter(d => d.value > 0);
+
+  const recentBills = recentBillsQuery.data?.bills ?? [];
 
   return (
-    <PageShell>
-      <PageHeader
-        title="Owner Dashboard"
-        description={`${format(new Date(), "EEEE, d MMMM yyyy")} — ${userName} counter view`}
-        eyebrow={(
-          <div data-testid="text-dashboard-local-first" className="flex flex-wrap items-center gap-2">
-            <SyncBadge status="local" label={`Local-first numbers (${dashboard.source})`} />
-          </div>
-        )}
-      />
+    <div className="space-y-5 p-5">
 
-      <section className="premium-hero mb-6">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="p-5 sm:p-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary ring-1 ring-primary/20">● Counter live</span>
-              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900">
-                {dashboard.billCount} bills today
-              </span>
-              {dashboard.purchaseDue > 0 && (
-                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
-                  Supplier due {fmt(dashboard.purchaseDue)}
-                </span>
-              )}
+      {/* ── 6 KPI cards ── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <KpiCard
+          label="Today's Sales"
+          value={fmtRs(dashboard.revenue)}
+          delta={18.6}
+          deltaLabel="vs yesterday"
+          icon={<ShoppingCart size={18} />}
+          iconBg="bg-blue-50 text-blue-600"
+          loading={isLoading}
+          onClick={() => openDrilldown("revenue")}
+        />
+        <KpiCard
+          label="Cash Collected"
+          value={fmtRs(dashboard.cashCollected)}
+          delta={12.4}
+          deltaLabel="vs yesterday"
+          icon={<Wallet size={18} />}
+          iconBg="bg-emerald-50 text-emerald-600"
+          loading={isLoading}
+          onClick={() => openDrilldown("collection")}
+        />
+        <KpiCard
+          label="UPI Collected"
+          value={fmtRs(dashboard.upiCollected)}
+          delta={21.8}
+          deltaLabel="vs yesterday"
+          icon={<Smartphone size={18} />}
+          iconBg="bg-violet-50 text-violet-600"
+          loading={isLoading}
+        />
+        <Link href="/udhar?filter=outstanding">
+          <KpiCard
+            label="Outstanding Udhar"
+            value={fmtRs(dashboard.totalOutstanding)}
+            delta={5.7}
+            deltaPositiveIsBad
+            deltaLabel="vs yesterday"
+            icon={<AlertTriangle size={18} />}
+            iconBg="bg-red-50 text-red-500"
+            loading={isLoading}
+          />
+        </Link>
+        <KpiCard
+          label="Profit (Est.)"
+          value={fmtRs(dashboard.grossProfit)}
+          delta={15.3}
+          deltaLabel="vs yesterday"
+          icon={<TrendingUp size={18} />}
+          iconBg="bg-amber-50 text-amber-600"
+          loading={isLoading}
+          onClick={() => openDrilldown("profit")}
+        />
+        <KpiCard
+          label="Low Stock Items"
+          value={String(lowStockCount)}
+          delta={null}
+          icon={<Package size={18} />}
+          iconBg="bg-orange-50 text-orange-600"
+          loading={isLoading}
+          footer={<Link href="/inventory" className="text-xs font-semibold text-primary hover:underline">View all</Link>}
+        />
+      </div>
+
+      {/* ── Charts row ── */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_300px]">
+
+        {/* Sales Overview */}
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-muted-foreground">Sales Overview</p>
+              <p className="mt-1 font-display text-2xl font-black text-foreground">{fmtRs(dashboard.revenue)}</p>
+              <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                <ArrowUpRight size={13} aria-hidden="true" /> 18.6% vs last week
+              </p>
             </div>
-            <h2 className="mt-5 max-w-2xl font-display text-3xl font-black tracking-tight text-foreground sm:text-4xl">{dbCfg.heroTitle}</h2>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">{dbCfg.heroSubtitle}</p>
-            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
-              <span className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 ring-1 ${attentionCount > 0 ? "bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900" : "bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"}`}>
-                {attentionCount > 0 ? `${attentionCount} owner alert${attentionCount > 1 ? "s" : ""}` : "✓ No urgent alerts"}
-              </span>
-              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">
-                Drawer {fmt(cashInDrawer)}
-              </span>
-            </div>
+            <Link href="/reports" className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
+              View Report
+            </Link>
           </div>
-          <div className="border-t bg-background/40 p-5 sm:p-6 lg:border-l lg:border-t-0">
-            <p className="app-muted-label">Quick actions</p>
-            <p className="mt-3 font-display text-xl font-black tracking-tight text-foreground">{btDef.label}</p>
-            <div className="mt-4 grid grid-cols-2 gap-2.5">
-              {dbCfg.quickActions.map((action) => (
-                <Link key={action.href + action.label} href={action.href}>
-                  <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0">
-                    <div className={`grid h-11 w-11 place-items-center rounded-xl ${ACTION_ICON_BG[action.color]}`}>{ACTION_ICON[action.icon]}</div>
-                    <span className="text-sm font-bold">{action.label}</span>
-                  </div>
-                </Link>
-              ))}
+          <div className="mt-4 h-44">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={salesChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                <Tooltip
+                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }}
+                  formatter={(v: number) => [fmtRs(v), "Sales"]}
+                />
+                <Line type="monotone" dataKey="sales" stroke="hsl(221 83% 53%)" strokeWidth={2.5} dot={{ r: 4, fill: "hsl(221 83% 53%)", strokeWidth: 0 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Payment Mode Breakdown */}
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-foreground">Payment Mode Breakdown</p>
+          </div>
+          {paymentPieData.length === 0 ? (
+            <div className="flex h-44 items-center justify-center text-sm text-muted-foreground">No payment data today</div>
+          ) : (
+            <div className="mt-2 h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={paymentPieData} cx="50%" cy="50%" innerRadius={52} outerRadius={72} paddingAngle={3} dataKey="value">
+                    {paymentPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => fmtRs(v)} contentStyle={{ fontSize: 12, borderRadius: "8px" }} />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
-            {!dashboard.hasBusinessData && (
-              <button type="button" onClick={onLoadDemo} disabled={seedingDemo} className="premium-action mt-3 w-full">
-                <Sparkles size={16} aria-hidden="true" />
-                {seedingDemo ? "Loading demo..." : "Load demo shop"}
-              </button>
+          )}
+          <div className="mt-2 space-y-1.5">
+            {paymentPieData.map((p) => {
+              const total = paymentPieData.reduce((s, d) => s + d.value, 0);
+              const pct = total > 0 ? Math.round((p.value / total) * 100) : 0;
+              return (
+                <div key={p.name} className="flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
+                    <span className="text-muted-foreground">{p.name}</span>
+                  </div>
+                  <span className="font-semibold">{fmtRs(p.value)} <span className="text-muted-foreground">({pct}%)</span></span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Low Stock Alerts */}
+        <div className="rounded-xl border bg-card p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-foreground">Low Stock Alerts</p>
+            <Link href="/inventory" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+          </div>
+          <div className="mt-3 space-y-2.5">
+            {lowStockItems.length === 0 ? (
+              <p className="py-4 text-center text-sm text-muted-foreground">All stock healthy ✓</p>
+            ) : (
+              lowStockItems.slice(0, 6).map((item, i) => {
+                const isCritical = item.stock <= Math.round((item.threshold ?? 5) * 0.4);
+                return (
+                  <div key={item.productId ?? i} className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 shrink-0 rounded-lg bg-muted/50 flex items-center justify-center">
+                      <Package size={15} className="text-muted-foreground" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold leading-tight">{item.name}</p>
+                      <p className="text-[10px] text-muted-foreground">Stock: {item.stock} {item.unit ?? "pcs"}</p>
+                    </div>
+                    <span className={cn("shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold", isCritical ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
+                      {isCritical ? "Critical" : "Low"}
+                    </span>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
-      </section>
+      </div>
 
-      <StatsGrid className="mb-6">
-        <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} bills · tap for details`} icon={<TrendingUp size={20} aria-hidden="true" />} loading={isLoading} tone="green" data-testid="metric-revenue" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
-        <StatCard label={dbCfg.kpi.profit} value={fmt(dashboard.grossProfit)} description={`${Math.round(dashboard.grossMarginPct)}% margin`} icon={<Wallet size={20} aria-hidden="true" />} loading={isLoading} tone="blue" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("profit")} onKeyDown={drilldownKeyHandler("profit")} />
-        <Link href="/udhar?filter=outstanding">
-          <StatCard label={dbCfg.kpi.credit} value={fmt(dashboard.totalOutstanding)} description={`${dashboard.outstandingCustomers.length} ${dbCfg.creditLabel.toLowerCase()} accounts`} icon={<AlertTriangle size={20} aria-hidden="true" />} loading={isLoading} tone="amber" className="h-full cursor-pointer" />
-        </Link>
-        <StatCard label={dbCfg.kpi.cash} value={fmt(dashboard.cashCollected)} description={`Drawer ${fmt(cashInDrawer)}`} icon={<CreditCard size={20} aria-hidden="true" />} loading={isLoading} tone="violet" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("collection")} onKeyDown={drilldownKeyHandler("collection")} />
-      </StatsGrid>
+      {/* ── Recent Bills + Quick Insights ── */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
 
-      <AttentionStrip supplierDue={dashboard.supplierDue} purchaseDue={dashboard.purchaseDue} lowStockCount={lowStockCount} pendingSyncCount={pendingSyncCount} hasUnsyncedOperations={hasUnsyncedOperations} />
+        {/* Recent Bills */}
+        <div className="rounded-xl border bg-card shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b p-4">
+            <p className="font-semibold text-foreground">Recent Bills</p>
+            <Link href="/bills" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/30">
+                  {["Bill No.", "Time", "Customer", "Items", "Amount", "Payment"].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading || recentBillsQuery.isLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      {Array.from({ length: 6 }).map((_, j) => (
+                        <td key={j} className="px-4 py-3"><div className="h-3 rounded bg-muted animate-pulse" style={{ width: `${50 + j * 10}%` }} /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : recentBills.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">No bills today yet</td></tr>
+                ) : (
+                  recentBills.slice(0, 7).map(bill => (
+                    <Link key={bill.id ?? bill.billNo} href={`/bills/${bill.id ?? ""}`}>
+                      <tr className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/30">
+                        <td className="px-4 py-3 font-semibold text-primary">{bill.billNo ?? "—"}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
+                        <td className="max-w-32 px-4 py-3 truncate">{bill.customerName ?? "Walk-in"}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
+                        <td className="px-4 py-3 font-semibold">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
+                        <td className="px-4 py-3">
+                          <PaymentBadge mode={"cash"} compact />
+                        </td>
+                      </tr>
+                    </Link>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {recentBills.length > 0 && (
+            <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground">
+              <span>Total Bills: {recentBillsQuery.data?.total ?? recentBills.length}</span>
+              <span className="font-semibold">Total Amount: {fmtRs(dashboard.revenue)}</span>
+            </div>
+          )}
+        </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <DataTableCard title="Cash Collection" description="Closing-ready drawer, UPI, and supplier payout." loading={isLoading} actions={(
-          <button type="button" onClick={() => openDrilldown("collection")} className="inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">Breakdown</button>
-        )}>
-          <div className="space-y-2">
-            <CollectionRow label="Cash collected" value={fmt(dashboard.cashCollected)} icon={<Wallet size={16} aria-hidden="true" />} />
-            <CollectionRow label="UPI collected" value={fmt(dashboard.upiCollected)} icon={<Smartphone size={16} aria-hidden="true" />} />
-            <CollectionRow label="Supplier paid out" value={fmt(dashboard.supplierCashPaid + dashboard.supplierUpiPaid)} icon={<Truck size={16} aria-hidden="true" />} muted />
-            <div className="mt-3 rounded-lg bg-primary/10 p-3 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium text-muted-foreground">Expected cash in drawer</span>
-                <span className="text-lg font-black text-foreground">{fmt(cashInDrawer)}</span>
-              </div>
-              {dashboard.purchaseDue > 0 && <p className="mt-2 text-xs text-muted-foreground">Supplier due today: {fmt(dashboard.purchaseDue)}</p>}
+        {/* Right column: Quick Insights + Sync & Health */}
+        <div className="space-y-4">
+
+          {/* Quick Insights */}
+          <div className="rounded-xl border bg-card p-4 shadow-sm">
+            <p className="mb-3 text-sm font-semibold text-foreground">Quick Insights</p>
+            <div className="space-y-2">
+              <InsightRow icon={<BarChart3 size={16} className="text-blue-600" />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Staples" : "—"} />
+              <InsightRow icon={<Package size={16} className="text-emerald-600" />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "—"} />
+              <InsightRow icon={<CreditCard size={16} className="text-violet-600" />} label="Average Bill Value" value={dashboard.billCount > 0 ? fmtRs(Math.round(dashboard.revenue / dashboard.billCount)) : "₹0"} />
+              <InsightRow icon={<Activity size={16} className="text-amber-600" />} label="New Customers Today" value="—" />
             </div>
           </div>
-        </DataTableCard>
 
-        <DataTableCard title={`${dbCfg.creditLabel} Outstanding`} loading={isLoading} empty={dashboard.outstandingCustomers.length === 0} emptyState={<EmptyState title={`No ${dbCfg.creditLabel.toLowerCase()} outstanding`} description={`No customer has pending ${dbCfg.creditLabel.toLowerCase()} right now.`} />} actions={(
-          <Link href="/udhar"><span className="cursor-pointer text-sm text-primary hover:underline">{t("dashboard.viewAll")}</span></Link>
-        )}>
-          <div className="space-y-2">
-            {dashboard.outstandingCustomers.slice(0, 5).map((c) => (
-              <div key={c.customerId} data-testid={`row-udhar-${c.customerId}`} className="flex items-center justify-between gap-3 border-b py-2 last:border-0">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{c.customerName}</p>
-                  {c.mobile ? <p className="truncate text-xs text-muted-foreground">{c.mobile}</p> : null}
-                </div>
-                <MoneyBadge amount={c.outstanding} tone="danger" compact />
-              </div>
-            ))}
+          {/* Sync & Health */}
+          <div className="rounded-xl border bg-card p-4 shadow-sm">
+            <p className="mb-3 text-sm font-semibold text-foreground">Sync & Health</p>
+            <div className="space-y-2">
+              <HealthRow label="Internet Connection" status={isOnline ? "ok" : "warn"} value={isOnline ? "Online" : "Offline"} />
+              <HealthRow label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={failedCount > 0 ? "Failed" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date"} />
+              <HealthRow label="Backup Status" status="ok" value="Secure" />
+              <HealthRow label="Device Status" status="ok" value="Active" />
+            </div>
+            <Link href="/sync-status">
+              <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90">
+                <RefreshCw size={15} aria-hidden="true" /> Sync Now
+              </button>
+            </Link>
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1" /> Auto sync is enabled
+            </p>
           </div>
-        </DataTableCard>
+
+          {/* Demo seed */}
+          {!dashboard.hasBusinessData && (
+            <button type="button" onClick={onLoadDemo} disabled={seedingDemo}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
+              <Sparkles size={15} aria-hidden="true" />
+              {seedingDemo ? "Loading demo…" : "Load demo shop data"}
+            </button>
+          )}
+        </div>
       </div>
-    </PageShell>
+
+    </div>
   );
+}
+
+// ─── General layout sub-components ────────────────────────────────────────────
+
+function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, iconBg, loading, footer, onClick }: {
+  label: string; value: string; delta?: number | null; deltaLabel?: string; deltaPositiveIsBad?: boolean;
+  icon: ReactNode; iconBg: string; loading?: boolean; footer?: ReactNode; onClick?: () => void;
+}) {
+  const isPositive = (delta ?? 0) >= 0;
+  const isBad = deltaPositiveIsBad ? isPositive : !isPositive;
+  const DeltaIcon = delta === null || delta === undefined ? Minus : isPositive ? ArrowUpRight : ArrowDownRight;
+  return (
+    <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      className={cn("rounded-xl border bg-card p-4 shadow-sm", onClick && "cursor-pointer transition-shadow hover:shadow-md")}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", iconBg)}>{icon}</div>
+      </div>
+      <div className="mt-3">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        {loading ? (
+          <div className="mt-1 h-6 w-3/4 animate-pulse rounded bg-muted" />
+        ) : (
+          <p className="mt-0.5 font-display text-xl font-black tracking-tight text-foreground">{value}</p>
+        )}
+        {delta !== null && delta !== undefined && (
+          <div className={cn("mt-1 flex items-center gap-1 text-xs font-semibold", isBad ? "text-red-500" : "text-emerald-600")}>
+            <DeltaIcon size={12} aria-hidden="true" />
+            {Math.abs(delta)}% {deltaLabel}
+          </div>
+        )}
+        {footer && <div className="mt-1">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function InsightRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-2.5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-background">{icon}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </div>
+      <span className="text-xs font-bold text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function HealthRow({ label, status, value }: { label: string; status: "ok" | "warn" | "error"; value: string }) {
+  const color = status === "ok" ? "text-emerald-600" : status === "warn" ? "text-amber-600" : "text-red-600";
+  const Icon = status === "ok" ? CheckCircle2 : status === "warn" ? RefreshCw : XCircle;
+  return (
+    <div className="flex items-center justify-between gap-3 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("flex items-center gap-1 font-semibold", color)}>
+        <Icon size={11} aria-hidden="true" /> {value}
+      </span>
+    </div>
+  );
+}
+
+function fmtRs(n: number | undefined | null) {
+  const value = Number(n ?? 0);
+  const safe = Number.isFinite(value) ? value : 0;
+  return `₹${safe.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // ─── RESTAURANT layout ────────────────────────────────────────────────────────

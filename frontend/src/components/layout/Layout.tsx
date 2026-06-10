@@ -12,31 +12,566 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useOfflineStatus } from "@/features/sync";
 import {
-  BookOpen,
-  CalendarCheck,
+  ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowUpFromLine,
+  BarChart3,
+  Bell,
+  ChevronDown,
+  ChevronRight,
   Cloud,
-  FileText,
+  FolderOpen,
   LayoutDashboard,
   LogOut,
+  MessageCircle,
   Package,
-  PanelLeftClose,
-  PanelLeftOpen,
+  PercentSquare,
   ReceiptText,
+  RefreshCw,
+  Search,
   Settings,
-  ShieldCheck,
+  ShoppingBag,
   ShoppingCart,
+  SlidersHorizontal,
+  Tag,
+  TrendingUp,
   Truck,
   Users,
+  Wallet,
   Wifi,
   WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/features/subscription";
-import { StatusBadge } from "@/components/shared";
 import { useAppLanguage } from "@/features/settings/i18n";
 import { useBusinessType } from "@/features/settings/business-types";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
 import { getApiBaseUrl } from "@/lib/api/http";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+// ── constants ─────────────────────────────────────────────────────────────────
+
+const SIDEBAR_WIDTH_KEY = "kirana:sidebar-width-v2";
+const SIDEBAR_COLLAPSED_KEY = "kirana:sidebar-collapsed-v2";
+const SIDEBAR_GROUPS_KEY = "kirana:sidebar-groups-v2";
+const DEFAULT_WIDTH = 260;
+const MIN_WIDTH = 220;
+const MAX_WIDTH = 320;
+const COLLAPSED_WIDTH = 72;
+
+// ── page title map ────────────────────────────────────────────────────────────
+
+const PAGE_TITLES: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/billing": "Billing",
+  "/bills": "Bills History",
+  "/products": "Products",
+  "/inventory": "Inventory",
+  "/purchase-bills": "Purchases",
+  "/customers": "Customers / Udhar",
+  "/udhar": "Udhar",
+  "/reports": "Reports",
+  "/daily-closing": "Daily Closing",
+  "/expenses": "Expenses",
+  "/offers": "Offers & Discounts",
+  "/settings": "Settings",
+  "/sync-status": "Cloud Backup",
+  "/staff": "Staff",
+  "/devices": "Devices",
+  "/audit-logs": "Audit Logs",
+  "/plans": "Plans",
+  "/subscription": "Subscription",
+};
+
+function getPageTitle(loc: string): string {
+  if (PAGE_TITLES[loc]) return PAGE_TITLES[loc];
+  const match = Object.keys(PAGE_TITLES).find(k => k !== "/dashboard" && loc.startsWith(k + "/"));
+  return match ? PAGE_TITLES[match] : "KiranaOS";
+}
+
+// ── nav data ──────────────────────────────────────────────────────────────────
+
+type SubItem = { href: string; label: string };
+
+interface LinkItem {
+  kind: "link";
+  href: string;
+  label: string;
+  Icon: React.ElementType;
+  badge?: string;
+  emphasis?: boolean;
+}
+
+interface GroupItem {
+  kind: "group";
+  id: string;
+  label: string;
+  Icon: React.ElementType;
+  triggerPaths: string[];
+  children: SubItem[];
+}
+
+type NavItem = LinkItem | GroupItem;
+
+const NAV: NavItem[] = [
+  { kind: "link", href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+  { kind: "link", href: "/billing", label: "Billing", Icon: ShoppingCart, badge: "F2", emphasis: true },
+  {
+    kind: "group", id: "inventory", label: "Inventory", Icon: Package,
+    triggerPaths: ["/products", "/inventory"],
+    children: [
+      { href: "/products", label: "Products" },
+      { href: "/inventory", label: "Stock Overview" },
+      { href: "/inventory/stock-in", label: "Stock In" },
+      { href: "/inventory/stock-out", label: "Stock Out" },
+      { href: "/inventory/adjustments", label: "Adjustments" },
+      { href: "/inventory/stock-transfers", label: "Stock Transfers" },
+    ],
+  },
+  { kind: "link", href: "/customers", label: "Customers / Udhar", Icon: Users },
+  { kind: "link", href: "/purchase-bills", label: "Purchases", Icon: Truck },
+  {
+    kind: "group", id: "sales", label: "Sales", Icon: TrendingUp,
+    triggerPaths: ["/bills"],
+    children: [
+      { href: "/bills", label: "Bills History" },
+      { href: "/reports", label: "Sales Overview" },
+    ],
+  },
+  { kind: "link", href: "/reports", label: "Reports", Icon: BarChart3 },
+  { kind: "link", href: "/expenses", label: "Expenses", Icon: Wallet },
+  { kind: "link", href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
+  { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
+];
+
+const MOBILE_NAV: { href: string; label: string; Icon: React.ElementType }[] = [
+  { href: "/billing", label: "Billing", Icon: ShoppingCart },
+  { href: "/products", label: "Products", Icon: Package },
+  { href: "/customers", label: "Customers", Icon: Users },
+  { href: "/reports", label: "Reports", Icon: BarChart3 },
+  { href: "/dashboard", label: "More", Icon: LayoutDashboard },
+];
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+function readLS(key: string, fallback: string) {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+function writeLS(key: string, val: string) {
+  try { localStorage.setItem(key, val); } catch { /* ignored */ }
+}
+function clampW(w: number) {
+  return Number.isFinite(w) ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(w))) : DEFAULT_WIDTH;
+}
+function isActive(loc: string, href: string) {
+  return loc === href || (href !== "/dashboard" && loc.startsWith(href + "/"));
+}
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map(s => s[0] ?? "").join("").toUpperCase() || "O";
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+
+export function Layout({ children }: { children: ReactNode }) {
+  const { user, logout } = useAuth();
+  const [loc] = useLocation();
+  const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
+  const { snapshot } = useSubscriptionSnapshot();
+  const { def: btDef } = useBusinessType();
+  const { t } = useAppLanguage();
+
+  const attentionCount = pendingCount + failedCount + conflictCount;
+
+  const [sidebarWidth, setSidebarWidth] = useState(() => clampW(Number(readLS(SIDEBAR_WIDTH_KEY, String(DEFAULT_WIDTH)))));
+  const [collapsed, setCollapsed] = useState(() => readLS(SIDEBAR_COLLAPSED_KEY, "false") === "true");
+  const [isResizing, setIsResizing] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(readLS(SIDEBAR_GROUPS_KEY, "[]")) as string[]); }
+    catch { return new Set<string>(); }
+  });
+
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const liveW = useRef(sidebarWidth);
+
+  const desktopW = collapsed ? COLLAPSED_WIDTH : sidebarWidth;
+  const shellStyle = useMemo(() => ({ "--app-sidebar-width": `${desktopW}px` }) as CSSProperties, [desktopW]);
+
+  // auto-expand groups when child route is active
+  useEffect(() => {
+    NAV.forEach(item => {
+      if (item.kind !== "group") return;
+      const hit = item.triggerPaths.some(p => isActive(loc, p)) || item.children.some(c => isActive(loc, c.href));
+      if (hit) setExpandedGroups(prev => { const n = new Set(prev); n.add(item.id); return n; });
+    });
+  }, [loc]);
+
+  useEffect(() => { liveW.current = sidebarWidth; writeLS(SIDEBAR_WIDTH_KEY, String(sidebarWidth)); }, [sidebarWidth]);
+  useEffect(() => { writeLS(SIDEBAR_COLLAPSED_KEY, String(collapsed)); }, [collapsed]);
+  useEffect(() => { writeLS(SIDEBAR_GROUPS_KEY, JSON.stringify([...expandedGroups])); }, [expandedGroups]);
+  useEffect(() => () => { if (frameRef.current !== null) cancelAnimationFrame(frameRef.current); }, []);
+
+  const toggleGroup = useCallback((id: string) => {
+    setExpandedGroups(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }, []);
+
+  const handleResize = useCallback((e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (collapsed) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const startX = e.clientX; const startW = sidebarWidth;
+    const prevCursor = document.body.style.cursor; const prevSel = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize"; document.body.style.userSelect = "none";
+    setIsResizing(true);
+    const writeW = (w: number) => {
+      liveW.current = w;
+      if (frameRef.current !== null) return;
+      frameRef.current = requestAnimationFrame(() => { frameRef.current = null; shellRef.current?.style.setProperty("--app-sidebar-width", `${liveW.current}px`); });
+    };
+    const onMove = (ev: PointerEvent) => writeW(clampW(startW + ev.clientX - startX));
+    const onUp = () => {
+      if (frameRef.current !== null) { cancelAnimationFrame(frameRef.current); frameRef.current = null; }
+      shellRef.current?.style.setProperty("--app-sidebar-width", `${liveW.current}px`);
+      setSidebarWidth(liveW.current); setIsResizing(false);
+      document.body.style.cursor = prevCursor; document.body.style.userSelect = prevSel;
+      window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }, [collapsed, sidebarWidth]);
+
+  const storeName = user?.name ?? "My Store";
+
+  // apply business-type nav label overrides
+  const labelOverrides: Record<string, string> = {
+    "/billing": btDef.navConfig.billing,
+    "/products": btDef.navConfig.products,
+    "/inventory": btDef.navConfig.inventory,
+    "/customers": btDef.navConfig.udhar,
+  };
+
+  return (
+    <div ref={shellRef} className="app-shell min-h-screen bg-background text-foreground lg:h-screen lg:overflow-hidden" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
+
+      {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl will-change-[width] lg:flex lg:h-screen lg:flex-col",
+          isResizing ? "transition-none" : "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        )}
+        style={{ width: "var(--app-sidebar-width)" }}
+      >
+        {/* resize handle */}
+        <button type="button" aria-label="Resize sidebar" disabled={collapsed} onPointerDown={handleResize}
+          className={cn("absolute inset-y-0 right-0 z-20 w-3 translate-x-1/2 cursor-col-resize transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", collapsed ? "pointer-events-none opacity-0" : "opacity-0 hover:opacity-100 focus-visible:opacity-100")}>
+          <span className="mx-auto block h-full w-1 rounded-full bg-sidebar-primary/35" />
+        </button>
+
+        {/* Logo */}
+        <div className={cn("flex items-center border-b border-sidebar-border", collapsed ? "flex-col gap-3 p-3" : "gap-3 p-4")}>
+          <Link href="/dashboard" className="flex shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-white shadow-lg ring-2 ring-white/15">
+              <ShoppingCart size={20} aria-hidden="true" />
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <div className="font-display text-lg font-black leading-none tracking-tight text-white">KiranaOS</div>
+                <div className="mt-0.5 text-[10px] font-medium leading-none text-sidebar-foreground/50">{btDef.navConfig.tagline}</div>
+              </div>
+            )}
+          </Link>
+          {!collapsed && (
+            <button type="button" aria-label="Collapse sidebar" onClick={() => setCollapsed(true)}
+              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/40 hover:bg-white/10 hover:text-white transition-colors">
+              <ChevronRight size={14} className="rotate-180" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+
+        {/* Nav */}
+        <nav aria-label="Main navigation" className={cn("flex-1 overflow-y-auto py-3", collapsed ? "space-y-1 px-2" : "space-y-0.5 px-3")}>
+          {NAV.map(item =>
+            item.kind === "link"
+              ? <SidebarLink key={item.href} item={item} loc={loc} collapsed={collapsed} labelOverride={labelOverrides[item.href]} />
+              : <SidebarGroup key={item.id} item={item} loc={loc} collapsed={collapsed} expanded={expandedGroups.has(item.id)} onToggle={() => toggleGroup(item.id)} labelOverrides={labelOverrides} />
+          )}
+        </nav>
+
+        {/* Footer */}
+        <div className={cn("border-t border-sidebar-border", collapsed ? "p-2 space-y-1.5" : "p-3 space-y-2")}>
+          {collapsed ? (
+            <>
+              <button type="button" onClick={() => setCollapsed(false)} aria-label="Expand sidebar"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/50 hover:bg-white/10 hover:text-white transition-colors">
+                <ChevronRight size={16} aria-hidden="true" />
+              </button>
+              <button type="button" onClick={logout} aria-label="Logout"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-sidebar-foreground/50 hover:bg-white/10 hover:text-white transition-colors">
+                <LogOut size={16} aria-hidden="true" />
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Sync status */}
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center gap-2">
+                  <span className={cn("h-2 w-2 shrink-0 rounded-full animate-pulse", isOnline ? "bg-emerald-400 animation-none" : "bg-amber-400")} style={isOnline ? { animation: "none" } : undefined} />
+                  <span className="text-sm font-semibold text-white">
+                    {isOnline ? (isSyncing ? "Syncing…" : "Synced") : "Offline safe"}
+                  </span>
+                  {attentionCount > 0 && <span className="ml-auto text-[11px] font-bold text-amber-300">{attentionCount}</span>}
+                </div>
+                <p className="mt-1 text-[11px] text-sidebar-foreground/50">{isOnline ? "Last synced just now" : "Your data is safe on this device"}</p>
+                <Link href="/sync-status" className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-sidebar-primary hover:text-white transition-colors">
+                  <RefreshCw size={10} aria-hidden="true" /> Sync Now
+                </Link>
+              </div>
+
+              {/* Help */}
+              <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/55 transition-colors hover:bg-white/8 hover:text-white">
+                <MessageCircle size={15} aria-hidden="true" />
+                <div className="text-left">
+                  <div className="text-xs font-semibold leading-none">Need help?</div>
+                  <div className="mt-0.5 text-[10px] leading-none opacity-70">Chat with support</div>
+                </div>
+              </button>
+
+              {/* Store + logout */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-white/8">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-white">
+                      {initials(storeName)}
+                    </div>
+                    <div className="min-w-0 flex-1 text-left">
+                      <div className="truncate text-sm font-semibold text-white">{storeName}</div>
+                      <div className="truncate text-[10px] text-sidebar-foreground/50">{user?.email ?? "Owner"}</div>
+                    </div>
+                    <ChevronDown size={13} className="shrink-0 text-sidebar-foreground/40" aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="start" className="w-52">
+                  <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                    <LogOut size={14} className="mr-2" aria-hidden="true" /> Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+        </div>
+      </aside>
+
+      {/* ── Main wrapper ────────────────────────────────────────────────────── */}
+      <div
+        className={cn(
+          "flex min-h-screen min-w-0 flex-1 flex-col will-change-[margin-left] lg:ml-[var(--app-sidebar-width)] lg:h-screen lg:min-h-0 lg:overflow-hidden",
+          isResizing ? "transition-none" : "transition-[margin-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        )}
+      >
+        {/* Desktop topbar */}
+        <header className="sticky top-0 z-40 hidden h-14 items-center gap-4 border-b border-border bg-background/95 px-5 backdrop-blur lg:flex">
+          <h1 className="min-w-0 flex-1 text-base font-bold text-foreground">{getPageTitle(loc)}</h1>
+
+          <div className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold",
+            isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-emerald-500" : "bg-amber-500")} />
+            {isOnline ? (isSyncing ? "Syncing…" : "Synced") : "Offline"}
+            {isOnline && !isSyncing && <span className="opacity-60">· Just now</span>}
+          </div>
+
+          <div className="hidden w-64 items-center gap-2 rounded-lg border bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-background xl:flex">
+            <Search size={14} aria-hidden="true" />
+            <span className="flex-1 truncate">Search products, bills, customers…</span>
+            <kbd className="rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+          </div>
+
+          <button type="button" aria-label="Notifications"
+            className="relative flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
+            <Bell size={17} aria-hidden="true" />
+            {attentionCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
+                {attentionCount}
+              </span>
+            )}
+          </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 rounded-lg border bg-background px-2.5 py-1.5 text-sm transition-colors hover:border-primary/40">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+                  {initials(storeName)}
+                </div>
+                <div className="hidden text-left xl:block">
+                  <div className="text-xs font-bold leading-tight">{storeName}</div>
+                  {user?.email && <div className="text-[10px] leading-tight text-muted-foreground">{user.email.split("@")[0]}</div>}
+                </div>
+                <ChevronDown size={13} className="text-muted-foreground" aria-hidden="true" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
+              <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                <LogOut size={14} className="mr-2" aria-hidden="true" /> Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
+
+        {/* Mobile topbar */}
+        <header className="sticky top-0 z-40 border-b bg-card/95 px-4 py-3 backdrop-blur lg:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/dashboard" className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow">
+                <ShoppingCart size={17} aria-hidden="true" />
+              </div>
+              <span className="font-display text-lg font-black tracking-tight">KiranaOS</span>
+            </Link>
+            <div className="flex items-center gap-2">
+              <div className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
+                isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
+                <span className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-emerald-500" : "bg-amber-500")} />
+                {isOnline ? "Synced" : "Offline"}
+              </div>
+              {snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+            </div>
+          </div>
+        </header>
+
+        <SubscriptionStatusBanner />
+        {backendStatus.browserOnline && !backendStatus.backendReachable && backendStatus.checkedAt && (
+          <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
+        )}
+
+        <main id="main-content" className="min-w-0 flex-1 overflow-auto pb-20 lg:pb-0">
+          {children}
+        </main>
+
+        {/* Mobile bottom nav */}
+        <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur lg:hidden">
+          <div className="grid grid-cols-5">
+            {MOBILE_NAV.map(({ href, label, Icon }) => {
+              const active = isActive(loc, href);
+              return (
+                <Link key={href} href={href}>
+                  <div className={cn("flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>
+                    <div className={cn("flex h-8 w-8 items-center justify-center rounded-xl transition-colors", active && "bg-primary/10")}>
+                      <Icon size={20} aria-hidden="true" />
+                    </div>
+                    {label}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
+
+      <VoiceAssistant />
+    </div>
+  );
+}
+
+// ── Sidebar nav components ────────────────────────────────────────────────────
+
+function SidebarLink({ item, loc, collapsed, labelOverride }: {
+  item: LinkItem; loc: string; collapsed: boolean; labelOverride?: string;
+}) {
+  const active = isActive(loc, item.href);
+  const label = labelOverride ?? item.label;
+  return (
+    <Link href={item.href}>
+      <div
+        role="menuitem"
+        aria-current={active ? "page" : undefined}
+        title={collapsed ? label : undefined}
+        className={cn(
+          "group flex min-h-[42px] items-center rounded-lg text-sm font-medium transition-all duration-150",
+          collapsed ? "justify-center px-0" : "gap-3 px-3",
+          active
+            ? "bg-sidebar-primary text-white shadow-md shadow-sidebar-primary/30"
+            : item.emphasis
+              ? "text-white/90 hover:bg-white/10 hover:text-white"
+              : "text-sidebar-foreground/70 hover:bg-white/8 hover:text-white"
+        )}
+      >
+        <item.Icon size={17} aria-hidden="true" />
+        {!collapsed && (
+          <>
+            <span className="flex-1 truncate">{label}</span>
+            {item.badge && !active && (
+              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-sidebar-foreground/50">
+                {item.badge}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides }: {
+  item: GroupItem; loc: string; collapsed: boolean; expanded: boolean; onToggle: () => void; labelOverrides: Record<string, string>;
+}) {
+  const groupActive = item.triggerPaths.some(p => isActive(loc, p)) || item.children.some(c => isActive(loc, c.href));
+
+  if (collapsed) {
+    const firstHref = item.triggerPaths[0] ?? item.children[0]?.href ?? "#";
+    return (
+      <Link href={firstHref}>
+        <div title={item.label}
+          className={cn("flex h-[42px] items-center justify-center rounded-lg transition-all duration-150",
+            groupActive ? "bg-sidebar-primary text-white shadow-md shadow-sidebar-primary/30" : "text-sidebar-foreground/70 hover:bg-white/8 hover:text-white")}>
+          <item.Icon size={17} aria-hidden="true" />
+        </div>
+      </Link>
+    );
+  }
+
+  return (
+    <div>
+      <button type="button" onClick={onToggle}
+        className={cn("group flex min-h-[42px] w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-150",
+          groupActive ? "bg-white/10 text-white" : "text-sidebar-foreground/70 hover:bg-white/8 hover:text-white")}>
+        <item.Icon size={17} aria-hidden="true" />
+        <span className="flex-1 truncate text-left">{item.label}</span>
+        <ChevronDown size={13} aria-hidden="true"
+          className={cn("shrink-0 text-sidebar-foreground/35 transition-transform duration-200", expanded && "rotate-180")} />
+      </button>
+
+      {expanded && (
+        <div className="mt-0.5 mb-1 space-y-0.5 pl-[42px]">
+          {item.children.map(child => {
+            const active = isActive(loc, child.href);
+            const label = labelOverrides[child.href] ?? child.label;
+            return (
+              <Link key={child.href} href={child.href}>
+                <div aria-current={active ? "page" : undefined}
+                  className={cn("flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                    active ? "bg-sidebar-primary text-white" : "text-sidebar-foreground/55 hover:bg-white/8 hover:text-white")}>
+                  <span className={cn("text-[8px]", active ? "text-white" : "text-sidebar-foreground/30")}>●</span>
+                  {label}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
   const isLocalhost = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
@@ -44,382 +579,9 @@ function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
     <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
       <WifiOff size={15} className="shrink-0 text-amber-600" aria-hidden="true" />
       <span className="flex-1 leading-tight">
-        {isLocalhost
-          ? "Backend is set to localhost — not accessible on this device. "
-          : "Backend server is not reachable. "}
-        <Link href="/sync-status" className="font-semibold underline underline-offset-2">
-          Fix Server URL →
-        </Link>
+        {isLocalhost ? "Backend is set to localhost — not accessible on this device. " : "Backend server is not reachable. "}
+        <Link href="/sync-status" className="font-semibold underline underline-offset-2">Fix Server URL →</Link>
       </span>
     </div>
-  );
-}
-
-const dailyLinks = [
-  { href: "/dashboard", key: "nav.dashboard", icon: LayoutDashboard },
-  { href: "/billing", key: "nav.billing", icon: ShoppingCart, emphasis: true },
-  { href: "/bills", key: "nav.bills", icon: ReceiptText },
-  { href: "/products", key: "nav.products", icon: Package },
-  { href: "/inventory", key: "nav.inventory", icon: BookOpen },
-  { href: "/purchase-bills", label: "Purchases", icon: Truck },
-  { href: "/customers", key: "nav.customers", icon: Users },
-  { href: "/udhar", key: "nav.udhar", icon: FileText },
-] as const;
-
-const businessLinks = [
-  { href: "/reports", key: "nav.reports", icon: FileText },
-  { href: "/daily-closing", key: "nav.closing", icon: CalendarCheck },
-] as const;
-
-const adminLinks = [
-  { href: "/sync-status", label: "Cloud Backup", icon: Cloud },
-  { href: "/settings", key: "nav.settings", icon: Settings },
-] as const;
-
-const mobileLinks = [...dailyLinks, ...businessLinks, ...adminLinks] as const;
-
-const SIDEBAR_WIDTH_STORAGE_KEY = "kirana:desktop-sidebar-width";
-const SIDEBAR_COLLAPSED_STORAGE_KEY = "kirana:desktop-sidebar-collapsed";
-const SIDEBAR_DEFAULT_WIDTH = 288;
-const SIDEBAR_MIN_WIDTH = 236;
-const SIDEBAR_MAX_WIDTH = 348;
-const SIDEBAR_COLLAPSED_WIDTH = 84;
-
-function isActiveLink(location: string, href: string) {
-  return location === href || (href !== "/dashboard" && location.startsWith(`${href}/`));
-}
-
-function clampSidebarWidth(width: number) {
-  if (!Number.isFinite(width)) return SIDEBAR_DEFAULT_WIDTH;
-  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
-}
-
-function readStoredSidebarWidth() {
-  if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
-  try {
-    const stored = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
-    return stored ? clampSidebarWidth(Number(stored)) : SIDEBAR_DEFAULT_WIDTH;
-  } catch {
-    return SIDEBAR_DEFAULT_WIDTH;
-  }
-}
-
-function readStoredSidebarCollapsed() {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-export function Layout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
-  const [location] = useLocation();
-  const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
-  const { snapshot } = useSubscriptionSnapshot();
-  const { t } = useAppLanguage();
-  const { def: btDef } = useBusinessType();
-  const navLabelOverrides: Record<string, string> = {
-    "/billing":   btDef.navConfig.billing,
-    "/products":  btDef.navConfig.products,
-    "/inventory": btDef.navConfig.inventory,
-    "/udhar":     btDef.navConfig.udhar,
-  };
-  const attentionCount = pendingCount + failedCount + conflictCount;
-  const [sidebarWidth, setSidebarWidth] = useState(readStoredSidebarWidth);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(readStoredSidebarCollapsed);
-  const [isSidebarResizing, setIsSidebarResizing] = useState(false);
-  const shellRef = useRef<HTMLDivElement | null>(null);
-  const resizeFrameRef = useRef<number | null>(null);
-  const liveSidebarWidthRef = useRef(sidebarWidth);
-  const desktopSidebarWidth = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth;
-  const shellStyle = useMemo(
-    () => ({ "--app-sidebar-width": `${desktopSidebarWidth}px` }) as CSSProperties,
-    [desktopSidebarWidth],
-  );
-
-  useEffect(() => {
-    liveSidebarWidthRef.current = sidebarWidth;
-    try {
-      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
-    } catch {
-      // Local storage is only a preference; layout remains usable without it.
-    }
-  }, [sidebarWidth]);
-
-  useEffect(() => {
-    return () => {
-      if (resizeFrameRef.current !== null) window.cancelAnimationFrame(resizeFrameRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(sidebarCollapsed));
-    } catch {
-      // Ignore preference persistence errors.
-    }
-  }, [sidebarCollapsed]);
-
-  const handleSidebarResize = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (sidebarCollapsed) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-
-    const startX = event.clientX;
-    const startWidth = sidebarWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    setIsSidebarResizing(true);
-
-    const writeSidebarWidth = (width: number) => {
-      liveSidebarWidthRef.current = width;
-      if (resizeFrameRef.current !== null) return;
-      resizeFrameRef.current = window.requestAnimationFrame(() => {
-        resizeFrameRef.current = null;
-        shellRef.current?.style.setProperty("--app-sidebar-width", `${liveSidebarWidthRef.current}px`);
-      });
-    };
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      writeSidebarWidth(clampSidebarWidth(startWidth + moveEvent.clientX - startX));
-    };
-
-    const handlePointerUp = () => {
-      if (resizeFrameRef.current !== null) {
-        window.cancelAnimationFrame(resizeFrameRef.current);
-        resizeFrameRef.current = null;
-      }
-      const nextWidth = liveSidebarWidthRef.current;
-      shellRef.current?.style.setProperty("--app-sidebar-width", `${nextWidth}px`);
-      setSidebarWidth(nextWidth);
-      setIsSidebarResizing(false);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp, { once: true });
-  }, [sidebarCollapsed, sidebarWidth]);
-
-  return (
-    <div
-      ref={shellRef}
-      className="app-shell min-h-screen bg-background text-foreground lg:h-screen lg:overflow-hidden"
-      style={shellStyle}
-      data-sidebar-resizing={isSidebarResizing ? "true" : undefined}
-    >
-      <aside
-        className={`fixed inset-y-0 left-0 z-30 hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl will-change-[width] lg:flex lg:h-screen lg:flex-col ${
-          isSidebarResizing
-            ? "transition-none"
-            : "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-        }`}
-        style={{ width: "var(--app-sidebar-width)" }}
-      >
-        <button
-          type="button"
-          aria-label="Resize sidebar"
-          title="Resize sidebar"
-          disabled={sidebarCollapsed}
-          onPointerDown={handleSidebarResize}
-          className={`absolute inset-y-0 right-0 z-20 w-3 translate-x-1/2 cursor-col-resize transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${
-            sidebarCollapsed ? "pointer-events-none opacity-0" : "opacity-0 hover:opacity-100 focus-visible:opacity-100"
-          }`}
-        >
-          <span className="mx-auto block h-full w-1 rounded-full bg-sidebar-primary/55" />
-        </button>
-
-        <div className={`border-b border-sidebar-border ${sidebarCollapsed ? "p-3" : "p-4"}`}>
-          <div className={`flex gap-3 ${sidebarCollapsed ? "flex-col items-center" : "items-start justify-between"}`}>
-            <Link href="/dashboard" className={`group flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${sidebarCollapsed ? "justify-center" : ""}`}>
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md ring-1 ring-white/10">
-                <ShoppingCart size={23} aria-hidden="true" />
-              </div>
-              <div
-                className={`min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-200 ease-out ${
-                  sidebarCollapsed ? "max-w-0 -translate-x-1 opacity-0" : "max-w-44 translate-x-0 opacity-100"
-                }`}
-              >
-                <h1 className="font-display text-xl font-black tracking-tight text-white">KiranaOS</h1>
-                <p className="truncate text-[11px] font-medium uppercase tracking-widest text-sidebar-foreground/55">{btDef.navConfig.tagline}</p>
-              </div>
-            </Link>
-            <div className={`flex shrink-0 items-center gap-2 ${sidebarCollapsed ? "flex-col" : ""}`}>
-              {!sidebarCollapsed && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-                className="h-9 w-9 text-sidebar-foreground hover:bg-white/10 hover:text-white"
-              >
-                {sidebarCollapsed ? <PanelLeftOpen size={17} aria-hidden="true" /> : <PanelLeftClose size={17} aria-hidden="true" />}
-              </Button>
-            </div>
-          </div>
-
-          {sidebarCollapsed ? (
-            <Link href="/sync-status" aria-label={isOnline ? "Online backup status" : "Offline backup status"}>
-              <div className="mt-3 flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 text-sidebar-foreground ring-1 ring-white/10 hover:bg-white/15" title={isOnline ? "Online" : "Offline ready"}>
-                {isOnline ? <Wifi size={17} aria-hidden="true" /> : <WifiOff size={17} aria-hidden="true" />}
-              </div>
-            </Link>
-          ) : (
-            <div className="mt-4 rounded-lg bg-white/10 p-3 ring-1 ring-white/10">
-              <div className="flex items-center justify-between gap-3">
-                <StatusBadge tone={isOnline ? "success" : "warning"} className="border-sidebar-border bg-white/10 text-white">
-                  {isOnline ? (isSyncing ? "Backing up" : "Online") : "Offline ready"}
-                </StatusBadge>
-                <Link href="/sync-status">
-                  <span className={`text-xs font-semibold ${attentionCount > 0 ? "text-amber-200" : "text-sidebar-foreground/70"}`}>
-                    {attentionCount > 0 ? `${attentionCount} backup items` : "Backup clear"}
-                  </span>
-                </Link>
-              </div>
-              <div className="mt-3 flex items-center gap-2 text-xs text-sidebar-foreground/72">
-                <ShieldCheck size={14} aria-hidden="true" />
-                <span>Billing works even when internet drops.</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <nav aria-label="Main navigation" className={`flex-1 space-y-4 overflow-y-auto ${sidebarCollapsed ? "p-2" : "p-3"}`}>
-          <NavSection title="Daily counter" links={dailyLinks} location={location} t={t} collapsed={sidebarCollapsed} labelOverrides={navLabelOverrides} />
-          <NavSection title="Owner view" links={businessLinks} location={location} t={t} collapsed={sidebarCollapsed} />
-          <NavSection title="Admin" links={adminLinks} location={location} t={t} quiet collapsed={sidebarCollapsed} />
-        </nav>
-
-        <div className={`border-t border-sidebar-border ${sidebarCollapsed ? "p-2" : "p-4"}`}>
-          {sidebarCollapsed ? (
-            <Button onClick={logout} variant="ghost" size="icon" aria-label="Logout" title="Logout" className="h-10 w-10 text-sidebar-foreground hover:bg-white/10 hover:text-white">
-              <LogOut size={16} aria-hidden="true" />
-            </Button>
-          ) : (
-            <div className="rounded-lg bg-white/10 p-3 ring-1 ring-white/10">
-              <div className="truncate text-sm font-semibold text-white">{user?.name ?? "Owner"}</div>
-              <div className="mt-1 text-xs text-sidebar-foreground/70">{t("status.dataSafe")}</div>
-              <Button onClick={logout} variant="ghost" className="mt-3 w-full justify-start text-sidebar-foreground hover:bg-white/10 hover:text-white">
-                <LogOut size={16} aria-hidden="true" />
-                Logout
-              </Button>
-            </div>
-          )}
-        </div>
-      </aside>
-
-      <div
-        className={`flex min-h-screen min-w-0 flex-1 flex-col will-change-[margin-left] lg:ml-[var(--app-sidebar-width)] lg:h-screen lg:min-h-0 lg:overflow-hidden ${
-          isSidebarResizing
-            ? "transition-none"
-            : "transition-[margin-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
-        }`}
-      >
-        <header className="sticky top-0 z-40 border-b bg-card/95 px-3 py-2 shadow-sm backdrop-blur lg:hidden">
-          <div className="flex items-center justify-between gap-2">
-            <Link href="/dashboard" className="flex items-center gap-2 rounded-xl font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <ShoppingCart size={20} aria-hidden="true" />
-              </div>
-              <span>KiranaOS</span>
-            </Link>
-            <div className="flex items-center gap-2">
-              {isOnline ? <Wifi size={18} className="text-emerald-600" aria-label="Online" /> : <WifiOff size={18} className="text-amber-600" aria-label="Offline" />}
-              {snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
-            </div>
-          </div>
-          <nav aria-label="Mobile navigation" className="mt-2 flex gap-2 overflow-x-auto pb-1">
-            {mobileLinks.map((link) => {
-              const Icon = link.icon;
-              const active = isActiveLink(location, link.href);
-              return (
-                <Link key={link.href} href={link.href}>
-                  <div className={`flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-semibold transition-colors ${active ? "border-primary bg-primary text-primary-foreground shadow-sm" : "bg-background text-foreground hover:bg-accent"}`}>
-                    <Icon size={15} aria-hidden="true" />
-                    {navLabelOverrides[link.href] ?? ("key" in link ? t(link.key) : link.label)}
-                  </div>
-                </Link>
-              );
-            })}
-          </nav>
-        </header>
-
-        <SubscriptionStatusBanner />
-        {backendStatus.browserOnline && !backendStatus.backendReachable && backendStatus.checkedAt && (
-          <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
-        )}
-        <main id="main-content" className="min-w-0 flex-1 overflow-auto">
-          {children}
-        </main>
-        <VoiceAssistant />
-      </div>
-    </div>
-  );
-}
-
-type NavigationLink = (typeof mobileLinks)[number];
-
-function NavSection({
-  title,
-  links,
-  location,
-  t,
-  quiet = false,
-  collapsed = false,
-  labelOverrides = {},
-}: {
-  title: string;
-  links: readonly NavigationLink[];
-  location: string;
-  t: (key: Extract<NavigationLink, { key: string }>["key"]) => string;
-  quiet?: boolean;
-  collapsed?: boolean;
-  labelOverrides?: Record<string, string>;
-}) {
-  return (
-    <section className="space-y-1.5" aria-label={title}>
-      {!collapsed && <p className="px-3 text-[11px] font-bold uppercase tracking-wide text-sidebar-foreground/48">{title}</p>}
-      {links.map((link) => {
-        const Icon = link.icon;
-        const active = isActiveLink(location, link.href);
-        const label = labelOverrides[link.href] ?? ("key" in link ? t(link.key) : link.label);
-        return (
-          <Link key={link.href} href={link.href}>
-            <div
-              aria-current={active ? "page" : undefined}
-              title={collapsed ? label : undefined}
-              className={`group flex min-h-11 items-center rounded-lg py-2.5 text-sm font-semibold transition-all duration-200 ${
-                collapsed ? "justify-center px-2" : "gap-3 px-3"
-              } ${
-                active
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md ring-1 ring-white/10"
-                  : "emphasis" in link && link.emphasis
-                    ? "bg-white/10 text-white hover:translate-x-0.5 hover:bg-sidebar-accent"
-                    : quiet
-                      ? "text-sidebar-foreground/68 hover:translate-x-0.5 hover:bg-sidebar-accent hover:text-white"
-                      : "text-sidebar-foreground/86 hover:translate-x-0.5 hover:bg-sidebar-accent hover:text-white"
-              }`}
-            >
-              <Icon size={18} aria-hidden="true" />
-              <span
-                className={`flex-1 overflow-hidden whitespace-nowrap transition-[max-width,opacity,transform] duration-200 ease-out ${
-                  collapsed ? "max-w-0 -translate-x-1 opacity-0" : "max-w-40 translate-x-0 opacity-100"
-                }`}
-              >
-                {label}
-              </span>
-            </div>
-          </Link>
-        );
-      })}
-    </section>
   );
 }
