@@ -45,7 +45,7 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onR
               <div
                 key={item.product.id}
                 data-testid={`cart-item-${item.product.id}`}
-                className="premium-panel grid grid-cols-1 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_142px_150px_110px_130px_42px] xl:items-center"
+                className="animate-in fade-in slide-in-from-bottom-2 duration-150 premium-panel grid grid-cols-1 gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_142px_150px_110px_130px_42px] xl:items-center"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold">{item.product.name}</p>

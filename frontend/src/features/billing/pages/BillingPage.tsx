@@ -9,6 +9,7 @@ import { useFeature } from "@/features/subscription";
 import { usePermission } from "@/features/staff/permissions";
 import { useDebounce } from "@/hooks/use-debounce";
 import { offlineDB } from "@/lib/offline/db";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { BillingCart } from "./components/BillingCart";
 import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
@@ -107,6 +108,7 @@ export default function Billing() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
   const [sensitivePinOpen, setSensitivePinOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [sensitiveApproval, setSensitiveApproval] = useState<{ ownerPin: string; reason: string; actions: BillingSensitiveAction[] } | null>(null);
   const [pendingSensitiveBillType, setPendingSensitiveBillType] = useState<BillTypeSelection | null>(null);
   const [voiceCommand, setVoiceCommand] = useState("");
@@ -727,7 +729,11 @@ export default function Billing() {
 
   function clearCartWithConfirmation() {
     if (cart.length === 0) return;
-    if (!window.confirm("Clear this bill? Unsaved items will be removed.")) return;
+    setClearConfirmOpen(true);
+  }
+
+  function executeClearCart() {
+    setClearConfirmOpen(false);
     resetCurrentBill();
     clearBillingDraft();
     toast({ title: "Cart cleared", description: "Current bill was cleared." });
@@ -907,6 +913,16 @@ export default function Billing() {
           setPendingSensitiveBillType(null);
           window.setTimeout(() => handleConfirm(nextType), 0);
         }}
+      />
+
+      <ConfirmDialog
+        open={clearConfirmOpen}
+        title="Clear this bill?"
+        description="All items in the current bill will be removed. This cannot be undone."
+        confirmLabel="Clear bill"
+        destructive
+        onConfirm={executeClearCart}
+        onCancel={() => setClearConfirmOpen(false)}
       />
     </div>
   );
