@@ -131,7 +131,7 @@ export function BillingSearch({
   const hasMoreCategories = categories.length > CATEGORY_LIMIT;
 
   return (
-    <div className="flex h-full flex-col gap-3.5 overflow-hidden">
+    <div className="flex h-full flex-col gap-3 overflow-hidden">
 
       {/* ── Offline / draft banners ── */}
       {!isOnline && (
@@ -309,7 +309,7 @@ export function BillingSearch({
 
       {/* ── 2. Bottom 3-column info section — Recent Bills widest, Quick Actions narrowest, Billing Tips medium ── */}
       {!search && (
-        <div className="shrink-0 grid grid-cols-[1.45fr_0.95fr_1.15fr] gap-3.5" style={{ height: "260px" }}>
+        <div className="shrink-0 grid grid-cols-[1.45fr_0.95fr_1.15fr] gap-3" style={{ height: "260px" }}>
           <RecentBillsPanel />
           <QuickActionsPanel onHoldBill={onHoldBill} />
           <BillingTipsPanel />

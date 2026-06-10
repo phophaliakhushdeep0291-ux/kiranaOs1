@@ -59,10 +59,10 @@ import {
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
-const SIDEBAR_WIDTH_KEY = "kirana:sidebar-width-v2";
+const SIDEBAR_WIDTH_KEY = "kirana:sidebar-width-v3";
 const SIDEBAR_COLLAPSED_KEY = "kirana:sidebar-collapsed-v2";
 const SIDEBAR_GROUPS_KEY = "kirana:sidebar-groups-v2";
-const DEFAULT_WIDTH = 260;
+const DEFAULT_WIDTH = 242;
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 320;
 const COLLAPSED_WIDTH = 72;

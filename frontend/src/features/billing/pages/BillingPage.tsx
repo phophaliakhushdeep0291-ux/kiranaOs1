@@ -820,7 +820,7 @@ export default function Billing() {
 
   return (
     <div className="h-[calc(100dvh-76px)] overflow-hidden bg-[#f7f9fd]">
-      <div className="flex h-full flex-col gap-3.5 px-3 py-3.5 lg:flex-row">
+      <div className="flex h-full flex-col gap-3 px-2.5 py-2.5 lg:flex-row">
       {/* ── LEFT PANEL: product search + grid ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <BillingSearch
