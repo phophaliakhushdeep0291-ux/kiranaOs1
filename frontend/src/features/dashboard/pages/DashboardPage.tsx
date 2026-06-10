@@ -172,61 +172,72 @@ export default function Dashboard() {
         )}
       />
 
-      <section className="premium-hero mb-5">
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="p-4 sm:p-5">
+      <section className="premium-hero mb-6">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">Counter live</span>
-              <span className="rounded-md bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-                {dashboard.billCount} bills
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary ring-1 ring-primary/20">
+                ● Counter live
+              </span>
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700 ring-1 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900">
+                {dashboard.billCount} bills today
               </span>
               {dashboard.purchaseDue > 0 ? (
-                <span className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900">
                   Supplier due {fmt(dashboard.purchaseDue)}
                 </span>
               ) : null}
             </div>
-            <h2 className="mt-4 max-w-2xl text-2xl font-black tracking-tight text-foreground sm:text-3xl">
+            <h2 className="mt-5 max-w-2xl font-display text-3xl font-black tracking-tight text-foreground sm:text-4xl">
               Today, at a glance.
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
               Sales, cash, udhar, and owner alerts for today&apos;s closing decisions.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
-              <span className={`rounded-md px-2.5 py-1 ${attentionCount > 0 ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"}`}>
-                {attentionCount > 0 ? `${attentionCount} owner alert${attentionCount > 1 ? "s" : ""}` : "No urgent alerts"}
+            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 ring-1 ${attentionCount > 0 ? "bg-amber-50 text-amber-700 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900" : "bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"}`}>
+                {attentionCount > 0 ? `${attentionCount} owner alert${attentionCount > 1 ? "s" : ""}` : "✓ No urgent alerts"}
               </span>
-              <span className="rounded-md bg-background/70 px-2.5 py-1 text-muted-foreground">Drawer {fmt(cashInDrawer)}</span>
+              <span className="rounded-full bg-muted/60 px-3 py-1.5 font-medium text-muted-foreground ring-1 ring-black/[0.06]">
+                Drawer {fmt(cashInDrawer)}
+              </span>
             </div>
           </div>
-          <div className="border-t bg-background/58 p-4 sm:p-5 lg:border-l lg:border-t-0">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Quick moves</p>
-            <p className="mt-2 text-2xl font-black tracking-tight text-foreground">Run the counter.</p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">Billing, payment, purchase, and close.</p>
-            <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="border-t bg-background/40 p-5 sm:p-6 lg:border-l lg:border-t-0">
+            <p className="app-muted-label">Quick actions</p>
+            <p className="mt-3 font-display text-xl font-black tracking-tight text-foreground">Run the counter.</p>
+            <div className="mt-4 grid grid-cols-2 gap-2.5">
               <Link href="/billing">
-                <span className="premium-action">
-                  <ShoppingCart size={17} aria-hidden="true" />
-                  Bill
-                </span>
+                <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md active:translate-y-0">
+                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <ShoppingCart size={22} aria-hidden="true" />
+                  </div>
+                  <span className="text-sm font-bold">New Bill</span>
+                </div>
               </Link>
               <Link href="/udhar">
-                <span className="premium-action">
-                  <HandCoins size={17} aria-hidden="true" />
-                  Payment
-                </span>
+                <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-400/40 hover:shadow-md active:translate-y-0">
+                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                    <HandCoins size={22} aria-hidden="true" />
+                  </div>
+                  <span className="text-sm font-bold">Payment</span>
+                </div>
               </Link>
               <Link href="/purchase-bills">
-                <span className="premium-action">
-                  <Truck size={17} aria-hidden="true" />
-                  Purchase
-                </span>
+                <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-400/40 hover:shadow-md active:translate-y-0">
+                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                    <Truck size={22} aria-hidden="true" />
+                  </div>
+                  <span className="text-sm font-bold">Purchase</span>
+                </div>
               </Link>
               <Link href="/daily-closing">
-                <span className="premium-action">
-                  <CalendarCheck size={17} aria-hidden="true" />
-                  Close
-                </span>
+                <div className="flex flex-col items-center gap-2.5 rounded-xl border bg-card p-4 text-center shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-violet-400/40 hover:shadow-md active:translate-y-0">
+                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+                    <CalendarCheck size={22} aria-hidden="true" />
+                  </div>
+                  <span className="text-sm font-bold">Close Day</span>
+                </div>
               </Link>
             </div>
             {!dashboard.hasBusinessData ? (
@@ -236,6 +247,7 @@ export default function Dashboard() {
                 disabled={seedingDemo}
                 className="premium-action mt-3 w-full"
               >
+                <Sparkles size={16} aria-hidden="true" />
                 {seedingDemo ? "Loading demo..." : "Load demo shop"}
               </button>
             ) : null}

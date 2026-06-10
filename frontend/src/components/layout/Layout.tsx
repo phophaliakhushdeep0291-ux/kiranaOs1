@@ -238,8 +238,8 @@ export function Layout({ children }: { children: ReactNode }) {
                   sidebarCollapsed ? "max-w-0 -translate-x-1 opacity-0" : "max-w-44 translate-x-0 opacity-100"
                 }`}
               >
-                <h1 className="text-lg font-black tracking-tight text-white">KiranaOS</h1>
-                <p className="truncate text-xs text-sidebar-foreground/70">Retail command center</p>
+                <h1 className="font-display text-xl font-black tracking-tight text-white">KiranaOS</h1>
+                <p className="truncate text-[11px] font-medium uppercase tracking-widest text-sidebar-foreground/55">Retail Command Center</p>
               </div>
             </Link>
             <div className={`flex shrink-0 items-center gap-2 ${sidebarCollapsed ? "flex-col" : ""}`}>

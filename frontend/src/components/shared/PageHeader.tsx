@@ -17,8 +17,8 @@ export function PageHeader({ title, description, eyebrow, actions, className, ..
       )}
       {...props}
     >
-      <div className="min-w-0 flex-1 space-y-1">
-        <h1 className="break-words text-2xl font-black tracking-tight text-foreground">{title}</h1>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <h1 className="break-words font-display text-2xl font-black tracking-tight text-foreground sm:text-3xl">{title}</h1>
         {description ? <div className="max-w-3xl text-sm leading-6 text-muted-foreground">{description}</div> : null}
         {eyebrow ? <div className="text-xs text-muted-foreground">{eyebrow}</div> : null}
       </div>

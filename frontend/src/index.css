@@ -57,6 +57,7 @@
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
   --font-sans: var(--app-font-sans);
+  --font-display: var(--app-font-display);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
 
@@ -121,7 +122,8 @@
   --chart-4: 271 80% 55%;
   --chart-5: 15 90% 55%;
 
-  --app-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans Devanagari', 'Noto Sans', sans-serif;
+  --app-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans Devanagari', 'Noto Sans', sans-serif;
+  --app-font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
   --radius: .5rem;
@@ -284,9 +286,9 @@
 @layer components {
   .app-shell {
     background:
-      linear-gradient(135deg, hsl(var(--primary) / 0.08), transparent 26rem),
-      linear-gradient(315deg, hsl(var(--chart-2) / 0.07), transparent 30rem),
-      linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.42));
+      radial-gradient(ellipse at 0% 0%, hsl(var(--primary) / 0.11) 0%, transparent 55%),
+      radial-gradient(ellipse at 100% 100%, hsl(var(--chart-2) / 0.09) 0%, transparent 55%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.5));
   }
 
   .app-page-shell {
@@ -294,35 +296,35 @@
   }
 
   .app-card {
-    @apply rounded-lg border bg-card text-card-foreground shadow-sm;
+    @apply rounded-xl border bg-card text-card-foreground shadow-sm;
   }
 
   .app-card-soft {
-    @apply rounded-lg border bg-card/92 text-card-foreground shadow-sm backdrop-blur;
+    @apply rounded-xl border bg-card/92 text-card-foreground shadow-sm backdrop-blur;
   }
 
   .premium-panel {
-    @apply rounded-lg border bg-card text-card-foreground shadow-sm ring-1 ring-black/[0.015];
+    @apply rounded-xl border bg-card text-card-foreground shadow-sm ring-1 ring-black/[0.04] transition-shadow duration-200;
   }
 
   .premium-panel-muted {
-    @apply rounded-lg border bg-card/92 text-card-foreground shadow-sm backdrop-blur ring-1 ring-black/[0.015];
+    @apply rounded-xl border bg-card/92 text-card-foreground shadow-sm backdrop-blur ring-1 ring-black/[0.04];
   }
 
   .premium-hero {
-    @apply overflow-hidden rounded-lg border bg-card shadow-sm;
+    @apply overflow-hidden rounded-2xl border bg-card shadow-md;
     background:
-      linear-gradient(135deg, hsl(var(--primary) / 0.10), transparent 36rem),
-      linear-gradient(315deg, hsl(var(--chart-2) / 0.09), transparent 34rem),
+      radial-gradient(ellipse at 0% 0%, hsl(var(--primary) / 0.14) 0%, transparent 60%),
+      radial-gradient(ellipse at 100% 100%, hsl(var(--chart-2) / 0.11) 0%, transparent 60%),
       hsl(var(--card));
   }
 
   .premium-kpi {
-    @apply rounded-lg border bg-background/82 p-3 shadow-xs ring-1 ring-black/[0.015];
+    @apply rounded-xl border bg-background/82 p-3 shadow-xs ring-1 ring-black/[0.04];
   }
 
   .premium-action {
-    @apply flex min-h-11 items-center justify-center gap-2 rounded-lg border bg-background px-3 text-sm font-semibold shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-accent active:translate-y-0;
+    @apply flex min-h-11 items-center justify-center gap-2 rounded-xl border bg-card px-3 text-sm font-semibold shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent hover:shadow-md active:translate-y-0;
   }
 
   .app-section-title {
@@ -330,7 +332,7 @@
   }
 
   .app-muted-label {
-    @apply text-xs font-semibold uppercase tracking-wide text-muted-foreground;
+    @apply text-[11px] font-bold uppercase tracking-widest text-muted-foreground;
   }
 
   .touch-target {
