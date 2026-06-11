@@ -3,19 +3,13 @@ import { useListProducts, type Product } from "@/lib/api/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Boxes, ChevronLeft, ChevronRight, IndianRupee, Layers, PackageX, Plus, Search } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertTriangle, Boxes, ChevronLeft, ChevronRight, IndianRupee, Layers, MinusCircle, MoreVertical, PackageX, Plus, PlusCircle, Search } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
-import { StockMovementDialog } from "./StockMovementDialog";
-import {
-  CATEGORIES,
-  averageCost,
-  fromBaseQty,
-  isDeletedProduct,
-  isLowStock,
-  productDisplayUnit,
-} from "@/features/products/pages/product-pricing";
+import { averageCost, fromBaseQty, isDeletedProduct, isLowStock, productDisplayUnit } from "@/features/products/pages/product-pricing";
 import { productMatchesSearch } from "@/features/products/product-reliability";
+import { StockMovementDialog } from "./StockMovementDialog";
 
 const ROWS_PER_PAGE = 10;
 
@@ -36,9 +30,12 @@ function categoryBadge(name: string) {
 
 export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("all");
+  const [statusF, setStatusF] = useState("all");
+  const [extraF, setExtraF] = useState("all"); // suppliers (in) / item types (out)
   const [page, setPage] = useState(1);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [moveMode, setMoveMode] = useState<"in" | "out">(mode);
+  const [movePreselect, setMovePreselect] = useState<string | undefined>(undefined);
   const debouncedSearch = useDebounce(search.trim(), 150);
 
   const products = useListProducts({ limit: 1000 }, {
@@ -51,12 +48,25 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
     [all, mode],
   );
 
+  const suppliers = useMemo(() => [...new Set(scoped.map((p) => (p.brand ?? "").trim()).filter(Boolean))].sort(), [scoped]);
+
   const rows = useMemo(() => {
     const q = debouncedSearch.toLowerCase();
     return scoped
-      .filter((p) => category === "all" || (p.category ?? "general") === category)
+      .filter((p) => {
+        if (statusF === "all") return true;
+        const low = isLowStock(p) && Number(p.stockBaseQty ?? 0) > 0;
+        if (statusF === "low") return low;
+        if (statusF === "in") return !low;
+        return true; // "out" handled by scope
+      })
+      .filter((p) => {
+        if (extraF === "all") return true;
+        if (mode === "in") return (p.brand ?? "").trim() === extraF;
+        return extraF === "loose" ? !!p.isLooseItem : !p.isLooseItem;
+      })
       .filter((p) => productMatchesSearch(p, q));
-  }, [scoped, category, debouncedSearch]);
+  }, [scoped, statusF, extraF, mode, debouncedSearch]);
 
   const stats = useMemo(() => {
     const totalQty = scoped.reduce((s, p) => s + fromBaseQty(p.stockBaseQty, productDisplayUnit(p)), 0);
@@ -67,11 +77,17 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   }, [scoped, all]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
-  useEffect(() => { setPage(1); }, [debouncedSearch, category]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusF, extraF]);
   const safePage = Math.min(page, totalPages);
   const pagedRows = rows.slice((safePage - 1) * ROWS_PER_PAGE, safePage * ROWS_PER_PAGE);
   const firstRow = rows.length === 0 ? 0 : (safePage - 1) * ROWS_PER_PAGE + 1;
   const lastRow = Math.min(safePage * ROWS_PER_PAGE, rows.length);
+
+  function openMove(m: "in" | "out", productId?: string) {
+    setMoveMode(m);
+    setMovePreselect(productId);
+    setMoveOpen(true);
+  }
 
   const cards = mode === "in"
     ? [
@@ -114,15 +130,48 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-52"><SelectValue placeholder="All Categories" /></SelectTrigger>
+
+        {/* extra filter: suppliers (in) / types (out) */}
+        <Select value={extraF} onValueChange={setExtraF}>
+          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-44">
+            <SelectValue placeholder={mode === "in" ? "All Suppliers" : "All Types"} />
+          </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {CATEGORIES.filter((c) => c !== "all").map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
+            {mode === "in" ? (
+              <>
+                <SelectItem value="all">All Suppliers</SelectItem>
+                {suppliers.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </>
+            ) : (
+              <>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="packed">Packed</SelectItem>
+                <SelectItem value="loose">Loose</SelectItem>
+              </>
+            )}
           </SelectContent>
         </Select>
+
+        {/* status filter */}
+        <Select value={statusF} onValueChange={setStatusF}>
+          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-40">
+            <SelectValue placeholder="All Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            {mode === "in" ? (
+              <>
+                <SelectItem value="in">In Stock</SelectItem>
+                <SelectItem value="low">Low Stock</SelectItem>
+              </>
+            ) : (
+              <SelectItem value="out">Out of Stock</SelectItem>
+            )}
+          </SelectContent>
+        </Select>
+
         <Button
-          onClick={() => setMoveOpen(true)}
+          onClick={() => openMove(mode)}
           style={{ background: mode === "in" ? "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" : "linear-gradient(180deg,#f43f5e 0%,#e11d48 100%)" }}
           className="h-11 shrink-0 gap-1.5 rounded-[10px] px-5 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] hover:opacity-95"
         >
@@ -133,7 +182,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
       {/* Table */}
       <div className="mt-3.5 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-[13px]">
+          <table className="w-full min-w-[880px] text-left text-[13px]">
             <thead>
               <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
                 <th className="px-4 py-3 font-bold">Product</th>
@@ -142,13 +191,14 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
                 <th className="px-3 py-3 font-bold">Unit</th>
                 <th className="px-3 py-3 text-center font-bold">Stock</th>
                 <th className="px-3 py-3 text-right font-bold">Stock Value</th>
+                <th className="px-3 py-3 text-center font-bold">Action</th>
               </tr>
             </thead>
             <tbody>
               {products.isLoading && rows.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-16 text-center text-sm text-[#536383]">Loading…</td></tr>
+                <tr><td colSpan={7} className="px-4 py-16 text-center text-sm text-[#536383]">Loading…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-16 text-center">
+                <tr><td colSpan={7} className="px-4 py-16 text-center">
                   <p className="text-sm font-bold text-[#13274d]">{mode === "in" ? "No items in stock" : "Nothing is out of stock 🎉"}</p>
                   <p className="mt-1 text-xs text-[#536383]">{mode === "in" ? "Add stock to your products to see them here." : "All your products currently have stock."}</p>
                 </td></tr>
@@ -181,16 +231,25 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
                       <td className="px-3 py-3">
                         <div className="flex flex-col items-center gap-1">
                           <span className={`font-bold ${mode === "out" ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{qty}</span>
-                          {mode === "out" ? (
-                            <Pill className="bg-rose-50 text-rose-600">Out of Stock</Pill>
-                          ) : low ? (
-                            <Pill className="bg-amber-50 text-amber-700">Low Stock</Pill>
-                          ) : (
-                            <Pill className="bg-emerald-50 text-emerald-700">In Stock</Pill>
-                          )}
+                          {mode === "out" ? <StatusBadge tone="rose">Out of Stock</StatusBadge> : low ? <StatusBadge tone="amber">Low Stock</StatusBadge> : <StatusBadge tone="emerald">In Stock</StatusBadge>}
                         </div>
                       </td>
                       <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{mode === "out" ? "—" : rs(value)}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex justify-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[#0057ff]" aria-label={`Actions for ${p.name}`}>
+                                <MoreVertical size={16} />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem onClick={() => openMove("in", p.id)}><PlusCircle size={14} className="mr-2 text-emerald-600" /> Stock In</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openMove("out", p.id)} disabled={qty <= 0}><MinusCircle size={14} className="mr-2 text-rose-600" /> Stock Out</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -210,13 +269,24 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
         )}
       </div>
 
-      <StockMovementDialog mode={mode} open={moveOpen} onOpenChange={setMoveOpen} />
+      <StockMovementDialog mode={moveMode} open={moveOpen} onOpenChange={setMoveOpen} initialProductId={movePreselect} />
     </div>
   );
 }
 
-function Pill({ children, className }: { children: React.ReactNode; className: string }) {
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${className}`}>{children}</span>;
+function StatusBadge({ tone, children }: { tone: "emerald" | "amber" | "rose"; children: React.ReactNode }) {
+  const map = {
+    emerald: "bg-emerald-100 text-emerald-700",
+    amber: "bg-amber-100 text-amber-700",
+    rose: "bg-rose-100 text-rose-700",
+  } as const;
+  const dot = { emerald: "bg-emerald-500", amber: "bg-amber-500", rose: "bg-rose-500" } as const;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-[7px] px-2 py-[3px] text-[11px] font-bold ${map[tone]}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dot[tone]}`} />
+      {children}
+    </span>
+  );
 }
 
 function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {

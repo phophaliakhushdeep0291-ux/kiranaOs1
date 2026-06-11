@@ -155,7 +155,7 @@ export default function CategoriesPage() {
               <th className="px-3 py-3 font-bold">Parent Category</th>
               <th className="px-3 py-3 text-right font-bold">Products</th>
               <th className="px-3 py-3 text-center font-bold">Status</th>
-              <th className="px-3 py-3 text-right font-bold">Action</th>
+              <th className="px-3 py-3 text-center font-bold">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -184,11 +184,13 @@ export default function CategoriesPage() {
                   </td>
                   <td className="px-3 py-3 text-right font-bold text-[#13274d]">{productCount(c.name).toLocaleString("en-IN")}</td>
                   <td className="px-3 py-3 text-center">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${c.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-[7px] px-2 py-[3px] text-[11px] font-bold ${c.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${c.status === "active" ? "bg-emerald-500" : "bg-slate-400"}`} />
                       {c.status === "active" ? "Active" : "Inactive"}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-3 py-3">
+                    <div className="flex justify-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[#0057ff]" aria-label={`Actions for ${c.name}`}>
@@ -201,6 +203,7 @@ export default function CategoriesPage() {
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => removeCategory(c)}><Trash2 size={14} className="mr-2" /> Delete</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
+                    </div>
                   </td>
                 </tr>
               ))

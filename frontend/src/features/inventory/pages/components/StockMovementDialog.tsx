@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,11 +13,15 @@ import { useRecordDamage, useRecordPurchase } from "@/features/inventory/queries
 
 const OUT_REASONS = ["Damage", "Expiry", "Sale Return", "Theft / Missing", "Other"];
 
-export function StockMovementDialog({ mode, open, onOpenChange }: { mode: "in" | "out"; open: boolean; onOpenChange: (o: boolean) => void }) {
+export function StockMovementDialog({ mode, open, onOpenChange, initialProductId }: { mode: "in" | "out"; open: boolean; onOpenChange: (o: boolean) => void; initialProductId?: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const products = useListProducts({ limit: 1000 }, { query: { staleTime: 60_000 } });
   const [productId, setProductId] = useState("");
+
+  useEffect(() => {
+    if (open) setProductId(initialProductId ?? "");
+  }, [open, initialProductId]);
   const [search, setSearch] = useState("");
   const [qty, setQty] = useState<number | "">("");
   const [cost, setCost] = useState<number | "">("");

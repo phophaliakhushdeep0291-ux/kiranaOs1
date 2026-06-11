@@ -320,7 +320,7 @@ export default function ProductsPage() {
                 <th className="px-3 py-3 text-right font-bold">Cost Price</th>
                 <th className="px-3 py-3 text-right font-bold">Selling Price</th>
                 <th className="px-3 py-3 text-center font-bold">Stock</th>
-                <th className="px-3 py-3 text-right font-bold">Action</th>
+                <th className="px-3 py-3 text-center font-bold">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -373,16 +373,17 @@ export default function ProductsPage() {
                         <div className="flex flex-col items-center gap-1">
                           <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
                           {outOfStock ? (
-                            <StatusPill className="bg-rose-50 text-rose-600">Out of Stock</StatusPill>
+                            <StatusPill tone="rose">Out of Stock</StatusPill>
                           ) : low ? (
-                            <StatusPill className="bg-amber-50 text-amber-700">Low Stock</StatusPill>
+                            <StatusPill tone="amber">Low Stock</StatusPill>
                           ) : (
-                            <StatusPill className="bg-emerald-50 text-emerald-700">In Stock</StatusPill>
+                            <StatusPill tone="emerald">In Stock</StatusPill>
                           )}
                         </div>
                       </td>
                       {/* Actions — three-dot menu */}
-                      <td className="px-3 py-3 text-right">
+                      <td className="px-3 py-3">
+                        <div className="flex justify-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
@@ -410,6 +411,7 @@ export default function ProductsPage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -495,8 +497,15 @@ function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNod
   );
 }
 
-function StatusPill({ children, className }: { children: React.ReactNode; className: string }) {
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${className}`}>{children}</span>;
+function StatusPill({ tone, children }: { tone: "emerald" | "amber" | "rose"; children: React.ReactNode }) {
+  const map = { emerald: "bg-emerald-100 text-emerald-700", amber: "bg-amber-100 text-amber-700", rose: "bg-rose-100 text-rose-700" } as const;
+  const dot = { emerald: "bg-emerald-500", amber: "bg-amber-500", rose: "bg-rose-500" } as const;
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-[7px] px-2 py-[3px] text-[11px] font-bold ${map[tone]}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dot[tone]}`} />
+      {children}
+    </span>
+  );
 }
 
 /* ── Filters popover ── */
