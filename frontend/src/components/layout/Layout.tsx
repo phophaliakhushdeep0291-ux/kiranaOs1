@@ -79,6 +79,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/inventory/stock-out": "Items that are out of stock",
   "/customers": "Customers and credit ledger",
   "/reports": "Sales insights and analytics",
+  "/settings": "Manage your store, preferences, and system configurations",
 };
 
 const PAGE_TITLES: Record<string, string> = {

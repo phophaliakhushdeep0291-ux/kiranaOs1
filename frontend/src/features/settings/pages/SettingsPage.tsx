@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { getGetShopQueryKey, useChangePassword, useGetShop, useUpdateShop } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,38 +9,21 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Archive,
-  Bell,
-  Check,
-  Cloud,
-  CreditCard,
-  Languages,
-  LayoutGrid,
-  LifeBuoy,
-  Loader2,
-  MonitorSmartphone,
-  Palette,
-  ReceiptText,
-  Recycle,
-  Shield,
-  Sparkles,
-  Store,
-  Truck,
-  UserCircle,
-  UsersRound,
+  Bell, Check, ChevronRight, Cloud, CreditCard, Eye, EyeOff, Loader2, MonitorSmartphone, Pencil,
+  Plug, Printer, Receipt, Settings2, Shield, Sliders, Store, UsersRound, X,
 } from "lucide-react";
 import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/settings/theme";
-import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-import { OwnerPinModal } from "@/components/security/OwnerPinModal";
-import { usePermission } from "@/features/staff/permissions";
 import { useAppLanguage, type AppLanguage } from "@/features/settings/i18n";
+import { useSubscriptionSnapshot } from "@/features/subscription";
+import { useOfflineStatus } from "@/features/sync";
 import { offlineDB } from "@/lib/offline/db";
-import { PageHeader, PageShell } from "@/components/shared";
+import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 const shopSchema = z.object({
   name: z.string().min(1),
@@ -52,393 +35,493 @@ const shopSchema = z.object({
 });
 type ShopFormData = z.infer<typeof shopSchema>;
 
-const passwordSchema = z.object({
+const PREFS_KEY = "kirana:settings-prefs:v1";
+interface Prefs {
+  printPreview: boolean; eInvoice: boolean; hsnTracking: boolean;
+  autoSync: boolean; dailyBackup: boolean;
+  biometric: boolean; twoFactor: boolean; sessionTimeout: string;
+  lowStock: boolean; paymentReminders: boolean; dailySummary: boolean; promotions: boolean;
+  gstMode: string; gstRate: string;
+}
+const DEFAULT_PREFS: Prefs = {
+  printPreview: true, eInvoice: true, hsnTracking: true,
+  autoSync: true, dailyBackup: true,
+  biometric: true, twoFactor: true, sessionTimeout: "15 minutes",
+  lowStock: true, paymentReminders: true, dailySummary: true, promotions: false,
+  gstMode: "Exclusive (Add to price)", gstRate: "18%",
+};
+
+const MENU = [
+  { id: "general", label: "General", icon: Settings2 },
+  { id: "store", label: "Store Profile", icon: Store },
+  { id: "billing", label: "Billing & Subscription", icon: CreditCard, href: "/subscription" },
+  { id: "staff", label: "Staff & Permissions", icon: UsersRound, href: "/staff" },
+  { id: "devices", label: "Device Management", icon: MonitorSmartphone, href: "/devices" },
+  { id: "printer", label: "Printer & Billing", icon: Printer },
+  { id: "taxes", label: "Taxes & GST", icon: Receipt },
+  { id: "sync", label: "Sync & Backup", icon: Cloud, href: "/sync-status" },
+  { id: "security", label: "Security & PIN", icon: Shield },
+  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "advanced", label: "Advanced", icon: Sliders },
+] as const;
+
+export default function SettingsPage() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
+  const { accent, setAccent } = useAppTheme();
+  const { language, setLanguage } = useAppLanguage();
+  const { snapshot } = useSubscriptionSnapshot();
+  const { isOnline, isSyncing } = useOfflineStatus();
+  const shop = useGetShop();
+  const [editOpen, setEditOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:settings-panel-width", { defaultWidth: 440 });
+
+  useEffect(() => {
+    let active = true;
+    void offlineDB.getSetting<Partial<Prefs>>(PREFS_KEY).then((saved) => {
+      if (active && saved) setPrefs((p) => ({ ...p, ...saved }));
+    });
+    return () => { active = false; };
+  }, []);
+
+  function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
+    setPrefs((prev) => {
+      const next = { ...prev, [key]: value };
+      void offlineDB.setSetting(PREFS_KEY, next);
+      return next;
+    });
+  }
+
+  const planName = snapshot?.planCode ? snapshot.planCode.charAt(0).toUpperCase() + snapshot.planCode.slice(1) : "Free";
+  const shopName = shop.data?.name ?? "My Store";
+  const shopAddress = [shop.data?.address, shop.data?.city].filter(Boolean).join(", ") || "Add your store address";
+  const shopEmail = (shop.data as { email?: string } | undefined)?.email ?? user?.email ?? "—";
+
+  return (
+    <div
+      className={cn("min-h-full bg-[#f8faff] px-4 py-4", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
+      style={editOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+    >
+      <div className="flex gap-4">
+        {/* Submenu */}
+        <aside className="hidden w-[200px] shrink-0 lg:block">
+          <nav className="space-y-0.5">
+            {MENU.map((m) => {
+              const active = m.id === "general";
+              const onClick = () => {
+                if ("href" in m && m.href) navigate(m.href);
+                else if (m.id === "store") setEditOpen(true);
+                else if (m.id === "security") setPwOpen(true);
+              };
+              return (
+                <button
+                  key={m.id}
+                  onClick={onClick}
+                  className={cn(
+                    "flex w-full items-center gap-2.5 rounded-[8px] px-3 py-2 text-left text-[13px] font-semibold transition-colors",
+                    active ? "bg-[#eef5ff] text-[#005dff]" : "text-[#344668] hover:bg-[#eef2f8]",
+                  )}
+                >
+                  <m.icon size={16} className={active ? "text-[#005dff]" : "text-[#536583]"} />
+                  <span className="flex-1 truncate">{m.label}</span>
+                  {"href" in m && m.href && <ChevronRight size={14} className="text-[#9aa6bb]" />}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        {/* Content grid */}
+        <div className="min-w-0 flex-1 space-y-4">
+          {/* Row 1: Store Profile + Billing */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHead icon={<Store size={15} />} title="Store Profile" action={<button onClick={() => setEditOpen(true)} className="flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Pencil size={12} /> Edit</button>} />
+              <div className="flex items-center gap-3.5 border-b border-[#eef2f8] px-5 pb-4">
+                <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[12px] bg-[#eef5ff] text-2xl">🏪</span>
+                <div className="min-w-0">
+                  <p className="truncate font-display text-[16px] font-black text-[#102347]">{shopName}</p>
+                  <p className="truncate text-[12px] text-[#52627e]">{shopAddress}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-y-4 px-5 py-4">
+                <Info label="Phone" value={shop.data?.phone ?? "—"} />
+                <Info label="Email" value={shopEmail} />
+                <Info label="GSTIN" value={shop.data?.gstNumber || "Not set"} />
+                <Info label="Currency" value="₹ Indian Rupee" />
+              </div>
+            </Card>
+
+            <Card>
+              <CardHead icon={<CreditCard size={15} />} title="Billing & Subscription" action={<Link href="/subscription" className="text-[12px] font-bold text-[#005dff] hover:underline">Manage Plan</Link>} />
+              <div className="px-5 pb-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="rounded-[8px] bg-[#fff4dd] px-2.5 py-1 text-[12px] font-extrabold text-[#b7791f]">{planName} Plan</span>
+                  <span className="rounded-[8px] bg-[#f5f7fc] px-2.5 py-1 text-[12px] font-semibold text-[#64748b] capitalize">{snapshot?.status ?? "active"}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <ul className="space-y-2">
+                    {["Unlimited Invoices", "Multi-User Access", "Advanced Reports", "Priority Support"].map((f) => (
+                      <li key={f} className="flex items-center gap-2 text-[12px] font-medium text-[#344668]">
+                        <Check size={13} className="shrink-0 text-emerald-500" /> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <div>
+                    <p className="text-[11px] text-[#64748b]">Usage this month</p>
+                    <p className="font-display text-[18px] font-black text-[#102347]">{snapshot?.status === "active" ? "Active" : "—"}</p>
+                    <p className="mt-1 text-[11px] text-[#64748b]">Manage billing & invoices in your plan.</p>
+                    <Link href="/subscription" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline">View plan <ChevronRight size={13} /></Link>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {/* Row 2: Staff + Devices */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHead icon={<UsersRound size={15} />} title="Staff & Permissions" action={<Link href="/staff" className="text-[12px] font-bold text-[#005dff] hover:underline">Manage Staff</Link>} />
+              <div className="grid grid-cols-2 gap-3 px-5 pb-5 sm:grid-cols-4">
+                <Stat label="Total Staff" value="—" sub="Active users" />
+                <Stat label="Cashiers" value="—" sub="Can create bills" />
+                <Stat label="Managers" value="—" sub="Full access" />
+                <Stat label="View Only" value="—" sub="Read access" />
+              </div>
+              <p className="px-5 pb-4 text-[11px] text-[#9aa6bb]">Manage users, roles & permissions on the Staff page.</p>
+            </Card>
+
+            <Card>
+              <CardHead icon={<MonitorSmartphone size={15} />} title="Device Management" sub="Manage your billing devices" action={<Link href="/devices" className="text-[12px] font-bold text-[#005dff] hover:underline">View All</Link>} />
+              <div className="px-5 pb-3">
+                {[
+                  { name: "This Device", meta: "Web · Active session", active: true },
+                ].map((d) => (
+                  <div key={d.name} className="flex items-center gap-3 border-t border-[#eef2f8] py-2.5 first:border-t-0">
+                    <MonitorSmartphone size={16} className="text-[#536583]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-bold text-[#102347]">{d.name}</p>
+                      <p className="text-[11px] text-[#64748b]">{d.meta}</p>
+                    </div>
+                    <span className="rounded-[7px] bg-emerald-100 px-2 py-[3px] text-[11px] font-bold text-emerald-700">Active</span>
+                  </div>
+                ))}
+                <Link href="/devices" className="mt-1 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[#005dff] hover:underline">+ Manage Devices</Link>
+              </div>
+            </Card>
+          </div>
+
+          {/* Row 3: Printer + Taxes + Sync */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <CardHead icon={<Printer size={15} />} title="Printer & Billing" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Configure</button>} />
+              <div className="px-5 pb-4">
+                <RowToggle label="Default Bill Printer" desc="Thermal Printer (Receipts)" pill={<span className="rounded-[7px] bg-emerald-100 px-2 py-[3px] text-[11px] font-bold text-emerald-700">Connected</span>} />
+                <RowToggle label="Bill Template" desc="Modern Template" pill={<button className="text-[12px] font-bold text-[#005dff]">Change</button>} />
+                <RowToggle label="Print Settings" desc="80mm · Auto Cut" pill={<button className="text-[12px] font-bold text-[#005dff]">Configure</button>} />
+                <RowToggle label="Print Preview" desc="Show before printing" pill={<Switch checked={prefs.printPreview} onCheckedChange={(v) => setPref("printPreview", v)} />} last />
+              </div>
+            </Card>
+
+            <Card>
+              <CardHead icon={<Receipt size={15} />} title="Taxes & GST" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Configure</button>} />
+              <div className="px-5 pb-4">
+                <RowToggle label="GST Mode" pill={<Select value={prefs.gstMode} onValueChange={(v) => setPref("gstMode", v)}><SelectTrigger className="h-8 w-[150px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Exclusive (Add to price)">Exclusive (Add to price)</SelectItem><SelectItem value="Inclusive (In price)">Inclusive (In price)</SelectItem></SelectContent></Select>} />
+                <RowToggle label="Default GST Rate" pill={<Select value={prefs.gstRate} onValueChange={(v) => setPref("gstRate", v)}><SelectTrigger className="h-8 w-[90px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["0%", "5%", "12%", "18%", "28%"].map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select>} />
+                <RowToggle label="Additional Rates" desc="5%, 12%, 28%" pill={<button className="text-[12px] font-bold text-[#005dff]">Manage</button>} />
+                <RowToggle label="E-Invoice" pill={<Switch checked={prefs.eInvoice} onCheckedChange={(v) => setPref("eInvoice", v)} />} />
+                <RowToggle label="HSN Code Tracking" pill={<Switch checked={prefs.hsnTracking} onCheckedChange={(v) => setPref("hsnTracking", v)} />} last />
+              </div>
+            </Card>
+
+            <Card>
+              <CardHead icon={<Cloud size={15} />} title="Sync & Backup" small action={<Link href="/sync-status" className="text-[12px] font-bold text-[#005dff] hover:underline">View Logs</Link>} />
+              <div className="px-5 pb-4">
+                <RowToggle label="Sync Status" pill={<span className="flex items-center gap-1.5 text-[12px] font-bold text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{isOnline ? (isSyncing ? "Syncing…" : "All synced") : "Offline"}</span>} />
+                <RowToggle label="Auto Sync" desc="Every 15 minutes" pill={<Switch checked={prefs.autoSync} onCheckedChange={(v) => setPref("autoSync", v)} />} />
+                <RowToggle label="Daily Backup" desc="At 02:00 AM" pill={<Switch checked={prefs.dailyBackup} onCheckedChange={(v) => setPref("dailyBackup", v)} />} />
+                <RowToggle label="Backup Location" desc="Secure Cloud Storage" pill={<Cloud size={15} className="text-[#536583]" />} last />
+              </div>
+            </Card>
+          </div>
+
+          {/* Row 4: Security + Notifications + Integrations */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <CardHead icon={<Shield size={15} />} title="Security & Owner PIN" small action={<button onClick={() => setPwOpen(true)} className="text-[12px] font-bold text-[#005dff] hover:underline">Update PIN</button>} />
+              <div className="px-5 pb-4">
+                <RowToggle label="Owner PIN" pill={<span className="font-mono text-[14px] tracking-widest text-[#102347]">•••••</span>} />
+                <RowToggle label="Session Timeout" pill={<Select value={prefs.sessionTimeout} onValueChange={(v) => setPref("sessionTimeout", v)}><SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["5 minutes", "15 minutes", "30 minutes", "1 hour"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>} />
+                <RowToggle label="Biometric Login" desc="For staff devices" pill={<Switch checked={prefs.biometric} onCheckedChange={(v) => setPref("biometric", v)} />} />
+                <RowToggle label="Two-Factor Auth" desc="Extra layer of security" pill={<Switch checked={prefs.twoFactor} onCheckedChange={(v) => setPref("twoFactor", v)} />} last />
+              </div>
+            </Card>
+
+            <Card>
+              <CardHead icon={<Bell size={15} />} title="Notifications" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Configure</button>} />
+              <div className="px-5 pb-4">
+                <RowToggle label="Low Stock Alerts" desc="Get notified for low stock" pill={<Switch checked={prefs.lowStock} onCheckedChange={(v) => setPref("lowStock", v)} />} />
+                <RowToggle label="Payment Reminders" desc="Pending payments" pill={<Switch checked={prefs.paymentReminders} onCheckedChange={(v) => setPref("paymentReminders", v)} />} />
+                <RowToggle label="Daily Summary" desc="End of day summary" pill={<Switch checked={prefs.dailySummary} onCheckedChange={(v) => setPref("dailySummary", v)} />} />
+                <RowToggle label="Promotions & Updates" desc="Product updates" pill={<Switch checked={prefs.promotions} onCheckedChange={(v) => setPref("promotions", v)} />} last />
+              </div>
+            </Card>
+
+            <Card>
+              <CardHead icon={<Plug size={15} />} title="Integrations" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Manage</button>} />
+              <div className="px-5 pb-4">
+                {[
+                  { name: "WhatsApp Business", status: "Connected", tone: "emerald" as const },
+                  { name: "TallyPrime", status: "Connected", tone: "emerald" as const },
+                  { name: "BharatPe", status: "Not Connected", tone: "amber" as const },
+                  { name: "Payment Gateway", status: "Connected", tone: "emerald" as const },
+                ].map((i, idx) => (
+                  <div key={i.name} className={cn("flex items-center gap-2.5 py-2.5", idx > 0 && "border-t border-[#eef2f8]")}>
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#f4f7fb]"><Plug size={13} className="text-[#536583]" /></span>
+                    <span className="flex-1 truncate text-[13px] font-bold text-[#102347]">{i.name}</span>
+                    <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", i.tone === "emerald" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>{i.status}</span>
+                    <ChevronRight size={14} className="text-[#9aa6bb]" />
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          {/* Footer */}
+          <div className="flex flex-col items-center justify-between gap-2 rounded-[12px] border border-[#e7edf7] bg-white px-5 py-3.5 sm:flex-row">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#eef5ff] text-[#005dff]"><Settings2 size={16} /></span>
+              <div>
+                <p className="text-[13px] font-extrabold text-[#102347]">About KiranaOS</p>
+                <p className="text-[11px] text-[#64748b]">Version 2.1.3 · You're up to date</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-5 text-[12px] font-bold text-[#005dff]">
+              <Link href="/sync-status" className="hover:underline">What's New</Link>
+              <button className="hover:underline">Help Center</button>
+              <button className="hover:underline">Contact Support</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <StoreEditPanel
+        open={editOpen}
+        shop={shop.data}
+        accent={accent}
+        setAccent={setAccent}
+        language={language}
+        setLanguage={setLanguage}
+        width={panelWidth}
+        onResizeStart={onResizeStart}
+        onClose={() => setEditOpen(false)}
+        onSaved={() => { queryClient.invalidateQueries({ queryKey: getGetShopQueryKey() }); setEditOpen(false); }}
+      />
+
+      <PasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
+    </div>
+  );
+}
+
+/* ── building blocks ── */
+function Card({ children }: { children: React.ReactNode }) {
+  return <div className="overflow-hidden rounded-[14px] border border-[#e7edf7] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">{children}</div>;
+}
+function CardHead({ icon, title, sub, action, small }: { icon: React.ReactNode; title: string; sub?: string; action?: React.ReactNode; small?: boolean }) {
+  return (
+    <div className={cn("flex items-start justify-between px-5 pt-4", small ? "pb-3" : "pb-3")}>
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-[#eef5ff] text-[#005dff]">{icon}</span>
+        <div>
+          <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">{title}</h3>
+          {sub && <p className="text-[11px] text-[#64748b]">{sub}</p>}
+        </div>
+      </div>
+      {action}
+    </div>
+  );
+}
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
+      <p className="truncate text-[13px] font-bold text-[#102347]">{value}</p>
+    </div>
+  );
+}
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="rounded-[8px] border border-[#e7edf7] p-3">
+      <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
+      <p className="font-display text-[20px] font-black text-[#102347]">{value}</p>
+      <p className="text-[10px] text-[#9aa6bb]">{sub}</p>
+    </div>
+  );
+}
+function RowToggle({ label, desc, pill, last }: { label: string; desc?: string; pill: React.ReactNode; last?: boolean }) {
+  return (
+    <div className={cn("flex items-center gap-3 py-2.5", !last && "border-b border-[#eef2f8]")}>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-bold text-[#102347]">{label}</p>
+        {desc && <p className="truncate text-[11px] text-[#64748b]">{desc}</p>}
+      </div>
+      <div className="shrink-0">{pill}</div>
+    </div>
+  );
+}
+
+/* ── Store profile edit slide-in ── */
+function StoreEditPanel({
+  open, shop, accent, setAccent, language, setLanguage, width, onResizeStart, onClose, onSaved,
+}: {
+  open: boolean;
+  shop: { name?: string | null; ownerName?: string | null; city?: string | null; address?: string | null; gstNumber?: string | null; phone?: string | null } | undefined;
+  accent: AccentColor;
+  setAccent: (c: AccentColor) => void;
+  language: AppLanguage;
+  setLanguage: (l: AppLanguage) => void;
+  width: number;
+  onResizeStart: (e: React.MouseEvent) => void;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const form = useForm<ShopFormData>({
+    resolver: zodResolver(shopSchema),
+    values: {
+      name: shop?.name ?? "", ownerName: shop?.ownerName ?? "", city: shop?.city ?? "",
+      address: shop?.address ?? "", gstNumber: shop?.gstNumber ?? "", phone: shop?.phone ?? "",
+    },
+  });
+  const updateShop = useUpdateShop({
+    mutation: {
+      onSuccess: () => { toast({ title: "Store profile saved" }); onSaved(); },
+      onError: (err: unknown) => toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
+    },
+  });
+
+  return (
+    <aside
+      style={{ width }}
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      role="dialog" aria-label="Edit store profile" aria-hidden={!open}
+    >
+      <PanelResizeHandle onResizeStart={onResizeStart} />
+      <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
+        <div>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">Edit Store Profile</h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">Store details, appearance and language.</p>
+        </div>
+        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+      </div>
+
+      <form onSubmit={form.handleSubmit((v) => updateShop.mutate({ data: v }))} className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+          <section className="space-y-3">
+            <h3 className="text-[13px] font-black text-[#13274d]">Store Details</h3>
+            <Fld label="Store Name" err={form.formState.errors.name?.message}><Input className="h-10" {...form.register("name")} /></Fld>
+            <Fld label="Owner Name" err={form.formState.errors.ownerName?.message}><Input className="h-10" {...form.register("ownerName")} /></Fld>
+            <div className="grid grid-cols-2 gap-3">
+              <Fld label="City" err={form.formState.errors.city?.message}><Input className="h-10" {...form.register("city")} /></Fld>
+              <Fld label="Phone"><Input className="h-10" {...form.register("phone")} /></Fld>
+            </div>
+            <Fld label="Address" err={form.formState.errors.address?.message}><Input className="h-10" {...form.register("address")} /></Fld>
+            <Fld label="GSTIN (optional)"><Input className="h-10" {...form.register("gstNumber")} /></Fld>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-[13px] font-black text-[#13274d]">Appearance</h3>
+            <div className="flex flex-wrap gap-2">
+              {(Object.entries(ACCENT_COLORS) as [AccentColor, { label: string; swatch: string }][]).map(([key, def]) => (
+                <button key={key} type="button" onClick={() => setAccent(key)} title={def.label}
+                  className={cn("h-8 w-8 rounded-full border-2 transition-transform", accent === key ? "scale-110 border-[#0f1e3d]" : "border-transparent hover:scale-105")}
+                  style={{ background: def.swatch }} aria-label={def.label} />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-[13px] font-black text-[#13274d]">Language</h3>
+            <Select value={language} onValueChange={(v) => setLanguage(v as AppLanguage)}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="hi">हिन्दी (Hindi)</SelectItem>
+              </SelectContent>
+            </Select>
+          </section>
+        </div>
+
+        <div className="shrink-0 border-t border-[#eef1f6] px-5 py-3.5">
+          <div className="flex gap-2.5">
+            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+              {updateShop.isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </aside>
+  );
+}
+
+function Fld({ label, err, children }: { label: string; err?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</Label>
+      {children}
+      {err && <p className="mt-1 text-[11px] text-rose-600">{err}</p>}
+    </div>
+  );
+}
+
+/* ── Password / PIN dialog ── */
+const pwSchema = z.object({
   currentPassword: z.string().min(1, "Required"),
   newPassword: z.string().min(6, "Min 6 characters"),
   confirmPassword: z.string(),
 }).refine((d) => d.newPassword === d.confirmPassword, { message: "Passwords don't match", path: ["confirmPassword"] });
-type PasswordFormData = z.infer<typeof passwordSchema>;
+type PwData = z.infer<typeof pwSchema>;
 
-const profileSchema = z.object({
-  displayName: z.string().min(1, "Name required"),
-  mobile: z.string().optional(),
-  counterName: z.string().optional(),
-});
-type ProfileFormData = z.infer<typeof profileSchema>;
-
-const PROFILE_SETTING_KEY = "ui:owner-profile:v1";
-
-const advancedLinks = [
-  { href: "/suppliers", label: "Suppliers", description: "Purchase parties", icon: Truck },
-  { href: "/staff", label: "Staff & roles", description: "Users and permissions", icon: UsersRound },
-  { href: "/devices", label: "Devices", description: "Licensed devices", icon: MonitorSmartphone },
-  { href: "/sync-status", label: "Cloud backup", description: "Backup health", icon: Cloud },
-  { href: "/smart-tools", label: "Smart tools", description: "Voice and automation", icon: Sparkles },
-  { href: "/recovery-mode", label: "Recovery mode", description: "Recover local drafts", icon: LifeBuoy },
-  { href: "/audit-logs", label: "Audit logs", description: "Owner approvals", icon: ReceiptText },
-  { href: "/recycle-bin", label: "Recycle bin", description: "Restore deleted records", icon: Recycle },
-  { href: "/plans", label: "Plans", description: "From Rs 299/month", icon: CreditCard },
-  { href: "/subscription", label: "Subscription", description: "Plan and expiry", icon: Bell },
-] as const;
-
-export default function Settings() {
+function PasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { toast } = useToast();
-  const { user } = useAuth();
-  const { language, setLanguage, t } = useAppLanguage();
-  const { accent, setAccent } = useAppTheme();
-  const changeSettingsPermission = usePermission("change_settings");
-  const queryClient = useQueryClient();
-  const [settingsPinOpen, setSettingsPinOpen] = useState(false);
-  const [settingsPinError, setSettingsPinError] = useState<string | null>(null);
-  const [pendingShopSettings, setPendingShopSettings] = useState<ShopFormData | null>(null);
-
-  const shop = useGetShop();
-
-  const profileForm = useForm<ProfileFormData>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      displayName: user?.name ?? "Owner",
-      mobile: user?.mobile ?? "",
-      counterName: "Main counter",
-    },
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    void offlineDB.getSetting<ProfileFormData>(PROFILE_SETTING_KEY).then((saved) => {
-      if (cancelled || !saved) return;
-      profileForm.reset({
-        displayName: saved.displayName || user?.name || "Owner",
-        mobile: saved.mobile || user?.mobile || "",
-        counterName: saved.counterName || "Main counter",
-      });
-    });
-    return () => { cancelled = true; };
-  }, [profileForm, user?.mobile, user?.name]);
-
-  const shopForm = useForm<ShopFormData>({
-    resolver: zodResolver(shopSchema),
-    values: {
-      name: shop.data?.name ?? "",
-      ownerName: shop.data?.ownerName ?? "",
-      city: shop.data?.city ?? "",
-      address: shop.data?.address ?? "",
-      gstNumber: shop.data?.gstNumber ?? "",
-      phone: shop.data?.phone ?? "",
-    },
-  });
-
-  const passwordForm = useForm<PasswordFormData>({
-    resolver: zodResolver(passwordSchema),
-    defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
-  });
-
-  const updateShop = useUpdateShop({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetShopQueryKey() });
-        toast({ title: "Shop settings saved" });
-      },
-      onError: (err: unknown) => toast({ title: "Error", description: (err as { data?: { message?: string } })?.data?.message ?? "Failed", variant: "destructive" }),
-    },
-  });
-
+  const [show, setShow] = useState(false);
+  const form = useForm<PwData>({ resolver: zodResolver(pwSchema), defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" } });
   const changePassword = useChangePassword({
     mutation: {
-      onSuccess: () => {
-        passwordForm.reset();
-        toast({ title: "Password changed" });
-      },
+      onSuccess: () => { form.reset(); toast({ title: "Password updated" }); onOpenChange(false); },
       onError: (err: unknown) => toast({ title: "Error", description: (err as { data?: { message?: string } })?.data?.message ?? "Incorrect password", variant: "destructive" }),
     },
   });
-
-  async function saveProfile(values: ProfileFormData) {
-    await offlineDB.setSetting(PROFILE_SETTING_KEY, values);
-    toast({ title: "Profile saved", description: "This profile is saved locally for the counter UI." });
-  }
-
-  function changeLanguage(nextLanguage: AppLanguage) {
-    setLanguage(nextLanguage);
-    toast({ title: "Language changed" });
-  }
-
   return (
-    <PageShell className="space-y-4">
-      <PageHeader title={t("settings.title")} description={t("settings.subtitle")} />
-
-      <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid h-auto w-full grid-cols-3 gap-1 bg-muted/60 p-1 sm:grid-cols-6 lg:max-w-5xl">
-          <TabsTrigger value="profile" data-testid="tab-profile"><UserCircle size={14} className="mr-1.5" />{t("settings.profile")}</TabsTrigger>
-          <TabsTrigger value="shop" data-testid="tab-shop"><Store size={14} className="mr-1.5" />{t("settings.shop")}</TabsTrigger>
-          <TabsTrigger value="language" data-testid="tab-language"><Languages size={14} className="mr-1.5" />{t("settings.language")}</TabsTrigger>
-          <TabsTrigger value="appearance" data-testid="tab-appearance"><Palette size={14} className="mr-1.5" />Appearance</TabsTrigger>
-          <TabsTrigger value="advanced" data-testid="tab-advanced"><LayoutGrid size={14} className="mr-1.5" />{t("settings.advanced")}</TabsTrigger>
-          <TabsTrigger value="security" data-testid="tab-security"><Shield size={14} className="mr-1.5" />{t("settings.security")}</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="profile">
-          <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-            <div className="rounded-lg border bg-card p-5">
-              <h2 className="font-semibold mb-1">{t("settings.profileTitle")}</h2>
-              <p className="text-sm text-muted-foreground mb-4">Visible owner/counter profile for this device. Backend account details still come from login.</p>
-              <form onSubmit={profileForm.handleSubmit(saveProfile)} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label>Display name</Label>
-                    <Input className="mt-1" {...profileForm.register("displayName")} />
-                  </div>
-                  <div>
-                    <Label>Mobile</Label>
-                    <Input className="mt-1" {...profileForm.register("mobile")} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label>Counter name</Label>
-                    <Input className="mt-1" placeholder="Main counter" {...profileForm.register("counterName")} />
-                  </div>
-                </div>
-                <Button type="submit">Save profile</Button>
-              </form>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">Update Owner Password</DialogTitle>
+          <p className="text-[12px] text-[#6d7c98]">Change the owner login password / PIN.</p>
+        </DialogHeader>
+        <form onSubmit={form.handleSubmit((v) => changePassword.mutate({ data: { currentPassword: v.currentPassword, newPassword: v.newPassword } }))} className="space-y-3.5">
+          <Fld label="Current password" err={form.formState.errors.currentPassword?.message}>
+            <div className="relative">
+              <Input className="h-10 pr-9" type={show ? "text" : "password"} {...form.register("currentPassword")} />
+              <button type="button" onClick={() => setShow((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]">{show ? <EyeOff size={15} /> : <Eye size={15} />}</button>
             </div>
-            <div className="rounded-lg border bg-card p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground"><UserCircle /></div>
-                <div>
-                  <p className="font-semibold">{user?.name ?? "Owner"}</p>
-                  <p className="text-xs text-muted-foreground">{user?.role ?? "owner"}</p>
-                </div>
-              </div>
-              <div className="mt-4 space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Account mobile</span><span>{user?.mobile ?? "Not set"}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Shop</span><span>{shop.data?.name ?? "Local shop"}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Language</span><Badge>{language === "hi" ? "Hindi" : "English"}</Badge></div>
-              </div>
-            </div>
+          </Fld>
+          <Fld label="New password" err={form.formState.errors.newPassword?.message}><Input className="h-10" type="password" {...form.register("newPassword")} /></Fld>
+          <Fld label="Confirm new password" err={form.formState.errors.confirmPassword?.message}><Input className="h-10" type="password" {...form.register("confirmPassword")} /></Fld>
+          <div className="flex gap-2.5 pt-1">
+            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={changePassword.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+              {changePassword.isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : "Update"}
+            </Button>
           </div>
-        </TabsContent>
-
-        <TabsContent value="shop">
-          <div className="rounded-lg border bg-card p-5">
-            <h2 className="font-semibold mb-4">Shop Profile</h2>
-            {shop.isLoading ? (
-              <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
-            ) : (
-              <form onSubmit={shopForm.handleSubmit((v) => {
-                if (!changeSettingsPermission.allowed) {
-                  toast({ title: "Permission denied", description: changeSettingsPermission.reason, variant: "destructive" });
-                  return;
-                }
-                setPendingShopSettings(v);
-                setSettingsPinError(null);
-                setSettingsPinOpen(true);
-              })} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <Label>Shop Name</Label>
-                    <Input data-testid="input-shop-name" className="mt-1" {...shopForm.register("name")} />
-                  </div>
-                  <div>
-                    <Label>Owner Name</Label>
-                    <Input data-testid="input-owner-name" className="mt-1" {...shopForm.register("ownerName")} />
-                  </div>
-                  <div>
-                    <Label>City</Label>
-                    <Input data-testid="input-city" className="mt-1" {...shopForm.register("city")} />
-                  </div>
-                  <div>
-                    <Label>Phone</Label>
-                    <Input data-testid="input-phone" className="mt-1" {...shopForm.register("phone")} />
-                  </div>
-                </div>
-                <div>
-                  <Label>Address</Label>
-                  <Input data-testid="input-address" className="mt-1" {...shopForm.register("address")} />
-                </div>
-                <div>
-                  <Label>GST Number (optional)</Label>
-                  <Input data-testid="input-gst" className="mt-1" placeholder="22AAAAA0000A1Z5" {...shopForm.register("gstNumber")} />
-                </div>
-                <Button type="submit" data-testid="button-save-shop" disabled={updateShop.isPending}>
-                  {updateShop.isPending ? <><Loader2 size={14} className="mr-1.5 animate-spin" />Saving...</> : "Save Settings"}
-                </Button>
-              </form>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="language">
-          <div className="rounded-lg border bg-card p-5">
-            <h2 className="font-semibold mb-1">{t("settings.languageTitle")}</h2>
-            <p className="text-sm text-muted-foreground mb-4">{t("settings.languageHelp")}</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <button type="button" onClick={() => changeLanguage("en")} className={`rounded-lg border p-4 text-left transition ${language === "en" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "hover:bg-accent"}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">{t("settings.english")}</span>
-                  {language === "en" && <Badge>Active</Badge>}
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">Clean English labels for counter staff.</p>
-              </button>
-              <button type="button" onClick={() => changeLanguage("hi")} className={`rounded-lg border p-4 text-left transition ${language === "hi" ? "border-primary bg-primary/10 ring-2 ring-primary/20" : "hover:bg-accent"}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">{t("settings.hindi")}</span>
-                  {language === "hi" && <Badge>Active</Badge>}
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">Shopkeeper-friendly Hindi/Hinglish labels.</p>
-              </button>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="appearance">
-          <div className="space-y-5">
-            <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-              <div className="border-b px-5 py-4">
-                <div className="flex items-center gap-2.5">
-                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
-                    <Palette size={16} />
-                  </span>
-                  <div>
-                    <h2 className="font-display text-base font-black tracking-tight">Accent colour</h2>
-                    <p className="text-[11px] text-muted-foreground">Changes buttons, sidebar, highlights and focus rings across the entire app. Applied instantly.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-3 p-5 sm:grid-cols-8">
-                {(Object.entries(ACCENT_COLORS) as [AccentColor, typeof ACCENT_COLORS[AccentColor]][]).map(([key, def]) => {
-                  const active = accent === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => {
-                        setAccent(key);
-                        toast({ title: `${def.label} theme applied` });
-                      }}
-                      className={cn(
-                        "group flex flex-col items-center gap-2.5 rounded-xl border-2 p-3 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        active
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-transparent hover:border-muted-foreground/20 hover:bg-muted/40"
-                      )}
-                    >
-                      <div className="relative">
-                        <div
-                          className="h-11 w-11 rounded-full shadow-md transition-transform duration-150 group-hover:scale-105"
-                          style={{ backgroundColor: def.swatch }}
-                        />
-                        {active && (
-                          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-background shadow ring-2 ring-primary">
-                            <Check size={11} className="text-primary" />
-                          </span>
-                        )}
-                      </div>
-                      <p className={cn("text-xs font-bold", active ? "text-primary" : "text-foreground")}>{def.label}</p>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="border-t bg-muted/30 px-5 py-3">
-                <p className="text-[11px] text-muted-foreground">
-                  Saved to this browser. Each device can have its own colour preference.
-                </p>
-              </div>
-            </div>
-
-            {/* Live preview card */}
-            <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-              <div className="border-b px-5 py-4">
-                <h2 className="font-display text-base font-black tracking-tight">Preview</h2>
-                <p className="text-[11px] text-muted-foreground">See how the selected accent looks across UI elements.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 p-5">
-                <button type="button" className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition hover:opacity-90">
-                  Primary button
-                </button>
-                <button type="button" className="rounded-xl border border-primary px-4 py-2 text-sm font-bold text-primary transition hover:bg-primary/10">
-                  Outline button
-                </button>
-                <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary">Badge</span>
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 rounded border-2 border-primary bg-primary" />
-                  <span className="text-sm text-muted-foreground">Checkbox</span>
-                </div>
-                <div className="h-2 w-32 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full w-3/5 rounded-full bg-primary transition-all duration-500" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="advanced">
-          <div className="rounded-lg border bg-card p-5">
-            <h2 className="font-semibold mb-1">{t("settings.advancedTitle")}</h2>
-            <p className="text-sm text-muted-foreground mb-4">{t("settings.advancedHelp")}</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {advancedLinks.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link key={item.href} href={item.href}>
-                    <div className="flex min-h-20 cursor-pointer gap-3 rounded-lg border p-3 transition hover:bg-accent">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon size={17} /></div>
-                      <div>
-                        <p className="font-semibold">{item.label}</p>
-                        <p className="text-sm text-muted-foreground">{item.description}</p>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="security">
-          <div className="rounded-lg border bg-card p-5">
-            <h2 className="font-semibold mb-4">Change Password</h2>
-            <form onSubmit={passwordForm.handleSubmit((v) => changePassword.mutate({ data: { currentPassword: v.currentPassword, newPassword: v.newPassword } }))} className="space-y-4 max-w-sm">
-              <div>
-                <Label>Current Password</Label>
-                <Input data-testid="input-current-password" type="password" className="mt-1" {...passwordForm.register("currentPassword")} />
-                {passwordForm.formState.errors.currentPassword && <p className="text-destructive text-xs mt-1">{passwordForm.formState.errors.currentPassword.message}</p>}
-              </div>
-              <div>
-                <Label>New Password</Label>
-                <Input data-testid="input-new-password" type="password" className="mt-1" {...passwordForm.register("newPassword")} />
-                {passwordForm.formState.errors.newPassword && <p className="text-destructive text-xs mt-1">{passwordForm.formState.errors.newPassword.message}</p>}
-              </div>
-              <div>
-                <Label>Confirm New Password</Label>
-                <Input data-testid="input-confirm-password" type="password" className="mt-1" {...passwordForm.register("confirmPassword")} />
-                {passwordForm.formState.errors.confirmPassword && <p className="text-destructive text-xs mt-1">{passwordForm.formState.errors.confirmPassword.message}</p>}
-              </div>
-              <Button type="submit" data-testid="button-change-password" disabled={changePassword.isPending}>
-                {changePassword.isPending ? <><Loader2 size={14} className="mr-1.5 animate-spin" />Changing...</> : "Change Password"}
-              </Button>
-            </form>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <OwnerPinModal
-        open={settingsPinOpen}
-        onCancel={() => setSettingsPinOpen(false)}
-        title="Approve settings change"
-        description="Owner PIN is required before changing shop settings. Data is saved locally first and backend must enforce it again."
-        confirmLabel="Save settings"
-        loading={updateShop.isPending}
-        error={settingsPinError}
-        onConfirm={async ({ ownerPin }) => {
-          if (!pendingShopSettings) return;
-          try {
-            await updateShop.mutateAsync({ data: { ...pendingShopSettings, ownerPin } });
-            setSettingsPinOpen(false);
-            setPendingShopSettings(null);
-          } catch (error) {
-            setSettingsPinError(error instanceof Error ? error.message : "Settings update failed. Check owner PIN.");
-          }
-        }}
-      />
-    </PageShell>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
