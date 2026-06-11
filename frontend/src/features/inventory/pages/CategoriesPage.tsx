@@ -1,125 +1,321 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useListProducts, type Product } from "@/lib/api/client";
 import { Input } from "@/components/ui/input";
-import { Boxes, FolderTree, Layers, Search, TrendingUp } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Boxes, ChevronLeft, ChevronRight, FolderTree, Layers, MoreVertical, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { isDeletedProduct } from "@/features/products/pages/product-pricing";
+import { descendantIds, loadCategories, newCategoryId, saveCategories, type ShopCategory } from "@/features/inventory/category-store";
 
-const BADGE = [
-  "bg-blue-50 text-blue-700", "bg-emerald-50 text-emerald-700", "bg-purple-50 text-purple-700",
-  "bg-amber-50 text-amber-700", "bg-rose-50 text-rose-700", "bg-cyan-50 text-cyan-700",
-  "bg-indigo-50 text-indigo-700", "bg-teal-50 text-teal-700",
-];
-function badge(name: string) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
-  return BADGE[h % BADGE.length];
-}
+const ROWS_PER_PAGE = 10;
 
 export default function CategoriesPage() {
-  const [search, setSearch] = useState("");
+  const { toast } = useToast();
   const products = useListProducts({ limit: 1000 }, {
     query: { placeholderData: (p: Product[] | undefined) => p ?? [], staleTime: 2 * 60_000 },
   });
+  const [cats, setCats] = useState<ShopCategory[]>([]);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<ShopCategory | null>(null);
+  const seededRef = useRef(false);
 
-  const all = useMemo(() => (products.data ?? []).filter((p) => !isDeletedProduct(p)), [products.data]);
+  const productList = useMemo(() => (products.data ?? []).filter((p) => !isDeletedProduct(p)), [products.data]);
 
-  const categories = useMemo(() => {
-    const map = new Map<string, number>();
-    all.forEach((p) => {
-      const c = (p.category ?? "general").trim() || "general";
-      map.set(c, (map.get(c) ?? 0) + 1);
-    });
-    return [...map.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
-  }, [all]);
+  // Load (and seed from product categories on first run)
+  useEffect(() => {
+    if (seededRef.current) return;
+    let active = true;
+    (async () => {
+      const stored = await loadCategories();
+      if (!active) return;
+      if (stored && stored.length) {
+        setCats(stored);
+        seededRef.current = true;
+        return;
+      }
+      if (!products.data) return; // wait for products to seed from
+      const names = [...new Set(productList.map((p) => (p.category ?? "general").trim() || "general"))];
+      const seeded: ShopCategory[] = names.map((name) => ({ id: newCategoryId(), name, parentId: null, status: "active", createdAt: new Date().toISOString() }));
+      setCats(seeded);
+      void saveCategories(seeded);
+      seededRef.current = true;
+    })();
+    return () => { active = false; };
+  }, [products.data, productList]);
+
+  function persist(next: ShopCategory[]) {
+    setCats(next);
+    void saveCategories(next);
+  }
+
+  function productCount(name: string) {
+    const n = name.trim().toLowerCase();
+    return productList.filter((p) => ((p.category ?? "general").trim().toLowerCase()) === n).length;
+  }
+  const nameById = useMemo(() => new Map(cats.map((c) => [c.id, c.name])), [cats]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? categories.filter((c) => c.name.toLowerCase().includes(q)) : categories;
-  }, [categories, search]);
+    return cats
+      .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.parentId && (nameById.get(c.parentId) ?? "").toLowerCase().includes(q)))
+      .sort((a, b) => (a.parentId === b.parentId ? a.name.localeCompare(b.name) : a.parentId ? 1 : -1));
+  }, [cats, search, nameById]);
 
-  const total = all.length;
-  const largest = categories[0];
-  const avg = categories.length ? Math.round(total / categories.length) : 0;
+  const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+  useEffect(() => { setPage(1); }, [search]);
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = rows.slice((safePage - 1) * ROWS_PER_PAGE, safePage * ROWS_PER_PAGE);
+  const firstRow = rows.length === 0 ? 0 : (safePage - 1) * ROWS_PER_PAGE + 1;
+  const lastRow = Math.min(safePage * ROWS_PER_PAGE, rows.length);
+
+  const stats = {
+    total: cats.length,
+    root: cats.filter((c) => !c.parentId).length,
+    sub: cats.filter((c) => c.parentId).length,
+    products: productList.length,
+  };
+
+  const openAdd = () => { setEditing(null); setDialogOpen(true); };
+  const openEdit = (c: ShopCategory) => { setEditing(c); setDialogOpen(true); };
+
+  function saveCategory(values: { name: string; parentId: string | null; status: "active" | "inactive" }) {
+    const name = values.name.trim();
+    if (!name) { toast({ title: "Category name required", variant: "destructive" }); return; }
+    const dupe = cats.find((c) => c.name.trim().toLowerCase() === name.toLowerCase() && c.id !== editing?.id);
+    if (dupe) { toast({ title: "Category already exists", variant: "destructive" }); return; }
+    if (editing) {
+      persist(cats.map((c) => (c.id === editing.id ? { ...c, name, parentId: values.parentId, status: values.status } : c)));
+      toast({ title: "Category updated" });
+    } else {
+      persist([...cats, { id: newCategoryId(), name, parentId: values.parentId, status: values.status, createdAt: new Date().toISOString() }]);
+      toast({ title: "Category added" });
+    }
+    setDialogOpen(false);
+  }
+
+  function toggleStatus(c: ShopCategory) {
+    persist(cats.map((x) => (x.id === c.id ? { ...x, status: x.status === "active" ? "inactive" : "active" } : x)));
+  }
+  function removeCategory(c: ShopCategory) {
+    // orphan children to root
+    persist(cats.filter((x) => x.id !== c.id).map((x) => (x.parentId === c.id ? { ...x, parentId: null } : x)));
+    toast({ title: "Category deleted" });
+  }
 
   const cards = [
-    { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: "Total Categories", value: categories.length.toLocaleString("en-IN"), sub: "In use" },
-    { icon: <Boxes size={18} />, cls: "bg-blue-50 text-blue-600", label: "Total Products", value: total.toLocaleString("en-IN"), sub: "Across categories" },
-    { icon: <TrendingUp size={18} />, cls: "bg-emerald-50 text-emerald-600", label: "Largest Category", value: largest ? String(largest.count) : "0", sub: largest ? largest.name.replace(/_/g, " ") : "—" },
-    { icon: <FolderTree size={18} />, cls: "bg-amber-50 text-amber-600", label: "Avg / Category", value: avg.toLocaleString("en-IN"), sub: "Products each" },
+    { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: "Total Categories", value: stats.total, sub: "Active categories" },
+    { icon: <FolderTree size={18} />, cls: "bg-blue-50 text-blue-600", label: "Root Categories", value: stats.root, sub: "Top level categories" },
+    { icon: <FolderTree size={18} />, cls: "bg-amber-50 text-amber-600", label: "Sub Categories", value: stats.sub, sub: "Child categories" },
+    { icon: <Boxes size={18} />, cls: "bg-emerald-50 text-emerald-600", label: "Products", value: stats.products, sub: "Under categories" },
   ];
 
   return (
     <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
+      {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {cards.map((c) => (
           <div key={c.label} className="flex items-center gap-3.5 rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[12px] ${c.cls}`}>{c.icon}</span>
             <div className="min-w-0">
               <p className="text-[12px] font-semibold text-[#6d7c98]">{c.label}</p>
-              <p className="font-display text-[22px] font-black leading-tight tracking-tight text-[#0f1e3d]">{c.value}</p>
-              <p className="truncate text-[11px] capitalize text-[#9aa6bb]">{c.sub}</p>
+              <p className="font-display text-[22px] font-black leading-tight tracking-tight text-[#0f1e3d]">{c.value.toLocaleString("en-IN")}</p>
+              <p className="text-[11px] text-[#9aa6bb]">{c.sub}</p>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="mt-3.5 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <div className="relative">
+      {/* Toolbar */}
+      <div className="mt-3.5 flex flex-col gap-3 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:flex-row md:items-center">
+        <div className="relative min-w-0 flex-1">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
           <Input
             className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[#0057ff] focus-visible:bg-white focus-visible:ring-0"
-            placeholder="Search categories"
+            placeholder="Search categories..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <Button onClick={openAdd} className="h-11 shrink-0 gap-1.5 rounded-[10px] px-5 text-[13px] font-bold shadow-[0_8px_18px_rgba(0,77,255,0.22)]">
+          <Plus size={16} /> Add Category
+        </Button>
       </div>
 
+      {/* Table */}
       <div className="mt-3.5 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <table className="w-full text-left text-[13px]">
           <thead>
             <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
-              <th className="px-4 py-3 font-bold">Category</th>
+              <th className="px-4 py-3 font-bold">Category Name</th>
+              <th className="px-3 py-3 font-bold">Parent Category</th>
               <th className="px-3 py-3 text-right font-bold">Products</th>
-              <th className="px-3 py-3 font-bold">Share of catalogue</th>
               <th className="px-3 py-3 text-center font-bold">Status</th>
+              <th className="px-3 py-3" />
             </tr>
           </thead>
           <tbody>
-            {products.isLoading && rows.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-16 text-center text-sm text-[#536383]">Loading…</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-16 text-center">
+            {rows.length === 0 ? (
+              <tr><td colSpan={5} className="px-4 py-16 text-center">
                 <p className="text-sm font-bold text-[#13274d]">No categories yet</p>
-                <p className="mt-1 text-xs text-[#536383]">Categories appear here as you assign them to products.</p>
+                <p className="mt-1 text-xs text-[#536383]">Click "Add Category" to create your first one.</p>
               </td></tr>
             ) : (
-              rows.map((c) => {
-                const share = total ? Math.round((c.count / total) * 100) : 0;
-                return (
-                  <tr key={c.name} className="border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe]">
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-bold capitalize ${badge(c.name)}`}>{c.name.replace(/_/g, " ")}</span>
-                    </td>
-                    <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{c.count.toLocaleString("en-IN")}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-28 overflow-hidden rounded-full bg-[#eef1f6]">
-                          <div className="h-full rounded-full bg-[#0057ff]" style={{ width: `${share}%` }} />
-                        </div>
-                        <span className="text-[12px] font-semibold text-[#6d7c98]">{share}%</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">Active</span>
-                    </td>
-                  </tr>
-                );
-              })
+              pagedRows.map((c) => (
+                <tr key={c.id} className="border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe]">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[#f4f7fb] text-[#536383]">
+                        <FolderTree size={15} />
+                      </span>
+                      <span className="font-extrabold capitalize text-[#14284e]">{c.name.replace(/_/g, " ")}</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    {c.parentId ? (
+                      <span className="capitalize text-[#45577a]">{(nameById.get(c.parentId) ?? "—").replace(/_/g, " ")}</span>
+                    ) : (
+                      <span className="text-[#9aa6bb]">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-right font-bold text-[#13274d]">{productCount(c.name).toLocaleString("en-IN")}</td>
+                  <td className="px-3 py-3 text-center">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${c.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                      {c.status === "active" ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[#0057ff]" aria-label={`Actions for ${c.name}`}>
+                          <MoreVertical size={16} />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onClick={() => openEdit(c)}><Pencil size={14} className="mr-2" /> Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toggleStatus(c)}><Power size={14} className="mr-2" /> {c.status === "active" ? "Deactivate" : "Activate"}</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => removeCategory(c)}><Trash2 size={14} className="mr-2" /> Delete</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
+
+        {rows.length > 0 && (
+          <div className="flex flex-col items-center gap-3 border-t border-[#eef1f6] px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-0">
+            <p className="text-[12px] text-[#6d7c98] sm:justify-self-start">
+              Showing <span className="font-bold text-[#13274d]">{firstRow}</span> to <span className="font-bold text-[#13274d]">{lastRow}</span> of <span className="font-bold text-[#13274d]">{rows.length}</span> categories
+            </p>
+            <div className="sm:justify-self-center"><Pagination page={safePage} totalPages={totalPages} onChange={setPage} /></div>
+            <span className="text-[11px] text-[#9aa6bb] sm:justify-self-end">{ROWS_PER_PAGE} per page</span>
+          </div>
+        )}
       </div>
+
+      <CategoryDialog open={dialogOpen} editing={editing} cats={cats} onOpenChange={setDialogOpen} onSave={saveCategory} />
+    </div>
+  );
+}
+
+function CategoryDialog({
+  open, editing, cats, onOpenChange, onSave,
+}: {
+  open: boolean;
+  editing: ShopCategory | null;
+  cats: ShopCategory[];
+  onOpenChange: (o: boolean) => void;
+  onSave: (v: { name: string; parentId: string | null; status: "active" | "inactive" }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [parentId, setParentId] = useState<string>("none");
+  const [status, setStatus] = useState<"active" | "inactive">("active");
+
+  useEffect(() => {
+    if (open) {
+      setName(editing?.name ?? "");
+      setParentId(editing?.parentId ?? "none");
+      setStatus(editing?.status ?? "active");
+    }
+  }, [open, editing]);
+
+  // valid parents: exclude self + descendants (no cycles)
+  const blocked = editing ? descendantIds(editing.id, cats) : new Set<string>();
+  const parentOptions = cats.filter((c) => c.id !== editing?.id && !blocked.has(c.id));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Category" : "Add Category"}</DialogTitle>
+          <p className="text-[12px] text-[#6d7c98]">{editing ? "Update this category." : "Create a new product category."}</p>
+        </DialogHeader>
+        <div className="space-y-3.5">
+          <div>
+            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Category Name<span className="ml-0.5 text-rose-500">*</span></Label>
+            <Input className="h-10" placeholder="e.g. Beverages" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </div>
+          <div>
+            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Parent Category</Label>
+            <Select value={parentId} onValueChange={setParentId}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (root category)</SelectItem>
+                {parentOptions.map((c) => <SelectItem key={c.id} value={c.id} className="capitalize">{c.name.replace(/_/g, " ")}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Status</Label>
+            <Select value={status} onValueChange={(v) => setStatus(v as "active" | "inactive")}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="mt-2 flex gap-2.5">
+          <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            type="button"
+            onClick={() => onSave({ name, parentId: parentId === "none" ? null : parentId, status })}
+            style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }}
+            className="h-11 flex-1 rounded-[10px] font-black text-white hover:opacity-95"
+          >
+            {editing ? "Update Category" : "Add Category"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const pages: (number | "…")[] = [];
+  if (totalPages <= 7) for (let i = 1; i <= totalPages; i++) pages.push(i);
+  else {
+    pages.push(1);
+    if (page > 3) pages.push("…");
+    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i);
+    if (page < totalPages - 2) pages.push("…");
+    pages.push(totalPages);
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40" aria-label="Previous"><ChevronLeft size={15} /></button>
+      {pages.map((p, i) => p === "…" ? <span key={`e${i}`} className="px-1.5 text-[12px] text-[#9aa6bb]">…</span> : (
+        <button key={p} onClick={() => onChange(p)} className={`grid h-8 min-w-8 place-items-center rounded-lg px-2 text-[12px] font-bold transition-colors ${p === page ? "bg-[#0057ff] text-white shadow-[0_4px_10px_rgba(0,87,255,0.25)]" : "border border-[#e3eaf3] text-[#45577a] hover:bg-[#f7f9fd]"}`}>{p}</button>
+      ))}
+      <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40" aria-label="Next"><ChevronRight size={15} /></button>
     </div>
   );
 }
