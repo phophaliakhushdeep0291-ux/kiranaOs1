@@ -29,6 +29,7 @@ import deviceRoutes from "./modules/devices/devices.routes.js";
 import paymentProviderRoutes from "./modules/payment-provider/paymentProvider.routes.js";
 import jobRoutes from "./modules/jobs/jobs.routes.js";
 import reminderRoutes from "./modules/reminders/reminders.routes.js";
+import expenseRoutes from "./modules/expenses/expenses.routes.js";
 
 const app = express();
 
@@ -189,6 +190,7 @@ app.use("/api/bills", billRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/udhar", udharRoutes);
 app.use("/api/suppliers", supplierRoutes);
+app.use("/api/expenses", expenseRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/ai", aiRoutes);

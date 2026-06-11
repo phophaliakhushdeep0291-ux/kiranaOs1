@@ -192,6 +192,38 @@ export interface Supplier {
   updatedAt?: string;
 }
 
+export type ExpensePaymentMode = "cash" | "upi" | "bank" | "card" | "other";
+
+export interface Expense {
+  id: string;
+  shopId?: string;
+  title: string;
+  amount: number;
+  category: string;
+  paymentMode: ExpensePaymentMode | string;
+  notes?: string | null;
+  spentAt: string;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExpenseInput {
+  title: string;
+  amount: number;
+  category?: string;
+  paymentMode?: ExpensePaymentMode;
+  notes?: string;
+  spentAt?: string;
+}
+
+export interface ExpenseSummary {
+  total: number;
+  count: number;
+  byCategory: Record<string, number>;
+  byMode: Record<string, number>;
+}
+
 export interface PurchaseBill {
   id: string;
   shopId?: string;

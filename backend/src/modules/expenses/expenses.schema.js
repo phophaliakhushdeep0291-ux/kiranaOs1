@@ -1,0 +1,19 @@
+import { z } from "zod";
+
+export const createExpenseSchema = z.object({
+  title: z.string().min(1).max(160),
+  amount: z.coerce.number().finite().nonnegative(),
+  category: z.string().min(1).max(60).default("general"),
+  paymentMode: z.enum(["cash", "upi", "bank", "card", "other"]).default("cash"),
+  notes: z.string().max(500).optional(),
+  spentAt: z.string().optional(),
+});
+
+export const updateExpenseSchema = createExpenseSchema.partial();
+
+export const expenseQuerySchema = z.object({
+  category: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  search: z.string().optional(),
+});

@@ -49,6 +49,7 @@ model Shop {
   reminderTemplates ReminderTemplate[]
   reminderLogs      ReminderLog[]
   dailyClosingSnapshots DailyClosingSnapshot[]
+  expenses          Expense[]
 }
 
 // ─────────────────────────────────────────────
@@ -374,6 +375,30 @@ model Supplier {
 
   @@index([shopId])
   @@index([shopId, deletedAt])
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// EXPENSE — shop operating expenses (rent, salary, utilities…)
+// ─────────────────────────────────────────────
+model Expense {
+  id          String    @id @default(cuid())
+  shopId      String
+  title       String
+  amount      Float     @default(0)
+  category    String    @default("general")
+  paymentMode String    @default("cash")
+  notes       String?
+  spentAt     DateTime  @default(now())
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId])
+  @@index([shopId, deletedAt])
+  @@index([shopId, spentAt])
   @@index([shopId, updatedAt, id])
 }
 
