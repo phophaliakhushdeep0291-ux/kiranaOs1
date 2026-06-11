@@ -17,6 +17,7 @@ const CustomerDetailPage = lazy(() => import("@/features/customers/pages/Custome
 const Inventory = lazy(() => import("@/features/inventory/pages/InventoryPage"));
 const StockIn = lazy(() => import("@/features/inventory/pages/StockInPage"));
 const StockOut = lazy(() => import("@/features/inventory/pages/StockOutPage"));
+const Categories = lazy(() => import("@/features/inventory/pages/CategoriesPage"));
 const PurchaseBillsPage = lazy(() => import("@/features/purchases/pages/PurchaseBillsPage"));
 const Udhar = lazy(() => import("@/features/ledger/pages/UdharPage"));
 const Suppliers = lazy(() => import("@/features/suppliers/pages/SuppliersPage"));
@@ -105,6 +106,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/products">
         <ProtectedRoute component={Products} />
+      </Route>
+      <Route path="/categories">
+        <ProtectedRoute component={Categories} />
       </Route>
       <Route path="/customers/:id">
         <ProtectedRoute component={CustomerDetailPage} />

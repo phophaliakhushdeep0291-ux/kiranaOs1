@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useListProducts, type Product } from "@/lib/api/client";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Boxes, ChevronLeft, ChevronRight, IndianRupee, Layers, PackageX, Search } from "lucide-react";
+import { AlertTriangle, Boxes, ChevronLeft, ChevronRight, IndianRupee, Layers, PackageX, Plus, Search } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
+import { StockMovementDialog } from "./StockMovementDialog";
 import {
   CATEGORIES,
   averageCost,
@@ -36,6 +38,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [page, setPage] = useState(1);
+  const [moveOpen, setMoveOpen] = useState(false);
   const debouncedSearch = useDebounce(search.trim(), 150);
 
   const products = useListProducts({ limit: 1000 }, {
@@ -118,6 +121,13 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
             {CATEGORIES.filter((c) => c !== "all").map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Button
+          onClick={() => setMoveOpen(true)}
+          style={{ background: mode === "in" ? "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" : "linear-gradient(180deg,#f43f5e 0%,#e11d48 100%)" }}
+          className="h-11 shrink-0 gap-1.5 rounded-[10px] px-5 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] hover:opacity-95"
+        >
+          <Plus size={16} /> {mode === "in" ? "New Stock In" : "New Stock Out"}
+        </Button>
       </div>
 
       {/* Table */}
@@ -199,6 +209,8 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
           </div>
         )}
       </div>
+
+      <StockMovementDialog mode={mode} open={moveOpen} onOpenChange={setMoveOpen} />
     </div>
   );
 }

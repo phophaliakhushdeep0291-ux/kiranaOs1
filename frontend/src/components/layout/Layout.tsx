@@ -73,6 +73,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/billing": "Create fast bills and collect payments",
   "/dashboard": "Your business at a glance",
   "/products": "Manage your product catalog",
+  "/categories": "Organise products into categories",
   "/inventory": "Track stock levels",
   "/inventory/stock-in": "Items currently in stock",
   "/inventory/stock-out": "Items that are out of stock",
@@ -85,6 +86,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/billing": "Billing",
   "/bills": "Bills History",
   "/products": "Products",
+  "/categories": "Categories",
   "/inventory": "Inventory",
   "/inventory/stock-in": "Stock In",
   "/inventory/stock-out": "Stock Out",
@@ -139,10 +141,10 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/billing", label: "Billing", Icon: ShoppingCart, badge: "F2", emphasis: true },
   {
     kind: "group", id: "inventory", label: "Inventory", Icon: Package,
-    triggerPaths: ["/products", "/inventory"],
+    triggerPaths: ["/products", "/categories", "/inventory"],
     children: [
       { href: "/products", label: "Products" },
-      { href: "/inventory", label: "Stock Overview" },
+      { href: "/categories", label: "Categories" },
       { href: "/inventory/stock-in", label: "Stock In" },
       { href: "/inventory/stock-out", label: "Stock Out" },
       { href: "/inventory/adjustments", label: "Adjustments" },
