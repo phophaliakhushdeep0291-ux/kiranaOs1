@@ -4,9 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Boxes, ChevronLeft, ChevronRight, FolderTree, Layers, MoreVertical, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
+import { Boxes, ChevronLeft, ChevronRight, FolderTree, Layers, MoreVertical, Pencil, Plus, Power, Search, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isDeletedProduct } from "@/features/products/pages/product-pricing";
 import { descendantIds, loadCategories, newCategoryId, saveCategories, type ShopCategory } from "@/features/inventory/category-store";
@@ -116,7 +115,7 @@ export default function CategoriesPage() {
   ];
 
   return (
-    <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
+    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${dialogOpen ? "lg:pr-[440px]" : ""}`}>
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {cards.map((c) => (
@@ -156,7 +155,7 @@ export default function CategoriesPage() {
               <th className="px-3 py-3 font-bold">Parent Category</th>
               <th className="px-3 py-3 text-right font-bold">Products</th>
               <th className="px-3 py-3 text-center font-bold">Status</th>
-              <th className="px-3 py-3" />
+              <th className="px-3 py-3 text-right font-bold">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -251,39 +250,49 @@ function CategoryDialog({
   const parentOptions = cats.filter((c) => c.id !== editing?.id && !blocked.has(c.id));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[420px]">
-        <DialogHeader>
-          <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Category" : "Add Category"}</DialogTitle>
-          <p className="text-[12px] text-[#6d7c98]">{editing ? "Update this category." : "Create a new product category."}</p>
-        </DialogHeader>
-        <div className="space-y-3.5">
-          <div>
-            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Category Name<span className="ml-0.5 text-rose-500">*</span></Label>
-            <Input className="h-10" placeholder="e.g. Beverages" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          </div>
-          <div>
-            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Parent Category</Label>
-            <Select value={parentId} onValueChange={setParentId}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None (root category)</SelectItem>
-                {parentOptions.map((c) => <SelectItem key={c.id} value={c.id} className="capitalize">{c.name.replace(/_/g, " ")}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Status</Label>
-            <Select value={status} onValueChange={(v) => setStatus(v as "active" | "inactive")}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+    <aside
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[420px] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      role="dialog"
+      aria-label={editing ? "Edit category" : "Add category"}
+      aria-hidden={!open}
+    >
+      <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
+        <div>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Category" : "Add Category"}</h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this category." : "Create a new product category."}</p>
         </div>
-        <div className="mt-2 flex gap-2.5">
+        <button onClick={() => onOpenChange(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
+        <div>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Category Name<span className="ml-0.5 text-rose-500">*</span></Label>
+          <Input className="h-10" placeholder="e.g. Beverages" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Parent Category</Label>
+          <Select value={parentId} onValueChange={setParentId}>
+            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None (root category)</SelectItem>
+              {parentOptions.map((c) => <SelectItem key={c.id} value={c.id} className="capitalize">{c.name.replace(/_/g, " ")}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Status</Label>
+          <Select value={status} onValueChange={(v) => setStatus(v as "active" | "inactive")}>
+            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-[#eef1f6] px-5 py-3.5">
+        <div className="flex gap-2.5">
           <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
             type="button"
@@ -294,8 +303,8 @@ function CategoryDialog({
             {editing ? "Update Category" : "Add Category"}
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </aside>
   );
 }
 

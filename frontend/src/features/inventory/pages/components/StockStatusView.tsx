@@ -88,7 +88,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
       ];
 
   return (
-    <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
+    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${moveOpen ? "lg:pr-[440px]" : ""}`}>
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {cards.map((c) => (

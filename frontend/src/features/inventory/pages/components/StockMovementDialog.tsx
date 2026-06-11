@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -75,96 +74,98 @@ export function StockMovementDialog({ mode, open, onOpenChange }: { mode: "in" |
   const unitLabel = selected ? productDisplayUnit(selected) : "";
 
   return (
-    <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())}>
-      <DialogContent className="max-w-[440px]">
-        <DialogHeader>
-          <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">
-            {mode === "in" ? "New Stock In" : "New Stock Out"}
-          </DialogTitle>
-          <p className="text-[12px] text-[#6d7c98]">
-            {mode === "in" ? "Add incoming stock to a product." : "Record stock leaving inventory (damage, expiry, return)."}
-          </p>
-        </DialogHeader>
+    <aside
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[420px] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      role="dialog"
+      aria-label={mode === "in" ? "New stock in" : "New stock out"}
+      aria-hidden={!open}
+    >
+      <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
+        <div>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{mode === "in" ? "New Stock In" : "New Stock Out"}</h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{mode === "in" ? "Add incoming stock to a product." : "Record stock leaving inventory."}</p>
+        </div>
+        <button onClick={close} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+      </div>
 
-        <div className="space-y-3.5">
-          {/* Product picker */}
-          <div>
-            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Product<span className="ml-0.5 text-rose-500">*</span></Label>
-            {selected ? (
-              <div className="flex items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-[#f8fafd] px-3 py-2">
-                <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-white text-lg">
-                  {selected.imageUrl ? <img src={selected.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(selected.name, selected.category)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-extrabold text-[#14284e]">{selected.name}</p>
-                  <p className="text-[11px] text-[#6d7c98]">In stock: {currentStock(selected)}</p>
-                </div>
-                <button onClick={() => { setProductId(""); setSearch(""); }} className="grid h-7 w-7 place-items-center rounded-lg text-[#536383] hover:bg-[#eef1f6]" aria-label="Change product"><X size={15} /></button>
+      <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
+        {/* Product picker */}
+        <div>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Product<span className="ml-0.5 text-rose-500">*</span></Label>
+          {selected ? (
+            <div className="flex items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-[#f8fafd] px-3 py-2">
+              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-white text-lg">
+                {selected.imageUrl ? <img src={selected.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(selected.name, selected.category)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-extrabold text-[#14284e]">{selected.name}</p>
+                <p className="text-[11px] text-[#6d7c98]">In stock: {currentStock(selected)}</p>
               </div>
-            ) : (
-              <div className="relative">
-                <div className="relative">
-                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
-                  <Input className="h-10 pl-9" placeholder="Search product by name or barcode" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
-                </div>
-                {matches.length > 0 && (
-                  <div className="mt-1 max-h-56 overflow-y-auto rounded-[10px] border border-[#e6ecf4] bg-white shadow-sm">
-                    {matches.map((p) => (
-                      <button key={p.id} onClick={() => { setProductId(p.id); setSearch(""); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-[#f7f9fd]">
-                        <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#f4f7fb] text-base">
-                          {p.imageUrl ? <img src={p.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(p.name, p.category)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[12.5px] font-bold text-[#14284e]">{p.name}</span>
-                          <span className="block text-[11px] text-[#6d7c98]">In stock: {currentStock(p)}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Quantity */}
-          <div>
-            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Quantity{unitLabel ? ` (${unitLabel})` : ""}<span className="ml-0.5 text-rose-500">*</span></Label>
-            <Input className="h-10" type="number" inputMode="decimal" min={0} placeholder="0" value={qty} onChange={(e) => setQty(e.target.value === "" ? "" : Number(e.target.value))} />
-          </div>
-
-          {mode === "in" ? (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Cost / unit (₹)</Label>
-                  <Input className="h-10" type="number" inputMode="decimal" min={0} placeholder="optional" value={cost} onChange={(e) => setCost(e.target.value === "" ? "" : Number(e.target.value))} />
-                </div>
-                <div>
-                  <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Supplier</Label>
-                  <Input className="h-10" placeholder="optional" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
-                </div>
-              </div>
-              <p className="text-[11px] text-[#9aa6bb]">Cost updates the product's weighted average cost.</p>
-            </>
+              <button onClick={() => { setProductId(""); setSearch(""); }} className="grid h-7 w-7 place-items-center rounded-lg text-[#536383] hover:bg-[#eef1f6]" aria-label="Change product"><X size={15} /></button>
+            </div>
           ) : (
-            <div>
-              <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Reason<span className="ml-0.5 text-rose-500">*</span></Label>
-              <Select value={reason} onValueChange={setReason}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {OUT_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="relative">
+              <div className="relative">
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
+                <Input className="h-10 pl-9" placeholder="Search product by name or barcode" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+              </div>
+              {matches.length > 0 && (
+                <div className="mt-1 max-h-56 overflow-y-auto rounded-[10px] border border-[#e6ecf4] bg-white shadow-sm">
+                  {matches.map((p) => (
+                    <button key={p.id} onClick={() => { setProductId(p.id); setSearch(""); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-[#f7f9fd]">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#f4f7fb] text-base">
+                        {p.imageUrl ? <img src={p.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(p.name, p.category)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12.5px] font-bold text-[#14284e]">{p.name}</span>
+                        <span className="block text-[11px] text-[#6d7c98]">In stock: {currentStock(p)}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
-
-          <div>
-            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Note</Label>
-            <Input className="h-10" placeholder="optional" value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
         </div>
 
-        <div className="mt-2 flex gap-2.5">
+        {/* Quantity */}
+        <div>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Quantity{unitLabel ? ` (${unitLabel})` : ""}<span className="ml-0.5 text-rose-500">*</span></Label>
+          <Input className="h-10" type="number" inputMode="decimal" min={0} placeholder="0" value={qty} onChange={(e) => setQty(e.target.value === "" ? "" : Number(e.target.value))} />
+        </div>
+
+        {mode === "in" ? (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Cost / unit (₹)</Label>
+                <Input className="h-10" type="number" inputMode="decimal" min={0} placeholder="optional" value={cost} onChange={(e) => setCost(e.target.value === "" ? "" : Number(e.target.value))} />
+              </div>
+              <div>
+                <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Supplier</Label>
+                <Input className="h-10" placeholder="optional" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+              </div>
+            </div>
+            <p className="text-[11px] text-[#9aa6bb]">Cost updates the product's weighted average cost.</p>
+          </>
+        ) : (
+          <div>
+            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Reason<span className="ml-0.5 text-rose-500">*</span></Label>
+            <Select value={reason} onValueChange={setReason}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>{OUT_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div>
+          <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Note</Label>
+          <Input className="h-10" placeholder="optional" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-[#eef1f6] px-5 py-3.5">
+        <div className="flex gap-2.5">
           <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={close}>Cancel</Button>
           <Button
             type="button"
@@ -176,7 +177,7 @@ export function StockMovementDialog({ mode, open, onOpenChange }: { mode: "in" |
             {pending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : mode === "in" ? "Add Stock" : "Remove Stock"}
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </aside>
   );
 }

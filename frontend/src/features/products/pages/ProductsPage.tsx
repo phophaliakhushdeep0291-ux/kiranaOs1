@@ -320,7 +320,7 @@ export default function ProductsPage() {
                 <th className="px-3 py-3 text-right font-bold">Cost Price</th>
                 <th className="px-3 py-3 text-right font-bold">Selling Price</th>
                 <th className="px-3 py-3 text-center font-bold">Stock</th>
-                <th className="px-3 py-3" />
+                <th className="px-3 py-3 text-right font-bold">Action</th>
               </tr>
             </thead>
             <tbody>
