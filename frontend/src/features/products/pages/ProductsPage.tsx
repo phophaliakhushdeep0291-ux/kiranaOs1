@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertTriangle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Layers,
@@ -28,6 +29,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import { usePermission } from "@/features/staff/permissions";
@@ -86,7 +88,9 @@ export default function ProductsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("active");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [open, setOpen] = useState(false);
@@ -177,8 +181,17 @@ export default function ProductsPage() {
       .filter((product) => !isDeletedProduct(product))
       .filter((product) => category === "all" || (product.category ?? "general") === category)
       .filter((product) => statusFilter === "all" || (statusFilter === "active" ? !isInactiveProduct(product) : isInactiveProduct(product)))
+      .filter((product) => {
+        if (stockFilter === "all") return true;
+        const out = Number(product.stockBaseQty ?? 0) <= 0;
+        const low = isLowStock(product) && !out;
+        if (stockFilter === "out") return out;
+        if (stockFilter === "low") return low;
+        return !out && !low; // "in"
+      })
+      .filter((product) => typeFilter === "all" || (typeFilter === "loose" ? !!product.isLooseItem : !product.isLooseItem))
       .filter((product) => productMatchesSearch(product, q));
-  }, [products.data, category, statusFilter, debouncedSearch]);
+  }, [products.data, category, statusFilter, stockFilter, typeFilter, debouncedSearch]);
 
   const stats = useMemo(() => {
     const all = (products.data ?? []).filter((product) => !isDeletedProduct(product));
@@ -194,7 +207,7 @@ export default function ProductsPage() {
 
   /* pagination */
   const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
-  useEffect(() => { setPage(1); }, [debouncedSearch, category, statusFilter, rowsPerPage]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, category, statusFilter, stockFilter, typeFilter, rowsPerPage]);
   const safePage = Math.min(page, totalPages);
   const pagedRows = rows.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
   const firstRow = rows.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
@@ -275,17 +288,14 @@ export default function ProductsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-11 w-full gap-2 rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-36" data-testid="select-status">
-            <SlidersHorizontal size={14} className="text-[#6b7a9a]" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="all">All status</SelectItem>
-          </SelectContent>
-        </Select>
+        <FiltersButton
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          stockFilter={stockFilter}
+          setStockFilter={setStockFilter}
+          typeFilter={typeFilter}
+          setTypeFilter={setTypeFilter}
+        />
         <Button
           data-testid="button-add-product"
           onClick={openAdd}
@@ -301,7 +311,7 @@ export default function ProductsPage() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[920px] text-left text-[13px]">
             <thead>
-              <tr className="border-b border-[#eef1f6] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
+              <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
                 <th className="px-4 py-3 font-bold">Product</th>
                 <th className="px-3 py-3 font-bold">Category</th>
                 <th className="px-3 py-3 font-bold">SKU / Barcode</th>
@@ -309,7 +319,7 @@ export default function ProductsPage() {
                 <th className="px-3 py-3 text-right font-bold">MRP</th>
                 <th className="px-3 py-3 text-right font-bold">Cost Price</th>
                 <th className="px-3 py-3 text-right font-bold">Selling Price</th>
-                <th className="px-3 py-3 text-right font-bold">Stock</th>
+                <th className="px-3 py-3 text-center font-bold">Stock</th>
                 <th className="px-3 py-3" />
               </tr>
             </thead>
@@ -358,9 +368,9 @@ export default function ProductsPage() {
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(mrp)}</td>
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(averageCost(product))}</td>
                       <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{rs(product.sellingPrice ?? product.defaultPricePerRateUnit)}</td>
-                      {/* Stock + status underneath */}
+                      {/* Stock + status underneath, centered */}
                       <td className="px-3 py-3">
-                        <div className="flex flex-col items-end gap-1">
+                        <div className="flex flex-col items-center gap-1">
                           <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
                           {outOfStock ? (
                             <StatusPill className="bg-rose-50 text-rose-600">Out of Stock</StatusPill>
@@ -487,6 +497,67 @@ function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNod
 
 function StatusPill({ children, className }: { children: React.ReactNode; className: string }) {
   return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${className}`}>{children}</span>;
+}
+
+/* ── Filters popover ── */
+function FiltersButton({
+  statusFilter, setStatusFilter, stockFilter, setStockFilter, typeFilter, setTypeFilter,
+}: {
+  statusFilter: string; setStatusFilter: (v: string) => void;
+  stockFilter: string; setStockFilter: (v: string) => void;
+  typeFilter: string; setTypeFilter: (v: string) => void;
+}) {
+  const activeCount = [statusFilter !== "all", stockFilter !== "all", typeFilter !== "all"].filter(Boolean).length;
+  const clearAll = () => { setStatusFilter("all"); setStockFilter("all"); setTypeFilter("all"); };
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          data-testid="button-filters"
+          className="relative flex h-11 shrink-0 items-center gap-2 rounded-[10px] border border-[#e3eaf3] bg-white px-4 text-[13px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] data-[state=open]:border-[#0057ff]"
+        >
+          <SlidersHorizontal size={14} className="text-[#6b7a9a]" />
+          Filters
+          {activeCount > 0 && (
+            <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[#0057ff] px-1 text-[10px] font-black text-white">{activeCount}</span>
+          )}
+          <ChevronDown size={14} className="text-[#6b7a9a]" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[264px] p-0">
+        <div className="flex items-center justify-between border-b border-[#eef1f6] px-4 py-2.5">
+          <span className="text-[13px] font-black text-[#13274d]">Filters</span>
+          <button onClick={clearAll} disabled={activeCount === 0} className="text-[12px] font-bold text-[#0057ff] transition-colors disabled:text-[#9aa6bb]">Clear all</button>
+        </div>
+        <div className="space-y-4 p-4">
+          <FilterGroup label="Stock" value={stockFilter} onChange={setStockFilter} options={[["all", "All"], ["in", "In Stock"], ["low", "Low Stock"], ["out", "Out of Stock"]]} />
+          <FilterGroup label="Item type" value={typeFilter} onChange={setTypeFilter} options={[["all", "All"], ["packed", "Packed"], ["loose", "Loose"]]} />
+          <FilterGroup label="Status" value={statusFilter} onChange={setStatusFilter} options={[["all", "All"], ["active", "Active"], ["inactive", "Inactive"]]} />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function FilterGroup({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map(([v, l]) => (
+          <button
+            key={v}
+            onClick={() => onChange(v)}
+            className={`rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
+              value === v ? "border-[#0057ff] bg-[#0057ff] text-white" : "border-[#e3eaf3] bg-white text-[#45577a] hover:bg-[#f7f9fd]"
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* ── Pagination ── */
