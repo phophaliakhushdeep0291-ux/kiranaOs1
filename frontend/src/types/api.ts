@@ -82,6 +82,7 @@ export interface Product {
   reorderLevel?: number;
   description?: string | null;
   imageUrl?: string | null;
+  isLooseItem?: boolean;
   lowStockThreshold?: number;
   lowStockAlert?: number;
   isActive?: boolean;
@@ -131,6 +132,7 @@ export interface ProductInput {
   reorderLevel?: number;
   description?: string;
   imageUrl?: string;
+  isLooseItem?: boolean;
   lowStockThreshold?: number;
   lowStockAlert?: number;
   isActive?: boolean;

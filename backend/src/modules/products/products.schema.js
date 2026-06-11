@@ -19,6 +19,7 @@ export const createProductSchema = z.object({
   reorderLevel: quantityAmount().default(0),
   description: z.string().max(500).optional(),
   imageUrl: z.string().optional(),
+  isLooseItem: z.boolean().default(false),
   lowStockThreshold: quantityAmount().default(0),
 });
 

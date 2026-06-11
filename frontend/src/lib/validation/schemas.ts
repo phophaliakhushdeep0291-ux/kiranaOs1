@@ -50,6 +50,7 @@ export const productCreationSchema = z.object({
   reorderLevel: nonNegativeQuantity.optional(),
   description: z.string().trim().max(500).optional(),
   imageUrl: z.string().optional(),
+  isLooseItem: z.boolean().default(false),
   displayUnit: z.string().trim().min(1).default("piece"),
   baseUnit: z.string().trim().min(1).default("piece"),
   rateUnit: z.string().trim().min(1).default("piece"),

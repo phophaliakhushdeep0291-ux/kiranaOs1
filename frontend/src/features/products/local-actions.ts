@@ -109,6 +109,7 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
     reorderLevel: normalized.reorderLevel ?? existing?.reorderLevel ?? 0,
     description: normalized.description ?? existing?.description ?? null,
     imageUrl: normalized.imageUrl ?? existing?.imageUrl ?? null,
+    isLooseItem: normalized.isLooseItem ?? existing?.isLooseItem ?? false,
     lowStockThreshold: normalized.lowStockThreshold,
     lowStockAlert: normalized.lowStockAlert ?? normalized.lowStockThreshold,
     isActive: normalized.isActive,

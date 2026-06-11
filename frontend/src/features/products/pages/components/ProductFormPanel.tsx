@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ScanLine, Upload, X } from "lucide-react";
+import { Loader2, Plus, ScanLine, Upload, X } from "lucide-react";
 import { useBusinessType } from "@/features/settings/business-types";
+import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAliases } from "@/features/products/product-reliability";
 import { UNITS } from "../product-pricing";
 import type { ProductFormData } from "../product-form-state";
 
@@ -64,7 +65,26 @@ export function ProductFormPanel({
   const categories = def.categories.filter((c) => c !== "all");
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
+  const isLoose = form.watch("isLooseItem");
   const err = form.formState.errors;
+
+  /* aliases */
+  const aliasesText = form.watch("aliasesText") ?? "";
+  const currentAliases = splitProductAliases(aliasesText);
+  const aliasSuggestions = uniqueProductAliases(getLocalProductAliasSuggestions(form.watch("name"), form.watch("category")))
+    .filter((a) => !currentAliases.map((x) => x.toLowerCase()).includes(a.toLowerCase()))
+    .slice(0, 8);
+  function appendAlias(alias: string) {
+    form.setValue("aliasesText", uniqueProductAliases([...currentAliases, alias]).join(", "), { shouldDirty: true });
+  }
+  function removeAlias(alias: string) {
+    form.setValue("aliasesText", currentAliases.filter((a) => a !== alias).join(", "), { shouldDirty: true });
+  }
+
+  /* avg cost + margin */
+  const cost = Number(form.watch("costPrice") || 0);
+  const selling = Number(form.watch("sellingPrice") || 0);
+  const margin = selling > 0 ? Math.round(((selling - cost) / selling) * 1000) / 10 : 0;
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -82,197 +102,217 @@ export function ProductFormPanel({
   }
 
   return (
-    <>
-      {/* light backdrop (click to close) */}
-      <div
-        onClick={() => onOpenChange(false)}
-        className={`fixed inset-0 z-40 bg-slate-900/10 transition-opacity duration-200 ${open ? "opacity-100" : "pointer-events-none opacity-0"}`}
-        aria-hidden="true"
-      />
+    <aside
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[420px] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      role="dialog"
+      aria-label={editing ? "Edit product" : "Add new product"}
+      aria-hidden={!open}
+    >
+      {/* Header */}
+      <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
+        <div>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">
+            {editing ? "Edit Product" : "Add New Product"}
+          </h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">
+            {editing ? "Update the details of this product" : "Fill in the details to add a new product"}
+          </p>
+        </div>
+        <button onClick={() => onOpenChange(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close">
+          <X size={18} />
+        </button>
+      </div>
 
-      {/* slide-in panel */}
-      <aside
-        className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-[420px] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.12)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "translate-x-0" : "translate-x-full"}`}
-        role="dialog"
-        aria-label={editing ? "Edit product" : "Add new product"}
-      >
-        {/* Header */}
-        <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
-          <div>
-            <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">
-              {editing ? "Edit Product" : "Add New Product"}
-            </h2>
-            <p className="mt-0.5 text-[12px] text-[#6d7c98]">
-              {editing ? "Update the details of this product" : "Fill in the details to add a new product"}
-            </p>
-          </div>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {/* Basic Information */}
+          <Section title="Basic Information">
+            <Field label="Product Name" required error={err.name?.message}>
+              <Input className="h-10" placeholder="e.g. Tata Salt 1kg" {...form.register("name")} />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Category" required>
+                <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Brand">
+                <Input className="h-10" placeholder="e.g. Tata" {...form.register("brand")} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="SKU / Barcode" required={!isLoose}>
+                <div className="relative">
+                  <Input className="h-10 pr-9" placeholder="Scan or type" {...form.register("barcode")} />
+                  <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
+                </div>
+              </Field>
+              <Field label="Unit Type" required>
+                <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {def.primaryUnits.map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
+                    <div className="my-1 h-px bg-border" />
+                    {UNITS.filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+            <Field label="HSN (Optional)">
+              <Input className="h-10" placeholder="e.g. 25010010" {...form.register("hsn")} />
+            </Field>
+
+            {/* Loose item toggle */}
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#e3eaf3] bg-[#f8fafd] px-3 py-2.5">
+              <input
+                type="checkbox"
+                checked={!!isLoose}
+                onChange={(e) => form.setValue("isLooseItem", e.target.checked, { shouldDirty: true })}
+                className="mt-0.5 h-4 w-4 rounded border-[#cdd9ea] accent-[#0057ff]"
+              />
+              <span>
+                <span className="block text-[12.5px] font-bold text-[#13274d]">Loose item</span>
+                <span className="block text-[11px] text-[#6d7c98]">Sold loose by weight (grains, pulses, oil) — no fixed package or barcode.</span>
+              </span>
+            </label>
+          </Section>
+
+          {/* Aliases */}
+          <Section title="Aliases & Local Names">
+            <Field label="Alternate names (comma separated)">
+              <Input className="h-10" placeholder="namak, salt, साल्ट" {...form.register("aliasesText")} />
+            </Field>
+            {currentAliases.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {currentAliases.map((a) => (
+                  <span key={a} className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-2.5 py-1 text-[11px] font-bold text-[#0057ff]">
+                    {a}
+                    <button type="button" onClick={() => removeAlias(a)} aria-label={`Remove ${a}`} className="text-[#0057ff]/60 hover:text-[#0057ff]"><X size={11} /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {aliasSuggestions.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-[11px] font-semibold text-[#6d7c98]">Suggestions — tap to add</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {aliasSuggestions.map((a) => (
+                    <button key={a} type="button" onClick={() => appendAlias(a)} className="inline-flex items-center gap-1 rounded-full border border-[#e3eaf3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#45577a] transition-colors hover:border-[#0057ff]/40 hover:text-[#0057ff]">
+                      <Plus size={11} /> {a}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Section>
+
+          {/* Pricing */}
+          <Section title="Pricing">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="MRP (₹)" required>
+                <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("mrp")} />
+              </Field>
+              <Field label="Cost Price (₹)" required>
+                <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("costPrice")} />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Selling Price (₹)" required error={err.sellingPrice?.message}>
+                <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("sellingPrice")} />
+              </Field>
+              <Field label="GST Rate">
+                <Select value={String(form.watch("gstRate") ?? 0)} onValueChange={(v) => form.setValue("gstRate", Number(v), { shouldDirty: true })}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {GST_RATES.map((r) => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+            {/* Avg cost + margin readout */}
+            <div className="flex items-center justify-between rounded-[10px] border border-[#e6ecf4] bg-[#f8fafd] px-3 py-2 text-[12px]">
+              <span className="font-semibold text-[#6d7c98]">Avg. cost</span>
+              <span className="font-black text-[#13274d]">₹{cost.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              <span className="font-semibold text-[#6d7c98]">Margin</span>
+              <span className={`font-black ${margin < 0 ? "text-rose-600" : "text-emerald-600"}`}>{margin}%</span>
+            </div>
+          </Section>
+
+          {/* Stock & Inventory */}
+          <Section title="Stock & Inventory">
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Opening Stock" required>
+                <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
+              </Field>
+              <Field label="Low Stock Alert">
+                <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("lowStockAlert")} />
+              </Field>
+              <Field label="Reorder Level">
+                <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("reorderLevel")} />
+              </Field>
+            </div>
+          </Section>
+
+          {/* Product Image */}
+          <Section title="Product Image">
+            <div className="flex items-center gap-3">
+              <div className="grid h-[84px] w-[84px] shrink-0 place-items-center overflow-hidden rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc]">
+                {imageUrl ? <img src={imageUrl} alt="Product" className="h-full w-full object-contain" /> : <Upload size={20} className="text-[#9aa6bb]" />}
+              </div>
+              <button type="button" onClick={() => fileRef.current?.click()} className="flex h-[84px] flex-1 flex-col items-center justify-center gap-1 rounded-[12px] border border-dashed border-[#cdd9ea] bg-[#fafbfe] text-center transition-colors hover:border-[#0057ff]/50">
+                <Upload size={18} className="text-[#0057ff]" />
+                <span className="text-[12px] font-bold text-[#0057ff]">{imageUrl ? "Replace Image" : "Upload Image"}</span>
+                <span className="text-[10px] text-[#9aa6bb]">PNG, JPG up to 2MB</span>
+              </button>
+              <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => void handleFile(e.target.files?.[0])} />
+            </div>
+            <p className="mt-1.5 text-[10px] text-[#9aa6bb]">Recommended size: 512x512px{imageUrl ? " · stored on this device and synced." : ""}</p>
+            {imageUrl && (
+              <button type="button" onClick={() => form.setValue("imageUrl", "", { shouldDirty: true })} className="mt-1 text-[11px] font-semibold text-rose-600 hover:underline">Remove image</button>
+            )}
+            {imgError && <p className="mt-1 text-[11px] text-rose-600">{imgError}</p>}
+          </Section>
+
+          {/* Additional Information */}
+          <Section title="Additional Information">
+            <Field label="Description (Optional)">
+              <textarea
+                {...form.register("description")}
+                maxLength={250}
+                rows={3}
+                placeholder="Enter product description..."
+                className="w-full resize-none rounded-[10px] border border-[#e3eaf3] bg-white px-3 py-2 text-[13px] text-[#0f2147] placeholder:text-[#6b7a9a] focus:border-[#0057ff] focus:outline-none focus:ring-0"
+              />
+              <p className="mt-1 text-right text-[10px] text-[#9aa6bb]">{description.length}/250</p>
+            </Field>
+          </Section>
         </div>
 
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            {/* Basic Information */}
-            <Section title="Basic Information">
-              <Field label="Product Name" required error={err.name?.message}>
-                <Input className="h-10" placeholder="e.g. Tata Salt 1kg" {...form.register("name")} />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Category" required>
-                  <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Brand">
-                  <Input className="h-10" placeholder="e.g. Tata" {...form.register("brand")} />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="SKU / Barcode" required>
-                  <div className="relative">
-                    <Input className="h-10 pr-9" placeholder="Scan or type" {...form.register("barcode")} />
-                    <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
-                  </div>
-                </Field>
-                <Field label="Unit Type" required>
-                  <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>
-                      {def.primaryUnits.map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
-                      <div className="my-1 h-px bg-border" />
-                      {UNITS.filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-              <Field label="HSN (Optional)">
-                <Input className="h-10" placeholder="e.g. 25010010" {...form.register("hsn")} />
-              </Field>
-            </Section>
-
-            {/* Pricing */}
-            <Section title="Pricing">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="MRP (₹)" required>
-                  <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("mrp")} />
-                </Field>
-                <Field label="Cost Price (₹)" required>
-                  <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("costPrice")} />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Selling Price (₹)" required error={err.sellingPrice?.message}>
-                  <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("sellingPrice")} />
-                </Field>
-                <Field label="GST Rate">
-                  <Select value={String(form.watch("gstRate") ?? 0)} onValueChange={(v) => form.setValue("gstRate", Number(v), { shouldDirty: true })}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {GST_RATES.map((r) => <SelectItem key={r} value={String(r)}>{r}%</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
-            </Section>
-
-            {/* Stock & Inventory */}
-            <Section title="Stock & Inventory">
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Opening Stock" required>
-                  <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
-                </Field>
-                <Field label="Low Stock Alert">
-                  <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("lowStockAlert")} />
-                </Field>
-                <Field label="Reorder Level">
-                  <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("reorderLevel")} />
-                </Field>
-              </div>
-            </Section>
-
-            {/* Product Image */}
-            <Section title="Product Image">
-              <div className="flex items-center gap-3">
-                <div className="grid h-[84px] w-[84px] shrink-0 place-items-center overflow-hidden rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc]">
-                  {imageUrl ? (
-                    <img src={imageUrl} alt="Product" className="h-full w-full object-contain" />
-                  ) : (
-                    <Upload size={20} className="text-[#9aa6bb]" />
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="flex h-[84px] flex-1 flex-col items-center justify-center gap-1 rounded-[12px] border border-dashed border-[#cdd9ea] bg-[#fafbfe] text-center transition-colors hover:border-[#0057ff]/50"
-                >
-                  <Upload size={18} className="text-[#0057ff]" />
-                  <span className="text-[12px] font-bold text-[#0057ff]">{imageUrl ? "Replace Image" : "Upload Image"}</span>
-                  <span className="text-[10px] text-[#9aa6bb]">PNG, JPG up to 2MB</span>
-                </button>
-                <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => void handleFile(e.target.files?.[0])} />
-              </div>
-              <p className="mt-1.5 text-[10px] text-[#9aa6bb]">Recommended size: 512x512px{imageUrl ? " · stored on this device and synced." : ""}</p>
-              {imageUrl && (
-                <button type="button" onClick={() => form.setValue("imageUrl", "", { shouldDirty: true })} className="mt-1 text-[11px] font-semibold text-rose-600 hover:underline">
-                  Remove image
-                </button>
-              )}
-              {imgError && <p className="mt-1 text-[11px] text-rose-600">{imgError}</p>}
-            </Section>
-
-            {/* Additional Information */}
-            <Section title="Additional Information">
-              <Field label="Description (Optional)">
-                <textarea
-                  {...form.register("description")}
-                  maxLength={250}
-                  rows={3}
-                  placeholder="Enter product description..."
-                  className="w-full resize-none rounded-[10px] border border-[#e3eaf3] bg-white px-3 py-2 text-[13px] text-[#0f2147] placeholder:text-[#6b7a9a] focus:border-[#0057ff] focus:outline-none focus:ring-0"
-                />
-                <p className="mt-1 text-right text-[10px] text-[#9aa6bb]">{description.length}/250</p>
-              </Field>
-            </Section>
+        {/* Footer */}
+        <div className="shrink-0 border-t border-[#eef1f6] px-5 py-3.5">
+          {!editing && (
+            <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
+              <input type="checkbox" checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[#0057ff]" />
+              Keep panel open to add another product
+            </label>
+          )}
+          <div className="flex gap-2.5">
+            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button
+              type="submit"
+              disabled={isPending}
+              style={{ background: "linear-gradient(180deg, #005dff 0%, #0047e8 100%)" }}
+              className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white shadow-[0_10px_22px_rgba(0,77,255,0.28)] hover:opacity-95"
+            >
+              {isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : editing ? "Update Product" : "Save Product"}
+            </Button>
           </div>
-
-          {/* Footer */}
-          <div className="shrink-0 border-t border-[#eef1f6] px-5 py-3.5">
-            {!editing && (
-              <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
-                <input
-                  type="checkbox"
-                  checked={stayOpen}
-                  onChange={(e) => onStayOpenChange(e.target.checked)}
-                  className="h-4 w-4 rounded border-[#cdd9ea] accent-[#0057ff]"
-                />
-                Keep panel open to add another product
-              </label>
-            )}
-            <div className="flex gap-2.5">
-              <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isPending}
-                style={{ background: "linear-gradient(180deg, #005dff 0%, #0047e8 100%)" }}
-                className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white shadow-[0_10px_22px_rgba(0,77,255,0.28)] hover:opacity-95"
-              >
-                {isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : editing ? "Update Product" : "Save Product"}
-              </Button>
-            </div>
-          </div>
-        </form>
-      </aside>
-    </>
+        </div>
+      </form>
+    </aside>
   );
 }
 

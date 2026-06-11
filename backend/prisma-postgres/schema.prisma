@@ -144,6 +144,7 @@ model Product {
   reorderLevel          Float     @default(0)   // suggested reorder quantity
   description           String?                 // optional product notes
   imageUrl              String?                 // optional product image (data URL or hosted URL)
+  isLooseItem           Boolean   @default(false) // sold loose by weight (no fixed package)
   lowStockThreshold     Float     @default(0)   // alert when stock <= this
   deletedAt             DateTime?               // soft delete
   createdAt             DateTime  @default(now())

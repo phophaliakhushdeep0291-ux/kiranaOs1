@@ -25,6 +25,7 @@ export const productFormSchema = z.object({
   reorderLevel: z.coerce.number().min(0).default(0),
   description: z.string().trim().max(500).optional(),
   imageUrl: z.string().optional(),
+  isLooseItem: z.boolean().default(false),
   isActive: z.boolean().default(true),
 });
 
@@ -125,6 +126,7 @@ export function productToForm(product?: Product): ProductFormData {
     reorderLevel: product?.reorderLevel ?? 0,
     description: product?.description ?? "",
     imageUrl: product?.imageUrl ?? "",
+    isLooseItem: product?.isLooseItem ?? false,
     isActive: product?.isActive ?? product?.status !== "inactive",
   };
 }
@@ -174,6 +176,7 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     reorderLevel: Number(values.reorderLevel || 0),
     description: values.description?.trim() || undefined,
     imageUrl: values.imageUrl || undefined,
+    isLooseItem: values.isLooseItem,
     lowStockThreshold: toBaseQty(values.lowStockAlert, values.unit),
     lowStockAlert: values.lowStockAlert,
     isActive: values.isActive,
