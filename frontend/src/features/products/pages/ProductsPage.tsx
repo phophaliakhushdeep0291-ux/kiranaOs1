@@ -256,7 +256,7 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "lg:pr-[440px]" : ""}`}>
+    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "lg:pr-[436px]" : ""}`}>
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <StatCard icon={<Package size={18} />} iconClass="bg-blue-50 text-blue-600" label="Total Products" value={stats.total.toLocaleString("en-IN")} sub="Active listings" />

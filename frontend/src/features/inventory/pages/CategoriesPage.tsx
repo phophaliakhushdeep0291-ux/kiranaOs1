@@ -115,7 +115,7 @@ export default function CategoriesPage() {
   ];
 
   return (
-    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${dialogOpen ? "lg:pr-[440px]" : ""}`}>
+    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${dialogOpen ? "lg:pr-[436px]" : ""}`}>
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {cards.map((c) => (
