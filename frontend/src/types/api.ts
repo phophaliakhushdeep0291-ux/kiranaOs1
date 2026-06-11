@@ -77,6 +77,11 @@ export interface Product {
   customerSpecificPricing?: CustomerSpecificPrice[] | Record<string, number>;
   gstRate?: number;
   hsn?: string | null;
+  brand?: string | null;
+  mrp?: number;
+  reorderLevel?: number;
+  description?: string | null;
+  imageUrl?: string | null;
   lowStockThreshold?: number;
   lowStockAlert?: number;
   isActive?: boolean;
@@ -121,6 +126,11 @@ export interface ProductInput {
   customerSpecificPricing?: CustomerSpecificPrice[] | Record<string, number>;
   gstRate?: number;
   hsn?: string;
+  brand?: string;
+  mrp?: number;
+  reorderLevel?: number;
+  description?: string;
+  imageUrl?: string;
   lowStockThreshold?: number;
   lowStockAlert?: number;
   isActive?: boolean;

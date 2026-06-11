@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getListProductsQueryKey,
   useCreateProduct,
@@ -31,13 +31,7 @@ import { useDebounce } from "@/hooks/use-debounce";
 import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
-import {
-  findDuplicateProductWarnings,
-  getLocalProductAliasSuggestions,
-  productMatchesSearch,
-  splitProductAliases,
-  uniqueProductAliases,
-} from "@/features/products/product-reliability";
+import { productMatchesSearch } from "@/features/products/product-reliability";
 import {
   CATEGORIES,
   averageCost,
@@ -58,8 +52,7 @@ import {
   readProductDraftEventDetail,
   type ProductFormData,
 } from "./product-form-state";
-import { fetchGroqAliasSuggestions } from "./product-aliases";
-import { ProductFormModal } from "./components/ProductFormModal";
+import { ProductFormPanel } from "./components/ProductFormPanel";
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
@@ -99,9 +92,8 @@ export default function ProductsPage() {
   const [pendingValues, setPendingValues] = useState<ProductFormData | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
-  const [aiAliasLoading, setAiAliasLoading] = useState(false);
-  const [aiAliasError, setAiAliasError] = useState<string | null>(null);
-  const [groqAliasSuggestions, setGroqAliasSuggestions] = useState<string[]>([]);
+  const [stayOpen, setStayOpen] = useState(true);
+  const stayOpenRef = useRef(true);
   const debouncedSearch = useDebounce(search.trim(), 150);
 
   const products = useListProducts({ limit: 1000 }, {
@@ -122,21 +114,16 @@ export default function ProductsPage() {
         toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" });
         return;
       }
-
       const existingProduct = findDraftProduct(draft, products.data ?? []);
       const shouldMerge = Boolean(detail.merge || open);
       const base = shouldMerge ? form.getValues() : productToForm(existingProduct);
       const nextEditing = existingProduct ?? (shouldMerge ? editing : null);
       setEditing(nextEditing);
       form.reset(mergeDraftIntoProductForm(base, draft));
-
-      const suggestionName = String(draft.name ?? draft.productName ?? base.name ?? "").trim();
-      setGroqAliasSuggestions(suggestionName ? getLocalProductAliasSuggestions(suggestionName, String(draft.category ?? base.category ?? "general")) : []);
-      setAiAliasError(null);
       setOpen(true);
       toast({
         title: shouldMerge ? "Product form updated" : nextEditing ? "Product edit prepared" : "Product draft prepared",
-        description: shouldMerge ? "Voice filled the open product form. Keep speaking fields or save locally." : "Voice assistant filled the form. Review pricing/stock, then save locally.",
+        description: "Voice assistant filled the form. Review pricing/stock, then save locally.",
       });
     };
     window.addEventListener("kirana:voice-product-draft", handler);
@@ -147,10 +134,10 @@ export default function ProductsPage() {
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
-        setOpen(false);
         setPinOpen(false);
         setPendingValues(null);
         form.reset(productToForm());
+        setOpen(stayOpenRef.current);
         toast({ title: "Product saved locally", description: "Stock tracking is enabled and it will sync to cloud when internet is available." });
       },
       onError: (err: unknown) => toast({ title: "Could not save product", description: err instanceof Error ? err.message : "Check required fields.", variant: "destructive" }),
@@ -211,29 +198,6 @@ export default function ProductsPage() {
   const firstRow = rows.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
   const lastRow = Math.min(safePage * rowsPerPage, rows.length);
 
-  const watchedName = form.watch("name");
-  const watchedCategory = form.watch("category");
-  const watchedAliases = form.watch("aliasesText");
-  const watchedBarcode = form.watch("barcode");
-  const duplicateWarnings = useMemo(() => findDuplicateProductWarnings({
-    name: watchedName,
-    category: watchedCategory,
-    barcode: watchedBarcode,
-    aliases: splitProductAliases(watchedAliases),
-  }, products.data ?? [], editing?.id), [watchedName, watchedCategory, watchedBarcode, watchedAliases, products.data, editing?.id]);
-
-  const aliasSuggestions = useMemo(() => {
-    const existing = splitProductAliases(watchedAliases).map((item) => item.toLowerCase());
-    return uniqueProductAliases([...groqAliasSuggestions, ...getLocalProductAliasSuggestions(watchedName, watchedCategory)])
-      .filter((alias) => !existing.includes(alias.toLowerCase()))
-      .slice(0, 16);
-  }, [watchedName, watchedCategory, watchedAliases, groqAliasSuggestions]);
-
-  const watchedMin = Number(form.watch("minimumSellingPrice") || 0);
-  const watchedSell = Number(form.watch("sellingPrice") || 0);
-  const watchedWholesale = Number(form.watch("wholesalePrice") || 0);
-  const watchedRetail = Number(form.watch("retailPrice") || 0);
-  const needsOwnerPinForPrice = needsOwnerPinForPrices(watchedMin, [watchedSell, watchedWholesale, watchedRetail]);
   const isPending = createProduct.isPending || updateProduct.isPending;
 
   const openAdd = () => {
@@ -243,8 +207,6 @@ export default function ProductsPage() {
     }
     setEditing(null);
     form.reset(productToForm());
-    setGroqAliasSuggestions([]);
-    setAiAliasError(null);
     setOpen(true);
   };
 
@@ -255,50 +217,8 @@ export default function ProductsPage() {
     }
     setEditing(product);
     form.reset(productToForm(product));
-    setGroqAliasSuggestions([]);
-    setAiAliasError(null);
     setOpen(true);
   };
-
-  function appendAlias(alias: string) {
-    const current = splitProductAliases(form.getValues("aliasesText"));
-    form.setValue("aliasesText", uniqueProductAliases([...current, alias]).join(", "), { shouldDirty: true });
-  }
-
-  function appendAllAliasSuggestions() {
-    const suggestions = getLocalProductAliasSuggestions(form.getValues("name"), form.getValues("category"));
-    const current = splitProductAliases(form.getValues("aliasesText"));
-    const next = uniqueProductAliases([...current, ...suggestions]);
-    form.setValue("aliasesText", next.join(", "), { shouldDirty: true });
-    toast({ title: "Alias suggestions added", description: "Review names once before saving the product." });
-  }
-
-  async function askGroqForAliases() {
-    const name = form.getValues("name").trim();
-    if (!name) {
-      toast({ title: "Product name required", description: "Type product name first, then ask AI for aliases.", variant: "destructive" });
-      return;
-    }
-    setAiAliasLoading(true);
-    setAiAliasError(null);
-    try {
-      const suggestions = await fetchGroqAliasSuggestions(name, form.getValues("category"), form.getValues("unit"));
-      setGroqAliasSuggestions(suggestions);
-      if (suggestions.length === 0) {
-        setAiAliasError("No AI aliases returned. Local aliases are still available.");
-        toast({ title: "No AI aliases returned", description: "Use local alias chips or type manually." });
-        return;
-      }
-      toast({ title: "AI aliases ready", description: `${suggestions.slice(0, 6).join(", ")}${suggestions.length > 6 ? "..." : ""}` });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "AI alias request failed";
-      setAiAliasError(`${message}. Showing local fallback aliases because the backend AI proxy is unavailable.`);
-      setGroqAliasSuggestions(getLocalProductAliasSuggestions(name, form.getValues("category")));
-      toast({ title: "AI alias failed", description: "Showing local fallback aliases. Check backend AI proxy.", variant: "destructive" });
-    } finally {
-      setAiAliasLoading(false);
-    }
-  }
 
   function submitValues(values: ProductFormData, ownerPin?: string, reason?: string) {
     const input = formToInput(values, ownerPin, reason);
@@ -312,13 +232,11 @@ export default function ProductsPage() {
       toast({ title: "Permission denied", description: belowMinPermission.reason, variant: "destructive" });
       return;
     }
-
     if (!editing || belowMin) {
       setPendingValues(values);
       setPinOpen(true);
       return;
     }
-
     submitValues(values);
   };
 
@@ -326,34 +244,10 @@ export default function ProductsPage() {
     <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-        <StatCard
-          icon={<Package size={18} />}
-          iconClass="bg-blue-50 text-blue-600"
-          label="Total Products"
-          value={stats.total.toLocaleString("en-IN")}
-          sub="Active listings"
-        />
-        <StatCard
-          icon={<AlertTriangle size={18} />}
-          iconClass="bg-amber-50 text-amber-600"
-          label="Low Stock"
-          value={stats.lowStock.toLocaleString("en-IN")}
-          sub="Needs attention"
-        />
-        <StatCard
-          icon={<XCircle size={18} />}
-          iconClass="bg-rose-50 text-rose-600"
-          label="Out of Stock"
-          value={stats.outOfStock.toLocaleString("en-IN")}
-          sub="Unavailable"
-        />
-        <StatCard
-          icon={<Layers size={18} />}
-          iconClass="bg-violet-50 text-violet-600"
-          label="Categories"
-          value={stats.categories.toLocaleString("en-IN")}
-          sub="Active categories"
-        />
+        <StatCard icon={<Package size={18} />} iconClass="bg-blue-50 text-blue-600" label="Total Products" value={stats.total.toLocaleString("en-IN")} sub="Active listings" />
+        <StatCard icon={<AlertTriangle size={18} />} iconClass="bg-amber-50 text-amber-600" label="Low Stock" value={stats.lowStock.toLocaleString("en-IN")} sub="Needs attention" />
+        <StatCard icon={<XCircle size={18} />} iconClass="bg-rose-50 text-rose-600" label="Out of Stock" value={stats.outOfStock.toLocaleString("en-IN")} sub="Unavailable" />
+        <StatCard icon={<Layers size={18} />} iconClass="bg-violet-50 text-violet-600" label="Categories" value={stats.categories.toLocaleString("en-IN")} sub="Active categories" />
       </div>
 
       {/* ── Toolbar ── */}
@@ -434,14 +328,18 @@ export default function ProductsPage() {
                   const outOfStock = stockBase <= 0;
                   const low = isLowStock(product) && !outOfStock;
                   const cat = (product.category ?? "general").trim() || "general";
-                  const brandLine = product.aliases?.[0] ?? "";
+                  const brandLine = product.brand ?? product.aliases?.[0] ?? "";
+                  const mrp = product.mrp && product.mrp > 0 ? product.mrp : productRetailPrice(product);
                   return (
                     <tr key={product.id} className="border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe]" data-testid={`row-product-${product.id}`}>
-                      {/* Product */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#f4f7fb] text-lg">
-                            {getProductEmoji(product.name, product.category)}
+                          <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-[#f4f7fb] text-lg">
+                            {product.imageUrl ? (
+                              <img src={product.imageUrl} alt="" className="h-full w-full object-contain" />
+                            ) : (
+                              getProductEmoji(product.name, product.category)
+                            )}
                           </span>
                           <div className="min-w-0">
                             <p className="truncate font-extrabold text-[#14284e]">{product.name}</p>
@@ -449,29 +347,19 @@ export default function ProductsPage() {
                           </div>
                         </div>
                       </td>
-                      {/* Category */}
                       <td className="px-3 py-3">
                         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${categoryBadge(cat)}`}>
                           {cat.replace(/_/g, " ")}
                         </span>
                       </td>
-                      {/* SKU / Barcode */}
-                      <td className="px-3 py-3">
-                        <span className="font-mono text-[12px] text-[#45577a]">{product.barcode ?? product.sku ?? "—"}</span>
-                      </td>
-                      {/* Unit */}
+                      <td className="px-3 py-3"><span className="font-mono text-[12px] text-[#45577a]">{product.barcode ?? product.sku ?? "—"}</span></td>
                       <td className="px-3 py-3 capitalize text-[#45577a]">{unit}</td>
-                      {/* MRP */}
-                      <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(productRetailPrice(product))}</td>
-                      {/* Cost */}
+                      <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(mrp)}</td>
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(averageCost(product))}</td>
-                      {/* Selling */}
                       <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{rs(product.sellingPrice ?? product.defaultPricePerRateUnit)}</td>
-                      {/* Stock */}
                       <td className="px-3 py-3 text-right">
                         <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
                       </td>
-                      {/* Status */}
                       <td className="px-3 py-3 text-center">
                         {outOfStock ? (
                           <StatusPill className="bg-rose-50 text-rose-600">Out of Stock</StatusPill>
@@ -481,14 +369,9 @@ export default function ProductsPage() {
                           <StatusPill className="bg-emerald-50 text-emerald-700">In Stock</StatusPill>
                         )}
                       </td>
-                      {/* Actions */}
                       <td className="px-3 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openEdit(product)}
-                            className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#eef4ff] hover:text-[#0057ff]"
-                            aria-label={`Edit ${product.name}`}
-                          >
+                          <button onClick={() => openEdit(product)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#eef4ff] hover:text-[#0057ff]" aria-label={`Edit ${product.name}`}>
                             <Pencil size={15} />
                           </button>
                           <button
@@ -536,21 +419,15 @@ export default function ProductsPage() {
         )}
       </div>
 
-      <ProductFormModal
+      <ProductFormPanel
         open={open}
         editing={editing}
         form={form}
-        duplicateWarnings={duplicateWarnings}
-        aliasSuggestions={aliasSuggestions}
-        aiAliasLoading={aiAliasLoading}
-        aiAliasError={aiAliasError}
-        needsOwnerPinForPrice={needsOwnerPinForPrice}
         isPending={isPending}
+        stayOpen={stayOpen}
+        onStayOpenChange={(v) => { setStayOpen(v); stayOpenRef.current = v; }}
         onOpenChange={setOpen}
         onSubmit={onSubmit}
-        onAppendAlias={appendAlias}
-        onAppendAllLocalAliases={appendAllAliasSuggestions}
-        onAskGroqForAliases={() => void askGroqForAliases()}
       />
 
       <OwnerPinModal
@@ -614,12 +491,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
   }
   return (
     <div className="flex items-center gap-1">
-      <button
-        onClick={() => onChange(Math.max(1, page - 1))}
-        disabled={page <= 1}
-        className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40"
-        aria-label="Previous page"
-      >
+      <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40" aria-label="Previous page">
         <ChevronLeft size={15} />
       </button>
       {pages.map((p, i) =>
@@ -637,12 +509,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
           </button>
         ),
       )}
-      <button
-        onClick={() => onChange(Math.min(totalPages, page + 1))}
-        disabled={page >= totalPages}
-        className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40"
-        aria-label="Next page"
-      >
+      <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40" aria-label="Next page">
         <ChevronRight size={15} />
       </button>
     </div>

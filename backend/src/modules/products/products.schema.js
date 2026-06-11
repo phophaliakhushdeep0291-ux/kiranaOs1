@@ -14,6 +14,11 @@ export const createProductSchema = z.object({
   defaultPricePerRateUnit: moneyAmount(),
   gstRate: percentageRate().default(0),
   hsn: z.string().optional(),
+  brand: z.string().optional(),
+  mrp: moneyAmount().default(0),
+  reorderLevel: quantityAmount().default(0),
+  description: z.string().max(500).optional(),
+  imageUrl: z.string().optional(),
   lowStockThreshold: quantityAmount().default(0),
 });
 
