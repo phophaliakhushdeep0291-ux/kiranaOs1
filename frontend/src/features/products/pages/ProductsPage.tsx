@@ -239,8 +239,13 @@ export default function ProductsPage() {
 
   function submitValues(values: ProductFormData, ownerPin?: string, reason?: string) {
     const input = formToInput(values, ownerPin, reason);
-    if (editing) updateProduct.mutate({ id: editing.id, data: input });
-    else createProduct.mutate({ data: input });
+    if (editing) {
+      // optimistic-concurrency base = the server version this edit started from
+      input.baseUpdatedAt = editing.updatedAt;
+      updateProduct.mutate({ id: editing.id, data: input });
+    } else {
+      createProduct.mutate({ data: input });
+    }
   }
 
   const onSubmit = (values: ProductFormData) => {

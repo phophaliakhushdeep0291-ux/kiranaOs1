@@ -48,7 +48,7 @@ export async function getProduct(shopId, id) {
 export async function createProduct(shopId, data) {
   await assertNoActiveProductNameConflict(shopId, data.name);
 
-  const { aliases, ...rest } = data;
+  const { aliases, baseUpdatedAt: _baseUpdatedAt, ...rest } = data;
   const product = await db.product.create({
     data: {
       ...rest,
@@ -65,10 +65,23 @@ export async function createProduct(shopId, data) {
 }
 
 export async function updateProduct(shopId, id, data) {
-  await getProduct(shopId, id); // ensures it exists and belongs to shop
+  const existing = await getProduct(shopId, id); // ensures it exists and belongs to shop
   if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id);
 
-  const { aliases, ...rest } = data;
+  const { aliases, baseUpdatedAt, ...rest } = data;
+
+  // Optimistic concurrency: reject if the server moved past the version this edit
+  // was based on (another device changed it first). A 1s tolerance avoids
+  // sub-second false positives; a missing baseUpdatedAt keeps legacy last-write-wins.
+  if (baseUpdatedAt) {
+    const serverTs = new Date(existing.updatedAt).getTime();
+    const baseTs = new Date(baseUpdatedAt).getTime();
+    if (Number.isFinite(serverTs) && Number.isFinite(baseTs) && serverTs > baseTs + 1000) {
+      const err = new AppError(`"${existing.name}" was changed on another device — reload to see the latest before editing.`, 409);
+      err.code = "PRODUCT_STALE_WRITE";
+      throw err;
+    }
+  }
   const updateData = {
     ...rest,
     ...moneyShadows({

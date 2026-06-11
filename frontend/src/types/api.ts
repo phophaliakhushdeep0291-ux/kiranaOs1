@@ -138,6 +138,7 @@ export interface ProductInput {
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;
+  baseUpdatedAt?: string;
   ownerPin?: string;
   ownerPinReason?: string;
 }

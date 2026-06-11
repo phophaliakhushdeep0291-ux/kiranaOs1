@@ -51,6 +51,7 @@ export const productCreationSchema = z.object({
   description: z.string().trim().max(500).optional(),
   imageUrl: z.string().optional(),
   isLooseItem: z.boolean().default(false),
+  baseUpdatedAt: z.string().optional(),
   displayUnit: z.string().trim().min(1).default("piece"),
   baseUnit: z.string().trim().min(1).default("piece"),
   rateUnit: z.string().trim().min(1).default("piece"),

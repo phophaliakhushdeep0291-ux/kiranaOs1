@@ -21,6 +21,8 @@ export const createProductSchema = z.object({
   imageUrl: z.string().optional(),
   isLooseItem: z.boolean().default(false),
   lowStockThreshold: quantityAmount().default(0),
+  // Optimistic-concurrency guard: the server updatedAt the client based this edit on.
+  baseUpdatedAt: z.string().optional(),
 });
 
 export const updateProductSchema = createProductSchema.partial();
