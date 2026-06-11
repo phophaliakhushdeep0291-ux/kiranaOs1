@@ -421,21 +421,21 @@ export default function ProductsPage() {
 
         {/* Pagination */}
         {rows.length > 0 && (
-          <div className="flex flex-col items-center justify-between gap-3 border-t border-[#eef1f6] px-4 py-3 sm:flex-row">
-            <p className="text-[12px] text-[#6d7c98]">
+          <div className="flex flex-col items-center gap-3 border-t border-[#eef1f6] px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-0">
+            <p className="text-[12px] text-[#6d7c98] sm:justify-self-start">
               Showing <span className="font-bold text-[#13274d]">{firstRow}</span> to <span className="font-bold text-[#13274d]">{lastRow}</span> of <span className="font-bold text-[#13274d]">{rows.length.toLocaleString("en-IN")}</span> products
             </p>
-            <div className="flex items-center gap-3">
+            <div className="sm:justify-self-center">
               <Pagination page={safePage} totalPages={totalPages} onChange={setPage} />
-              <div className="flex items-center gap-1.5">
-                <span className="text-[12px] text-[#6d7c98]">Rows per page</span>
-                <Select value={String(rowsPerPage)} onValueChange={(v) => setRowsPerPage(Number(v))}>
-                  <SelectTrigger className="h-8 w-[68px] rounded-lg border-[#e3eaf3] text-[12px] font-semibold"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ROWS_PER_PAGE_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+            <div className="flex items-center gap-1.5 sm:justify-self-end">
+              <span className="text-[12px] text-[#6d7c98]">Rows per page</span>
+              <Select value={String(rowsPerPage)} onValueChange={(v) => setRowsPerPage(Number(v))}>
+                <SelectTrigger className="h-8 w-[68px] rounded-lg border-[#e3eaf3] text-[12px] font-semibold"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROWS_PER_PAGE_OPTIONS.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}

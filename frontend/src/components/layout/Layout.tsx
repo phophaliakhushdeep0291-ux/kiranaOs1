@@ -390,7 +390,7 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
       >
         {/* Desktop topbar */}
-        <header className="sticky top-0 z-40 hidden h-[76px] items-center gap-4 bg-background/95 px-5 backdrop-blur lg:flex">
+        <header className={cn("sticky top-0 z-40 hidden h-[76px] items-center gap-4 bg-background/95 px-5 backdrop-blur lg:flex", loc !== "/billing" && "border-b border-border")}>
           <button
             type="button"
             aria-label="Toggle sidebar"
