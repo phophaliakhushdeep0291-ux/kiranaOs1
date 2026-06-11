@@ -42,7 +42,7 @@ export function SettingsShell({ children, className }: { children: ReactNode; cl
     <div className="min-h-full bg-[#f8faff] px-4 py-4">
       <div className="flex gap-4">
         <aside className="hidden w-[200px] shrink-0 lg:block">
-          <nav className="sticky top-[92px] space-y-0.5">
+          <nav className="sticky top-4 space-y-0.5">
             {SETTINGS_MENU.map((m) => {
               const isActive = location === m.href;
               return (
@@ -67,6 +67,20 @@ export function SettingsShell({ children, className }: { children: ReactNode; cl
         <div className={cn("min-w-0 flex-1 space-y-4", className)}>{children}</div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Frames an existing standalone page (Billing/Staff/Devices) inside the shell.
+ * Those pages wrap themselves in a padded, max-width PageShell; here we cancel
+ * that outer padding/width so the content sits flush against the submenu and
+ * aligns with the natively-built tabs instead of starting lower with a gap.
+ */
+export function FramedSettingsPage({ children }: { children: ReactNode }) {
+  return (
+    <SettingsShell>
+      <div className="[&>*]:!max-w-none [&>*]:!p-0">{children}</div>
+    </SettingsShell>
   );
 }
 
