@@ -24,7 +24,7 @@ export default function CategoriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ShopCategory | null>(null);
   const seededRef = useRef(false);
-  const { width: panelWidth, isDesktop, onResizeStart } = usePanelResize("kirana:category-panel-width");
+  const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:category-panel-width");
 
   const productList = useMemo(() => (products.data ?? []).filter((p) => !isDeletedProduct(p)), [products.data]);
 
@@ -118,7 +118,7 @@ export default function CategoriesPage() {
 
   return (
     <div
-      className="min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      className={`min-h-full bg-[#f7f9fd] px-4 py-4 ${isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
       style={dialogOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
     >
       {/* Stat cards */}

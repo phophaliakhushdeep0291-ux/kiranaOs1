@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 interface Options {
   defaultWidth?: number;
@@ -18,11 +18,15 @@ function readStored(key: string, def: number, min: number, max: number) {
 /**
  * Width state for a right-docked slide-in panel, with a drag handle and
  * localStorage persistence. `onResizeStart` is a mousedown handler for a
- * left-edge handle; dragging left widens the panel.
+ * left-edge handle; dragging left widens the panel. `isResizing` lets callers
+ * drop the width/padding transition during an active drag so it tracks the
+ * cursor 1:1 (the transition is only wanted for the open/close slide).
  */
 export function usePanelResize(storageKey: string, { defaultWidth = 420, min = 360, max = 760 }: Options = {}) {
   const [width, setWidth] = useState(() => readStored(storageKey, defaultWidth, min, max));
+  const [isResizing, setIsResizing] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches);
+  const frame = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -37,16 +41,33 @@ export function usePanelResize(storageKey: string, { defaultWidth = 420, min = 3
     try { localStorage.setItem(storageKey, String(Math.round(width))); } catch { /* ignore */ }
   }, [storageKey, width]);
 
+  useEffect(() => () => { if (frame.current !== null) cancelAnimationFrame(frame.current); }, []);
+
   const onResizeStart = useCallback((event: ReactMouseEvent) => {
     event.preventDefault();
     const startX = event.clientX;
     const startWidth = width;
+    let latestX = startX;
+    const clamp = (x: number) => Math.min(max, Math.max(min, startWidth - (x - startX)));
+
+    setIsResizing(true);
     const prevCursor = document.body.style.cursor;
     const prevSelect = document.body.style.userSelect;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-    const onMove = (e: MouseEvent) => setWidth(Math.min(max, Math.max(min, startWidth - (e.clientX - startX))));
+
+    const onMove = (e: MouseEvent) => {
+      latestX = e.clientX;
+      if (frame.current !== null) return;
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null;
+        setWidth(clamp(latestX));
+      });
+    };
     const onUp = () => {
+      if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null; }
+      setWidth(clamp(latestX));
+      setIsResizing(false);
       document.body.style.cursor = prevCursor;
       document.body.style.userSelect = prevSelect;
       window.removeEventListener("mousemove", onMove);
@@ -56,7 +77,7 @@ export function usePanelResize(storageKey: string, { defaultWidth = 420, min = 3
     window.addEventListener("mouseup", onUp);
   }, [width, min, max]);
 
-  return { width, isDesktop, onResizeStart };
+  return { width, isResizing, isDesktop, onResizeStart };
 }
 
 /** Drag handle for the left edge of a docked panel. */
