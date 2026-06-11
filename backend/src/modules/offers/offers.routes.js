@@ -15,5 +15,6 @@ router.post("/", validate(createOfferSchema), ctrl.create);
 router.patch("/:id", validate(updateOfferSchema), ctrl.update);
 router.delete("/:id", ctrl.remove);
 router.post("/:id/restore", ctrl.restore);
+router.post("/:id/redeem", ctrl.redeem);
 
 export default router;

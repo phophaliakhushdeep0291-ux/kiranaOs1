@@ -391,17 +391,22 @@ model Supplier {
 // EXPENSE — shop operating expenses (rent, salary, utilities…)
 // ─────────────────────────────────────────────
 model Expense {
-  id          String    @id @default(cuid())
-  shopId      String
-  title       String
-  amount      Float     @default(0)
-  category    String    @default("general")
-  paymentMode String    @default("cash")
-  notes       String?
-  spentAt     DateTime  @default(now())
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  shopId            String
+  title             String
+  amount            Float     @default(0)
+  category          String    @default("general")
+  paymentMode       String    @default("cash")
+  vendor            String?
+  status            String    @default("paid") // paid | pending
+  recurringInterval String    @default("none") // none | daily | weekly | monthly
+  nextDueOn         DateTime?
+  recordedBy        String?
+  notes             String?
+  spentAt           DateTime  @default(now())
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id])
 

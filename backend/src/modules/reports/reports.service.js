@@ -426,10 +426,17 @@ export async function getPnL(shopId, { range, from, to }) {
     select: { amount: true },
   });
 
+  const operatingExpenseRows = await db.expense.findMany({
+    where: { shopId, deletedAt: null, spentAt: { gte: start, lte: end } },
+    select: { amount: true },
+  });
+
   const grossSales = sumMoney(bills.map((b) => b.grandTotal));
   const grossProfit = sumMoney(bills.map((b) => b.grossProfit));
   const inventoryLoss = sumMoney(damageEntries.map((d) => d.damageLossValue));
-  const netProfit = subtractMoney(grossProfit, inventoryLoss);
+  const operatingExpenses = sumMoney(operatingExpenseRows.map((e) => e.amount));
+  // Net profit = trading profit minus damage losses minus operating expenses (rent, salary…).
+  const netProfit = subtractMoney(subtractMoney(grossProfit, inventoryLoss), operatingExpenses);
 
   const cashCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "cash");
   const upiCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "upi");
@@ -447,6 +454,7 @@ export async function getPnL(shopId, { range, from, to }) {
     grossSales,
     grossProfit,
     inventoryLoss,
+    operatingExpenses,
     netProfit,
     cashCollected,
     upiCollected,

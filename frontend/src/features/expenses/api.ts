@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api/http";
-import type { Expense, ExpenseInput, ExpenseSummary } from "@/types/api";
+import type { Expense, ExpenseInput, ExpenseOverview, ExpenseSummary } from "@/types/api";
 
 function qs(params?: Record<string, string | undefined>) {
   if (!params) return "";
@@ -7,12 +7,16 @@ function qs(params?: Record<string, string | undefined>) {
   return entries.length ? `?${new URLSearchParams(entries).toString()}` : "";
 }
 
-export function listExpenses(params?: { category?: string; from?: string; to?: string; search?: string }) {
+export function listExpenses(params?: { category?: string; status?: string; from?: string; to?: string; search?: string }) {
   return apiRequest<Expense[]>(`/expenses${qs(params)}`);
 }
 
 export function getExpenseSummary(params?: { from?: string; to?: string }) {
   return apiRequest<ExpenseSummary>(`/expenses/summary${qs(params)}`);
+}
+
+export function getExpenseOverview() {
+  return apiRequest<ExpenseOverview>("/expenses/overview");
 }
 
 export function createExpense(data: ExpenseInput) {

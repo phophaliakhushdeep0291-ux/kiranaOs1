@@ -193,6 +193,8 @@ export interface Supplier {
 }
 
 export type ExpensePaymentMode = "cash" | "upi" | "bank" | "card" | "other";
+export type ExpenseStatus = "paid" | "pending";
+export type ExpenseRecurringInterval = "none" | "daily" | "weekly" | "monthly";
 
 export interface Expense {
   id: string;
@@ -201,6 +203,11 @@ export interface Expense {
   amount: number;
   category: string;
   paymentMode: ExpensePaymentMode | string;
+  vendor?: string | null;
+  status: ExpenseStatus | string;
+  recurringInterval: ExpenseRecurringInterval | string;
+  nextDueOn?: string | null;
+  recordedBy?: string | null;
   notes?: string | null;
   spentAt: string;
   deletedAt?: string | null;
@@ -213,6 +220,10 @@ export interface ExpenseInput {
   amount: number;
   category?: string;
   paymentMode?: ExpensePaymentMode;
+  vendor?: string;
+  status?: ExpenseStatus;
+  recurringInterval?: ExpenseRecurringInterval;
+  nextDueOn?: string;
   notes?: string;
   spentAt?: string;
 }
@@ -222,6 +233,20 @@ export interface ExpenseSummary {
   count: number;
   byCategory: Record<string, number>;
   byMode: Record<string, number>;
+  pendingTotal?: number;
+  pendingCount?: number;
+}
+
+export interface ExpenseOverview {
+  today: number;
+  yesterday: number;
+  month: number;
+  lastMonth: number;
+  pendingTotal: number;
+  pendingCount: number;
+  byCategory: Record<string, number>;
+  trend: { month: string; total: number }[];
+  monthlyAverage: number;
 }
 
 export type OfferType = "percentage" | "flat";

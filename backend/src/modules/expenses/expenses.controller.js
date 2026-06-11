@@ -1,3 +1,4 @@
+import db from "../../db.js";
 import * as svc from "./expenses.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
@@ -11,9 +12,16 @@ export async function summary(req, res, next) {
   catch (err) { next(err); }
 }
 
+export async function overview(req, res, next) {
+  try { res.json({ success: true, data: await svc.getExpenseOverview(req.shopId, req.query) }); }
+  catch (err) { next(err); }
+}
+
 export async function create(req, res, next) {
   try {
-    const expense = await svc.createExpense(req.shopId, req.body);
+    // Stamp who recorded it (display-only) without trusting client input.
+    const user = req.user?.userId ? await db.user.findUnique({ where: { id: req.user.userId }, select: { name: true } }) : null;
+    const expense = await svc.createExpense(req.shopId, { ...req.body, recordedBy: user?.name ?? null });
     await createAuditLog({
       shopId: req.shopId, userId: req.user?.userId, action: "EXPENSE_CREATED",
       entityType: "Expense", entityId: expense.id,

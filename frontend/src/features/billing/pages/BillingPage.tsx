@@ -16,6 +16,7 @@ import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
+import { redeemOffer } from "@/features/offers/api";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 
@@ -253,10 +254,18 @@ export default function Billing() {
     });
   }, [allowAdvancePayment, grandTotal, paidAmount, splitCashAmount]);
 
+  const appliedOfferIdRef = useRef<string | null>(null);
+
   const confirmBill = useConfirmBill({
     mutation: {
       onSuccess: (data: Bill) => {
         const billNo = data.billNumber ?? data.billNo ?? `PENDING-${Date.now()}`;
+        // Count the coupon redemption against its usage limit (fire-and-forget;
+        // offline redemptions are skipped rather than queued).
+        if (appliedOfferIdRef.current) {
+          void redeemOffer(appliedOfferIdRef.current).catch(() => undefined);
+          appliedOfferIdRef.current = null;
+        }
         const pendingPrint = pendingAutoPrintRef.current;
         const printableForSavedBill = pendingPrint
           ? { ...pendingPrint.printable, billNo, createdAt: data.createdAt ?? pendingPrint.printable.createdAt }
@@ -894,6 +903,7 @@ export default function Billing() {
         subtotal={subtotal}
         safeDiscount={safeDiscount}
         setDiscount={setDiscount}
+        onCouponApplied={(offerId) => { appliedOfferIdRef.current = offerId; }}
         grandTotal={grandTotal}
         paymentMode={paymentMode}
         setPaymentMode={setPaymentMode}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, Database, Download, FileBarChart, RefreshCw, ShieldAlert, TrendingUp, Users, Wallet, XCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, Database, Download, FileBarChart, RefreshCw, ShieldAlert, TrendingDown, TrendingUp, Users, Wallet, XCircle } from "lucide-react";
+import { getExpenseSummary } from "@/features/expenses/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +52,18 @@ export default function Reports() {
 
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
   const rangeLabel = useMemo(() => formatRangeLabel(range.from, range.to), [range.from, range.to]);
+
+  // Operating expenses come from the server (online-first feature); when offline
+  // the cards show an em dash rather than a wrong zero.
+  const expenseQ = useQuery({
+    queryKey: ["reports-expense-summary", range],
+    queryFn: () => getExpenseSummary({ from: `${range.from}T00:00:00.000Z`, to: `${range.to}T23:59:59.999Z` }),
+    retry: 1,
+  });
+  const expenseTotal = expenseQ.data?.total;
+  const netProfit = expenseQ.data != null && snapshot?.selected != null
+    ? (snapshot.selected.profitEstimate ?? 0) - expenseQ.data.total
+    : undefined;
 
   const loadReports = async () => {
     setLoading(true);
@@ -200,6 +214,22 @@ export default function Reports() {
               icon={<Wallet size={18} />}
               loading={loading}
               tone="green"
+            />
+            <StatCard
+              label="Expense total"
+              value={expenseQ.isLoading ? "" : expenseTotal != null ? fmt(expenseTotal) : "—"}
+              description={expenseQ.isError ? "Connect to load expenses" : "Operating costs this period"}
+              icon={<TrendingDown size={18} />}
+              loading={expenseQ.isLoading}
+              tone="amber"
+            />
+            <StatCard
+              label="Net profit"
+              value={loading || expenseQ.isLoading ? "" : netProfit != null ? fmt(netProfit) : "—"}
+              description={netProfit != null ? "Profit estimate minus expenses" : "Needs expenses (online)"}
+              icon={<FileBarChart size={18} />}
+              loading={loading || expenseQ.isLoading}
+              tone="blue"
             />
           </StatsGrid>
         </div>

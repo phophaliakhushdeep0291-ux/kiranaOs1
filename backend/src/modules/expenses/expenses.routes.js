@@ -11,6 +11,7 @@ router.use(requireAuth, requireShop, requireDeviceActivated());
 
 router.get("/", ctrl.list);
 router.get("/summary", ctrl.summary);
+router.get("/overview", ctrl.overview);
 router.post("/", validate(createExpenseSchema), ctrl.create);
 router.patch("/:id", validate(updateExpenseSchema), ctrl.update);
 router.delete("/:id", ctrl.remove);

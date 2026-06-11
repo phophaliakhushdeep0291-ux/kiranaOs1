@@ -48,3 +48,10 @@ export async function restore(req, res, next) {
     res.json({ success: true, message: "Offer restored", data: offer });
   } catch (err) { next(err); }
 }
+
+export async function redeem(req, res, next) {
+  try {
+    const offer = await svc.redeemOffer(req.shopId, req.params.id);
+    res.json({ success: true, data: offer });
+  } catch (err) { next(err); }
+}
