@@ -13,8 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Bell, Check, ChevronRight, Cloud, CreditCard, Eye, EyeOff, Loader2, MonitorSmartphone, Pencil,
-  Plug, Printer, Receipt, Settings2, Shield, Sliders, Store, UsersRound, X,
+  Bell, Check, ChevronRight, Cloud, CreditCard, Eye, EyeOff, LifeBuoy, Loader2, MonitorSmartphone, Pencil,
+  Plug, Printer, Receipt, Recycle, Settings2, Shield, Sliders, Sparkles, Store, Truck, UsersRound, X,
 } from "lucide-react";
 import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/settings/theme";
 import { useAppLanguage, type AppLanguage } from "@/features/settings/i18n";
@@ -78,6 +78,7 @@ export default function SettingsPage() {
   const shop = useGetShop();
   const [editOpen, setEditOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("general");
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:settings-panel-width", { defaultWidth: 440 });
 
@@ -112,11 +113,13 @@ export default function SettingsPage() {
         <aside className="hidden w-[200px] shrink-0 lg:block">
           <nav className="space-y-0.5">
             {MENU.map((m) => {
-              const active = m.id === "general";
+              const routed = "href" in m && Boolean(m.href);
+              const isActive = !routed && m.id === activeSection;
               const onClick = () => {
-                if ("href" in m && m.href) navigate(m.href);
-                else if (m.id === "store") setEditOpen(true);
-                else if (m.id === "security") setPwOpen(true);
+                if (routed) { navigate((m as { href: string }).href); return; }
+                setActiveSection(m.id);
+                const targetId = m.id === "general" ? "section-store" : `section-${m.id}`;
+                document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
               };
               return (
                 <button
@@ -124,12 +127,12 @@ export default function SettingsPage() {
                   onClick={onClick}
                   className={cn(
                     "flex w-full items-center gap-2.5 rounded-[8px] px-3 py-2 text-left text-[13px] font-semibold transition-colors",
-                    active ? "bg-[#eef5ff] text-[#005dff]" : "text-[#344668] hover:bg-[#eef2f8]",
+                    isActive ? "bg-[#eef5ff] text-[#005dff]" : "text-[#344668] hover:bg-[#eef2f8]",
                   )}
                 >
-                  <m.icon size={16} className={active ? "text-[#005dff]" : "text-[#536583]"} />
+                  <m.icon size={16} className={isActive ? "text-[#005dff]" : "text-[#536583]"} />
                   <span className="flex-1 truncate">{m.label}</span>
-                  {"href" in m && m.href && <ChevronRight size={14} className="text-[#9aa6bb]" />}
+                  {routed && <ChevronRight size={14} className="text-[#9aa6bb]" />}
                 </button>
               );
             })}
@@ -140,7 +143,7 @@ export default function SettingsPage() {
         <div className="min-w-0 flex-1 space-y-4">
           {/* Row 1: Store Profile + Billing */}
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
+            <Card id="section-store">
               <CardHead icon={<Store size={15} />} title="Store Profile" action={<button onClick={() => setEditOpen(true)} className="flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Pencil size={12} /> Edit</button>} />
               <div className="flex items-center gap-3.5 border-b border-[#eef2f8] px-5 pb-4">
                 <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[12px] bg-[#eef5ff] text-2xl">🏪</span>
@@ -218,7 +221,7 @@ export default function SettingsPage() {
 
           {/* Row 3: Printer + Taxes + Sync */}
           <div className="grid gap-4 lg:grid-cols-3">
-            <Card>
+            <Card id="section-printer">
               <CardHead icon={<Printer size={15} />} title="Printer & Billing" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Configure</button>} />
               <div className="px-5 pb-4">
                 <RowToggle label="Default Bill Printer" desc="Thermal Printer (Receipts)" pill={<span className="rounded-[7px] bg-emerald-100 px-2 py-[3px] text-[11px] font-bold text-emerald-700">Connected</span>} />
@@ -228,7 +231,7 @@ export default function SettingsPage() {
               </div>
             </Card>
 
-            <Card>
+            <Card id="section-taxes">
               <CardHead icon={<Receipt size={15} />} title="Taxes & GST" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Configure</button>} />
               <div className="px-5 pb-4">
                 <RowToggle label="GST Mode" pill={<Select value={prefs.gstMode} onValueChange={(v) => setPref("gstMode", v)}><SelectTrigger className="h-8 w-[150px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Exclusive (Add to price)">Exclusive (Add to price)</SelectItem><SelectItem value="Inclusive (In price)">Inclusive (In price)</SelectItem></SelectContent></Select>} />
@@ -252,7 +255,7 @@ export default function SettingsPage() {
 
           {/* Row 4: Security + Notifications + Integrations */}
           <div className="grid gap-4 lg:grid-cols-3">
-            <Card>
+            <Card id="section-security">
               <CardHead icon={<Shield size={15} />} title="Security & Owner PIN" small action={<button onClick={() => setPwOpen(true)} className="text-[12px] font-bold text-[#005dff] hover:underline">Update PIN</button>} />
               <div className="px-5 pb-4">
                 <RowToggle label="Owner PIN" pill={<span className="font-mono text-[14px] tracking-widest text-[#102347]">•••••</span>} />
@@ -262,7 +265,7 @@ export default function SettingsPage() {
               </div>
             </Card>
 
-            <Card>
+            <Card id="section-notifications">
               <CardHead icon={<Bell size={15} />} title="Notifications" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Configure</button>} />
               <div className="px-5 pb-4">
                 <RowToggle label="Low Stock Alerts" desc="Get notified for low stock" pill={<Switch checked={prefs.lowStock} onCheckedChange={(v) => setPref("lowStock", v)} />} />
@@ -272,7 +275,7 @@ export default function SettingsPage() {
               </div>
             </Card>
 
-            <Card>
+            <Card id="section-integrations">
               <CardHead icon={<Plug size={15} />} title="Integrations" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Manage</button>} />
               <div className="px-5 pb-4">
                 {[
@@ -291,6 +294,33 @@ export default function SettingsPage() {
               </div>
             </Card>
           </div>
+
+          {/* Advanced */}
+          <Card id="section-advanced">
+            <CardHead icon={<Sliders size={15} />} title="Advanced" sub="Tools, data and account management" />
+            <div className="grid grid-cols-1 gap-2 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                { href: "/suppliers", label: "Suppliers", desc: "Purchase parties", icon: Truck },
+                { href: "/staff", label: "Staff & Roles", desc: "Users and permissions", icon: UsersRound },
+                { href: "/devices", label: "Devices", desc: "Licensed devices", icon: MonitorSmartphone },
+                { href: "/sync-status", label: "Cloud Backup", desc: "Backup health & logs", icon: Cloud },
+                { href: "/smart-tools", label: "Smart Tools", desc: "Voice & automation", icon: Sparkles },
+                { href: "/recovery-mode", label: "Recovery Mode", desc: "Recover local drafts", icon: LifeBuoy },
+                { href: "/audit-logs", label: "Audit Logs", desc: "Owner approvals", icon: Receipt },
+                { href: "/recycle-bin", label: "Recycle Bin", desc: "Restore deleted records", icon: Recycle },
+                { href: "/plans", label: "Plans", desc: "Compare & upgrade", icon: CreditCard },
+              ].map((l) => (
+                <Link key={l.href} href={l.href} className="flex items-center gap-3 rounded-[10px] border border-[#e7edf7] bg-white px-3 py-2.5 transition-colors hover:border-[#cfe0ff] hover:bg-[#f7faff]">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[#eef5ff] text-[#005dff]"><l.icon size={16} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-bold text-[#102347]">{l.label}</span>
+                    <span className="block truncate text-[11px] text-[#64748b]">{l.desc}</span>
+                  </span>
+                  <ChevronRight size={15} className="shrink-0 text-[#9aa6bb]" />
+                </Link>
+              ))}
+            </div>
+          </Card>
 
           {/* Footer */}
           <div className="flex flex-col items-center justify-between gap-2 rounded-[12px] border border-[#e7edf7] bg-white px-5 py-3.5 sm:flex-row">
@@ -329,8 +359,8 @@ export default function SettingsPage() {
 }
 
 /* ── building blocks ── */
-function Card({ children }: { children: React.ReactNode }) {
-  return <div className="overflow-hidden rounded-[14px] border border-[#e7edf7] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">{children}</div>;
+function Card({ id, children }: { id?: string; children: React.ReactNode }) {
+  return <div id={id} className="scroll-mt-4 overflow-hidden rounded-[14px] border border-[#e7edf7] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">{children}</div>;
 }
 function CardHead({ icon, title, sub, action, small }: { icon: React.ReactNode; title: string; sub?: string; action?: React.ReactNode; small?: boolean }) {
   return (
