@@ -20,6 +20,7 @@ export interface Shop {
   address: string;
   gstNumber?: string | null;
   phone?: string | null;
+  settingsJson?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

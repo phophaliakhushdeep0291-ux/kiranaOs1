@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { getGetShopQueryKey, useChangePassword, useGetShop, useUpdateShop } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/AuthContext";
@@ -82,6 +82,11 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:settings-panel-width", { defaultWidth: 440 });
 
+  const serverLoadedRef = useRef(false);
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveSettings = useUpdateShop({ mutation: { onError: () => undefined } });
+
+  // Instant local load (offline-first)
   useEffect(() => {
     let active = true;
     void offlineDB.getSetting<Partial<Prefs>>(PREFS_KEY).then((saved) => {
@@ -90,12 +95,29 @@ export default function SettingsPage() {
     return () => { active = false; };
   }, []);
 
+  // Server is source of truth on first load (syncs across devices)
+  useEffect(() => {
+    if (serverLoadedRef.current) return;
+    const raw = shop.data?.settingsJson;
+    if (raw == null) return;
+    serverLoadedRef.current = true;
+    try {
+      const parsed = JSON.parse(raw || "{}");
+      if (parsed && typeof parsed === "object") {
+        setPrefs((p) => ({ ...p, ...parsed }));
+        void offlineDB.setSetting(PREFS_KEY, { ...DEFAULT_PREFS, ...parsed });
+      }
+    } catch { /* ignore malformed */ }
+  }, [shop.data?.settingsJson]);
+
+  useEffect(() => () => { if (pushTimer.current) clearTimeout(pushTimer.current); }, []);
+
   function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]) {
-    setPrefs((prev) => {
-      const next = { ...prev, [key]: value };
-      void offlineDB.setSetting(PREFS_KEY, next);
-      return next;
-    });
+    const next = { ...prefs, [key]: value };
+    setPrefs(next);
+    void offlineDB.setSetting(PREFS_KEY, next); // instant + offline
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => saveSettings.mutate({ data: { settingsJson: JSON.stringify(next) } }), 700); // debounced server sync
   }
 
   const planName = snapshot?.planCode ? snapshot.planCode.charAt(0).toUpperCase() + snapshot.planCode.slice(1) : "Free";

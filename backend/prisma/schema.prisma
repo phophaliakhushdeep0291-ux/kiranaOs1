@@ -25,6 +25,7 @@ model Shop {
   address     String
   gstNumber   String?
   phone       String?
+  settingsJson String  @default("{}")  // shop preferences: printer, taxes, notifications, security toggles
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

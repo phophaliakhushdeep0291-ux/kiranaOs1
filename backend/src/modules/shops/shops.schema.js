@@ -7,4 +7,5 @@ export const updateShopSchema = z.object({
   address: z.string().optional(),
   gstNumber: z.string().optional(),
   phone: z.string().optional(),
+  settingsJson: z.string().max(20000).optional(),
 });
