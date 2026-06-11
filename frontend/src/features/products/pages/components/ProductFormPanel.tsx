@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Plus, ScanLine, Upload, X } from "lucide-react";
+import { Loader2, Package, Plus, Scale, ScanLine, Sparkles, Upload, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useBusinessType } from "@/features/settings/business-types";
 import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAliases } from "@/features/products/product-reliability";
+import { fetchGroqAliasSuggestions } from "../product-aliases";
 import { UNITS } from "../product-pricing";
 import type { ProductFormData } from "../product-form-state";
 
@@ -59,26 +61,52 @@ export function ProductFormPanel({
   onOpenChange,
   onSubmit,
 }: ProductFormPanelProps) {
+  const { toast } = useToast();
   const { def } = useBusinessType();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [imgError, setImgError] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const categories = def.categories.filter((c) => c !== "all");
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
-  const isLoose = form.watch("isLooseItem");
+  const isLoose = !!form.watch("isLooseItem");
   const err = form.formState.errors;
 
   /* aliases */
   const aliasesText = form.watch("aliasesText") ?? "";
   const currentAliases = splitProductAliases(aliasesText);
-  const aliasSuggestions = uniqueProductAliases(getLocalProductAliasSuggestions(form.watch("name"), form.watch("category")))
+  const suggestions = uniqueProductAliases([...aiSuggestions, ...getLocalProductAliasSuggestions(form.watch("name"), form.watch("category"))])
     .filter((a) => !currentAliases.map((x) => x.toLowerCase()).includes(a.toLowerCase()))
-    .slice(0, 8);
+    .slice(0, 12);
   function appendAlias(alias: string) {
     form.setValue("aliasesText", uniqueProductAliases([...currentAliases, alias]).join(", "), { shouldDirty: true });
   }
   function removeAlias(alias: string) {
     form.setValue("aliasesText", currentAliases.filter((a) => a !== alias).join(", "), { shouldDirty: true });
+  }
+  async function askAi() {
+    const name = form.getValues("name").trim();
+    if (!name) {
+      toast({ title: "Product name required", description: "Type the product name first, then ask AI.", variant: "destructive" });
+      return;
+    }
+    setAiLoading(true);
+    try {
+      const s = await fetchGroqAliasSuggestions(name, form.getValues("category"), form.getValues("unit"));
+      if (s.length === 0) {
+        setAiSuggestions(getLocalProductAliasSuggestions(name, form.getValues("category")));
+        toast({ title: "No AI names returned", description: "Showing local suggestions instead." });
+      } else {
+        setAiSuggestions(s);
+        toast({ title: "AI names ready", description: `${s.slice(0, 6).join(", ")}${s.length > 6 ? "…" : ""}` });
+      }
+    } catch {
+      setAiSuggestions(getLocalProductAliasSuggestions(name, form.getValues("category")));
+      toast({ title: "AI unavailable", description: "Showing local suggestions instead.", variant: "destructive" });
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   /* avg cost + margin */
@@ -100,6 +128,29 @@ export function ProductFormPanel({
       setImgError("Could not read image. Try another file.");
     }
   }
+
+  const CategoryField = (
+    <Field label="Category" required>
+      <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
+        <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
+        <SelectContent>
+          {categories.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
+  const UnitField = (
+    <Field label="Unit Type" required>
+      <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
+        <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
+        <SelectContent>
+          {def.primaryUnits.map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
+          <div className="my-1 h-px bg-border" />
+          {UNITS.filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </Field>
+  );
 
   return (
     <aside
@@ -125,59 +176,48 @@ export function ProductFormPanel({
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {/* Product type: Packed / Loose */}
+          <div className="mb-5 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc] p-1">
+            <TypeButton active={!isLoose} icon={<Package size={16} />} label="Packed Item" onClick={() => form.setValue("isLooseItem", false, { shouldDirty: true })} />
+            <TypeButton active={isLoose} icon={<Scale size={16} />} label="Loose Item" onClick={() => form.setValue("isLooseItem", true, { shouldDirty: true })} />
+          </div>
+
           {/* Basic Information */}
           <Section title="Basic Information">
             <Field label="Product Name" required error={err.name?.message}>
-              <Input className="h-10" placeholder="e.g. Tata Salt 1kg" {...form.register("name")} />
+              <Input className="h-10" placeholder={isLoose ? "e.g. Sugar (loose)" : "e.g. Tata Salt 1kg"} {...form.register("name")} />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Category" required>
-                <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g, " ")}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="Brand">
-                <Input className="h-10" placeholder="e.g. Tata" {...form.register("brand")} />
-              </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="SKU / Barcode" required={!isLoose}>
-                <div className="relative">
-                  <Input className="h-10 pr-9" placeholder="Scan or type" {...form.register("barcode")} />
-                  <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
-                </div>
-              </Field>
-              <Field label="Unit Type" required>
-                <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent>
-                    {def.primaryUnits.map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
-                    <div className="my-1 h-px bg-border" />
-                    {UNITS.filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
+
+            {/* Category + Brand (brand hidden for loose) */}
+            {isLoose ? (
+              CategoryField
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {CategoryField}
+                <Field label="Brand">
+                  <Input className="h-10" placeholder="e.g. Tata" {...form.register("brand")} />
+                </Field>
+              </div>
+            )}
+
+            {/* SKU/Barcode + Unit (SKU hidden for loose) */}
+            {isLoose ? (
+              UnitField
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="SKU / Barcode" required>
+                  <div className="relative">
+                    <Input className="h-10 pr-9" placeholder="Scan or type" {...form.register("barcode")} />
+                    <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
+                  </div>
+                </Field>
+                {UnitField}
+              </div>
+            )}
+
             <Field label="HSN (Optional)">
               <Input className="h-10" placeholder="e.g. 25010010" {...form.register("hsn")} />
             </Field>
-
-            {/* Loose item toggle */}
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#e3eaf3] bg-[#f8fafd] px-3 py-2.5">
-              <input
-                type="checkbox"
-                checked={!!isLoose}
-                onChange={(e) => form.setValue("isLooseItem", e.target.checked, { shouldDirty: true })}
-                className="mt-0.5 h-4 w-4 rounded border-[#cdd9ea] accent-[#0057ff]"
-              />
-              <span>
-                <span className="block text-[12.5px] font-bold text-[#13274d]">Loose item</span>
-                <span className="block text-[11px] text-[#6d7c98]">Sold loose by weight (grains, pulses, oil) — no fixed package or barcode.</span>
-              </span>
-            </label>
           </Section>
 
           {/* Aliases */}
@@ -195,16 +235,25 @@ export function ProductFormPanel({
                 ))}
               </div>
             )}
-            {aliasSuggestions.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-[11px] font-semibold text-[#6d7c98]">Suggestions — tap to add</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {aliasSuggestions.map((a) => (
-                    <button key={a} type="button" onClick={() => appendAlias(a)} className="inline-flex items-center gap-1 rounded-full border border-[#e3eaf3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#45577a] transition-colors hover:border-[#0057ff]/40 hover:text-[#0057ff]">
-                      <Plus size={11} /> {a}
-                    </button>
-                  ))}
-                </div>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-[#6d7c98]">{suggestions.length > 0 ? "Suggestions — tap to add" : "Generate name variations"}</p>
+              <button
+                type="button"
+                onClick={() => void askAi()}
+                disabled={aiLoading}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#d8c9ff] bg-[#f3ecff] px-2.5 py-1 text-[11px] font-extrabold text-[#7c3aed] transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {aiLoading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                AI Suggest
+              </button>
+            </div>
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {suggestions.map((a) => (
+                  <button key={a} type="button" onClick={() => appendAlias(a)} className="inline-flex items-center gap-1 rounded-full border border-[#e3eaf3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#45577a] transition-colors hover:border-[#0057ff]/40 hover:text-[#0057ff]">
+                    <Plus size={11} /> {a}
+                  </button>
+                ))}
               </div>
             )}
           </Section>
@@ -232,7 +281,6 @@ export function ProductFormPanel({
                 </Select>
               </Field>
             </div>
-            {/* Avg cost + margin readout */}
             <div className="flex items-center justify-between rounded-[10px] border border-[#e6ecf4] bg-[#f8fafd] px-3 py-2 text-[12px]">
               <span className="font-semibold text-[#6d7c98]">Avg. cost</span>
               <span className="font-black text-[#13274d]">₹{cost.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -313,6 +361,21 @@ export function ProductFormPanel({
         </div>
       </form>
     </aside>
+  );
+}
+
+function TypeButton({ active, icon, label, onClick }: { active: boolean; icon: React.ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-10 items-center justify-center gap-2 rounded-[9px] text-[13px] font-bold transition-all ${
+        active ? "bg-white text-[#0057ff] shadow-[0_2px_8px_rgba(15,23,42,0.08)]" : "text-[#6d7c98] hover:text-[#13274d]"
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
