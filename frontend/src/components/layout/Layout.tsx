@@ -74,6 +74,8 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/dashboard": "Your business at a glance",
   "/products": "Manage your product catalog",
   "/inventory": "Track stock levels",
+  "/inventory/stock-in": "Items currently in stock",
+  "/inventory/stock-out": "Items that are out of stock",
   "/customers": "Customers and credit ledger",
   "/reports": "Sales insights and analytics",
 };
@@ -84,6 +86,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/bills": "Bills History",
   "/products": "Products",
   "/inventory": "Inventory",
+  "/inventory/stock-in": "Stock In",
+  "/inventory/stock-out": "Stock Out",
   "/purchase-bills": "Purchases",
   "/customers": "Customers / Udhar",
   "/udhar": "Udhar",
