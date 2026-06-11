@@ -113,6 +113,12 @@ function getPageTitle(loc: string): string {
   return match ? PAGE_TITLES[match] : "KiranaOS";
 }
 
+function getPageSubtitle(loc: string): string | undefined {
+  if (PAGE_SUBTITLES[loc]) return PAGE_SUBTITLES[loc];
+  const match = Object.keys(PAGE_SUBTITLES).find(k => loc.startsWith(k + "/"));
+  return match ? PAGE_SUBTITLES[match] : undefined;
+}
+
 // ── nav data ──────────────────────────────────────────────────────────────────
 
 type SubItem = { href: string; label: string };
@@ -408,8 +414,8 @@ export function Layout({ children }: { children: ReactNode }) {
           </button>
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-[26px] font-black tracking-tight text-foreground leading-none">{getPageTitle(loc)}</h1>
-            {PAGE_SUBTITLES[loc] && (
-              <p className="text-[12.5px] font-medium text-muted-foreground leading-none mt-1.5">{PAGE_SUBTITLES[loc]}</p>
+            {getPageSubtitle(loc) && (
+              <p className="text-[12.5px] font-medium text-muted-foreground leading-none mt-1.5">{getPageSubtitle(loc)}</p>
             )}
           </div>
 

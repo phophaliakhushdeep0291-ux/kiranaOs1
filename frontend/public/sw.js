@@ -1,15 +1,20 @@
-const CACHE_NAME = "kiranaos-offline-v4";
-
-const APP_SHELL = [
-  "/",
-  "/index.html",
-  "/manifest.webmanifest",
-  "/offline.html"
+/* KiranaOS service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
+const CACHE_VERSION = "kiranaos-shell-v3";
+const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/offline.html"];
+const NEVER_CACHE_PATTERNS = [
+  /\/api\//i,
+  /\/sync\//i,
+  /\/auth\//i,
+  /\/login/i,
+  /\/logout/i,
+  /\/register/i,
+  /token/i,
+  /password/i,
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
+    caches.open(CACHE_VERSION)
       .then((cache) => cache.addAll(APP_SHELL))
       .then(() => self.skipWaiting())
   );
@@ -18,70 +23,84 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key !== CACHE_NAME)
-            .map((key) => caches.delete(key))
-        )
-      )
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_VERSION).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+// Sensitive routes (API, auth, sync, cross-origin, non-GET) must never touch Cache Storage.
+function shouldBypass(request, url) {
+  if (request.method !== "GET") return true;
+  if (url.origin !== self.location.origin) return true;
+  return NEVER_CACHE_PATTERNS.some((pattern) => pattern.test(url.pathname + url.search));
+}
+
+async function networkFirstNavigation(request) {
+  const cache = await caches.open(CACHE_VERSION);
+  try {
+    const response = await fetch(request);
+    // Keep the freshest app shell so client-side routes still render offline.
+    if (response && response.ok && response.type === "basic") {
+      cache.put("/index.html", response.clone()).catch(() => undefined);
+    }
+    return response;
+  } catch {
+    // Offline: serve the cached SPA shell so any in-app route can boot, then fall back to offline.html.
+    return (
+      (await cache.match("/index.html")) ||
+      (await cache.match("/")) ||
+      (await cache.match("/offline.html"))
+    );
+  }
+}
+
+async function cacheFirstStatic(request) {
+  const cached = await caches.match(request);
+  const cache = await caches.open(CACHE_VERSION);
+  const fetchAndStore = fetch(request).then((response) => {
+    if (response && response.ok && response.type === "basic") cache.put(request, response.clone()).catch(() => undefined);
+    return response;
+  });
+  if (cached) {
+    fetchAndStore.catch(() => undefined);
+    return cached;
+  }
+  return fetchAndStore;
+}
+
+async function networkFirstStatic(request) {
+  const cache = await caches.open(CACHE_VERSION);
+  try {
+    const response = await fetch(request);
+    if (response && response.ok && response.type === "basic") cache.put(request, response.clone()).catch(() => undefined);
+    return response;
+  } catch {
+    return cache.match(request);
+  }
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
+  if (shouldBypass(request, url)) return;
 
-  // Never cache backend/API calls.
-  if (
-    url.pathname.startsWith("/api/") ||
-    url.hostname.includes("railway.app") ||
-    request.method !== "GET"
-  ) {
-    return;
-  }
-
-  // For page navigation, serve React app shell offline.
   if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put("/index.html", copy);
-          });
-          return response;
-        })
-        .catch(async () => {
-          return (
-            (await caches.match("/index.html")) ||
-            (await caches.match("/")) ||
-            (await caches.match("/offline.html"))
-          );
-        })
-    );
+    event.respondWith(networkFirstNavigation(request));
     return;
   }
 
-  // Cache frontend assets.
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        const networkFetch = fetch(request)
-          .then((response) => {
-            if (response && response.ok) {
-              const copy = response.clone();
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(request, copy);
-              });
-            }
-            return response;
-          })
-          .catch(() => cached);
+  // App code is fetched network-first so users never run stale JS/CSS/workers.
+  if (["style", "script", "worker"].includes(request.destination)) {
+    event.respondWith(networkFirstStatic(request));
+    return;
+  }
 
-        return cached || networkFetch;
-      })
-    );
+  // Fonts and images rarely change; serve them cache-first for speed.
+  if (["font", "image"].includes(request.destination)) {
+    event.respondWith(cacheFirstStatic(request));
   }
 });

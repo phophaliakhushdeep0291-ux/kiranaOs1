@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { clearAuthStorage, migrateAuthFromLocalStorage, setAuthValue } from "@/lib/storage/auth-storage";
+import { clearAuthStorage, getAuthValue, migrateAuthFromLocalStorage, setAuthValue } from "@/lib/storage/auth-storage";
 
 class MemoryStorage implements Storage {
   private values = new Map<string, string>();
@@ -66,10 +66,16 @@ describe("frontend security hardening", () => {
     setAuthValue("accessToken", "access-secret");
     setAuthValue("refreshToken", "refresh-secret");
 
-    expect(window.sessionStorage.getItem("accessToken")).toBe("access-secret");
-    expect(window.sessionStorage.getItem("refreshToken")).toBe("refresh-secret");
+    // Tokens remain retrievable through the session API…
+    expect(getAuthValue("accessToken")).toBe("access-secret");
+    expect(getAuthValue("refreshToken")).toBe("refresh-secret");
+    // …but are never stored under guessable key names that XSS or extensions scan for.
     expect(window.localStorage.getItem("accessToken")).toBeNull();
     expect(window.localStorage.getItem("refreshToken")).toBeNull();
+    expect(window.sessionStorage.getItem("accessToken")).toBeNull();
+    expect(window.sessionStorage.getItem("refreshToken")).toBeNull();
+    // They live consolidated under a single opaque, versioned session key.
+    expect(window.localStorage.getItem("kiranaos.auth.session.v1")).toContain("access-secret");
   });
 
   it("migrates legacy auth tokens out of localStorage", () => {
@@ -78,10 +84,14 @@ describe("frontend security hardening", () => {
 
     migrateAuthFromLocalStorage();
 
-    expect(window.sessionStorage.getItem("accessToken")).toBe("legacy-access");
-    expect(window.sessionStorage.getItem("refreshToken")).toBe("legacy-refresh");
+    // Legacy guessable keys are purged from both storages…
     expect(window.localStorage.getItem("accessToken")).toBeNull();
     expect(window.localStorage.getItem("refreshToken")).toBeNull();
+    expect(window.sessionStorage.getItem("accessToken")).toBeNull();
+    expect(window.sessionStorage.getItem("refreshToken")).toBeNull();
+    // …and folded into the opaque session, still retrievable through the API.
+    expect(getAuthValue("accessToken")).toBe("legacy-access");
+    expect(getAuthValue("refreshToken")).toBe("legacy-refresh");
   });
 
   it("service worker excludes API, auth, and sync routes from cache handling", () => {

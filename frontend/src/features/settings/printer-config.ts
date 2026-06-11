@@ -13,24 +13,58 @@ export type PrinterConnection = "browser" | "bluetooth" | "usb" | "network";
 export interface PrinterConfig {
   connection: PrinterConnection;
   deviceName: string;
+  model: string;
   networkAddress: string;
   paperSize: ReceiptPaperSize;
   autoPrint: boolean;
   copies: number;
+  // Print behaviour
+  askBeforePrint: boolean;
+  customerCopy: boolean;
+  shopCopy: boolean;
+  autoCut: boolean;
   cashDrawer: boolean;
+  printLogo: boolean;
+  printQr: boolean;
+  // Receipt content
   showGst: boolean;
+  showMrp: boolean;
+  showDiscount: boolean;
+  showGstBreakup: boolean;
+  showHsn: boolean;
+  showCashier: boolean;
+  showCustomerPhone: boolean;
+  showPreviousUdhar: boolean;
+  showSavings: boolean;
+  showReturnPolicy: boolean;
   footerText: string;
 }
 
 export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
   connection: "browser",
   deviceName: "Browser / system printer",
+  model: "",
   networkAddress: "",
   paperSize: "80mm",
   autoPrint: true,
   copies: 1,
+  askBeforePrint: false,
+  customerCopy: true,
+  shopCopy: false,
+  autoCut: true,
   cashDrawer: false,
+  printLogo: true,
+  printQr: true,
   showGst: true,
+  showMrp: false,
+  showDiscount: true,
+  showGstBreakup: true,
+  showHsn: false,
+  showCashier: true,
+  showCustomerPhone: true,
+  showPreviousUdhar: false,
+  showSavings: false,
+  showReturnPolicy: false,
   footerText: "Thank you for shopping with us.",
 };
 

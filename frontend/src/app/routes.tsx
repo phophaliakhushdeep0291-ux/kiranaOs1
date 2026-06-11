@@ -24,6 +24,17 @@ const Suppliers = lazy(() => import("@/features/suppliers/pages/SuppliersPage"))
 const Reports = lazy(() => import("@/features/reports/pages/ReportsPage"));
 const DailyClosingPage = lazy(() => import("@/features/reports/pages/DailyClosingPage"));
 const Settings = lazy(() => import("@/features/settings/pages/SettingsPage"));
+const StoreProfileSettings = lazy(() => import("@/features/settings/pages/StoreProfilePage"));
+const PrinterSettings = lazy(() => import("@/features/settings/pages/PrinterSettingsPage"));
+const BillingSettings = lazy(() => import("@/features/settings/pages/BillingSettingsPage"));
+const StaffSettings = lazy(() => import("@/features/settings/pages/StaffSettingsPage"));
+const DevicesSettings = lazy(() => import("@/features/settings/pages/DevicesSettingsPage"));
+const SyncSettings = lazy(() => import("@/features/settings/pages/SyncSettingsPage"));
+const TaxesSettings = lazy(() => import("@/features/settings/pages/TaxesSettingsPage"));
+const SecuritySettings = lazy(() => import("@/features/settings/pages/SecuritySettingsPage"));
+const NotificationsSettings = lazy(() => import("@/features/settings/pages/NotificationsSettingsPage"));
+const IntegrationsSettings = lazy(() => import("@/features/settings/pages/IntegrationsSettingsPage"));
+const AdvancedSettings = lazy(() => import("@/features/settings/pages/AdvancedSettingsPage"));
 const SyncStatusPage = lazy(() => import("@/features/sync/pages/SyncStatusPage"));
 const PlansPage = lazy(() => import("@/features/subscription/pages/PlansPage"));
 const SubscriptionPage = lazy(() => import("@/features/subscription/pages/SubscriptionPage"));
@@ -142,6 +153,39 @@ export function AppRoutes() {
       </Route>
       <Route path="/settings">
         <ProtectedRoute component={Settings} />
+      </Route>
+      <Route path="/settings/store-profile">
+        <ProtectedRoute component={StoreProfileSettings} />
+      </Route>
+      <Route path="/settings/printer">
+        <ProtectedRoute component={PrinterSettings} />
+      </Route>
+      <Route path="/settings/billing">
+        <ProtectedRoute component={BillingSettings} />
+      </Route>
+      <Route path="/settings/staff">
+        <ProtectedRoute component={StaffSettings} />
+      </Route>
+      <Route path="/settings/devices">
+        <ProtectedRoute component={DevicesSettings} />
+      </Route>
+      <Route path="/settings/sync">
+        <ProtectedRoute component={SyncSettings} />
+      </Route>
+      <Route path="/settings/taxes">
+        <ProtectedRoute component={TaxesSettings} />
+      </Route>
+      <Route path="/settings/security">
+        <ProtectedRoute component={SecuritySettings} />
+      </Route>
+      <Route path="/settings/notifications">
+        <ProtectedRoute component={NotificationsSettings} />
+      </Route>
+      <Route path="/settings/integrations">
+        <ProtectedRoute component={IntegrationsSettings} />
+      </Route>
+      <Route path="/settings/advanced">
+        <ProtectedRoute component={AdvancedSettings} />
       </Route>
       <Route path="/plans">
         <ProtectedRoute component={PlansPage} />
