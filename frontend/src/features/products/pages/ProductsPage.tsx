@@ -32,6 +32,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
+import { usePanelResize } from "@/hooks/use-panel-resize";
 import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
@@ -100,6 +101,7 @@ export default function ProductsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
   const [stayOpen, setStayOpen] = useState(true);
   const stayOpenRef = useRef(true);
+  const { width: panelWidth, isDesktop, onResizeStart } = usePanelResize("kirana:product-panel-width");
   const debouncedSearch = useDebounce(search.trim(), 150);
 
   const products = useListProducts({ limit: 1000 }, {
@@ -256,7 +258,10 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${open ? "lg:pr-[436px]" : ""}`}>
+    <div
+      className="min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      style={open && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+    >
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <StatCard icon={<Package size={18} />} iconClass="bg-blue-50 text-blue-600" label="Total Products" value={stats.total.toLocaleString("en-IN")} sub="Active listings" />
@@ -449,6 +454,8 @@ export default function ProductsPage() {
         form={form}
         isPending={isPending}
         stayOpen={stayOpen}
+        width={panelWidth}
+        onResizeStart={onResizeStart}
         onStayOpenChange={(v) => { setStayOpen(v); stayOpenRef.current = v; }}
         onOpenChange={setOpen}
         onSubmit={onSubmit}

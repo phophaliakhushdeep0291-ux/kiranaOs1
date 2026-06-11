@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertTriangle, Boxes, ChevronLeft, ChevronRight, IndianRupee, Layers, MinusCircle, MoreVertical, PackageX, Plus, PlusCircle, Search } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
+import { usePanelResize } from "@/hooks/use-panel-resize";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
 import { averageCost, fromBaseQty, isDeletedProduct, isLowStock, productDisplayUnit } from "@/features/products/pages/product-pricing";
 import { productMatchesSearch } from "@/features/products/product-reliability";
@@ -36,6 +37,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveMode, setMoveMode] = useState<"in" | "out">(mode);
   const [movePreselect, setMovePreselect] = useState<string | undefined>(undefined);
+  const { width: panelWidth, isDesktop, onResizeStart } = usePanelResize("kirana:stock-panel-width");
   const debouncedSearch = useDebounce(search.trim(), 150);
 
   const products = useListProducts({ limit: 1000 }, {
@@ -104,7 +106,10 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
       ];
 
   return (
-    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${moveOpen ? "lg:pr-[436px]" : ""}`}>
+    <div
+      className="min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      style={moveOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+    >
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {cards.map((c) => (
@@ -269,7 +274,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
         )}
       </div>
 
-      <StockMovementDialog mode={moveMode} open={moveOpen} onOpenChange={setMoveOpen} initialProductId={movePreselect} />
+      <StockMovementDialog mode={moveMode} open={moveOpen} onOpenChange={setMoveOpen} initialProductId={movePreselect} width={panelWidth} onResizeStart={onResizeStart} />
     </div>
   );
 }

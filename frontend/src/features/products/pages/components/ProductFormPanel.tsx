@@ -1,5 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { UseFormReturn } from "react-hook-form";
+import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import type { Product } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,8 @@ interface ProductFormPanelProps {
   form: UseFormReturn<ProductFormData>;
   isPending: boolean;
   stayOpen: boolean;
+  width: number;
+  onResizeStart: (e: ReactMouseEvent) => void;
   onStayOpenChange: (value: boolean) => void;
   onOpenChange: (open: boolean) => void;
   onSubmit: (values: ProductFormData) => void;
@@ -57,6 +60,8 @@ export function ProductFormPanel({
   form,
   isPending,
   stayOpen,
+  width,
+  onResizeStart,
   onStayOpenChange,
   onOpenChange,
   onSubmit,
@@ -154,11 +159,13 @@ export function ProductFormPanel({
 
   return (
     <aside
-      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[420px] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      style={{ width }}
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
       aria-label={editing ? "Edit product" : "Add new product"}
       aria-hidden={!open}
     >
+      <PanelResizeHandle onResizeStart={onResizeStart} />
       {/* Header */}
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>

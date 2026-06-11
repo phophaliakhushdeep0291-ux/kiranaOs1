@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useListProducts, type Product } from "@/lib/api/client";
+import { PanelResizeHandle, usePanelResize } from "@/hooks/use-panel-resize";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ export default function CategoriesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ShopCategory | null>(null);
   const seededRef = useRef(false);
+  const { width: panelWidth, isDesktop, onResizeStart } = usePanelResize("kirana:category-panel-width");
 
   const productList = useMemo(() => (products.data ?? []).filter((p) => !isDeletedProduct(p)), [products.data]);
 
@@ -115,7 +117,10 @@ export default function CategoriesPage() {
   ];
 
   return (
-    <div className={`min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${dialogOpen ? "lg:pr-[436px]" : ""}`}>
+    <div
+      className="min-h-full bg-[#f7f9fd] px-4 py-4 transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+      style={dialogOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+    >
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {cards.map((c) => (
@@ -222,17 +227,19 @@ export default function CategoriesPage() {
         )}
       </div>
 
-      <CategoryDialog open={dialogOpen} editing={editing} cats={cats} onOpenChange={setDialogOpen} onSave={saveCategory} />
+      <CategoryDialog open={dialogOpen} editing={editing} cats={cats} width={panelWidth} onResizeStart={onResizeStart} onOpenChange={setDialogOpen} onSave={saveCategory} />
     </div>
   );
 }
 
 function CategoryDialog({
-  open, editing, cats, onOpenChange, onSave,
+  open, editing, cats, width, onResizeStart, onOpenChange, onSave,
 }: {
   open: boolean;
   editing: ShopCategory | null;
   cats: ShopCategory[];
+  width: number;
+  onResizeStart: (e: ReactMouseEvent) => void;
   onOpenChange: (o: boolean) => void;
   onSave: (v: { name: string; parentId: string | null; status: "active" | "inactive" }) => void;
 }) {
@@ -254,11 +261,13 @@ function CategoryDialog({
 
   return (
     <aside
-      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[420px] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      style={{ width }}
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
       aria-label={editing ? "Edit category" : "Add category"}
       aria-hidden={!open}
     >
+      <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
           <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Category" : "Add Category"}</h2>

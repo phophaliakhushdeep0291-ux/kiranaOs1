@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { useRecordDamage, useRecordPurchase } from "@/features/inventory/queries
 
 const OUT_REASONS = ["Damage", "Expiry", "Sale Return", "Theft / Missing", "Other"];
 
-export function StockMovementDialog({ mode, open, onOpenChange, initialProductId }: { mode: "in" | "out"; open: boolean; onOpenChange: (o: boolean) => void; initialProductId?: string }) {
+export function StockMovementDialog({ mode, open, onOpenChange, initialProductId, width, onResizeStart }: { mode: "in" | "out"; open: boolean; onOpenChange: (o: boolean) => void; initialProductId?: string; width: number; onResizeStart: (e: ReactMouseEvent) => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const products = useListProducts({ limit: 1000 }, { query: { staleTime: 60_000 } });
@@ -79,11 +80,13 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
 
   return (
     <aside
-      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[420px] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      style={{ width }}
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
       aria-label={mode === "in" ? "New stock in" : "New stock out"}
       aria-hidden={!open}
     >
+      <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
           <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{mode === "in" ? "New Stock In" : "New Stock Out"}</h2>
