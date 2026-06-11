@@ -15,6 +15,7 @@ import { BillingSummary } from "./components/BillingSummary";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
+import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 
@@ -232,6 +233,12 @@ export default function Billing() {
   useEffect(() => {
     if (discount !== safeDiscount) setDiscount(safeDiscount);
   }, [discount, safeDiscount]);
+
+  // Hydrate the printer config cache so receipts honour the saved paper size,
+  // copies, footer and auto-print toggle from Settings.
+  useEffect(() => {
+    void loadPrinterConfig();
+  }, []);
 
   useEffect(() => {
     setSensitiveApproval(null);
@@ -654,7 +661,7 @@ export default function Billing() {
     setLastPrintableBill(printable);
     pendingAutoPrintRef.current = null;
 
-    if (!isEstimate && overrideBillType === undefined) {
+    if (!isEstimate && overrideBillType === undefined && getPrinterConfigSync().autoPrint) {
       const popup = window.open("", "_blank", "width=460,height=760");
       if (popup) {
         pendingAutoPrintRef.current = { popup, printable };

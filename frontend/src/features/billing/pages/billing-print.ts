@@ -6,7 +6,9 @@ import {
   writeReceiptWindow,
   type ReceiptPaymentLine,
   type ReceiptSnapshot,
+  type ReceiptWindowOptions,
 } from "@/features/receipts/receipt-print";
+import { getPrinterConfigSync } from "@/features/settings/printer-config";
 import type { PrintableBill } from "./billing-types";
 
 function billTypeLabel(type: PrintableBill["billType"]) {
@@ -31,6 +33,9 @@ function fallbackPaymentLines(bill: PrintableBill): ReceiptPaymentLine[] {
 }
 
 export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapshot {
+  const printer = getPrinterConfigSync();
+  // Respect the "Show GSTIN on receipt" toggle by stripping the number when off.
+  const shop = bill.shop && !printer.showGst ? { ...bill.shop, gstNumber: null } : bill.shop;
   return {
     billNo: bill.billNo,
     createdAt: bill.createdAt,
@@ -51,8 +56,12 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     paid: bill.paid,
     credit: bill.credit,
     payments: bill.payments?.length ? bill.payments : fallbackPaymentLines(bill),
-    shop: bill.shop,
-    footerNote: bill.credit > 0 ? "Please keep this receipt for udhar records." : "Thank you for shopping with us.",
+    shop,
+    // Udhar bills keep their record-keeping note; everything else uses the
+    // shop's configured receipt footer (falling back to the friendly default).
+    footerNote: bill.credit > 0
+      ? "Please keep this receipt for udhar records."
+      : (getPrinterConfigSync().footerText || "Thank you for shopping with us."),
   };
 }
 
@@ -60,8 +69,15 @@ export function buildBillingReceiptHtml(bill: PrintableBill) {
   return buildReceiptHtml(buildBillingReceiptSnapshot(bill));
 }
 
-export function writeBillingReceiptWindow(popup: Window, bill: PrintableBill, options: { autoPrint?: boolean; printDelayMs?: number } = {}) {
-  writeReceiptWindow(popup, buildBillingReceiptSnapshot(bill), options);
+export function writeBillingReceiptWindow(popup: Window, bill: PrintableBill, options: ReceiptWindowOptions = {}) {
+  const printer = getPrinterConfigSync();
+  // Saved printer config drives paper size + copies; the caller still decides
+  // auto-print (the after-save flow already gates on the auto-print toggle).
+  writeReceiptWindow(popup, buildBillingReceiptSnapshot(bill), {
+    paperSize: printer.paperSize,
+    copies: printer.copies,
+    ...options,
+  });
 }
 
 export function writeBillingReceiptPendingWindow(popup: Window, bill: PrintableBill) {

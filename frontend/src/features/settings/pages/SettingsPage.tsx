@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/settings/theme";
 import { useAppLanguage, type AppLanguage } from "@/features/settings/i18n";
+import {
+  DEFAULT_PRINTER_CONFIG, PRINTER_CONNECTION_LABELS, setPrinterConfigCache,
+  type PrinterConfig, type PrinterConnection,
+} from "@/features/settings/printer-config";
+import { openReceiptWindow, type ReceiptPaperSize, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
 import { useSubscriptionSnapshot } from "@/features/subscription";
 import { useOfflineStatus } from "@/features/sync";
 import { offlineDB } from "@/lib/offline/db";
@@ -42,6 +47,7 @@ interface Prefs {
   biometric: boolean; twoFactor: boolean; sessionTimeout: string;
   lowStock: boolean; paymentReminders: boolean; dailySummary: boolean; promotions: boolean;
   gstMode: string; gstRate: string;
+  printer: PrinterConfig;
 }
 const DEFAULT_PREFS: Prefs = {
   printPreview: true, eInvoice: true, hsnTracking: true,
@@ -49,6 +55,7 @@ const DEFAULT_PREFS: Prefs = {
   biometric: true, twoFactor: true, sessionTimeout: "15 minutes",
   lowStock: true, paymentReminders: true, dailySummary: true, promotions: false,
   gstMode: "Exclusive (Add to price)", gstRate: "18%",
+  printer: DEFAULT_PRINTER_CONFIG,
 };
 
 const MENU = [
@@ -77,6 +84,7 @@ export default function SettingsPage() {
   const { isOnline, isSyncing } = useOfflineStatus();
   const shop = useGetShop();
   const [editOpen, setEditOpen] = useState(false);
+  const [printerOpen, setPrinterOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("general");
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
@@ -90,7 +98,10 @@ export default function SettingsPage() {
   useEffect(() => {
     let active = true;
     void offlineDB.getSetting<Partial<Prefs>>(PREFS_KEY).then((saved) => {
-      if (active && saved) setPrefs((p) => ({ ...p, ...saved }));
+      if (active && saved) {
+        setPrefs((p) => ({ ...p, ...saved, printer: { ...DEFAULT_PRINTER_CONFIG, ...(saved.printer ?? {}) } }));
+        if (saved.printer) setPrinterConfigCache(saved.printer);
+      }
     });
     return () => { active = false; };
   }, []);
@@ -104,8 +115,10 @@ export default function SettingsPage() {
     try {
       const parsed = JSON.parse(raw || "{}");
       if (parsed && typeof parsed === "object") {
-        setPrefs((p) => ({ ...p, ...parsed }));
-        void offlineDB.setSetting(PREFS_KEY, { ...DEFAULT_PREFS, ...parsed });
+        const merged = { ...DEFAULT_PREFS, ...parsed, printer: { ...DEFAULT_PRINTER_CONFIG, ...(parsed.printer ?? {}) } };
+        setPrefs((p) => ({ ...p, ...parsed, printer: merged.printer }));
+        setPrinterConfigCache(merged.printer);
+        void offlineDB.setSetting(PREFS_KEY, merged);
       }
     } catch { /* ignore malformed */ }
   }, [shop.data?.settingsJson]);
@@ -120,6 +133,13 @@ export default function SettingsPage() {
     pushTimer.current = setTimeout(() => saveSettings.mutate({ data: { settingsJson: JSON.stringify(next) } }), 700); // debounced server sync
   }
 
+  function savePrinter(next: PrinterConfig) {
+    setPref("printer", next);     // persist into the synced prefs blob (offline + debounced server)
+    setPrinterConfigCache(next);  // keep the billing print path's sync cache fresh this session
+    setPrinterOpen(false);
+    toast({ title: "Printer settings saved" });
+  }
+
   const planName = snapshot?.planCode ? snapshot.planCode.charAt(0).toUpperCase() + snapshot.planCode.slice(1) : "Free";
   const shopName = shop.data?.name ?? "My Store";
   const shopAddress = [shop.data?.address, shop.data?.city].filter(Boolean).join(", ") || "Add your store address";
@@ -128,7 +148,7 @@ export default function SettingsPage() {
   return (
     <div
       className={cn("min-h-full bg-[#f8faff] px-4 py-4", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
-      style={editOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+      style={(editOpen || printerOpen) && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
     >
       <div className="flex gap-4">
         {/* Submenu */}
@@ -244,11 +264,11 @@ export default function SettingsPage() {
           {/* Row 3: Printer + Taxes + Sync */}
           <div className="grid gap-4 lg:grid-cols-3">
             <Card id="section-printer">
-              <CardHead icon={<Printer size={15} />} title="Printer & Billing" small action={<button className="text-[12px] font-bold text-[#005dff] hover:underline">Configure</button>} />
+              <CardHead icon={<Printer size={15} />} title="Printer & Billing" small action={<button onClick={() => setPrinterOpen(true)} className="text-[12px] font-bold text-[#005dff] hover:underline">Configure</button>} />
               <div className="px-5 pb-4">
-                <RowToggle label="Default Bill Printer" desc="Thermal Printer (Receipts)" pill={<span className="rounded-[7px] bg-emerald-100 px-2 py-[3px] text-[11px] font-bold text-emerald-700">Connected</span>} />
-                <RowToggle label="Bill Template" desc="Modern Template" pill={<button className="text-[12px] font-bold text-[#005dff]">Change</button>} />
-                <RowToggle label="Print Settings" desc="80mm · Auto Cut" pill={<button className="text-[12px] font-bold text-[#005dff]">Configure</button>} />
+                <RowToggle label="Default Bill Printer" desc={prefs.printer.deviceName || "Browser / system printer"} pill={<span className="rounded-[7px] bg-[#eef5ff] px-2 py-[3px] text-[11px] font-bold text-[#005dff]">{PRINTER_CONNECTION_LABELS[prefs.printer.connection]}</span>} />
+                <RowToggle label="Paper & Output" desc={`${prefs.printer.paperSize} · ${prefs.printer.copies} cop${prefs.printer.copies > 1 ? "ies" : "y"} · ${prefs.printer.autoPrint ? "Auto-print on" : "Manual print"}`} pill={<button onClick={() => setPrinterOpen(true)} className="text-[12px] font-bold text-[#005dff]">Configure</button>} />
+                <RowToggle label="Receipt Footer" desc={prefs.printer.footerText || "No footer message"} pill={<button onClick={() => setPrinterOpen(true)} className="text-[12px] font-bold text-[#005dff]">Edit</button>} />
                 <RowToggle label="Print Preview" desc="Show before printing" pill={<Switch checked={prefs.printPreview} onCheckedChange={(v) => setPref("printPreview", v)} />} last />
               </div>
             </Card>
@@ -373,6 +393,16 @@ export default function SettingsPage() {
         onResizeStart={onResizeStart}
         onClose={() => setEditOpen(false)}
         onSaved={() => { queryClient.invalidateQueries({ queryKey: getGetShopQueryKey() }); setEditOpen(false); }}
+      />
+
+      <PrinterConfigPanel
+        open={printerOpen}
+        initial={prefs.printer}
+        shop={shop.data}
+        width={panelWidth}
+        onResizeStart={onResizeStart}
+        onClose={() => setPrinterOpen(false)}
+        onSave={savePrinter}
       />
 
       <PasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
@@ -529,6 +559,161 @@ function Fld({ label, err, children }: { label: string; err?: string; children: 
       {children}
       {err && <p className="mt-1 text-[11px] text-rose-600">{err}</p>}
     </div>
+  );
+}
+
+/* ── Printer configuration slide-in ── */
+type PrinterShop = { name?: string | null; address?: string | null; city?: string | null; phone?: string | null; gstNumber?: string | null } | undefined;
+
+function buildSamplePreview(shop: PrinterShop, cfg: PrinterConfig): ReceiptSnapshot {
+  return {
+    billNo: "PREVIEW-001",
+    createdAt: new Date().toISOString(),
+    billTypeLabel: "Sample receipt",
+    copyLabel: "Test print",
+    customerName: "Walk-in customer",
+    customerMobile: "",
+    rows: [
+      { name: "Tata Salt 1kg", quantity: 2, unit: "pkt", rate: 28, total: 56 },
+      { name: "Aashirvaad Atta 5kg", quantity: 1, unit: "bag", rate: 245, total: 245 },
+      { name: "Amul Butter 100g", quantity: 3, unit: "pcs", rate: 62, total: 186 },
+    ],
+    subtotal: 487, discount: 7, total: 480, paid: 480, credit: 0,
+    payments: [{ mode: "cash", amount: 480 }],
+    shop: {
+      name: shop?.name ?? "My Store",
+      address: shop?.address ?? null,
+      city: shop?.city ?? null,
+      phone: shop?.phone ?? null,
+      gstNumber: cfg.showGst ? (shop?.gstNumber ?? null) : null,
+    },
+    footerNote: cfg.footerText || "Thank you for shopping with us.",
+  };
+}
+
+function PrinterRow({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[#e7edf7] px-3.5 py-2.5">
+      <div className="min-w-0">
+        <p className="text-[13px] font-bold text-[#102347]">{title}</p>
+        {desc && <p className="text-[11px] text-[#64748b]">{desc}</p>}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  );
+}
+
+function PrinterConfigPanel({
+  open, initial, shop, width, onResizeStart, onClose, onSave,
+}: {
+  open: boolean;
+  initial: PrinterConfig;
+  shop: PrinterShop;
+  width: number;
+  onResizeStart: (e: React.MouseEvent) => void;
+  onClose: () => void;
+  onSave: (next: PrinterConfig) => void;
+}) {
+  const { toast } = useToast();
+  const [cfg, setCfg] = useState<PrinterConfig>(initial);
+
+  // Re-seed from saved config each time the panel opens.
+  useEffect(() => { if (open) setCfg(initial); }, [open, initial]);
+
+  const set = <K extends keyof PrinterConfig>(key: K, value: PrinterConfig[K]) => setCfg((c) => ({ ...c, [key]: value }));
+
+  function handleTestPrint() {
+    const ok = openReceiptWindow(buildSamplePreview(shop, cfg), { paperSize: cfg.paperSize, copies: cfg.copies, autoPrint: true });
+    if (!ok) toast({ title: "Allow pop-ups", description: "Enable pop-ups to preview the test print.", variant: "destructive" });
+  }
+
+  return (
+    <aside
+      style={{ width }}
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      role="dialog" aria-label="Printer settings" aria-hidden={!open}
+    >
+      <PanelResizeHandle onResizeStart={onResizeStart} />
+      <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
+        <div>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">Printer & Receipt</h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">Connect a printer and control how receipts print.</p>
+        </div>
+        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        <section className="space-y-3">
+          <h3 className="text-[13px] font-black text-[#13274d]">Printer connection</h3>
+          <Fld label="Connection method">
+            <Select value={cfg.connection} onValueChange={(v) => set("connection", v as PrinterConnection)}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(Object.entries(PRINTER_CONNECTION_LABELS) as [PrinterConnection, string][]).map(([key, label]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Fld>
+          <Fld label="Printer name / label"><Input className="h-10" placeholder="Counter thermal printer" value={cfg.deviceName} onChange={(e) => set("deviceName", e.target.value)} /></Fld>
+          {cfg.connection === "network" && (
+            <Fld label="Network address (IP:port)"><Input className="h-10" placeholder="192.168.1.50:9100" value={cfg.networkAddress} onChange={(e) => set("networkAddress", e.target.value)} /></Fld>
+          )}
+          {cfg.connection === "browser" ? (
+            <p className="rounded-[10px] bg-[#eef5ff] px-3 py-2 text-[11px] font-medium text-[#34507f]">Uses your device's print dialog — works on any phone, tablet or PC. Recommended for most shops.</p>
+          ) : (
+            <p className="rounded-[10px] bg-[#fff7e8] px-3 py-2 text-[11px] font-medium text-[#8a6314]">Pair the {PRINTER_CONNECTION_LABELS[cfg.connection]} printer from your device/OS first. KiranaOS sends the receipt; the browser print dialog stays available as a fallback.</p>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <h3 className="text-[13px] font-black text-[#13274d]">Paper & output</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <Fld label="Paper size">
+              <Select value={cfg.paperSize} onValueChange={(v) => set("paperSize", v as ReceiptPaperSize)}>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="58mm">58mm thermal</SelectItem>
+                  <SelectItem value="80mm">80mm thermal</SelectItem>
+                  <SelectItem value="A4">A4 sheet</SelectItem>
+                </SelectContent>
+              </Select>
+            </Fld>
+            <Fld label="Copies per bill">
+              <Select value={String(cfg.copies)} onValueChange={(v) => set("copies", Number(v))}>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                <SelectContent>{[1, 2, 3, 4].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
+              </Select>
+            </Fld>
+          </div>
+          <PrinterRow title="Auto-print after bill" desc="Open the receipt automatically when a bill is saved">
+            <Switch checked={cfg.autoPrint} onCheckedChange={(v) => set("autoPrint", v)} />
+          </PrinterRow>
+          <PrinterRow title="Open cash drawer" desc="Pulse the drawer on supported USB/network printers">
+            <Switch checked={cfg.cashDrawer} onCheckedChange={(v) => set("cashDrawer", v)} />
+          </PrinterRow>
+        </section>
+
+        <section className="space-y-3">
+          <h3 className="text-[13px] font-black text-[#13274d]">Receipt content</h3>
+          <PrinterRow title="Show GSTIN on receipt" desc="Print your shop's GST number">
+            <Switch checked={cfg.showGst} onCheckedChange={(v) => set("showGst", v)} />
+          </PrinterRow>
+          <Fld label="Footer message"><Input className="h-10" placeholder="Thank you, visit again!" value={cfg.footerText} onChange={(e) => set("footerText", e.target.value)} /></Fld>
+        </section>
+
+        <Button type="button" variant="outline" className="h-10 w-full gap-2 rounded-[10px] font-bold" onClick={handleTestPrint}>
+          <Printer size={15} /> Test print sample receipt
+        </Button>
+      </div>
+
+      <div className="shrink-0 border-t border-[#eef1f6] px-5 py-3.5">
+        <div className="flex gap-2.5">
+          <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
+          <Button type="button" onClick={() => onSave(cfg)} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">Save Changes</Button>
+        </div>
+      </div>
+    </aside>
   );
 }
 

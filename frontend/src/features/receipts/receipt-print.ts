@@ -40,6 +40,27 @@ export interface ReceiptSnapshot {
   footerNote?: string | null;
 }
 
+export type ReceiptPaperSize = "58mm" | "80mm" | "A4";
+
+export interface ReceiptRenderOptions {
+  /** Thermal/page width. Defaults to 80mm (the most common thermal roll). */
+  paperSize?: ReceiptPaperSize;
+  /** How many copies to stack in one print job (merchant + customer). 1–4. */
+  copies?: number;
+}
+
+function receiptPageRule(paperSize: ReceiptPaperSize) {
+  if (paperSize === "58mm") return "@page { size: 58mm auto; margin: 3mm; }";
+  if (paperSize === "A4") return "@page { size: A4; margin: 12mm; }";
+  return "@page { size: 80mm auto; margin: 4mm; }";
+}
+
+function receiptShellWidth(paperSize: ReceiptPaperSize) {
+  if (paperSize === "58mm") return "64mm";
+  if (paperSize === "A4") return "150mm";
+  return "88mm";
+}
+
 export function formatReceiptMoney(value: number) {
   const amount = Number.isFinite(value) ? value : 0;
   return `Rs ${amount.toLocaleString("en-IN", {
@@ -133,7 +154,9 @@ function shopLines(shop?: ReceiptShopInfo | null) {
   return lines.map((line) => `<div>${escapeHtml(line)}</div>`).join("");
 }
 
-export function buildReceiptHtml(snapshot: ReceiptSnapshot) {
+export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRenderOptions = {}) {
+  const paperSize = options.paperSize ?? "80mm";
+  const copies = Math.max(1, Math.min(4, Math.floor(options.copies ?? 1)));
   const shopName = safeText(snapshot.shop?.name, "KiranaOS");
   const dateTime = formatDateTime(snapshot.createdAt);
   const customerName = safeText(snapshot.customerName, "Walk-in");
@@ -144,6 +167,51 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot) {
   const footerNote = safeText(snapshot.footerNote, "Thank you for shopping with us.");
   const cancelled = safeText(snapshot.status).toLowerCase() === "cancelled";
 
+  const innerHtml = `<header class="shop">
+          <div class="shop-name">${escapeHtml(shopName)}</div>
+          <div class="shop-meta">${shopLines(snapshot.shop)}</div>
+        </header>
+        <div class="receipt-type">
+          <span>${escapeHtml(billTypeLabel)}</span>
+          <span class="badge">${escapeHtml(copyLabel)}</span>
+        </div>
+        ${cancelled ? `<div class="cancelled">Cancelled bill</div>` : ""}
+        <section class="meta-grid">
+          <div><span>Bill no</span><strong>${escapeHtml(safeText(snapshot.billNo, "Pending"))}</strong></div>
+          <div><span>Date</span><strong>${escapeHtml(dateTime || "-")}</strong></div>
+          <div><span>Customer</span><strong>${escapeHtml(customerName)}</strong></div>
+          <div><span>Mobile</span><strong>${escapeHtml(customerMobile || "-")}</strong></div>
+          ${cashierName ? `<div><span>Cashier</span><strong>${escapeHtml(cashierName)}</strong></div>` : ""}
+        </section>
+        <table>
+          <thead>
+            <tr><th>Item</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amt</th></tr>
+          </thead>
+          <tbody>${receiptRows(snapshot.rows)}</tbody>
+        </table>
+        <section class="summary">
+          <div class="line"><span>Subtotal</span><strong>${formatReceiptMoney(snapshot.subtotal)}</strong></div>
+          ${snapshot.discount > 0 ? `<div class="line"><span>Discount</span><strong>-${formatReceiptMoney(snapshot.discount)}</strong></div>` : ""}
+          <div class="line grand"><span>Total</span><strong>${formatReceiptMoney(snapshot.total)}</strong></div>
+          <div class="line"><span>Paid</span><strong>${formatReceiptMoney(snapshot.paid)}</strong></div>
+          <div class="line due"><span>Due / Udhar</span><strong>${formatReceiptMoney(snapshot.credit)}</strong></div>
+        </section>
+        ${paymentRows(snapshot)}
+        <footer class="footer">
+          <strong>${escapeHtml(footerNote)}</strong>
+          <div class="system-note">Powered by KiranaOS - local-first counter billing.</div>
+        </footer>`;
+
+  const actionsHtml = `<div class="actions"><button onclick="window.print()">Print / Save PDF</button></div>`;
+  // Stack `copies` receipts in one print job (merchant + customer). The first copy
+  // carries the on-screen print button; extra copies page-break onto fresh paper.
+  const cards = Array.from({ length: copies }, (_, index) => `<div class="receipt"${index > 0 ? ` style="page-break-before: always;"` : ""}>
+      <div class="inner">
+        ${innerHtml}
+      </div>
+      ${index === 0 ? actionsHtml : ""}
+    </div>`).join("\n    ");
+
   return `<!doctype html>
 <html>
 <head>
@@ -151,7 +219,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(snapshot.billNo)}</title>
   <style>
-    @page { size: 80mm auto; margin: 4mm; }
+    ${receiptPageRule(paperSize)}
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -162,7 +230,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot) {
       line-height: 1.35;
     }
     .receipt-shell {
-      width: min(100%, 88mm);
+      width: min(100%, ${receiptShellWidth(paperSize)});
       margin: 0 auto;
       padding: 12px;
     }
@@ -343,45 +411,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot) {
 </head>
 <body>
   <div class="receipt-shell">
-    <div class="receipt">
-      <div class="inner">
-        <header class="shop">
-          <div class="shop-name">${escapeHtml(shopName)}</div>
-          <div class="shop-meta">${shopLines(snapshot.shop)}</div>
-        </header>
-        <div class="receipt-type">
-          <span>${escapeHtml(billTypeLabel)}</span>
-          <span class="badge">${escapeHtml(copyLabel)}</span>
-        </div>
-        ${cancelled ? `<div class="cancelled">Cancelled bill</div>` : ""}
-        <section class="meta-grid">
-          <div><span>Bill no</span><strong>${escapeHtml(safeText(snapshot.billNo, "Pending"))}</strong></div>
-          <div><span>Date</span><strong>${escapeHtml(dateTime || "-")}</strong></div>
-          <div><span>Customer</span><strong>${escapeHtml(customerName)}</strong></div>
-          <div><span>Mobile</span><strong>${escapeHtml(customerMobile || "-")}</strong></div>
-          ${cashierName ? `<div><span>Cashier</span><strong>${escapeHtml(cashierName)}</strong></div>` : ""}
-        </section>
-        <table>
-          <thead>
-            <tr><th>Item</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amt</th></tr>
-          </thead>
-          <tbody>${receiptRows(snapshot.rows)}</tbody>
-        </table>
-        <section class="summary">
-          <div class="line"><span>Subtotal</span><strong>${formatReceiptMoney(snapshot.subtotal)}</strong></div>
-          ${snapshot.discount > 0 ? `<div class="line"><span>Discount</span><strong>-${formatReceiptMoney(snapshot.discount)}</strong></div>` : ""}
-          <div class="line grand"><span>Total</span><strong>${formatReceiptMoney(snapshot.total)}</strong></div>
-          <div class="line"><span>Paid</span><strong>${formatReceiptMoney(snapshot.paid)}</strong></div>
-          <div class="line due"><span>Due / Udhar</span><strong>${formatReceiptMoney(snapshot.credit)}</strong></div>
-        </section>
-        ${paymentRows(snapshot)}
-        <footer class="footer">
-          <strong>${escapeHtml(footerNote)}</strong>
-          <div class="system-note">Powered by KiranaOS - local-first counter billing.</div>
-        </footer>
-      </div>
-      <div class="actions"><button onclick="window.print()">Print / Save PDF</button></div>
-    </div>
+    ${cards}
   </div>
 </body>
 </html>`;
@@ -431,9 +461,14 @@ export function buildReceiptErrorHtml(message: string) {
 </html>`;
 }
 
-export function writeReceiptWindow(popup: Window, snapshot: ReceiptSnapshot, options: { autoPrint?: boolean; printDelayMs?: number } = {}) {
+export interface ReceiptWindowOptions extends ReceiptRenderOptions {
+  autoPrint?: boolean;
+  printDelayMs?: number;
+}
+
+export function writeReceiptWindow(popup: Window, snapshot: ReceiptSnapshot, options: ReceiptWindowOptions = {}) {
   popup.document.open();
-  popup.document.write(buildReceiptHtml(snapshot));
+  popup.document.write(buildReceiptHtml(snapshot, { paperSize: options.paperSize, copies: options.copies }));
   popup.document.close();
   popup.focus();
   if (options.autoPrint ?? true) {
@@ -455,7 +490,7 @@ export function writeReceiptErrorWindow(popup: Window, message: string) {
   popup.focus();
 }
 
-export function openReceiptWindow(snapshot: ReceiptSnapshot, options: { autoPrint?: boolean; printDelayMs?: number } = {}) {
+export function openReceiptWindow(snapshot: ReceiptSnapshot, options: ReceiptWindowOptions = {}) {
   const popup = window.open("", "_blank", "width=460,height=760");
   if (!popup) return false;
   writeReceiptWindow(popup, snapshot, options);
