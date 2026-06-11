@@ -22,6 +22,7 @@ const PurchaseBillsPage = lazy(() => import("@/features/purchases/pages/Purchase
 const Udhar = lazy(() => import("@/features/ledger/pages/UdharPage"));
 const Suppliers = lazy(() => import("@/features/suppliers/pages/SuppliersPage"));
 const Expenses = lazy(() => import("@/features/expenses/pages/ExpensesPage"));
+const Offers = lazy(() => import("@/features/offers/pages/OffersPage"));
 const Reports = lazy(() => import("@/features/reports/pages/ReportsPage"));
 const DailyClosingPage = lazy(() => import("@/features/reports/pages/DailyClosingPage"));
 const Settings = lazy(() => import("@/features/settings/pages/SettingsPage"));
@@ -148,6 +149,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/expenses">
         <ProtectedRoute component={Expenses} />
+      </Route>
+      <Route path="/offers">
+        <ProtectedRoute component={Offers} />
       </Route>
       <Route path="/reports">
         <ProtectedRoute component={Reports} />

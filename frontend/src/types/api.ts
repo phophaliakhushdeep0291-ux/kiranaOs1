@@ -224,6 +224,55 @@ export interface ExpenseSummary {
   byMode: Record<string, number>;
 }
 
+export type OfferType = "percentage" | "flat";
+
+export interface Offer {
+  id: string;
+  shopId?: string;
+  title: string;
+  code?: string | null;
+  type: OfferType | string;
+  value: number;
+  minBillAmount: number;
+  maxDiscount: number;
+  scope: string;
+  scopeValue?: string | null;
+  validFrom?: string | null;
+  validTo?: string | null;
+  usageLimit: number;
+  usedCount: number;
+  active: boolean;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OfferInput {
+  title: string;
+  code?: string;
+  type?: OfferType;
+  value: number;
+  minBillAmount?: number;
+  maxDiscount?: number;
+  scope?: string;
+  scopeValue?: string;
+  validFrom?: string;
+  validTo?: string;
+  usageLimit?: number;
+  active?: boolean;
+}
+
+export interface ApplyOfferResult {
+  applicable: boolean;
+  discount: number;
+  offerId?: string;
+  title?: string;
+  code?: string | null;
+  type?: string;
+  value?: number;
+  reason?: string;
+}
+
 export interface PurchaseBill {
   id: string;
   shopId?: string;

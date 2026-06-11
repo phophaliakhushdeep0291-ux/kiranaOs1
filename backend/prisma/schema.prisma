@@ -52,6 +52,7 @@ model Shop {
   reminderLogs      ReminderLog[]
   dailyClosingSnapshots DailyClosingSnapshot[]
   expenses          Expense[]
+  offers            Offer[]
 }
 
 // ─────────────────────────────────────────────
@@ -407,6 +408,37 @@ model Expense {
   @@index([shopId])
   @@index([shopId, deletedAt])
   @@index([shopId, spentAt])
+  @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// OFFER — discounts / coupons applied at billing
+// ─────────────────────────────────────────────
+model Offer {
+  id            String    @id @default(cuid())
+  shopId        String
+  title         String
+  code          String?
+  type          String    @default("percentage") // percentage | flat
+  value         Float     @default(0)
+  minBillAmount Float     @default(0)
+  maxDiscount   Float     @default(0)             // cap for percentage; 0 = no cap
+  scope         String    @default("all")         // all | category | product
+  scopeValue    String?
+  validFrom     DateTime?
+  validTo       DateTime?
+  usageLimit    Int       @default(0)             // 0 = unlimited
+  usedCount     Int       @default(0)
+  active        Boolean   @default(true)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId])
+  @@index([shopId, deletedAt])
+  @@index([shopId, active])
   @@index([shopId, updatedAt, id])
 }
 

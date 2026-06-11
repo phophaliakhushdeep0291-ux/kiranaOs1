@@ -80,6 +80,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/customers": "Customers and credit ledger",
   "/reports": "Sales insights and analytics",
   "/expenses": "Track shop expenses and outflows",
+  "/offers": "Create coupons and discounts for billing",
   "/settings": "Manage your store, preferences, and system configurations",
 };
 

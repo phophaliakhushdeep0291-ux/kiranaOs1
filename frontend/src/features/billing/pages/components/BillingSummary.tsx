@@ -17,6 +17,7 @@ import {
   User,
 } from "lucide-react";
 import { clampAmount } from "../billing-calculations";
+import { applyOffer } from "@/features/offers/api";
 import type { BillTypeSelection, CartItem, HeldBill, PaymentSelection } from "../billing-types";
 import { BillingCart } from "./BillingCart";
 import { BillingDraftRestore } from "./BillingDraftRestore";
@@ -140,6 +141,28 @@ export function BillingSummary({
 }: BillingSummaryProps) {
   const [showCustomerOptions, setShowCustomerOptions] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function handleApplyCoupon() {
+    if (!couponCode.trim() || subtotal <= 0) return;
+    setCouponBusy(true);
+    setCouponMsg(null);
+    try {
+      const res = await applyOffer(subtotal, couponCode.trim());
+      if (res.applicable && res.discount > 0) {
+        setDiscount(clampAmount(res.discount, 0, subtotal));
+        setCouponMsg({ ok: true, text: `${res.title ?? "Coupon"} applied — saved ₹${res.discount.toLocaleString("en-IN")}` });
+      } else {
+        setCouponMsg({ ok: false, text: res.reason ?? "Coupon not applicable to this bill" });
+      }
+    } catch {
+      setCouponMsg({ ok: false, text: "Couldn't check coupon — needs connection" });
+    } finally {
+      setCouponBusy(false);
+    }
+  }
 
   /* GST calculation (informational — grandTotal unchanged) */
   const totalGst = cart.reduce((sum, item) => {
@@ -346,6 +369,25 @@ export function BillingSummary({
                 </button>
               </div>
             </div>
+
+            {/* Coupon / offer */}
+            <div className="flex items-center gap-2 pt-0.5">
+              <input
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()}
+                placeholder="Coupon code"
+                className="h-7 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-2 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]"
+              />
+              <button
+                onClick={() => void handleApplyCoupon()}
+                disabled={couponBusy || !couponCode.trim() || subtotal <= 0}
+                className="inline-flex h-7 items-center gap-1 rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-2 text-[10px] font-extrabold text-[#0057ff] hover:bg-[#eaf2ff] disabled:opacity-50"
+              >
+                {couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply
+              </button>
+            </div>
+            {couponMsg && <p className={`pt-0.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
 
             {/* Tax */}
             {totalGst > 0 && (
