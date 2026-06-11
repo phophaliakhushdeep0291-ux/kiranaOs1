@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -43,11 +43,15 @@ export default function PrinterSettingsPage() {
   const { toast } = useToast();
   const shop = useGetShop();
   const { prefs, patch } = useSettingsPrefs();
-  const cfg: PrinterConfig = { ...DEFAULT_PRINTER_CONFIG, ...(prefs.printer ?? {}) };
+  // Stable per saved-printer reference so the preview useMemo actually caches.
+  const cfg: PrinterConfig = useMemo(() => ({ ...DEFAULT_PRINTER_CONFIG, ...(prefs.printer ?? {}) }), [prefs.printer]);
 
   const setP = <K extends keyof PrinterConfig>(key: K, val: PrinterConfig[K]) => patch({ printer: { ...cfg, [key]: val } });
 
-  const previewHtml = useMemo(() => buildReceiptHtml(sampleSnapshot(shop.data, cfg), { paperSize: cfg.paperSize, copies: 1 }), [shop.data, cfg]);
+  // Debounce the receipt rebuild so rapid typing/toggling doesn't reload the iframe each keystroke.
+  const [previewCfg, setPreviewCfg] = useState(cfg);
+  useEffect(() => { const t = setTimeout(() => setPreviewCfg(cfg), 300); return () => clearTimeout(t); }, [cfg]);
+  const previewHtml = useMemo(() => buildReceiptHtml(sampleSnapshot(shop.data, previewCfg), { paperSize: previewCfg.paperSize, copies: 1 }), [shop.data, previewCfg]);
 
   function testPrint() {
     const ok = openReceiptWindow(sampleSnapshot(shop.data, cfg), { paperSize: cfg.paperSize, copies: cfg.copies, autoPrint: true });

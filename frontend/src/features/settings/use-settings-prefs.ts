@@ -50,6 +50,7 @@ export function useSettingsPrefs() {
   const [hydrated, setHydrated] = useState(false);
   const serverLoadedRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<SettingsPrefs | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,15 +80,24 @@ export function useSettingsPrefs() {
     } catch { /* ignore malformed */ }
   }, [shop.data?.settingsJson]);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  // Flush any pending server write on unmount so a change made just before
+  // navigating away is never lost (and can't be clobbered by a stale re-load).
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+    if (pendingRef.current) {
+      save.mutate({ data: { settingsJson: JSON.stringify(pendingRef.current) } });
+      pendingRef.current = null;
+    }
+  }, []);
 
   function patch(partial: Partial<SettingsPrefs>) {
     setPrefs((prev) => {
       const next = { ...prev, ...partial };
-      void offlineDB.setSetting(PREFS_KEY, next);
+      pendingRef.current = next;
+      void offlineDB.setSetting(PREFS_KEY, next); // durable + instant; cheap IndexedDB put
       if ("printer" in partial && next.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...next.printer });
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => save.mutate({ data: { settingsJson: JSON.stringify(next) } }), 700);
+      timer.current = setTimeout(() => { save.mutate({ data: { settingsJson: JSON.stringify(next) } }); pendingRef.current = null; }, 700);
       return next;
     });
   }
