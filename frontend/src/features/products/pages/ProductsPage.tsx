@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
+  MoreVertical,
   Package,
   Pencil,
   Plus,
@@ -26,6 +27,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
 import { usePermission } from "@/features/staff/permissions";
@@ -308,15 +310,14 @@ export default function ProductsPage() {
                 <th className="px-3 py-3 text-right font-bold">Cost Price</th>
                 <th className="px-3 py-3 text-right font-bold">Selling Price</th>
                 <th className="px-3 py-3 text-right font-bold">Stock</th>
-                <th className="px-3 py-3 text-center font-bold">Status</th>
                 <th className="px-3 py-3" />
               </tr>
             </thead>
             <tbody>
               {products.isLoading && rows.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-16 text-center text-sm text-[#536383]">Loading products…</td></tr>
+                <tr><td colSpan={9} className="px-4 py-16 text-center text-sm text-[#536383]">Loading products…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-16 text-center">
+                <tr><td colSpan={9} className="px-4 py-16 text-center">
                   <p className="text-sm font-bold text-[#13274d]">No products found</p>
                   <p className="mt-1 text-xs text-[#536383]">Add a product or clear filters to see your catalogue.</p>
                 </td></tr>
@@ -357,37 +358,48 @@ export default function ProductsPage() {
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(mrp)}</td>
                       <td className="px-3 py-3 text-right font-semibold text-[#45577a]">{rs(averageCost(product))}</td>
                       <td className="px-3 py-3 text-right font-extrabold text-[#13274d]">{rs(product.sellingPrice ?? product.defaultPricePerRateUnit)}</td>
-                      <td className="px-3 py-3 text-right">
-                        <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        {outOfStock ? (
-                          <StatusPill className="bg-rose-50 text-rose-600">Out of Stock</StatusPill>
-                        ) : low ? (
-                          <StatusPill className="bg-amber-50 text-amber-700">Low Stock</StatusPill>
-                        ) : (
-                          <StatusPill className="bg-emerald-50 text-emerald-700">In Stock</StatusPill>
-                        )}
-                      </td>
+                      {/* Stock + status underneath */}
                       <td className="px-3 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => openEdit(product)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#eef4ff] hover:text-[#0057ff]" aria-label={`Edit ${product.name}`}>
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (!manageProducts.allowed) {
-                                toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" });
-                                return;
-                              }
-                              setDeleteTarget(product);
-                            }}
-                            className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-rose-50 hover:text-rose-600"
-                            aria-label={`Delete ${product.name}`}
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className={`font-bold ${outOfStock ? "text-rose-600" : low ? "text-amber-600" : "text-[#13274d]"}`}>{stock}</span>
+                          {outOfStock ? (
+                            <StatusPill className="bg-rose-50 text-rose-600">Out of Stock</StatusPill>
+                          ) : low ? (
+                            <StatusPill className="bg-amber-50 text-amber-700">Low Stock</StatusPill>
+                          ) : (
+                            <StatusPill className="bg-emerald-50 text-emerald-700">In Stock</StatusPill>
+                          )}
                         </div>
+                      </td>
+                      {/* Actions — three-dot menu */}
+                      <td className="px-3 py-3 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[#0057ff]"
+                              aria-label={`Actions for ${product.name}`}
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuItem onClick={() => openEdit(product)}>
+                              <Pencil size={14} className="mr-2" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => {
+                                if (!manageProducts.allowed) {
+                                  toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" });
+                                  return;
+                                }
+                                setDeleteTarget(product);
+                              }}
+                            >
+                              <Trash2 size={14} className="mr-2" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
