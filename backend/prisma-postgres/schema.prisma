@@ -426,6 +426,7 @@ model Offer {
   validTo       DateTime?
   usageLimit    Int       @default(0)
   usedCount     Int       @default(0)
+  discountGiven Float     @default(0)
   active        Boolean   @default(true)
   deletedAt     DateTime?
   createdAt     DateTime  @default(now())

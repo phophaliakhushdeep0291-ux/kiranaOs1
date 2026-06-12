@@ -434,6 +434,7 @@ model Offer {
   validTo       DateTime?
   usageLimit    Int       @default(0)             // 0 = unlimited
   usedCount     Int       @default(0)
+  discountGiven Float     @default(0)             // accumulated ₹ discount from redemptions
   active        Boolean   @default(true)
   deletedAt     DateTime?
   createdAt     DateTime  @default(now())

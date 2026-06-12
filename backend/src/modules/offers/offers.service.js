@@ -95,9 +95,13 @@ export async function applyOffer(shopId, { subtotal, code }) {
   return { applicable: best.discount > 0, ...best };
 }
 
-/** Increment usage count after a bill that used the offer is confirmed. */
-export async function redeemOffer(shopId, id) {
+/** Increment usage + accumulated discount after a bill that used the offer is confirmed. */
+export async function redeemOffer(shopId, id, discount = 0) {
   const offer = await db.offer.findFirst({ where: { id, shopId, deletedAt: null } });
   if (!offer) return null;
-  return db.offer.update({ where: { id: offer.id }, data: { usedCount: { increment: 1 } } });
+  const safeDiscount = round2(Math.max(0, Number(discount) || 0));
+  return db.offer.update({
+    where: { id: offer.id },
+    data: { usedCount: { increment: 1 }, ...(safeDiscount > 0 && { discountGiven: { increment: safeDiscount } }) },
+  });
 }

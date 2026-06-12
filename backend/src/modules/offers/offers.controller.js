@@ -51,7 +51,7 @@ export async function restore(req, res, next) {
 
 export async function redeem(req, res, next) {
   try {
-    const offer = await svc.redeemOffer(req.shopId, req.params.id);
+    const offer = await svc.redeemOffer(req.shopId, req.params.id, req.body?.discount);
     res.json({ success: true, data: offer });
   } catch (err) { next(err); }
 }

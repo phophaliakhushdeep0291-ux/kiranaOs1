@@ -266,6 +266,7 @@ export interface Offer {
   validTo?: string | null;
   usageLimit: number;
   usedCount: number;
+  discountGiven?: number;
   active: boolean;
   deletedAt?: string | null;
   createdAt?: string;
