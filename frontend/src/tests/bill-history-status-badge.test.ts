@@ -6,9 +6,12 @@ const source = readFileSync("src/features/bills/pages/BillsPage.tsx", "utf8");
 describe("bill history connection badge", () => {
   it("uses live backup status instead of a hardcoded offline label", () => {
     expect(source).toContain("useOfflineStatus");
-    expect(source).toContain("Online backup");
+    // The badge must branch on live connection state, not render a fixed label.
+    expect(source).toContain("isOnline\n    ?");
+    expect(source).toContain("isBrowserOnline");
+    expect(source).toContain("isSyncing ?");
     expect(source).toContain("Backing up");
-    expect(source).toContain("Backup reconnecting");
+    expect(source).toContain("Reconnecting");
     expect(source).toContain("Offline ready");
     expect(source).not.toContain("Works offline");
   });
