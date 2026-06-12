@@ -1,0 +1,24 @@
+# Prometheus scrape config for the KiranaOS backend.
+# The /metrics endpoint is gated: set METRICS_ENABLED=true and (recommended)
+# METRICS_REQUIRE_TOKEN=true + METRICS_TOKEN on the backend, then mirror the
+# token here. Works with self-hosted Prometheus or Grafana Cloud Agent.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: kiranaos-backend
+    metrics_path: /metrics
+    scheme: https # http if scraping inside a private network
+    authorization:
+      type: Bearer
+      credentials: ${KIRANAOS_METRICS_TOKEN}
+    static_configs:
+      - targets:
+          - api.your-domain.example # ← backend host (no scheme)
+        labels:
+          service: kiranaos-backend
+          env: production

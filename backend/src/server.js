@@ -37,6 +37,14 @@ async function main() {
       })
     );
   });
+
+  // Behind a load balancer / reverse proxy the app's keep-alive must outlive the
+  // LB's idle timeout (commonly 60s), or the LB reuses a socket the app just
+  // closed → intermittent 502s under load. headersTimeout must exceed
+  // keepAliveTimeout; requestTimeout bounds slow/stuck clients.
+  httpServer.keepAliveTimeout = 65_000;
+  httpServer.headersTimeout = 66_000;
+  httpServer.requestTimeout = 30_000;
 }
 
 main().catch((err) => {

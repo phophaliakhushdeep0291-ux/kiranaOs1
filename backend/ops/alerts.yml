@@ -1,0 +1,58 @@
+# Alert rules matched to the metric names the backend actually exports
+# (src/lib/metrics.js): http_requests_total, http_request_duration_ms (summary
+# with _sum/_count), db_ready_status, redis_ready_status, storage_ready_status,
+# worker_ready_status, queue_jobs_failed.
+groups:
+  - name: kiranaos-backend
+    rules:
+      - alert: BackendDown
+        expr: up{job="kiranaos-backend"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "KiranaOS backend is unreachable"
+          description: "Prometheus has not been able to scrape /metrics for 2 minutes."
+
+      - alert: DatabaseNotReady
+        expr: db_ready_status == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Postgres readiness failing"
+          description: "/health/ready reports the database check failing — bills cannot sync."
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{statusCode=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.02
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "More than 2% of requests are 5xx"
+          description: "Check recent deploys and backend logs (requestId-correlated)."
+
+      - alert: SlowRequests
+        expr: |
+          sum(rate(http_request_duration_ms_sum[5m]))
+            / sum(rate(http_request_duration_ms_count[5m])) > 750
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Average API latency above 750ms"
+          description: "Counter billing feels slow past ~1s. Check DB pool saturation (PgBouncer) and server CPU."
+
+      - alert: WorkerUnhealthy
+        expr: worker_ready_status == 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Background worker heartbeat missing"
+          description: "Reminders/report exports are not being processed."
+
+      - alert: QueueJobsFailing
+        expr: sum(queue_jobs_failed) > 10
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Background queue has failed jobs piling up"
+          description: "Inspect the failed jobs via the jobs API before they expire."

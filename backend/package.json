@@ -60,7 +60,9 @@
     "release:gate": "node scripts/release-gate.js",
     "release:manifest": "node scripts/release-manifest.js",
     "proof:release": "npm run migration:safety && npm run release:gate && npm run proof:ops",
-    "test:phase46": "node tests/phase46-multidevice-smoothness.examples.js"
+    "test:phase46": "node tests/phase46-multidevice-smoothness.examples.js",
+    "loadtest": "node loadtest/loadtest.js",
+    "loadtest:smoke": "node loadtest/loadtest.js --smoke"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
@@ -68,6 +70,7 @@
     "@prisma/client": "5.14.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.34.1",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
@@ -79,6 +82,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "autocannon": "^8.0.0",
     "prisma": "5.14.0"
   }
 }

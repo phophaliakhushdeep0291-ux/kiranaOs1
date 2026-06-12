@@ -1,6 +1,7 @@
 import express from "express";
 import crypto from "crypto";
 import helmet from "helmet";
+import compression from "compression";
 import cors from "cors";
 import { env } from "./config/env.js";
 import db from "./db.js";
@@ -46,6 +47,9 @@ app.set("json replacer", (_key, value) => {
 });
 app.use(requestId);
 app.use(helmet());
+// Gzip JSON responses — sync pulls and report payloads shrink 5-10x on shop
+// connections; CPU cost is negligible at this payload size.
+app.use(compression());
 app.use(securityHeaders);
 app.use(requestLogger);
 

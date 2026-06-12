@@ -9,7 +9,12 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // App traffic goes through the pooler (PgBouncer) URL; append ?pgbouncer=true
+  // so Prisma skips prepared statements under transaction pooling.
+  url       = env("DATABASE_URL")
+  // Migrations and introspection need a direct (non-pooled) connection.
+  // Deploy scripts default this to DATABASE_URL when no pooler is in front.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // ─────────────────────────────────────────────

@@ -236,3 +236,72 @@ Never point `RESTORE_TEST_DATABASE_URL` at the production database.
 ## Phase 29 release gate
 
 Before deploying to paid shops, run `npm run proof:release`. This includes migration safety and release gate checks. Record a rollback image, create a backup before migration, run a restore drill, verify `/health/ready`, verify Redis worker heartbeat, run Razorpay test-mode checkout/webhook, and complete frontend-backend E2E sync/device/subscription testing.
+
+## Scaling & operations (PgBouncer, sizing, monitoring, load tests)
+
+### 1. Connection pooling — PgBouncer / managed pooler
+
+Prisma opens its own pool per instance; without a pooler, 3-4 backend instances
+can exhaust a small Postgres (`max_connections` is often 20-100 on managed tiers).
+
+- `prisma-postgres/schema.prisma` now has `directUrl`. Wire two env vars:
+  - `DATABASE_URL` → the **pooled** endpoint, with `?pgbouncer=true&connection_limit=10`
+    (`pgbouncer=true` disables prepared statements, required for transaction pooling;
+    `connection_limit` caps Prisma's own pool per instance).
+  - `DIRECT_DATABASE_URL` → the **direct** Postgres endpoint (migrations only).
+- No pooler yet? Leave `DIRECT_DATABASE_URL` unset — the Docker CMD falls back to
+  `DATABASE_URL`, nothing changes.
+- Provider quick map: Supabase → pooled port `6543` (direct `5432`); Neon → the
+  `-pooler` host vs the plain host; Railway/Render → run the PgBouncer
+  plugin/sidecar in transaction mode (`pool_mode = transaction`).
+- Sizing rule of thumb: `connection_limit × instances ≤ PgBouncer default_pool_size`,
+  and `default_pool_size ≤ Postgres max_connections − 10` (keep headroom for
+  migrations and psql).
+
+### 2. Server sizing
+
+One Node process per container/instance; scale horizontally behind the platform LB.
+The HTTP server is tuned for LBs (`keepAliveTimeout 65s > LB idle 60s`,
+`requestTimeout 30s`) and gzips JSON (`compression`).
+
+| Stage | Shops (≈) | Instance | Postgres |
+| --- | --- | --- | --- |
+| Pilot | 1–25 | 1× 0.5 vCPU / 512MB | shared 1GB |
+| Early | 25–250 | 2× 1 vCPU / 1GB | 2 vCPU / 4GB + PgBouncer |
+| Growth | 250–2000 | 3-4× 2 vCPU / 2GB + worker instance | 4 vCPU / 8GB + PgBouncer + read replica for reports |
+
+Sync is the load driver (each device polls + pushes); bills are small writes.
+CPU saturating before DB → add instances. DB connections saturating → PgBouncer
+first, bigger DB second.
+
+### 3. Monitoring
+
+Already built in: `/health` (liveness), `/health/ready` (DB/Redis/storage checks),
+`/metrics` (Prometheus), JSON logs with `requestId`, Sentry support.
+
+Hook it up (one-time, ~30 min):
+1. **Uptime**: point UptimeRobot/BetterStack at `GET /health/ready`, alert on
+   non-200 for >2 min. This alone catches most outages.
+2. **Errors**: set `ERROR_TRACKING_ENABLED=true` + `SENTRY_DSN` (free Sentry tier
+   is fine). Releases tag via `SENTRY_RELEASE`.
+3. **Metrics**: set `METRICS_ENABLED=true`, `METRICS_REQUIRE_TOKEN=true`,
+   `METRICS_TOKEN=<random>`; scrape with `ops/prometheus.yml` (Grafana Cloud free
+   tier or self-hosted) and load `ops/alerts.yml` — alerts are matched to the
+   metric names this backend actually exports.
+
+### 4. Load testing
+
+`loadtest/loadtest.js` (autocannon) hits health + authed products/customers/bills
+list endpoints, prints req/s + p50/p95/p99, and fails non-zero when budgets are
+exceeded (defaults: p95 ≤ 800ms, errors ≤ 1%).
+
+```bash
+npm run loadtest:smoke   # 5s × 10 connections per scenario
+npm run loadtest         # 10s × 25 connections per scenario
+# Against a remote target with an existing login:
+LOADTEST_BASE_URL=https://api.example.com LOADTEST_MOBILE=98xxxxxx PASSWORD=... npm run loadtest
+```
+
+Raise limiter env on the TARGET during a test run (`API_RATE_LIMIT_MAX=1000000`)
+or you measure the rate limiter, not the app. Never load-test production with
+writes during shop hours; the suite is read-only by default.
