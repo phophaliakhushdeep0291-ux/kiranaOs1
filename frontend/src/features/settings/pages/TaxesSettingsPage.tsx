@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/api/http";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -24,8 +26,18 @@ interface TaxConfig {
   lockAfterBill: boolean;
   warnInvalidGstin: boolean;
 }
+interface GstReport {
+  totalBills: number;
+  gstBills: number;
+  taxableSales: number;
+  gstCollected: number;
+  cgst: number;
+  sgst: number;
+}
+
 const DEFAULT_TAX: TaxConfig = {
-  mode: "exclusive", defaultRate: "18", gstin: "", invoicePrefix: "INV",
+  // Kirana MRP prices include GST — inclusive is the safe default.
+  mode: "inclusive", defaultRate: "18", gstin: "", invoicePrefix: "INV",
   taxInvoice: true, composition: false,
   rates: { "0": true, "5": true, "12": true, "18": true, "28": true },
   eInvoice: false, eWayBill: false, showBreakup: true, roundOff: true, lockAfterBill: true, warnInvalidGstin: true,
@@ -43,6 +55,9 @@ export default function TaxesSettingsPage() {
   const { prefs, patch, shop, hydrated } = useSettingsPrefs();
   const [tax, setTax] = useState<TaxConfig>(DEFAULT_TAX);
   const seeded = useRef(false);
+  // Real numbers from stored bills (gst + gstMode persisted per bill).
+  const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), retry: 1 });
+  const inr = (n?: number) => (n == null ? "—" : `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
   useEffect(() => {
     if (seeded.current || !hydrated) return;
@@ -143,11 +158,12 @@ export default function TaxesSettingsPage() {
         <Card>
           <CardHead icon={<BarChart3 size={15} />} title="GST Reports" sub="This month" action={<button onClick={() => toast({ title: "Export started", description: "GST report export will download shortly." })} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Export</button>} />
           <div className="grid grid-cols-2 gap-3 px-5 pb-5">
-            <Kpi label="GST Collected" value="₹18,430" tone="green" />
-            <Kpi label="Taxable Sales" value="₹2,16,380" tone="blue" />
-            <Kpi label="Output GST" value="₹18,430" tone="amber" />
-            <Kpi label="Bills (GST)" value="124" tone="violet" />
+            <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
+            <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />
+            <Kpi label="CGST / SGST" value={gstQ.isLoading ? "…" : gstQ.data ? `${inr(gstQ.data.cgst)} each` : "—"} tone="amber" />
+            <Kpi label="Bills with GST" value={gstQ.isLoading ? "…" : gstQ.data ? String(gstQ.data.gstBills) : "—"} tone="violet" />
           </div>
+          {gstQ.isError && <p className="px-5 pb-4 text-[11px] text-[#94a3b8]">Connect to the cloud to load this month's GST report.</p>}
         </Card>
 
         {/* Compliance Settings */}

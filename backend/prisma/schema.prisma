@@ -210,6 +210,7 @@ model Bill {
   discountPaise    BigInt?
   gst              Float     @default(0)
   gstPaise         BigInt?
+  gstMode          String    @default("inclusive") // inclusive | exclusive | none
   grandTotal       Float     @default(0)
   grandTotalPaise  BigInt?
   actualAmount     Float     @default(0)              // frontend actual bill amount before let-go handling

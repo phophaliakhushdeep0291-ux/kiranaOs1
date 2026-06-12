@@ -132,6 +132,10 @@ export async function pnl(req, res, next) {
   try { res.json({ success: true, data: await svc.getPnL(req.shopId, req.query) }); }
   catch (err) { next(err); }
 }
+export async function gstReport(req, res, next) {
+  try { res.json({ success: true, data: await svc.getGstReport(req.shopId, req.query) }); }
+  catch (err) { next(err); }
+}
 export async function monthlyBreakdown(req, res, next) {
   try { res.json({ success: true, data: await svc.getMonthlyBreakdown(req.shopId, req.query) }); }
   catch (err) { next(err); }

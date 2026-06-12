@@ -46,6 +46,7 @@ router.get("/inventory-health", validateQuery(inventoryHealthSchema), ctrl.inven
 router.get("/staff-sales", requireRole("owner", "admin"), validateQuery(staffSalesSchema), ctrl.staffSales);
 
 // Profit/cost-sensitive reports remain owner-only.
+router.get("/gst", validateQuery(pnlQuerySchema), ctrl.gstReport);
 router.get("/pnl", requireRole("owner"), requireFeature("profit_estimate"), validateQuery(pnlQuerySchema), ctrl.pnl);
 router.get("/monthly-breakdown", requireRole("owner"), validateQuery(monthlyBreakdownSchema), ctrl.monthlyBreakdown);
 

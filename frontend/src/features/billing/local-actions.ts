@@ -13,6 +13,7 @@ const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
 
 type SensitiveBillAction = "large_discount" | "selling_below_minimum_price" | string;
+type GstMode = NonNullable<BillInput["gstMode"]>;
 
 function readSensitiveBillActions(input: BillInput): SensitiveBillAction[] {
   return Array.from(new Set((input.sensitiveActions ?? [])
@@ -153,11 +154,16 @@ async function prepareCustomerForCreditBill(data: BillInput, creditAmount: numbe
   };
 }
 
-function buildBillItems(billId: string, items: BillInputItem[]) {
+function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode = "inclusive") {
   const now = new Date().toISOString();
   return items.map((item) => {
     const subtotal = roundMoney(item.quantity * item.ratePerRateUnit);
-    const gst = roundMoney(subtotal * readNumber(item.gstRate, 0) / 100);
+    const rate = readNumber(item.gstRate, 0);
+    // Inclusive (default): tax is extracted from the entered price, line total
+    // stays the entered amount. Exclusive: tax is added on top.
+    const gst = gstMode === "exclusive"
+      ? roundMoney(subtotal * rate / 100)
+      : rate > 0 ? roundMoney(subtotal - subtotal / (1 + rate / 100)) : 0;
     return makeLocalEntity({
       id: createLocalId("bill_item"),
       billId,
@@ -174,7 +180,7 @@ function buildBillItems(billId: string, items: BillInputItem[]) {
       gst_rate: item.gstRate ?? 0,
       line_subtotal: subtotal,
       line_gst: gst,
-      line_total: subtotal + gst,
+      line_total: gstMode === "exclusive" ? roundMoney(subtotal + gst) : subtotal,
       createdAt: now,
     }, "bill_item", "pending_sync");
   });
@@ -220,11 +226,23 @@ function buildSaleMovements(billId: string, items: BillInputItem[]) {
 }
 
 function calculateBillAmounts(data: BillInput) {
+  // Mirrors the BillingPage GST engine and the backend: inclusive mode (kirana
+  // MRP default) keeps the payable equal to the entered prices and extracts the
+  // tax; exclusive mode adds tax on top of the entered prices.
+  const rawGstMode = String((data as { gstMode?: string }).gstMode ?? "inclusive");
+  const gstMode: GstMode = rawGstMode === "exclusive" || rawGstMode === "none" ? rawGstMode : "inclusive";
   const subtotal = roundMoney(data.items.reduce((sum, item) => sum + readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0), 0));
-  const gst = roundMoney(data.items.reduce((sum, item) => sum + readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0) * readNumber(item.gstRate, 0) / 100, 0));
+  const gst = roundMoney(data.items.reduce((sum, item) => {
+    const lineTotal = readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0);
+    const rate = readNumber(item.gstRate, 0);
+    if (rate <= 0 || lineTotal <= 0 || gstMode === "none") return sum;
+    if (gstMode === "exclusive") return sum + lineTotal * rate / 100;
+    return sum + (lineTotal - lineTotal / (1 + rate / 100));
+  }, 0));
   const discount = roundMoney(readNumber(data.discount, 0));
-  const total = roundMoney(Math.max(0, subtotal + gst - discount));
-  return { subtotal, gst, discount, total };
+  const payableBase = gstMode === "exclusive" ? roundMoney(subtotal + gst) : subtotal;
+  const total = roundMoney(Math.max(0, payableBase - discount));
+  return { subtotal, gst, discount, total, gstMode, payableBase };
 }
 
 function hasCustomerReference(data: BillInput) {
@@ -233,7 +251,7 @@ function hasCustomerReference(data: BillInput) {
 }
 
 function validateBillCreationBusinessRules(data: BillInput) {
-  const { subtotal, total, discount } = calculateBillAmounts(data);
+  const { total, discount, payableBase } = calculateBillAmounts(data);
   const cashPaid = data.payments.filter((payment) => payment.mode === BillPaymentMode.cash).reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
   const upiPaid = data.payments.filter((payment) => payment.mode === BillPaymentMode.upi).reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
   const cashUpiPaid = roundMoney(cashPaid + upiPaid);
@@ -241,8 +259,8 @@ function validateBillCreationBusinessRules(data: BillInput) {
   const hasSplitCashUpi = cashPaid > 0 && upiPaid > 0;
   const creditAmount = getCreditAmount(data.payments);
 
-  if (discount > subtotal) {
-    throw new Error("Discount cannot exceed subtotal");
+  if (discount > payableBase) {
+    throw new Error("Discount cannot exceed bill total");
   }
 
   if ((data.billType === "udhar_entry" || creditAmount > 0) && !hasCustomerReference(data)) {
@@ -332,7 +350,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const paid = roundMoney(readNumber(billData.buyerPaidAmount, billData.payments
     .filter((payment) => payment.mode !== BillPaymentMode.credit)
     .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0)));
-  const billItems = buildBillItems(billId, billData.items);
+  const billItems = buildBillItems(billId, billData.items, calculatedAmounts.gstMode);
   const billPayments = buildPayments(billId, billData.customerId, billData.payments);
   const saleMovements = billData.billType === "estimate" ? [] : buildSaleMovements(billId, billData.items);
   const tenderPayments = billData.payments.filter((payment) => payment.mode !== BillPaymentMode.credit);
@@ -355,9 +373,10 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     customerId: billData.customerId ?? null,
     customerName: billData.customerName ?? "Walk-in",
     customerMobile: billData.customerMobile ?? null,
-    subtotal: roundMoney(calculatedAmounts.subtotal + calculatedAmounts.gst),
+    subtotal: calculatedAmounts.payableBase,
     discount: calculatedAmounts.discount,
     gst: calculatedAmounts.gst,
+    gstMode: calculatedAmounts.gstMode,
     grandTotal: total,
     totalAmount: total,
     netAmount: total,

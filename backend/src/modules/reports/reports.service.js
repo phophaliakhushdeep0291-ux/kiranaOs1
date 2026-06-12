@@ -465,6 +465,47 @@ export async function getPnL(shopId, { range, from, to }) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// GST REPORT — taxable sales + CGST/SGST collected for a period.
+// Counter sales are intra-state, so GST splits evenly into CGST + SGST.
+// Taxable value depends on the bill's gstMode: exclusive bills carry tax on
+// top of the subtotal; inclusive bills carry it inside (taxable = subtotal − gst).
+// ─────────────────────────────────────────────────────────────
+export async function getGstReport(shopId, { range, from, to } = {}) {
+  const { start, end } = getDateRange(range, from, to, env.DAILY_CLOSING_TIMEZONE);
+
+  const bills = await db.bill.findMany({
+    where: { shopId, ...REAL_SALE_BILL_FILTER, createdAt: { gte: start, lte: end } },
+    select: { subtotal: true, gst: true, gstMode: true },
+  });
+
+  let gstCollected = 0;
+  let taxableSales = 0;
+  let gstBills = 0;
+  for (const bill of bills) {
+    const gst = Number(bill.gst) || 0;
+    gstCollected = addMoney(gstCollected, gst);
+    const taxable = bill.gstMode === "exclusive"
+      ? Number(bill.subtotal) || 0
+      : Math.max(0, subtractMoney(Number(bill.subtotal) || 0, gst));
+    taxableSales = addMoney(taxableSales, taxable);
+    if (gst > 0) gstBills += 1;
+  }
+
+  const cgst = round2(gstCollected / 2);
+  return {
+    range: range ?? "custom",
+    from: start.toISOString(),
+    to: end.toISOString(),
+    totalBills: bills.length,
+    gstBills,
+    taxableSales: round2(taxableSales),
+    gstCollected: round2(gstCollected),
+    cgst,
+    sgst: round2(subtractMoney(gstCollected, cgst)),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
 // MONTHLY BREAKDOWN — grouped query pattern avoids obvious N+1 bill fetching
 // ─────────────────────────────────────────────────────────────
 export async function getMonthlyBreakdown(shopId, { year, untilMonth }) {

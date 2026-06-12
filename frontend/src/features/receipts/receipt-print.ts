@@ -13,6 +13,15 @@ export interface ReceiptLine {
   unit?: string | null;
   rate: number;
   total: number;
+  hsn?: string | null;
+}
+
+export interface ReceiptGstInfo {
+  mode: "inclusive" | "exclusive" | "none";
+  gst: number;
+  cgst: number;
+  sgst: number;
+  byRate: { rate: number; taxable: number; cgst: number; sgst: number }[];
 }
 
 export interface ReceiptPaymentLine {
@@ -38,6 +47,10 @@ export interface ReceiptSnapshot {
   status?: string | null;
   shop?: ReceiptShopInfo | null;
   footerNote?: string | null;
+  /** When present, the receipt prints the CGST/SGST breakup. */
+  gst?: ReceiptGstInfo | null;
+  /** Show the HSN code under item names (GST invoices). */
+  showHsn?: boolean;
 }
 
 export type ReceiptPaperSize = "58mm" | "80mm" | "A4";
@@ -109,7 +122,7 @@ function paymentLabel(mode: string, fallback?: string | null) {
   return safeText(mode, "Payment");
 }
 
-function receiptRows(rows: ReceiptLine[]) {
+function receiptRows(rows: ReceiptLine[], showHsn = false) {
   if (rows.length === 0) {
     return `<tr><td class="empty" colspan="4">No items recorded</td></tr>`;
   }
@@ -118,6 +131,7 @@ function receiptRows(rows: ReceiptLine[]) {
           <td class="item">
             <span class="serial">${index + 1}.</span>
             <span>${escapeHtml(safeText(item.name, "Item"))}</span>
+            ${showHsn && item.hsn ? `<div class="hsn">HSN: ${escapeHtml(safeText(item.hsn))}</div>` : ""}
           </td>
           <td class="right nowrap">${formatQuantity(item.quantity)} ${escapeHtml(safeText(item.unit))}</td>
           <td class="right nowrap">${formatReceiptMoney(item.rate)}</td>
@@ -142,6 +156,26 @@ function paymentRows(snapshot: ReceiptSnapshot) {
             <strong>${formatReceiptMoney(Number(payment.amount) || 0)}</strong>
           </div>`).join("")}
       </div>`;
+}
+
+function gstSection(snapshot: ReceiptSnapshot) {
+  const info = snapshot.gst;
+  if (!info || info.gst <= 0) return "";
+  const rateRows = info.byRate.map((row) => `
+          <div class="line">
+            <span>@${row.rate}% on ${formatReceiptMoney(row.taxable)}</span>
+            <strong>CGST ${formatReceiptMoney(row.cgst)} · SGST ${formatReceiptMoney(row.sgst)}</strong>
+          </div>`).join("");
+  const note = info.mode === "inclusive"
+    ? `<div class="gst-note">Prices are GST-inclusive — total includes GST of ${formatReceiptMoney(info.gst)}.</div>`
+    : "";
+  return `
+      <div class="section-title">GST Breakup (CGST + SGST)</div>
+      <div class="payment-box">
+        ${rateRows}
+        <div class="line"><span>Total GST</span><strong>${formatReceiptMoney(info.gst)}</strong></div>
+      </div>
+      ${note}`;
 }
 
 function shopLines(shop?: ReceiptShopInfo | null) {
@@ -187,15 +221,17 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
           <thead>
             <tr><th>Item</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amt</th></tr>
           </thead>
-          <tbody>${receiptRows(snapshot.rows)}</tbody>
+          <tbody>${receiptRows(snapshot.rows, Boolean(snapshot.showHsn))}</tbody>
         </table>
         <section class="summary">
           <div class="line"><span>Subtotal</span><strong>${formatReceiptMoney(snapshot.subtotal)}</strong></div>
+          ${snapshot.gst && snapshot.gst.gst > 0 && snapshot.gst.mode === "exclusive" ? `<div class="line"><span>GST (CGST + SGST)</span><strong>+${formatReceiptMoney(snapshot.gst.gst)}</strong></div>` : ""}
           ${snapshot.discount > 0 ? `<div class="line"><span>Discount</span><strong>-${formatReceiptMoney(snapshot.discount)}</strong></div>` : ""}
           <div class="line grand"><span>Total</span><strong>${formatReceiptMoney(snapshot.total)}</strong></div>
           <div class="line"><span>Paid</span><strong>${formatReceiptMoney(snapshot.paid)}</strong></div>
           <div class="line due"><span>Due / Udhar</span><strong>${formatReceiptMoney(snapshot.credit)}</strong></div>
         </section>
+        ${gstSection(snapshot)}
         ${paymentRows(snapshot)}
         <footer class="footer">
           <strong>${escapeHtml(footerNote)}</strong>
@@ -328,6 +364,17 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
       color: #6b7280;
       font-weight: 700;
       margin-right: 3px;
+    }
+    .hsn {
+      color: #6b7280;
+      font-size: 9px;
+      margin-top: 1px;
+    }
+    .gst-note {
+      margin-top: 5px;
+      color: #4b5563;
+      font-size: 10px;
+      text-align: center;
     }
     .right { text-align: right; }
     .nowrap { white-space: nowrap; }

@@ -47,6 +47,8 @@ interface BillingSummaryProps {
   safeDiscount: number;
   setDiscount: Dispatch<SetStateAction<number>>;
   onCouponApplied?: (offerId: string | null, discount: number) => void;
+  gstAmount: number;
+  gstMode: "inclusive" | "exclusive" | "none";
   grandTotal: number;
   paymentMode: PaymentSelection;
   setPaymentMode: Dispatch<SetStateAction<PaymentSelection>>;
@@ -108,6 +110,8 @@ export function BillingSummary({
   safeDiscount,
   setDiscount,
   onCouponApplied,
+  gstAmount,
+  gstMode,
   grandTotal,
   paymentMode,
   setPaymentMode,
@@ -341,6 +345,18 @@ export function BillingSummary({
               <span className="font-semibold text-[#536383]">Subtotal</span>
               <span data-testid="text-subtotal" className="font-black text-[#13274d]">{fmtRs(subtotal)}</span>
             </div>
+
+            {/* GST — exclusive adds to the payable; inclusive is informational */}
+            {gstAmount > 0 && (
+              <div className="flex h-[29px] items-center justify-between text-[12px]">
+                <span className="font-semibold text-[#536383]">
+                  GST <span className="text-[10.5px] text-[#94a3b8]">(CGST {fmtRs(gstAmount / 2)} + SGST {fmtRs(gstAmount / 2)})</span>
+                </span>
+                <span data-testid="text-gst" className={gstMode === "exclusive" ? "font-black text-[#13274d]" : "font-bold text-[#64748b]"}>
+                  {gstMode === "exclusive" ? `+${fmtRs(gstAmount)}` : `incl. ${fmtRs(gstAmount)}`}
+                </span>
+              </div>
+            )}
 
             {/* Discount */}
             <div className="flex h-[29px] items-center justify-between text-[12px]">

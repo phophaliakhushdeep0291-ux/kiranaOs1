@@ -382,6 +382,8 @@ export interface BillInputItem {
 
 export interface BillInput {
   billType: typeof BillInputBillType[keyof typeof BillInputBillType];
+  /** How GST applies: inclusive (MRP prices, default), exclusive (added on top), or none. */
+  gstMode?: "inclusive" | "exclusive" | "none";
   customerId?: string;
   customerName?: string;
   customerMobile?: string;
@@ -421,6 +423,7 @@ export interface Bill {
   subtotal?: number;
   discount?: number;
   gst?: number;
+  gstMode?: "inclusive" | "exclusive" | "none";
   grandTotal?: number;
   totalAmount?: number;
   netAmount?: number;

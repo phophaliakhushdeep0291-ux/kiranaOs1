@@ -9,6 +9,8 @@ import {
   type ReceiptWindowOptions,
 } from "@/features/receipts/receipt-print";
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
+import { getTaxConfigSync } from "@/features/settings/tax-config";
+import { computeGstBreakdown } from "@/lib/gst";
 import type { PrintableBill } from "./billing-types";
 
 function billTypeLabel(type: PrintableBill["billType"]) {
@@ -36,6 +38,11 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
   const printer = getPrinterConfigSync();
   // Respect the "Show GSTIN on receipt" toggle by stripping the number when off.
   const shop = bill.shop && !printer.showGst ? { ...bill.shop, gstNumber: null } : bill.shop;
+  // CGST/SGST breakup for the receipt — same engine as the billing totals.
+  const breakdown = computeGstBreakdown(
+    bill.items.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0 })),
+    getTaxConfigSync().mode,
+  );
   return {
     billNo: bill.billNo,
     createdAt: bill.createdAt,
@@ -49,6 +56,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
       unit: item.unit,
       rate: item.rate,
       total: item.quantity * item.rate,
+      hsn: item.product.hsn ?? null,
     })),
     subtotal: bill.subtotal,
     discount: bill.discount,
@@ -57,6 +65,10 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     credit: bill.credit,
     payments: bill.payments?.length ? bill.payments : fallbackPaymentLines(bill),
     shop,
+    gst: printer.showGstBreakup && breakdown.gst > 0
+      ? { mode: breakdown.mode, gst: breakdown.gst, cgst: breakdown.cgst, sgst: breakdown.sgst, byRate: breakdown.byRate.map(({ rate, taxable, cgst, sgst }) => ({ rate, taxable, cgst, sgst })) }
+      : null,
+    showHsn: printer.showHsn,
     // Udhar bills keep their record-keeping note; everything else uses the
     // shop's configured receipt footer (falling back to the friendly default).
     footerNote: bill.credit > 0

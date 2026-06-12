@@ -55,6 +55,7 @@ export async function confirmBill(shopId, body, actor = {}) {
     customerName,
     items,
     discount,
+    gstMode = "inclusive",
     payments = [],
     creditAmount: inputCreditAmount,
     actualAmount: inputActualAmount,
@@ -132,7 +133,13 @@ export async function confirmBill(shopId, body, actor = {}) {
         ? baseQtyToRateQty(qtyInBase, product.rateUnit, product.baseUnit)
         : item.quantity;
       const lineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
-      const gstAmount = multiplyMoney(lineTotal, item.gstRate / 100);
+      // GST: exclusive adds tax on top of the entered price; inclusive (kirana
+      // MRP default) extracts the tax already inside it; none disables GST.
+      const gstAmount = gstMode === "exclusive"
+        ? multiplyMoney(lineTotal, item.gstRate / 100)
+        : gstMode === "none" || item.gstRate <= 0
+          ? 0
+          : subtractMoney(lineTotal, round2(lineTotal / (1 + item.gstRate / 100)));
 
       const lineCost = multiplyMoney(costPerRateUnit, qtyInRateUnit);
       const lineProfit = subtractMoney(lineTotal, lineCost);
@@ -171,7 +178,12 @@ export async function confirmBill(shopId, body, actor = {}) {
     totalGst = round2(totalGst);
     itemProfit = round2(itemProfit);
     const billDiscount = round2(discount);
-    const grandTotal = addMoney(subtractMoney(subtotal, billDiscount), totalGst);
+    // Inclusive: tax already lives inside subtotal, so the payable is simply
+    // subtotal − discount (matches what the counter UI shows and collects).
+    // Exclusive: tax is added on top before the discount.
+    const grandTotal = gstMode === "exclusive"
+      ? addMoney(subtractMoney(subtotal, billDiscount), totalGst)
+      : subtractMoney(subtotal, billDiscount);
 
     // Estimates are saved as quotes only. They should not create payments, udhar, or P&L profit.
     const waivedAmount = isEstimate ? 0 : round2(inputWaivedAmount);
@@ -246,6 +258,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         subtotal,
         discount: billDiscount,
         gst: totalGst,
+        gstMode,
         grandTotal,
         actualAmount,
         buyerPaidAmount,

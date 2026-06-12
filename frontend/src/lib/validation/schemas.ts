@@ -123,6 +123,7 @@ export const billPaymentSchema = z.object({
 export const billCreationSchema = z
   .object({
     billType: z.enum(["normal_sale", "udhar_entry", "gst_invoice", "estimate"]),
+    gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),
     customerId: optionalText,
     customerLocalId: optionalText,
     customerName: optionalText,
@@ -138,11 +139,16 @@ export const billCreationSchema = z
   })
   .superRefine((bill, ctx) => {
     const subtotal = bill.items.reduce((sum, item) => sum + item.quantity * item.ratePerRateUnit, 0);
-    const gst = bill.items.reduce((sum, item) => sum + item.quantity * item.ratePerRateUnit * (item.gstRate / 100), 0);
-    const total = Math.max(0, subtotal + gst - bill.discount);
+    // Inclusive mode (kirana MRP default): tax lives inside the entered prices,
+    // so the payable base is the subtotal itself. Exclusive adds tax on top.
+    const gstToAdd = bill.gstMode === "exclusive"
+      ? bill.items.reduce((sum, item) => sum + item.quantity * item.ratePerRateUnit * (item.gstRate / 100), 0)
+      : 0;
+    const payableBase = subtotal + gstToAdd;
+    const total = Math.max(0, payableBase - bill.discount);
     const paid = bill.payments.reduce((sum, payment) => sum + payment.amount, 0);
 
-    if (bill.discount > subtotal + gst) {
+    if (bill.discount > payableBase) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["discount"],

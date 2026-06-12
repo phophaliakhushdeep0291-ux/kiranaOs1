@@ -17,6 +17,10 @@ const paymentSchema = z.object({
 
 export const confirmBillSchema = z.object({
   billType: z.enum(["estimate", "normal_sale", "gst_invoice", "udhar_entry"]).default("normal_sale"),
+  // inclusive (default): entered prices already contain GST — the payable stays
+  // subtotal − discount and tax is extracted for the invoice breakup.
+  // exclusive: GST is added on top of entered prices. none: no GST.
+  gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),
   customerId: z.string().optional(),
   customerName: z.string().default("Walk-in"),
   items: z.array(billItemSchema).min(1, "At least one item required"),

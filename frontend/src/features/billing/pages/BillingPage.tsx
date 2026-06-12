@@ -16,6 +16,8 @@ import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
+import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config";
+import { computeGstBreakdown } from "@/lib/gst";
 import { redeemOffer } from "@/features/offers/api";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
@@ -129,13 +131,17 @@ export default function Billing() {
   const customers = useListCustomers();
 
   const subtotal = useMemo(() => roundMoney(cart.reduce((sum, item) => sum + item.quantity * item.rate, 0)), [cart]);
-  const safeDiscount = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
-  const grandTotal = roundMoney(Math.max(0, subtotal - safeDiscount));
-  const totalGst = useMemo(() => cart.reduce((sum, item) => {
-    const rate = item.product.gstRate ?? 0;
-    if (rate <= 0) return sum;
-    return sum + Math.round(item.quantity * item.rate * rate) / 100;
-  }, 0), [cart]);
+  // GST: one engine for UI, local record and server. Inclusive (kirana MRP
+  // default) extracts tax from the entered prices without changing the payable;
+  // exclusive adds it on top — and then the discount cap must include it.
+  const gstBreakdown = useMemo(
+    () => computeGstBreakdown(cart.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0 })), getTaxConfigSync().mode),
+    [cart],
+  );
+  const payableBase = roundMoney(subtotal + gstBreakdown.gstToAdd);
+  const safeDiscount = Math.min(Math.max(Number(discount) || 0, 0), payableBase);
+  const grandTotal = roundMoney(Math.max(0, payableBase - safeDiscount));
+  const totalGst = gstBreakdown.gst;
   const typedCustomerName = customerName.trim();
   const typedCustomerMobile = customerMobile.replace(/\D/g, "").trim();
   const selectedCustomerBackendId = selectedCustomerId === "walk_in" ? "" : selectedCustomerId;
@@ -235,10 +241,11 @@ export default function Billing() {
     if (discount !== safeDiscount) setDiscount(safeDiscount);
   }, [discount, safeDiscount]);
 
-  // Hydrate the printer config cache so receipts honour the saved paper size,
-  // copies, footer and auto-print toggle from Settings.
+  // Hydrate the printer + tax config caches so receipts honour the saved paper
+  // size/copies/footer and totals honour the saved GST mode from Settings.
   useEffect(() => {
     void loadPrinterConfig();
+    void loadTaxConfig();
   }, []);
 
   useEffect(() => {
@@ -683,6 +690,7 @@ export default function Billing() {
     confirmBill.mutate({
       data: {
         billType: nextBillType,
+        gstMode: getTaxConfigSync().mode,
         customerId: resolvedCustomerId || undefined,
         customerName: resolvedCustomerName || "Walk-in",
         customerMobile: resolvedCustomerMobile || undefined,
@@ -835,10 +843,10 @@ export default function Billing() {
   }, [search]);
 
   return (
-    <div className="min-h-[calc(100dvh-76px)] bg-white lg:h-[calc(100dvh-76px)] lg:overflow-hidden">
-      <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 lg:h-full lg:flex-row">
+    <div className="min-h-[calc(100dvh-5.75rem)] bg-white lg:h-[calc(100dvh-76px)] lg:min-h-0 lg:overflow-hidden">
+      <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 sm:px-3 sm:py-3 lg:h-full lg:flex-row lg:gap-4 lg:px-4">
       {/* ── LEFT PANEL: product search + grid ── */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-visible lg:overflow-hidden">
         <BillingSearch
           isOnline={isOnline}
           draftRestored={draftRestored}
@@ -904,6 +912,8 @@ export default function Billing() {
         safeDiscount={safeDiscount}
         setDiscount={setDiscount}
         onCouponApplied={(offerId, discount) => { appliedOfferRef.current = offerId ? { id: offerId, discount } : null; }}
+        gstAmount={gstBreakdown.gst}
+        gstMode={gstBreakdown.mode}
         grandTotal={grandTotal}
         paymentMode={paymentMode}
         setPaymentMode={setPaymentMode}
