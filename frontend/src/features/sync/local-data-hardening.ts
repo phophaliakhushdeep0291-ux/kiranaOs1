@@ -1,7 +1,9 @@
 import { dexieDB, filterRowsForCurrentScope, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
+import { isLikelySyncedCopyOfPendingBill } from "@/features/sync/bill-reconciliation";
 
 export interface LocalDataHardeningResult {
+  billsMerged: number;
   paymentsMerged: number;
   ledgerMerged: number;
   outboxResolved: number;
@@ -68,7 +70,10 @@ function normalizedIdText(value: unknown): string {
 function looksLocalId(value: unknown): boolean {
   const id = normalizedIdText(value);
   if (!id) return false;
-  return LOCAL_ID_PATTERNS.some((pattern) => id.startsWith(pattern) || id.includes(pattern));
+  return (
+    LOCAL_ID_PATTERNS.some((pattern) => id.startsWith(pattern) || id.includes(pattern)) ||
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)
+  );
 }
 
 function rowHasServerProof(row: MutableRow): boolean {
@@ -171,6 +176,117 @@ function tombstoneEchoRow(row: MutableRow, winner: MutableRow): MutableRow {
     updatedAt: now,
     hardening_reason: "duplicate local/server financial echo merged",
   };
+}
+
+function billServerId(row: MutableRow): string | undefined {
+  return readStringFrom(row, ["server_id", "serverId", "id"]);
+}
+
+function billLocalId(row: MutableRow): string | undefined {
+  return readStringFrom(row, [
+    "local_id",
+    "localId",
+    "localBillId",
+    "local_bill_id",
+    "clientBillId",
+    "client_bill_id",
+    "id",
+  ]);
+}
+
+function mergeBillWinnerIdentity(winner: MutableRow, localEcho: MutableRow): MutableRow {
+  const now = nowIso();
+  const localId = billLocalId(localEcho);
+  const serverId = billServerId(winner);
+  return {
+    ...winner,
+    local_id: readStringFrom(winner, ["local_id", "localId"]) ?? localId,
+    localId: readStringFrom(winner, ["localId", "local_id"]) ?? localId,
+    localBillId: readStringFrom(winner, ["localBillId", "local_bill_id"]) ?? localId,
+    local_bill_id: readStringFrom(winner, ["local_bill_id", "localBillId"]) ?? localId,
+    clientBillId: readStringFrom(winner, ["clientBillId", "client_bill_id"]) ?? localId,
+    client_bill_id: readStringFrom(winner, ["client_bill_id", "clientBillId"]) ?? localId,
+    server_id: serverId ?? winner.server_id,
+    serverId: serverId ?? winner.serverId,
+    sync_status: "synced",
+    isSynced: true,
+    is_synced: true,
+    deleted_at: null,
+    deletedAt: null,
+    updated_at: now,
+    updatedAt: now,
+  };
+}
+
+function tombstoneBillEchoRow(row: MutableRow, winner: MutableRow): MutableRow {
+  const now = nowIso();
+  const winnerId = billServerId(winner);
+  return {
+    ...row,
+    server_id: winnerId ?? row.server_id,
+    serverId: winnerId ?? row.serverId,
+    merged_into_id: winnerId ?? row.merged_into_id ?? null,
+    mergedIntoId: winnerId ?? row.mergedIntoId ?? null,
+    sync_status: "synced",
+    isSynced: true,
+    is_synced: true,
+    deleted_at: row.deleted_at ?? now,
+    deletedAt: row.deletedAt ?? now,
+    updated_at: now,
+    updatedAt: now,
+    hardening_reason: "duplicate local/server bill echo merged",
+  };
+}
+
+async function repairDuplicateBillEchoRows(): Promise<number> {
+  await dexieDB.open();
+  const rows = filterRowsForCurrentScope(
+    await dexieDB.bills.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+  ) as MutableRow[];
+  const activeRows = rows.filter((row) => !isDeleted(row));
+  const serverRows = activeRows
+    .filter(rowHasServerProof)
+    .sort((a, b) => rowPriority(b) - rowPriority(a));
+  const localEchoRows = activeRows
+    .filter((row) => rowLooksLocalEcho(row) && !rowHasServerProof(row))
+    .sort((a, b) => rowPriority(a) - rowPriority(b));
+
+  let merged = 0;
+  const usedLocalIds = new Set<string>();
+  const usedServerIds = new Set<string>();
+  for (const localRow of localEchoRows) {
+    const localRowId = readStringFrom(localRow, ["id"]);
+    if (!localRowId || usedLocalIds.has(localRowId)) continue;
+    const winner = serverRows.find((serverRow) => {
+      const serverRowId = readStringFrom(serverRow, ["id"]);
+      return (
+        serverRowId &&
+        serverRowId !== localRowId &&
+        !usedServerIds.has(serverRowId) &&
+        isLikelySyncedCopyOfPendingBill(localRow, serverRow)
+      );
+    });
+    if (!winner) continue;
+
+    const serverId = billServerId(winner);
+    const localId = billLocalId(localRow);
+    await dexieDB.bills.put(mergeBillWinnerIdentity(winner, localRow) as never);
+    await dexieDB.bills.put(tombstoneBillEchoRow(localRow, winner) as never);
+    if (serverId && localId && serverId !== localId) {
+      await dexieDB.id_mappings.put({
+        local_id: localId,
+        server_id: serverId,
+        entity_type: "bill",
+        tenant_id: readStringFrom(localRow, ["tenant_id", "tenantId"]) ?? readStringFrom(winner, ["tenant_id", "tenantId"]),
+        store_id: readStringFrom(localRow, ["store_id", "storeId"]) ?? readStringFrom(winner, ["store_id", "storeId"]),
+        updated_at: nowIso(),
+      } as never);
+    }
+    usedLocalIds.add(localRowId);
+    if (serverId) usedServerIds.add(serverId);
+    merged += 1;
+  }
+  return merged;
 }
 
 async function repairDuplicateFinancialEchoTable(tableName: FinancialTableName): Promise<number> {
@@ -290,16 +406,17 @@ let hardeningInFlight: Promise<LocalDataHardeningResult> | null = null;
 export async function hardenLocalFinancialData(): Promise<LocalDataHardeningResult> {
   if (hardeningInFlight) return hardeningInFlight;
   hardeningInFlight = (async () => {
+    const billsMerged = await repairDuplicateBillEchoRows().catch(() => 0);
     const paymentsMerged = await repairDuplicateFinancialEchoTable("payments").catch(() => 0);
     const ledgerMerged = await repairDuplicateFinancialEchoTable("customer_ledger").catch(() => 0);
     const outboxResolved = await repairFinancialDuplicateOutboxFailures().catch(() => 0);
     const conflictsResolved = await repairConflictsWithoutBlockingOutbox().catch(() => 0);
-    const total = paymentsMerged + ledgerMerged + outboxResolved + conflictsResolved;
+    const total = billsMerged + paymentsMerged + ledgerMerged + outboxResolved + conflictsResolved;
     if (total > 0 && typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("kirana:local-data-changed"));
       window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
     }
-    return { paymentsMerged, ledgerMerged, outboxResolved, conflictsResolved, total };
+    return { billsMerged, paymentsMerged, ledgerMerged, outboxResolved, conflictsResolved, total };
   })();
   try {
     return await hardeningInFlight;

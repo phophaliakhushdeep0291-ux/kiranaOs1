@@ -180,7 +180,7 @@ describe("bill creation transaction safety", () => {
       actualAmount: 8,
       buyerPaidAmount: 8,
       payments: [{ mode: BillPaymentMode.cash, amount: 8 }],
-    }))).rejects.toThrow(/discount cannot exceed subtotal/i);
+    }))).rejects.toThrow(/discount cannot exceed bill total/i);
     expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
   });
 

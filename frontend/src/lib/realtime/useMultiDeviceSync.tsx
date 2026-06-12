@@ -9,10 +9,10 @@ import {
   shouldRunScheduledNetworkWork,
 } from "@/lib/browser/multiTabCoordinator";
 
-const SYNC_INTERVAL_MS = 12_000;
-const SNAPSHOT_INTERVAL_MS = 90_000;
-const FOCUS_THROTTLE_MS = 4_000;
-const LOCAL_WRITE_SYNC_DELAY_MS = 900;
+const SYNC_INTERVAL_MS = 8_000;
+const SNAPSHOT_INTERVAL_MS = 60_000;
+const FOCUS_THROTTLE_MS = 2_000;
+const LOCAL_WRITE_SYNC_DELAY_MS = 250;
 const CHANNEL_NAME = "kirana:multi-device-sync";
 
 type SyncBroadcastMessage = {
@@ -90,7 +90,7 @@ export function useMultiDeviceSync() {
       if (disposed || inFlightRef.current) return;
       if (!isVisible()) return;
       if (!options.force && !shouldRunScheduledNetworkWork()) return;
-      if (!options.force && !shouldPassSharedThrottle(syncThrottleKey, 2_500)) return;
+      if (!options.force && !shouldPassSharedThrottle(syncThrottleKey, 900)) return;
 
       inFlightRef.current = true;
       try {
@@ -172,7 +172,7 @@ export function useMultiDeviceSync() {
     // second device does not wait for the interval before catching up.
     window.setTimeout(() => {
       if (!disposed) void run("initial", { force: true, snapshot: true });
-    }, 1_200);
+    }, 450);
 
     return () => {
       disposed = true;

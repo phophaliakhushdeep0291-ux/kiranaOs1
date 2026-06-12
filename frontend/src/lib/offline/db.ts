@@ -73,6 +73,20 @@ export interface PendingSyncEvent {
   last_error?: string | null;
 }
 
+function isCriticalBillSyncEvent(event: PendingSyncEvent): boolean {
+  const type = String(event.operation_type || event.type || "").toUpperCase();
+  const entityType = String(event.entity_type || "").toLowerCase();
+  return entityType === "bill" || type.includes("BILL");
+}
+
+function retryDelayForFailedEvent(event: PendingSyncEvent, retryCount: number): number {
+  const attempt = Math.max(0, Math.min(retryCount - 1, 6));
+  if (isCriticalBillSyncEvent(event)) {
+    return Math.min(30_000, 1_000 * 2 ** attempt);
+  }
+  return Math.min(120_000, 2_500 * 2 ** attempt);
+}
+
 export interface OfflineWriteTransaction {
   put<T>(storeName: string, value: T): Promise<void>;
   putMany<T>(storeName: string, values: T[]): Promise<void>;
@@ -702,7 +716,7 @@ class OfflineDBFacade {
           status === "FAILED" ? row.retry_count + 1 : row.retry_count;
         const retryDelayMs =
           status === "FAILED"
-            ? Math.min(300_000, 5_000 * 2 ** Math.min(retryCount, 6))
+            ? retryDelayForFailedEvent(row, retryCount)
             : 0;
         await dexieDB.sync_outbox.put({
           ...row,

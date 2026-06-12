@@ -114,6 +114,7 @@ export interface Bill extends LocalEntityMeta {
   subtotal: Money;
   discount: Money;
   gst: Money;
+  gst_mode?: "inclusive" | "exclusive" | "none";
   grand_total: Money;
   paid_amount: Money;
   credit_amount: Money;
