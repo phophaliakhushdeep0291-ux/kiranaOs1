@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCircle2, ClipboardList, Pencil, Plus, Search, Trash2, Truck, Wallet } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import {
+  AlertTriangle, CalendarDays, CheckCircle2, ClipboardList, Crown, Loader2, Pencil, Plus, Search, Trash2, Truck, Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid } from "@/components/shared";
 import {
   FinancialAggregationService,
   type FinancialAggregationSnapshot,
@@ -18,27 +18,34 @@ import { hydratePurchaseHistoryFromSyncPull } from "@/features/sync/cloud-hydrat
 import { useAuth } from "@/features/auth/AuthContext";
 import { deletePurchaseLocal, markPurchasePaidLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 function money(value: unknown) {
-  const num = Number(value ?? 0);
+  const num = Number(value);
   return Number.isFinite(num) ? num : 0;
 }
 
 function fmt(value: number | undefined | null) {
-  return `Rs ${money(value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  return `₹${money(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
 function safeDate(value: string) {
-  const date = value ? new Date(value) : null;
-  if (!date || !Number.isFinite(date.getTime())) return "Date not set";
-  return format(date, "d MMM yyyy");
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return format(date, "dd MMM yyyy");
 }
 
-function statusVariant(row: SupplierDueRow) {
-  if (row.due > 0 && row.paid > 0) return "outline" as const;
-  if (row.due > 0) return "destructive" as const;
-  return "secondary" as const;
-}
+const STATUS_CLS: Record<string, string> = {
+  paid: "bg-emerald-100 text-emerald-700",
+  partial: "bg-amber-100 text-amber-700",
+  due: "bg-rose-100 text-rose-700",
+};
+const MODE_CLS: Record<string, string> = {
+  cash: "bg-emerald-50 text-emerald-700",
+  upi: "bg-violet-50 text-violet-700",
+  bank: "bg-[#eef5ff] text-[#0057ff]",
+  credit: "bg-amber-50 text-amber-700",
+};
 
 interface PurchaseFormState {
   supplierName: string;
@@ -146,6 +153,41 @@ export default function PurchaseBillsPage() {
     );
   }, [rows]);
 
+  const today = useMemo(() => {
+    const key = new Date().toDateString();
+    return rows.reduce(
+      (sum, row) => {
+        if (new Date(row.date).toDateString() === key) { sum.amount += row.amount; sum.count += 1; }
+        return sum;
+      },
+      { amount: 0, count: 0 },
+    );
+  }, [rows]);
+
+  const topSuppliers = useMemo(() => {
+    const map = new Map<string, { amount: number; count: number }>();
+    for (const row of rows) {
+      const entry = map.get(row.supplierName) ?? { amount: 0, count: 0 };
+      entry.amount += row.amount;
+      entry.count += 1;
+      map.set(row.supplierName, entry);
+    }
+    return [...map.entries()]
+      .map(([name, v]) => ({ name, ...v, share: totals.amount > 0 ? Math.round((v.amount / totals.amount) * 100) : 0 }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [rows, totals.amount]);
+
+  const recentRows = useMemo(
+    () => [...rows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5),
+    [rows],
+  );
+
+  const dueAlerts = useMemo(
+    () => rows.filter((row) => row.due > 0).sort((a, b) => b.due - a.due).slice(0, 5),
+    [rows],
+  );
+
   function openEdit(row: SupplierDueRow) {
     setEditingRow(row);
     setPurchaseForm(purchaseFormFromRow(row));
@@ -220,122 +262,151 @@ export default function PurchaseBillsPage() {
   }
 
   return (
-    <PageShell>
-      <PageHeader
-        title="Purchase Bills"
-        description="Supplier dues, paid purchases, and inventory purchase bill history."
-        eyebrow={<Badge variant="secondary">Local-first finance</Badge>}
-        actions={(
-          <>
-            <Link href="/dashboard">
-              <Button variant="outline">
-                <ArrowLeft size={16} aria-hidden="true" />
-                Dashboard
-              </Button>
-            </Link>
-            <Link href="/inventory">
-              <Button>
-                <Plus size={16} aria-hidden="true" />
-                Add purchase
-              </Button>
-            </Link>
-          </>
-        )}
-      />
-
-      <StatsGrid columns={3} className="mb-6">
-        <StatCard label="Total Purchases" value={fmt(totals.amount)} description={`${rows.length} purchase rows`} icon={<ClipboardList size={20} aria-hidden="true" />} loading={loading} />
-        <StatCard label="Paid" value={fmt(totals.paid)} description="Cash, UPI, or bank paid to suppliers" icon={<Wallet size={20} aria-hidden="true" />} loading={loading} tone="green" />
-        <StatCard label="Supplier Due" value={fmt(totals.due)} description="Pending purchase bill amount" icon={<Truck size={20} aria-hidden="true" />} loading={loading} tone={totals.due > 0 ? "red" : "green"} />
-      </StatsGrid>
-
-      <DataTableCard
-        title="Supplier purchase ledger"
-        description="Rows are built from purchase bills and inventory purchase movements."
-        loading={loading}
-        empty={!loading && filtered.length === 0}
-        emptyState={<EmptyState title="No purchase bills yet" description="Record a purchase from Inventory to start supplier due tracking." />}
-        actions={(
-          <div className="relative w-full sm:w-72">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-            <Input className="pl-9" placeholder="Search supplier or bill" value={search} onChange={(event) => setSearch(event.target.value)} />
-          </div>
-        )}
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead>
-              <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2">Bill</th>
-                <th className="px-3 py-2">Supplier</th>
-                <th className="px-3 py-2">Date</th>
-                <th className="px-3 py-2 text-right">Amount</th>
-                <th className="px-3 py-2 text-right">Paid</th>
-                <th className="px-3 py-2 text-right">Due</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={`${row.source}:${row.id}`} className="border-b last:border-0">
-                  <td className="px-3 py-3">
-                    <p className="font-semibold">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber}</p>
-                    <p className="text-xs text-muted-foreground">{row.source === "purchase_bill" ? "Purchase bill" : "Inventory movement"}</p>
-                  </td>
-                  <td className="px-3 py-3">{row.supplierName}</td>
-                  <td className="px-3 py-3 text-muted-foreground">{safeDate(row.date)}</td>
-                  <td className="px-3 py-3 text-right font-medium">{fmt(row.amount)}</td>
-                  <td className="px-3 py-3 text-right">{fmt(row.paid)}</td>
-                  <td className="px-3 py-3 text-right">
-                    <MoneyBadge amount={row.due} tone={row.due > 0 ? "danger" : "success"} compact />
-                  </td>
-                  <td className="px-3 py-3">
-                    <Badge variant={statusVariant(row)}>{row.due > 0 ? row.status : "paid"}</Badge>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        title="Mark paid"
-                        aria-label="Mark purchase paid"
-                        disabled={row.due <= 0 || saving}
-                        onClick={() => openPay(row)}
-                      >
-                        <CheckCircle2 size={15} aria-hidden="true" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        title="Edit purchase"
-                        aria-label="Edit purchase"
-                        disabled={saving}
-                        onClick={() => openEdit(row)}
-                      >
-                        <Pencil size={15} aria-hidden="true" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        title="Delete purchase"
-                        aria-label="Delete purchase"
-                        disabled={saving}
-                        onClick={() => setDeletingRow(row)}
-                      >
-                        <Trash2 size={15} aria-hidden="true" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
+      <div className="space-y-4">
+        {/* KPI row */}
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <Kpi icon={<ClipboardList size={16} />} iconBg="bg-[#eef5ff] text-[#0057ff]" label="Total Purchase Value" value={fmt(totals.amount)} sub={`${rows.length} purchase bill${rows.length === 1 ? "" : "s"}`} loading={loading} />
+          <Kpi icon={<AlertTriangle size={16} />} iconBg="bg-rose-50 text-rose-600" label="Unpaid Purchase Dues" value={fmt(totals.due)} sub={totals.due > 0 ? `${dueAlerts.length}+ supplier${dueAlerts.length === 1 ? "" : "s"} to pay` : "All bills settled"} subTone={totals.due > 0 ? "bad" : "good"} loading={loading} />
+          <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="Today's Purchases" value={fmt(today.amount)} sub={`${today.count} bill${today.count === 1 ? "" : "s"} today`} loading={loading} />
+          <Kpi icon={<Wallet size={16} />} iconBg="bg-emerald-50 text-emerald-600" label="Paid to Suppliers" value={fmt(totals.paid)} sub="Cash, UPI & bank combined" loading={loading} />
         </div>
-      </DataTableCard>
+
+        {/* Insight strip */}
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <Insight icon={<Crown size={14} />} label="Top Supplier" value={topSuppliers[0]?.name ?? "—"} sub={topSuppliers[0] ? `${fmt(topSuppliers[0].amount)} (${topSuppliers[0].share}%)` : "No purchases yet"} />
+          <Insight icon={<ClipboardList size={14} />} label="Avg. Bill Value" value={rows.length ? fmt(totals.amount / rows.length) : "—"} sub={`across ${rows.length} bills`} />
+          <Insight icon={<Truck size={14} />} label="Suppliers" value={String(new Set(rows.map((r) => r.supplierName)).size)} sub="with purchase history" />
+          <Insight icon={<AlertTriangle size={14} />} label="Bills with Due" value={String(rows.filter((r) => r.due > 0).length)} sub={totals.due > 0 ? `${fmt(totals.due)} outstanding` : "nothing pending"} />
+        </div>
+
+        {/* Purchase bills table */}
+        <div className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
+          <div className="flex flex-col gap-3 border-b border-[#eef2f8] px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Purchase Bills</h3>
+            <div className="flex items-center gap-2">
+              <div className="relative w-full sm:w-64">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
+                <Input className="h-9 pl-8 text-[12.5px]" placeholder="Search by bill no. or supplier…" value={search} onChange={(event) => setSearch(event.target.value)} />
+              </div>
+              <Link href="/inventory">
+                <Button style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-9 gap-1.5 rounded-[9px] font-bold text-white hover:opacity-95">
+                  <Plus size={15} /> Add Purchase
+                </Button>
+              </Link>
+            </div>
+          </div>
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#64748b]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-center">
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-[#eef5ff] text-[#0057ff]"><Truck size={22} /></span>
+              <p className="text-[13px] font-bold text-[#102347]">No purchase bills yet</p>
+              <p className="text-[12px] text-[#64748b]">Record a purchase from Inventory to start supplier due tracking.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] text-[12.5px]">
+                <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-bold">Purchase No.</th>
+                    <th className="px-4 py-2.5 text-left font-bold">Supplier</th>
+                    <th className="px-4 py-2.5 text-left font-bold">Date</th>
+                    <th className="px-4 py-2.5 text-right font-bold">Total Amount</th>
+                    <th className="px-4 py-2.5 text-right font-bold">Paid Amount</th>
+                    <th className="px-4 py-2.5 text-right font-bold">Due Amount</th>
+                    <th className="px-4 py-2.5 text-left font-bold">Payment Mode</th>
+                    <th className="px-4 py-2.5 text-left font-bold">Status</th>
+                    <th className="px-4 py-2.5 text-right font-bold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((row, i) => {
+                    const status = row.due > 0 ? row.status : "paid";
+                    return (
+                      <tr key={`${row.source}:${row.id}`} className={i < filtered.length - 1 ? "border-b border-[#eef2f8]" : ""}>
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-[#102347]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber}</p>
+                          <p className="text-[10px] text-[#94a3b8]">{row.source === "purchase_bill" ? "Purchase bill" : "Inventory movement"}</p>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-[#344668]">{row.supplierName}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-[#52627e]">{safeDate(row.date)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[#102347]">{fmt(row.amount)}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-[#344668]">{fmt(row.paid)}</td>
+                        <td className={cn("whitespace-nowrap px-4 py-3 text-right font-bold", row.due > 0 ? "text-rose-600" : "text-emerald-600")}>{fmt(row.due)}</td>
+                        <td className="px-4 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold capitalize", MODE_CLS[row.paymentMode] ?? "bg-[#eef2f8] text-[#64748b]")}>{row.paymentMode === "upi" ? "UPI" : row.paymentMode}</span></td>
+                        <td className="px-4 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold capitalize", STATUS_CLS[status] ?? STATUS_CLS.due)}>{status}</span></td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-1">
+                            <button title="Mark paid" aria-label="Mark purchase paid" disabled={row.due <= 0 || saving} onClick={() => openPay(row)}
+                              className="grid h-7 w-7 place-items-center rounded-[7px] text-emerald-600 hover:bg-emerald-50 disabled:opacity-30 disabled:hover:bg-transparent"><CheckCircle2 size={14} /></button>
+                            <button title="Edit purchase" aria-label="Edit purchase" disabled={saving} onClick={() => openEdit(row)}
+                              className="grid h-7 w-7 place-items-center rounded-[7px] text-[#536583] hover:bg-[#eef2f8]"><Pencil size={13} /></button>
+                            <button title="Delete purchase" aria-label="Delete purchase" disabled={saving} onClick={() => setDeletingRow(row)}
+                              className="grid h-7 w-7 place-items-center rounded-[7px] text-rose-500 hover:bg-rose-50"><Trash2 size={13} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom insight row */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* Top suppliers */}
+          <BottomCard icon={<Crown size={15} />} title="Top Suppliers">
+            {topSuppliers.length === 0 ? <EmptyHint text="No suppliers yet." /> : topSuppliers.map((s, i) => (
+              <div key={s.name} className={cn("flex items-center gap-3 py-2.5", i < topSuppliers.length - 1 && "border-b border-[#eef2f8]")}>
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#eef5ff] text-[11px] font-black text-[#0057ff]">{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-bold text-[#102347]">{s.name}</p>
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-[#eef2f8]"><div className="h-full rounded-full bg-[#0057ff]" style={{ width: `${Math.max(6, s.share)}%` }} /></div>
+                </div>
+                <span className="shrink-0 text-[11.5px] font-bold text-[#344668]">{fmt(s.amount)} <span className="text-[10px] font-semibold text-[#94a3b8]">({s.share}%)</span></span>
+              </div>
+            ))}
+          </BottomCard>
+
+          {/* Recent activity */}
+          <BottomCard icon={<ClipboardList size={15} />} title="Recent Purchase Activity">
+            {recentRows.length === 0 ? <EmptyHint text="No purchases recorded yet." /> : recentRows.map((row, i) => (
+              <div key={`${row.source}:${row.id}`} className={cn("flex items-center gap-3 py-2.5", i < recentRows.length - 1 && "border-b border-[#eef2f8]")}>
+                <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", row.due > 0 ? "bg-amber-500" : "bg-emerald-500")} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-bold text-[#102347]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber} <span className="font-medium text-[#64748b]">from {row.supplierName}</span></p>
+                  <p className="text-[10.5px] text-[#94a3b8]">{fmt(row.amount)} · {row.due > 0 ? row.status : "paid"} · {safeDate(row.date)}</p>
+                </div>
+              </div>
+            ))}
+          </BottomCard>
+
+          {/* Due alerts */}
+          <BottomCard icon={<AlertTriangle size={15} />} title="Purchase Due Alerts" tone="rose">
+            {dueAlerts.length === 0 ? <EmptyHint text="No supplier dues — all settled. 🎉" /> : (
+              <>
+                {dueAlerts.map((row, i) => (
+                  <div key={`${row.source}:${row.id}`} className={cn("flex items-center gap-3 py-2.5", i < dueAlerts.length - 1 && "border-b border-rose-100/70")}>
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-rose-50 text-rose-500"><AlertTriangle size={13} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12.5px] font-bold text-[#102347]">{row.supplierName}</p>
+                      <p className="text-[10.5px] text-[#94a3b8]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber}</p>
+                    </div>
+                    <span className="shrink-0 text-[12.5px] font-black text-rose-600">{fmt(row.due)}</span>
+                  </div>
+                ))}
+                <div className="mt-1 flex items-center justify-between border-t border-rose-100 pt-2.5">
+                  <span className="text-[12px] font-bold text-[#344668]">Total Overdue</span>
+                  <span className="text-[13px] font-black text-rose-600">{fmt(totals.due)}</span>
+                </div>
+              </>
+            )}
+          </BottomCard>
+        </div>
+      </div>
 
       <Dialog open={Boolean(editingRow)} onOpenChange={(open) => !open && setEditingRow(null)}>
         <DialogContent className="max-w-md">
@@ -441,6 +512,48 @@ export default function PurchaseBillsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageShell>
+    </div>
   );
+}
+
+function Kpi({ icon, iconBg, label, value, sub, subTone = "muted", loading }: { icon: React.ReactNode; iconBg: string; label: string; value: string; sub: string; subTone?: "good" | "bad" | "muted"; loading?: boolean }) {
+  const subClass = subTone === "good" ? "text-emerald-600" : subTone === "bad" ? "text-rose-500" : "text-[#94a3b8]";
+  return (
+    <div className="rounded-[14px] border border-[#e6ecf4] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
+      <div className="flex items-center gap-2.5">
+        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[10px]", iconBg)}>{icon}</span>
+        <p className="text-[11.5px] font-semibold text-[#64748b]">{label}</p>
+      </div>
+      <p className="mt-2 truncate font-display text-[22px] font-black leading-none text-[#102347]">{loading ? "…" : value}</p>
+      <p className={cn("mt-1.5 text-[11px] font-bold", subClass)}>{sub}</p>
+    </div>
+  );
+}
+
+function Insight({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-[12px] border border-[#e6ecf4] bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[#f4f7fb] text-[#536583]">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[10.5px] font-semibold text-[#64748b]">{label}</p>
+        <p className="truncate text-[13px] font-black text-[#102347]">{value} <span className="text-[10.5px] font-semibold text-[#94a3b8]">{sub}</span></p>
+      </div>
+    </div>
+  );
+}
+
+function BottomCard({ icon, title, tone, children }: { icon: React.ReactNode; title: string; tone?: "rose"; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
+      <div className="flex items-center gap-2 border-b border-[#eef2f8] px-5 py-3">
+        <span className={cn("grid h-7 w-7 place-items-center rounded-[8px]", tone === "rose" ? "bg-rose-50 text-rose-500" : "bg-[#eef5ff] text-[#0057ff]")}>{icon}</span>
+        <h3 className="font-display text-[13.5px] font-black tracking-tight text-[#102347]">{title}</h3>
+      </div>
+      <div className="px-5 py-2.5">{children}</div>
+    </div>
+  );
+}
+
+function EmptyHint({ text }: { text: string }) {
+  return <p className="py-6 text-center text-[12px] text-[#94a3b8]">{text}</p>;
 }
