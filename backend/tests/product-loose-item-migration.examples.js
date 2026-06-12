@@ -12,6 +12,7 @@ const pkg = JSON.parse(read("package.json"));
 const dockerfile = read("Dockerfile");
 const deployDocs = read("DEPLOY.md");
 const productionCheck = read("scripts/production-check.js");
+const verifier = read("scripts/verify-product-schema.js");
 
 const productFieldsThatCanBreakFindMany = [
   "brand",
@@ -66,15 +67,31 @@ assert.ok(!/DROP\s+TABLE|DROP\s+COLUMN|TRUNCATE|DELETE\s+FROM/i.test(migration),
 
 assert.ok(pkg.scripts["deploy:migrate"], "package.json must expose deploy:migrate");
 assert.ok(pkg.scripts["deploy:migrate:postgres"], "package.json must expose deploy:migrate:postgres");
+assert.ok(pkg.scripts["verify:product-schema"], "package.json must expose verify:product-schema");
 assert.ok(pkg.scripts["deploy:migrate"].includes("npx prisma migrate deploy"), "deploy:migrate must run npx prisma migrate deploy");
 assert.ok(pkg.scripts["deploy:migrate"].includes("npx prisma generate"), "deploy:migrate must run npx prisma generate");
+assert.ok(pkg.scripts["deploy:migrate"].includes("scripts/verify-product-schema.js"), "deploy:migrate must verify Product DB columns");
 assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("npx prisma migrate deploy --schema prisma-postgres/schema.prisma"), "Postgres deploy helper must run migrate deploy with the Postgres schema");
 assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("npx prisma generate --schema prisma-postgres/schema.prisma"), "Postgres deploy helper must generate with the Postgres schema");
+assert.ok(pkg.scripts["deploy:migrate:postgres"].includes("scripts/verify-product-schema.js"), "Postgres deploy helper must verify Product DB columns");
 
-assert.ok(dockerfile.includes("npm run prisma:deploy:postgres && npm run prisma:generate:postgres"), "Dockerfile must deploy migrations and regenerate Prisma client at startup");
+assert.ok(dockerfile.includes("npm run deploy:migrate:postgres && npm start"), "Dockerfile must run the migration helper before startup");
 assert.ok(deployDocs.includes("npm run deploy:migrate:postgres"), "DEPLOY.md must document the one-command migration helper");
 assert.ok(deployDocs.includes("npx prisma migrate deploy"), "DEPLOY.md must document migrate deploy");
 assert.ok(deployDocs.includes("npx prisma generate"), "DEPLOY.md must document prisma generate");
+assert.ok(deployDocs.includes("verify-product-schema"), "DEPLOY.md must document Product schema verification");
 assert.ok(productionCheck.includes("000020_add_product_loose_item_fields"), "production-check must require the repair migration");
+assert.ok(productionCheck.includes("verify:product-schema"), "production-check must require the Product schema verifier script");
+
+for (const snippet of [
+  "information_schema.columns",
+  'PRAGMA table_info("Product")',
+  "REQUIRED_PRODUCT_COLUMNS",
+  "isLooseItem",
+  "db.product.findMany({ take: 1 })",
+  "product_schema_check",
+]) {
+  assert.ok(verifier.includes(snippet), `Product schema verifier must include ${snippet}`);
+}
 
 console.log("Product loose item migration examples passed");

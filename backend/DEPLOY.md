@@ -8,15 +8,20 @@ Use PostgreSQL in production:
 
 ```bash
 npm ci
-npm run prisma:deploy:postgres
-npm run prisma:generate:postgres
+npm run deploy:migrate:postgres
 npm start
 ```
 
-`npm run deploy:migrate:postgres` is the single deployment helper for hosts
-that need one command. It runs `npx prisma migrate deploy --schema
-prisma-postgres/schema.prisma` and then `npx prisma generate --schema
-prisma-postgres/schema.prisma`, preserving existing production data.
+`npm run deploy:migrate:postgres` is the production migration helper. It runs
+`npx prisma migrate deploy --schema prisma-postgres/schema.prisma`, then
+`npx prisma generate --schema prisma-postgres/schema.prisma`, then
+`node scripts/verify-product-schema.js`. This preserves existing production data
+and fails fast if the deployed database is still missing Product columns such as
+`isLooseItem`.
+
+If you need to run the lower-level steps manually, use
+`npm run prisma:deploy:postgres`, `npm run prisma:generate:postgres`, and then
+`npm run verify:product-schema` in that order.
 
 For local SQLite development only:
 
@@ -177,8 +182,7 @@ Before deployment or packaging, run:
 
 ```bash
 npm ci
-npm run prisma:deploy:postgres
-npm run prisma:generate:postgres
+npm run deploy:migrate:postgres
 npm test
 node scripts/production-check.js
 ```

@@ -88,6 +88,7 @@ const requiredFiles = [
   "tests/phase29-release-gate.examples.js",
   "tests/product-loose-item-migration.examples.js",
   "prisma-postgres/migrations/000020_add_product_loose_item_fields/migration.sql",
+  "scripts/verify-product-schema.js",
   "scripts/money-paise-reconciliation.js",
   "prisma-postgres/migrations/000009_money_paise_shadow_columns/migration.sql",
   "docs/OPERATIONAL_PROOF.md",
@@ -254,6 +255,7 @@ const requiredPackageScripts = [
   "prisma:push",
   "prisma:generate:postgres",
   "prisma:deploy:postgres",
+  "verify:product-schema",
   "deploy:migrate",
   "deploy:migrate:postgres",
   "prisma:push:postgres",
@@ -434,9 +436,9 @@ if (exists("Dockerfile")) {
   const dockerfile = read("Dockerfile");
   if (!dockerfile.includes("npm ci")) errors.push("Dockerfile must install with npm ci");
   if (!dockerfile.includes("npm run prisma:generate:postgres")) errors.push("Dockerfile must generate Prisma client with PostgreSQL schema");
-  if (!dockerfile.includes("npm run prisma:deploy:postgres")) errors.push("Dockerfile must deploy PostgreSQL migrations before start");
-  if (!dockerfile.includes("npm run prisma:deploy:postgres && npm run prisma:generate:postgres")) {
-    errors.push("Dockerfile must run Prisma migrate deploy and generate during container startup");
+  if (!dockerfile.includes("npm run deploy:migrate:postgres")) errors.push("Dockerfile must deploy PostgreSQL migrations before start");
+  if (!dockerfile.includes("npm run deploy:migrate:postgres && npm start")) {
+    errors.push("Dockerfile must run migration deploy, Prisma generate, and product schema verification before startup");
   }
   if (!dockerfile.includes("HEALTHCHECK")) errors.push("Dockerfile must include HEALTHCHECK");
   if (!dockerfile.includes("COPY contracts ./contracts")) errors.push("Dockerfile must copy contracts so release/contract proof can run inside image");
@@ -531,6 +533,7 @@ if (exists("DEPLOY.md")) {
     "deploy:migrate:postgres",
     "npx prisma migrate deploy",
     "npx prisma generate",
+    "verify-product-schema",
     "DATABASE_URL",
     "health/ready",
     "Helmet is installed and enabled",
@@ -1475,7 +1478,7 @@ if (exists(".github/workflows/backend-ci.yml")) {
 
 if (exists("Dockerfile")) {
   const dockerfile = read("Dockerfile");
-  for (const snippet of ["npm ci", "npm run prisma:generate:postgres", "/health/ready", "npm run prisma:deploy:postgres", "npm start"]) {
+  for (const snippet of ["npm ci", "npm run prisma:generate:postgres", "/health/ready", "npm run deploy:migrate:postgres", "npm start"]) {
     if (!dockerfile.includes(snippet)) errors.push(`Dockerfile missing production reliability snippet: ${snippet}`);
   }
   if (dockerfile.includes("JWT_SECRET=") || dockerfile.includes("RAZORPAY_KEY_" + "SECRET=")) {

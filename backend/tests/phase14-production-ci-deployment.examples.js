@@ -42,7 +42,7 @@ for (const snippet of [
 assert(!ci.includes("RAZORPAY_KEY_SECRET=rz") && !ci.includes("prod-secret"), "CI must not contain production secrets");
 
 const dockerfile = read("Dockerfile");
-for (const snippet of ["npm ci", "npm run prisma:generate:postgres", "/health/ready", "npm run prisma:deploy:postgres", "npm start"]) {
+for (const snippet of ["npm ci", "npm run prisma:generate:postgres", "/health/ready", "npm run deploy:migrate:postgres", "npm start"]) {
   assert(dockerfile.includes(snippet), `Dockerfile must include ${snippet}`);
 }
 assert(!dockerfile.includes("JWT_SECRET=") && !dockerfile.includes("RAZORPAY_KEY_" + "SECRET="), "Dockerfile must not bake secrets");
