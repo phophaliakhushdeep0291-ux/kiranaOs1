@@ -22,6 +22,8 @@ for (const scriptName of [
   "prisma:deploy",
   "prisma:generate:postgres",
   "prisma:deploy:postgres",
+  "deploy:migrate",
+  "deploy:migrate:postgres",
   "test",
   "seed",
   "prod:check",
@@ -42,6 +44,8 @@ assert.ok(app.includes("requestLogger"), "request logging middleware must be wir
 
 const dockerfile = read("Dockerfile");
 assert.ok(dockerfile.includes("npm run prisma:deploy:postgres"), "Dockerfile must run Postgres prisma deploy before start");
+assert.ok(dockerfile.includes("npm run prisma:generate:postgres"), "Dockerfile must generate Prisma client before/after migration");
+assert.ok(dockerfile.includes("npm run prisma:deploy:postgres && npm run prisma:generate:postgres"), "Dockerfile must deploy migrations and regenerate Prisma client during startup");
 assert.ok(dockerfile.includes("HEALTHCHECK"), "Dockerfile must include health check");
 
 const compose = read("docker-compose.yml");

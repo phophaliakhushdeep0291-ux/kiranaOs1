@@ -31,6 +31,44 @@ if (ctx.skip) {
       assert.equal(updated.name, "New Name");
     });
 
+    test("product findMany, loose-item fields, and search work for billing", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const created = assertSuccess(await ctx.post("/api/products", productPayload({
+        name: "Loose Sugar",
+        category: "grocery",
+        displayUnit: "kg",
+        baseUnit: "g",
+        rateUnit: "kg",
+        isLooseItem: true,
+        brand: "Daily",
+        mrp: 48,
+        reorderLevel: 5,
+        description: "Loose counter sugar",
+        imageUrl: "https://example.test/sugar.png",
+      }), { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+
+      assert.equal(created.isLooseItem, true);
+      assert.equal(created.brand, "Daily");
+      assert.equal(created.mrp, 48);
+      assert.equal(created.reorderLevel, 5);
+
+      const rows = await ctx.db.product.findMany({ where: { shopId: tenant.shop.id, name: "Loose Sugar" } });
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].isLooseItem, true);
+
+      const updated = assertSuccess(await ctx.patch(`/api/products/${created.id}`, {
+        isLooseItem: false,
+        brand: "Daily Select",
+        mrp: 50,
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(updated.isLooseItem, false);
+      assert.equal(updated.brand, "Daily Select");
+      assert.equal(updated.mrp, 50);
+
+      const search = assertSuccess(await ctx.get("/api/products?search=Sugar", { token: ownerAuth.accessToken }));
+      assert.ok(search.some((product) => product.id === created.id), "billing product search should return the created product");
+    });
+
     test("product soft delete works and list excludes deleted products", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Delete Me" });

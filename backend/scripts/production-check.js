@@ -86,6 +86,8 @@ const requiredFiles = [
   "scripts/release-gate.js",
   "scripts/release-manifest.js",
   "tests/phase29-release-gate.examples.js",
+  "tests/product-loose-item-migration.examples.js",
+  "prisma-postgres/migrations/000020_add_product_loose_item_fields/migration.sql",
   "scripts/money-paise-reconciliation.js",
   "prisma-postgres/migrations/000009_money_paise_shadow_columns/migration.sql",
   "docs/OPERATIONAL_PROOF.md",
@@ -252,6 +254,8 @@ const requiredPackageScripts = [
   "prisma:push",
   "prisma:generate:postgres",
   "prisma:deploy:postgres",
+  "deploy:migrate",
+  "deploy:migrate:postgres",
   "prisma:push:postgres",
   "daily-closing:run",
   "worker",
@@ -431,6 +435,9 @@ if (exists("Dockerfile")) {
   if (!dockerfile.includes("npm ci")) errors.push("Dockerfile must install with npm ci");
   if (!dockerfile.includes("npm run prisma:generate:postgres")) errors.push("Dockerfile must generate Prisma client with PostgreSQL schema");
   if (!dockerfile.includes("npm run prisma:deploy:postgres")) errors.push("Dockerfile must deploy PostgreSQL migrations before start");
+  if (!dockerfile.includes("npm run prisma:deploy:postgres && npm run prisma:generate:postgres")) {
+    errors.push("Dockerfile must run Prisma migrate deploy and generate during container startup");
+  }
   if (!dockerfile.includes("HEALTHCHECK")) errors.push("Dockerfile must include HEALTHCHECK");
   if (!dockerfile.includes("COPY contracts ./contracts")) errors.push("Dockerfile must copy contracts so release/contract proof can run inside image");
 }
@@ -521,6 +528,9 @@ if (exists("DEPLOY.md")) {
   for (const word of [
     "docker compose",
     "prisma:deploy:postgres",
+    "deploy:migrate:postgres",
+    "npx prisma migrate deploy",
+    "npx prisma generate",
     "DATABASE_URL",
     "health/ready",
     "Helmet is installed and enabled",

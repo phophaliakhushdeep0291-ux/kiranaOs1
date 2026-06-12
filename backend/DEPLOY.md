@@ -8,10 +8,15 @@ Use PostgreSQL in production:
 
 ```bash
 npm ci
-npm run prisma:generate:postgres
 npm run prisma:deploy:postgres
+npm run prisma:generate:postgres
 npm start
 ```
+
+`npm run deploy:migrate:postgres` is the single deployment helper for hosts
+that need one command. It runs `npx prisma migrate deploy --schema
+prisma-postgres/schema.prisma` and then `npx prisma generate --schema
+prisma-postgres/schema.prisma`, preserving existing production data.
 
 For local SQLite development only:
 
@@ -39,7 +44,7 @@ PORT=3000
 DATABASE_URL="postgresql://kiranaos:STRONG_PASSWORD@postgres:5432/kiranaos?schema=public"
 POSTGRES_DATABASE_URL="postgresql://kiranaos:STRONG_PASSWORD@postgres:5432/kiranaos?schema=public"
 JWT_SECRET="replace-with-a-long-random-secret"
-JWT_EXPIRES_IN="7d"
+JWT_EXPIRES_IN="15m"
 ALLOWED_ORIGINS="https://yourdomain.com"
 LOG_LEVEL="info"
 ```
@@ -172,8 +177,8 @@ Before deployment or packaging, run:
 
 ```bash
 npm ci
-npm run prisma:generate:postgres
 npm run prisma:deploy:postgres
+npm run prisma:generate:postgres
 npm test
 node scripts/production-check.js
 ```

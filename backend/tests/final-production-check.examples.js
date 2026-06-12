@@ -31,7 +31,7 @@ for (const table of ["BillCounter", "AuditLog", "Session", "OfflineSyncEvent"]) 
   assert.ok(productionCheck.includes(table), `production-check must verify production migration includes ${table}`);
 }
 
-for (const command of ["npm ci", "prisma:generate:postgres", "prisma:deploy:postgres"]) {
+for (const command of ["npm ci", "prisma:generate:postgres", "prisma:deploy:postgres", "deploy:migrate:postgres"]) {
   assert.ok(productionCheck.includes(command), `production-check must verify ${command}`);
 }
 
@@ -46,6 +46,9 @@ assert.ok(pkg.scripts["test:billing"].includes("final-production-check.examples.
 
 const deploy = read("DEPLOY.md");
 assert.ok(deploy.includes("npm run prisma:deploy:postgres"), "DEPLOY.md must document PostgreSQL migrations");
+assert.ok(deploy.includes("npm run deploy:migrate:postgres"), "DEPLOY.md must document one-command PostgreSQL migration deployment");
+assert.ok(deploy.includes("npx prisma migrate deploy"), "DEPLOY.md must document migrate deploy");
+assert.ok(deploy.includes("npx prisma generate"), "DEPLOY.md must document prisma generate");
 assert.ok(deploy.includes("/health/ready"), "DEPLOY.md must document readiness endpoint");
 
 console.log("Final production check examples passed");
