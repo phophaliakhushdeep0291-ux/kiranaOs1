@@ -46,11 +46,11 @@ export function refreshAccessToken(refreshToken = getStoredRefreshToken()) {
   });
 }
 
-export function logoutSession(refreshToken = getStoredRefreshToken()) {
+export function logoutSession(refreshToken = getStoredRefreshToken(), deviceId?: string) {
   if (!refreshToken) return Promise.resolve({ success: true });
   return apiRequest<{ success: boolean; message?: string }>("/auth/logout", {
     method: "POST",
-    body: JSON.stringify({ refreshToken }),
+    body: JSON.stringify({ refreshToken, deviceId }),
     skipAuth: true,
     skipRefresh: true,
   });

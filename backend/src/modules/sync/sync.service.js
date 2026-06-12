@@ -190,38 +190,6 @@ const SYNC_PROCESSING_STALE_MS = 2 * 60 * 1000;
  *
  * Tenant isolation: every query is scoped by shopId from the JWT.
  */
-async function enrichBillsWithSyncIdentity(shopId, bills) {
-  if (!bills.length) return bills;
-  const events = await db.offlineSyncEvent.findMany({
-    where: { shopId, type: SYNC_EVENT_TYPES.CREATE_BILL, status: SYNC_EVENT_STATUSES.SYNCED },
-    orderBy: { updatedAt: "desc" },
-    take: 200,
-    select: { resultJson: true, requestJson: true },
-  });
-  const identityByBillId = new Map();
-  for (const event of events) {
-    const result = safeJsonParse(event.resultJson);
-    const request = safeJsonParse(event.requestJson);
-    const billId = result?.billId ?? result?.serverBillId ?? result?.bill?.id;
-    if (!billId || identityByBillId.has(billId)) continue;
-    const localBillId = result?.localBillId ?? result?.local_bill_id
-      ?? request?.payload?.localBillId ?? request?.payload?.local_bill_id ?? null;
-    const clientBillId = result?.clientBillId ?? result?.client_bill_id
-      ?? request?.payload?.clientBillId ?? null;
-    const idempotency_key = result?.idempotencyKey ?? result?.idempotency_key
-      ?? request?.payload?.idempotency_key ?? null;
-    if (localBillId || clientBillId || idempotency_key) {
-      identityByBillId.set(billId, { localBillId, clientBillId, idempotency_key });
-    }
-  }
-  if (identityByBillId.size === 0) return bills;
-  return bills.map((bill) => {
-    const identity = identityByBillId.get(bill.id);
-    if (!identity) return bill;
-    return { ...bill, ...identity };
-  });
-}
-
 export async function pullSince(shopId, since, { cursor, limit, cursors } = {}) {
   const sinceDate = new Date(since);
   limit = Math.min(
@@ -248,7 +216,7 @@ export async function pullSince(shopId, since, { cursor, limit, cursors } = {}) 
 
   const orderBy = [{ updatedAt: "asc" }, { id: "asc" }];
 
-  const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory] = await Promise.all([
+  const [products, customers, bills, stockLedger, udharLedger, suppliers, purchaseHistory] = await Promise.all([
     db.product.findMany({ where: buildWhere("products"), orderBy, take: limit }),
     db.customer.findMany({ where: buildWhere("customers"), orderBy, take: limit }),
     db.bill.findMany({ where: buildWhere("bills"), include: { items: true, payments: true }, orderBy, take: limit }),
@@ -257,7 +225,6 @@ export async function pullSince(shopId, since, { cursor, limit, cursors } = {}) 
     db.supplier.findMany({ where: buildWhere("suppliers"), orderBy, take: limit }),
     db.purchaseHistory.findMany({ where: buildWhere("purchaseHistory"), orderBy, take: limit }),
   ]);
-  const bills = await enrichBillsWithSyncIdentity(shopId, rawBills);
 
   const entitySets = { products, customers, bills, stockLedger, udharLedger, suppliers, purchaseHistory };
   const hasMoreByEntity = Object.fromEntries(

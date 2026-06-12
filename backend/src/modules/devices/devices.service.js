@@ -56,8 +56,21 @@ export async function activateDevice(shopId, user, input, req = null) {
   }
 
   const effective = await getEffectivePlan(shopId);
-  const activeCount = await db.device.count({ where: { shopId, status: "active" } });
+  let activeCount = await db.device.count({ where: { shopId, status: "active" } });
   const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
+  if (activeCount >= allowedMaxDevices) {
+    const canReplaceOldestSelfDevice =
+      input.replaceOldestSelfDevice === true &&
+      ["owner", "admin"].includes(String(user?.role ?? ""));
+
+    if (canReplaceOldestSelfDevice) {
+      const reclaimed = await reclaimOldestReplaceableDevice(shopId, userId, input.deviceId);
+      if (reclaimed) {
+        activeCount = await db.device.count({ where: { shopId, status: "active" } });
+      }
+    }
+  }
+
   if (activeCount >= allowedMaxDevices) {
     const err = new AppError("Device limit exceeded", 403);
     err.code = "DEVICE_LIMIT_EXCEEDED";
@@ -102,6 +115,35 @@ export async function activateDevice(shopId, user, input, req = null) {
   const license = await issueDeviceLicense(shopId, device.deviceId);
   await auditDeviceAction({ shopId, userId, action: "DEVICE_ACTIVATED", entityId: device.id, metadata: { deviceId: device.deviceId, platform: device.platform, planCode: license.payload.planCode }, req });
   return withLicense(device, license);
+}
+
+async function reclaimOldestReplaceableDevice(shopId, userId, incomingDeviceId) {
+  const oldDevice = await db.device.findFirst({
+    where: {
+      shopId,
+      status: "active",
+      deviceId: { not: incomingDeviceId },
+      OR: [{ userId }, { userId: null }],
+    },
+    orderBy: [{ lastActiveAt: "asc" }, { createdAt: "asc" }],
+  });
+
+  if (!oldDevice) return null;
+  const removedAt = new Date();
+  const updated = await db.device.update({
+    where: { id: oldDevice.id },
+    data: { status: "removed", removedAt },
+  });
+  await revokeDeviceLicense(shopId, oldDevice.deviceId, "owner_replaced_oldest_device");
+  await auditDeviceAction({
+    shopId,
+    userId,
+    action: "DEVICE_REPLACED_BY_OWNER",
+    entityId: oldDevice.id,
+    metadata: { deviceId: oldDevice.deviceId, replacedByDeviceId: incomingDeviceId },
+    req: null,
+  });
+  return updated;
 }
 
 export async function removeDevice(shopId, deviceId, userId = null, req = null) {
