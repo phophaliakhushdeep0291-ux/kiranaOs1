@@ -10,6 +10,8 @@ import {
   dedupeBillsForDisplay,
   dedupePaymentsForDisplay,
   findDuplicateLocalPaymentForServerPayment,
+  isBillSynced,
+  isLikelySyncedCopyOfPendingBill,
 } from "@/features/sync/bill-reconciliation";
 import { storeConflict } from "@/features/sync/sync-conflicts";
 import {
@@ -187,7 +189,7 @@ export async function mergeServerChange(
 
   const mappedLocalId = await findLocalIdForServerId(serverId);
   const localId =
-    getStringFrom(entity, ["local_id", "localId"]) ?? mappedLocalId;
+    getStringFrom(entity, ["local_id", "localId", "localBillId", "local_bill_id", "clientBillId", "client_bill_id"]) ?? mappedLocalId;
   const duplicatePayment =
     tableName === "payments"
       ? await findDuplicateLocalPaymentForServerPayment(entity)
@@ -203,6 +205,17 @@ export async function mergeServerChange(
     duplicateLedger ??
     (await findExistingServerRow(tableName, serverId, effectiveLocalId));
 
+  const duplicateBill =
+    tableName === "bills" &&
+    existing != null &&
+    !isBillSynced(existing) &&
+    isBillSynced(entity as Record<string, unknown>)
+      ? (isLikelySyncedCopyOfPendingBill(existing, entity as Record<string, unknown>) ? existing : undefined)
+      : undefined;
+  const effectiveDuplicateLocalId =
+    getStringFrom(duplicatePayment ?? duplicateLedger ?? duplicateBill ?? {}, ["id", "local_id", "localId"]);
+  const resolvedLocalId = effectiveLocalId ?? effectiveDuplicateLocalId;
+
   if (tableName === "purchase_bills") {
     const serverPurchase = {
       ...entity,
@@ -217,7 +230,7 @@ export async function mergeServerChange(
     if (localOverrideWins) {
       await putIdMapping(
         entityTypeFromOperation("", entityType),
-        effectiveLocalId,
+        resolvedLocalId ?? effectiveLocalId,
         serverId,
       );
       return "ignored";
@@ -228,6 +241,7 @@ export async function mergeServerChange(
     existing &&
     !duplicatePayment &&
     !duplicateLedger &&
+    !duplicateBill &&
     UNSYNCED_STATUSES.has(
       String(existing.sync_status ?? "synced") as SyncStatus,
     )
@@ -256,10 +270,10 @@ export async function mergeServerChange(
 
   await putIdMapping(
     entityTypeFromOperation("", entityType),
-    effectiveLocalId,
+    resolvedLocalId,
     serverId,
   );
-  await replaceLocalEntityId(entityType, effectiveLocalId ?? serverId, serverId, entity);
+  await replaceLocalEntityId(entityType, resolvedLocalId ?? serverId, serverId, entity);
   return "merged";
 }
 
@@ -292,7 +306,7 @@ async function refreshCustomerBalancesFromLocalLedger(): Promise<void> {
       return customerId ? ids.has(customerId) : false;
     });
     if (entries.length === 0) continue;
-    const balance = Math.round((Math.max(0, calculateLedgerBalance(entries)) + Number.EPSILON) * 100) / 100;
+    const balance = Math.round((calculateLedgerBalance(entries) + Number.EPSILON) * 100) / 100;
     const current = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
     if (Number.isFinite(current) && Math.abs(current - balance) < 0.005) continue;
     await table.put({

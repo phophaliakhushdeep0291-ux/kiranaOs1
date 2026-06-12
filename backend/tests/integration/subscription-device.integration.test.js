@@ -64,7 +64,7 @@ if (ctx.skip) {
       const license = assertSuccess(await ctx.get("/api/devices/license?deviceId=device-1", { token: ownerAuth.accessToken }));
       assert.equal(license.planCode, "starter");
       assert.ok(license.features.includes("basic_billing"));
-      assert.equal(license.maxDevices, 1);
+      assert.equal(license.maxDevices, 2);
     });
 
     test("razorpay webhook without a valid signature is rejected", async () => {

@@ -104,6 +104,7 @@ model Session {
   id               String    @id @default(cuid())
   userId           String
   shopId           String
+  deviceId         String?   // Browser/device id that owns this login session. Used for concurrent device limits.
   refreshTokenHash String
   userAgent        String?
   ipAddress        String?
@@ -117,6 +118,7 @@ model Session {
 
   @@index([userId, revokedAt])
   @@index([shopId, revokedAt])
+  @@index([shopId, deviceId, revokedAt])
   @@index([expiresAt])
 }
 

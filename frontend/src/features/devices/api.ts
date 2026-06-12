@@ -28,14 +28,13 @@ export function listDevices() {
   return apiRequest<{ devices: DeviceDto[]; license?: OfflineLicenseToken }>("/devices");
 }
 
-export function activateDevice(deviceName: string, deviceId = getOfflineScope().device_id, options: { replaceOldestSelfDevice?: boolean } = {}) {
+export function activateDevice(deviceName: string, deviceId = getOfflineScope().device_id) {
   return apiRequest<{ device: DeviceDto; license?: OfflineLicenseToken }>("/devices/activate", {
     method: "POST",
     body: JSON.stringify({
       deviceId,
       deviceName: deviceName.trim() || "This device",
       platform: platformName(),
-      replaceOldestSelfDevice: options.replaceOldestSelfDevice === true,
     }),
   });
 }

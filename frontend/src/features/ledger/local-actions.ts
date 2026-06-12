@@ -4,19 +4,19 @@ import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/off
 import { enqueueOutboxOperation } from "@/features/sync/outbox";
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import type { Customer } from "@/types/api";
-import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry } from "@/features/ledger/accounting";
+import { calculateLedgerBalance, type CustomerLedgerEntry } from "@/features/ledger/accounting";
 
 const CUSTOMER_CACHE_KEY = "customers";
 const LEDGER_CACHE_KEY = "customer_ledger";
 
 export async function readCustomerLedgerEntries(customerId: string): Promise<CustomerLedgerEntry[]> {
   const rows = await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []);
-  return dedupeLedgerEntries(rows.filter((row) => row.customerId === customerId || row.customer_id === customerId));
+  return rows.filter((row) => row.customerId === customerId || row.customer_id === customerId);
 }
 
 export async function refreshCustomerBalanceFromLedger(customerId: string): Promise<number> {
   const ledger = await readCustomerLedgerEntries(customerId);
-  const balance = roundMoney(Math.max(0, calculateLedgerBalance(ledger)));
+  const balance = roundMoney(calculateLedgerBalance(ledger));
   const customers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
   const customer = customers.find((row) => row.id === customerId || row.local_id === customerId || row.server_id === customerId);
   if (customer) {
@@ -72,12 +72,6 @@ export async function createLedgerAdjustmentLocalFirst(input: {
   });
   const amount = roundMoney(readNumber(input.amount, 0));
   if (amount === 0) throw new Error("Adjustment amount cannot be zero");
-  if (amount < 0) {
-    const currentBalance = roundMoney(Math.max(0, calculateLedgerBalance(await readCustomerLedgerEntries(input.customerId))));
-    if (Math.abs(amount) > currentBalance + 0.005) {
-      throw new Error(`Adjustment ₹${Math.abs(amount).toLocaleString("en-IN")} exceeds outstanding udhar ₹${currentBalance.toLocaleString("en-IN")}`);
-    }
-  }
   const entry = await appendCustomerLedgerEntry({
     customerId: input.customerId,
     customer_id: input.customerId,

@@ -154,7 +154,7 @@ export default function Dashboard() {
     const grossProfit = roundMoney(money(finance?.profitToday ?? reportToday?.profitEstimate ?? localSnapshot.grossProfit ?? backendPnL?.grossProfit));
     const cash = finance?.cashSalesToday ?? reportToday?.cashSales ?? localSnapshot.cash ?? paymentSummary.data?.cash;
     const upi = finance?.upiSalesToday ?? reportToday?.upiSales ?? localSnapshot.upi ?? paymentSummary.data?.upi;
-    const credit = reportToday?.udharSales ?? localSnapshot.credit ?? paymentSummary.data?.credit;
+    const credit = finance?.udharSalesToday ?? reportToday?.udharSales ?? localSnapshot.credit ?? paymentSummary.data?.credit;
     const todayUdhar = roundMoney(money(credit));
     const cashIn = roundMoney(money(cash));
     const upiIn = roundMoney(money(upi));

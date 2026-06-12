@@ -94,6 +94,7 @@ const starterFeatures: FeatureName[] = [
   "offline_billing",
   "local_reports_7_day",
   "cloud_backup",
+  "automatic_two_way_sync",
   "basic_recycle_bin",
   "basic_support",
   "no_barcode_fast_billing",
@@ -101,7 +102,6 @@ const starterFeatures: FeatureName[] = [
 ];
 
 const standardExtra: FeatureName[] = [
-  "automatic_two_way_sync",
   "reports_30_day",
   "customer_payment_history",
   "stock_tracking",
@@ -159,15 +159,15 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
     name: "Starter",
     price: 299,
     maxStores: 1,
-    maxDevices: 1,
-    headline: "For one shopkeeper and one billing device.",
+    maxDevices: 2,
+    headline: "For one shopkeeper using up to two devices.",
     features: starterFeatures,
     bullets: [
-      "1 store, 1 device, owner account only",
+      "1 store, 2 devices, owner account only",
       "Basic billing, rough bill, paid/udhar bill",
       "Customer ledger and payment recording",
       "Basic products, offline billing and 7-day offline grace",
-      "7-day local reports, cloud backup, basic recycle bin",
+      "7-day local reports, cloud backup, automatic two-way sync, basic recycle bin",
       "Basic support",
     ],
   },
