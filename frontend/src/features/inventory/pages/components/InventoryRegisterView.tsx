@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { AlertTriangle, ArrowRightLeft, ClipboardList, Download, Package, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowRightLeft, CheckCircle2, ClipboardList, Download, Package, Search, SlidersHorizontal } from "lucide-react";
 import { useGetStockLedger } from "@/lib/api/client";
+import { offlineDB } from "@/lib/offline/db";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { CHIP_TONES } from "@/lib/chip-tones";
 import { cn } from "@/lib/utils";
 
 type RegisterMode = "adjustments" | "transfers";
@@ -65,8 +68,21 @@ function exportRows(rows: MovementRow[], mode: RegisterMode) {
 export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
   const [search, setSearch] = useState("");
   const ledger = useGetStockLedger({ limit: 500 });
+  // Local movements keep this register offline-first: unsynced corrections show
+  // immediately and the page still works without the backend.
+  const localMovements = useQuery({
+    queryKey: ["inventory-register-local"],
+    queryFn: () => offlineDB.getAll<MovementRow>("inventory_movements").catch(() => [] as MovementRow[]),
+    staleTime: 2_000,
+    refetchInterval: 5_000, // movements recorded elsewhere appear without a remount
+  });
   const isAdjustments = mode === "adjustments";
-  const sourceRows = useMemo(() => ((ledger.data?.entries ?? []) as MovementRow[]), [ledger.data]);
+  const sourceRows = useMemo(() => {
+    const merged = new Map<string, MovementRow>();
+    for (const row of (localMovements.data ?? [])) if (row?.id) merged.set(String(row.id), row);
+    for (const row of ((ledger.data?.entries ?? []) as MovementRow[])) if (row?.id) merged.set(String(row.id), { ...merged.get(String(row.id)), ...row });
+    return [...merged.values()].sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")));
+  }, [ledger.data, localMovements.data]);
 
   const scopedRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -122,7 +138,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
         <Kpi icon={icon} label={isAdjustments ? "Total Adjustments" : "Total Transfers"} value={stats.total.toLocaleString("en-IN")} tone="blue" />
         <Kpi icon={<Package size={18} />} label="Items Touched" value={stats.items.toLocaleString("en-IN")} tone="green" />
         <Kpi icon={<ClipboardList size={18} />} label="Total Quantity" value={stats.quantity.toLocaleString("en-IN")} tone="violet" />
-        <Kpi icon={<AlertTriangle size={18} />} label="Completed" value={stats.completed.toLocaleString("en-IN")} tone="amber" />
+        <Kpi icon={<CheckCircle2 size={18} />} label="Completed" value={stats.completed.toLocaleString("en-IN")} tone="amber" />
       </div>
 
       <div className="mt-4 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
@@ -138,7 +154,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
       </div>
 
       <div className="mt-4 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
-        {ledger.isLoading ? (
+        {ledger.isLoading && localMovements.isLoading ? (
           <div className="py-14 text-center text-[13px] text-[#64748b]">Loading movement history...</div>
         ) : scopedRows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
@@ -162,16 +178,18 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
               <tbody>
                 {scopedRows.map((row, index) => {
                   const delta = qty(row);
+                  const sync = String(row.sync_status ?? "synced").toLowerCase();
+                  const syncTone = sync === "synced" ? CHIP_TONES.green : sync === "failed" || sync === "conflict" ? CHIP_TONES.red : CHIP_TONES.amber;
                   return (
                     <tr key={String(row.id ?? index)} className="border-b border-[#eef2f8] last:border-0">
                       <td className="whitespace-nowrap px-4 py-3 text-[#52627e]">{rowDate(row)}</td>
-                      <td className="px-4 py-3 font-mono text-[12px] text-[#52627e]">{String(row.id ?? "-")}</td>
+                      <td className="px-4 py-3 font-mono text-[12px] uppercase text-[#52627e]" title={String(row.id ?? "-")}>{String(row.id ?? "-").slice(-8)}</td>
                       <td className="px-4 py-3 font-bold text-[#102347]">{String(row.productName ?? row.product_name ?? "-")}</td>
                       <td className={cn("px-4 py-3 text-right font-black", delta >= 0 ? "text-emerald-600" : "text-rose-600")}>
                         {delta >= 0 ? "+" : ""}{delta.toLocaleString("en-IN")}
                       </td>
                       <td className="max-w-[260px] truncate px-4 py-3 text-[#344668]">{String(row.reason ?? row.note ?? "-")}</td>
-                      <td className="px-4 py-3"><span className="rounded-[7px] bg-emerald-50 px-2 py-[3px] text-[11px] font-bold text-emerald-700">{String(row.sync_status ?? "Synced")}</span></td>
+                      <td className="px-4 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold capitalize", syncTone)}>{sync.replaceAll("_", " ")}</span></td>
                     </tr>
                   );
                 })}

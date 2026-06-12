@@ -6,12 +6,15 @@ import {
   FileText,
   MapPin,
   MessageCircle,
+  MessageSquare,
   MoreHorizontal,
   Pencil,
   Phone,
   Plus,
   Search,
   Star,
+  Trash2,
+  UserRound,
   Users,
   Wallet,
 } from "lucide-react";
@@ -20,7 +23,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { CHIP_TONES } from "@/lib/chip-tones";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useToast } from "@/hooks/use-toast";
 import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/customers/local-actions";
@@ -76,7 +81,7 @@ function money(value: unknown) {
 }
 
 function fmtMoney(value: unknown) {
-  return `Rs ${money(value).toLocaleString("en-IN")}`;
+  return `₹${money(value).toLocaleString("en-IN")}`;
 }
 
 function initials(name: string) {
@@ -103,10 +108,12 @@ function riskInfo(customer: CustomerWithLedger) {
   const balance = Math.max(0, customer.ledgerBalance);
   const limit = Number(customer.udharLimit ?? 0);
   if (balance <= 0) return { label: "No Due", cls: "bg-[#eef2f8] text-[#52627e]", dot: "bg-[#94a3b8]" };
-  if (customer.ledgerMetrics.isBadCustomer || (limit > 0 && balance > limit * 0.8)) {
+  // With a limit: risk scales by utilisation. Without one: by absolute exposure.
+  const ratio = limit > 0 ? balance / limit : balance / 10_000;
+  if (customer.ledgerMetrics.isBadCustomer || ratio > 0.8) {
     return { label: "High Risk", cls: "bg-rose-50 text-rose-600 ring-rose-100", dot: "bg-rose-500" };
   }
-  if (balance > 0) return { label: "Medium Risk", cls: "bg-amber-50 text-amber-700 ring-amber-100", dot: "bg-amber-500" };
+  if (ratio > 0.35) return { label: "Medium Risk", cls: "bg-amber-50 text-amber-700 ring-amber-100", dot: "bg-amber-500" };
   return { label: "Low Risk", cls: "bg-emerald-50 text-emerald-700 ring-emerald-100", dot: "bg-emerald-500" };
 }
 
@@ -147,6 +154,7 @@ export default function CustomersPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerWithLedger | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"ledger" | "transactions" | "payments" | "notes">("ledger");
 
   const dedupedCustomers = useMemo(() => {
     const map = new Map<string, CustomerWithLedger>();
@@ -333,6 +341,43 @@ export default function CustomersPage() {
     }
   }
 
+  function mobileDigits() {
+    return String(selectedCustomer?.mobile ?? "").replace(/\D/g, "").slice(-10);
+  }
+
+  function shareWhatsApp() {
+    const digits = mobileDigits();
+    if (!digits) { toast({ title: "No mobile number", description: "Add a mobile number to send a WhatsApp reminder.", variant: "destructive" }); return; }
+    const balance = Math.max(0, money(selectedCustomer?.ledgerBalance));
+    const text = encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ₹${balance.toLocaleString("en-IN")} hai. Kripya payment kar dein. Dhanyavaad!`);
+    window.open(`https://wa.me/91${digits}?text=${text}`, "_blank", "noopener");
+  }
+
+  function sendSms() {
+    const digits = mobileDigits();
+    if (!digits) { toast({ title: "No mobile number", variant: "destructive" }); return; }
+    const balance = Math.max(0, money(selectedCustomer?.ledgerBalance));
+    window.location.href = `sms:+91${digits}?body=${encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ₹${balance.toLocaleString("en-IN")} hai.`)}`;
+  }
+
+  function quickCall() {
+    const digits = mobileDigits();
+    if (!digits) { toast({ title: "No mobile number", variant: "destructive" }); return; }
+    window.location.href = `tel:+91${digits}`;
+  }
+
+  function printStatement() {
+    if (!selectedCustomer) return;
+    const popup = window.open("", "_blank", "width=540,height=740");
+    if (!popup) { toast({ title: "Allow pop-ups", description: "Enable pop-ups to print the statement.", variant: "destructive" }); return; }
+    const rows = (selectedDetail.data?.ledger ?? []).map((row) => {
+      const signed = Number(row.signed_amount ?? 0);
+      return `<tr><td>${formatShortDate(row.display_date)}</td><td>${String(row.note || row.source_id || row.display_type)}</td><td style="text-align:right">${signed > 0 ? signed.toLocaleString("en-IN") : "-"}</td><td style="text-align:right">${signed < 0 ? Math.abs(signed).toLocaleString("en-IN") : "-"}</td><td style="text-align:right">${money(row.running_balance).toLocaleString("en-IN")}</td></tr>`;
+    }).join("");
+    popup.document.write(`<!doctype html><html><head><title>Khata Statement — ${selectedCustomer.name}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>Khata Statement — ${selectedCustomer.name}</h1><p>${selectedCustomer.mobile ?? ""}</p><p>As on ${formatShortDate(new Date().toISOString())} · Outstanding: <strong class="due">₹${Math.max(0, money(selectedCustomer.ledgerBalance)).toLocaleString("en-IN")}</strong></p><table><thead><tr><th>Date</th><th>Particulars</th><th style="text-align:right">Udhar (₹)</th><th style="text-align:right">Paid (₹)</th><th style="text-align:right">Balance (₹)</th></tr></thead><tbody>${rows || `<tr><td colspan="5">No ledger entries</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
+    popup.document.close();
+  }
+
   async function recordPayment() {
     const amount = Number(paymentForm.amount);
     if (!paymentForm.customerId || !Number.isFinite(amount) || amount <= 0) {
@@ -478,7 +523,13 @@ export default function CustomersPage() {
                 <div className="mt-5 grid gap-3 rounded-[14px] border border-[#e8eef7] bg-[#fbfdff] p-4 md:grid-cols-3">
                   <SummaryCell label="Total Outstanding" value={fmtMoney(selectedCustomer.ledgerBalance)} valueClass={selectedCustomer.ledgerBalance > 0 ? "text-rose-600" : "text-emerald-600"} />
                   <SummaryCell label="Credit Limit" value={creditLimit > 0 ? fmtMoney(creditLimit) : "Not set"} />
-                  <SummaryCell label="Available Credit" value={creditLimit > 0 ? fmtMoney(availableCredit) : "No limit"} valueClass="text-emerald-600" />
+                  <SummaryCell
+                    label="Available Credit"
+                    value={creditLimit > 0
+                      ? (money(selectedCustomer.ledgerBalance) > creditLimit ? `Over by ${fmtMoney(money(selectedCustomer.ledgerBalance) - creditLimit)}` : fmtMoney(availableCredit))
+                      : "No limit"}
+                    valueClass={creditLimit > 0 && money(selectedCustomer.ledgerBalance) > creditLimit ? "text-rose-600" : "text-emerald-600"}
+                  />
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px]">
@@ -494,59 +545,119 @@ export default function CustomersPage() {
                   </div>
                   <div className="rounded-[14px] border border-[#e8eef7] bg-white p-4 text-center">
                     <p className="text-[12px] font-bold text-[#64748b]">Payment Score</p>
-                    <div className="mx-auto mt-2 grid h-14 w-14 place-items-center rounded-full border-4 border-[#ff6b6b] bg-white font-display text-[12px] font-black text-rose-600">
-                      {trustScore}/100
-                    </div>
+                    {(() => {
+                      const scoreColor = trustScore >= 75 ? "#16a34a" : trustScore >= 45 ? "#f59e0b" : "#ef4444";
+                      return (
+                        <div
+                          className="mx-auto mt-2 grid h-16 w-16 place-items-center rounded-full"
+                          style={{ background: `conic-gradient(${scoreColor} 0 ${Math.min(100, Math.max(0, trustScore))}%, #eef2f8 ${Math.min(100, Math.max(0, trustScore))}% 100%)` }}
+                        >
+                          <span className="grid h-[52px] w-[52px] place-items-center rounded-full bg-white font-display text-[12px] font-black" style={{ color: scoreColor }}>
+                            {trustScore}<span className="text-[8px] text-[#94a3b8]">/100</span>
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
 
               <div className="rounded-[16px] border border-[#e6ecf4] bg-white shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
-                <div className="flex items-center gap-6 border-b border-[#edf2f8] px-5">
-                  {["Ledger", "Transactions", "Payment History", "Notes"].map((tab, index) => (
-                    <button key={tab} className={cn("h-12 border-b-2 text-[13px] font-black", index === 0 ? "border-[#075cf7] text-[#075cf7]" : "border-transparent text-[#536383]")}>{tab}</button>
+                <div className="flex items-center gap-6 overflow-x-auto border-b border-[#edf2f8] px-5">
+                  {([["ledger", "Ledger"], ["transactions", "Transactions"], ["payments", "Payment History"], ["notes", `Notes${selectedCustomer.notes ? " (1)" : ""}`]] as const).map(([key, label]) => (
+                    <button key={key} onClick={() => setActiveTab(key)} className={cn("h-12 whitespace-nowrap border-b-2 text-[13px] font-black transition-colors", activeTab === key ? "border-[#075cf7] text-[#075cf7]" : "border-transparent text-[#536383] hover:text-[#102347]")}>{label}</button>
                   ))}
                 </div>
-                <div className="overflow-x-auto p-3">
-                  <table className="w-full min-w-[650px] text-[12.5px]">
-                    <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
-                      <tr>
-                        <th className="px-3 py-2.5 text-left font-bold">Date</th>
-                        <th className="px-3 py-2.5 text-left font-bold">Particulars</th>
-                        <th className="px-3 py-2.5 text-left font-bold">Type</th>
-                        <th className="px-3 py-2.5 text-right font-bold">Debit</th>
-                        <th className="px-3 py-2.5 text-right font-bold">Credit</th>
-                        <th className="px-3 py-2.5 text-right font-bold">Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedDetail.isLoading ? (
-                        <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">Loading ledger...</td></tr>
-                      ) : ledgerRows.length === 0 ? (
-                        <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">No ledger entries yet.</td></tr>
-                      ) : (
-                        ledgerRows.slice(0, 7).map((row) => {
-                          const signed = Number(row.signed_amount ?? 0);
-                          return (
-                            <tr key={row.id} className="border-b border-[#eef2f8] last:border-0">
-                              <td className="px-3 py-3 text-[#52627e]">{formatShortDate(row.display_date)}</td>
-                              <td className="max-w-[220px] truncate px-3 py-3 font-semibold text-[#102347]">{row.note || row.source_id || row.display_type}</td>
-                              <td className="px-3 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", row.display_type === "PAYMENT" ? "bg-emerald-50 text-emerald-700" : "bg-[#eef5ff] text-[#075cf7]")}>{row.display_type}</span></td>
-                              <td className="px-3 py-3 text-right font-bold text-[#102347]">{signed > 0 ? fmtMoney(signed) : "-"}</td>
-                              <td className="px-3 py-3 text-right font-bold text-emerald-600">{signed < 0 ? fmtMoney(Math.abs(signed)) : "-"}</td>
-                              <td className="px-3 py-3 text-right font-black text-[#102347]">{fmtMoney(row.running_balance)}</td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="border-t border-[#edf2f8] px-5 py-3 text-center">
-                  <Link href={`/customers/${selectedCustomer.id}`} className="inline-flex items-center gap-2 text-[13px] font-black text-[#075cf7] hover:underline">
-                    View Full Ledger <ChevronRight size={14} />
-                  </Link>
-                </div>
+                {activeTab === "ledger" && (
+                  <>
+                    <div className="overflow-x-auto p-3">
+                      <table className="w-full min-w-[650px] text-[12.5px]">
+                        <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
+                          <tr>
+                            <th className="px-3 py-2.5 text-left font-bold">Date</th>
+                            <th className="px-3 py-2.5 text-left font-bold">Particulars</th>
+                            <th className="px-3 py-2.5 text-left font-bold">Type</th>
+                            <th className="px-3 py-2.5 text-right font-bold">Debit</th>
+                            <th className="px-3 py-2.5 text-right font-bold">Credit</th>
+                            <th className="px-3 py-2.5 text-right font-bold">Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedDetail.isLoading ? (
+                            <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">Loading ledger...</td></tr>
+                          ) : ledgerRows.length === 0 ? (
+                            <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">No ledger entries yet.</td></tr>
+                          ) : (
+                            ledgerRows.slice(0, 7).map((row) => {
+                              const signed = Number(row.signed_amount ?? 0);
+                              return (
+                                <tr key={row.id} className="border-b border-[#eef2f8] last:border-0">
+                                  <td className="px-3 py-3 text-[#52627e]">{formatShortDate(row.display_date)}</td>
+                                  <td className="max-w-[220px] truncate px-3 py-3 font-semibold text-[#102347]">{row.note || row.source_id || row.display_type}</td>
+                                  <td className="px-3 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", row.display_type === "PAYMENT" ? CHIP_TONES.green : CHIP_TONES.blue)}>{row.display_type}</span></td>
+                                  <td className="px-3 py-3 text-right font-bold text-[#102347]">{signed > 0 ? fmtMoney(signed) : "-"}</td>
+                                  <td className="px-3 py-3 text-right font-bold text-emerald-600">{signed < 0 ? fmtMoney(Math.abs(signed)) : "-"}</td>
+                                  <td className="px-3 py-3 text-right font-black text-[#102347]">{fmtMoney(row.running_balance)}</td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="border-t border-[#edf2f8] px-5 py-3 text-center">
+                      <Link href={`/customers/${selectedCustomer.id}`} className="inline-flex items-center gap-2 text-[13px] font-black text-[#075cf7] hover:underline">
+                        View Full Ledger <ChevronRight size={14} />
+                      </Link>
+                    </div>
+                  </>
+                )}
+                {activeTab === "transactions" && (
+                  <div className="p-4">
+                    {billRows.length === 0 ? (
+                      <p className="py-8 text-center text-[12.5px] text-[#64748b]">No bills for this customer yet.</p>
+                    ) : (
+                      billRows.slice(0, 8).map((bill, index) => (
+                        <div key={String(bill.id ?? index)} className={cn("flex items-center gap-3 py-2.5", index < Math.min(billRows.length, 8) - 1 && "border-b border-[#eef2f8]")}>
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[#eef5ff] text-[#075cf7]"><FileText size={15} /></span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12.5px] font-black text-[#102347]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</p>
+                            <p className="text-[11px] text-[#94a3b8]">{formatShortDate(getDate(bill, ["createdAt", "created_at"]))}</p>
+                          </div>
+                          <span className="text-[13px] font-black text-[#102347]">{fmtMoney(getAmount(bill, ["grandTotal", "grand_total", "totalAmount", "total_amount"]))}</span>
+                          <span className={cn("rounded-[7px] px-2 py-[3px] text-[10.5px] font-black", money(bill.creditAmount) > 0 ? CHIP_TONES.red : CHIP_TONES.green)}>{money(bill.creditAmount) > 0 ? "Due" : "Paid"}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+                {activeTab === "payments" && (
+                  <div className="p-4">
+                    {paymentRows.length === 0 ? (
+                      <p className="py-8 text-center text-[12.5px] text-[#64748b]">No payments recorded yet.</p>
+                    ) : (
+                      paymentRows.slice(0, 8).map((payment, index) => (
+                        <div key={String(payment.id ?? index)} className={cn("flex items-center gap-3 py-2.5", index < Math.min(paymentRows.length, 8) - 1 && "border-b border-[#eef2f8]")}>
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-emerald-50 text-emerald-600"><Wallet size={15} /></span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-black text-[#102347]">{fmtMoney(getAmount(payment, ["amount", "paidAmount", "paid_amount"]))}</p>
+                            <p className="text-[11px] text-[#94a3b8]">{formatShortDate(getDate(payment, ["paidAt", "paid_at", "createdAt", "created_at"]))}</p>
+                          </div>
+                          <span className={cn("rounded-[7px] px-2 py-[3px] text-[10.5px] font-black", String(payment.mode ?? "").toLowerCase() === "upi" ? CHIP_TONES.violet : CHIP_TONES.green)}>{String(payment.mode ?? "cash").toUpperCase()}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+                {activeTab === "notes" && (
+                  <div className="p-4">
+                    <div className="rounded-[12px] border border-[#e8eef7] bg-[#fbfdff] p-4 text-[12.5px] leading-6 text-[#344668]">
+                      {selectedCustomer.notes || "No notes yet. Add payment preferences, delivery habits, or credit rules."}
+                      <p className="mt-3 text-[11px] font-semibold text-[#94a3b8]">Updated {formatShortDate(selectedCustomer.updatedAt ?? selectedCustomer.createdAt)}</p>
+                    </div>
+                    <Button variant="outline" className="mt-3 h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => openEdit(selectedCustomer)}><Pencil size={13} /> {selectedCustomer.notes ? "Edit note" : "Add note"}</Button>
+                  </div>
+                )}
               </div>
 
               <button
@@ -564,11 +675,26 @@ export default function CustomersPage() {
               </button>
 
               <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                <ActionTile icon={<FileText size={18} />} title="Statement" sub="Download / Print" />
-                <ActionTile icon={<MessageCircle size={18} />} title="WhatsApp" sub="Share Statement" />
-                <ActionTile icon={<MessageCircle size={18} />} title="SMS" sub="Send Reminder" />
-                <ActionTile icon={<Phone size={18} />} title="Call" sub="Quick Call" />
-                <ActionTile icon={<MoreHorizontal size={18} />} title="More" sub="More Options" />
+                <ActionTile icon={<FileText size={18} />} title="Statement" sub="Download / Print" onClick={printStatement} />
+                <ActionTile icon={<MessageCircle size={18} className="text-emerald-600" />} title="WhatsApp" sub="Share Statement" onClick={shareWhatsApp} />
+                <ActionTile icon={<MessageSquare size={18} />} title="SMS" sub="Send Reminder" onClick={sendSms} />
+                <ActionTile icon={<Phone size={18} />} title="Call" sub="Quick Call" onClick={quickCall} />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 text-center shadow-[0_10px_24px_rgba(15,35,80,0.045)] transition-all hover:-translate-y-0.5 hover:border-[#cfe0ff] hover:bg-[#f8fbff]">
+                      <span className="mx-auto grid h-10 w-10 place-items-center rounded-[12px] bg-[#eef5ff] text-[#075cf7]"><MoreHorizontal size={18} /></span>
+                      <span className="mt-2 block text-[12px] font-black text-[#102347]">More</span>
+                      <span className="mt-0.5 block text-[10.5px] font-medium text-[#64748b]">More Options</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem asChild><Link href={`/customers/${selectedCustomer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" /> Open full profile</span></Link></DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openEdit(selectedCustomer)}><Pencil size={14} className="mr-2" /> Edit customer</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(selectedCustomer.mobile ?? ""); toast({ title: "Mobile copied" }); }}><Phone size={14} className="mr-2" /> Copy mobile</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestDeleteCustomer(selectedCustomer)}><Trash2 size={14} className="mr-2" /> Delete customer</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </>
           )}
@@ -576,27 +702,45 @@ export default function CustomersPage() {
 
         <aside className="space-y-4">
           <RightCard title="Aging Summary">
-            <div className="flex items-center gap-4">
-              <div
-                className="grid h-28 w-28 shrink-0 place-items-center rounded-full"
-                style={{ background: "conic-gradient(#ef4444 0 42%, #f59e0b 42% 72%, #22c55e 72% 100%)" }}
-              >
-                <div className="grid h-[76px] w-[76px] place-items-center rounded-full bg-white text-center shadow-inner">
-                  <div>
-                    <p className="font-display text-[16px] font-black text-[#102347]">{fmtMoney(ageing?.total ?? 0)}</p>
-                    <p className="text-[10px] font-semibold text-[#64748b]">Total Due</p>
+            {(() => {
+              // Real conic stops from the ledger ageing buckets — not decorative.
+              const buckets = [
+                { value: Math.max(0, money(ageing?.zeroToSeven)), color: "#22c55e" },
+                { value: Math.max(0, money(ageing?.sevenToThirty)), color: "#f59e0b" },
+                { value: Math.max(0, money(ageing?.thirtyPlus)), color: "#ef4444" },
+              ];
+              const total = buckets.reduce((sum, b) => sum + b.value, 0);
+              let acc = 0;
+              const stops = buckets.filter((b) => b.value > 0).map((b) => {
+                const from = (acc / total) * 100;
+                acc += b.value;
+                const to = (acc / total) * 100;
+                return `${b.color} ${from}% ${to}%`;
+              }).join(", ");
+              return (
+                <div className="flex items-center gap-4">
+                  <div
+                    className="grid h-28 w-28 shrink-0 place-items-center rounded-full"
+                    style={{ background: total > 0 ? `conic-gradient(${stops})` : "conic-gradient(#e6ecf4 0 100%)" }}
+                  >
+                    <div className="grid h-[76px] w-[76px] place-items-center rounded-full bg-white text-center shadow-inner">
+                      <div>
+                        <p className="font-display text-[16px] font-black text-[#102347]">{fmtMoney(total)}</p>
+                        <p className="text-[10px] font-semibold text-[#64748b]">Total Due</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2 text-[12px]">
+                    <Legend color="bg-emerald-500" label="0 - 7 Days" value={fmtMoney(ageing?.zeroToSeven ?? 0)} />
+                    <Legend color="bg-amber-500" label="7 - 30 Days" value={fmtMoney(ageing?.sevenToThirty ?? 0)} />
+                    <Legend color="bg-rose-500" label="30+ Days" value={fmtMoney(ageing?.thirtyPlus ?? 0)} />
                   </div>
                 </div>
-              </div>
-              <div className="min-w-0 flex-1 space-y-2 text-[12px]">
-                <Legend color="bg-emerald-500" label="0 - 7 Days" value={fmtMoney(ageing?.zeroToSeven ?? 0)} />
-                <Legend color="bg-amber-500" label="7 - 30 Days" value={fmtMoney(ageing?.sevenToThirty ?? 0)} />
-                <Legend color="bg-rose-500" label="30+ Days" value={fmtMoney(ageing?.thirtyPlus ?? 0)} />
-              </div>
-            </div>
+              );
+            })()}
           </RightCard>
 
-          <RightCard title="Payment History" action="View all">
+          <RightCard title="Payment History" action="View all" onAction={() => setActiveTab("payments")}>
             {paymentRows.length === 0 ? (
               <p className="py-5 text-center text-[12px] text-[#64748b]">No payments recorded yet.</p>
             ) : (
@@ -608,7 +752,7 @@ export default function CustomersPage() {
                     <div key={String(payment.id ?? index)} className="flex items-center justify-between gap-3 text-[12px]">
                       <span className="text-[#52627e]">{formatShortDate(date)}</span>
                       <span className="font-black text-[#102347]">{fmtMoney(amount)}</span>
-                      <span className="rounded-[7px] bg-emerald-50 px-2 py-[3px] text-[10px] font-black text-emerald-700">{String(payment.mode ?? "cash").toUpperCase()}</span>
+                      <span className={cn("rounded-[7px] px-2 py-[3px] text-[10px] font-black", String(payment.mode ?? "").toLowerCase() === "upi" ? CHIP_TONES.violet : CHIP_TONES.green)}>{String(payment.mode ?? "cash").toUpperCase()}</span>
                     </div>
                   );
                 })}
@@ -616,7 +760,7 @@ export default function CustomersPage() {
             )}
           </RightCard>
 
-          <RightCard title="Recent Transactions" action="View all">
+          <RightCard title="Recent Transactions" action="View all" onAction={() => setActiveTab("transactions")}>
             {billRows.length === 0 ? (
               <p className="py-5 text-center text-[12px] text-[#64748b]">No recent bills yet.</p>
             ) : (
@@ -634,7 +778,7 @@ export default function CustomersPage() {
             )}
           </RightCard>
 
-          <RightCard title="Customer Notes" action="View all">
+          <RightCard title="Customer Notes" action="View all" onAction={() => setActiveTab("notes")}>
             <div className="rounded-[12px] border border-[#e8eef7] bg-[#fbfdff] p-3 text-[12px] leading-5 text-[#344668]">
               {selectedCustomer?.notes || "No notes yet. Add payment preferences, delivery habits, or credit rules from Edit."}
               <p className="mt-3 text-[11px] font-semibold text-[#94a3b8]">Updated {formatShortDate(selectedCustomer?.updatedAt ?? selectedCustomer?.createdAt)}</p>
@@ -706,9 +850,9 @@ function SummaryCell({ label, value, valueClass }: { label: string; value: strin
   );
 }
 
-function ActionTile({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) {
+function ActionTile({ icon, title, sub, onClick }: { icon: React.ReactNode; title: string; sub: string; onClick?: () => void }) {
   return (
-    <button className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 text-center shadow-[0_10px_24px_rgba(15,35,80,0.045)] transition-all hover:-translate-y-0.5 hover:border-[#cfe0ff] hover:bg-[#f8fbff]">
+    <button onClick={onClick} className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 text-center shadow-[0_10px_24px_rgba(15,35,80,0.045)] transition-all hover:-translate-y-0.5 hover:border-[#cfe0ff] hover:bg-[#f8fbff]">
       <span className="mx-auto grid h-10 w-10 place-items-center rounded-[12px] bg-[#eef5ff] text-[#075cf7]">{icon}</span>
       <span className="mt-2 block text-[12px] font-black text-[#102347]">{title}</span>
       <span className="mt-0.5 block text-[10.5px] font-medium text-[#64748b]">{sub}</span>
@@ -716,12 +860,12 @@ function ActionTile({ icon, title, sub }: { icon: React.ReactNode; title: string
   );
 }
 
-function RightCard({ title, action, children }: { title: string; action?: string; children: React.ReactNode }) {
+function RightCard({ title, action, onAction, children }: { title: string; action?: string; onAction?: () => void; children: React.ReactNode }) {
   return (
     <div className="rounded-[16px] border border-[#e6ecf4] bg-white p-4 shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="font-display text-[15px] font-black tracking-tight text-[#102347]">{title}</h3>
-        {action ? <button className="text-[12px] font-black text-[#075cf7] hover:underline">{action}</button> : null}
+        {action ? <button onClick={onAction} className="text-[12px] font-black text-[#075cf7] hover:underline">{action}</button> : null}
       </div>
       {children}
     </div>
