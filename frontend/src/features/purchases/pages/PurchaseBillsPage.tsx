@@ -263,7 +263,7 @@ export default function PurchaseBillsPage() {
   }
 
   return (
-    <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
+    <div className="min-h-full bg-white px-4 py-4">
       <div className="space-y-4">
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">

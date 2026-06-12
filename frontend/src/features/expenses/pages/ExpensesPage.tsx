@@ -132,7 +132,7 @@ export default function ExpensesPage() {
 
   return (
     <div
-      className={cn("min-h-full bg-[#f7f9fd] px-4 py-4", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
+      className={cn("min-h-full bg-white px-4 py-4", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
       style={panelOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
     >
       <div className="space-y-4">

@@ -118,7 +118,7 @@ export default function CategoriesPage() {
 
   return (
     <div
-      className={`min-h-full bg-[#f7f9fd] px-4 py-4 ${isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
+      className={`min-h-full bg-white px-4 py-4 ${isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
       style={dialogOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
     >
       {/* Stat cards */}
