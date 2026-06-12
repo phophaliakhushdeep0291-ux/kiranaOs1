@@ -46,7 +46,7 @@ interface BillingSummaryProps {
   subtotal: number;
   safeDiscount: number;
   setDiscount: Dispatch<SetStateAction<number>>;
-  onCouponApplied?: (offerId: string | null) => void;
+  onCouponApplied?: (offerId: string | null, discount: number) => void;
   grandTotal: number;
   paymentMode: PaymentSelection;
   setPaymentMode: Dispatch<SetStateAction<PaymentSelection>>;
@@ -155,7 +155,7 @@ export function BillingSummary({
       const res = await applyOffer(subtotal, couponCode.trim());
       if (res.applicable && res.discount > 0) {
         setDiscount(clampAmount(res.discount, 0, subtotal));
-        onCouponApplied?.(res.offerId ?? null);
+        onCouponApplied?.(res.offerId ?? null, res.discount);
         setCouponMsg({ ok: true, text: `${res.title ?? "Coupon"} applied — saved ₹${res.discount.toLocaleString("en-IN")}` });
       } else {
         setCouponMsg({ ok: false, text: res.reason ?? "Coupon not applicable to this bill" });

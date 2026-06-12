@@ -254,17 +254,17 @@ export default function Billing() {
     });
   }, [allowAdvancePayment, grandTotal, paidAmount, splitCashAmount]);
 
-  const appliedOfferIdRef = useRef<string | null>(null);
+  const appliedOfferRef = useRef<{ id: string; discount: number } | null>(null);
 
   const confirmBill = useConfirmBill({
     mutation: {
       onSuccess: (data: Bill) => {
         const billNo = data.billNumber ?? data.billNo ?? `PENDING-${Date.now()}`;
-        // Count the coupon redemption against its usage limit (fire-and-forget;
-        // offline redemptions are skipped rather than queued).
-        if (appliedOfferIdRef.current) {
-          void redeemOffer(appliedOfferIdRef.current).catch(() => undefined);
-          appliedOfferIdRef.current = null;
+        // Count the coupon redemption (usage + discount impact) — fire-and-forget;
+        // offline redemptions are skipped rather than queued.
+        if (appliedOfferRef.current) {
+          void redeemOffer(appliedOfferRef.current.id, appliedOfferRef.current.discount).catch(() => undefined);
+          appliedOfferRef.current = null;
         }
         const pendingPrint = pendingAutoPrintRef.current;
         const printableForSavedBill = pendingPrint
@@ -903,7 +903,7 @@ export default function Billing() {
         subtotal={subtotal}
         safeDiscount={safeDiscount}
         setDiscount={setDiscount}
-        onCouponApplied={(offerId) => { appliedOfferIdRef.current = offerId; }}
+        onCouponApplied={(offerId, discount) => { appliedOfferRef.current = offerId ? { id: offerId, discount } : null; }}
         grandTotal={grandTotal}
         paymentMode={paymentMode}
         setPaymentMode={setPaymentMode}

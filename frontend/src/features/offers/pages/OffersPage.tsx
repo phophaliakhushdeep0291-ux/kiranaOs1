@@ -67,15 +67,18 @@ export default function OffersPage() {
 
   const rows = offersQ.data ?? [];
   const activeCount = rows.filter((o) => offerStatus(o).label === "Active").length;
+  const scheduledCount = rows.filter((o) => offerStatus(o).label === "Scheduled").length;
   const redemptions = rows.reduce((s, o) => s + (o.usedCount || 0), 0);
+  const discountImpact = rows.reduce((s, o) => s + (o.discountGiven || 0), 0);
 
   return (
     <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
       <div className="mx-auto w-full max-w-[1200px] space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Kpi icon={<Ticket size={16} />} label="Active offers" value={String(activeCount)} tone="blue" />
-          <Kpi icon={<Tag size={16} />} label="Total offers" value={String(rows.length)} tone="violet" />
-          <Kpi icon={<BadgePercent size={16} />} label="Redemptions" value={String(redemptions)} tone="green" />
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <Kpi icon={<Ticket size={16} />} label="Active Offers" value={String(activeCount)} tone="blue" />
+          <Kpi icon={<Tag size={16} />} label="Scheduled Offers" value={String(scheduledCount)} tone="violet" />
+          <Kpi icon={<BadgePercent size={16} />} label="Coupon Redemptions" value={redemptions.toLocaleString("en-IN")} tone="green" />
+          <Kpi icon={<BadgePercent size={16} />} label="Discount Impact" value={inr(discountImpact)} tone="green" />
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -105,6 +108,7 @@ export default function OffersPage() {
                       <th className="px-5 py-2.5 text-left font-bold">Offer</th>
                       <th className="px-5 py-2.5 text-left font-bold">Discount</th>
                       <th className="px-5 py-2.5 text-left font-bold">Validity</th>
+                      <th className="px-5 py-2.5 text-left font-bold">Usage</th>
                       <th className="px-5 py-2.5 text-left font-bold">Status</th>
                       <th className="px-5 py-2.5 text-right font-bold">Actions</th>
                     </tr>
@@ -119,7 +123,17 @@ export default function OffersPage() {
                             {o.code ? <span className="mt-0.5 inline-block rounded-[6px] bg-[#0f1e3d] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-white">{o.code}</span> : <span className="text-[11px] text-[#94a3b8]">Auto-apply</span>}
                           </td>
                           <td className="px-5 py-3 font-bold text-[#102347]">{o.type === "flat" ? inr(o.value) : `${o.value}%`}{o.minBillAmount > 0 && <span className="block text-[10px] font-medium text-[#94a3b8]">min {inr(o.minBillAmount)}</span>}</td>
-                          <td className="px-5 py-3 text-[#52627e]">{o.validFrom || o.validTo ? `${fmtDate(o.validFrom)} – ${fmtDate(o.validTo)}` : "Always"}{o.usageLimit > 0 && <span className="block text-[10px] text-[#94a3b8]">{o.usedCount}/{o.usageLimit} used</span>}</td>
+                          <td className="px-5 py-3 text-[#52627e]">{o.validFrom || o.validTo ? `${fmtDate(o.validFrom)} – ${fmtDate(o.validTo)}` : "Always"}</td>
+                          <td className="px-5 py-3">
+                            {o.usageLimit > 0 ? (
+                              <div className="w-[110px]">
+                                <div className="flex justify-between text-[10px] font-bold text-[#52627e]"><span>{o.usedCount} / {o.usageLimit}</span><span>{Math.min(100, Math.round((o.usedCount / o.usageLimit) * 100))}%</span></div>
+                                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#eef2f8]"><div className="h-full rounded-full bg-[#0057ff]" style={{ width: `${Math.min(100, (o.usedCount / o.usageLimit) * 100)}%` }} /></div>
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-[#94a3b8]">{o.usedCount} used · no limit</span>
+                            )}
+                          </td>
                           <td className="px-5 py-3"><span className={`rounded-[7px] px-2 py-[3px] text-[11px] font-bold ${TONE_CLASS[st.tone]}`}>{st.label}</span></td>
                           <td className="px-5 py-3">
                             <div className="flex items-center justify-end gap-1.5">
