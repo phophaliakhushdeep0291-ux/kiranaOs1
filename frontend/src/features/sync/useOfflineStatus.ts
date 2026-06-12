@@ -4,9 +4,9 @@ import { readSyncQueueCounts, type SyncQueueCounts } from "@/features/sync/sync-
 import { probeBackendConnection, readBackendConnectionSnapshot } from "@/features/sync/backend-health";
 import { shouldPassSharedThrottle, shouldRunScheduledNetworkWork } from "@/lib/browser/multiTabCoordinator";
 
-const SYNC_INTERVAL_MS = 60_000;
-const BACKEND_STATUS_INTERVAL_MS = 20_000;
-const LOCAL_QUEUE_RECOVERY_THROTTLE_MS = 12_000;
+const SYNC_INTERVAL_MS = 18_000;
+const BACKEND_STATUS_INTERVAL_MS = 8_000;
+const LOCAL_QUEUE_RECOVERY_THROTTLE_MS = 3_000;
 const LOCAL_QUEUE_RECOVERY_THROTTLE_KEY = "kirana.sync.localQueueRecovery.lastRun";
 
 export function useOfflineStatus() {
@@ -70,7 +70,7 @@ export function useOfflineStatus() {
 
     const handleOnline = () => {
       if (shouldRunScheduledNetworkWork()) void probeBackendConnection({ force: true }).then(setBackendStatus);
-      scheduleSync(1_500);
+      scheduleSync(500);
     };
     const handleOffline = () => {
       void probeBackendConnection({ force: true }).then(setBackendStatus);
@@ -78,8 +78,8 @@ export function useOfflineStatus() {
     const handleQueueUpdated = () => {
       void refreshCount();
       if (navigator.onLine && document.visibilityState === "visible") {
-        scheduleSync(2_000);
-        window.setTimeout(() => void recoverLocalQueueIfNeeded(), 2_500);
+        scheduleSync(450);
+        window.setTimeout(() => void recoverLocalQueueIfNeeded(), 900);
       }
     };
     const handleBackendStatus = (event: Event) => {
@@ -114,9 +114,9 @@ export function useOfflineStatus() {
     void refreshCount();
     if (shouldRunScheduledNetworkWork()) void probeBackendConnection({ force: true }).then(setBackendStatus);
     if ((typeof navigator === "undefined" || navigator.onLine) && shouldRunScheduledNetworkWork()) {
-      window.setTimeout(() => void syncNow(), 2_000);
+      window.setTimeout(() => void syncNow(), 700);
     }
-    window.setTimeout(() => void recoverLocalQueueIfNeeded(), 2_400);
+    window.setTimeout(() => void recoverLocalQueueIfNeeded(), 1_000);
     const interval = window.setInterval(() => {
       void refreshCount();
       if (navigator.onLine && document.visibilityState === "visible" && shouldRunScheduledNetworkWork()) void syncNow();

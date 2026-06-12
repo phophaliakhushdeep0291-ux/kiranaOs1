@@ -179,7 +179,7 @@ describe("billing business rules", () => {
       actualAmount: 0,
       buyerPaidAmount: 0,
       payments: [],
-    }))).rejects.toThrow(/discount cannot exceed subtotal/i);
+    }))).rejects.toThrow(/discount cannot exceed bill total/i);
     expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
   });
 

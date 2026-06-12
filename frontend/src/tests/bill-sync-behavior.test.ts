@@ -277,6 +277,7 @@ import {
   dedupePaymentsForDisplay,
   reconcileSyncedBillFromPush,
 } from "@/features/sync/bill-reconciliation";
+import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 
 const mockedSyncPush = vi.mocked(syncPush);
 
@@ -562,5 +563,88 @@ describe("bill sync behavior", () => {
     expect(activeRows("inventory_movements")).toEqual([expect.objectContaining({ billId: bill.id, reference_id: bill.id })]);
     expect(scopedRows("sync_outbox")).toContainEqual(expect.objectContaining({ clientEventId: createBillOutbox?.clientEventId, operation_type: "CREATE_BILL", status: "FAILED", sync_status: "failed", retry_count: 1, entity_id: bill.id }));
     expect(scopedRows("sync_outbox").find((row) => row.clientEventId === createBillOutbox?.clientEventId)?.payload).toEqual(expect.objectContaining({ localBillId: bill.id }));
+  });
+
+  it("hardens older failed local bill rows after their server echo arrives from pull", async () => {
+    dbState.putInto("bills", {
+      id: "bill_local_first",
+      local_id: "bill_local_first",
+      billNo: "PENDING-FIRST",
+      customerName: "Ramesh",
+      grandTotal: 450,
+      paidAmount: 450,
+      creditAmount: 0,
+      createdAt: "2026-06-07T09:00:00.000Z",
+      updatedAt: "2026-06-07T09:00:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "failed",
+      status: "pending_sync",
+      deleted_at: null,
+    });
+    dbState.putInto("bills", {
+      id: "server_bill_first",
+      billNo: "KOS-2026-000101",
+      customerName: "Ramesh",
+      grandTotal: 450,
+      paidAmount: 450,
+      creditAmount: 0,
+      createdAt: "2026-06-07T09:44:00.000Z",
+      updatedAt: "2026-06-07T09:44:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "synced",
+      status: "completed",
+      deleted_at: null,
+    });
+    dbState.putInto("sync_outbox", {
+      op_id: "op_bill_local_first",
+      clientEventId: "op_bill_local_first",
+      idempotency_key: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_local_first",
+      entity_id: "bill_local_first",
+      entity_type: "bill",
+      operation_type: "CREATE_BILL",
+      type: "CREATE_BILL",
+      payload: { localBillId: "bill_local_first", customerName: "Ramesh", grandTotal: 450 },
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      client_created_at: "2026-06-07T09:00:00.000Z",
+      createdAt: 1,
+      retry_count: 1,
+      attempts: 1,
+      status: "FAILED",
+      sync_status: "failed",
+      next_retry_at: null,
+    });
+
+    const result = await hardenLocalFinancialData();
+
+    expect(result.billsMerged).toBe(1);
+    expect(activeRows("bills")).toEqual([
+      expect.objectContaining({
+        id: "server_bill_first",
+        local_id: "bill_local_first",
+        localBillId: "bill_local_first",
+        sync_status: "synced",
+      }),
+    ]);
+    expect(scopedRows("bills")).toContainEqual(
+      expect.objectContaining({
+        id: "bill_local_first",
+        merged_into_id: "server_bill_first",
+        deleted_at: expect.any(String),
+        sync_status: "synced",
+      }),
+    );
+    expect(scopedRows("id_mappings")).toContainEqual(
+      expect.objectContaining({
+        entity_type: "bill",
+        local_id: "bill_local_first",
+        server_id: "server_bill_first",
+      }),
+    );
   });
 });

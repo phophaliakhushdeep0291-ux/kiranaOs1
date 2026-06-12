@@ -11,7 +11,7 @@ import {
   normaliseLedgerType,
   type CustomerLedgerEntry,
 } from "@/features/ledger/accounting";
-import { dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
+import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 
 export interface DateRange {
@@ -141,92 +141,6 @@ export interface DailyClosingReport {
 type RecordLike = Record<string, unknown>;
 
 type LocalBill = Bill & RecordLike;
-
-function readBoolean(row: RecordLike, keys: string[]): boolean | undefined {
-  for (const key of keys) {
-    const value = row[key];
-    if (typeof value === "boolean") return value;
-    if (typeof value === "string") {
-      const normalized = value.trim().toLowerCase();
-      if (normalized === "true") return true;
-      if (normalized === "false") return false;
-    }
-  }
-  return undefined;
-}
-
-function readIdentity(row: RecordLike, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = row[key];
-    if (typeof value === "string" && value.trim().length > 0) return value.trim();
-    if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  }
-  return null;
-}
-
-function reportBillSyncedPriority(bill: LocalBill): number {
-  const explicit = readBoolean(bill, ["isSynced", "is_synced"]);
-  const status = String(bill.status ?? "").toLowerCase();
-  const syncStatus = String(bill.sync_status ?? "").toLowerCase();
-  if (explicit === true || syncStatus === "synced") return 4;
-  if (syncStatus === "failed" || syncStatus === "conflict") return 1;
-  if (explicit === false || status === "pending_sync" || syncStatus === "pending_sync" || syncStatus === "syncing") return 2;
-  return 3;
-}
-
-function reportBillContentSignature(bill: LocalBill): string | null {
-  const total = readNumber(
-    bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? bill.actualAmount,
-    NaN,
-  );
-  const createdAt = String(bill.createdAt ?? bill.created_at ?? "");
-  const createdTime = new Date(createdAt).getTime();
-  if (!Number.isFinite(total) || !Number.isFinite(createdTime)) return null;
-  const fiveMinuteBucket = Math.floor(createdTime / (5 * 60 * 1000));
-  const customer = String(
-    bill.customerId ?? bill.customer_id ?? bill.customerMobile ?? bill.customerName ?? "walk-in",
-  ).trim().toLowerCase();
-  const type = String(bill.billType ?? bill.bill_type ?? "sale").trim().toLowerCase();
-  return `${fiveMinuteBucket}|${type}|${customer}|${total.toFixed(2)}`;
-}
-
-function reportBillIdentityKeys(bill: LocalBill): string[] {
-  return [
-    readIdentity(bill, ["id"]),
-    readIdentity(bill, ["server_id", "serverId"]),
-    readIdentity(bill, ["local_id", "localId"]),
-    readIdentity(bill, ["merged_into_id", "mergedIntoId"]),
-    readIdentity(bill, ["localBillId", "local_bill_id"]),
-    readIdentity(bill, ["clientBillId", "client_bill_id"]),
-    readIdentity(bill, ["idempotencyKey", "idempotency_key"]),
-    readIdentity(bill, ["uniqueBillId", "unique_bill_id"]),
-  ].filter((key): key is string => Boolean(key));
-}
-
-function dedupeBillsForDashboardReports(bills: LocalBill[]): LocalBill[] {
-  const sorted = [...bills]
-    .filter((bill) => !isDeleted(bill))
-    .sort((a, b) => {
-      const priority = reportBillSyncedPriority(b) - reportBillSyncedPriority(a);
-      if (priority !== 0) return priority;
-      return String(b.updatedAt ?? b.updated_at ?? b.createdAt ?? b.created_at ?? "")
-        .localeCompare(String(a.updatedAt ?? a.updated_at ?? a.createdAt ?? a.created_at ?? ""));
-    });
-  const seenKeys = new Set<string>();
-  const seenSyncedContent = new Set<string>();
-  const picked: LocalBill[] = [];
-  for (const bill of sorted) {
-    const keys = reportBillIdentityKeys(bill);
-    if (keys.some((key) => seenKeys.has(key))) continue;
-    const signature = reportBillContentSignature(bill);
-    const isSynced = reportBillSyncedPriority(bill) >= 3;
-    if (!isSynced && signature && seenSyncedContent.has(signature)) continue;
-    keys.forEach((key) => seenKeys.add(key));
-    if (isSynced && signature) seenSyncedContent.add(signature);
-    picked.push(bill);
-  }
-  return picked.sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")));
-}
 
 type LocalPayment = RecordLike & {
   id?: string;
@@ -1232,7 +1146,7 @@ export async function buildLocalReportSnapshot(
     offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
   ]);
 
-  const bills = dedupeBillsForDashboardReports(filterRowsForCurrentScope(billsRaw));
+  const bills = dedupeBillsForDisplay(filterRowsForCurrentScope(billsRaw)) as LocalBill[];
   const billItems = filterRowsForCurrentScope(billItemsRaw);
   const payments = dedupePaymentsForDisplay(filterRowsForCurrentScope(paymentsRaw));
   // Dashboard/reports must use the same deduped ledger view as the Udhar page.

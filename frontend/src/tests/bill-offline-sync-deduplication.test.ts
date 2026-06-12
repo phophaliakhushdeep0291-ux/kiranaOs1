@@ -94,4 +94,54 @@ describe("offline bill sync deduplication", () => {
     expect(rows[0].id).toBe("server_bill_270");
   });
 
+  it("dedupes every failed local bill when multiple older retries later receive server echoes", () => {
+    const rows = dedupeBillsForDisplay([
+      {
+        id: "bill_local_first",
+        billNo: "PENDING-FIRST",
+        customerName: "Khushdeep",
+        grandTotal: 450,
+        paidAmount: 450,
+        creditAmount: 0,
+        createdAt: "2026-06-07T09:00:00.000Z",
+        sync_status: "failed",
+        status: "pending_sync",
+      },
+      {
+        id: "bill_local_second",
+        billNo: "PENDING-SECOND",
+        customerName: "Khushdeep",
+        grandTotal: 900,
+        paidAmount: 900,
+        creditAmount: 0,
+        createdAt: "2026-06-07T09:02:00.000Z",
+        sync_status: "failed",
+        status: "pending_sync",
+      },
+      {
+        id: "server_bill_first",
+        billNo: "KOS-2026-000101",
+        customerName: "Khushdeep",
+        grandTotal: 450,
+        paidAmount: 450,
+        creditAmount: 0,
+        createdAt: "2026-06-07T09:44:00.000Z",
+        sync_status: "synced",
+      },
+      {
+        id: "server_bill_second",
+        billNo: "KOS-2026-000102",
+        customerName: "Khushdeep",
+        grandTotal: 900,
+        paidAmount: 900,
+        creditAmount: 0,
+        createdAt: "2026-06-07T09:46:00.000Z",
+        sync_status: "synced",
+      },
+    ]) as Array<Record<string, unknown>>;
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.id).sort()).toEqual(["server_bill_first", "server_bill_second"]);
+  });
+
 });
