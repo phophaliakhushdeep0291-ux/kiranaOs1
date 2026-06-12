@@ -77,22 +77,22 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 0 0% 100%;
+  --background: 214 100% 99%;
   --foreground: 222 47% 10%;
-  --border: 214 24% 88%;
+  --border: 216 34% 90%;
 
   --card: 0 0% 100%;
   --card-foreground: 222 47% 10%;
-  --card-border: 214 20% 88%;
+  --card-border: 216 34% 90%;
 
-  --sidebar: 222 47% 11%;
+  --sidebar: 217 88% 9%;
   --sidebar-foreground: 0 0% 97%;
-  --sidebar-border: 220 50% 8%;
-  --sidebar-primary: 221 83% 53%;
+  --sidebar-border: 218 72% 13%;
+  --sidebar-primary: 220 98% 52%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 42% 19%;
+  --sidebar-accent: 217 61% 15%;
   --sidebar-accent-foreground: 0 0% 97%;
-  --sidebar-ring: 221 83% 53%;
+  --sidebar-ring: 220 98% 52%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
@@ -101,13 +101,13 @@
   --primary: 221 83% 53%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 160 18% 94%;
+  --secondary: 215 45% 96%;
   --secondary-foreground: 222 47% 11%;
 
-  --muted: 165 16% 94%;
-  --muted-foreground: 220 8% 46%;
+  --muted: 216 44% 96%;
+  --muted-foreground: 221 18% 45%;
 
-  --accent: 190 32% 92%;
+  --accent: 216 100% 96%;
   --accent-foreground: 222 47% 11%;
 
   --destructive: 0 84% 60%;
@@ -126,14 +126,14 @@
   --app-font-display: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: Menlo, monospace;
-  --radius: .5rem;
+  --radius: .625rem;
 
   --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.04);
   --shadow-xs: 0px 1px 3px 0px rgba(0,0,0,0.06);
-  --shadow-sm: 0px 1px 3px 0px rgba(0,0,0,0.06), 0px 1px 2px -1px rgba(0,0,0,0.04);
-  --shadow: 0px 2px 4px 0px rgba(0,0,0,0.07), 0px 1px 2px -1px rgba(0,0,0,0.04);
-  --shadow-md: 0px 4px 6px -1px rgba(0,0,0,0.08), 0px 2px 4px -2px rgba(0,0,0,0.04);
-  --shadow-lg: 0px 10px 15px -3px rgba(0,0,0,0.08), 0px 4px 6px -4px rgba(0,0,0,0.04);
+  --shadow-sm: 0px 8px 24px rgba(15,35,80,0.045);
+  --shadow: 0px 10px 30px rgba(15,35,80,0.055);
+  --shadow-md: 0px 14px 38px rgba(15,35,80,0.075);
+  --shadow-lg: 0px 20px 48px rgba(15,35,80,0.10);
   --shadow-xl: 0px 20px 25px -5px rgba(0,0,0,0.08), 0px 8px 10px -6px rgba(0,0,0,0.04);
   --shadow-2xl: 0px 25px 50px -12px rgba(0,0,0,0.18);
 
@@ -286,8 +286,8 @@
 @layer components {
   .app-shell {
     background:
-      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--muted) / 0.42) 100%),
-      linear-gradient(90deg, hsl(var(--primary) / 0.035), transparent 34%, hsl(var(--chart-2) / 0.035));
+      radial-gradient(circle at 82% 0%, hsl(var(--primary) / 0.055), transparent 30rem),
+      linear-gradient(180deg, #ffffff 0%, #f7fbff 58%, #f3f8ff 100%);
   }
 
   .app-scrollbar {
@@ -327,35 +327,35 @@
   }
 
   .app-card {
-    @apply rounded-xl border bg-card text-card-foreground shadow-sm;
+    @apply rounded-[14px] border border-[#e6ecf4] bg-white text-card-foreground shadow-sm;
   }
 
   .app-card-soft {
-    @apply rounded-xl border bg-card/92 text-card-foreground shadow-sm backdrop-blur;
+    @apply rounded-[14px] border border-[#e6ecf4] bg-white/95 text-card-foreground shadow-sm backdrop-blur;
   }
 
   .premium-panel {
-    @apply rounded-xl border bg-card text-card-foreground shadow-sm ring-1 ring-black/[0.04] transition-shadow duration-200;
+    @apply rounded-[14px] border border-[#e6ecf4] bg-white text-card-foreground shadow-sm ring-1 ring-black/[0.02] transition-all duration-200;
   }
 
   .premium-panel-muted {
-    @apply rounded-xl border bg-card/92 text-card-foreground shadow-sm backdrop-blur ring-1 ring-black/[0.04];
+    @apply rounded-[14px] border border-[#e6ecf4] bg-white/95 text-card-foreground shadow-sm backdrop-blur ring-1 ring-black/[0.02];
   }
 
   .premium-hero {
-    @apply overflow-hidden rounded-xl border bg-card shadow-sm;
+    @apply overflow-hidden rounded-[16px] border border-[#dce7f5] bg-white shadow-sm;
     background:
       linear-gradient(135deg, hsl(var(--primary) / 0.08), transparent 36%),
       linear-gradient(315deg, hsl(var(--chart-2) / 0.07), transparent 42%),
-      hsl(var(--card));
+      #ffffff;
   }
 
   .premium-kpi {
-    @apply rounded-xl border bg-background/82 p-3 shadow-xs ring-1 ring-black/[0.04];
+    @apply rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-sm ring-1 ring-black/[0.02];
   }
 
   .premium-action {
-    @apply flex min-h-11 items-center justify-center gap-2 rounded-xl border bg-card px-3 text-sm font-semibold shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent hover:shadow-md active:translate-y-0;
+    @apply flex min-h-11 items-center justify-center gap-2 rounded-[10px] border border-[#dce7f5] bg-white px-3 text-sm font-semibold shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:bg-[#f4f8ff] hover:text-primary hover:shadow-md active:translate-y-0;
   }
 
   .app-section-title {
@@ -387,7 +387,7 @@
   }
 
   .billing-grid-button {
-    @apply min-h-[92px] rounded-lg border bg-card p-3 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary hover:bg-primary/5 hover:shadow-sm active:translate-y-0;
+    @apply min-h-[92px] rounded-[12px] border border-[#e3eaf3] bg-white p-3 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary hover:bg-primary/5 hover:shadow-sm active:translate-y-0;
   }
 
   .billing-summary-panel {
@@ -395,11 +395,11 @@
   }
 
   .table-card {
-    @apply overflow-hidden rounded-lg border bg-card shadow-sm;
+    @apply overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-sm;
   }
 
   .pos-filter-card {
-    @apply rounded-lg border bg-card p-3 shadow-sm;
+    @apply rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-sm;
   }
 
   .pos-filter-grid {
@@ -513,7 +513,7 @@
 
 @layer components {
   .pos-filter-search-box {
-    @apply flex h-12 items-center gap-3 rounded-lg border bg-background px-4 shadow-none transition-colors focus-within:ring-2 focus-within:ring-ring;
+    @apply flex h-12 items-center gap-3 rounded-[12px] border border-[#e3eaf3] bg-[#f8fafd] px-4 shadow-none transition-colors focus-within:border-primary focus-within:bg-white focus-within:ring-2 focus-within:ring-ring/20;
   }
 
   .pos-filter-input-clean {

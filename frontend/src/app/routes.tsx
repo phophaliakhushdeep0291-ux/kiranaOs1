@@ -17,6 +17,8 @@ const CustomerDetailPage = lazy(() => import("@/features/customers/pages/Custome
 const Inventory = lazy(() => import("@/features/inventory/pages/InventoryPage"));
 const StockIn = lazy(() => import("@/features/inventory/pages/StockInPage"));
 const StockOut = lazy(() => import("@/features/inventory/pages/StockOutPage"));
+const Adjustments = lazy(() => import("@/features/inventory/pages/AdjustmentsPage"));
+const StockTransfers = lazy(() => import("@/features/inventory/pages/StockTransfersPage"));
 const Categories = lazy(() => import("@/features/inventory/pages/CategoriesPage"));
 const PurchaseBillsPage = lazy(() => import("@/features/purchases/pages/PurchaseBillsPage"));
 const Udhar = lazy(() => import("@/features/ledger/pages/UdharPage"));
@@ -134,6 +136,12 @@ export function AppRoutes() {
       </Route>
       <Route path="/inventory/stock-out">
         <ProtectedRoute component={StockOut} />
+      </Route>
+      <Route path="/inventory/adjustments">
+        <ProtectedRoute component={Adjustments} />
+      </Route>
+      <Route path="/inventory/stock-transfers">
+        <ProtectedRoute component={StockTransfers} />
       </Route>
       <Route path="/inventory">
         <ProtectedRoute component={Inventory} />

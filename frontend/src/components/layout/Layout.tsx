@@ -21,8 +21,8 @@ import {
   Menu,
   Package,
   PercentSquare,
-  ReceiptText,
   RefreshCw,
+  Search,
   Settings,
   ShoppingCart,
   TrendingUp,
@@ -49,26 +49,32 @@ import {
 const SIDEBAR_WIDTH_KEY = "kirana:sidebar-width-v3";
 const SIDEBAR_COLLAPSED_KEY = "kirana:sidebar-collapsed-v2";
 const SIDEBAR_GROUPS_KEY = "kirana:sidebar-groups-v2";
-const DEFAULT_WIDTH = 242;
-const MIN_WIDTH = 220;
+const DEFAULT_WIDTH = 256;
+const MIN_WIDTH = 232;
 const MAX_WIDTH = 320;
-const COLLAPSED_WIDTH = 72;
+const COLLAPSED_WIDTH = 76;
 
 // ── page title map ────────────────────────────────────────────────────────────
 
 const PAGE_SUBTITLES: Record<string, string> = {
   "/billing": "Create fast bills and collect payments",
-  "/dashboard": "Your business at a glance",
-  "/products": "Manage your product catalog",
+  "/dashboard": "Live sales, cash, stock, and sync health",
+  "/bills": "View, manage, and track all your sales bills",
+  "/products": "Manage your product catalog, pricing and stock",
   "/categories": "Organise products into categories",
-  "/inventory": "Track stock levels",
-  "/inventory/stock-in": "Items currently in stock",
-  "/inventory/stock-out": "Items that are out of stock",
-  "/customers": "Customers and credit ledger",
-  "/reports": "Sales insights and analytics",
+  "/inventory": "Manage stock, movements, and purchase flow",
+  "/inventory/stock-in": "Add incoming stock to inventory",
+  "/inventory/stock-out": "Report outgoing stock from inventory",
+  "/inventory/adjustments": "Adjust inventory quantities and review corrections",
+  "/inventory/stock-transfers": "Transfer stock between locations",
+  "/purchase-bills": "Manage purchase bills, suppliers, and purchase dues",
+  "/customers": "Track credit, payments, and customer trust",
+  "/reports": "Track performance, trends, and data-driven decisions",
+  "/daily-closing": "Cash drawer and daily business summary",
   "/expenses": "Track shop expenses and outflows",
   "/offers": "Create coupons and discounts for billing",
   "/settings": "Manage your store, preferences, and system configurations",
+  "/sync-status": "Monitor cloud backup and local-first safety",
 };
 
 const PAGE_TITLES: Record<string, string> = {
@@ -80,10 +86,12 @@ const PAGE_TITLES: Record<string, string> = {
   "/inventory": "Inventory",
   "/inventory/stock-in": "Stock In",
   "/inventory/stock-out": "Stock Out",
+  "/inventory/adjustments": "Adjustments",
+  "/inventory/stock-transfers": "Stock Transfers",
   "/purchase-bills": "Purchases",
   "/customers": "Customers / Udhar",
   "/udhar": "Udhar",
-  "/reports": "Reports",
+  "/reports": "Reports & Analytics",
   "/daily-closing": "Daily Closing",
   "/expenses": "Expenses",
   "/offers": "Offers & Discounts",
@@ -169,12 +177,6 @@ const MOBILE_NAV: { href: string; label: string; Icon: React.ElementType }[] = [
   { href: "/customers", label: "Customers", Icon: Users },
   { href: "/reports", label: "Reports", Icon: BarChart3 },
   { href: "/dashboard", label: "More", Icon: LayoutDashboard },
-];
-
-const TOPBAR_SHORTCUTS: { href: string; label: string; Icon: React.ElementType }[] = [
-  { href: "/billing", label: "Bill", Icon: ShoppingCart },
-  { href: "/bills", label: "Bills", Icon: ReceiptText },
-  { href: "/reports", label: "Reports", Icon: BarChart3 },
 ];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -308,10 +310,13 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xl will-change-[width] lg:flex lg:h-screen lg:flex-col",
+          "fixed inset-y-0 left-0 z-30 hidden border-r border-white/10 bg-sidebar text-sidebar-foreground shadow-[10px_0_40px_rgba(3,18,43,0.20)] will-change-[width] lg:flex lg:h-screen lg:flex-col",
           isResizing ? "transition-none" : "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
         )}
-        style={{ width: "var(--app-sidebar-width)" }}
+        style={{
+          width: "var(--app-sidebar-width)",
+          background: "radial-gradient(circle at 20% 0%, rgba(0,91,255,0.22), transparent 18rem), linear-gradient(180deg,#061b38 0%,#04152d 62%,#031024 100%)",
+        }}
       >
         {/* resize handle */}
         <button type="button" aria-label="Resize sidebar" disabled={collapsed} onPointerDown={handleResize}
@@ -320,15 +325,17 @@ export function Layout({ children }: { children: ReactNode }) {
         </button>
 
         {/* Logo */}
-        <div className={cn("flex items-center border-b border-sidebar-border", collapsed ? "flex-col gap-3 p-3" : "gap-3 p-4")}>
-          <Link href="/dashboard" className="flex shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sidebar-primary text-white shadow-lg ring-2 ring-white/15">
+        <div className={cn("flex items-center border-b border-white/10", collapsed ? "flex-col gap-3 p-3" : "gap-3 px-4 py-5")}>
+          <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[#075cf7] text-white shadow-[0_14px_28px_rgba(0,91,255,0.30)] ring-1 ring-white/20">
               <ShoppingCart size={20} aria-hidden="true" />
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <div className="font-display text-lg font-black leading-none tracking-tight text-white">KiranaOS</div>
-                <div className="mt-0.5 text-[10px] font-medium leading-none text-sidebar-foreground/50">{btDef.navConfig.tagline}</div>
+                <div className="font-display text-[25px] font-black leading-none tracking-tight text-white">
+                  Kirana<span className="text-[#2b7cff]">OS</span>
+                </div>
+                <div className="mt-1 truncate text-[11px] font-medium leading-none text-white/68">{btDef.navConfig.tagline}</div>
               </div>
             )}
           </Link>
@@ -341,7 +348,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav aria-label="Main navigation" className={cn("app-scrollbar flex-1 overflow-y-auto py-3", collapsed ? "space-y-1 px-2" : "space-y-0.5 px-3")}>
+        <nav aria-label="Main navigation" className={cn("app-scrollbar flex-1 overflow-y-auto py-4", collapsed ? "space-y-1 px-2" : "space-y-1 px-3")}>
           {NAV.map(item =>
             item.kind === "link"
               ? <SidebarLink key={item.href} item={item} loc={loc} collapsed={collapsed} labelOverride={labelOverrides[item.href]} />
@@ -350,7 +357,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </nav>
 
         {/* Footer */}
-        <div className={cn("border-t border-sidebar-border", collapsed ? "p-2 space-y-1.5" : "p-3 space-y-2")}>
+        <div className={cn("border-t border-white/10", collapsed ? "p-2 space-y-1.5" : "p-4 space-y-3")}>
           {collapsed ? (
             <>
               <button type="button" onClick={() => setCollapsed(false)} aria-label="Expand sidebar"
@@ -365,7 +372,7 @@ export function Layout({ children }: { children: ReactNode }) {
           ) : (
             <>
               {/* Sync status */}
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="rounded-[14px] border border-white/12 bg-white/[0.055] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                 <div className="flex items-center gap-2">
                   <span className={cn("h-2 w-2 shrink-0 rounded-full", connectionDotClass, !isOnline && "animate-pulse")} />
                   <span className="text-sm font-semibold text-white">
@@ -374,21 +381,21 @@ export function Layout({ children }: { children: ReactNode }) {
                   {attentionCount > 0 && <span className="ml-auto text-[11px] font-bold text-amber-300">{attentionCount}</span>}
                 </div>
                 <p className="mt-1 text-[11px] text-sidebar-foreground/50">{connectionDetail}</p>
-                <Link href="/sync-status" className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-sidebar-primary hover:text-white transition-colors">
-                  <RefreshCw size={10} aria-hidden="true" /> Review sync
+                <Link href="/sync-status" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-[10px] border border-white/12 bg-white/5 text-[12px] font-bold text-white transition-colors hover:border-[#075cf7]/70 hover:bg-[#075cf7]">
+                  <RefreshCw size={13} aria-hidden="true" /> Sync Now
                 </Link>
               </div>
 
               {/* Store + logout */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-white/8">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-white">
+                  <button className="flex w-full items-center gap-3 rounded-[14px] border border-white/10 bg-white/[0.045] px-3 py-3 text-sm transition-colors hover:bg-white/8">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#075cf7] text-xs font-bold text-white ring-2 ring-white/15">
                       {initials(storeName)}
                     </div>
                     <div className="min-w-0 flex-1 text-left">
                       <div className="truncate text-sm font-semibold text-white">{storeName}</div>
-                      <div className="truncate text-[10px] text-sidebar-foreground/50">{user?.email ?? "Owner"}</div>
+                      <div className="truncate text-[11px] text-white/55">{storeLocation}</div>
                     </div>
                     <ChevronDown size={13} className="shrink-0 text-sidebar-foreground/40" aria-hidden="true" />
                   </button>
@@ -415,40 +422,29 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
       >
         {/* Desktop topbar */}
-        <header className="sticky top-0 z-40 hidden min-h-[64px] items-center gap-3 border-b border-border/80 bg-background/90 px-4 backdrop-blur-xl lg:flex">
+        <header className="sticky top-0 z-40 hidden min-h-[76px] items-center gap-4 border-b border-[#e6ecf4] bg-white/94 px-6 shadow-[0_1px_0_rgba(15,35,80,0.02)] backdrop-blur-xl lg:flex">
           <button
             type="button"
             aria-label="Toggle sidebar"
             onClick={() => setCollapsed((c) => !c)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground/70 shadow-sm transition-colors hover:border-primary/40 hover:text-primary"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[#0f2147] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary"
           >
             <Menu size={19} aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[16px] font-black tracking-tight text-foreground leading-none">{getPageTitle(loc)}</h1>
+            <h1 className="truncate font-display text-[20px] font-black tracking-tight text-[#0f2147] leading-none">{getPageTitle(loc)}</h1>
             {getPageSubtitle(loc) && (
-              <p className="mt-1 truncate text-[12px] font-medium leading-none text-muted-foreground">{getPageSubtitle(loc)}</p>
+              <p className="mt-1.5 truncate text-[12px] font-medium leading-none text-[#64748b]">{getPageSubtitle(loc)}</p>
             )}
           </div>
 
-          <div className="hidden items-center gap-1 xl:flex">
-            {TOPBAR_SHORTCUTS.map(({ href, label, Icon }) => {
-              const active = isActive(loc, href);
-              return (
-                <Link key={href} href={href}>
-                  <div className={cn(
-                    "flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition-colors",
-                    active ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-primary"
-                  )}>
-                    <Icon size={14} aria-hidden="true" />
-                    {label}
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="hidden h-11 w-[320px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-[#f8fbff] px-3 text-[#64748b] shadow-sm xl:flex">
+            <Search size={17} aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">Search products, bills, customers...</span>
+            <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
           </div>
 
-          <div className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold", connectionBadgeClass)}>
+          <div className={cn("flex h-10 min-w-[126px] items-center justify-center gap-1.5 rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
             {connectionLabel}
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
@@ -458,8 +454,8 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"
-              className="relative flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
-              <Bell size={17} aria-hidden="true" />
+              className="relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[#0f2147] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary">
+              <Bell size={18} aria-hidden="true" />
               {attentionCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
                   {attentionCount}
@@ -470,12 +466,12 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2.5 rounded-xl border bg-background px-2.5 py-1.5 text-sm transition-colors hover:border-primary/40">
+              <button className="flex items-center gap-3 rounded-[14px] border border-[#dfe8f5] bg-white px-2.5 py-2 text-sm shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
                 <div className="hidden text-right xl:block">
-                  <div className="text-[13px] font-extrabold leading-tight text-foreground">{storeName}</div>
-                  <div className="text-[11px] leading-tight text-muted-foreground">{storeLocation}</div>
+                  <div className="text-[13px] font-extrabold leading-tight text-[#0f2147]">{storeName}</div>
+                  <div className="text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
                 </div>
-                <div className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[#075cf7] text-sm font-bold text-white ring-2 ring-[#e7f0ff]">
                   {initials(storeName)}
                 </div>
                 <ChevronDown size={13} className="text-muted-foreground" aria-hidden="true" />
@@ -516,7 +512,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
         )}
 
-        <main id="main-content" className="app-scrollbar min-w-0 flex-1 overflow-auto pb-20 lg:pb-0">
+        <main id="main-content" className="app-scrollbar min-w-0 flex-1 overflow-auto bg-[#f7fbff] pb-20 lg:pb-0">
           {children}
         </main>
 
@@ -559,21 +555,21 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
         aria-current={active ? "page" : undefined}
         title={collapsed ? label : undefined}
         className={cn(
-          "group flex min-h-[42px] items-center rounded-lg text-sm font-medium transition-all duration-150",
+          "group flex min-h-[44px] items-center rounded-[10px] text-[14px] font-semibold transition-all duration-150",
           collapsed ? "justify-center px-0" : "gap-3 px-3",
           active
-            ? "bg-sidebar-primary text-white shadow-md shadow-sidebar-primary/30"
+            ? "bg-[#075cf7] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]"
             : item.emphasis
               ? "text-white/90 hover:bg-white/10 hover:text-white"
-              : "text-sidebar-foreground/70 hover:bg-white/8 hover:text-white"
+              : "text-white/76 hover:bg-white/8 hover:text-white"
         )}
       >
-        <item.Icon size={17} aria-hidden="true" />
+        <item.Icon size={18} aria-hidden="true" />
         {!collapsed && (
           <>
             <span className="flex-1 truncate">{label}</span>
             {item.badge && !active && (
-              <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-sidebar-foreground/50">
+              <span className="rounded-[6px] bg-[#075cf7] px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
                 {item.badge}
               </span>
             )}
@@ -594,9 +590,9 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
     return (
       <Link href={firstHref}>
         <div title={item.label}
-          className={cn("flex h-[42px] items-center justify-center rounded-lg transition-all duration-150",
-            groupActive ? "bg-sidebar-primary text-white shadow-md shadow-sidebar-primary/30" : "text-sidebar-foreground/70 hover:bg-white/8 hover:text-white")}>
-          <item.Icon size={17} aria-hidden="true" />
+          className={cn("flex h-[44px] items-center justify-center rounded-[10px] transition-all duration-150",
+            groupActive ? "bg-[#075cf7] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]" : "text-white/76 hover:bg-white/8 hover:text-white")}>
+          <item.Icon size={18} aria-hidden="true" />
         </div>
       </Link>
     );
@@ -605,16 +601,16 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
   return (
     <div>
       <button type="button" onClick={onToggle}
-        className={cn("group flex min-h-[42px] w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-150",
-          groupActive ? "bg-white/10 text-white" : "text-sidebar-foreground/70 hover:bg-white/8 hover:text-white")}>
-        <item.Icon size={17} aria-hidden="true" />
+        className={cn("group flex min-h-[44px] w-full items-center gap-3 rounded-[10px] px-3 text-[14px] font-semibold transition-all duration-150",
+          groupActive ? "bg-white/10 text-white" : "text-white/76 hover:bg-white/8 hover:text-white")}>
+        <item.Icon size={18} aria-hidden="true" />
         <span className="flex-1 truncate text-left">{item.label}</span>
         <ChevronDown size={13} aria-hidden="true"
           className={cn("shrink-0 text-sidebar-foreground/35 transition-transform duration-200", expanded && "rotate-180")} />
       </button>
 
       {expanded && (
-        <div className="mt-0.5 mb-1 space-y-0.5 pl-[42px]">
+        <div className="mb-1 mt-1 space-y-0.5 pl-[42px]">
           {item.children.map(child => {
             const active = isActive(loc, child.href);
             const label = labelOverrides[child.href] ?? child.label;

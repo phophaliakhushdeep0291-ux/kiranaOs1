@@ -58,9 +58,9 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
     categories: ["grocery", "dairy", "beverages", "snacks", "household", "personal_care", "stationery", "other"],
     primaryUnits: ["piece", "kg", "gram", "litre", "ml", "packet", "box", "dozen"],
     voiceExample: "name aata, cost 40, selling 45, stock 10 kg, category grocery",
-    defaultAccent: "emerald",
+    defaultAccent: "blue",
     dashboardVariant: "general",
-    navConfig: { billing: "Billing", products: "Products", inventory: "Inventory", udhar: "Udhar", tagline: "Kirana Counter" },
+    navConfig: { billing: "Billing", products: "Products", inventory: "Inventory", udhar: "Customers / Udhar", tagline: "Smart POS for Modern Stores" },
     dashboard: {
       heroTitle: "Today's counter",
       heroSubtitle: "Sales, cash, udhar, and stock at a glance.",
