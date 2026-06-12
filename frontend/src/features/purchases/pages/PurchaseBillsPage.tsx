@@ -17,7 +17,7 @@ import {
   type SupplierDueRow,
 } from "@/features/finance/services/FinancialAggregationService";
 import { hydratePurchaseHistoryFromSyncPull } from "@/features/sync/cloud-hydration";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 import { deletePurchaseLocal, markPurchasePaidLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
 import { createSupplierLocalFirst } from "@/features/suppliers/local-actions";

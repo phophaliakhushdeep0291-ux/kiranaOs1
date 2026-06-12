@@ -1,23 +1,12 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { AUTH_SESSION_EXPIRED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type User, type Shop } from "@/lib/api/client";
-import { clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, removeAuthValue, saveAuthSession, setAuthValue } from "@/lib/storage/auth-storage";
+import { AUTH_SESSION_EXPIRED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type Shop, type User } from "@/lib/api/client";
+import { clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
 import { writeAuditLog } from "@/features/audit-logs/local-actions";
 import { activateDevice } from "@/features/devices/api";
 import { ensureCurrentDeviceRegistered, writeOfflineLicenseToken } from "@/features/devices/license";
 import { getOfflineScope } from "@/lib/offline/context";
-
-interface AuthContextType {
-  user: User | null;
-  shop: Shop | null;
-  accessToken: string | null;
-  isLoading: boolean;
-  login: (token: string | undefined | null, refresh: string | undefined | null, user: User, shop?: Shop | null) => void;
-  logout: () => Promise<void>;
-  isAuthenticated: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext } from "./auth-context";
 
 function persistAuth(data: AuthResponse) {
   const token = data.accessToken || data.token;
@@ -224,12 +213,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
 }

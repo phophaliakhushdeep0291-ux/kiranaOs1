@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 import { runSyncCycle } from "@/features/sync/engine";
 import { hydrateFromBackendSnapshot } from "@/features/sync/cloud-hydration";
 import { probeBackendConnection } from "@/features/sync/backend-health";

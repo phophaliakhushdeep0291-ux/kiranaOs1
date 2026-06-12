@@ -9,9 +9,11 @@ describe("bill history connection badge", () => {
     // The badge must branch on live connection state, not render a fixed label.
     expect(source).toContain("isOnline\n    ?");
     expect(source).toContain("isBrowserOnline");
+    expect(source).toContain("backendStatus");
     expect(source).toContain("isSyncing ?");
     expect(source).toContain("Backing up");
-    expect(source).toContain("Reconnecting");
+    expect(source).toContain("Cloud paused");
+    expect(source).toContain("Checking backup");
     expect(source).toContain("Offline ready");
     expect(source).not.toContain("Works offline");
   });

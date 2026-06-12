@@ -35,7 +35,7 @@ function timeAgo(d: Date | null) {
 
 export default function SyncSettingsPage() {
   const { toast } = useToast();
-  const { isOnline, isSyncing, pendingCount, failedCount, conflictCount, syncNow } = useOfflineStatus();
+  const { isOnline, isBrowserOnline, backendStatus, isSyncing, pendingCount, failedCount, conflictCount, syncNow } = useOfflineStatus();
   const { prefs, patch, hydrated } = useSettingsPrefs();
   const [backup, setBackup] = useState<BackupConfig>(DEFAULT_BACKUP);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
@@ -52,8 +52,23 @@ export default function SyncSettingsPage() {
 
   const update = (partial: Partial<BackupConfig>) => { const next = { ...backup, ...partial }; setBackup(next); patch({ backup: next }); };
   const allSynced = isOnline && pendingCount === 0 && failedCount === 0 && conflictCount === 0;
+  const backupStatusLabel = isOnline
+    ? (isSyncing ? "Syncing" : "Synced")
+    : isBrowserOnline
+      ? (backendStatus.checkedAt ? "Cloud paused" : "Checking")
+      : "Offline";
 
-  function handleSync() { void syncNow({ manual: true }); toast({ title: isOnline ? "Syncing now…" : "You're offline", description: isOnline ? "Pushing and pulling the latest changes." : "Changes will sync when you're back online." }); }
+  function handleSync() {
+    void syncNow({ manual: true });
+    toast({
+      title: isOnline ? "Syncing now..." : isBrowserOnline ? "Cloud backup paused" : "You're offline",
+      description: isOnline
+        ? "Pushing and pulling the latest changes."
+        : isBrowserOnline
+          ? "The app is online, but the backend is not reachable yet."
+          : "Changes will sync when you're back online.",
+    });
+  }
 
   return (
     <SettingsShell>
@@ -67,7 +82,7 @@ export default function SyncSettingsPage() {
             </div>
           } />
         <div className="grid grid-cols-2 gap-3 px-5 pb-5 lg:grid-cols-5">
-          <Kpi label="Sync Status" value={isOnline ? (isSyncing ? "Syncing" : "Synced") : "Offline"} tone={allSynced ? "green" : isOnline ? "amber" : "gray"} icon={allSynced ? <CheckCircle2 size={15} /> : <Clock size={15} />} />
+          <Kpi label="Sync Status" value={backupStatusLabel} tone={allSynced ? "green" : isBrowserOnline ? "amber" : "gray"} icon={allSynced ? <CheckCircle2 size={15} /> : <Clock size={15} />} />
           <Kpi label="Last Synced" value={timeAgo(lastSynced)} sub={lastSynced ? "today" : "this session"} tone="blue" />
           <Kpi label="Pending Uploads" value={pendingCount} tone={pendingCount ? "amber" : "green"} icon={<Upload size={15} />} />
           <Kpi label="Failed" value={failedCount} tone={failedCount ? "red" : "green"} />

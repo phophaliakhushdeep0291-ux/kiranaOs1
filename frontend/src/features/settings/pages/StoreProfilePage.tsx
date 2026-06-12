@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getGetShopQueryKey, useUpdateShop } from "@/lib/api/client";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 import { useSubscriptionSnapshot } from "@/features/subscription";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

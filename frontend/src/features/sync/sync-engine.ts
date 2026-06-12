@@ -6,24 +6,36 @@ import { getCurrentSubscriptionSnapshot } from "@/features/subscription/access";
 import { readSyncQueueCounts, repairResolvedSyncStatusNoise, repairRetryableBillValidationConflicts } from "@/features/sync/sync-status-repair";
 import { entityTypeFromOperation, tableNameForEntity, type SyncRunResult } from "@/features/sync/sync-types";
 import { probeBackendConnection } from "@/features/sync/backend-health";
+import { ApiClientError, getStoredAccessToken, getStoredRefreshToken } from "@/lib/api/http";
 
 async function canSubscriptionSync(): Promise<boolean> {
   const snapshot = await getCurrentSubscriptionSnapshot();
   return snapshot.cloudSyncAllowed;
 }
 
+function isAuthSyncFailure(error: unknown) {
+  return error instanceof ApiClientError && (error.status === 401 || error.status === 403);
+}
+
+async function emptySyncResult(cursor?: string | number | null): Promise<SyncRunResult> {
+  return {
+    pushed: 0,
+    pulled: 0,
+    conflicts: 0,
+    failed: 0,
+    pending: (await readSyncQueueCounts()).totalBlocking,
+    skipped: 0,
+    cursor,
+  };
+}
+
 export async function runSyncCycle(): Promise<SyncRunResult> {
   await offlineDB.init();
+  if (typeof window !== "undefined" && !getStoredAccessToken() && !getStoredRefreshToken()) return emptySyncResult();
+
   const connection = await probeBackendConnection();
   if (!connection.browserOnline || !connection.backendReachable) {
-    return {
-      pushed: 0,
-      pulled: 0,
-      conflicts: 0,
-      failed: 0,
-      pending: (await readSyncQueueCounts()).totalBlocking,
-      skipped: 0,
-    };
+    return emptySyncResult();
   }
   const localSubscriptionAllowsSync = await canSubscriptionSync();
   let serverAllowsSync: boolean | null = null;
@@ -33,21 +45,14 @@ export async function runSyncCycle(): Promise<SyncRunResult> {
     const status = await getSyncStatus({ background: true });
     serverAllowsSync = status.allowed !== false;
     statusCursor = status.cursor ?? status.server_version;
-  } catch {
+  } catch (error) {
+    if (isAuthSyncFailure(error)) return emptySyncResult(statusCursor);
     // If /sync/status is unavailable, continue. Push and pull will surface real failures.
   }
 
   const syncAllowed = serverAllowsSync ?? localSubscriptionAllowsSync;
   if (!syncAllowed) {
-    return {
-      pushed: 0,
-      pulled: 0,
-      conflicts: 0,
-      failed: 0,
-      pending: (await readSyncQueueCounts()).totalBlocking,
-      skipped: 0,
-      cursor: statusCursor,
-    };
+    return emptySyncResult(statusCursor);
   }
 
   await repairRetryableBillValidationConflicts().catch(() => 0);

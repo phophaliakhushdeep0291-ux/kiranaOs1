@@ -161,7 +161,7 @@ function useLocalBills() {
 export default function BillsPage() {
   const { toast } = useToast();
   const cancelPermission = usePermission("cancel_bill");
-  const { isOnline, isBrowserOnline, isSyncing } = useOfflineStatus();
+  const { isOnline, isBrowserOnline, backendStatus, isSyncing } = useOfflineStatus();
   const { data: bills = [], isLoading, refetch } = useLocalBills();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<BillFilter>("all");
@@ -260,9 +260,9 @@ export default function BillsPage() {
   }, [panelClosed, selectedId, pageRows, filtered]);
 
   const backupStatus = isOnline
-    ? { icon: Wifi, label: isSyncing ? "Backing up…" : "Synced", cls: "bg-emerald-50 text-emerald-700" }
+    ? { icon: Wifi, label: isSyncing ? "Backing up..." : "Synced", cls: "bg-emerald-50 text-emerald-700" }
     : isBrowserOnline
-      ? { icon: CloudOff, label: "Reconnecting", cls: "bg-amber-50 text-amber-700" }
+      ? { icon: CloudOff, label: backendStatus.checkedAt ? "Cloud paused" : "Checking backup", cls: "bg-sky-50 text-sky-700" }
       : { icon: WifiOff, label: "Offline ready", cls: "bg-[#eef2f8] text-[#64748b]" };
   const BackupStatusIcon = backupStatus.icon;
 

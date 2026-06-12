@@ -48,6 +48,10 @@ const migration000002 = fs.readFileSync(
   "prisma-postgres/migrations/000002_sync_indexes/migration.sql", "utf8"
 );
 
+function modelBlock(schema, model) {
+  return schema.match(new RegExp(`model\\s+${model}\\s*\\{[\\s\\S]*?\\n\\}`, "m"))?.[0] ?? "";
+}
+
 // ── 1–2. OfflineSyncEvent idempotency indexes unchanged ───────────────────────
 
 for (const [label, schema] of [["SQLite", sqliteSchema], ["PG", pgSchema]]) {
@@ -66,14 +70,12 @@ for (const [label, schema] of [["SQLite", sqliteSchema], ["PG", pgSchema]]) {
 // ── 3–4. Soft-delete indexes unchanged ────────────────────────────────────────
 
 for (const [label, schema] of [["SQLite", sqliteSchema], ["PG", pgSchema]]) {
-  assert.match(
-    schema,
-    /model Product[\s\S]{0,2000}@@index\(\[shopId, deletedAt\]\)/,
+  assert.ok(
+    modelBlock(schema, "Product").includes("@@index([shopId, deletedAt])"),
     `${label}: Product must retain @@index([shopId, deletedAt])`
   );
-  assert.match(
-    schema,
-    /model Customer[\s\S]{0,2000}@@index\(\[shopId, deletedAt\]\)/,
+  assert.ok(
+    modelBlock(schema, "Customer").includes("@@index([shopId, deletedAt])"),
     `${label}: Customer must retain @@index([shopId, deletedAt])`
   );
 }
@@ -83,15 +85,13 @@ for (const [label, schema] of [["SQLite", sqliteSchema], ["PG", pgSchema]]) {
 const syncIndexModels = ["Product", "Customer", "Bill", "StockLedger", "UdharLedger"];
 
 for (const model of syncIndexModels) {
-  const modelPattern = new RegExp(`model ${model}\\s*\\{[^}]+\\}`, "s");
-
-  const sqliteBlock = sqliteSchema.match(modelPattern)?.[0] ?? "";
+  const sqliteBlock = modelBlock(sqliteSchema, model);
   assert.ok(
     sqliteBlock.includes("[shopId, updatedAt, id]"),
     `SQLite schema: ${model} must have @@index([shopId, updatedAt, id]) for sync pull keyset pagination`
   );
 
-  const pgBlock = pgSchema.match(modelPattern)?.[0] ?? "";
+  const pgBlock = modelBlock(pgSchema, model);
   assert.ok(
     pgBlock.includes("[shopId, updatedAt, id]"),
     `PG schema: ${model} must have @@index([shopId, updatedAt, id]) for sync pull keyset pagination`

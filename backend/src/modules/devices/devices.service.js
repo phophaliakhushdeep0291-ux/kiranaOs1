@@ -9,17 +9,12 @@ import { getEffectivePlan } from "../subscription/subscription.service.js";
 import { issueDeviceLicense, refreshDeviceLicense, revokeDeviceLicense } from "./license.service.js";
 
 function isDevelopmentMultiDeviceOverrideEnabled() {
-  return env.NODE_ENV !== "production" && env.DEV_MAX_ACTIVE_DEVICES > 0;
+  return env.NODE_ENV === "development" && env.DEV_MAX_ACTIVE_DEVICES > 0;
 }
 
 function getRuntimeDeviceLimit(planMaxDevices, subscription = null) {
   if (isDevelopmentMultiDeviceOverrideEnabled()) {
     return Math.max(Number(planMaxDevices) || 1, env.DEV_MAX_ACTIVE_DEVICES);
-  }
-  // During trial, allow at least 5 devices so users can test cross-device sync
-  // before committing to a paid plan.
-  if (subscription?.status === "trial") {
-    return Math.max(Number(planMaxDevices) || 1, 5);
   }
   return Number(planMaxDevices) || 1;
 }

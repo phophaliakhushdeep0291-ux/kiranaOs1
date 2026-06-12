@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 import { useFeature } from "@/features/subscription";
 
 export const STAFF_ROLES = ["owner", "manager", "cashier", "viewer"] as const;

@@ -2,18 +2,16 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from
 import { Link } from "wouter";
 import { format } from "date-fns";
 import {
-  ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Minus,
+  ShoppingCart, AlertTriangle, TrendingUp, Minus,
   Wallet, CreditCard, Smartphone, CalendarCheck, Sparkles, HandCoins,
   ReceiptText, Truck, PackagePlus, Layers, BarChart3, Building2,
   ChefHat, Wrench, Pill, ClipboardList, Package, ArrowUpRight,
-  ArrowDownRight, Wifi, WifiOff, RefreshCw, CheckCircle2, XCircle,
-  ShieldCheck, Monitor, Activity,
+  ArrowDownRight, RefreshCw, CheckCircle2, XCircle,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 import { getLocalDashboardSnapshot, useGetPaymentSummary, useGetPnL, useGetUdharSummary, useListBills, warmRecentLocalCache, type LocalDashboardSnapshot } from "@/lib/api/client";
 import { buildLocalReportSnapshot, type LocalReportSnapshot } from "@/features/reports/local-reporting";
 import { FinancialAggregationService, type FinancialAggregationSnapshot } from "@/features/finance/services/FinancialAggregationService";
@@ -269,28 +267,17 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
     return days.map(d => ({ date: d.label, sales: Math.round(d.value) }));
   }, [weeklyBillsQuery.data, dashboard.revenue]);
 
-  // Payment mode breakdown for donut
-  const totalCollected = dashboard.cashCollected + dashboard.upiCollected;
-  const card = Math.max(0, totalCollected - dashboard.cashCollected - dashboard.upiCollected);
-  const paymentPieData = [
-    { name: "Cash", value: Math.round(dashboard.cashCollected), color: "#3B82F6" },
-    { name: "UPI", value: Math.round(dashboard.upiCollected), color: "#10B981" },
-    { name: "Card", value: Math.round(card), color: "#F59E0B" },
-    { name: "Udhar", value: Math.round(dashboard.credit), color: "#EF4444" },
-  ].filter(d => d.value > 0);
-
   const recentBills = recentBillsQuery.data?.bills ?? [];
 
   return (
     <div className="space-y-5 p-5">
 
-      {/* ── 6 KPI cards ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* Counter focus */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <KpiCard
           label="Today's Sales"
           value={fmtRs(dashboard.revenue)}
-          delta={18.6}
-          deltaLabel="vs yesterday"
+          delta={null}
           icon={<ShoppingCart size={18} />}
           iconBg="bg-blue-50 text-blue-600"
           loading={isLoading}
@@ -299,29 +286,17 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
         <KpiCard
           label="Cash Collected"
           value={fmtRs(dashboard.cashCollected)}
-          delta={12.4}
-          deltaLabel="vs yesterday"
+          delta={null}
           icon={<Wallet size={18} />}
           iconBg="bg-emerald-50 text-emerald-600"
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
-        <KpiCard
-          label="UPI Collected"
-          value={fmtRs(dashboard.upiCollected)}
-          delta={21.8}
-          deltaLabel="vs yesterday"
-          icon={<Smartphone size={18} />}
-          iconBg="bg-violet-50 text-violet-600"
-          loading={isLoading}
-        />
         <Link href="/udhar?filter=outstanding">
           <KpiCard
             label="Outstanding Udhar"
             value={fmtRs(dashboard.totalOutstanding)}
-            delta={5.7}
-            deltaPositiveIsBad
-            deltaLabel="vs yesterday"
+            delta={null}
             icon={<AlertTriangle size={18} />}
             iconBg="bg-red-50 text-red-500"
             loading={isLoading}
@@ -330,26 +305,16 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
         <KpiCard
           label="Profit (Est.)"
           value={fmtRs(dashboard.grossProfit)}
-          delta={15.3}
-          deltaLabel="vs yesterday"
+          delta={null}
           icon={<TrendingUp size={18} />}
           iconBg="bg-amber-50 text-amber-600"
           loading={isLoading}
           onClick={() => openDrilldown("profit")}
         />
-        <KpiCard
-          label="Low Stock Items"
-          value={String(lowStockCount)}
-          delta={null}
-          icon={<Package size={18} />}
-          iconBg="bg-orange-50 text-orange-600"
-          loading={isLoading}
-          footer={<Link href="/inventory" className="text-xs font-semibold text-primary hover:underline">View all</Link>}
-        />
       </div>
 
-      {/* ── Charts row ── */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_300px]">
+      {/* Sales and stock */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
 
         {/* Sales Overview */}
         <div className="rounded-xl border bg-card p-5 shadow-sm">
@@ -357,8 +322,8 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
             <div>
               <p className="text-sm font-semibold text-muted-foreground">Sales Overview</p>
               <p className="mt-1 font-display text-2xl font-black text-foreground">{fmtRs(dashboard.revenue)}</p>
-              <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-emerald-600">
-                <ArrowUpRight size={13} aria-hidden="true" /> 18.6% vs last week
+              <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
+                {dashboard.billCount} bill{dashboard.billCount === 1 ? "" : "s"} recorded today
               </p>
             </div>
             <Link href="/reports" className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
@@ -378,42 +343,6 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
                 <Line type="monotone" dataKey="sales" stroke="hsl(221 83% 53%)" strokeWidth={2.5} dot={{ r: 4, fill: "hsl(221 83% 53%)", strokeWidth: 0 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Payment Mode Breakdown */}
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-foreground">Payment Mode Breakdown</p>
-          </div>
-          {paymentPieData.length === 0 ? (
-            <div className="flex h-44 items-center justify-center text-sm text-muted-foreground">No payment data today</div>
-          ) : (
-            <div className="mt-2 h-44">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={paymentPieData} cx="50%" cy="50%" innerRadius={52} outerRadius={72} paddingAngle={3} dataKey="value">
-                    {paymentPieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => fmtRs(v)} contentStyle={{ fontSize: 12, borderRadius: "8px" }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          <div className="mt-2 space-y-1.5">
-            {paymentPieData.map((p) => {
-              const total = paymentPieData.reduce((s, d) => s + d.value, 0);
-              const pct = total > 0 ? Math.round((p.value / total) * 100) : 0;
-              return (
-                <div key={p.name} className="flex items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
-                    <span className="text-muted-foreground">{p.name}</span>
-                  </div>
-                  <span className="font-semibold">{fmtRs(p.value)} <span className="text-muted-foreground">({pct}%)</span></span>
-                </div>
-              );
-            })}
           </div>
         </div>
 
@@ -512,10 +441,10 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
           <div className="rounded-xl border bg-card p-4 shadow-sm">
             <p className="mb-3 text-sm font-semibold text-foreground">Quick Insights</p>
             <div className="space-y-2">
-              <InsightRow icon={<BarChart3 size={16} className="text-blue-600" />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Staples" : "—"} />
               <InsightRow icon={<Package size={16} className="text-emerald-600" />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "—"} />
               <InsightRow icon={<CreditCard size={16} className="text-violet-600" />} label="Average Bill Value" value={dashboard.billCount > 0 ? fmtRs(Math.round(dashboard.revenue / dashboard.billCount)) : "₹0"} />
-              <InsightRow icon={<Activity size={16} className="text-amber-600" />} label="New Customers Today" value="—" />
+              <InsightRow icon={<Smartphone size={16} className="text-sky-600" />} label="UPI Collected" value={fmtRs(dashboard.upiCollected)} />
+              <InsightRow icon={<Truck size={16} className="text-amber-600" />} label="Supplier Due" value={dashboard.supplierDue > 0 ? fmtRs(dashboard.supplierDue) : "Clear"} />
             </div>
           </div>
 
@@ -524,17 +453,17 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
             <p className="mb-3 text-sm font-semibold text-foreground">Sync & Health</p>
             <div className="space-y-2">
               <HealthRow label="Internet Connection" status={isOnline ? "ok" : "warn"} value={isOnline ? "Online" : "Offline"} />
-              <HealthRow label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={failedCount > 0 ? "Failed" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date"} />
-              <HealthRow label="Backup Status" status="ok" value="Secure" />
+              <HealthRow label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={failedCount > 0 ? "Needs review" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date"} />
+              <HealthRow label="Backup Status" status={pendingCount > 0 ? "warn" : "ok"} value={isSyncing ? "Syncing" : pendingCount > 0 ? "Queued" : "Local safe"} />
               <HealthRow label="Device Status" status="ok" value="Active" />
             </div>
             <Link href="/sync-status">
               <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90">
-                <RefreshCw size={15} aria-hidden="true" /> Sync Now
+                <RefreshCw size={15} aria-hidden="true" /> Review Sync
               </button>
             </Link>
             <p className="mt-2 text-center text-[11px] text-muted-foreground">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1" /> Auto sync is enabled
+              <span className={cn("mr-1 inline-block h-1.5 w-1.5 rounded-full", pendingCount > 0 ? "bg-amber-500" : "bg-emerald-500")} /> Auto backup stays queued safely
             </p>
           </div>
 

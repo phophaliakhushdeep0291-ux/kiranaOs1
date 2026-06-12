@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useGetShop } from "@/lib/api/client";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 import { useSubscriptionSnapshot } from "@/features/subscription";
 import { useOfflineStatus } from "@/features/sync";
 import { offlineDB } from "@/lib/offline/db";

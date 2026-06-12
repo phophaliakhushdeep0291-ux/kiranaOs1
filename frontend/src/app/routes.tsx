@@ -3,7 +3,7 @@ import { Redirect, Route, Switch } from "wouter";
 import { Layout } from "@/components/layout";
 import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary, PageLoading } from "@/components/shared";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/auth/pages/RegisterPage"));

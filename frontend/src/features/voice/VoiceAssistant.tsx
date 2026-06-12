@@ -252,7 +252,7 @@ export function VoiceAssistant() {
   return (
     <div
       ref={containerRef}
-      className={`fixed z-50 print:hidden transition-opacity duration-200 ${assistantIsIdle ? "opacity-50 hover:opacity-100 focus-within:opacity-100" : "opacity-100"} ${dragging ? "select-none" : ""}`}
+      className={`fixed z-50 print:hidden transition-opacity duration-200 ${assistantIsIdle ? "opacity-[0.38] hover:opacity-100 focus-within:opacity-100" : "opacity-100"} ${dragging ? "select-none" : ""}`}
       style={floatingStyle}
     >
       {open && (
@@ -299,7 +299,7 @@ export function VoiceAssistant() {
           aria-label="Move voice assistant"
           title="Move voice assistant"
           onPointerDown={handleMovePointerDown}
-          className={`flex cursor-grab items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200 active:cursor-grabbing ${open ? "h-10 w-9 bg-card text-muted-foreground shadow-xl hover:bg-muted hover:text-foreground" : "h-9 w-8 bg-background/35 text-muted-foreground/60 shadow-md hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-xl"}`}
+          className={`flex cursor-grab items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200 active:cursor-grabbing ${open ? "h-10 w-9 bg-card text-muted-foreground shadow-xl hover:bg-muted hover:text-foreground" : "h-9 w-8 bg-background/25 text-muted-foreground/45 shadow-sm hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-xl"}`}
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -307,7 +307,7 @@ export function VoiceAssistant() {
           type="button"
           size="icon"
           variant="ghost"
-          className={`rounded-full border backdrop-blur-md transition-all duration-200 ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-10 w-10 bg-background/40 text-muted-foreground/70 shadow-lg hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-2xl"}`}
+          className={`rounded-full border backdrop-blur-md transition-all duration-200 ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-10 w-10 bg-background/30 text-muted-foreground/55 shadow-md hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-2xl"}`}
           onClick={() => (open ? startMic() : setOpen(true))}
         >
           <Mic className="h-4 w-4" aria-hidden="true" />

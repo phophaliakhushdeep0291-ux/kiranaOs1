@@ -2,7 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent
 import { useQueryClient } from "@tanstack/react-query";
 import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, useListProducts, type Bill, type Customer, type Product } from "@/lib/api/client";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
 import { useFeature } from "@/features/subscription";

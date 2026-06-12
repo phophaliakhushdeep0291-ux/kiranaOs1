@@ -21,7 +21,8 @@ describe("floating voice assistant", () => {
 
   it("stays compact and blended until the owner hovers or focuses it", () => {
     expect(source).toContain("assistantIsIdle");
-    expect(source).toContain("opacity-50 hover:opacity-100 focus-within:opacity-100");
+    expect(source).toContain("opacity-[0.38] hover:opacity-100 focus-within:opacity-100");
+    expect(source).toContain("bg-background/25 text-muted-foreground/45");
     expect(source).toContain("h-10 w-10");
     expect(source).toContain("sr-only");
     expect(source).toContain("hover:bg-sidebar hover:text-sidebar-foreground");

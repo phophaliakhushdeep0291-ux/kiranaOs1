@@ -9,42 +9,29 @@ import {
   useState,
 } from "react";
 import { Link, useLocation } from "wouter";
-import { useAuth } from "@/features/auth/AuthContext";
+import { useAuth } from "@/features/auth/useAuth";
 import { useOfflineStatus } from "@/features/sync";
 import {
-  ArrowDownToLine,
-  ArrowLeftRight,
-  ArrowUpFromLine,
   BarChart3,
   Bell,
   ChevronDown,
   ChevronRight,
-  Cloud,
-  FolderOpen,
   LayoutDashboard,
   LogOut,
   Menu,
-  MessageCircle,
   Package,
   PercentSquare,
   ReceiptText,
   RefreshCw,
-  Search,
   Settings,
-  ShoppingBag,
   ShoppingCart,
-  SlidersHorizontal,
-  Tag,
   TrendingUp,
   Truck,
   Users,
   Wallet,
-  Wifi,
   WifiOff,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/features/subscription";
-import { useAppLanguage } from "@/features/settings/i18n";
 import { useBusinessType } from "@/features/settings/business-types";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
 import { getApiBaseUrl } from "@/lib/api/http";
@@ -184,6 +171,12 @@ const MOBILE_NAV: { href: string; label: string; Icon: React.ElementType }[] = [
   { href: "/dashboard", label: "More", Icon: LayoutDashboard },
 ];
 
+const TOPBAR_SHORTCUTS: { href: string; label: string; Icon: React.ElementType }[] = [
+  { href: "/billing", label: "Bill", Icon: ShoppingCart },
+  { href: "/bills", label: "Bills", Icon: ReceiptText },
+  { href: "/reports", label: "Reports", Icon: BarChart3 },
+];
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function readLS(key: string, fallback: string) {
@@ -210,9 +203,35 @@ export function Layout({ children }: { children: ReactNode }) {
   const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();
-  const { t } = useAppLanguage();
 
   const attentionCount = pendingCount + failedCount + conflictCount;
+  const hasSyncProblems = failedCount > 0 || conflictCount > 0;
+  const hasPendingSync = pendingCount > 0;
+  const backendChecked = Boolean(backendStatus.checkedAt);
+  const connectionLabel = isOnline
+    ? (hasSyncProblems ? "Review sync" : isSyncing ? "Syncing..." : hasPendingSync ? `${pendingCount} pending` : "Synced")
+    : backendStatus.browserOnline
+      ? (backendChecked ? "Cloud paused" : "Checking backup")
+      : "Offline safe";
+  const connectionDetail = isOnline
+    ? (hasSyncProblems ? "Some records need owner review" : hasPendingSync ? "Backup will finish shortly" : "Last synced just now")
+    : backendStatus.browserOnline
+      ? "Local billing works; backup will retry"
+      : "Your data is safe on this device";
+  const connectionBadgeClass = isOnline
+    ? (hasSyncProblems
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : hasPendingSync
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-emerald-200 bg-emerald-50 text-emerald-700")
+    : backendStatus.browserOnline
+      ? "border-sky-200 bg-sky-50 text-sky-700"
+      : "border-amber-200 bg-amber-50 text-amber-700";
+  const connectionDotClass = isOnline
+    ? (hasSyncProblems ? "bg-rose-500" : hasPendingSync ? "bg-amber-500" : "bg-emerald-500")
+    : backendStatus.browserOnline
+      ? "bg-sky-500"
+      : "bg-amber-500";
 
   const [sidebarWidth, setSidebarWidth] = useState(() => clampW(Number(readLS(SIDEBAR_WIDTH_KEY, String(DEFAULT_WIDTH)))));
   const [collapsed, setCollapsed] = useState(() => readLS(SIDEBAR_COLLAPSED_KEY, "false") === "true");
@@ -322,7 +341,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav aria-label="Main navigation" className={cn("flex-1 overflow-y-auto py-3", collapsed ? "space-y-1 px-2" : "space-y-0.5 px-3")}>
+        <nav aria-label="Main navigation" className={cn("app-scrollbar flex-1 overflow-y-auto py-3", collapsed ? "space-y-1 px-2" : "space-y-0.5 px-3")}>
           {NAV.map(item =>
             item.kind === "link"
               ? <SidebarLink key={item.href} item={item} loc={loc} collapsed={collapsed} labelOverride={labelOverrides[item.href]} />
@@ -348,26 +367,17 @@ export function Layout({ children }: { children: ReactNode }) {
               {/* Sync status */}
               <div className="rounded-lg border border-white/10 bg-white/5 p-3">
                 <div className="flex items-center gap-2">
-                  <span className={cn("h-2 w-2 shrink-0 rounded-full animate-pulse", isOnline ? "bg-emerald-400 animation-none" : "bg-amber-400")} style={isOnline ? { animation: "none" } : undefined} />
+                  <span className={cn("h-2 w-2 shrink-0 rounded-full", connectionDotClass, !isOnline && "animate-pulse")} />
                   <span className="text-sm font-semibold text-white">
-                    {isOnline ? (isSyncing ? "Syncing…" : "Synced") : "Offline safe"}
+                    {connectionLabel}
                   </span>
                   {attentionCount > 0 && <span className="ml-auto text-[11px] font-bold text-amber-300">{attentionCount}</span>}
                 </div>
-                <p className="mt-1 text-[11px] text-sidebar-foreground/50">{isOnline ? "Last synced just now" : "Your data is safe on this device"}</p>
+                <p className="mt-1 text-[11px] text-sidebar-foreground/50">{connectionDetail}</p>
                 <Link href="/sync-status" className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-sidebar-primary hover:text-white transition-colors">
-                  <RefreshCw size={10} aria-hidden="true" /> Sync Now
+                  <RefreshCw size={10} aria-hidden="true" /> Review sync
                 </Link>
               </div>
-
-              {/* Help */}
-              <button className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/55 transition-colors hover:bg-white/8 hover:text-white">
-                <MessageCircle size={15} aria-hidden="true" />
-                <div className="text-left">
-                  <div className="text-xs font-semibold leading-none">Need help?</div>
-                  <div className="mt-0.5 text-[10px] leading-none opacity-70">Chat with support</div>
-                </div>
-              </button>
 
               {/* Store + logout */}
               <DropdownMenu>
@@ -405,7 +415,7 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
       >
         {/* Desktop topbar */}
-        <header className={cn("sticky top-0 z-40 hidden h-[76px] items-center gap-4 bg-background/95 px-5 backdrop-blur lg:flex", loc !== "/billing" && "border-b border-border")}>
+        <header className="sticky top-0 z-40 hidden min-h-[64px] items-center gap-3 border-b border-border/80 bg-background/90 px-4 backdrop-blur-xl lg:flex">
           <button
             type="button"
             aria-label="Toggle sidebar"
@@ -415,34 +425,48 @@ export function Layout({ children }: { children: ReactNode }) {
             <Menu size={19} aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-[26px] font-black tracking-tight text-foreground leading-none">{getPageTitle(loc)}</h1>
+            <h1 className="truncate font-display text-[16px] font-black tracking-tight text-foreground leading-none">{getPageTitle(loc)}</h1>
             {getPageSubtitle(loc) && (
-              <p className="text-[12.5px] font-medium text-muted-foreground leading-none mt-1.5">{getPageSubtitle(loc)}</p>
+              <p className="mt-1 truncate text-[12px] font-medium leading-none text-muted-foreground">{getPageSubtitle(loc)}</p>
             )}
           </div>
 
-          <div className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold",
-            isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
-            <span className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-emerald-500" : "bg-amber-500")} />
-            {isOnline ? (isSyncing ? "Syncing…" : "Synced") : "Offline"}
-            {isOnline && !isSyncing && <span className="opacity-60">· Just now</span>}
+          <div className="hidden items-center gap-1 xl:flex">
+            {TOPBAR_SHORTCUTS.map(({ href, label, Icon }) => {
+              const active = isActive(loc, href);
+              return (
+                <Link key={href} href={href}>
+                  <div className={cn(
+                    "flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition-colors",
+                    active ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-card/70 text-muted-foreground hover:border-primary/30 hover:text-primary"
+                  )}>
+                    <Icon size={14} aria-hidden="true" />
+                    {label}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
 
-          <div className="hidden w-64 items-center gap-2 rounded-lg border bg-muted/50 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-background xl:flex">
-            <Search size={14} aria-hidden="true" />
-            <span className="flex-1 truncate">Search products, bills, customers…</span>
-            <kbd className="rounded border bg-background px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+          <div className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold", connectionBadgeClass)}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
+            {connectionLabel}
+            {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
           </div>
 
-          <button type="button" aria-label="Notifications"
-            className="relative flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
-            <Bell size={17} aria-hidden="true" />
-            {attentionCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
-                {attentionCount}
-              </span>
-            )}
-          </button>
+          {snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+
+          <Link href="/sync-status">
+            <div aria-label="Open sync alerts"
+              className="relative flex h-9 w-9 items-center justify-center rounded-lg border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
+              <Bell size={17} aria-hidden="true" />
+              {attentionCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
+                  {attentionCount}
+                </span>
+              )}
+            </div>
+          </Link>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -469,7 +493,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Mobile topbar */}
-        <header className="sticky top-0 z-40 border-b bg-card/95 px-4 py-3 backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-40 border-b bg-background/92 px-4 py-3 backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between gap-3">
             <Link href="/dashboard" className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow">
@@ -478,10 +502,9 @@ export function Layout({ children }: { children: ReactNode }) {
               <span className="font-display text-lg font-black tracking-tight">KiranaOS</span>
             </Link>
             <div className="flex items-center gap-2">
-              <div className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold",
-                isOnline ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
-                <span className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-emerald-500" : "bg-amber-500")} />
-                {isOnline ? "Synced" : "Offline"}
+              <div className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold", connectionBadgeClass)}>
+                <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
+                {connectionLabel}
               </div>
               {snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
             </div>
@@ -493,7 +516,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
         )}
 
-        <main id="main-content" className="min-w-0 flex-1 overflow-auto pb-20 lg:pb-0">
+        <main id="main-content" className="app-scrollbar min-w-0 flex-1 overflow-auto pb-20 lg:pb-0">
           {children}
         </main>
 
@@ -618,8 +641,8 @@ function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
     <div className="flex items-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
       <WifiOff size={15} className="shrink-0 text-amber-600" aria-hidden="true" />
       <span className="flex-1 leading-tight">
-        {isLocalhost ? "Backend is set to localhost — not accessible on this device. " : "Backend server is not reachable. "}
-        <Link href="/sync-status" className="font-semibold underline underline-offset-2">Fix Server URL →</Link>
+        {isLocalhost ? "Backend URL points to localhost. Make sure the backend server is running on this machine. " : "Cloud backup is paused because the backend is not reachable. Local billing still works. "}
+        <Link href="/sync-status" className="font-semibold underline underline-offset-2">Open Sync Status -&gt;</Link>
       </span>
     </div>
   );

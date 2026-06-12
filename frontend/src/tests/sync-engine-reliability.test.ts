@@ -210,6 +210,7 @@ const dbState = vi.hoisted(() => {
 
 const syncPushMock = vi.hoisted(() => vi.fn());
 const syncPullMock = vi.hoisted(() => vi.fn());
+const getSyncStatusMock = vi.hoisted(() => vi.fn(async () => ({ allowed: true })));
 const requestSyncRetryMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/offline/context", () => ({
@@ -309,7 +310,7 @@ vi.mock("@/lib/offline/db", () => {
 vi.mock("@/features/sync/api", () => ({
   syncPush: syncPushMock,
   syncPull: syncPullMock,
-  getSyncStatus: vi.fn(async () => ({ allowed: true })),
+  getSyncStatus: getSyncStatusMock,
   requestSyncRetry: requestSyncRetryMock,
 }));
 
@@ -324,6 +325,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { syncPush } from "@/features/sync/api";
+import { ApiClientError } from "@/lib/api/http";
 import {
   pullServerChanges,
   pushPendingOutboxOperations,
@@ -420,6 +422,7 @@ describe("sync engine reliability", () => {
     vi.clearAllMocks();
     vi.stubGlobal("navigator", { onLine: true });
     dbState.reset();
+    getSyncStatusMock.mockResolvedValue({ allowed: true });
     syncPullMock.mockResolvedValue({ changes: [], cursor: "cursor_empty" });
     requestSyncRetryMock.mockResolvedValue({ queued: true });
   });
@@ -717,6 +720,22 @@ describe("sync engine reliability", () => {
         status: "SYNCED",
         idempotency_key: "idem-after-reload",
       }),
+    );
+  });
+
+  it("stops scheduled sync quietly when the backend reports an auth failure", async () => {
+    seedOutbox();
+    getSyncStatusMock.mockRejectedValueOnce(
+      new ApiClientError("Authentication required", 401, { code: "AUTH_REQUIRED" }),
+    );
+
+    const result = await runSyncCycle();
+
+    expect(result).toEqual(expect.objectContaining({ pushed: 0, pulled: 0, failed: 0, pending: 1 }));
+    expect(mockedSyncPush).not.toHaveBeenCalled();
+    expect(syncPullMock).not.toHaveBeenCalled();
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({ status: "PENDING", sync_status: "pending_sync" }),
     );
   });
 
