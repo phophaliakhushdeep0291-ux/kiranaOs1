@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { BadgePercent, CheckCircle2, Loader2, Pencil, Plus, Tag, Ticket, Trash2, XCircle } from "lucide-react";
+import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
+import { cn } from "@/lib/utils";
+import { BadgePercent, CheckCircle2, Gift, IndianRupee, Loader2, Pencil, Percent, Plus, Tag, Ticket, Trash2, X, XCircle } from "lucide-react";
 import { listOffers, createOffer, updateOffer, deleteOffer, applyOffer } from "@/features/offers/api";
 import type { ApplyOfferResult, Offer, OfferInput } from "@/types/api";
 
@@ -28,9 +29,10 @@ function offerStatus(o: Offer): { label: string; tone: "green" | "amber" | "rose
 const TONE_CLASS: Record<string, string> = {
   green: "bg-emerald-100 text-emerald-700", amber: "bg-amber-100 text-amber-700", rose: "bg-rose-100 text-rose-700", gray: "bg-[#eef2f8] text-[#64748b]",
 };
+const TILE_COLORS = ["#0057ff", "#16a34a", "#f59e0b", "#8b5cf6", "#ef4444", "#0891b2", "#db2777", "#ea580c"];
 
 const offerFormSchema = z.object({
-  title: z.string().trim().min(1, "Title is required").max(160),
+  title: z.string().trim().min(1, "Offer name is required").max(160),
   code: z.string().trim().max(40).optional(),
   type: z.enum(["percentage", "flat"]),
   value: z.coerce.number().positive("Enter a value"),
@@ -46,16 +48,17 @@ type OfferFormData = z.infer<typeof offerFormSchema>;
 export default function OffersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Offer | null>(null);
   const [deleting, setDeleting] = useState<Offer | null>(null);
+  const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:offers-panel-width", { defaultWidth: 420 });
 
   const offersQ = useQuery({ queryKey: ["offers"], queryFn: listOffers });
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["offers"] });
 
   const saveMut = useMutation({
     mutationFn: (vars: { id?: string; data: OfferInput }) => (vars.id ? updateOffer(vars.id, vars.data) : createOffer(vars.data)),
-    onSuccess: () => { invalidate(); setDialogOpen(false); setEditing(null); toast({ title: editing ? "Offer updated" : "Offer created" }); },
+    onSuccess: () => { invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Offer updated" : "Offer created" }); },
     onError: (err: unknown) => toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
   });
   const deleteMut = useMutation({
@@ -71,23 +74,29 @@ export default function OffersPage() {
   const redemptions = rows.reduce((s, o) => s + (o.usedCount || 0), 0);
   const discountImpact = rows.reduce((s, o) => s + (o.discountGiven || 0), 0);
 
+  function openCreate() { setEditing(null); setPanelOpen(true); }
+  function openEdit(o: Offer) { setEditing(o); setPanelOpen(true); }
+
   return (
-    <div className="min-h-full bg-[#f7f9fd] px-4 py-4">
-      <div className="mx-auto w-full max-w-[1200px] space-y-4">
+    <div
+      className={cn("min-h-full bg-[#f7f9fd] px-4 py-4", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
+      style={panelOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+    >
+      <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           <Kpi icon={<Ticket size={16} />} label="Active Offers" value={String(activeCount)} tone="blue" />
           <Kpi icon={<Tag size={16} />} label="Scheduled Offers" value={String(scheduledCount)} tone="violet" />
           <Kpi icon={<BadgePercent size={16} />} label="Coupon Redemptions" value={redemptions.toLocaleString("en-IN")} tone="green" />
-          <Kpi icon={<BadgePercent size={16} />} label="Discount Impact" value={inr(discountImpact)} tone="green" />
+          <Kpi icon={<IndianRupee size={16} />} label="Discount Impact" value={inr(discountImpact)} tone="green" />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
           {/* Offers table */}
           <div className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3.5">
-              <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Your offers</h3>
-              <Button onClick={() => { setEditing(null); setDialogOpen(true); }} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
-                <Plus size={15} /> Create Offer
+              <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">All Offers & Campaigns</h3>
+              <Button onClick={openCreate} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
+                <Plus size={15} /> New Offer
               </Button>
             </div>
             {offersQ.isLoading ? (
@@ -105,8 +114,8 @@ export default function OffersPage() {
                 <table className="w-full text-[13px]">
                   <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                     <tr>
-                      <th className="px-5 py-2.5 text-left font-bold">Offer</th>
-                      <th className="px-5 py-2.5 text-left font-bold">Discount</th>
+                      <th className="px-5 py-2.5 text-left font-bold">Offer Name</th>
+                      <th className="px-5 py-2.5 text-left font-bold">Type</th>
                       <th className="px-5 py-2.5 text-left font-bold">Validity</th>
                       <th className="px-5 py-2.5 text-left font-bold">Usage</th>
                       <th className="px-5 py-2.5 text-left font-bold">Status</th>
@@ -116,13 +125,27 @@ export default function OffersPage() {
                   <tbody>
                     {rows.map((o, i) => {
                       const st = offerStatus(o);
+                      const tileColor = TILE_COLORS[i % TILE_COLORS.length];
                       return (
                         <tr key={o.id} className={i < rows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
                           <td className="px-5 py-3">
-                            <p className="font-bold text-[#102347]">{o.title}</p>
-                            {o.code ? <span className="mt-0.5 inline-block rounded-[6px] bg-[#0f1e3d] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-white">{o.code}</span> : <span className="text-[11px] text-[#94a3b8]">Auto-apply</span>}
+                            <div className="flex items-center gap-3">
+                              <span className="grid h-10 w-12 shrink-0 place-items-center rounded-[8px] text-center leading-none text-white" style={{ background: tileColor }}>
+                                <span>
+                                  <span className="block text-[11px] font-black">{o.type === "flat" ? `₹${Math.round(o.value)}` : `${o.value}%`}</span>
+                                  <span className="block text-[7px] font-bold tracking-wider">OFF</span>
+                                </span>
+                              </span>
+                              <div className="min-w-0">
+                                <p className="truncate font-bold text-[#102347]">{o.title}</p>
+                                {o.code ? <span className="mt-0.5 inline-block rounded-[5px] bg-[#0f1e3d] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-white">{o.code}</span> : <span className="text-[11px] text-[#94a3b8]">Auto-apply</span>}
+                              </div>
+                            </div>
                           </td>
-                          <td className="px-5 py-3 font-bold text-[#102347]">{o.type === "flat" ? inr(o.value) : `${o.value}%`}{o.minBillAmount > 0 && <span className="block text-[10px] font-medium text-[#94a3b8]">min {inr(o.minBillAmount)}</span>}</td>
+                          <td className="px-5 py-3">
+                            <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", o.type === "flat" ? "bg-[#eef5ff] text-[#0057ff]" : "bg-violet-50 text-violet-700")}>{o.type === "flat" ? "Flat" : "Percentage"}</span>
+                            {o.minBillAmount > 0 && <span className="mt-1 block text-[10px] text-[#94a3b8]">min {inr(o.minBillAmount)}</span>}
+                          </td>
                           <td className="px-5 py-3 text-[#52627e]">{o.validFrom || o.validTo ? `${fmtDate(o.validFrom)} – ${fmtDate(o.validTo)}` : "Always"}</td>
                           <td className="px-5 py-3">
                             {o.usageLimit > 0 ? (
@@ -138,7 +161,7 @@ export default function OffersPage() {
                           <td className="px-5 py-3">
                             <div className="flex items-center justify-end gap-1.5">
                               <Switch checked={o.active} onCheckedChange={() => toggleActive(o)} />
-                              <button onClick={() => { setEditing(o); setDialogOpen(true); }} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Edit"><Pencil size={14} /></button>
+                              <button onClick={() => openEdit(o)} className="grid h-8 w-8 place-items-center rounded-[8px] text-[#536583] hover:bg-[#eef2f8]" aria-label="Edit"><Pencil size={14} /></button>
                               <button onClick={() => setDeleting(o)} className="grid h-8 w-8 place-items-center rounded-[8px] text-rose-500 hover:bg-rose-50" aria-label="Delete"><Trash2 size={14} /></button>
                             </div>
                           </td>
@@ -155,11 +178,13 @@ export default function OffersPage() {
         </div>
       </div>
 
-      <OfferDialog
-        open={dialogOpen}
+      <OfferPanel
+        open={panelOpen}
         editing={editing}
         saving={saveMut.isPending}
-        onClose={() => { setDialogOpen(false); setEditing(null); }}
+        width={panelWidth}
+        onResizeStart={onResizeStart}
+        onClose={() => { setPanelOpen(false); setEditing(null); }}
         onSubmit={(data) => saveMut.mutate({ id: editing?.id, data })}
       />
 
@@ -217,12 +242,23 @@ function Kpi({ icon, label, value, tone }: { icon: React.ReactNode; label: strin
         <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
         <span className={`grid h-8 w-8 place-items-center rounded-[9px] ${ring}`}>{icon}</span>
       </div>
-      <p className="mt-1.5 font-display text-[24px] font-black leading-none text-[#102347]">{value}</p>
+      <p className="mt-1.5 truncate font-display text-[24px] font-black leading-none text-[#102347]">{value}</p>
     </div>
   );
 }
 
-function OfferDialog({ open, editing, saving, onClose, onSubmit }: { open: boolean; editing: Offer | null; saving: boolean; onClose: () => void; onSubmit: (data: OfferInput) => void }) {
+/* ── Create / Edit docked panel ── */
+const TYPE_CARDS: { key: OfferFormData["type"] | "bundle"; label: string; icon: typeof Percent; soon?: boolean }[] = [
+  { key: "flat", label: "Flat", icon: IndianRupee },
+  { key: "percentage", label: "Percentage", icon: Percent },
+  { key: "bundle", label: "Bundle", icon: Gift, soon: true },
+];
+
+function OfferPanel({ open, editing, saving, width, onResizeStart, onClose, onSubmit }: {
+  open: boolean; editing: Offer | null; saving: boolean; width: number;
+  onResizeStart: (e: React.MouseEvent) => void; onClose: () => void; onSubmit: (data: OfferInput) => void;
+}) {
+  const { toast } = useToast();
   const form = useForm<OfferFormData>({
     resolver: zodResolver(offerFormSchema),
     values: {
@@ -250,45 +286,86 @@ function OfferDialog({ open, editing, saving, onClose, onSubmit }: { open: boole
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-[460px]">
-        <DialogHeader><DialogTitle className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Offer" : "Create Offer"}</DialogTitle></DialogHeader>
-        <form onSubmit={form.handleSubmit(submit)} className="space-y-3.5">
-          <Fld label="Offer title" err={form.formState.errors.title?.message}><Input className="h-10" placeholder="Diwali Sale" {...form.register("title")} /></Fld>
+    <aside
+      style={{ width }}
+      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      role="dialog" aria-label={editing ? "Edit offer" : "Create new offer"} aria-hidden={!open}
+    >
+      <PanelResizeHandle onResizeStart={onResizeStart} />
+      <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
+        <div>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Offer" : "Create New Offer"}</h2>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this discount or promotion" : "Set up a new discount or promotional offer"}</p>
+        </div>
+        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+      </div>
+
+      <form onSubmit={form.handleSubmit(submit)} className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
+          {/* Offer type cards */}
+          <div>
+            <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Offer Type</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {TYPE_CARDS.map((t) => {
+                const selected = type === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    disabled={t.soon}
+                    onClick={() => { if (t.soon) { toast({ title: "Bundle offers coming soon", description: "Buy-X-get-Y bundles arrive in a later update." }); return; } form.setValue("type", t.key as OfferFormData["type"]); }}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-[10px] border px-2 py-3 transition-colors",
+                      selected ? "border-[#0057ff] bg-[#eef5ff]" : "border-[#e7edf7] bg-white hover:border-[#cfe0ff]",
+                      t.soon && "cursor-not-allowed opacity-50",
+                    )}
+                  >
+                    <t.icon size={17} className={selected ? "text-[#0057ff]" : "text-[#536583]"} />
+                    <span className={cn("text-[11.5px] font-bold", selected ? "text-[#0057ff]" : "text-[#344668]")}>{t.label}</span>
+                    {t.soon && <span className="rounded-full bg-[#eef2f8] px-1.5 text-[9px] font-bold text-[#64748b]">Soon</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <Fld label="Offer Name *" err={form.formState.errors.title?.message}><Input className="h-10" placeholder="E.g., Summer Sale Flat ₹50 Off" {...form.register("title")} /></Fld>
+          <Fld label="Coupon Code (Optional)" hint="Leave blank to auto-apply at billing"><Input className="h-10 uppercase" placeholder="E.g., SUMMER50" {...form.register("code")} /></Fld>
+
           <div className="grid grid-cols-2 gap-3">
-            <Fld label="Coupon code (optional)"><Input className="h-10 uppercase" placeholder="DIWALI10" {...form.register("code")} /></Fld>
-            <Fld label="Discount type">
-              <Select value={type} onValueChange={(v) => form.setValue("type", v as OfferFormData["type"])}>
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="percentage">Percentage (%)</SelectItem><SelectItem value="flat">Flat (₹)</SelectItem></SelectContent>
-              </Select>
+            <Fld label={type === "flat" ? "Discount Value (₹) *" : "Discount Value (%) *"} err={form.formState.errors.value?.message}>
+              <Input className="h-10" type="number" step="0.01" placeholder={type === "flat" ? "E.g., 50" : "E.g., 10"} {...form.register("value")} />
             </Fld>
+            <Fld label="Minimum Purchase (₹)" hint="Minimum cart value to apply offer"><Input className="h-10" type="number" step="0.01" {...form.register("minBillAmount")} /></Fld>
           </div>
+          {type === "percentage" && <Fld label="Max Discount Cap (₹)" hint="0 = no cap"><Input className="h-10" type="number" step="0.01" {...form.register("maxDiscount")} /></Fld>}
+
           <div className="grid grid-cols-2 gap-3">
-            <Fld label={type === "flat" ? "Discount (₹)" : "Discount (%)"} err={form.formState.errors.value?.message}><Input className="h-10" type="number" step="0.01" {...form.register("value")} /></Fld>
-            <Fld label="Min bill (₹)"><Input className="h-10" type="number" step="0.01" {...form.register("minBillAmount")} /></Fld>
+            <Fld label="Start Date"><Input className="h-10" type="date" {...form.register("validFrom")} /></Fld>
+            <Fld label="End Date"><Input className="h-10" type="date" {...form.register("validTo")} /></Fld>
           </div>
-          {type === "percentage" && <Fld label="Max discount cap (₹)" hint="0 = no cap"><Input className="h-10" type="number" step="0.01" {...form.register("maxDiscount")} /></Fld>}
-          <div className="grid grid-cols-2 gap-3">
-            <Fld label="Valid from"><Input className="h-10" type="date" {...form.register("validFrom")} /></Fld>
-            <Fld label="Valid to"><Input className="h-10" type="date" {...form.register("validTo")} /></Fld>
+
+          <Fld label="Usage Limit" hint="Total times this offer can be used · 0 = unlimited"><Input className="h-10" type="number" {...form.register("usageLimit")} /></Fld>
+
+          <div className="flex items-center justify-between rounded-[10px] border border-[#e7edf7] px-3.5 py-2.5">
+            <div>
+              <p className="text-[13px] font-bold text-[#102347]">Status — Active</p>
+              <p className="text-[11px] text-[#64748b]">Offer will be live immediately</p>
+            </div>
+            <Switch checked={form.watch("active")} onCheckedChange={(v) => form.setValue("active", v)} />
           </div>
-          <div className="grid grid-cols-2 items-end gap-3">
-            <Fld label="Usage limit" hint="0 = unlimited"><Input className="h-10" type="number" {...form.register("usageLimit")} /></Fld>
-            <label className="flex h-10 items-center justify-between rounded-[8px] border border-[#eef2f8] px-3">
-              <span className="text-[12px] font-semibold text-[#344668]">Active</span>
-              <Switch checked={form.watch("active")} onCheckedChange={(v) => form.setValue("active", v)} />
-            </label>
-          </div>
-          <div className="flex gap-2.5 pt-1">
+        </div>
+
+        <div className="shrink-0 border-t border-[#eef1f6] px-5 py-3.5">
+          <div className="flex gap-2.5">
             <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
-              {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : editing ? "Save changes" : "Create offer"}
+              {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><Ticket size={15} /> {editing ? "Save Changes" : "Create Offer"}</>}
             </Button>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </form>
+    </aside>
   );
 }
 
