@@ -7,7 +7,7 @@ describe("dashboard cash collection scope", () => {
     expect(source).toContain("FinancialAggregationService.buildSnapshot(today)");
     expect(source).toContain("const cash = finance?.cashSalesToday");
     expect(source).toContain("const upi = finance?.upiSalesToday");
-    expect(source).toContain("const credit = reportToday?.udharSales");
+    expect(source).toContain("const credit = finance?.udharSalesToday");
     expect(source).not.toContain("const cash = reportPayments?.cash");
   });
 

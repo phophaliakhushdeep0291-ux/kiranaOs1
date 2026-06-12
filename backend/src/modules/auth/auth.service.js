@@ -5,6 +5,7 @@ import { signToken } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { assertDeviceCanOwnLoginSession } from "../devices/devices.service.js";
 
 const REFRESH_TOKEN_BYTES = 48;
 const REFRESH_TOKEN_TTL_DAYS = 30;
@@ -92,10 +93,15 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
   const nextSecret = createRefreshSecret();
   const nextRefreshToken = formatRefreshToken(session.id, nextSecret);
   const refreshTokenHash = await bcrypt.hash(nextSecret, 10);
+  const nextDeviceId = normalizeDeviceId(reqMeta.deviceId) ?? session.deviceId ?? null;
+  if (nextDeviceId && nextDeviceId !== session.deviceId) {
+    await assertDeviceCanOwnLoginSession(session.shopId, session.user, nextDeviceId);
+  }
 
   await db.session.update({
     where: { id: session.id },
     data: {
+      deviceId: nextDeviceId,
       refreshTokenHash,
       userAgent: reqMeta.userAgent ?? session.userAgent,
       ipAddress: reqMeta.ipAddress ?? session.ipAddress,
@@ -118,7 +124,7 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
   };
 }
 
-export async function logout(refreshToken, user = null, options = {}) {
+export async function logout(refreshToken, user = null) {
   const parsed = parseRefreshToken(refreshToken);
   if (!parsed) return { success: true, message: "Logged out" };
 
@@ -136,26 +142,7 @@ export async function logout(refreshToken, user = null, options = {}) {
   const ok = await bcrypt.compare(parsed.secret, session.refreshTokenHash);
   if (!ok) throw new AppError("Invalid refresh token", 401);
 
-  await db.$transaction(async (tx) => {
-    await tx.session.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedReason: "LOGOUT" } });
-
-    const deviceId = typeof options.deviceId === "string" ? options.deviceId.trim() : "";
-    if (deviceId) {
-      await tx.device.updateMany({
-        where: {
-          shopId: session.shopId,
-          deviceId,
-          status: "active",
-          OR: [{ userId: session.userId }, { userId: null }],
-        },
-        data: { status: "removed", removedAt: new Date() },
-      });
-      await tx.deviceLicense.updateMany({
-        where: { shopId: session.shopId, deviceId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-    }
-  });
+  await db.session.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedReason: "LOGOUT" } });
   return { success: true, message: "Logged out" };
 }
 
@@ -309,6 +296,11 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
 // ── Helpers ─────────────────────────────────────────────────
 
 async function issueAuthResponse(user, shop, reqMeta = {}) {
+  const deviceId = normalizeDeviceId(reqMeta.deviceId);
+  if (deviceId) {
+    await assertDeviceCanOwnLoginSession(user.shopId, user, deviceId);
+  }
+
   const accessToken = signToken({ userId: user.id, shopId: user.shopId, role: user.role });
   const refreshSecret = createRefreshSecret();
   const refreshTokenHash = await bcrypt.hash(refreshSecret, 10);
@@ -316,6 +308,7 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
     data: {
       userId: user.id,
       shopId: user.shopId,
+      deviceId,
       refreshTokenHash,
       userAgent: reqMeta.userAgent,
       ipAddress: reqMeta.ipAddress,
@@ -330,6 +323,10 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
     shop,
     user: sanitizeUser(user),
   };
+}
+
+function normalizeDeviceId(deviceId) {
+  return typeof deviceId === "string" && deviceId.trim() ? deviceId.trim() : null;
 }
 
 function createRefreshSecret() {

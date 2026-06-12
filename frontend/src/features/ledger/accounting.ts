@@ -262,12 +262,11 @@ export function buildLedgerStatement(entries: CustomerLedgerEntry[]): LedgerStat
   return sortLedgerEntries(entries).map((entry) => {
     const signed = ledgerSignedAmount(entry);
     running = roundMoney(running + signed);
-    const displayedRunning = Math.max(0, running);
     return {
       ...entry,
       signed_amount: signed,
-      running_balance: displayedRunning,
-      balance_after: displayedRunning,
+      running_balance: running,
+      balance_after: running,
       display_type: normaliseLedgerType(entry.type, entry.source_type),
       display_date: getLedgerDate(entry),
     };
@@ -310,10 +309,7 @@ export function calculateUdharAgeing(entries: CustomerLedgerEntry[], now = new D
 }
 
 export function calculateTrustScore(customer: Partial<Customer>, entries: CustomerLedgerEntry[]): LedgerMetrics {
-  // Outstanding udhar is debt, so the user-facing balance must not become
-  // negative if a stale/duplicate payment row exists locally before the matching
-  // bill/debit row arrives from sync.
-  const balance = Math.max(0, calculateLedgerBalance(entries));
+  const balance = calculateLedgerBalance(entries);
   const ageing = calculateUdharAgeing(entries);
   const sorted = sortLedgerEntries(entries);
   const payments = sorted.filter((entry) => normaliseLedgerType(entry.type, entry.source_type) === "PAYMENT");

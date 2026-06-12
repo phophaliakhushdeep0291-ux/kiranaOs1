@@ -165,11 +165,8 @@ export async function recordPaymentLocalFirst(
   if (!existing) throw new Error("Customer not found in local records");
 
   const existingLedgerEntries = await readCustomerLedgerEntries(customerId);
-  const currentBalance = roundMoney(Math.max(0, calculateLedgerBalance(existingLedgerEntries)));
-  if (amount > currentBalance + 0.005) {
-    throw new Error(`Payment ₹${amount.toLocaleString("en-IN")} exceeds outstanding udhar ₹${currentBalance.toLocaleString("en-IN")}`);
-  }
-  const nextBalance = roundMoney(Math.max(0, currentBalance - amount));
+  const currentBalance = calculateLedgerBalance(existingLedgerEntries);
+  const nextBalance = roundMoney(currentBalance - amount);
   const note = typeof validated.note === "string" ? validated.note : undefined;
   const paidAt = typeof validated.paidAt === "string" ? validated.paidAt : now;
 

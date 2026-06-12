@@ -71,8 +71,4 @@ export const refreshSchema = z.object({
 
 export const logoutSchema = z.object({
   refreshToken: z.string().min(20),
-  // Optional current browser/device id. When present, logout also unlinks this
-  // device row so plan device slots are actually freed instead of only revoking
-  // the auth session.
-  deviceId: z.string().min(3).max(128).optional(),
 });

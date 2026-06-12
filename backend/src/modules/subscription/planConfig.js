@@ -17,11 +17,12 @@ const starterFeatures = [
   "offline_billing",
   "seven_day_local_reports",
   "cloud_backup",
+  // Minimum two devices means Starter must include real two-way sync too.
+  "auto_two_way_sync",
   "basic_recycle_bin",
 ];
 
 const standardOnlyFeatures = [
-  "auto_two_way_sync",
   "thirty_day_reports",
   "customer_payment_history",
   "stock_tracking",
@@ -73,7 +74,7 @@ export const PLAN_CONFIGS = {
     name: "Starter",
     priceMonthlyPaise: 29900,
     priceYearlyPaise: 29900 * 12,
-    maxDevices: 1,
+    maxDevices: 2,
     maxStores: 1,
     maxStaff: 0,
     features: starterFeatures,

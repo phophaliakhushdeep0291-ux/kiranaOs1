@@ -104,6 +104,7 @@ export interface FinancialAggregationSnapshot {
   grossMarginPct: number;
   cashSalesToday: number;
   upiSalesToday: number;
+  udharSalesToday: number;
   cashUdharRecoveryToday: number;
   upiUdharRecoveryToday: number;
   totalCashCollectedToday: number;
@@ -894,6 +895,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const revenueToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.amount, 0));
   const cashSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.cash, 0));
   const upiSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.upi, 0));
+  const udharSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.udhar, 0));
   const profitByProduct = calculateProfitByProduct(todayBills, billItems, products);
   const itemProfit = roundMoney(profitByProduct.reduce((sum, row) => sum + row.profit, 0));
   const billProfit = roundMoney(todayBills.reduce((sum, bill) => sum + readNumber(bill.grossProfit ?? bill.gross_profit, 0), 0));
@@ -928,6 +930,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
     grossMarginPct: revenueToday > 0 ? Math.round((profitToday / revenueToday) * 100) : 0,
     cashSalesToday,
     upiSalesToday,
+    udharSalesToday,
     cashUdharRecoveryToday: oldUdhar.cash,
     upiUdharRecoveryToday: oldUdhar.upi,
     totalCashCollectedToday,

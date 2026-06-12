@@ -39,7 +39,7 @@ for (const [code, price] of Object.entries({ starter: 29900, standard: 39900, gr
   assert(planConfig.includes(code), `Plan config must include ${code}`);
   assert(planConfig.includes(String(price)), `Plan config must price ${code} in paise`);
 }
-assert(planConfig.includes("maxDevices: 1") && planConfig.includes("maxDevices: 5"), "Plan device limits must be configured");
+assert(planConfig.includes("maxDevices: 2") && planConfig.includes("maxDevices: 5"), "Plan device limits must be configured with at least 2 devices and Pro at 5");
 assert(planConfig.includes("maxStaff: 0") && planConfig.includes("maxStaff: 15"), "Plan staff limits must be configured");
 assert(planConfig.includes("staff_login"), "Growth must include staff_login");
 assert(planConfig.includes("whatsapp_reminders"), "Pro must include whatsapp_reminders");

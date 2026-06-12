@@ -4,7 +4,13 @@ function requestMeta(req) {
   return {
     userAgent: req.get("user-agent") || null,
     ipAddress: req.ip || req.socket?.remoteAddress || null,
+    deviceId: getRequestDeviceId(req),
   };
+}
+
+function getRequestDeviceId(req) {
+  const raw = req.get("x-device-id") || req.body?.deviceId || req.query?.deviceId || null;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
 }
 
 export async function register(req, res, next) {
@@ -23,7 +29,7 @@ export async function refresh(req, res, next) {
 }
 
 export async function logout(req, res, next) {
-  try { res.json({ success: true, data: await authService.logout(req.body.refreshToken, req.user ?? null, { deviceId: req.body.deviceId }) }); }
+  try { res.json({ success: true, data: await authService.logout(req.body.refreshToken, req.user ?? null) }); }
   catch (err) { next(err); }
 }
 

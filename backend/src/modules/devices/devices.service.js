@@ -23,6 +23,58 @@ export async function listDevices(shopId) {
   return db.device.findMany({ where: { shopId }, orderBy: { createdAt: "asc" } });
 }
 
+export async function assertDeviceCanOwnLoginSession(shopId, user, deviceId) {
+  if (!shopId || !deviceId) return;
+
+  const existing = await db.device.findUnique({ where: { shopId_deviceId: { shopId, deviceId } } });
+  if (existing?.status === "blocked") {
+    const err = new AppError("Device is blocked", 403);
+    err.code = "DEVICE_BLOCKED";
+    throw err;
+  }
+
+  // A manually removed device should not silently come back for staff in production.
+  // Owner/admin can reactivate it, and any device can log in again if its old session
+  // was merely logged out and the same browser device id is reused.
+  if (existing?.status === "removed" && env.NODE_ENV === "production" && !["owner", "admin"].includes(user?.role)) {
+    const err = new AppError("Removed device reactivation requires owner/admin approval", 403);
+    err.code = "DEVICE_REMOVED_REACTIVATION_REQUIRES_OWNER";
+    throw err;
+  }
+
+  const effective = await getEffectivePlan(shopId);
+  const activeSessionDeviceIds = await getActiveSessionDeviceIds(shopId);
+  activeSessionDeviceIds.delete(deviceId);
+
+  const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
+  if (activeSessionDeviceIds.size >= allowedMaxDevices) {
+    const err = new AppError("Device limit exceeded", 403);
+    err.code = "DEVICE_LIMIT_EXCEEDED";
+    err.meta = {
+      activeCount: activeSessionDeviceIds.size,
+      maxDevices: effective.limits.maxDevices,
+      allowedMaxDevices,
+      planCode: effective.planCode,
+      developmentOverride: isDevelopmentMultiDeviceOverrideEnabled(),
+      mode: "active_login_sessions",
+    };
+    throw err;
+  }
+}
+
+async function getActiveSessionDeviceIds(shopId) {
+  const sessions = await db.session.findMany({
+    where: {
+      shopId,
+      revokedAt: null,
+      expiresAt: { gt: new Date() },
+      deviceId: { not: null },
+    },
+    select: { deviceId: true },
+  });
+  return new Set(sessions.map((session) => session.deviceId).filter(Boolean));
+}
+
 export async function activateDevice(shopId, user, input, req = null) {
   const userId = user?.userId ?? user?.id ?? null;
   const existing = await db.device.findUnique({ where: { shopId_deviceId: { shopId, deviceId: input.deviceId } } });
@@ -55,34 +107,7 @@ export async function activateDevice(shopId, user, input, req = null) {
     throw err;
   }
 
-  const effective = await getEffectivePlan(shopId);
-  let activeCount = await db.device.count({ where: { shopId, status: "active" } });
-  const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
-  if (activeCount >= allowedMaxDevices) {
-    const canReplaceOldestSelfDevice =
-      input.replaceOldestSelfDevice === true &&
-      ["owner", "admin"].includes(String(user?.role ?? ""));
-
-    if (canReplaceOldestSelfDevice) {
-      const reclaimed = await reclaimOldestReplaceableDevice(shopId, userId, input.deviceId);
-      if (reclaimed) {
-        activeCount = await db.device.count({ where: { shopId, status: "active" } });
-      }
-    }
-  }
-
-  if (activeCount >= allowedMaxDevices) {
-    const err = new AppError("Device limit exceeded", 403);
-    err.code = "DEVICE_LIMIT_EXCEEDED";
-    err.meta = {
-      activeCount,
-      maxDevices: effective.limits.maxDevices,
-      allowedMaxDevices,
-      planCode: effective.planCode,
-      developmentOverride: isDevelopmentMultiDeviceOverrideEnabled(),
-    };
-    throw err;
-  }
+  await assertDeviceCanOwnLoginSession(shopId, user, input.deviceId);
 
   const device = existing
     ? await db.device.update({
@@ -115,35 +140,6 @@ export async function activateDevice(shopId, user, input, req = null) {
   const license = await issueDeviceLicense(shopId, device.deviceId);
   await auditDeviceAction({ shopId, userId, action: "DEVICE_ACTIVATED", entityId: device.id, metadata: { deviceId: device.deviceId, platform: device.platform, planCode: license.payload.planCode }, req });
   return withLicense(device, license);
-}
-
-async function reclaimOldestReplaceableDevice(shopId, userId, incomingDeviceId) {
-  const oldDevice = await db.device.findFirst({
-    where: {
-      shopId,
-      status: "active",
-      deviceId: { not: incomingDeviceId },
-      OR: [{ userId }, { userId: null }],
-    },
-    orderBy: [{ lastActiveAt: "asc" }, { createdAt: "asc" }],
-  });
-
-  if (!oldDevice) return null;
-  const removedAt = new Date();
-  const updated = await db.device.update({
-    where: { id: oldDevice.id },
-    data: { status: "removed", removedAt },
-  });
-  await revokeDeviceLicense(shopId, oldDevice.deviceId, "owner_replaced_oldest_device");
-  await auditDeviceAction({
-    shopId,
-    userId,
-    action: "DEVICE_REPLACED_BY_OWNER",
-    entityId: oldDevice.id,
-    metadata: { deviceId: oldDevice.deviceId, replacedByDeviceId: incomingDeviceId },
-    req: null,
-  });
-  return updated;
 }
 
 export async function removeDevice(shopId, deviceId, userId = null, req = null) {
