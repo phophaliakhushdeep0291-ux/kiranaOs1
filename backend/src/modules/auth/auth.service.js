@@ -113,6 +113,7 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
     userId: session.user.id,
     shopId: session.shopId,
     role: session.user.role,
+    sessionId: session.id,
   });
 
   return {
@@ -301,7 +302,6 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
     await assertDeviceCanOwnLoginSession(user.shopId, user, deviceId);
   }
 
-  const accessToken = signToken({ userId: user.id, shopId: user.shopId, role: user.role });
   const refreshSecret = createRefreshSecret();
   const refreshTokenHash = await bcrypt.hash(refreshSecret, 10);
   const session = await db.session.create({
@@ -315,6 +315,7 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
       expiresAt: refreshExpiryDate(),
     },
   });
+  const accessToken = signToken({ userId: user.id, shopId: user.shopId, role: user.role, sessionId: session.id });
 
   return {
     accessToken,

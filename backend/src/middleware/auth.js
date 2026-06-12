@@ -39,9 +39,37 @@ export async function requireAuth(req, _res, next) {
       throw err;
     }
 
+    let session = null;
+    if (payload.sessionId || payload.sid) {
+      session = await db.session.findFirst({
+        where: {
+          id: payload.sessionId || payload.sid,
+          userId: user.id,
+          shopId: user.shopId,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true, deviceId: true },
+      });
+
+      if (!session) {
+        const err = new AppError("Login session is no longer active", 401);
+        err.code = "SESSION_INACTIVE";
+        throw err;
+      }
+    }
+
     // Never trust stale role claims from an old JWT. Role changes must apply
-    // immediately for all protected APIs.
-    req.user = { ...payload, userId: user.id, shopId: user.shopId, role: user.role };
+    // immediately for all protected APIs. Session/device data is loaded fresh
+    // from the database when the token contains a session id.
+    req.user = {
+      ...payload,
+      userId: user.id,
+      shopId: user.shopId,
+      role: user.role,
+      sessionId: session?.id ?? payload.sessionId ?? payload.sid ?? null,
+      deviceId: session?.deviceId ?? null,
+    };
     next();
   } catch (error) {
     if (error instanceof AppError) return next(error);

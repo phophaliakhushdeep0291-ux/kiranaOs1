@@ -9,7 +9,7 @@ import { getEffectivePlan } from "../subscription/subscription.service.js";
 import { issueDeviceLicense, refreshDeviceLicense, revokeDeviceLicense } from "./license.service.js";
 
 function isDevelopmentMultiDeviceOverrideEnabled() {
-  return env.NODE_ENV === "development" && env.DEV_MAX_ACTIVE_DEVICES > 0;
+  return env.NODE_ENV === "development" && env.ENABLE_DEV_DEVICE_LIMIT_OVERRIDE && env.DEV_MAX_ACTIVE_DEVICES > 0;
 }
 
 function getRuntimeDeviceLimit(planMaxDevices, subscription = null) {
@@ -75,10 +75,53 @@ async function getActiveSessionDeviceIds(shopId) {
   return new Set(sessions.map((session) => session.deviceId).filter(Boolean));
 }
 
+export async function assertDeviceHasActiveLoginSession(shopId, user, deviceId) {
+  if (!shopId || !deviceId) return;
+
+  const sessionId = user?.sessionId ?? user?.sid ?? null;
+  if (sessionId) {
+    const session = await db.session.findFirst({
+      where: {
+        id: sessionId,
+        shopId,
+        userId: user?.userId ?? user?.id,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { deviceId: true },
+    });
+
+    if (!session) {
+      const err = new AppError("Login session is no longer active", 401);
+      err.code = "SESSION_INACTIVE";
+      throw err;
+    }
+
+    if (session.deviceId !== deviceId) {
+      const err = new AppError("This login session belongs to another device", 403);
+      err.code = "SESSION_DEVICE_MISMATCH";
+      throw err;
+    }
+
+    return;
+  }
+
+  const activeSessionDeviceIds = await getActiveSessionDeviceIds(shopId);
+  if (!activeSessionDeviceIds.has(deviceId)) {
+    const err = new AppError("Active login session required for this device", 403);
+    err.code = "DEVICE_SESSION_REQUIRED";
+    throw err;
+  }
+}
+
 export async function activateDevice(shopId, user, input, req = null) {
   const userId = user?.userId ?? user?.id ?? null;
   const existing = await db.device.findUnique({ where: { shopId_deviceId: { shopId, deviceId: input.deviceId } } });
   const now = new Date();
+
+  // Even already-registered devices must respect the current plan's concurrent-device limit.
+  // Without this, an old active Device row could keep working after the shop is already over limit.
+  await assertDeviceCanOwnLoginSession(shopId, user, input.deviceId);
 
   if (existing?.status === "active") {
     const device = await db.device.update({
@@ -106,8 +149,6 @@ export async function activateDevice(shopId, user, input, req = null) {
     err.code = "DEVICE_REMOVED_REACTIVATION_REQUIRES_OWNER";
     throw err;
   }
-
-  await assertDeviceCanOwnLoginSession(shopId, user, input.deviceId);
 
   const device = existing
     ? await db.device.update({

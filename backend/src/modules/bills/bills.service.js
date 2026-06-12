@@ -1,8 +1,9 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney, toPaiseBigInt } from "../../utils/money.js";
+import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
+import { syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -321,11 +322,10 @@ export async function confirmBill(shopId, body, actor = {}) {
       });
       void udharLedgerEntry;
 
-      await tx.customer.updateMany({
-        where: { id: customerId, shopId, deletedAt: null },
-        data: { udharAmount: { increment: creditAmount }, type: "udhar" },
+      await syncCustomerUdharBalance(tx, shopId, customerId, {
+        repairNegative: true,
+        repairNote: `System repair after bill ${bill.billNo}: previous udhar balance was negative`,
       });
-      await syncCustomerUdharPaise(tx, shopId, customerId);
     }
 
     return bill;
@@ -400,17 +400,10 @@ export async function cancelBill(shopId, billId, { reason }) {
           },
         });
 
-        const decremented = await tx.customer.updateMany({
-          where: { id: bill.customerId, shopId, udharAmount: { gte: bill.creditAmount } },
-          data: { udharAmount: { decrement: bill.creditAmount } },
+        await syncCustomerUdharBalance(tx, shopId, bill.customerId, {
+          repairNegative: true,
+          repairNote: `System repair after cancelling bill ${bill.billNo}: udhar balance went negative`,
         });
-        await syncCustomerUdharPaise(tx, shopId, bill.customerId);
-        if (decremented.count !== 1) {
-          await tx.customer.updateMany({
-            where: { id: bill.customerId, shopId },
-            data: { udharAmount: 0, udharAmountPaise: 0n },
-          });
-        }
       }
     }
 
@@ -503,11 +496,10 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
           },
         });
 
-        await tx.customer.updateMany({
-          where: { id: bill.customerId, shopId, deletedAt: null },
-          data: { udharAmount: { increment: bill.creditAmount }, type: "udhar" },
+        await syncCustomerUdharBalance(tx, shopId, bill.customerId, {
+          repairNegative: true,
+          repairNote: `System repair after restoring bill ${bill.billNo}: previous udhar balance was negative`,
         });
-        await syncCustomerUdharPaise(tx, shopId, bill.customerId);
       }
     }
 
@@ -561,17 +553,4 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
   const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
   const oldStock = round2(newStock + qtyInBase);
   return { oldStock, newStock };
-}
-
-
-async function syncCustomerUdharPaise(tx, shopId, customerId) {
-  const fresh = await tx.customer.findFirst({
-    where: { id: customerId, shopId },
-    select: { id: true, udharAmount: true },
-  });
-  if (!fresh) return;
-  await tx.customer.update({
-    where: { id: fresh.id },
-    data: { udharAmountPaise: toPaiseBigInt(fresh.udharAmount) },
-  });
 }

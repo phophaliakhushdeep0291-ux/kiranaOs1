@@ -28,8 +28,9 @@ import {
 } from "../../utils/syncRules.js";
 import { decodeCursor, encodeCursor, PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT } from "./sync.schema.js";
 import { moneyAmount, quantityAmount } from "../../utils/validationSchemas.js";
-import { moneyShadows, round2, toPaiseBigInt } from "../../utils/money.js";
+import { moneyShadows, round2 } from "../../utils/money.js";
 import { toBaseQty } from "../../utils/units.js";
+import { calculateCustomerUdharBalance, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 
 const protectedProductFields = [
   "defaultPricePerRateUnit",
@@ -797,6 +798,9 @@ async function applyUpdateCustomer(shopId, event, context) {
   if (!customerId) throw new AppError("customerId required for UPDATE_CUSTOMER sync event", 400);
 
   const changes = updateCustomerSchema.parse(payload.changes ?? stripKnownSyncPayloadKeys(payload));
+  // Udhar balance is ledger-derived. Offline customer updates must not overwrite it.
+  delete changes.udharAmount;
+  delete changes.udharAmountPaise;
 
   if (changes.mobile) {
     const duplicate = await db.customer.findFirst({
@@ -863,33 +867,33 @@ async function applyLedgerAdjustment(shopId, event, context) {
   return db.$transaction(async (tx) => {
     const customer = await tx.customer.findFirst({ where: { id: payload.customerId, shopId, deletedAt: null } });
     if (!customer) throw new AppError("Customer not found", 404);
-    const nextBalance = round2(customer.udharAmount + amount);
+
+    const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customer.id);
+    const nextBalance = round2(currentBalance.balance + amount);
     if (nextBalance < 0) {
       const err = new AppError("Ledger adjustment would make udhar balance negative", 409);
       err.code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
+      err.meta = { outstanding: currentBalance.balance, attemptedAdjustment: amount, rawBalance: currentBalance.rawBalance };
       throw err;
     }
 
+    const ledgerAmount = round2(Math.abs(amount));
     const ledger = await tx.udharLedger.create({
       data: {
         shopId,
         customerId: customer.id,
         customerName: customer.name,
         type: amount >= 0 ? "debit" : "payment",
-        amount: Math.abs(amount),
-        ...moneyShadows({ amount: Math.abs(amount) }),
+        amount: ledgerAmount,
+        ...moneyShadows({ amount: ledgerAmount }),
         mode: "adjustment",
         note: payload.note ?? "Offline ledger adjustment",
       },
     });
 
-    await tx.customer.update({
-      where: { id: customer.id },
-      data: {
-        udharAmount: nextBalance,
-        udharAmountPaise: toPaiseBigInt(nextBalance),
-        type: nextBalance > 0 ? "udhar" : customer.type,
-      },
+    const refreshed = await syncCustomerUdharBalance(tx, shopId, customer.id, {
+      repairNegative: true,
+      repairNote: `System repair after ledger adjustment ${ledger.id}: udhar balance went negative`,
     });
 
     return {
@@ -897,7 +901,7 @@ async function applyLedgerAdjustment(shopId, event, context) {
       ledgerEntryId: ledger.id,
       localLedgerEntryId: payload.ledgerEntryId ?? payload.localLedgerEntryId ?? payload.localId ?? null,
       customerId: customer.id,
-      newBalance: nextBalance,
+      newBalance: refreshed.balance,
       amount,
     };
   });
