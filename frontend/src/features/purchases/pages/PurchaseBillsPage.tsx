@@ -18,6 +18,7 @@ import { hydratePurchaseHistoryFromSyncPull } from "@/features/sync/cloud-hydrat
 import { useAuth } from "@/features/auth/AuthContext";
 import { deletePurchaseLocal, markPurchasePaidLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { useToast } from "@/hooks/use-toast";
+import { CHIP_TONES } from "@/lib/chip-tones";
 import { cn } from "@/lib/utils";
 
 function money(value: unknown) {
@@ -36,15 +37,15 @@ function safeDate(value: string) {
 }
 
 const STATUS_CLS: Record<string, string> = {
-  paid: "bg-emerald-100 text-emerald-700",
-  partial: "bg-amber-100 text-amber-700",
-  due: "bg-rose-100 text-rose-700",
+  paid: CHIP_TONES.green,
+  partial: CHIP_TONES.orange,
+  due: CHIP_TONES.red,
 };
 const MODE_CLS: Record<string, string> = {
-  cash: "bg-emerald-50 text-emerald-700",
-  upi: "bg-violet-50 text-violet-700",
-  bank: "bg-[#eef5ff] text-[#0057ff]",
-  credit: "bg-amber-50 text-amber-700",
+  cash: CHIP_TONES.green,
+  upi: CHIP_TONES.violet,
+  bank: CHIP_TONES.blue,
+  credit: CHIP_TONES.amber,
 };
 
 interface PurchaseFormState {
@@ -333,7 +334,7 @@ export default function PurchaseBillsPage() {
                         <td className="whitespace-nowrap px-4 py-3 text-[#52627e]">{safeDate(row.date)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[#102347]">{fmt(row.amount)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-right text-[#344668]">{fmt(row.paid)}</td>
-                        <td className={cn("whitespace-nowrap px-4 py-3 text-right font-bold", row.due > 0 ? "text-rose-600" : "text-emerald-600")}>{fmt(row.due)}</td>
+                        <td className={cn("whitespace-nowrap px-4 py-3 text-right font-bold", row.due > 0 ? "text-[#ef4444]" : "text-[#16a34a]")}>{fmt(row.due)}</td>
                         <td className="px-4 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold capitalize", MODE_CLS[row.paymentMode] ?? "bg-[#eef2f8] text-[#64748b]")}>{row.paymentMode === "upi" ? "UPI" : row.paymentMode}</span></td>
                         <td className="px-4 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold capitalize", STATUS_CLS[status] ?? STATUS_CLS.due)}>{status}</span></td>
                         <td className="px-4 py-3">

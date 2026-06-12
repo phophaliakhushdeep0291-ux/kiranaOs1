@@ -21,6 +21,7 @@ import type { Bill } from "@/types/api";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { usePermission } from "@/features/staff/permissions";
 import { useOfflineStatus } from "@/features/sync";
+import { CHIP_TONES } from "@/lib/chip-tones";
 import { cn } from "@/lib/utils";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
@@ -105,19 +106,19 @@ function statusLabel(status: string) {
 }
 
 const STATUS_CLS: Record<string, string> = {
-  Paid: "bg-emerald-100 text-emerald-700",
-  Partial: "bg-amber-100 text-amber-700",
-  Udhar: "bg-rose-100 text-rose-600",
-  Pending: "bg-[#eef2f8] text-[#64748b]",
-  Cancelled: "bg-rose-100 text-rose-700",
-  "Rough/Estimate": "bg-violet-100 text-violet-700",
+  Paid: CHIP_TONES.green,
+  Partial: CHIP_TONES.orange,
+  Udhar: CHIP_TONES.red, // shown as "Unpaid"
+  Pending: CHIP_TONES.gray,
+  Cancelled: CHIP_TONES.red,
+  "Rough/Estimate": CHIP_TONES.violet,
 };
 const MODE_CLS: Record<string, string> = {
-  cash: "bg-emerald-50 text-emerald-700",
-  upi: "bg-violet-50 text-violet-700",
-  udhar: "bg-amber-50 text-amber-700",
-  card: "bg-[#eef5ff] text-[#0057ff]",
-  bank: "bg-[#eef5ff] text-[#0057ff]",
+  cash: CHIP_TONES.green,
+  upi: CHIP_TONES.violet,
+  udhar: CHIP_TONES.amber,
+  card: CHIP_TONES.blue,
+  bank: CHIP_TONES.blue,
 };
 
 function modeLabel(mode: string) {
@@ -466,11 +467,11 @@ export default function BillsPage() {
                             <td className="px-3 py-3 text-right text-[#52627e]">{items ?? "—"}</td>
                             <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-[#102347]">{money(billTotal(bill))}</td>
                             <td className="whitespace-nowrap px-3 py-3 text-right text-[#344668]">{money(billPaid(bill))}</td>
-                            <td className={cn("whitespace-nowrap px-3 py-3 text-right font-bold", due > 0 ? "text-rose-600" : "text-[#344668]")}>{money(due)}</td>
+                            <td className={cn("whitespace-nowrap px-3 py-3 text-right font-bold", due > 0 ? "text-[#ef4444]" : "text-[#344668]")}>{money(due)}</td>
                             <td className="px-3 py-3"><span className={cn("whitespace-nowrap rounded-[7px] px-2 py-[3px] text-[11px] font-bold", MODE_CLS[mode] ?? "bg-[#eef2f8] text-[#64748b]")}>{modeLabel(mode)}</span></td>
                             <td className="px-3 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", STATUS_CLS[status] ?? STATUS_CLS.Pending)}>{statusLabel(status)}</span></td>
                             <td className="px-3 py-3">
-                              <span className={cn("flex w-fit items-center gap-1 whitespace-nowrap rounded-[7px] px-2 py-[3px] text-[11px] font-bold", sync === "synced" ? "bg-emerald-50 text-emerald-700" : sync === "failed" || sync === "conflict" ? "bg-rose-50 text-rose-600" : "bg-amber-50 text-amber-700")}>
+                              <span className={cn("flex w-fit items-center gap-1 whitespace-nowrap rounded-[7px] px-2 py-[3px] text-[11px] font-bold", sync === "synced" ? CHIP_TONES.green : sync === "failed" || sync === "conflict" ? CHIP_TONES.red : CHIP_TONES.amber)}>
                                 {sync === "synced" ? <CheckCircle2 size={11} /> : <Clock3 size={11} />}{sync === "synced" ? "Synced" : sync.replaceAll("_", " ")}
                               </span>
                             </td>
@@ -560,10 +561,10 @@ export default function BillsPage() {
                     <DetailRow label="Items" value={`${itemsCount(selectedBill) ?? "—"} items`} />
                     <DetailRow label="Total Amount" value={money(billTotal(selectedBill))} bold />
                     <DetailRow label="Paid Amount" value={money(billPaid(selectedBill))} />
-                    <DetailRow label="Due Amount" value={money(billCredit(selectedBill))} valueClass={billCredit(selectedBill) > 0 ? "text-rose-600" : "text-emerald-600"} />
+                    <DetailRow label="Due Amount" value={money(billCredit(selectedBill))} valueClass={billCredit(selectedBill) > 0 ? "text-[#ef4444]" : "text-[#16a34a]"} />
                     <DetailRow label="Payment Mode" value={modeLabel(paymentModeOf(selectedBill))} />
                     <DetailRow label="Status" value={<span className={cn("rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-bold", STATUS_CLS[paymentStatusOf(selectedBill)] ?? STATUS_CLS.Pending)}>{statusLabel(paymentStatusOf(selectedBill))}</span>} />
-                    <DetailRow label="Sync Status" value={<span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600"><CheckCircle2 size={11} /> {syncStatusOf(selectedBill) === "synced" ? "Synced" : syncStatusOf(selectedBill).replaceAll("_", " ")}</span>} />
+                    <DetailRow label="Sync Status" value={<span className="flex items-center gap-1 text-[11px] font-bold text-[#16a34a]"><CheckCircle2 size={11} /> {syncStatusOf(selectedBill) === "synced" ? "Synced" : syncStatusOf(selectedBill).replaceAll("_", " ")}</span>} />
                   </dl>
                   <p className="mb-1.5 text-[10.5px] font-bold uppercase tracking-wide text-[#9aa6bb]">Bill Actions</p>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -601,7 +602,7 @@ export default function BillsPage() {
                 <DetailRow label="Total Bills" value={String(summary.totalBills)} />
                 <DetailRow label="Total Sales" value={money(summary.totalSales)} bold />
                 <DetailRow label="Paid Amount" value={money(summary.paidAmount)} />
-                <DetailRow label="Due Amount" value={money(summary.dueAmount)} valueClass={summary.dueAmount > 0 ? "text-rose-600" : undefined} />
+                <DetailRow label="Due Amount" value={money(summary.dueAmount)} valueClass={summary.dueAmount > 0 ? "text-[#ef4444]" : undefined} />
                 <DetailRow label="Cancelled Bills" value={String(summary.cancelled)} />
                 <DetailRow label="Avg. Bill Value" value={money(summary.avg)} />
               </dl>

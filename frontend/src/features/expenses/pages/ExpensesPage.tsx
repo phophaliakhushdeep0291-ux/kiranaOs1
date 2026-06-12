@@ -18,6 +18,7 @@ import {
   Package, Pencil, PieChart as PieIcon, Plus, Receipt, Search, Smartphone, Trash2, Truck, Users, Wallet, Wrench, X, Zap,
 } from "lucide-react";
 import { listExpenses, getExpenseOverview, createExpense, updateExpense, deleteExpense } from "@/features/expenses/api";
+import { CHIP_TONES } from "@/lib/chip-tones";
 import type { Expense, ExpenseInput } from "@/types/api";
 
 const CATEGORIES = ["Rent", "Salaries", "Utilities", "Stock Purchase", "Transport", "Maintenance", "Marketing", "Office Supplies", "Mobile & Internet", "Misc"];
@@ -25,7 +26,7 @@ const MODES: { value: string; label: string }[] = [
   { value: "cash", label: "Cash" }, { value: "upi", label: "UPI" }, { value: "bank", label: "Bank Transfer" }, { value: "card", label: "Card" }, { value: "other", label: "Other" },
 ];
 const MODE_BADGE: Record<string, string> = {
-  cash: "bg-emerald-50 text-emerald-700", upi: "bg-violet-50 text-violet-700", bank: "bg-[#eef5ff] text-[#0057ff]", card: "bg-amber-50 text-amber-700", other: "bg-[#eef2f8] text-[#64748b]",
+  cash: CHIP_TONES.green, upi: CHIP_TONES.violet, bank: CHIP_TONES.blue, card: CHIP_TONES.blue, other: CHIP_TONES.gray,
 };
 const PALETTE = ["#0057ff", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#64748b"];
 const CATEGORY_ICON: Record<string, typeof Home> = {
@@ -296,7 +297,7 @@ export default function ExpensesPage() {
                           <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[#102347]">{inr(e.amount)}</td>
                           <td className="max-w-[120px] truncate px-4 py-3 text-[#52627e]">{e.recordedBy || "—"}</td>
                           <td className="px-4 py-3">
-                            <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", e.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>{e.status === "pending" ? "Pending" : "Paid"}</span>
+                            <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", e.status === "pending" ? CHIP_TONES.amber : CHIP_TONES.green)}>{e.status === "pending" ? "Pending" : "Paid"}</span>
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex justify-end gap-1">

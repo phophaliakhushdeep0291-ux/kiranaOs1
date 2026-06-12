@@ -9,13 +9,14 @@ import { cn } from "@/lib/utils";
 
 export type Tone = "blue" | "green" | "amber" | "red" | "gray" | "violet";
 
+// Vivid mid-tone text on a soft tint — matches the reference chips (see lib/chip-tones).
 const BADGE_TONES: Record<Tone, string> = {
-  blue: "bg-[#eef5ff] text-[#005dff]",
-  green: "bg-emerald-100 text-emerald-700",
-  amber: "bg-amber-100 text-amber-700",
-  red: "bg-rose-100 text-rose-700",
-  gray: "bg-[#eef2f8] text-[#64748b]",
-  violet: "bg-violet-100 text-violet-700",
+  blue: "bg-[#e8f0fe] text-[#2563eb]",
+  green: "bg-[#e6f7ee] text-[#16a34a]",
+  amber: "bg-[#fdf3e1] text-[#d97706]",
+  red: "bg-[#fdebeb] text-[#ef4444]",
+  gray: "bg-[#eef2f7] text-[#64748b]",
+  violet: "bg-[#f1ecfe] text-[#7c3aed]",
 };
 
 const KPI_TONES: Record<Tone, { ring: string; value: string }> = {

@@ -13,6 +13,7 @@ import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
 import { BadgePercent, CheckCircle2, Gift, IndianRupee, Loader2, Pencil, Percent, Plus, Tag, Ticket, Trash2, X, XCircle } from "lucide-react";
 import { listOffers, createOffer, updateOffer, deleteOffer, applyOffer } from "@/features/offers/api";
+import { CHIP_TONES } from "@/lib/chip-tones";
 import type { ApplyOfferResult, Offer, OfferInput } from "@/types/api";
 
 function inr(n: number) { return `₹${(Number(n) || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`; }
@@ -27,7 +28,7 @@ function offerStatus(o: Offer): { label: string; tone: "green" | "amber" | "rose
   return { label: "Active", tone: "green" };
 }
 const TONE_CLASS: Record<string, string> = {
-  green: "bg-emerald-100 text-emerald-700", amber: "bg-amber-100 text-amber-700", rose: "bg-rose-100 text-rose-700", gray: "bg-[#eef2f8] text-[#64748b]",
+  green: CHIP_TONES.green, amber: CHIP_TONES.amber, rose: CHIP_TONES.red, gray: CHIP_TONES.gray,
 };
 const TILE_COLORS = ["#0057ff", "#16a34a", "#f59e0b", "#8b5cf6", "#ef4444", "#0891b2", "#db2777", "#ea580c"];
 
@@ -143,7 +144,7 @@ export default function OffersPage() {
                             </div>
                           </td>
                           <td className="px-5 py-3">
-                            <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", o.type === "flat" ? "bg-[#eef5ff] text-[#0057ff]" : "bg-violet-50 text-violet-700")}>{o.type === "flat" ? "Flat" : "Percentage"}</span>
+                            <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", o.type === "flat" ? CHIP_TONES.blue : CHIP_TONES.violet)}>{o.type === "flat" ? "Flat" : "Percentage"}</span>
                             {o.minBillAmount > 0 && <span className="mt-1 block text-[10px] text-[#94a3b8]">min {inr(o.minBillAmount)}</span>}
                           </td>
                           <td className="px-5 py-3 text-[#52627e]">{o.validFrom || o.validTo ? `${fmtDate(o.validFrom)} – ${fmtDate(o.validTo)}` : "Always"}</td>
