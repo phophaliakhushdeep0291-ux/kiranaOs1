@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, Database, Download, FileBarChart, RefreshCw, ShieldAlert, TrendingDown, TrendingUp, Users, Wallet, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, Database, Download, FileBarChart, Lightbulb, PieChart as PieIcon, RefreshCw, ShieldAlert, TrendingDown, TrendingUp, Users, Wallet, XCircle } from "lucide-react";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
 import { getExpenseSummary } from "@/features/expenses/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,30 @@ export default function Reports() {
   const netProfit = expenseQ.data != null && snapshot?.selected != null
     ? (snapshot.selected.profitEstimate ?? 0) - expenseQ.data.total
     : undefined;
+
+  const payModeData = useMemo(() => {
+    const s = snapshot?.selected;
+    if (!s) return [];
+    return [
+      { name: "Cash", value: s.cashSales ?? 0, color: "#16a34a" },
+      { name: "UPI", value: s.upiSales ?? 0, color: "#8b5cf6" },
+      { name: "Udhar", value: s.udharSales ?? 0, color: "#f59e0b" },
+    ].filter((d) => d.value > 0);
+  }, [snapshot]);
+
+  const insights = useMemo(() => {
+    const s = snapshot?.selected;
+    if (!s || !s.bills) return [];
+    const out: { text: string; tone: "green" | "amber" | "blue" }[] = [];
+    out.push({ tone: "blue", text: `${fmt(s.sales)} across ${s.bills} bill${s.bills === 1 ? "" : "s"} — average ${fmt(s.sales / s.bills)} per bill.` });
+    const top = payModeData.length ? payModeData.reduce((a, b) => (b.value > a.value ? b : a)) : null;
+    if (top && s.sales > 0) out.push({ tone: "green", text: `${top.name} leads payments with ${Math.round((top.value / s.sales) * 100)}% of sales.` });
+    const topProduct = snapshot?.topProducts?.[0];
+    if (topProduct && s.sales > 0) out.push({ tone: "blue", text: `${topProduct.name} is your top seller — ${fmt(topProduct.revenue)} (${Math.round((topProduct.revenue / s.sales) * 100)}% of sales).` });
+    if ((s.udharSales ?? 0) > 0) out.push({ tone: "amber", text: `${fmt(s.udharSales)} went out as udhar this period — follow up to protect cash flow.` });
+    if (netProfit != null) out.push({ tone: netProfit >= 0 ? "green" : "amber", text: `Net profit ${fmt(netProfit)} after ${fmt(expenseTotal ?? 0)} operating expenses.` });
+    return out.slice(0, 4);
+  }, [snapshot, payModeData, netProfit, expenseTotal]);
 
   const loadReports = async () => {
     setLoading(true);
@@ -234,6 +259,77 @@ export default function Reports() {
           </StatsGrid>
         </div>
       </section>
+
+      {/* ── Payment Mode Breakdown + Insights ────────────────────────────── */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="border-b px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><PieIcon size={16} /></span>
+              <h2 className="font-display text-base font-black tracking-tight">Payment mode breakdown</h2>
+            </div>
+          </div>
+          {loading ? (
+            <div className="p-5"><Skeleton className="h-40 w-full" /></div>
+          ) : payModeData.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-muted-foreground">No sales in this period yet.</p>
+          ) : (
+            <div className="flex items-center gap-4 p-5">
+              <div className="relative h-[130px] w-[130px] shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={payModeData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2} strokeWidth={0}>
+                      {payModeData.map((d) => <Cell key={d.name} fill={d.color} />)}
+                    </Pie>
+                    <ChartTooltip formatter={(v: number) => fmt(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+                  <div>
+                    <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Sales</p>
+                    <p className="font-display text-sm font-black">{fmt(selected?.sales)}</p>
+                  </div>
+                </div>
+              </div>
+              <ul className="min-w-0 flex-1 space-y-2">
+                {payModeData.map((d) => (
+                  <li key={d.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.color }} />
+                    <span className="flex-1 font-semibold">{d.name}</span>
+                    <span className="font-bold">{fmt(d.value)}</span>
+                    <span className="text-[10px] text-muted-foreground">({selected?.sales ? Math.round((d.value / selected.sales) * 100) : 0}%)</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm lg:col-span-2">
+          <div className="border-b px-5 py-4">
+            <div className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"><Lightbulb size={16} /></span>
+              <h2 className="font-display text-base font-black tracking-tight">Report insights</h2>
+            </div>
+          </div>
+          {loading ? (
+            <div className="p-5"><Skeleton className="h-40 w-full" /></div>
+          ) : insights.length === 0 ? (
+            <p className="px-5 py-10 text-center text-sm text-muted-foreground">Insights appear once this period has bills.</p>
+          ) : (
+            <ul className="space-y-3 p-5">
+              {insights.map((ins, i) => (
+                <li key={i} className="flex items-start gap-3 rounded-xl border bg-background/60 px-4 py-3">
+                  <span className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg ${ins.tone === "green" ? "bg-emerald-50 text-emerald-600" : ins.tone === "amber" ? "bg-amber-50 text-amber-600" : "bg-sky-50 text-sky-600"}`}>
+                    {ins.tone === "green" ? <TrendingUp size={14} /> : ins.tone === "amber" ? <AlertTriangle size={14} /> : <FileBarChart size={14} />}
+                  </span>
+                  <p className="text-sm font-medium leading-snug">{ins.text}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
 
       {/* ── Money Flow + Sync Status ─────────────────────────────────────── */}
       <div className="grid gap-4 lg:grid-cols-3">
