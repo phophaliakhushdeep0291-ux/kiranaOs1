@@ -23,6 +23,12 @@ type AssistantPosition = { x: number; y: number };
 
 const VOICE_ASSISTANT_POSITION_KEY = "kirana:voice-assistant-position";
 const FLOATING_MARGIN = 12;
+const MOBILE_BOTTOM_NAV_OFFSET = 84;
+
+function getFloatingBottomOffset(): number {
+  if (typeof window === "undefined") return FLOATING_MARGIN + 4;
+  return window.innerWidth < 1024 ? MOBILE_BOTTOM_NAV_OFFSET : FLOATING_MARGIN + 4;
+}
 
 function readStoredAssistantPosition(): AssistantPosition | null {
   if (typeof window === "undefined") return null;
@@ -43,7 +49,7 @@ function clampAssistantPosition(position: AssistantPosition, width: number, heig
   const safeWidth = Math.max(1, width);
   const safeHeight = Math.max(1, height);
   const maxX = Math.max(FLOATING_MARGIN, window.innerWidth - safeWidth - FLOATING_MARGIN);
-  const maxY = Math.max(FLOATING_MARGIN, window.innerHeight - safeHeight - FLOATING_MARGIN);
+  const maxY = Math.max(FLOATING_MARGIN, window.innerHeight - safeHeight - getFloatingBottomOffset());
   return {
     x: Math.min(Math.max(FLOATING_MARGIN, Math.round(position.x)), maxX),
     y: Math.min(Math.max(FLOATING_MARGIN, Math.round(position.y)), maxY),
@@ -75,7 +81,7 @@ export function VoiceAssistant() {
   const [dragging, setDragging] = useState(false);
   const Recognition = useMemo(() => getSpeechRecognitionConstructor(), []);
   const floatingStyle = useMemo<CSSProperties>(() => {
-    if (!position) return { bottom: FLOATING_MARGIN + 4, right: FLOATING_MARGIN + 4 };
+    if (!position) return { bottom: getFloatingBottomOffset(), right: FLOATING_MARGIN + 4 };
     return { left: position.x, top: position.y };
   }, [position]);
   const assistantIsIdle = !open && !dragging;

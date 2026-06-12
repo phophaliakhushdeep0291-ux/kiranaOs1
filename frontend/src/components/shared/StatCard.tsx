@@ -35,8 +35,8 @@ export function StatCard({ label, value, description, icon, loading = false, ton
   return (
     <div
       className={cn(
-        "group rounded-xl border border-t-2 bg-card p-4 text-card-foreground shadow-sm",
-        "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md sm:p-5",
+        "group min-h-[118px] rounded-xl border border-t-2 bg-card p-3.5 text-card-foreground shadow-sm sm:p-5",
+        "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
         toneBorderTop[tone],
         className,
       )}
@@ -47,7 +47,7 @@ export function StatCard({ label, value, description, icon, loading = false, ton
           {label}
         </span>
         {icon ? (
-          <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl ring-1", toneIconClasses[tone])}>
+          <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl ring-1 sm:h-10 sm:w-10", toneIconClasses[tone])}>
             {icon}
           </span>
         ) : null}
@@ -59,7 +59,7 @@ export function StatCard({ label, value, description, icon, loading = false, ton
         </div>
       ) : (
         <div className="min-w-0">
-          <p className="break-words font-display text-2xl font-black tracking-tight text-foreground tabular-nums sm:text-3xl">
+          <p className="break-words font-display text-[1.45rem] font-black leading-tight tracking-tight text-foreground tabular-nums sm:text-3xl">
             {value}
           </p>
           {description ? (

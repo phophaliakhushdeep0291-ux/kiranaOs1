@@ -29,4 +29,10 @@ describe("desktop app shell behavior", () => {
     expect(layout).toContain("Collapse sidebar");
     expect(layout).toContain("Expand sidebar");
   });
+
+  it("reserves mobile safe-area space for bottom navigation and floating controls", () => {
+    expect(layout).toContain("pb-[calc(5.75rem+env(safe-area-inset-bottom))]");
+    expect(layout).toContain("pb-[env(safe-area-inset-bottom)]");
+    expect(layout).toContain("overscroll-contain");
+  });
 });

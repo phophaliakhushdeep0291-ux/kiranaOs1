@@ -777,6 +777,25 @@ function purchaseBusinessKey(row: RecordLike): string {
   ].join("|");
 }
 
+function purchaseStableKey(row: RecordLike): string {
+  const invoiceNumber = purchaseInvoiceNumber(row);
+  const supplierKey = normalizePurchaseKey(
+    readString(row, ["supplierId", "supplier_id"]) ||
+      readString(row, ["supplierName", "supplier_name"], "supplier"),
+  );
+  const productKey = normalizePurchaseKey(readString(row, ["productId", "product_id"], "product"));
+  const amount = purchaseAmount(row).toFixed(2);
+  const invoiceKey = normalizePurchaseKey(invoiceNumber || "-");
+  return [
+    "purchase-stable",
+    supplierKey,
+    productKey,
+    invoiceKey,
+    amount,
+    purchaseDateDedupeBucket(row, invoiceNumber),
+  ].join("|");
+}
+
 function purchaseIdentityKeys(row: RecordLike): string[] {
   const purchaseIds = [
     readString(row, ["purchaseHistoryId", "purchase_history_id"]),
@@ -822,7 +841,7 @@ function buildSupplierDueCandidate(
     paymentMode: purchasePaymentMode(row),
     status: readString(row, statusKeys, due > 0 ? "due" : "paid"),
     source,
-    dedupeKeys: [...purchaseIdentityKeys(row), purchaseBusinessKey(row)],
+    dedupeKeys: [...purchaseIdentityKeys(row), purchaseStableKey(row), purchaseBusinessKey(row)],
     priority: purchaseRowPriority(row, source),
   };
 }

@@ -27,4 +27,11 @@ describe("floating voice assistant", () => {
     expect(source).toContain("sr-only");
     expect(source).toContain("hover:bg-sidebar hover:text-sidebar-foreground");
   });
+
+  it("keeps clear of the mobile bottom navigation by default", () => {
+    expect(source).toContain("MOBILE_BOTTOM_NAV_OFFSET");
+    expect(source).toContain("getFloatingBottomOffset");
+    expect(source).toContain("window.innerWidth < 1024");
+    expect(source).toContain("window.innerHeight - safeHeight - getFloatingBottomOffset()");
+  });
 });

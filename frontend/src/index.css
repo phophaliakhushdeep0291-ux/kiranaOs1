@@ -242,12 +242,19 @@
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    height: 100%;
     text-rendering: optimizeLegibility;
     scroll-behavior: smooth;
   }
 
   body {
+    min-height: 100%;
     min-width: 320px;
+    overscroll-behavior: none;
+  }
+
+  #root {
+    min-height: 100%;
   }
 
   ::selection {
@@ -291,6 +298,7 @@
   }
 
   .app-scrollbar {
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.28) transparent;
   }
@@ -398,6 +406,37 @@
     @apply overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-sm;
   }
 
+  .app-table-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.22) transparent;
+  }
+
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-table-scroll table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .app-table-scroll th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .app-table-scroll td,
+  .app-table-scroll th {
+    white-space: nowrap;
+  }
+
+  .app-table-scroll td:first-child,
+  .app-table-scroll th:first-child {
+    white-space: normal;
+  }
+
   .pos-filter-card {
     @apply rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-sm;
   }
@@ -427,6 +466,26 @@
     @apply h-12 w-full rounded-lg text-[15px] font-semibold;
   }
 
+}
+
+@media (max-width: 640px) {
+  .premium-panel,
+  .premium-panel-muted,
+  .premium-kpi,
+  .table-card,
+  .app-card,
+  .app-card-soft {
+    border-radius: 12px;
+  }
+
+  .app-table-scroll {
+    margin-inline: -0.25rem;
+    padding-inline: 0.25rem;
+  }
+
+  .app-table-scroll table {
+    min-width: 680px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

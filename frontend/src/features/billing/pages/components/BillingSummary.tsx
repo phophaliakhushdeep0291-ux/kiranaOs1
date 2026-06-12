@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
+import { useState, type CSSProperties, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -186,8 +186,8 @@ export function BillingSummary({
 
   return (
     <div
-      className="relative flex w-full shrink-0 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.055)] lg:h-full lg:w-auto"
-      style={{ width: summaryWidth, maxWidth: "100%" }}
+      className="relative flex w-full shrink-0 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.055)] lg:h-full lg:w-[var(--bill-summary-width)]"
+      style={{ "--bill-summary-width": `${summaryWidth}px` } as CSSProperties}
       data-testid="bill-summary-panel"
     >
       {/* Resize handle */}

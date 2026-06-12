@@ -20,11 +20,12 @@ function printClosing(report: DailyClosingReport) {
       <h1>Daily Closing Report</h1><div class="muted">${report.date} • ${report.isLocalEstimate ? "Local estimate" : "Local saved data"}</div>
       <div class="grid">
         <div class="box"><div class="label">Total sales</div><div class="value">${fmt(report.totalSales)}</div></div>
-        <div class="box"><div class="label">Cash received</div><div class="value">${fmt(report.cashReceived)}</div></div>
-        <div class="box"><div class="label">UPI received</div><div class="value">${fmt(report.upiReceived)}</div></div>
+        <div class="box"><div class="label">Cash in (sales + old udhar)</div><div class="value">${fmt(report.cashReceived)}</div></div>
+        <div class="box"><div class="label">UPI/bank in (sales + old udhar)</div><div class="value">${fmt(report.upiReceived)}</div></div>
         <div class="box"><div class="label">Udhar given</div><div class="value">${fmt(report.udharGiven)}</div></div>
         <div class="box"><div class="label">Old udhar payment</div><div class="value">${fmt(report.oldUdharPaymentReceived)}</div></div>
-        <div class="box"><div class="label">Supplier paid</div><div class="value">${fmt(report.purchasePaid)}</div></div>
+        <div class="box"><div class="label">Supplier cash paid</div><div class="value">${fmt(report.purchaseCashPaid)}</div></div>
+        <div class="box"><div class="label">Supplier UPI/bank paid</div><div class="value">${fmt(report.purchaseUpiPaid)}</div></div>
         <div class="box"><div class="label">Supplier due</div><div class="value">${fmt(report.purchaseDue)}</div></div>
         <div class="box"><div class="label">Expected cash in drawer</div><div class="value">${fmt(report.expectedCashInDrawer)}</div></div>
         <div class="box"><div class="label">Expected UPI/bank net</div><div class="value">${fmt(report.expectedUpiInBank)}</div></div>
@@ -62,9 +63,9 @@ export default function DailyClosingPage() {
     };
   }, [date]);
 
-  const totalCashIn = (report?.cashReceived ?? 0) + (report?.oldUdharPaymentReceived ?? 0);
-  const cashPct = totalCashIn > 0 ? Math.round(((report?.cashReceived ?? 0) / totalCashIn) * 100) : 0;
-  const upiPct = totalCashIn > 0 ? 100 - cashPct : 0;
+  const totalIncomingTender = (report?.cashReceived ?? 0) + (report?.upiReceived ?? 0);
+  const cashPct = totalIncomingTender > 0 ? Math.round(((report?.cashReceived ?? 0) / totalIncomingTender) * 100) : 0;
+  const upiPct = totalIncomingTender > 0 ? Math.round(((report?.upiReceived ?? 0) / totalIncomingTender) * 100) : 0;
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-5 p-4 sm:p-5 lg:p-6">
@@ -121,18 +122,18 @@ export default function DailyClosingPage() {
                   {fmt(report?.expectedCashInDrawer)}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Cash sales + udhar cash recovery − supplier cash paid
+                  Cash sales + old udhar cash recovery - supplier cash paid
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300">
-                    <ArrowUpRight size={13} />Cash {fmt(report?.cashReceived)}
+                    <ArrowUpRight size={13} />Cash in {fmt(report?.cashReceived)}
                   </span>
                   <span className="flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300">
-                    <CreditCard size={13} />UPI net {fmt(report?.expectedUpiInBank)}
+                    <CreditCard size={13} />UPI/bank in {fmt(report?.upiReceived)}
                   </span>
-                  {(report?.purchasePaid ?? 0) > 0 && (
+                  {(report?.purchaseCashPaid ?? 0) > 0 && (
                     <span className="flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 ring-1 ring-orange-200/60 dark:bg-orange-950/40 dark:text-orange-300">
-                      <ArrowDownRight size={13} />Supplier −{fmt(report?.purchasePaid)}
+                      <ArrowDownRight size={13} />Supplier cash -{fmt(report?.purchaseCashPaid)}
                     </span>
                   )}
                 </div>
@@ -148,7 +149,7 @@ export default function DailyClosingPage() {
               <div className="mt-3 space-y-3">
                 <div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">Cash received</span>
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">Cash in</span>
                     <span className="font-black tabular-nums">{fmt(report?.cashReceived)}</span>
                   </div>
                   <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
@@ -158,7 +159,7 @@ export default function DailyClosingPage() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-semibold text-sky-700 dark:text-sky-400">UPI received</span>
+                    <span className="font-semibold text-sky-700 dark:text-sky-400">UPI/bank in</span>
                     <span className="font-black tabular-nums">{fmt(report?.upiReceived)}</span>
                   </div>
                   <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
@@ -205,13 +206,13 @@ export default function DailyClosingPage() {
                 highlight
                 hint="All bills for the day"
               />
-              <FlowRow label="Cash sales" value={fmt(report?.cashReceived)} direction="in" />
-              <FlowRow label="UPI / digital sales" value={fmt(report?.upiReceived)} direction="in" />
+              <FlowRow label="Cash sales" value={fmt(report?.cashSales)} direction="in" />
+              <FlowRow label="UPI / digital sales" value={fmt(report?.upiSales)} direction="in" />
               <FlowRow
                 label="Old udhar recovered"
                 value={fmt(report?.oldUdharPaymentReceived)}
                 direction="in"
-                hint="Payments received on older dues"
+                hint={`Cash ${fmt(report?.oldUdharCashReceived)} / UPI ${fmt(report?.oldUdharUpiReceived)}`}
               />
             </div>
           )}
@@ -240,7 +241,8 @@ export default function DailyClosingPage() {
                 direction="out"
                 hint="Credit extended to customers"
               />
-              <FlowRow label="Supplier cash paid" value={fmt(report?.purchasePaid)} direction="out" />
+              <FlowRow label="Supplier cash paid" value={fmt(report?.purchaseCashPaid)} direction="out" />
+              <FlowRow label="Supplier UPI/bank paid" value={fmt(report?.purchaseUpiPaid)} direction="out" />
               <FlowRow
                 label="Supplier due (unpaid)"
                 value={fmt(report?.purchaseDue)}

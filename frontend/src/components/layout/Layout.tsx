@@ -305,7 +305,7 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div ref={shellRef} className="app-shell min-h-screen bg-background text-foreground lg:h-screen lg:overflow-hidden" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
+    <div ref={shellRef} className="app-shell isolate min-h-screen bg-background text-foreground lg:h-screen lg:overflow-hidden" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
 
       {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
       <aside
@@ -512,12 +512,12 @@ export function Layout({ children }: { children: ReactNode }) {
           <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
         )}
 
-        <main id="main-content" className="app-scrollbar min-w-0 flex-1 overflow-auto bg-[#f7fbff] pb-20 lg:pb-0">
+        <main id="main-content" className="app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain bg-[#f7fbff] pb-[calc(5.75rem+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
 
         {/* Mobile bottom nav */}
-        <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur lg:hidden">
+        <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(15,35,80,0.08)] backdrop-blur lg:hidden">
           <div className="grid grid-cols-5">
             {MOBILE_NAV.map(({ href, label, Icon }) => {
               const active = isActive(loc, href);

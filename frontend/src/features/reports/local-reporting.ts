@@ -115,10 +115,14 @@ export interface LocalReportSnapshot {
 export interface DailyClosingReport {
   date: string;
   totalSales: number;
+  cashSales: number;
+  upiSales: number;
   cashReceived: number;
   upiReceived: number;
   udharGiven: number;
   oldUdharPaymentReceived: number;
+  oldUdharCashReceived: number;
+  oldUdharUpiReceived: number;
   purchaseCashPaid: number;
   purchaseUpiPaid: number;
   purchasePaid: number;
@@ -1312,10 +1316,14 @@ export async function buildDailyClosingReport(
   return {
     date,
     totalSales: snapshot.selected.sales,
+    cashSales: snapshot.paymentBreakdown.cash,
+    upiSales: snapshot.paymentBreakdown.upi,
     cashReceived: snapshot.paymentBreakdown.cashIn,
     upiReceived: snapshot.paymentBreakdown.upiIn,
     udharGiven: snapshot.paymentBreakdown.udhar,
     oldUdharPaymentReceived: snapshot.paymentBreakdown.oldUdharReceived,
+    oldUdharCashReceived: snapshot.paymentBreakdown.oldUdharCashReceived,
+    oldUdharUpiReceived: snapshot.paymentBreakdown.oldUdharUpiReceived,
     purchaseCashPaid: snapshot.paymentBreakdown.purchaseCashPaid,
     purchaseUpiPaid: snapshot.paymentBreakdown.purchaseUpiPaid,
     purchasePaid: snapshot.paymentBreakdown.purchasePaid,

@@ -373,4 +373,68 @@ describe("FinancialAggregationService", () => {
     expect(snapshot.supplierDue).toBe(4100);
     expect(snapshot.purchaseDueToday).toBe(4100);
   });
+
+  it("dedupes a paid purchase history row against a stale unpaid inventory movement copy", () => {
+    const snapshot = aggregateFinancialRows({
+      date,
+      purchaseBills: [
+        {
+          id: "purchase_history_paid",
+          productId: "product_rice",
+          product_id: "product_rice",
+          supplierName: "Govind ji",
+          supplier_name: "Govind ji",
+          invoiceNumber: "LPB-PAID-1",
+          invoice_number: "LPB-PAID-1",
+          billAmount: 4100,
+          bill_amount: 4100,
+          purchasePaidAmount: 4100,
+          purchase_paid_amount: 4100,
+          purchaseDueAmount: 0,
+          purchase_due_amount: 0,
+          purchasePaymentStatus: "paid",
+          purchase_payment_status: "paid",
+          createdAt: `${date}T12:00:05.000`,
+          created_at: `${date}T12:00:05.000`,
+          sync_status: "synced",
+        },
+      ],
+      inventoryMovements: [
+        {
+          id: "stock_purchase_stale",
+          productId: "product_rice",
+          product_id: "product_rice",
+          action: "purchase",
+          type: "purchase",
+          supplierName: "govind ji",
+          supplier_name: "govind ji",
+          purchaseBillNo: "LPB-PAID-1",
+          purchase_bill_no: "LPB-PAID-1",
+          billAmount: 4100,
+          bill_amount: 4100,
+          purchasePaidAmount: 0,
+          purchase_paid_amount: 0,
+          purchaseDueAmount: 4100,
+          purchase_due_amount: 4100,
+          purchasePaymentStatus: "due",
+          purchase_payment_status: "due",
+          createdAt: `${date}T12:00:00.000`,
+          created_at: `${date}T12:00:00.000`,
+          sync_status: "pending_sync",
+        },
+      ],
+    });
+
+    expect(snapshot.supplierDueRows).toHaveLength(1);
+    expect(snapshot.supplierDueRows[0]).toEqual(expect.objectContaining({
+      source: "purchase_bill",
+      invoiceNumber: "LPB-PAID-1",
+      amount: 4100,
+      paid: 4100,
+      due: 0,
+      status: "paid",
+    }));
+    expect(snapshot.supplierDue).toBe(0);
+    expect(snapshot.purchaseDueToday).toBe(0);
+  });
 });

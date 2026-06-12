@@ -351,6 +351,10 @@ describe("local reports and daily closing", () => {
     expect(closing.totalSales).toBe(49500);
     expect(closing.udharGiven).toBe(4500);
     expect(closing.oldUdharPaymentReceived).toBe(4000);
+    expect(closing.oldUdharCashReceived).toBe(4000);
+    expect(closing.oldUdharUpiReceived).toBe(0);
+    expect(closing.cashSales).toBe(45000);
+    expect(closing.upiSales).toBe(0);
     expect(closing.cashReceived).toBe(49000);
     expect(closing.expectedCashInDrawer).toBe(49000);
   });
@@ -389,6 +393,10 @@ describe("local reports and daily closing", () => {
     expect(closing.totalSales).toBe(49590);
     expect(closing.udharGiven).toBe(4500);
     expect(closing.oldUdharPaymentReceived).toBe(4000);
+    expect(closing.oldUdharCashReceived).toBe(4000);
+    expect(closing.oldUdharUpiReceived).toBe(0);
+    expect(closing.cashSales).toBe(45090);
+    expect(closing.upiSales).toBe(0);
     expect(closing.cashReceived).toBe(49090);
     expect(closing.expectedCashInDrawer).toBe(49090);
   });

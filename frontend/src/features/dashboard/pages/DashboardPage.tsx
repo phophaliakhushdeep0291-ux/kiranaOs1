@@ -162,8 +162,8 @@ export default function Dashboard() {
     const supplierUpiPaid = roundMoney(money(finance?.supplierUpiPaidToday ?? reportPayments?.purchaseUpiPaid));
     const purchaseDue = roundMoney(money(finance?.purchaseDueToday ?? reportPayments?.purchaseDue));
     const supplierDue = roundMoney(money(finance?.supplierDue ?? reportPayments?.purchaseDue));
-    const cashCollected = roundMoney(money(finance?.totalCashCollectedToday ?? reportPayments?.netCashInHand ?? Math.max(0, cashIn - supplierCashPaid)));
-    const upiCollected = roundMoney(money(finance?.totalUpiCollectedToday ?? upiIn - supplierUpiPaid));
+    const cashCollected = roundMoney(money(finance?.totalCashCollectedToday ?? reportPayments?.cashIn ?? cashIn));
+    const upiCollected = roundMoney(money(finance?.totalUpiCollectedToday ?? reportPayments?.upiIn ?? upiIn));
     const grossMarginPct = revenue > 0
       ? Math.round((grossProfit / revenue) * 100)
       : roundMoney(money(localSnapshot.grossMarginPct ?? backendPnL?.grossMarginPct));
@@ -186,7 +186,10 @@ export default function Dashboard() {
   }, [financialSnapshot, ownerReport, localSnapshot, backendPnL, billsToday.data, udharSummary.data, paymentSummary.data]);
 
   const isLoading = !financialSnapshot && !ownerReport && !localSnapshot.hasCache && (pnl.isLoading || udharSummary.isLoading || paymentSummary.isLoading);
-  const cashInDrawer = Math.max(0, dashboard.cashCollected - dashboard.supplierCashPaid);
+  const cashInDrawer = Math.max(
+    0,
+    roundMoney(money(financialSnapshot?.cashDrawer.expectedClosingCash ?? ownerReport?.paymentBreakdown.netCashInHand ?? dashboard.cashCollected - dashboard.supplierCashPaid)),
+  );
   const lowStockCount = ownerReport?.lowStock.length ?? 0;
   const pendingSyncCount = ownerReport?.pendingSyncCount ?? 0;
   const hasUnsyncedOperations = Boolean(ownerReport?.hasUnsyncedOperations);

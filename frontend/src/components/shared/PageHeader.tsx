@@ -18,11 +18,11 @@ export function PageHeader({ title, description, eyebrow, actions, className, ..
       {...props}
     >
       <div className="min-w-0 flex-1 space-y-1.5">
-        <h1 className="break-words font-display text-2xl font-black tracking-tight text-foreground sm:text-3xl">{title}</h1>
-        {description ? <div className="max-w-3xl text-sm leading-6 text-muted-foreground">{description}</div> : null}
+        <h1 className="text-balance font-display text-[1.55rem] font-black leading-tight tracking-tight text-foreground sm:text-3xl">{title}</h1>
+        {description ? <div className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-[15px]">{description}</div> : null}
         {eyebrow ? <div className="text-xs text-muted-foreground">{eyebrow}</div> : null}
       </div>
-      {actions ? <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{actions}</div> : null}
+      {actions ? <div className="grid w-full shrink-0 grid-cols-1 gap-2 min-[420px]:flex min-[420px]:flex-wrap min-[420px]:items-center sm:w-auto sm:justify-end">{actions}</div> : null}
     </header>
   );
 }

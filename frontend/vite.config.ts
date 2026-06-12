@@ -30,6 +30,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(projectRoot, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
         manualChunks: {
