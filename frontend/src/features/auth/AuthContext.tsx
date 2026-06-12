@@ -28,7 +28,13 @@ async function activateCurrentDeviceSafely() {
       ? "This device"
       : "This device";
     await ensureCurrentDeviceRegistered(deviceName);
-    const response = await activateDevice(deviceName, scope.device_id);
+    let response;
+    try {
+      response = await activateDevice(deviceName, scope.device_id);
+    } catch (error) {
+      if (!(error instanceof ApiClientError) || error.data?.code !== "DEVICE_LIMIT_EXCEEDED") throw error;
+      response = await activateDevice(deviceName, scope.device_id, { replaceOldestSelfDevice: true });
+    }
     if (response.license) await writeOfflineLicenseToken(response.license, "backend-activation");
   } catch {
     // Login must not fail just because the backend/device activation endpoint is temporarily unavailable.
@@ -186,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      await logoutSession();
+      await logoutSession(undefined, getOfflineScope().device_id);
     } catch {
       // Continue with local logout even when network is unavailable.
     }

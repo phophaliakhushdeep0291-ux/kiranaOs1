@@ -23,7 +23,7 @@ export async function refresh(req, res, next) {
 }
 
 export async function logout(req, res, next) {
-  try { res.json({ success: true, data: await authService.logout(req.body.refreshToken, req.user ?? null) }); }
+  try { res.json({ success: true, data: await authService.logout(req.body.refreshToken, req.user ?? null, { deviceId: req.body.deviceId }) }); }
   catch (err) { next(err); }
 }
 

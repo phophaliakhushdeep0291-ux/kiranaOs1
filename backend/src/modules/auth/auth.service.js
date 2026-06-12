@@ -118,7 +118,7 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
   };
 }
 
-export async function logout(refreshToken, user = null) {
+export async function logout(refreshToken, user = null, options = {}) {
   const parsed = parseRefreshToken(refreshToken);
   if (!parsed) return { success: true, message: "Logged out" };
 
@@ -136,7 +136,26 @@ export async function logout(refreshToken, user = null) {
   const ok = await bcrypt.compare(parsed.secret, session.refreshTokenHash);
   if (!ok) throw new AppError("Invalid refresh token", 401);
 
-  await db.session.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedReason: "LOGOUT" } });
+  await db.$transaction(async (tx) => {
+    await tx.session.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedReason: "LOGOUT" } });
+
+    const deviceId = typeof options.deviceId === "string" ? options.deviceId.trim() : "";
+    if (deviceId) {
+      await tx.device.updateMany({
+        where: {
+          shopId: session.shopId,
+          deviceId,
+          status: "active",
+          OR: [{ userId: session.userId }, { userId: null }],
+        },
+        data: { status: "removed", removedAt: new Date() },
+      });
+      await tx.deviceLicense.updateMany({
+        where: { shopId: session.shopId, deviceId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    }
+  });
   return { success: true, message: "Logged out" };
 }
 
