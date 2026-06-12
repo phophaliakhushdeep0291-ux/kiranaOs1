@@ -8,9 +8,14 @@ describe("purchase bill actions", () => {
     expect(source).toContain("markPurchasePaidLocal");
     expect(source).toContain("updatePurchaseLocal");
     expect(source).toContain("deletePurchaseLocal");
-    expect(source).toContain("aria-label=\"Mark purchase paid\"");
-    expect(source).toContain("aria-label=\"Edit purchase\"");
-    expect(source).toContain("aria-label=\"Delete purchase\"");
+    // Row actions live in a per-row dropdown menu (reference design).
+    expect(source).toContain("aria-label={`Actions for ${row.invoiceNumber}`}");
+    expect(source).toContain("Mark paid");
+    expect(source).toContain("Edit purchase");
+    expect(source).toContain("Delete purchase");
+    expect(source).toContain("openPay(row)");
+    expect(source).toContain("openEdit(row)");
+    expect(source).toContain("setDeletingRow(row)");
   });
 
   it("updates matching purchase history and inventory movement copies together", () => {
