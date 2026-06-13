@@ -722,4 +722,71 @@ describe("bill sync behavior", () => {
     expect(billHistory).toHaveLength(1);
     expect(billHistory[0]).toEqual(expect.objectContaining({ id: "server_bill_echo", sync_status: "synced" }));
   });
+
+  it("product created offline merges with its synced server echo instead of conflicting", async () => {
+    // Unsynced LOCAL create (no server_id). Its synced server copy arrives via pull, matched
+    // back by clientProductId. Must merge, not raise a false conflict.
+    dbState.putInto("products", {
+      id: "local_prod_echo",
+      local_id: "local_prod_echo",
+      clientProductId: "local_prod_echo",
+      name: "Sugar 1kg",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "pending_sync",
+      deleted_at: null,
+    });
+
+    const status = await mergeServerChange({
+      entity_type: "product",
+      entity_id: "server_prod_echo",
+      entity: {
+        id: "server_prod_echo",
+        clientProductId: "local_prod_echo",
+        name: "Sugar 1kg",
+        tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id,
+        sync_status: "synced",
+        deleted_at: null,
+      },
+    } as never);
+
+    expect(status).toBe("merged");
+    expect(scopedRows("sync_conflicts")).toHaveLength(0);
+  });
+
+  it("offline edit of an already-synced row still raises a conflict (safety)", async () => {
+    // This row was synced before (it has a server_id) and then edited offline. A divergent
+    // server change must still conflict — the create-echo rule must NOT swallow real edits.
+    dbState.putInto("products", {
+      id: "server_prod_edit",
+      server_id: "server_prod_edit",
+      local_id: "local_prod_orig",
+      clientProductId: "local_prod_orig",
+      name: "Locally edited name",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "pending_sync",
+      deleted_at: null,
+    });
+
+    const status = await mergeServerChange({
+      entity_type: "product",
+      entity_id: "server_prod_edit",
+      entity: {
+        id: "server_prod_edit",
+        clientProductId: "local_prod_orig",
+        name: "Server-side name",
+        tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id,
+        sync_status: "synced",
+        deleted_at: null,
+      },
+    } as never);
+
+    expect(status).toBe("conflict");
+    expect(scopedRows("sync_conflicts").length).toBeGreaterThan(0);
+  });
 });
