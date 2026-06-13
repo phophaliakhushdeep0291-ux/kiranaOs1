@@ -11,6 +11,24 @@ function baseError(req, message) {
   };
 }
 
+// Every error response carries a stable, machine-readable `code` so the frontend can
+// branch reliably instead of string-matching messages. Specific codes are set at the
+// throw site (AppError) or by the handlers below; this fills a sensible default by status.
+function defaultCodeForStatus(statusCode) {
+  switch (statusCode) {
+    case 400: return "BAD_REQUEST";
+    case 401: return "UNAUTHORIZED";
+    case 403: return "FORBIDDEN";
+    case 404: return "NOT_FOUND";
+    case 409: return "CONFLICT";
+    case 413: return "PAYLOAD_TOO_LARGE";
+    case 422: return "UNPROCESSABLE_ENTITY";
+    case 429: return "RATE_LIMITED";
+    case 503: return "SERVICE_UNAVAILABLE";
+    default: return statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED";
+  }
+}
+
 function logUnhandledError(err, req) {
   captureRequestError(err, req);
   logger.error({
@@ -50,6 +68,7 @@ export function errorHandler(err, req, res, _next) {
   if (err instanceof ZodError) {
     return res.status(400).json({
       ...baseError(req, "Validation failed"),
+      code: "VALIDATION_FAILED",
       details: err.flatten().fieldErrors,
     });
   }
@@ -57,12 +76,18 @@ export function errorHandler(err, req, res, _next) {
   // Prisma unique constraint violation
   if (err.code === "P2002") {
     const field = err.meta?.target?.join(", ") ?? "field";
-    return res.status(409).json(baseError(req, `A record with this ${field} already exists`));
+    return res.status(409).json({
+      ...baseError(req, `A record with this ${field} already exists`),
+      code: "DUPLICATE_RECORD",
+    });
   }
 
   // Prisma record not found
   if (err.code === "P2025") {
-    return res.status(404).json(baseError(req, "Record not found"));
+    return res.status(404).json({
+      ...baseError(req, "Record not found"),
+      code: "RECORD_NOT_FOUND",
+    });
   }
 
   const statusCode = Number(err.statusCode || err.status || 0);
@@ -73,7 +98,7 @@ export function errorHandler(err, req, res, _next) {
       : err.message || "Request failed";
     return res.status(statusCode).json({
       ...baseError(req, message),
-      ...(err.code && { code: err.code }),
+      code: err.code ?? defaultCodeForStatus(statusCode),
       ...(err.publicData && typeof err.publicData === "object" ? err.publicData : {}),
       ...(err.meta && env.NODE_ENV === "development" ? { meta: err.meta } : {}),
     });
@@ -83,14 +108,17 @@ export function errorHandler(err, req, res, _next) {
   logUnhandledError(err, req);
   return res.status(500).json({
     ...baseError(req, "Internal server error"),
+    code: "INTERNAL_ERROR",
     ...(env.NODE_ENV === "development" && { detail: err.message }),
   });
 }
 
-/** Throw this to return a clean HTTP error from anywhere */
+/** Throw this to return a clean HTTP error from anywhere. */
 export class AppError extends Error {
-  constructor(message, statusCode = 400) {
+  constructor(message, statusCode = 400, code = undefined) {
     super(message);
     this.statusCode = statusCode;
+    // Optional stable code; callers may also set `err.code` after construction.
+    if (code) this.code = code;
   }
 }
