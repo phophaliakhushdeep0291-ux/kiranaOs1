@@ -377,59 +377,58 @@ export async function getUdharAgeing(shopId) {
 export async function getPnL(shopId, { range, from, to }) {
   const { start, end } = getDateRange(range, from, to, env.DAILY_CLOSING_TIMEZONE);
 
-  const bills = await db.bill.findMany({
-    where: {
-      shopId,
-      status: "active",
-      billType: { not: "estimate" },
-      createdAt: { gte: start, lte: end },
-    },
-    include: { payments: true },
-  });
-
-  const cancelledBills = await db.bill.findMany({
-    where: {
-      shopId,
-      status: "cancelled",
-      billType: { not: "estimate" },
-      createdAt: { gte: start, lte: end },
-    },
-    select: { grandTotal: true, creditAmount: true },
-  });
-
-  const damageEntries = await db.stockLedger.findMany({
-    where: {
-      shopId,
-      action: "damage",
-      createdAt: { gte: start, lte: end },
-    },
-    select: { damageLossValue: true },
-  });
-
-  const udharCreated = await db.udharLedger.findMany({
-    where: {
-      shopId,
-      type: "debit",
-      createdAt: { gte: start, lte: end },
-    },
-    select: { amount: true },
-  });
-
-  const udharRecovered = await db.udharLedger.findMany({
-    where: {
-      shopId,
-      type: "payment",
-      mode: { not: "reversal" },
-      reversedAt: null,
-      createdAt: { gte: start, lte: end },
-    },
-    select: { amount: true },
-  });
-
-  const operatingExpenseRows = await db.expense.findMany({
-    where: { shopId, deletedAt: null, spentAt: { gte: start, lte: end } },
-    select: { amount: true },
-  });
+  // These six reads are independent, so run them in parallel (one batch of round-trips
+  // instead of six sequential ones) — matching how the other report functions already work.
+  const [bills, cancelledBills, damageEntries, udharCreated, udharRecovered, operatingExpenseRows] = await Promise.all([
+    db.bill.findMany({
+      where: {
+        shopId,
+        status: "active",
+        billType: { not: "estimate" },
+        createdAt: { gte: start, lte: end },
+      },
+      include: { payments: true },
+    }),
+    db.bill.findMany({
+      where: {
+        shopId,
+        status: "cancelled",
+        billType: { not: "estimate" },
+        createdAt: { gte: start, lte: end },
+      },
+      select: { grandTotal: true, creditAmount: true },
+    }),
+    db.stockLedger.findMany({
+      where: {
+        shopId,
+        action: "damage",
+        createdAt: { gte: start, lte: end },
+      },
+      select: { damageLossValue: true },
+    }),
+    db.udharLedger.findMany({
+      where: {
+        shopId,
+        type: "debit",
+        createdAt: { gte: start, lte: end },
+      },
+      select: { amount: true },
+    }),
+    db.udharLedger.findMany({
+      where: {
+        shopId,
+        type: "payment",
+        mode: { not: "reversal" },
+        reversedAt: null,
+        createdAt: { gte: start, lte: end },
+      },
+      select: { amount: true },
+    }),
+    db.expense.findMany({
+      where: { shopId, deletedAt: null, spentAt: { gte: start, lte: end } },
+      select: { amount: true },
+    }),
+  ]);
 
   const grossSales = sumMoney(bills.map((b) => b.grandTotal));
   const grossProfit = sumMoney(bills.map((b) => b.grossProfit));
