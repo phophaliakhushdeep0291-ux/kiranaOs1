@@ -15,6 +15,7 @@ const env = {
   ...process.env,
   NODE_ENV: "test",
   DATABASE_URL: postgresUrl,
+  DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL || postgresUrl,
   TEST_DATABASE_URL: postgresUrl,
   POSTGRES_TEST_DATABASE_URL: postgresUrl,
   FORCE_DB_TESTS: process.env.FORCE_DB_TESTS || "true",

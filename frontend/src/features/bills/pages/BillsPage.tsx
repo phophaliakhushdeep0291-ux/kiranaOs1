@@ -341,10 +341,10 @@ export default function BillsPage() {
     : "All time";
 
   return (
-    <div className="min-h-full bg-white px-4 py-4">
+    <div className="app-docked-page">
       <div className="space-y-4">
         {/* KPI row */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 min-[460px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
           <Kpi icon={<ReceiptText size={15} />} iconBg="bg-[#eef5ff] text-[#0057ff]" label="Today's Bills" value={String(stats.todayCount)} delta={stats.todayCountDelta} loading={isLoading} />
           <Kpi icon={<IndianRupee size={15} />} iconBg="bg-emerald-50 text-emerald-600" label="Total Sales (Today)" value={money(stats.todaySales)} delta={stats.todaySalesDelta} loading={isLoading} />
           <Kpi icon={<ShoppingCart size={15} />} iconBg="bg-amber-50 text-amber-600" label="Paid Bills" value={String(stats.paidCount)} sub={`${stats.paidPct}% of total bills`} loading={isLoading} />
@@ -416,7 +416,7 @@ export default function BillsPage() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <div className="app-table-scroll overflow-x-auto">
                   <table className="w-full min-w-[960px] text-[12.5px]">
                     <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                       <tr>

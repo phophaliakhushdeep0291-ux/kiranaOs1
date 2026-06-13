@@ -6,10 +6,10 @@ const billingSummary = readFileSync("src/features/billing/pages/components/Billi
 
 describe("billing responsive layout", () => {
   it("allows the billing page to scroll naturally on mobile while keeping desktop POS split-screen", () => {
-    expect(billingPage).toContain("min-h-[calc(100dvh-5.75rem)]");
-    expect(billingPage).toContain("lg:h-[calc(100dvh-76px)] lg:min-h-0 lg:overflow-hidden");
+    expect(billingPage).toContain("min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))]");
+    expect(billingPage).toContain("lg:h-[calc(100dvh-var(--app-desktop-topbar-height))] lg:min-h-0 lg:overflow-hidden");
     expect(billingPage).toContain("lg:h-full lg:flex-row");
-    expect(billingPage).toContain("overflow-visible lg:overflow-hidden");
+    expect(billingPage).toContain("overflow-visible lg:min-h-0 lg:overflow-hidden");
   });
 
   it("applies the saved cart summary width only at desktop breakpoint", () => {

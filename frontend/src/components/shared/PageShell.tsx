@@ -10,8 +10,8 @@ export function PageShell({ children, className, fullWidth = true, ...props }: P
   return (
     <div
       className={cn(
-        "mx-auto w-full px-3.5 py-4 sm:px-5 sm:py-5 lg:px-6",
-        fullWidth ? "max-w-[1500px]" : "max-w-7xl",
+        "app-page-shell",
+        fullWidth ? "max-w-[1600px]" : "max-w-7xl",
         className,
       )}
       {...props}

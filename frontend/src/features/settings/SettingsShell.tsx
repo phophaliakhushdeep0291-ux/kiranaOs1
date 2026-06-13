@@ -39,7 +39,7 @@ export function SettingsShell({ children, className }: { children: ReactNode; cl
   const [location, navigate] = useLocation();
 
   return (
-    <div className="min-h-full bg-white px-4 py-4">
+    <div className="app-docked-page">
       <div className="flex gap-4">
         <aside className="hidden w-[200px] shrink-0 lg:block">
           <nav className="sticky top-4 space-y-0.5">

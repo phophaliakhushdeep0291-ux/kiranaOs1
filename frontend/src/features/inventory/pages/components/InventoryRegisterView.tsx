@@ -118,7 +118,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
   const emptyText = isAdjustments ? "Stock corrections and damage entries will appear here." : "Transfers will appear here once multi-location stock movement is recorded.";
 
   return (
-    <div className="min-h-full bg-[#f7fbff] px-4 py-4">
+    <div className="app-docked-page">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h2 className="font-display text-[22px] font-black tracking-tight text-[#102347]">{title}</h2>
@@ -134,7 +134,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
         <Kpi icon={icon} label={isAdjustments ? "Total Adjustments" : "Total Transfers"} value={stats.total.toLocaleString("en-IN")} tone="blue" />
         <Kpi icon={<Package size={18} />} label="Items Touched" value={stats.items.toLocaleString("en-IN")} tone="green" />
         <Kpi icon={<ClipboardList size={18} />} label="Total Quantity" value={stats.quantity.toLocaleString("en-IN")} tone="violet" />
@@ -163,7 +163,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
             <p className="max-w-sm text-[12px] leading-5 text-[#64748b]">{emptyText}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="app-table-scroll overflow-x-auto">
             <table className="w-full min-w-[760px] text-[12.5px]">
               <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                 <tr>
