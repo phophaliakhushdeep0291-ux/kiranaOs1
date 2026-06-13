@@ -91,6 +91,50 @@ if (ctx.skip) {
       assert.equal(count, 1, "exactly one active customer should exist for the mobile");
     });
 
+    test("bill creation posts append-only FinancialLedger entries exactly once across retries", async () => {
+      // Part 4 consistency: a partial cash + udhar bill must post sale + cash_in + udhar_debit.
+      // Re-pushing the same bill under a new event id (retry after lost ack) must NOT double-post:
+      // the ledger is the dashboard's source of truth, so a retry that double-counted would
+      // corrupt every money KPI. The unique idempotency key guarantees exactly-once.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+      const localBillId = "local-bill-ledger-1";
+      const billBody = {
+        ...billPayload(product, {
+          quantity: 1,
+          ratePerRateUnit: 100,
+          customerId: customer.id,
+          customerName: customer.name,
+          buyerPaidAmount: 40,
+          payments: [{ mode: "cash", amount: 40 }],
+        }),
+        localBillId,
+        clientBillId: localBillId,
+        idempotencyKey: "create-bill:test:ledger:1",
+        creditAmount: 60,
+      };
+      const event = {
+        type: "CREATE_BILL",
+        payload: { localBillId, clientBillId: localBillId, idempotencyKey: "create-bill:test:ledger:1", bill: billBody },
+      };
+
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "create-bill-ledger-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      // Retry under a brand-new event id (event-level idempotency cannot catch this).
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "create-bill-ledger-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const ledger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id } });
+      const ofType = (entryType) => ledger.filter((row) => row.entryType === entryType);
+      assert.equal(ledger.length, 3, "sale + cash_in + udhar_debit, posted once despite the retry");
+      assert.equal(ofType("sale").length, 1);
+      assert.equal(Number(ofType("sale")[0].amountPaise), 10000, "sale = ₹100");
+      assert.equal(ofType("cash_in").length, 1);
+      assert.equal(Number(ofType("cash_in")[0].amountPaise), 4000, "cash_in = ₹40");
+      assert.equal(ofType("upi_in").length, 0, "no UPI tender on this bill");
+      assert.equal(ofType("udhar_debit").length, 1);
+      assert.equal(Number(ofType("udhar_debit")[0].amountPaise), 6000, "udhar_debit = ₹60");
+    });
+
     test("sync push CREATE_BILL works", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 30 });

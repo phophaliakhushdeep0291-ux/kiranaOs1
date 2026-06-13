@@ -4,6 +4,7 @@ import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMon
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
 import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
+import { postBillCreatedLedger } from "../finance/financial-ledger.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -350,6 +351,19 @@ export async function confirmBill(shopId, body, actor = {}) {
       await syncCustomerUdharBalance(tx, shopId, customerId, {
         repairNegative: true,
         repairNote: `System repair after bill ${bill.billNo}: previous udhar balance was negative`,
+      });
+    }
+
+    // ── 7. FinancialLedger: append-only accounting source of truth ─
+    // Posted inside the same transaction so the ledger can never disagree with the bill.
+    // Estimates are quotes, so they record no money movement.
+    if (!isEstimate) {
+      await postBillCreatedLedger(tx, {
+        shopId,
+        bill,
+        tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
+        creditAmount,
+        customerId: customerId ?? null,
       });
     }
 
