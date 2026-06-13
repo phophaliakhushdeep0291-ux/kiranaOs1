@@ -2,7 +2,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { env } from "../../config/env.js";
 import { getEffectivePlan, isSubscriptionActive } from "../subscription/subscription.service.js";
-import { activateDevice } from "./devices.service.js";
+import { activateDevice, assertDeviceHasActiveLoginSession } from "./devices.service.js";
 import { revokeDeviceLicense } from "./license.service.js";
 
 export function requireDeviceActivated() {
@@ -84,6 +84,7 @@ export async function assertRequestDevice(req) {
     err.code = "DEVICE_NOT_ACTIVE";
     throw err;
   }
+  await assertDeviceHasActiveLoginSession(req.shopId, req.user, deviceId);
   return device;
 }
 
@@ -122,7 +123,7 @@ async function activateMissingRequestDevice(req, deviceId) {
     // can block cloud bootstrap with DEVICE_LIMIT_EXCEEDED. In non-production only,
     // reclaim the oldest active device for the same user/shop and retry. Production
     // still enforces the plan limit strictly.
-    if (err?.code === "DEVICE_LIMIT_EXCEEDED" && env.NODE_ENV !== "production") {
+    if (err?.code === "DEVICE_LIMIT_EXCEEDED" && env.NODE_ENV !== "production" && env.ENABLE_DEV_DEVICE_LIMIT_OVERRIDE) {
       await reclaimOldestDevelopmentDevice(req.shopId, userId, deviceId);
       return activateDevice(req.shopId, { ...user, userId }, input, req);
     }

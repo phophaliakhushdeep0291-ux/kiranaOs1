@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import db from "../../db.js";
+import { env } from "../../config/env.js";
 import { signToken } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
@@ -95,6 +96,11 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
   const refreshTokenHash = await bcrypt.hash(nextSecret, 10);
   const nextDeviceId = normalizeDeviceId(reqMeta.deviceId) ?? session.deviceId ?? null;
   if (nextDeviceId && nextDeviceId !== session.deviceId) {
+    if (session.deviceId) {
+      const err = new AppError("This login session belongs to another device", 403);
+      err.code = "SESSION_DEVICE_MISMATCH";
+      throw err;
+    }
     await assertDeviceCanOwnLoginSession(session.shopId, session.user, nextDeviceId);
   }
 
@@ -113,6 +119,7 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
     userId: session.user.id,
     shopId: session.shopId,
     role: session.user.role,
+    sessionId: session.id,
   });
 
   return {
@@ -142,8 +149,22 @@ export async function logout(refreshToken, user = null) {
   const ok = await bcrypt.compare(parsed.secret, session.refreshTokenHash);
   if (!ok) throw new AppError("Invalid refresh token", 401);
 
-  await db.session.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedReason: "LOGOUT" } });
-  return { success: true, message: "Logged out" };
+  const revokedAt = new Date();
+  const result = session.deviceId
+    ? await db.session.updateMany({
+        where: {
+          userId: session.userId,
+          shopId: session.shopId,
+          deviceId: session.deviceId,
+          revokedAt: null,
+        },
+        data: { revokedAt, revokedReason: "LOGOUT" },
+      })
+    : await db.session.updateMany({
+        where: { id: session.id, revokedAt: null },
+        data: { revokedAt, revokedReason: "LOGOUT" },
+      });
+  return { success: true, message: "Logged out", revokedSessions: result.count };
 }
 
 export async function getMe(userId, shopId) {
@@ -297,11 +318,17 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
 
 async function issueAuthResponse(user, shop, reqMeta = {}) {
   const deviceId = normalizeDeviceId(reqMeta.deviceId);
+  // Fail closed in production: without a device id the per-plan device cap can't be
+  // enforced (a null-device session isn't counted), so a client could bypass the limit
+  // simply by omitting the header. The app always sends x-device-id, so requiring it in
+  // production only blocks unsupported/bypassing clients. Dev/test stay lenient.
+  if (!deviceId && env.NODE_ENV === "production") {
+    throw new AppError("A device id is required to sign in. Please reload the app and try again.", 400, "DEVICE_ID_REQUIRED");
+  }
   if (deviceId) {
     await assertDeviceCanOwnLoginSession(user.shopId, user, deviceId);
   }
 
-  const accessToken = signToken({ userId: user.id, shopId: user.shopId, role: user.role });
   const refreshSecret = createRefreshSecret();
   const refreshTokenHash = await bcrypt.hash(refreshSecret, 10);
   const session = await db.session.create({
@@ -315,6 +342,7 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
       expiresAt: refreshExpiryDate(),
     },
   });
+  const accessToken = signToken({ userId: user.id, shopId: user.shopId, role: user.role, sessionId: session.id });
 
   return {
     accessToken,

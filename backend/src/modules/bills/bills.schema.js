@@ -13,6 +13,10 @@ const billItemSchema = z.object({
 const paymentSchema = z.object({
   mode: z.enum(["cash", "upi", "credit"]),
   amount: moneyAmount({ positive: true }),
+  clientPaymentId: z.string().min(1).optional(),
+  client_payment_id: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1).optional(),
+  idempotency_key: z.string().min(1).optional(),
 });
 
 export const confirmBillSchema = z.object({
@@ -30,6 +34,12 @@ export const confirmBillSchema = z.object({
   waivedAmount: moneyAmount().default(0),
   creditAmount: moneyAmount().default(0).optional(),
   payments: z.array(paymentSchema).default([]),
+  localBillId: z.string().min(1).optional(),
+  local_bill_id: z.string().min(1).optional(),
+  clientBillId: z.string().min(1).optional(),
+  client_bill_id: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1).optional(),
+  idempotency_key: z.string().min(1).optional(),
 }).superRefine((data, ctx) => {
   if (data.billType !== "estimate" && data.payments.length === 0 && Number(data.creditAmount ?? 0) <= 0) {
     ctx.addIssue({

@@ -264,11 +264,11 @@ export default function ProductsPage() {
 
   return (
     <div
-      className={`min-h-full bg-white px-4 py-4 ${isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
-      style={open && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+      className={`app-docked-page ${isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
+      style={open && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={<Package size={18} />} iconClass="bg-blue-50 text-blue-600" label="Total Products" value={stats.total.toLocaleString("en-IN")} sub="Active listings" />
         <StatCard icon={<AlertTriangle size={18} />} iconClass="bg-amber-50 text-amber-600" label="Low Stock" value={stats.lowStock.toLocaleString("en-IN")} sub="Needs attention" />
         <StatCard icon={<XCircle size={18} />} iconClass="bg-rose-50 text-rose-600" label="Out of Stock" value={stats.outOfStock.toLocaleString("en-IN")} sub="Unavailable" />
@@ -276,7 +276,7 @@ export default function ProductsPage() {
       </div>
 
       {/* ── Toolbar ── */}
-      <div className="mt-3.5 flex flex-col gap-3 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] md:flex-row md:items-center">
+      <div className="mt-3.5 flex flex-col gap-3 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] lg:flex-row lg:items-center">
         <div className="relative min-w-0 flex-1">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" aria-hidden="true" />
           <Input
@@ -288,7 +288,7 @@ export default function ProductsPage() {
           />
         </div>
         <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold md:w-52" data-testid="select-category">
+          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold lg:w-52" data-testid="select-category">
             <SelectValue placeholder="All Categories" />
           </SelectTrigger>
           <SelectContent>
@@ -318,7 +318,7 @@ export default function ProductsPage() {
 
       {/* ── Products table ── */}
       <div className="mt-3.5 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <div className="overflow-x-auto">
+        <div className="app-table-scroll overflow-x-auto">
           <table className="w-full min-w-[920px] text-left text-[13px]">
             <thead>
               <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">

@@ -83,9 +83,18 @@ assert.match(validationSchemas, /Money amount must have at most 2 decimal places
 assert.match(validationSchemas, /z\.number\(\)\.finite\(\)/, "validation helpers must reject NaN/Infinity");
 
 const customersService = read("src/modules/customers/customers.service.js");
-assert.match(customersService, /udharAmount: \{ gte: amount \}/, "manual udhar payment must use conditional balance guard");
-assert.match(customersService, /udharAmount: \{ decrement: amount \}/, "manual udhar payment must use atomic decrement");
-assert.match(customersService, /UDHAR_PAYMENT_CONCURRENT_MODIFICATION/, "manual udhar payment race must have explicit error code");
+assert.match(
+  customersService,
+  /calculateCustomerUdharBalance\(tx, shopId, customerId\)/,
+  "manual udhar payment must derive outstanding balance from ledger"
+);
+assert.match(
+  customersService,
+  /currentBalance\.balance < paymentAmount/,
+  "manual udhar payment must reject payments above ledger-derived outstanding"
+);
+assert.match(customersService, /UDHAR_PAYMENT_EXCEEDS_OUTSTANDING/, "manual udhar payment overpay must have explicit error code");
+assert.match(customersService, /idempotentReplay: true/, "manual udhar payment retry must replay existing ledger entry safely");
 assert.match(customersService, /NOT: \{ id \}/, "customer update must reject duplicate active mobile except self");
 assert.match(customersService, /data: \{ mobile: null \}/, "soft-deleted customer mobile should be cleared for reuse compatibility");
 

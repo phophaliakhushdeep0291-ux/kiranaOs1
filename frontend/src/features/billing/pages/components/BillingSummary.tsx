@@ -496,7 +496,7 @@ export function BillingSummary({
         </Button>
 
         {/* Secondary actions */}
-        <div className="mt-2 grid grid-cols-4 gap-1.5">
+        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           <SecBtn onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label="Estimate" />
           <SecBtn onClick={onHoldBill} disabled={cart.length === 0} icon={<PauseCircle size={13} />} label="Hold" shortcut="F9" />
           <SecBtn onClick={onPrintBill} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Printer size={13} />} label="Print" />
@@ -519,7 +519,7 @@ export function BillingSummary({
         )}
 
         {/* Keyboard shortcuts — 5 buttons */}
-        <div className="mt-2 grid grid-cols-5 gap-1.5 border-t border-[#edf1f6] pt-2.5">
+        <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-[#edf1f6] pt-2.5 sm:grid-cols-5">
           {[
             { key: "F2", label: "Search" },
             { key: "F4", label: "Discount" },

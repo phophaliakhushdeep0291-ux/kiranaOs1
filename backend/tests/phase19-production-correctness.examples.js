@@ -14,8 +14,8 @@ assert(billsService.includes("stockBaseQty: { gte: qtyInBase }"), "bill stock de
 assert(billsService.includes("stockBaseQty: { decrement: qtyInBase }"), "bill stock decrement must use atomic decrement");
 assert(billsService.includes("INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION"), "concurrent stock failure must have explicit error code");
 assert(billsService.includes("RESTORE_INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION"), "bill restore must also be concurrency-safe");
-assert(billsService.includes("udharAmount: { increment: creditAmount }"), "credit bill udhar update must use atomic increment");
-assert(billsService.includes("udharAmount: { decrement: bill.creditAmount }"), "bill cancellation udhar reversal must use atomic decrement guard");
+assert(billsService.includes("syncCustomerUdharBalance(tx, shopId, customerId"), "credit bill udhar update must derive balance from ledger");
+assert(billsService.includes("syncCustomerUdharBalance(tx, shopId, bill.customerId"), "bill cancellation udhar reversal must derive balance from ledger");
 
 assert(inventoryService.includes("CONCURRENT_STOCK_MODIFICATION_RETRY"), "purchase/correction must fail safely on concurrent stock writes");
 assert(inventoryService.includes("stockBaseQty: oldStock"), "purchase must use optimistic stock guard");

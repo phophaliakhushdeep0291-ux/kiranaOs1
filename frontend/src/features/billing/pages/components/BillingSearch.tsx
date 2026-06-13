@@ -118,6 +118,8 @@ export function BillingSearch({
   selectedCategory,
   onSelectedCategoryChange,
   recentProducts,
+  voiceVisible,
+  onToggleVoice,
   onHoldBill,
   cartItemCount,
   cartSubtotal,
@@ -155,11 +157,11 @@ export function BillingSearch({
 
         {/* Top section: search + recent products */}
         <div className="shrink-0 px-4 pt-4">
-          <div className="flex items-start gap-4">
+          <div className="flex flex-col items-stretch gap-3 xl:flex-row xl:items-start xl:gap-4">
 
             {/* Search box */}
             <div className="min-w-0 flex-1">
-              <div className="relative flex h-[52px] items-center gap-3 rounded-[14px] border border-[#e3eaf3] bg-white px-4 transition-colors focus-within:border-[#0057ff]">
+              <div className="relative flex h-12 items-center gap-3 rounded-[14px] border border-[#e3eaf3] bg-white px-4 transition-colors focus-within:border-[#0057ff] sm:h-[52px]">
                 <Search size={18} className="shrink-0 text-[#6b7a9a]" aria-hidden="true" />
                 <Input
                   ref={searchInputRef}
@@ -169,7 +171,7 @@ export function BillingSearch({
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
                 />
-                <kbd className="ml-auto flex shrink-0 items-center gap-1 rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 py-1 text-[11px] font-bold text-[#45577a]">
+                <kbd className="ml-auto hidden shrink-0 items-center gap-1 rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 py-1 text-[11px] font-bold text-[#45577a] sm:flex">
                   ⌘ K
                 </kbd>
               </div>
@@ -185,7 +187,8 @@ export function BillingSearch({
                 <button
                   type="button"
                   title="Voice billing"
-                  className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff]"
+                  onClick={onToggleVoice}
+                  className={`grid h-9 w-9 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] ${voiceVisible ? "border-[#bcd0ff] bg-[#eef5ff] text-[#0057ff]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
                 >
                   <Mic size={16} aria-hidden="true" />
                 </button>
@@ -194,7 +197,7 @@ export function BillingSearch({
 
             {/* Recent products — its own bordered box */}
             {recentProducts.length > 0 && !search && (
-              <div className="hidden shrink-0 rounded-[10px] border border-[#e6ecf4] bg-[#fafbfe] px-3 py-2 lg:block">
+              <div className="hidden shrink-0 rounded-[10px] border border-[#e6ecf4] bg-[#fafbfe] px-3 py-2 xl:block">
                 <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-[#536383]">Recent Products</p>
                 <div className="flex items-center gap-2.5">
                   {recentProducts.slice(0, 3).map((p) => {
@@ -279,7 +282,7 @@ export function BillingSearch({
               )}
 
               {/* 5-column grid */}
-              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 min-[520px]:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {displayedProducts.map((product) => (
                   <ProductCard
                     key={product.id}
@@ -309,7 +312,7 @@ export function BillingSearch({
 
       {/* ── 2. Bottom 3-column info section — Recent Bills widest, Quick Actions narrowest, Billing Tips medium ── */}
       {!search && (
-        <div className="shrink-0 grid grid-cols-[1.45fr_0.95fr_1.15fr] gap-3" style={{ height: "260px" }}>
+        <div className="hidden shrink-0 grid-cols-[1.45fr_0.95fr_1.15fr] gap-3 xl:grid" style={{ height: "260px" }}>
           <RecentBillsPanel />
           <QuickActionsPanel onHoldBill={onHoldBill} />
           <BillingTipsPanel />
@@ -318,10 +321,10 @@ export function BillingSearch({
 
       {/* ── 3. Order Summary Card ── */}
       {cartItemCount > 0 && (
-        <div className="shrink-0 flex items-center rounded-[13px] border border-[#e6ecf4] bg-white px-[22px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]" style={{ height: "86px" }}>
+        <div className="flex shrink-0 flex-col gap-3 rounded-[13px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:px-[22px]">
           <div className="min-w-0 flex-1">
             <p className="mb-2 text-[12px] font-bold text-[#5b6b89]">Order Summary</p>
-            <div className="flex items-center gap-[30px]">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-[30px]">
               {/* Items */}
               <div className="flex items-center gap-2.5">
                 <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[8px] bg-blue-50">
@@ -377,7 +380,7 @@ export function BillingSearch({
             </div>
           </div>
           {/* Grand total — right aligned */}
-          <div className="ml-auto shrink-0 text-right">
+          <div className="shrink-0 text-left sm:ml-auto sm:text-right">
             <p className="font-display text-[22px] font-black tracking-tight text-[#0f1e3d]">
               ₹{cartGrandTotal.toLocaleString("en-IN")}
             </p>

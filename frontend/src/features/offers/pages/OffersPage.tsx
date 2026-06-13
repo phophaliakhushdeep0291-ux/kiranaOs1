@@ -80,11 +80,11 @@ export default function OffersPage() {
 
   return (
     <div
-      className={cn("min-h-full bg-white px-4 py-4", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
-      style={panelOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+      className={cn("app-docked-page", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
+      style={panelOpen && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
           <Kpi icon={<Ticket size={16} />} label="Active Offers" value={String(activeCount)} tone="blue" />
           <Kpi icon={<Tag size={16} />} label="Scheduled Offers" value={String(scheduledCount)} tone="violet" />
           <Kpi icon={<BadgePercent size={16} />} label="Coupon Redemptions" value={redemptions.toLocaleString("en-IN")} tone="green" />
@@ -111,7 +111,7 @@ export default function OffersPage() {
                 <p className="text-[12px] text-[#64748b]">Create a coupon or auto-discount to boost sales.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="app-table-scroll overflow-x-auto">
                 <table className="w-full text-[13px]">
                   <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                     <tr>
@@ -289,7 +289,7 @@ function OfferPanel({ open, editing, saving, width, onResizeStart, onClose, onSu
   return (
     <aside
       style={{ width }}
-      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      className={`app-slide-panel fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog" aria-label={editing ? "Edit offer" : "Create new offer"} aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />

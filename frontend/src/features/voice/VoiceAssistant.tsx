@@ -23,7 +23,7 @@ type AssistantPosition = { x: number; y: number };
 
 const VOICE_ASSISTANT_POSITION_KEY = "kirana:voice-assistant-position";
 const FLOATING_MARGIN = 12;
-const MOBILE_BOTTOM_NAV_OFFSET = 84;
+const MOBILE_BOTTOM_NAV_OFFSET = 96;
 
 function getFloatingBottomOffset(): number {
   if (typeof window === "undefined") return FLOATING_MARGIN + 4;
@@ -258,11 +258,11 @@ export function VoiceAssistant() {
   return (
     <div
       ref={containerRef}
-      className={`fixed z-50 print:hidden transition-opacity duration-200 ${assistantIsIdle ? "opacity-[0.38] hover:opacity-100 focus-within:opacity-100" : "opacity-100"} ${dragging ? "select-none" : ""}`}
+      className={`fixed z-50 print:hidden transition-[opacity,transform] duration-200 ${assistantIsIdle ? "opacity-[0.22] hover:opacity-100 focus-within:opacity-100" : "opacity-100"} ${dragging ? "select-none" : ""}`}
       style={floatingStyle}
     >
       {open && (
-        <div className={`mb-3 w-[min(92vw,420px)] rounded-lg border bg-card p-3 shadow-2xl transition-transform duration-150 ${dragging ? "scale-[1.01]" : ""}`}>
+        <div className={`app-scrollbar mb-3 max-h-[min(calc(100dvh-120px),620px)] w-[min(calc(100vw-24px),420px)] overflow-y-auto rounded-[14px] border bg-card p-3 shadow-2xl ring-1 ring-black/[0.03] transition-transform duration-150 ${dragging ? "scale-[1.01]" : ""}`}>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 font-semibold">
               <button
@@ -286,7 +286,7 @@ export function VoiceAssistant() {
             className="mt-3 min-h-20 resize-none"
             placeholder="Try: open products / search product chini / add product chini cost 40 selling 45 / record payment Ramesh 500 cash / pending sync count"
           />
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-2 min-[420px]:flex min-[420px]:flex-wrap">
             <Button type="button" variant={listening ? "destructive" : "outline"} onClick={startMic}>
               {listening ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
               {listening ? "Stop" : "Speak"}
@@ -299,13 +299,13 @@ export function VoiceAssistant() {
           <Badge variant="outline" className="mt-2">AI used when backend proxy is configured</Badge>
         </div>
       )}
-      <div className={`flex justify-end gap-1.5 transition-all duration-200 ${assistantIsIdle ? "scale-95" : "scale-100"}`}>
+      <div className={`flex justify-end gap-1.5 transition-transform duration-200 ${assistantIsIdle ? "scale-95" : "scale-100"}`}>
         <button
           type="button"
           aria-label="Move voice assistant"
           title="Move voice assistant"
           onPointerDown={handleMovePointerDown}
-          className={`flex cursor-grab items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200 active:cursor-grabbing ${open ? "h-10 w-9 bg-card text-muted-foreground shadow-xl hover:bg-muted hover:text-foreground" : "h-9 w-8 bg-background/25 text-muted-foreground/45 shadow-sm hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-xl"}`}
+          className={`flex cursor-grab items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200 active:cursor-grabbing ${open ? "h-10 w-9 bg-card text-muted-foreground shadow-xl hover:bg-muted hover:text-foreground" : "h-8 w-7 bg-background/25 text-muted-foreground/45 shadow-sm hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-xl"}`}
         >
           <GripVertical className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -313,7 +313,7 @@ export function VoiceAssistant() {
           type="button"
           size="icon"
           variant="ghost"
-          className={`rounded-full border backdrop-blur-md transition-all duration-200 ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-10 w-10 bg-background/30 text-muted-foreground/55 shadow-md hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-2xl"}`}
+          className={`rounded-full border backdrop-blur-md transition-all duration-200 ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-9 w-9 bg-background/30 text-muted-foreground/55 shadow-md hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-2xl"}`}
           onClick={() => (open ? startMic() : setOpen(true))}
         >
           <Mic className="h-4 w-4" aria-hidden="true" />

@@ -31,7 +31,8 @@ describe("desktop app shell behavior", () => {
   });
 
   it("reserves mobile safe-area space for bottom navigation and floating controls", () => {
-    expect(layout).toContain("pb-[calc(5.75rem+env(safe-area-inset-bottom))]");
+    expect(layout).toContain("pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))]");
+    expect(layout).toContain("min-h-[var(--app-mobile-nav-height)]");
     expect(layout).toContain("pb-[env(safe-area-inset-bottom)]");
     expect(layout).toContain("overscroll-contain");
   });

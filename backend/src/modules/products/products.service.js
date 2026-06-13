@@ -45,23 +45,100 @@ export async function getProduct(shopId, id) {
   return deserializeProduct(product);
 }
 
-export async function createProduct(shopId, data) {
+export async function createProduct(shopId, data, { identity = null } = {}) {
+  const productIdentity = normalizeProductIdentity(shopId, identity);
+
+  // Idempotency must win before the name-conflict check: a retried offline create
+  // (lost ack, or the same product re-pushed under a new event id) carries the same
+  // client identity and must converge on the existing product instead of failing with
+  // "name already exists" or creating a duplicate. The online path passes no identity,
+  // so it keeps the original create-and-validate behaviour.
+  if (hasProductIdentity(productIdentity)) {
+    const existing = await findExistingProductByIdentity(db, shopId, productIdentity);
+    if (existing) return deserializeProduct(existing);
+  }
+
   await assertNoActiveProductNameConflict(shopId, data.name);
 
   const { aliases, baseUpdatedAt: _baseUpdatedAt, ...rest } = data;
-  const product = await db.product.create({
-    data: {
-      ...rest,
-      ...moneyShadows({
-        costPerRateUnit: rest.costPerRateUnit,
-        minPricePerRateUnit: rest.minPricePerRateUnit,
-        defaultPricePerRateUnit: rest.defaultPricePerRateUnit,
-      }),
-      shopId,
-      aliasesJson: JSON.stringify(aliases ?? []),
-    },
-  });
-  return deserializeProduct(product);
+  try {
+    const product = await db.product.create({
+      data: {
+        ...rest,
+        ...moneyShadows({
+          costPerRateUnit: rest.costPerRateUnit,
+          minPricePerRateUnit: rest.minPricePerRateUnit,
+          defaultPricePerRateUnit: rest.defaultPricePerRateUnit,
+        }),
+        shopId,
+        aliasesJson: JSON.stringify(aliases ?? []),
+        clientProductId: productIdentity.clientProductId,
+        idempotencyKey: productIdentity.idempotencyKey,
+        sourceDeviceId: productIdentity.sourceDeviceId,
+      },
+    });
+    return deserializeProduct(product);
+  } catch (error) {
+    // Race backstop: two concurrent creates with the same client identity collide on the
+    // unique index; the loser resolves to the winner instead of surfacing a 500.
+    if (isUniqueConstraintError(error) && hasProductIdentity(productIdentity)) {
+      const existing = await findExistingProductByIdentity(db, shopId, productIdentity);
+      if (existing) return deserializeProduct(existing);
+    }
+    throw error;
+  }
+}
+
+function pickString(...values) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+function isUniqueConstraintError(error) {
+  return error?.code === "P2002";
+}
+
+function normalizeProductIdentity(shopId, identity) {
+  const clientProductId = pickString(identity?.clientProductId, identity?.localProductId, identity?.localId);
+  const sourceDeviceId = pickString(identity?.sourceDeviceId);
+  const explicitKey = pickString(identity?.idempotencyKey);
+  const derivedKey = !explicitKey && sourceDeviceId && clientProductId
+    ? `create-product:${shopId}:${sourceDeviceId}:${clientProductId}`
+    : null;
+  return { clientProductId, idempotencyKey: explicitKey ?? derivedKey, sourceDeviceId };
+}
+
+function hasProductIdentity(identity) {
+  // clientProductId alone is enough to converge a sequential retry (it is the client's
+  // unique local product id). A device id, when present, additionally derives an
+  // idempotencyKey that the unique index enforces against concurrent races.
+  return Boolean(identity?.idempotencyKey || identity?.clientProductId);
+}
+
+async function findExistingProductByIdentity(client, shopId, identity) {
+  if (!hasProductIdentity(identity)) return null;
+  if (identity.idempotencyKey) {
+    const byKey = await client.product.findFirst({
+      where: { shopId, idempotencyKey: identity.idempotencyKey },
+    });
+    if (byKey) return byKey;
+  }
+  if (identity.sourceDeviceId && identity.clientProductId) {
+    const byDevice = await client.product.findFirst({
+      where: { shopId, sourceDeviceId: identity.sourceDeviceId, clientProductId: identity.clientProductId },
+    });
+    if (byDevice) return byDevice;
+  }
+  if (identity.clientProductId) {
+    return client.product.findFirst({
+      where: { shopId, clientProductId: identity.clientProductId },
+    });
+  }
+  return null;
 }
 
 export async function updateProduct(shopId, id, data) {

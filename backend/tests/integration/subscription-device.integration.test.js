@@ -48,11 +48,15 @@ if (ctx.skip) {
       const { tenant, ownerAuth } = await ownerCtx({ planCode: null });
       const d1 = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-1", deviceName: "Counter 1" }, { token: ownerAuth.accessToken }), 201);
       assert.equal(d1.deviceId, "device-1");
-      const over = assertFailure(await ctx.post("/api/devices/activate", { deviceId: "device-2", deviceName: "Counter 2" }, { token: ownerAuth.accessToken }), 403);
+      const secondAuth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const d2 = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-2", deviceName: "Counter 2" }, { token: secondAuth.accessToken }), 201);
+      assert.equal(d2.deviceId, "device-2");
+      const thirdAuth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const over = assertFailure(await ctx.post("/api/devices/activate", { deviceId: "device-3", deviceName: "Counter 3" }, { token: thirdAuth.accessToken }), 403);
       assert.equal(over.code, "DEVICE_LIMIT_EXCEEDED");
       assertSuccess(await ctx.delete("/api/devices/device-1", { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
-      const d2 = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-2", deviceName: "Counter 2" }, { token: ownerAuth.accessToken }), 201);
-      assert.equal(d2.deviceId, "device-2");
+      const d3 = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-3", deviceName: "Counter 3" }, { token: thirdAuth.accessToken }), 201);
+      assert.equal(d3.deviceId, "device-3");
     });
 
     test("heartbeat updates lastActiveAt and license returns plan/features", async () => {

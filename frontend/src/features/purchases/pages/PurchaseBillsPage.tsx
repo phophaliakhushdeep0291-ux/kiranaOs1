@@ -373,12 +373,12 @@ export default function PurchaseBillsPage() {
 
   return (
     <div
-      className={cn("min-h-full bg-white px-4 py-4", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
-      style={panelOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+      className={cn("app-docked-page", isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")}
+      style={panelOpen && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       <div className="space-y-4">
         {/* KPI row — label left, icon top-right per reference */}
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
           <Kpi label="Total Purchase Value" value={fmt(totals.amount)} icon={<ShoppingBag size={16} />} iconBg="bg-[#e8f0fe] text-[#2563eb]"
             delta={monthStats.totalDelta} deltaSuffix="vs last month" fallbackSub={`${rows.length} purchase bills`} loading={loading} />
           <Kpi label="Unpaid Purchase Dues" value={fmt(totals.due)} icon={<AlertTriangle size={16} />} iconBg="bg-[#fdebeb] text-[#ef4444]"
@@ -390,7 +390,7 @@ export default function PurchaseBillsPage() {
         </div>
 
         {/* Insight strip — one card, four cells */}
-        <div className="grid grid-cols-2 divide-y divide-[#eef2f8] rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)] xl:grid-cols-4 xl:divide-y-0 xl:divide-x">
+        <div className="grid grid-cols-1 divide-y divide-[#eef2f8] rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)] min-[560px]:grid-cols-2 xl:grid-cols-4 xl:divide-y-0 xl:divide-x">
           <Insight icon={<Crown size={15} />} iconBg="bg-[#e8f0fe] text-[#2563eb]" label="Top Supplier"
             value={topSuppliers[0]?.name ?? "—"} sub={topSuppliers[0] ? `${fmt(topSuppliers[0].amount)} (${topSuppliers[0].share}%)` : "No purchases yet"} />
           <Insight icon={<Package size={15} />} iconBg="bg-[#fdf3e1] text-[#d97706]" label="Most Purchased Item"
@@ -470,7 +470,7 @@ export default function PurchaseBillsPage() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              <div className="app-table-scroll overflow-x-auto">
                 <table className="w-full min-w-[860px] text-[12.5px]">
                   <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                     <tr>
@@ -821,7 +821,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
   return (
     <aside
       style={{ width }}
-      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      className={`app-slide-panel fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog" aria-label="Add purchase" aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
@@ -833,7 +833,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
         <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+      <div className="app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
         {/* Supplier information */}
         <section className="space-y-3">
           <h3 className="text-[13px] font-black text-[#13274d]">Supplier Information</h3>
@@ -849,7 +849,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
           {supplierId === "new" && (
             <Fld label="New supplier name *"><Input className="h-10" placeholder="Shree Balaji Distributors" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} /></Fld>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Fld label="Contact Person"><Input className="h-10" placeholder="Ramesh Ji" value={contact} onChange={(e) => setContact(e.target.value)} /></Fld>
             <Fld label="Mobile"><Input className="h-10" placeholder="+91 98290 12345" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Fld>
           </div>
@@ -858,7 +858,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
         {/* Bill details */}
         <section className="space-y-3">
           <h3 className="text-[13px] font-black text-[#13274d]">Bill Details</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Fld label="Purchase Date *"><Input className="h-10" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Fld>
             <Fld label="Purchase No."><Input className="h-10" placeholder="Auto if left blank" value={purchaseNo} onChange={(e) => setPurchaseNo(e.target.value)} /></Fld>
             <Fld label="Payment Mode *">
@@ -888,13 +888,13 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
         </section>
 
         {/* Products */}
-        <section className="space-y-2">
+        <section className="app-table-scroll space-y-2 overflow-x-auto pb-1">
           <h3 className="text-[13px] font-black text-[#13274d]">Products</h3>
-          <div className="grid grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">
+          <div className="grid min-w-[420px] grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">
             <span>Product</span><span>Qty</span><span>Unit Cost</span><span className="text-right">Total</span><span />
           </div>
           {lines.map((line) => (
-            <div key={line.key} className="grid grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5">
+            <div key={line.key} className="grid min-w-[420px] grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5">
               <Select value={line.productId} onValueChange={(v) => setLine(line.key, { productId: v })}>
                 <SelectTrigger className="h-9 text-[12px]"><SelectValue placeholder="Select product" /></SelectTrigger>
                 <SelectContent>
@@ -907,7 +907,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
               <button onClick={() => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== line.key) : prev))} className="grid h-7 w-7 place-items-center rounded text-rose-400 hover:bg-rose-50" aria-label="Remove line"><Trash2 size={13} /></button>
             </div>
           ))}
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex min-w-[420px] items-center justify-between pt-1">
             <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])} className="flex items-center gap-1 text-[12px] font-bold text-[#2563eb] hover:underline"><Plus size={13} /> Add Product</button>
             <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[11.5px] font-bold" onClick={() => toast({ title: "Barcode scanning coming soon", description: "Use the product dropdown for now." })}><Barcode size={13} /> Scan Barcode</Button>
           </div>
@@ -954,7 +954,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
       </div>
 
       <div className="shrink-0 border-t border-[#eef1f6] px-5 py-3.5">
-        <div className="flex gap-2.5">
+        <div className="flex flex-col gap-2.5 sm:flex-row">
           <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
           <Button type="button" onClick={() => void save()} disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
             {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><ClipboardList size={15} /> Save Purchase</>}

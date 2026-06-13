@@ -7,6 +7,7 @@ import {
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
 import { writeInstantCache } from "@/lib/offline/instant-cache";
 import {
+  billsShareClientIdentity,
   dedupeBillsForDisplay,
   dedupePaymentsForDisplay,
   findDuplicateLocalPaymentForServerPayment,
@@ -189,7 +190,18 @@ export async function mergeServerChange(
 
   const mappedLocalId = await findLocalIdForServerId(serverId);
   const localId =
-    getStringFrom(entity, ["local_id", "localId", "localBillId", "local_bill_id", "clientBillId", "client_bill_id"]) ?? mappedLocalId;
+    getStringFrom(entity, [
+      "local_id",
+      "localId",
+      "localBillId",
+      "local_bill_id",
+      "clientBillId",
+      "client_bill_id",
+      "localProductId",
+      "local_product_id",
+      "clientProductId",
+      "client_product_id",
+    ]) ?? mappedLocalId;
   const duplicatePayment =
     tableName === "payments"
       ? await findDuplicateLocalPaymentForServerPayment(entity)
@@ -210,11 +222,30 @@ export async function mergeServerChange(
     existing != null &&
     !isBillSynced(existing) &&
     isBillSynced(entity as Record<string, unknown>)
-      ? (isLikelySyncedCopyOfPendingBill(existing, entity as Record<string, unknown>) ? existing : undefined)
+      ? // A pending local bill whose synced server echo shares the client-generated
+        // identity is provably the same bill — merge it deterministically and never
+        // raise a conflict. The content heuristic stays only as a legacy fallback for
+        // bills created before the backend stamped a durable client identity.
+        billsShareClientIdentity(existing, entity as Record<string, unknown>) ||
+        isLikelySyncedCopyOfPendingBill(existing, entity as Record<string, unknown>)
+        ? existing
+        : undefined
       : undefined;
   const effectiveDuplicateLocalId =
     getStringFrom(duplicatePayment ?? duplicateLedger ?? duplicateBill ?? {}, ["id", "local_id", "localId"]);
   const resolvedLocalId = effectiveLocalId ?? effectiveDuplicateLocalId;
+
+  // Create-echo: an unsynced LOCAL create (never synced ⇒ no server_id) whose synced server
+  // copy is now arriving via pull, matched back to it by the client-generated id. It's the
+  // same record, not a conflict — fall through to the merge below. Offline EDITS of an
+  // already-synced row keep a server_id, so they still take the conflict path. This is the
+  // entity-agnostic version of the bill create-echo handling (covers products/customers/etc.).
+  const isCreateEcho =
+    existing != null &&
+    UNSYNCED_STATUSES.has(String(existing.sync_status ?? "synced") as SyncStatus) &&
+    !getStringFrom(existing, ["server_id", "serverId"]) &&
+    Boolean(effectiveLocalId) &&
+    getStringFrom(existing, ["id", "local_id", "localId"]) === effectiveLocalId;
 
   if (tableName === "purchase_bills") {
     const serverPurchase = {
@@ -242,6 +273,7 @@ export async function mergeServerChange(
     !duplicatePayment &&
     !duplicateLedger &&
     !duplicateBill &&
+    !isCreateEcho &&
     UNSYNCED_STATUSES.has(
       String(existing.sync_status ?? "synced") as SyncStatus,
     )

@@ -16,6 +16,16 @@ export const udharPaymentSchema = z.object({
   amount: moneyAmount({ positive: true }),
   mode: z.enum(["cash", "upi"]),
   note: z.string().optional(),
+  localLedgerEntryId: z.string().min(1).optional(),
+  local_ledger_entry_id: z.string().min(1).optional(),
+  clientLedgerId: z.string().min(1).optional(),
+  client_ledger_id: z.string().min(1).optional(),
+  ledgerEntryId: z.string().min(1).optional(),
+  ledger_entry_id: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1).optional(),
+  idempotency_key: z.string().min(1).optional(),
+  sourceDeviceId: z.string().min(1).optional(),
+  source_device_id: z.string().min(1).optional(),
 });
 
 

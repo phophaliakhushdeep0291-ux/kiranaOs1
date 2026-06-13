@@ -880,6 +880,40 @@ export function billIdentityKeys(bill: Record<string, unknown>): string[] {
   ].filter((key): key is string => Boolean(key));
 }
 
+/**
+ * Deterministic same-bill check based only on the client-generated identity
+ * (clientBillId / localBillId / idempotencyKey). A pending local bill stores its
+ * client id as its own primary id/local_id, so those are matched against the
+ * server bill's client identity. Server ids are intentionally excluded — a pending
+ * local bill and its synced server echo never share a server id, only the client id.
+ *
+ * When this returns true the two rows are provably the same bill, so the sync merge
+ * path can collapse them without relying on the fuzzy content/time heuristic. This
+ * only becomes true once the backend stamps the durable client identity onto the
+ * bill, so legacy bills (no client identity) correctly fall through to the heuristic.
+ */
+export function billsShareClientIdentity(
+  localBill: Record<string, unknown>,
+  serverBill: Record<string, unknown>,
+): boolean {
+  const serverClientIdentity = new Set(
+    [
+      getStringFrom(serverBill, ["clientBillId", "client_bill_id"]),
+      getStringFrom(serverBill, ["localBillId", "local_bill_id"]),
+      getStringFrom(serverBill, ["idempotency_key", "idempotencyKey"]),
+    ].filter((key): key is string => Boolean(key)),
+  );
+  if (serverClientIdentity.size === 0) return false;
+  const localIdentity = [
+    getStringFrom(localBill, ["id"]),
+    getStringFrom(localBill, ["local_id", "localId"]),
+    getStringFrom(localBill, ["localBillId", "local_bill_id"]),
+    getStringFrom(localBill, ["clientBillId", "client_bill_id"]),
+    getStringFrom(localBill, ["idempotency_key", "idempotencyKey"]),
+  ].filter((key): key is string => Boolean(key));
+  return localIdentity.some((key) => serverClientIdentity.has(key));
+}
+
 function isDeleted(row: Record<string, unknown>): boolean {
   return row.deleted_at != null || row.deletedAt != null;
 }

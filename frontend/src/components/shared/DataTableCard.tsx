@@ -18,13 +18,13 @@ export interface DataTableCardProps extends Omit<HTMLAttributes<HTMLDivElement>,
 
 export function DataTableCard({ title, description, actions, children, loading = false, error, empty = false, emptyState, loadingRows = 3, className, ...props }: DataTableCardProps) {
   return (
-    <section className={cn("rounded-xl border bg-card p-3 text-card-foreground shadow-sm sm:p-4", className)} {...props}>
-      <div className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <section className={cn("premium-panel min-w-0 p-3 text-card-foreground sm:p-4", className)} {...props}>
+      <div className="mb-3 flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <h2 className="break-words text-base font-bold text-foreground">{title}</h2>
           {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
         </div>
-        {actions ? <div className="grid w-full shrink-0 grid-cols-1 gap-2 min-[420px]:flex min-[420px]:w-auto min-[420px]:flex-wrap min-[420px]:items-center">{actions}</div> : null}
+        {actions ? <div className="responsive-action-row shrink-0 md:justify-end">{actions}</div> : null}
       </div>
       {loading ? (
         <div className="space-y-2" aria-busy="true" aria-label="Loading">

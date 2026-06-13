@@ -160,7 +160,7 @@ export function ProductFormPanel({
   return (
     <aside
       style={{ width }}
-      className={`fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[76px] lg:h-[calc(100vh-76px)] ${open ? "translate-x-0" : "translate-x-full"}`}
+      className={`app-slide-panel fixed right-0 top-0 z-40 flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
       aria-label={editing ? "Edit product" : "Add new product"}
       aria-hidden={!open}
@@ -182,7 +182,7 @@ export function ProductFormPanel({
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           {/* Product type: Packed / Loose */}
           <div className="mb-5 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc] p-1">
             <TypeButton active={!isLoose} icon={<Package size={16} />} label="Packed Item" onClick={() => form.setValue("isLooseItem", false, { shouldDirty: true })} />
@@ -199,7 +199,7 @@ export function ProductFormPanel({
             {isLoose ? (
               CategoryField
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {CategoryField}
                 <Field label="Brand">
                   <Input className="h-10" placeholder="e.g. Tata" {...form.register("brand")} />
@@ -211,7 +211,7 @@ export function ProductFormPanel({
             {isLoose ? (
               UnitField
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="SKU / Barcode" required>
                   <div className="relative">
                     <Input className="h-10 pr-9" placeholder="Scan or type" {...form.register("barcode")} />
@@ -267,7 +267,7 @@ export function ProductFormPanel({
 
           {/* Pricing */}
           <Section title="Pricing">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="MRP (₹)" required>
                 <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("mrp")} />
               </Field>
@@ -275,7 +275,7 @@ export function ProductFormPanel({
                 <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("costPrice")} />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Selling Price (₹)" required error={err.sellingPrice?.message}>
                 <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("sellingPrice")} />
               </Field>
@@ -298,7 +298,7 @@ export function ProductFormPanel({
 
           {/* Stock & Inventory */}
           <Section title="Stock & Inventory">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Field label="Opening Stock" required>
                 <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
               </Field>
@@ -313,7 +313,7 @@ export function ProductFormPanel({
 
           {/* Product Image */}
           <Section title="Product Image">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="grid h-[84px] w-[84px] shrink-0 place-items-center overflow-hidden rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc]">
                 {imageUrl ? <img src={imageUrl} alt="Product" className="h-full w-full object-contain" /> : <Upload size={20} className="text-[#9aa6bb]" />}
               </div>
@@ -354,7 +354,7 @@ export function ProductFormPanel({
               Keep panel open to add another product
             </label>
           )}
-          <div className="flex gap-2.5">
+          <div className="flex flex-col gap-2.5 sm:flex-row">
             <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button
               type="submit"

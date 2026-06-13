@@ -18,6 +18,16 @@ export function isPostgresTestDatabaseUrl(url = getTestDatabaseUrl()) {
 }
 
 export function assertSafeTestDatabaseUrl(url = getTestDatabaseUrl()) {
+  if (process.env.REQUIRE_POSTGRES_TEST_DB === "true") {
+    const configuredUrl = process.env.POSTGRES_TEST_DATABASE_URL || process.env.TEST_DATABASE_URL;
+    if (!configuredUrl) {
+      throw new Error(
+        "POSTGRES_TEST_DATABASE_URL or TEST_DATABASE_URL is required when REQUIRE_POSTGRES_TEST_DB=true"
+      );
+    }
+    return assertSafePostgresTestDatabaseUrl(configuredUrl);
+  }
+
   if (!url) {
     throw new Error("TEST_DATABASE_URL is required for DB-backed integration tests");
   }
@@ -90,6 +100,7 @@ export function buildTestEnv(extra = {}) {
     ALLOW_POSTGRES_TEST_DB: process.env.ALLOW_POSTGRES_TEST_DB || (isPostgresTestDatabaseUrl(testDatabaseUrl) ? "true" : undefined),
     TEST_DATABASE_URL: testDatabaseUrl,
     DATABASE_URL: testDatabaseUrl,
+    DIRECT_DATABASE_URL: process.env.DIRECT_DATABASE_URL || (isPostgresTestDatabaseUrl(testDatabaseUrl) ? testDatabaseUrl : undefined),
     JWT_SECRET: process.env.JWT_SECRET || "test-jwt-secret-change-me-1234567890",
     JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "15m",
     ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || "http://localhost:5500,http://127.0.0.1:5500",

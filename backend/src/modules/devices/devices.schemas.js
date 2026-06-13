@@ -11,6 +11,12 @@ export const heartbeatSchema = z.object({
   deviceId: z.string().min(3).max(128),
 });
 
+export const logoutDeviceSchema = z.object({
+  deviceId: z.string().min(3).max(128),
+  currentDeviceId: z.string().min(3).max(128).optional(),
+  deviceLimitToken: z.string().min(16).optional(),
+});
+
 export const licenseQuerySchema = z.object({
   deviceId: z.string().min(3).max(128).optional(),
 });

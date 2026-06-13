@@ -422,7 +422,7 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
       >
         {/* Desktop topbar */}
-        <header className="sticky top-0 z-40 hidden min-h-[76px] items-center gap-4 border-b border-[#e6ecf4] bg-white/94 px-6 shadow-[0_1px_0_rgba(15,35,80,0.02)] backdrop-blur-xl lg:flex">
+        <header className="sticky top-0 z-40 hidden min-h-[var(--app-desktop-topbar-height)] items-center gap-4 border-b border-[#e6ecf4] bg-white/94 px-5 shadow-[0_1px_0_rgba(15,35,80,0.02)] backdrop-blur-xl lg:flex xl:px-6">
           <button
             type="button"
             aria-label="Toggle sidebar"
@@ -444,9 +444,9 @@ export function Layout({ children }: { children: ReactNode }) {
             <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
           </div>
 
-          <div className={cn("flex h-10 min-w-[126px] items-center justify-center gap-1.5 rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
+          <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
-            {connectionLabel}
+            <span className="truncate">{connectionLabel}</span>
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
           </div>
 
@@ -489,18 +489,18 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Mobile topbar */}
-        <header className="sticky top-0 z-40 border-b bg-background/92 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <header className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b bg-background/92 px-3.5 py-2.5 backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between gap-3">
-            <Link href="/dashboard" className="flex items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link href="/dashboard" className="flex min-w-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow">
                 <ShoppingCart size={17} aria-hidden="true" />
               </div>
-              <span className="font-display text-lg font-black tracking-tight">KiranaOS</span>
+              <span className="min-w-0 truncate font-display text-lg font-black tracking-tight">KiranaOS</span>
             </Link>
-            <div className="flex items-center gap-2">
-              <div className={cn("flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold", connectionBadgeClass)}>
+            <div className="flex min-w-0 items-center justify-end gap-2">
+              <div className={cn("flex min-w-0 max-w-[42vw] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold", connectionBadgeClass)}>
                 <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
-                {connectionLabel}
+                <span className="truncate">{connectionLabel}</span>
               </div>
               {snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
             </div>
@@ -512,7 +512,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
         )}
 
-        <main id="main-content" className="app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain bg-[#f7fbff] pb-[calc(5.75rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <main id="main-content" className="app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain bg-[#f7fbff] pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
 
@@ -523,7 +523,7 @@ export function Layout({ children }: { children: ReactNode }) {
               const active = isActive(loc, href);
               return (
                 <Link key={href} href={href}>
-                  <div className={cn("flex flex-col items-center gap-1 py-2.5 text-[10px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>
+                  <div className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>
                     <div className={cn("flex h-8 w-8 items-center justify-center rounded-xl transition-colors", active && "bg-primary/10")}>
                       <Icon size={20} aria-hidden="true" />
                     </div>

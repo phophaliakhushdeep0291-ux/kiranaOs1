@@ -27,6 +27,7 @@ const dbState = vi.hoisted(() => {
     "customer_ledger",
     "inventory_movements",
     "suppliers",
+    "purchase_bills",
     "settings",
     "sync_outbox",
     "sync_cursor",
@@ -278,6 +279,7 @@ import {
   reconcileSyncedBillFromPush,
 } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
+import { mergeServerChange } from "@/features/sync/sync-reconcile";
 
 const mockedSyncPush = vi.mocked(syncPush);
 
@@ -646,5 +648,145 @@ describe("bill sync behavior", () => {
         server_id: "server_bill_first",
       }),
     );
+  });
+
+  it("pulled server bill merges (never conflicts) when client identity matches even if money and timestamp differ", async () => {
+    // Local pending bill: offline udhar split (paid 40 / credit 60), created earlier.
+    dbState.putInto("bills", {
+      id: "bill_local_echo",
+      local_id: "bill_local_echo",
+      clientBillId: "bill_local_echo",
+      client_bill_id: "bill_local_echo",
+      localBillId: "bill_local_echo",
+      idempotencyKey: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_local_echo",
+      idempotency_key: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_local_echo",
+      billNo: "PENDING-ECHO",
+      customerName: "Ramesh",
+      grandTotal: 100,
+      paidAmount: 40,
+      creditAmount: 60,
+      createdAt: "2026-06-07T09:00:00.000Z",
+      updatedAt: "2026-06-07T09:00:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "pending_sync",
+      status: "pending_sync",
+      isSynced: false,
+      is_synced: false,
+      deleted_at: null,
+    });
+
+    // Server echo of the SAME bill (same client identity) but the server-authoritative
+    // money differs (paid 100 / credit 0) and the timestamp is in a different bucket,
+    // so the fuzzy content heuristic would NOT recognise it — only the durable client
+    // identity proves they are one bill.
+    const change = {
+      entity_type: "bill",
+      entity_id: "server_bill_echo",
+      entity: {
+        id: "server_bill_echo",
+        server_id: "server_bill_echo",
+        clientBillId: "bill_local_echo",
+        client_bill_id: "bill_local_echo",
+        localBillId: "bill_local_echo",
+        idempotencyKey: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_local_echo",
+        idempotency_key: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_local_echo",
+        billNo: "KOS-2026-000202",
+        customerName: "Ramesh",
+        grandTotal: 100,
+        paidAmount: 100,
+        creditAmount: 0,
+        createdAt: "2026-06-07T09:42:00.000Z",
+        updatedAt: "2026-06-07T09:42:00.000Z",
+        tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id,
+        device_id: dbState.scope.device_id,
+        sync_status: "synced",
+        status: "completed",
+        isSynced: true,
+        is_synced: true,
+        deleted_at: null,
+      },
+    };
+
+    const status = await mergeServerChange(change as never);
+
+    expect(status).toBe("merged");
+    expect(scopedRows("sync_conflicts")).toHaveLength(0);
+    expect(scopedRows("id_mappings")).toContainEqual(
+      expect.objectContaining({ entity_type: "bill", local_id: "bill_local_echo", server_id: "server_bill_echo" }),
+    );
+    // Exactly one bill survives for display, and it is the synced server copy.
+    const billHistory = dedupeBillsForDisplay(scopedRows("bills"));
+    expect(billHistory).toHaveLength(1);
+    expect(billHistory[0]).toEqual(expect.objectContaining({ id: "server_bill_echo", sync_status: "synced" }));
+  });
+
+  it("product created offline merges with its synced server echo instead of conflicting", async () => {
+    // Unsynced LOCAL create (no server_id). Its synced server copy arrives via pull, matched
+    // back by clientProductId. Must merge, not raise a false conflict.
+    dbState.putInto("products", {
+      id: "local_prod_echo",
+      local_id: "local_prod_echo",
+      clientProductId: "local_prod_echo",
+      name: "Sugar 1kg",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "pending_sync",
+      deleted_at: null,
+    });
+
+    const status = await mergeServerChange({
+      entity_type: "product",
+      entity_id: "server_prod_echo",
+      entity: {
+        id: "server_prod_echo",
+        clientProductId: "local_prod_echo",
+        name: "Sugar 1kg",
+        tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id,
+        sync_status: "synced",
+        deleted_at: null,
+      },
+    } as never);
+
+    expect(status).toBe("merged");
+    expect(scopedRows("sync_conflicts")).toHaveLength(0);
+  });
+
+  it("offline edit of an already-synced row still raises a conflict (safety)", async () => {
+    // This row was synced before (it has a server_id) and then edited offline. A divergent
+    // server change must still conflict — the create-echo rule must NOT swallow real edits.
+    dbState.putInto("products", {
+      id: "server_prod_edit",
+      server_id: "server_prod_edit",
+      local_id: "local_prod_orig",
+      clientProductId: "local_prod_orig",
+      name: "Locally edited name",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "pending_sync",
+      deleted_at: null,
+    });
+
+    const status = await mergeServerChange({
+      entity_type: "product",
+      entity_id: "server_prod_edit",
+      entity: {
+        id: "server_prod_edit",
+        clientProductId: "local_prod_orig",
+        name: "Server-side name",
+        tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id,
+        sync_status: "synced",
+        deleted_at: null,
+      },
+    } as never);
+
+    expect(status).toBe("conflict");
+    expect(scopedRows("sync_conflicts").length).toBeGreaterThan(0);
   });
 });

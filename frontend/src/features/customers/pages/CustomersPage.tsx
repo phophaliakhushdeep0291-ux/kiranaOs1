@@ -398,8 +398,8 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="min-h-full bg-[#f7fbff] px-4 py-4 lg:px-5">
-      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)_320px]">
+    <div className="app-docked-page">
+      <div className="grid gap-4 xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)_minmax(280px,320px)]">
         <section className="min-h-0 overflow-hidden rounded-[16px] border border-[#e6ecf4] bg-white shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
           <div className="border-b border-[#edf2f8] p-4">
             <div className="relative">

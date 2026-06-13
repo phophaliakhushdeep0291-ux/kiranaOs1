@@ -5,9 +5,30 @@ export async function list(req, res, next) {
   catch (err) { next(err); }
 }
 
+export async function active(req, res, next) {
+  try {
+    const currentDeviceId = req.query?.currentDeviceId ?? req.headers["x-device-id"] ?? null;
+    res.json({ success: true, data: { activeDevices: await service.listActiveDevices(req.shopId, { currentDeviceId }) } });
+  } catch (err) { next(err); }
+}
+
 export async function activate(req, res, next) {
   try { res.status(201).json({ success: true, data: await service.activateDevice(req.shopId, req.user, req.body, req) }); }
   catch (err) { next(err); }
+}
+
+export async function logoutDevice(req, res, next) {
+  try {
+    const currentDeviceId = req.body.currentDeviceId ?? req.headers["x-device-id"] ?? null;
+    const data = req.body.deviceLimitToken
+      ? await service.logoutActiveDeviceWithChallenge({
+          deviceLimitToken: req.body.deviceLimitToken,
+          targetDeviceId: req.body.deviceId,
+          currentDeviceId,
+        }, req)
+      : await service.logoutActiveDeviceForUser(req.shopId, req.user, req.body.deviceId, currentDeviceId, req);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
 }
 
 export async function remove(req, res, next) {

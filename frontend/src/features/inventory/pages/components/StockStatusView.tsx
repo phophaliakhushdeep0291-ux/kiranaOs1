@@ -107,11 +107,11 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
 
   return (
     <div
-      className={`min-h-full bg-white px-4 py-4 ${isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
-      style={moveOpen && isDesktop ? { paddingRight: panelWidth + 16 } : undefined}
+      className={`app-docked-page ${isResizing ? "" : "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"}`}
+      style={moveOpen && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       {/* Stat cards */}
-      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
         {cards.map((c) => (
           <div key={c.label} className="flex items-center gap-3.5 rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[12px] ${c.cls}`}>{c.icon}</span>
@@ -186,7 +186,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
 
       {/* Table */}
       <div className="mt-3.5 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <div className="overflow-x-auto">
+        <div className="app-table-scroll overflow-x-auto">
           <table className="w-full min-w-[880px] text-left text-[13px]">
             <thead>
               <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
