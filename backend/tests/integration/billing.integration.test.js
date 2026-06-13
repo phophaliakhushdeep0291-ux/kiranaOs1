@@ -182,6 +182,36 @@ if (ctx.skip) {
       assert.equal(await sumOf("cash_in"), 0, "cash collected nets to zero after cancellation");
     });
 
+    test("concurrent cancels restore stock only once", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 2,
+        ratePerRateUnit: 50,
+        payments: [{ mode: "cash", amount: 100 }],
+      }), { token: ownerAuth.accessToken }), 201);
+      // Stock is now 8.
+
+      // Two cancels race. The atomic active->cancelled transition must let only one win,
+      // so stock is restored exactly once (8 -> 10), never twice (12).
+      const [a, b] = await Promise.all([
+        ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Race A" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }),
+        ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Race B" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }),
+      ]);
+
+      const statuses = [a.status, b.status];
+      assert.ok(statuses.includes(200), "one cancel succeeds");
+      assert.ok(statuses.some((s) => s >= 400), "the other cancel is rejected, not silently double-applied");
+
+      const refreshed = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(refreshed.stockBaseQty, 10, "stock restored exactly once (not doubled)");
+
+      const reversals = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "cancel_reversal" },
+      });
+      assert.equal(reversals.length, 1, "exactly one stock reversal recorded");
+    });
+
     test("cancelled bill is not counted as active sale in P&L", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });

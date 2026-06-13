@@ -71,6 +71,10 @@ export async function confirmBill(shopId, body, actor = {}) {
   // never from frontend/offline payload attribution fields.
   const createdByUserId = actor?.userId ?? null;
   const deviceId = actor?.deviceId ?? null;
+  // Offline-origin bills (replayed from a device's sync queue) represent sales that
+  // already physically happened, so they must never be dropped for being stock-short.
+  // The online counter path leaves this false and still rejects overselling live.
+  const allowStockShortfall = actor?.allowStockShortfall === true;
   const billPayments = isEstimate ? [] : payments;
   const legacyCreditAmount = sumMoney(billPayments.filter((p) => p.mode === "credit").map((p) => p.amount));
   const requestedCreditAmount = inputCreditAmount !== undefined
@@ -126,7 +130,9 @@ export async function confirmBill(shopId, body, actor = {}) {
         : item.quantity;
 
       // Stock check only applies to real sale bills. Estimates are quotes, not stock movements.
-      if (product && !isEstimate) {
+      // Offline-origin bills skip the rejection (the sale already happened) and instead
+      // reconcile the shortfall at decrement time.
+      if (product && !isEstimate && !allowStockShortfall) {
         if (product.stockBaseQty < qtyInBase) {
           throw new AppError(
             `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
@@ -246,14 +252,16 @@ export async function confirmBill(shopId, body, actor = {}) {
     }
 
     const stockUpdatesByProduct = aggregateStockUpdates(stockUpdates);
-    for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
-      if (product.stockBaseQty < qtyInBase) {
-        const err = new AppError(
-          `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
-          400
-        );
-        err.code = "INSUFFICIENT_STOCK";
-        throw err;
+    if (!allowStockShortfall) {
+      for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
+        if (product.stockBaseQty < qtyInBase) {
+          const err = new AppError(
+            `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
+            400
+          );
+          err.code = "INSUFFICIENT_STOCK";
+          throw err;
+        }
       }
     }
 
@@ -312,15 +320,19 @@ export async function confirmBill(shopId, body, actor = {}) {
         statusCode: 409,
         code: "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION",
         message: `Insufficient stock for "${product.name}". Another bill may have used this stock first.`,
+        allowShortfall: allowStockShortfall,
       });
 
+      // Record the actual stock removed (= qtyInBase normally; less on a floored shortfall),
+      // so the ledger entry stays internally consistent (old + change == new).
+      const removedBaseQty = round2(stockResult.oldStock - stockResult.newStock);
       await tx.stockLedger.create({
         data: {
           shopId,
           productId: product.id,
           productName: product.name,
           action: "sale",
-          changeBaseQty: -qtyInBase,
+          changeBaseQty: -removedBaseQty,
           oldStockBaseQty: stockResult.oldStock,
           newStockBaseQty: stockResult.newStock,
           billId: bill.id,
@@ -329,6 +341,9 @@ export async function confirmBill(shopId, body, actor = {}) {
           sourceDeviceId: billIdentity.sourceDeviceId,
           sourceType: "bill",
           sourceId: bill.id,
+          note: stockResult.shortfallBaseQty > 0
+            ? `Offline sale recorded with ${stockResult.shortfallBaseQty} ${product.baseUnit} stock shortfall — reconcile inventory`
+            : undefined,
         },
       });
     }
@@ -410,6 +425,20 @@ export async function cancelBill(shopId, billId, { reason }) {
   if (bill.status === "cancelled") throw new AppError("Bill is already cancelled", 400);
 
   return db.$transaction(async (tx) => {
+    // Atomic claim: only one concurrent request can transition active -> cancelled, so two
+    // simultaneous cancels can't both restore stock / reverse udhar. The conditional update
+    // locks the row until commit; a read-then-act status check (the outer guard above) does not.
+    const cancelledAt = new Date();
+    const claimed = await tx.bill.updateMany({
+      where: { id: billId, shopId, status: "active" },
+      data: { status: "cancelled", cancelledAt, cancelledReason: reason },
+    });
+    if (claimed.count !== 1) {
+      const err = new AppError("Bill is already cancelled or not active", 409);
+      err.code = "BILL_NOT_CANCELLABLE";
+      throw err;
+    }
+
     // ── 1. Restore stock for every item ───────────────────────
     for (const item of bill.items) {
       if (!item.productId) continue;
@@ -467,18 +496,7 @@ export async function cancelBill(shopId, billId, { reason }) {
       }
     }
 
-    // ── 3. Mark bill as cancelled ─────────────────────────────
-    const cancelledAt = new Date();
-    const cancelled = await tx.bill.update({
-      where: { id: billId },
-      data: {
-        status: "cancelled",
-        cancelledAt,
-        cancelledReason: reason,
-      },
-    });
-
-    // ── 4. FinancialLedger: reverse the bill's money effect ───
+    // ── 3. FinancialLedger: reverse the bill's money effect ───
     // Same entryTypes, negated amounts, dated to the cancellation, so dashboard KPIs
     // net out. Estimates posted nothing on creation, so they reverse nothing.
     if (bill.billType !== "estimate") {
@@ -492,7 +510,7 @@ export async function cancelBill(shopId, billId, { reason }) {
       });
     }
 
-    return cancelled;
+    return tx.bill.findFirst({ where: { id: billId, shopId } });
   });
 }
 
@@ -513,6 +531,18 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
   const isEstimate = bill.billType === "estimate";
 
   return db.$transaction(async (tx) => {
+    // Atomic claim: cancelled -> active, so only one concurrent restore wins (mirrors cancel).
+    const restoredAt = new Date();
+    const claimed = await tx.bill.updateMany({
+      where: { id: billId, shopId, status: "cancelled" },
+      data: { status: "active", cancelledAt: null, cancelledReason: null },
+    });
+    if (claimed.count !== 1) {
+      const err = new AppError("Bill is already restored or not cancelled", 409);
+      err.code = "BILL_NOT_RESTORABLE";
+      throw err;
+    }
+
     if (!isEstimate) {
       // Re-deduct stock that was restored during cancellation.
       for (const item of bill.items) {
@@ -580,17 +610,6 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       }
     }
 
-    const restoredAt = new Date();
-    const restored = await tx.bill.update({
-      where: { id: billId },
-      data: {
-        status: "active",
-        cancelledAt: null,
-        cancelledReason: null,
-      },
-      include: { items: true, payments: true },
-    });
-
     // FinancialLedger: re-apply the bill's money effect, dated to the restore.
     if (!isEstimate) {
       await postBillRestoredLedger(tx, {
@@ -603,7 +622,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       });
     }
 
-    return restored;
+    return tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
   });
 }
 
@@ -688,7 +707,7 @@ function isUniqueConstraintError(error) {
   return error?.code === "P2002";
 }
 
-async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, statusCode = 409, code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION", message }) {
+async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, statusCode = 409, code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION", message, allowShortfall = false }) {
   const updated = await tx.product.updateMany({
     where: {
       id: product.id,
@@ -700,9 +719,23 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
   });
 
   if (updated.count !== 1) {
-    const err = new AppError(message || `Insufficient stock for "${product.name}"`, statusCode);
-    err.code = code;
-    throw err;
+    if (!allowShortfall) {
+      const err = new AppError(message || `Insufficient stock for "${product.name}"`, statusCode);
+      err.code = code;
+      throw err;
+    }
+    // Offline-origin sale already happened: remove what stock is available and floor at
+    // zero (never negative) so the sale is recorded, not dropped. The caller flags the
+    // shortfall on the stock-ledger entry for the shopkeeper to reconcile.
+    const fresh = await tx.product.findFirst({
+      where: { id: product.id, shopId },
+      select: { stockBaseQty: true },
+    });
+    const available = round2(Math.max(0, fresh?.stockBaseQty ?? 0));
+    const newStock = round2(Math.max(0, available - qtyInBase));
+    const shortfallBaseQty = round2(Math.max(0, qtyInBase - available));
+    await tx.product.updateMany({ where: { id: product.id, shopId }, data: { stockBaseQty: newStock } });
+    return { oldStock: available, newStock, shortfallBaseQty };
   }
 
   const freshProduct = await tx.product.findFirst({
@@ -711,5 +744,5 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
   });
   const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
   const oldStock = round2(newStock + qtyInBase);
-  return { oldStock, newStock };
+  return { oldStock, newStock, shortfallBaseQty: 0 };
 }

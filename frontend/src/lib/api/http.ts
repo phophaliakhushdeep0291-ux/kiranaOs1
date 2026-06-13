@@ -64,10 +64,36 @@ function safeLocalStorageSet(key: string, value: string) {
   }
 }
 
-export function getApiBaseUrl() {
-  const fromStorage = safeLocalStorageGet("kiranaApiBaseUrl");
-  const fromEnv = import.meta.env.VITE_API_BASE_URL as string | undefined;
+/**
+ * Resolve the API base URL. In production it MUST come from the build-time
+ * VITE_API_BASE_URL and nothing else — no localStorage override (a malicious script or
+ * browser extension could repoint it to exfiltrate tokens) and no localhost fallback.
+ * Development keeps the convenient override + localhost fallback. Pure for testability.
+ */
+export function resolveApiBaseUrl({
+  isProd,
+  fromEnv,
+  fromStorage,
+}: {
+  isProd: boolean;
+  fromEnv: string | undefined | null;
+  fromStorage: string | undefined | null;
+}): string {
+  if (isProd) {
+    if (!fromEnv) {
+      throw new Error("Missing VITE_API_BASE_URL in production build");
+    }
+    return fromEnv.replace(/\/$/, "");
+  }
   return (fromStorage || fromEnv || "http://localhost:3000/api").replace(/\/$/, "");
+}
+
+export function getApiBaseUrl() {
+  return resolveApiBaseUrl({
+    isProd: import.meta.env.PROD,
+    fromEnv: import.meta.env.VITE_API_BASE_URL as string | undefined,
+    fromStorage: safeLocalStorageGet("kiranaApiBaseUrl"),
+  });
 }
 
 export function setApiBaseUrl(url: string) {
