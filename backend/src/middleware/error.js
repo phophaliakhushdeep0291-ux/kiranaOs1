@@ -74,6 +74,7 @@ export function errorHandler(err, req, res, _next) {
     return res.status(statusCode).json({
       ...baseError(req, message),
       ...(err.code && { code: err.code }),
+      ...(err.publicData && typeof err.publicData === "object" ? err.publicData : {}),
       ...(err.meta && env.NODE_ENV === "development" ? { meta: err.meta } : {}),
     });
   }

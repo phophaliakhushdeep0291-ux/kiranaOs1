@@ -500,7 +500,7 @@ async function applySyncEvent(shopId, event, user, context) {
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyRestoreBill(shopId, event, context);
     case SYNC_EVENT_TYPES.CREATE_PRODUCT:
-      return applyCreateProduct(shopId, event);
+      return applyCreateProduct(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_PRODUCT:
       return applyUpdateProduct(shopId, event, user, context);
     case SYNC_EVENT_TYPES.DELETE_PRODUCT:
@@ -555,20 +555,31 @@ async function applySyncEvent(shopId, event, user, context) {
 async function applyCreateBill(shopId, event, user, context) {
   const payload = getEventPayload(event);
   const billBody = payload.bill ?? payload;
-  const existingResult = await findExistingCreateBillResultByIdempotency(shopId, payload, billBody);
+  const existingResult = await findExistingCreateBillResultByIdempotency(shopId, event, payload, billBody);
   if (existingResult) return existingResult;
 
-  const resolvedBillBody = await resolveBillBodyReferences(shopId, billBody, context);
+  const billIdentity = getCreateBillIdentity(event, payload, billBody);
+  const resolvedBillBody = {
+    ...(await resolveBillBodyReferences(shopId, billBody, context)),
+    ...billIdentity.billBodyFields,
+  };
   await validateBillProductExpectations(shopId, resolvedBillBody.items ?? []);
 
   const parsed = confirmBillSchema.parse(resolvedBillBody);
   // Cashier attribution is server-authoritative. Ignore any frontend-created createdByUserId.
-  const bill = await confirmBill(shopId, parsed, { userId: user?.userId ?? null, deviceId: user?.deviceId ?? null });
+  const bill = await confirmBill(shopId, parsed, {
+    userId: user?.userId ?? null,
+    deviceId: billIdentity.sourceDeviceId ?? user?.deviceId ?? null,
+  });
   return buildCreateBillSyncPayload(shopId, bill, payload, billBody);
 }
 
-async function findExistingCreateBillResultByIdempotency(shopId, payload, billBody) {
-  const identities = collectCreateBillIdentityValues(payload, billBody);
+async function findExistingCreateBillResultByIdempotency(shopId, event, payload, billBody) {
+  const billIdentity = getCreateBillIdentity(event, payload, billBody);
+  const existingBill = await findExistingBillByCreateIdentity(shopId, billIdentity);
+  if (existingBill) return buildCreateBillSyncPayload(shopId, existingBill, payload, billBody);
+
+  const identities = collectCreateBillIdentityValues(event, payload, billBody);
   if (identities.size === 0) return null;
 
   const events = await db.offlineSyncEvent.findMany({
@@ -585,6 +596,7 @@ async function findExistingCreateBillResultByIdempotency(shopId, payload, billBo
     const result = safeJsonParse(event.resultJson);
     const request = safeJsonParse(event.requestJson);
     const eventIdentities = collectCreateBillIdentityValues(
+      event,
       result,
       result?.bill,
       request,
@@ -622,18 +634,21 @@ async function buildCreateBillSyncPayload(shopId, bill, payload, billBody) {
     billBody.local_bill_id ??
     billBody.localId ??
     billBody.local_id ??
+    bill.clientBillId ??
     null;
   const clientBillId =
     payload.clientBillId ??
     payload.client_bill_id ??
     billBody.clientBillId ??
     billBody.client_bill_id ??
+    bill.clientBillId ??
     localBillId;
   const idempotencyKey =
     payload.idempotencyKey ??
     payload.idempotency_key ??
     billBody.idempotencyKey ??
     billBody.idempotency_key ??
+    bill.idempotencyKey ??
     null;
 
   return {
@@ -646,6 +661,7 @@ async function buildCreateBillSyncPayload(shopId, bill, payload, billBody) {
     localBillId,
     clientBillId,
     idempotencyKey,
+    idempotency_key: idempotencyKey,
     bill: toSyncJsonSafe({
       ...bill,
       payments: bill.payments.filter((payment) => payment.mode !== "credit"),
@@ -688,17 +704,54 @@ async function applyRestoreBill(shopId, event, context) {
   };
 }
 
-async function applyCreateProduct(shopId, event) {
+async function applyCreateProduct(shopId, event, user = null) {
   const payload = createProductPayloadSchema.parse(getEventPayload(event));
   const productBody = payload.product ?? stripKnownSyncPayloadKeys(payload);
   const parsed = createProductSchema.parse(productBody);
-  const product = await createProduct(shopId, parsed);
+  const identity = getCreateProductIdentity(event, payload, productBody, user);
+  // Durable identity makes the create idempotent across retries and cross-device replays.
+  const product = await createProduct(shopId, parsed, { identity });
   return {
     type: event.type,
     productId: product.id,
-    localProductId: payload.localProductId ?? productBody.localId ?? null,
+    localProductId: payload.localProductId ?? productBody.localId ?? identity.clientProductId ?? null,
     updatedAt: product.updatedAt,
   };
+}
+
+function getCreateProductIdentity(event, payload, productBody, user = null) {
+  const clientProductId = pickString(
+    payload?.clientProductId,
+    payload?.client_product_id,
+    productBody?.clientProductId,
+    productBody?.client_product_id,
+    payload?.localProductId,
+    payload?.local_product_id,
+    productBody?.localProductId,
+    productBody?.local_product_id,
+    productBody?.localId,
+    productBody?.local_id,
+    event?.entity_id
+  );
+  const idempotencyKey = pickString(
+    payload?.idempotencyKey,
+    payload?.idempotency_key,
+    productBody?.idempotencyKey,
+    productBody?.idempotency_key,
+    event?.idempotencyKey,
+    event?.idempotency_key
+  );
+  const sourceDeviceId = pickString(
+    payload?.sourceDeviceId,
+    payload?.source_device_id,
+    productBody?.sourceDeviceId,
+    productBody?.source_device_id,
+    event?.deviceId,
+    event?.device_id,
+    user?.deviceId,
+    user?.device_id
+  );
+  return { clientProductId, idempotencyKey, sourceDeviceId };
 }
 
 async function applyUpdateProduct(shopId, event, user, context) {
@@ -783,7 +836,10 @@ async function applyCreateCustomer(shopId, event) {
   const payload = getEventPayload(event);
   const customerBody = payload.customer ?? payload;
   const parsed = createCustomerSchema.parse(stripKnownSyncPayloadKeys(customerBody));
-  const customer = await createCustomer(shopId, parsed);
+  // Sync replays must converge on an existing customer (same mobile) rather than
+  // throw, so a retried/cross-device create maps the local id onto one server
+  // customer instead of duplicating or sticking as a permanently failed event.
+  const customer = await createCustomer(shopId, parsed, { reuseExistingMobile: true });
   return {
     type: event.type,
     customerId: customer.id,
@@ -831,8 +887,14 @@ async function applyUdharPayment(shopId, event, context) {
     mode: payload.mode,
     note: payload.note,
   };
-  const parsedPayment = udharPaymentSchema.parse(payment);
-  const data = await recordUdharPayment(shopId, payload.customerId, parsedPayment);
+  const paymentIdentity = getUdharPaymentIdentity(event, payload, payment);
+  const parsedPayment = udharPaymentSchema.parse({
+    ...payment,
+    ...paymentIdentity.paymentFields,
+  });
+  const data = await recordUdharPayment(shopId, payload.customerId, parsedPayment, {
+    deviceId: paymentIdentity.sourceDeviceId ?? context?.user?.deviceId ?? null,
+  });
   return {
     type: event.type,
     localLedgerEntryId: payload.localLedgerEntryId ?? payload.ledgerEntryId ?? payload.localId ?? null,
@@ -1565,6 +1627,7 @@ function collectCreateBillIdentityValues(...sources) {
     "client_bill_id",
     "localId",
     "local_id",
+    "entity_id",
   ];
   const values = new Set();
   for (const source of sources) {
@@ -1575,6 +1638,125 @@ function collectCreateBillIdentityValues(...sources) {
     }
   }
   return values;
+}
+
+function getCreateBillIdentity(event, payload, billBody) {
+  const clientBillId = pickString(
+    payload?.clientBillId,
+    payload?.client_bill_id,
+    billBody?.clientBillId,
+    billBody?.client_bill_id,
+    payload?.localBillId,
+    payload?.local_bill_id,
+    billBody?.localBillId,
+    billBody?.local_bill_id,
+    payload?.localId,
+    payload?.local_id,
+    billBody?.localId,
+    billBody?.local_id,
+    event?.entity_id
+  );
+  const idempotencyKey = pickString(
+    payload?.idempotencyKey,
+    payload?.idempotency_key,
+    billBody?.idempotencyKey,
+    billBody?.idempotency_key,
+    event?.idempotencyKey,
+    event?.idempotency_key
+  );
+  const sourceDeviceId = pickString(
+    payload?.sourceDeviceId,
+    payload?.source_device_id,
+    billBody?.sourceDeviceId,
+    billBody?.source_device_id,
+    event?.deviceId,
+    event?.device_id
+  );
+
+  return {
+    clientBillId,
+    idempotencyKey,
+    sourceDeviceId,
+    billBodyFields: {
+      ...(clientBillId ? { clientBillId, localBillId: clientBillId } : {}),
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(sourceDeviceId ? { sourceDeviceId } : {}),
+    },
+  };
+}
+
+async function findExistingBillByCreateIdentity(shopId, identity) {
+  if (!identity?.idempotencyKey && !(identity?.sourceDeviceId && identity?.clientBillId)) return null;
+  const include = { items: true, payments: true };
+  if (identity.idempotencyKey) {
+    const byKey = await db.bill.findFirst({
+      where: { shopId, idempotencyKey: identity.idempotencyKey },
+      include,
+    });
+    if (byKey) return byKey;
+  }
+  if (identity.sourceDeviceId && identity.clientBillId) {
+    return db.bill.findFirst({
+      where: {
+        shopId,
+        sourceDeviceId: identity.sourceDeviceId,
+        clientBillId: identity.clientBillId,
+      },
+      include,
+    });
+  }
+  return null;
+}
+
+function getUdharPaymentIdentity(event, payload, payment) {
+  const clientLedgerId = pickString(
+    payment?.clientLedgerId,
+    payment?.client_ledger_id,
+    payload?.clientLedgerId,
+    payload?.client_ledger_id,
+    payload?.localLedgerEntryId,
+    payload?.local_ledger_entry_id,
+    payload?.ledgerEntryId,
+    payload?.ledger_entry_id,
+    payload?.localId,
+    payload?.local_id,
+    event?.entity_id
+  );
+  const idempotencyKey = pickString(
+    payment?.idempotencyKey,
+    payment?.idempotency_key,
+    payload?.idempotencyKey,
+    payload?.idempotency_key,
+    event?.idempotencyKey,
+    event?.idempotency_key
+  );
+  const sourceDeviceId = pickString(
+    payment?.sourceDeviceId,
+    payment?.source_device_id,
+    payload?.sourceDeviceId,
+    payload?.source_device_id,
+    event?.deviceId,
+    event?.device_id
+  );
+  return {
+    clientLedgerId,
+    idempotencyKey,
+    sourceDeviceId,
+    paymentFields: {
+      ...(clientLedgerId ? { clientLedgerId, localLedgerEntryId: clientLedgerId } : {}),
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(sourceDeviceId ? { sourceDeviceId } : {}),
+    },
+  };
+}
+
+function pickString(...values) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
 }
 
 function toSyncJsonSafe(value) {

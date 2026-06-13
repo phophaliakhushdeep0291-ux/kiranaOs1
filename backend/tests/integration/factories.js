@@ -159,6 +159,12 @@ export function productPayload(overrides = {}) {
     gstRate: overrides.gstRate ?? 0,
     lowStockThreshold: overrides.lowStockThreshold ?? 5,
     ...(overrides.hsn !== undefined ? { hsn: overrides.hsn } : {}),
+    ...(overrides.brand !== undefined ? { brand: overrides.brand } : {}),
+    ...(overrides.mrp !== undefined ? { mrp: overrides.mrp } : {}),
+    ...(overrides.reorderLevel !== undefined ? { reorderLevel: overrides.reorderLevel } : {}),
+    ...(overrides.description !== undefined ? { description: overrides.description } : {}),
+    ...(overrides.imageUrl !== undefined ? { imageUrl: overrides.imageUrl } : {}),
+    ...(overrides.isLooseItem !== undefined ? { isLooseItem: overrides.isLooseItem } : {}),
   };
 }
 

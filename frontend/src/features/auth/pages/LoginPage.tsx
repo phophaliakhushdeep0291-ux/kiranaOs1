@@ -3,13 +3,15 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useLogin, type AuthResponse } from "@/lib/api/client";
+import { ApiClientError, useLogin, type AuthResponse } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
-import { Loader2, LockKeyhole, Store } from "lucide-react";
+import { logoutDevice, type ActiveDeviceDto } from "@/features/devices/api";
+import { getOfflineScope } from "@/lib/offline/context";
+import { Laptop, Loader2, LockKeyhole, LogOut, Store } from "lucide-react";
 
 const schema = z.object({
   mobile: z.string().min(10, "Enter a valid mobile number"),
@@ -17,10 +19,19 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+interface DeviceLimitState {
+  message: string;
+  activeDevices: ActiveDeviceDto[];
+  deviceLimitToken: string;
+  plan?: { code?: string; maxDevices?: number; allowedMaxDevices?: number };
+}
+
 export default function Login() {
   const [, setLocation] = useLocation();
   const auth = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [deviceLimit, setDeviceLimit] = useState<DeviceLimitState | null>(null);
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -34,6 +45,18 @@ export default function Login() {
         setLocation("/dashboard");
       },
       onError: (err: unknown) => {
+        if (err instanceof ApiClientError && err.data?.code === "DEVICE_LIMIT_EXCEEDED") {
+          const activeDevices = Array.isArray(err.data.activeDevices) ? err.data.activeDevices as ActiveDeviceDto[] : [];
+          const token = typeof err.data.deviceLimitToken === "string" ? err.data.deviceLimitToken : "";
+          setDeviceLimit({
+            message: err.message,
+            activeDevices,
+            deviceLimitToken: token,
+            plan: typeof err.data.plan === "object" && err.data.plan ? err.data.plan as DeviceLimitState["plan"] : undefined,
+          });
+          setServerError(null);
+          return;
+        }
         const msg = (err as { data?: { message?: string }; message?: string })?.data?.message ?? (err as { message?: string })?.message ?? "Login failed";
         setServerError(msg);
       },
@@ -42,7 +65,39 @@ export default function Login() {
 
   const onSubmit = (values: FormData) => {
     setServerError(null);
+    setDeviceLimit(null);
     loginMutation.mutate({ data: { mobile: values.mobile, password: values.password } });
+  };
+
+  const retryLogin = () => {
+    const values = form.getValues();
+    loginMutation.mutate({ data: { mobile: values.mobile, password: values.password } });
+  };
+
+  const logoutSelectedDevice = async (deviceId: string) => {
+    if (!deviceLimit?.deviceLimitToken) {
+      setServerError("Device management session expired. Please sign in again.");
+      setDeviceLimit(null);
+      return;
+    }
+    setRevokingDeviceId(deviceId);
+    setServerError(null);
+    try {
+      const currentDeviceId = getOfflineScope().device_id;
+      const result = await logoutDevice(deviceId, {
+        deviceLimitToken: deviceLimit.deviceLimitToken,
+        currentDeviceId,
+      });
+      setDeviceLimit((state) => state
+        ? { ...state, activeDevices: result.activeDevices ?? state.activeDevices.filter((device) => device.deviceId !== deviceId) }
+        : state);
+      retryLogin();
+    } catch (error) {
+      const msg = error instanceof ApiClientError ? error.message : "Could not logout that device";
+      setServerError(msg);
+    } finally {
+      setRevokingDeviceId(null);
+    }
   };
 
   return (
@@ -81,6 +136,64 @@ export default function Login() {
         </div>
 
         <div className="rounded-lg border bg-background/70 p-5 shadow-sm">
+          {deviceLimit ? (
+            <div className="space-y-4" data-testid="device-limit-panel">
+              <div>
+                <h2 className="text-lg font-bold text-card-foreground">Device limit reached</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {deviceLimit.message}
+                </p>
+                {deviceLimit.plan?.code && (
+                  <p className="mt-2 inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                    {deviceLimit.plan.code} plan - {deviceLimit.plan.allowedMaxDevices ?? deviceLimit.plan.maxDevices} active devices
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                {deviceLimit.activeDevices.map((device) => (
+                  <div key={device.deviceId} className="flex items-center gap-3 rounded-lg border bg-card p-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Laptop size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-card-foreground">{device.deviceName || "Active device"}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {device.userName || "Shop user"}{device.lastSeenAt ? ` - last used ${new Date(device.lastSeenAt).toLocaleString()}` : ""}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => void logoutSelectedDevice(device.deviceId)}
+                      disabled={revokingDeviceId !== null || device.current}
+                    >
+                      {revokingDeviceId === device.deviceId ? <Loader2 size={15} className="animate-spin" /> : <LogOut size={15} />}
+                      <span className="ml-1 hidden sm:inline">Logout</span>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {serverError && (
+                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="status-error">
+                  {serverError}
+                </div>
+              )}
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button type="button" variant="outline" onClick={() => setDeviceLimit(null)}>
+                  Back to sign in
+                </Button>
+                <Button type="button" onClick={retryLogin} disabled={loginMutation.isPending || revokingDeviceId !== null}>
+                  {loginMutation.isPending ? <><Loader2 size={16} className="mr-2 animate-spin" />Continuing...</> : "Continue login"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+          <>
           <h2 className="mb-5 text-lg font-bold text-card-foreground">Sign in to your shop</h2>
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -139,6 +252,8 @@ export default function Login() {
               </span>
             </Link>
           </p>
+          </>
+          )}
         </div>
         </div>
       </div>

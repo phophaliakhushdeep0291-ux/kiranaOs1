@@ -3,7 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
-import { syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
+import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -63,6 +63,7 @@ export async function confirmBill(shopId, body, actor = {}) {
     buyerPaidAmount: inputBuyerPaidAmount,
     waivedAmount: inputWaivedAmount = 0,
   } = body;
+  const billIdentity = normalizeBillIdentity(shopId, body, actor);
 
   const isEstimate = billType === "estimate";
   // Phase 12: cashier attribution is taken only from authenticated server context,
@@ -86,7 +87,12 @@ export async function confirmBill(shopId, body, actor = {}) {
     throw new AppError("Customer is required for credit/udhar bills", 400);
   }
 
-  const bill = await db.$transaction(async (tx) => {
+  let bill;
+  try {
+    bill = await db.$transaction(async (tx) => {
+    const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
+    if (existingBill) return existingBill;
+
     // ── 1. Load and validate all products ─────────────────────
     const productIds = items.filter((i) => i.productId).map((i) => i.productId);
     const dbProducts = await tx.product.findMany({
@@ -240,8 +246,13 @@ export async function confirmBill(shopId, body, actor = {}) {
 
     const paymentRows = billPayments
       .filter((payment) => payment.mode !== "credit")
-      .map((payment) => ({
-        ...payment,
+      .map((payment, index) => ({
+        shopId,
+        mode: payment.mode,
+        amount: payment.amount,
+        clientPaymentId: pickString(payment.clientPaymentId, payment.client_payment_id),
+        idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `payment:${index}:${payment.mode}`),
+        sourceDeviceId: billIdentity.sourceDeviceId,
         ...moneyShadows({ amount: payment.amount }),
       }));
 
@@ -270,6 +281,9 @@ export async function confirmBill(shopId, body, actor = {}) {
         ...moneyShadows({ subtotal, discount: billDiscount, gst: totalGst, grandTotal, actualAmount, buyerPaidAmount, waivedAmount, grossProfit, paidAmount, creditAmount }),
         createdByUserId,
         deviceId,
+        clientBillId: billIdentity.clientBillId,
+        idempotencyKey: billIdentity.idempotencyKey,
+        sourceDeviceId: billIdentity.sourceDeviceId,
         items: { create: billItems },
         payments: { create: paymentRows },
       },
@@ -297,6 +311,11 @@ export async function confirmBill(shopId, body, actor = {}) {
           oldStockBaseQty: stockResult.oldStock,
           newStockBaseQty: stockResult.newStock,
           billId: bill.id,
+          clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `stock:${product.id}`),
+          idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `stock:${product.id}`),
+          sourceDeviceId: billIdentity.sourceDeviceId,
+          sourceType: "bill",
+          sourceId: bill.id,
         },
       });
     }
@@ -306,6 +325,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       const customer = await tx.customer.findFirst({ where: { id: customerId, shopId, deletedAt: null } });
       if (!customer) throw new AppError("Customer not found", 404);
 
+      await ensureLegacyUdharOpeningLedger(tx, shopId, customerId);
       const udharLedgerEntry = await tx.udharLedger.create({
         data: {
           shopId,
@@ -317,6 +337,11 @@ export async function confirmBill(shopId, body, actor = {}) {
           mode: "credit",
           billId: bill.id,
           billNo: bill.billNo,
+          clientLedgerId: buildChildIdempotencyKey(billIdentity.clientBillId, "udhar:debit"),
+          idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, "udhar:debit"),
+          sourceDeviceId: billIdentity.sourceDeviceId,
+          sourceType: "bill",
+          sourceId: bill.id,
           note: `Bill ${bill.billNo}`,
         },
       });
@@ -330,6 +355,15 @@ export async function confirmBill(shopId, body, actor = {}) {
 
     return bill;
   });
+  } catch (error) {
+    if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
+      const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
+      if (!existingBill) throw error;
+      bill = existingBill;
+    } else {
+      throw error;
+    }
+  }
 
   return {
     ...bill,
@@ -527,6 +561,73 @@ function aggregateStockUpdates(stockUpdates) {
     }
   }
   return byProduct;
+}
+
+function normalizeBillIdentity(shopId, body, actor) {
+  const sourceDeviceId = pickString(actor?.deviceId, body?.sourceDeviceId, body?.source_device_id);
+  const clientBillId = pickString(
+    body?.clientBillId,
+    body?.client_bill_id,
+    body?.localBillId,
+    body?.local_bill_id,
+    body?.localId,
+    body?.local_id
+  );
+  const explicitKey = pickString(body?.idempotencyKey, body?.idempotency_key);
+  const derivedKey = !explicitKey && sourceDeviceId && clientBillId
+    ? `create-bill:${shopId}:${sourceDeviceId}:${clientBillId}`
+    : null;
+
+  return {
+    clientBillId,
+    idempotencyKey: explicitKey ?? derivedKey,
+    sourceDeviceId,
+  };
+}
+
+function hasBillIdentity(identity) {
+  return Boolean(identity?.idempotencyKey || (identity?.sourceDeviceId && identity?.clientBillId));
+}
+
+async function findExistingBillByIdentity(client, shopId, identity) {
+  if (!hasBillIdentity(identity)) return null;
+  const include = { items: true, payments: true };
+  if (identity.idempotencyKey) {
+    const byKey = await client.bill.findFirst({
+      where: { shopId, idempotencyKey: identity.idempotencyKey },
+      include,
+    });
+    if (byKey) return byKey;
+  }
+  if (identity.sourceDeviceId && identity.clientBillId) {
+    return client.bill.findFirst({
+      where: {
+        shopId,
+        sourceDeviceId: identity.sourceDeviceId,
+        clientBillId: identity.clientBillId,
+      },
+      include,
+    });
+  }
+  return null;
+}
+
+function buildChildIdempotencyKey(parentKey, suffix) {
+  if (!parentKey) return null;
+  return `${parentKey}:${suffix}`;
+}
+
+function pickString(...values) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+function isUniqueConstraintError(error) {
+  return error?.code === "P2002";
 }
 
 async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, statusCode = 409, code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION", message }) {

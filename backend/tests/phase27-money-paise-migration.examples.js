@@ -14,6 +14,7 @@ const billsService = read("src/modules/bills/bills.service.js");
 const customersService = read("src/modules/customers/customers.service.js");
 const productsService = read("src/modules/products/products.service.js");
 const inventoryService = read("src/modules/inventory/inventory.service.js");
+const udharBalanceService = read("src/modules/udhar/udharBalance.service.js");
 const reconciliation = read("scripts/money-paise-reconciliation.js");
 const pgProof = read("scripts/postgres-production-proof.js");
 const pkg = JSON.parse(read("package.json"));
@@ -67,7 +68,8 @@ assert.ok(app.includes('typeof value !== "bigint"'), "JSON replacer must explici
 
 assert.ok(billsService.includes("moneyShadows({ subtotal"), "bill create must write bill paise shadow fields");
 assert.ok(billsService.includes("payments: { create: paymentRows }"), "bill payments must use paise-aware paymentRows");
-assert.ok(billsService.includes("syncCustomerUdharPaise"), "bill udhar changes must refresh customer paise balance");
+assert.ok(billsService.includes("syncCustomerUdharBalance"), "bill udhar changes must refresh customer balance from ledger");
+assert.ok(udharBalanceService.includes("udharAmountPaise: toPaiseBigInt(balance)"), "ledger-derived udhar balance refresh must write paise shadow");
 assert.ok(customersService.includes("moneyShadows({ udharAmount"), "customer create/update must write udharAmountPaise");
 assert.ok(customersService.includes("udharAmountPaise: toPaiseBigInt"), "manual udhar payment must refresh udharAmountPaise");
 assert.ok(productsService.includes("moneyShadows({") && productsService.includes("defaultPricePerRateUnit"), "products must write price paise fields");

@@ -47,7 +47,9 @@ export async function getKhata(req, res, next) {
 
 export async function udharPayment(req, res, next) {
   try {
-    const data = await svc.recordUdharPayment(req.shopId, req.params.id, req.body);
+    const data = await svc.recordUdharPayment(req.shopId, req.params.id, req.body, {
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+    });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

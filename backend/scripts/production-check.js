@@ -1838,8 +1838,11 @@ if (exists("src/middleware/auth.js") && exists("src/modules/auth/auth.service.js
   if (!migrations.includes('ALTER TABLE "Session" ADD COLUMN IF NOT EXISTS "revokedReason"')) {
     errors.push("PostgreSQL migrations missing Session.revokedReason additive migration");
   }
-  for (const snippet of ["db.user.findFirst", "disabledAt: null", "USER_SESSION_INACTIVE", "req.user = { ...payload", "role: user.role"]) {
+  for (const snippet of ["db.user.findFirst", "disabledAt: null", "USER_SESSION_INACTIVE", "role: user.role"]) {
     if (!authMiddleware.includes(snippet)) errors.push(`auth middleware missing active-user/stale-role protection: ${snippet}`);
+  }
+  if (!/req\.user = \{\s*\.\.\.payload/s.test(authMiddleware)) {
+    errors.push("auth middleware missing active-user/stale-role protection: req.user payload compatibility");
   }
   for (const snippet of ["REFRESH_TOKEN_REUSE_DETECTED", "STAFF_DISABLED", "PASSWORD_CHANGED", "revokedReason", "mobile: null", "email: null", "createAuditLog"]) {
     if (!authService.includes(snippet)) errors.push(`auth service missing session/staff production protection: ${snippet}`);

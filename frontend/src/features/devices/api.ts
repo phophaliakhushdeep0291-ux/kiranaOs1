@@ -14,6 +14,18 @@ export interface DeviceDto {
   sync_status?: string;
 }
 
+export interface ActiveDeviceDto {
+  deviceId: string;
+  deviceName?: string | null;
+  platform?: string | null;
+  lastSeenAt?: string | null;
+  current?: boolean;
+  userId?: string | null;
+  userName?: string | null;
+  userRole?: string | null;
+  sessionCount?: number;
+}
+
 function platformName() {
   if (typeof navigator === "undefined") return "web";
   const userAgent = navigator.userAgent || "web";
@@ -28,6 +40,12 @@ export function listDevices() {
   return apiRequest<{ devices: DeviceDto[]; license?: OfflineLicenseToken }>("/devices");
 }
 
+export function listActiveDevices(currentDeviceId = getOfflineScope().device_id) {
+  return apiRequest<{ activeDevices: ActiveDeviceDto[] }>(
+    `/devices/active?currentDeviceId=${encodeURIComponent(currentDeviceId)}`,
+  );
+}
+
 export function activateDevice(deviceName: string, deviceId = getOfflineScope().device_id) {
   return apiRequest<{ device: DeviceDto; license?: OfflineLicenseToken }>("/devices/activate", {
     method: "POST",
@@ -36,6 +54,19 @@ export function activateDevice(deviceName: string, deviceId = getOfflineScope().
       deviceName: deviceName.trim() || "This device",
       platform: platformName(),
     }),
+  });
+}
+
+export function logoutDevice(deviceId: string, options: { deviceLimitToken?: string; currentDeviceId?: string } = {}) {
+  return apiRequest<{ success: boolean; activeDevices?: ActiveDeviceDto[]; revokedSessions?: number }>("/devices/logout-device", {
+    method: "POST",
+    body: JSON.stringify({
+      deviceId,
+      currentDeviceId: options.currentDeviceId ?? getOfflineScope().device_id,
+      deviceLimitToken: options.deviceLimitToken,
+    }),
+    skipAuth: Boolean(options.deviceLimitToken),
+    skipRefresh: Boolean(options.deviceLimitToken),
   });
 }
 

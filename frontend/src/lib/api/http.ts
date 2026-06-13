@@ -8,6 +8,7 @@ export interface ApiErrorData {
   code?: string;
   requestId?: string;
   details?: Record<string, string[]>;
+  [key: string]: unknown;
 }
 
 export class ApiClientError extends Error {
@@ -117,6 +118,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const data: ApiErrorData = isJsonRecord(body)
       ? {
+          ...body,
           message: typeof body.message === "string" ? body.message : undefined,
           error: typeof body.error === "string" ? body.error : undefined,
           code: typeof body.code === "string" ? body.code : undefined,

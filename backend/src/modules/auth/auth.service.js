@@ -95,6 +95,11 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
   const refreshTokenHash = await bcrypt.hash(nextSecret, 10);
   const nextDeviceId = normalizeDeviceId(reqMeta.deviceId) ?? session.deviceId ?? null;
   if (nextDeviceId && nextDeviceId !== session.deviceId) {
+    if (session.deviceId) {
+      const err = new AppError("This login session belongs to another device", 403);
+      err.code = "SESSION_DEVICE_MISMATCH";
+      throw err;
+    }
     await assertDeviceCanOwnLoginSession(session.shopId, session.user, nextDeviceId);
   }
 
@@ -143,8 +148,22 @@ export async function logout(refreshToken, user = null) {
   const ok = await bcrypt.compare(parsed.secret, session.refreshTokenHash);
   if (!ok) throw new AppError("Invalid refresh token", 401);
 
-  await db.session.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedReason: "LOGOUT" } });
-  return { success: true, message: "Logged out" };
+  const revokedAt = new Date();
+  const result = session.deviceId
+    ? await db.session.updateMany({
+        where: {
+          userId: session.userId,
+          shopId: session.shopId,
+          deviceId: session.deviceId,
+          revokedAt: null,
+        },
+        data: { revokedAt, revokedReason: "LOGOUT" },
+      })
+    : await db.session.updateMany({
+        where: { id: session.id, revokedAt: null },
+        data: { revokedAt, revokedReason: "LOGOUT" },
+      });
+  return { success: true, message: "Logged out", revokedSessions: result.count };
 }
 
 export async function getMe(userId, shopId) {

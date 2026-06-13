@@ -30,6 +30,30 @@ if (ctx.skip) {
       assert.ok(data.results[0].serverId);
     });
 
+    test("CREATE_PRODUCT retried under a new event id converges to one product", async () => {
+      // The same offline product re-pushed under a different event id (retry after a lost
+      // ack). Event-level idempotency does NOT catch this (different event ids), so the
+      // create itself must converge on the durable client identity: one server product,
+      // both local ids mapped onto it, and no duplicate / name-conflict failure.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = productPayload({ name: "Parle-G Biscuit" });
+      const response = await ctx.post("/api/sync/push", {
+        events: [
+          { eventId: "create-product-conv-1", type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_x", product } },
+          { eventId: "create-product-conv-2", type: "CREATE_PRODUCT", payload: { localProductId: "local_prod_x", product } },
+        ],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+
+      const data = assertSuccess(response);
+      assert.equal(data.summary.failed, 0, "neither product create should fail");
+      assert.equal(data.summary.conflicts, 0, "retried product create must converge, not conflict");
+      const serverIdA = data.idMappings.products?.local_prod_x;
+      assert.ok(serverIdA, "local product id maps to a server product");
+
+      const count = await ctx.db.product.count({ where: { shopId: tenant.shop.id, name: "Parle-G Biscuit", deletedAt: null } });
+      assert.equal(count, 1, "exactly one product should exist after the retried create");
+    });
+
     test("sync push CREATE_CUSTOMER works", async () => {
       const { ownerAuth, deviceHeaders } = await ownerCtx();
       const response = await ctx.post("/api/sync/push", {
@@ -38,6 +62,33 @@ if (ctx.skip) {
       const data = assertSuccess(response);
       assert.equal(data.summary.synced, 1);
       assert.ok(data.results[0].serverId);
+    });
+
+    test("CREATE_CUSTOMER converges on existing mobile instead of duplicating or failing", async () => {
+      // Same customer (same mobile) created twice with different event ids and different
+      // local ids — e.g. a retry after a lost ack, or the same customer added on a second
+      // device. Event-level idempotency does NOT catch this (different event ids), so the
+      // create itself must converge: one server customer, both local ids mapped onto it,
+      // and no permanently-failed sync event.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const mobile = "6999900042";
+      const response = await ctx.post("/api/sync/push", {
+        events: [
+          { eventId: "create-customer-conv-1", type: "CREATE_CUSTOMER", payload: { localCustomerId: "local_cust_a", customer: { name: "Ramesh", mobile, type: "regular" } } },
+          { eventId: "create-customer-conv-2", type: "CREATE_CUSTOMER", payload: { localCustomerId: "local_cust_b", customer: { name: "Ramesh", mobile, type: "regular" } } },
+        ],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+
+      const data = assertSuccess(response);
+      assert.equal(data.summary.failed, 0, "neither customer create should fail");
+      assert.equal(data.summary.conflicts, 0, "duplicate-mobile create must converge, not conflict");
+      const serverIdA = data.idMappings.customers?.local_cust_a;
+      const serverIdB = data.idMappings.customers?.local_cust_b;
+      assert.ok(serverIdA, "first local customer id maps to a server customer");
+      assert.equal(serverIdB, serverIdA, "second local customer id converges to the same server customer");
+
+      const count = await ctx.db.customer.count({ where: { shopId: tenant.shop.id, mobile, deletedAt: null } });
+      assert.equal(count, 1, "exactly one active customer should exist for the mobile");
     });
 
     test("sync push CREATE_BILL works", async () => {

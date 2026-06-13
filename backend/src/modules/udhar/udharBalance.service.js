@@ -10,7 +10,14 @@ export async function calculateCustomerUdharRawBalance(tx, shopId, customerId) {
     where: { shopId, customerId },
     select: { type: true, amount: true },
   });
-  return round2(entries.reduce((total, entry) => total + signedUdharLedgerAmount(entry), 0));
+  const rawBalance = round2(entries.reduce((total, entry) => total + signedUdharLedgerAmount(entry), 0));
+  if (entries.length > 0) return rawBalance;
+
+  const customer = await tx.customer.findFirst({
+    where: { id: customerId, shopId, deletedAt: null },
+    select: { udharAmount: true },
+  });
+  return round2(Math.max(0, Number(customer?.udharAmount ?? 0)));
 }
 
 export async function calculateCustomerUdharBalance(tx, shopId, customerId) {
@@ -32,8 +39,21 @@ export async function calculateCustomerUdharBalances(tx, shopId, customerIds) {
   });
 
   const totals = new Map(ids.map((id) => [id, 0]));
+  const entryCounts = new Map(ids.map((id) => [id, 0]));
   for (const entry of entries) {
     totals.set(entry.customerId, round2((totals.get(entry.customerId) ?? 0) + signedUdharLedgerAmount(entry)));
+    entryCounts.set(entry.customerId, (entryCounts.get(entry.customerId) ?? 0) + 1);
+  }
+
+  const idsWithoutLedger = ids.filter((id) => (entryCounts.get(id) ?? 0) === 0);
+  if (idsWithoutLedger.length) {
+    const customers = await tx.customer.findMany({
+      where: { shopId, id: { in: idsWithoutLedger }, deletedAt: null },
+      select: { id: true, udharAmount: true },
+    });
+    for (const customer of customers) {
+      totals.set(customer.id, round2(Math.max(0, Number(customer.udharAmount ?? 0))));
+    }
   }
 
   return new Map(
@@ -48,8 +68,38 @@ export async function calculateCustomerUdharBalances(tx, shopId, customerIds) {
   );
 }
 
+export async function ensureLegacyUdharOpeningLedger(tx, shopId, customerId) {
+  const customer = await tx.customer.findFirst({
+    where: { id: customerId, shopId, deletedAt: null },
+    select: { id: true, name: true, udharAmount: true },
+  });
+  const legacyBalance = round2(Math.max(0, Number(customer?.udharAmount ?? 0)));
+  if (!customer || legacyBalance <= 0) return false;
+
+  const existingDebit = await tx.udharLedger.findFirst({
+    where: { shopId, customerId, type: "debit" },
+    select: { id: true },
+  });
+  if (existingDebit) return false;
+
+  await tx.udharLedger.create({
+    data: {
+      shopId,
+      customerId,
+      customerName: customer.name,
+      type: "debit",
+      amount: legacyBalance,
+      amountPaise: toPaiseBigInt(legacyBalance),
+      mode: "legacy_opening_balance",
+      note: "Migrated from saved customer udhar balance",
+    },
+  });
+  return true;
+}
+
 export async function syncCustomerUdharBalance(tx, shopId, customerId, options = {}) {
   const { repairNegative = false, repairNote = "System udhar repair: negative balance corrected to zero" } = options;
+  await ensureLegacyUdharOpeningLedger(tx, shopId, customerId);
   let { rawBalance, balance, isNegative } = await calculateCustomerUdharBalance(tx, shopId, customerId);
 
   if (repairNegative && isNegative) {

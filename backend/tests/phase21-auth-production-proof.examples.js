@@ -23,11 +23,15 @@ for (const snippet of [
   "db.user.findFirst",
   "disabledAt: null",
   "USER_SESSION_INACTIVE",
-  "req.user = { ...payload",
   "role: user.role",
 ]) {
   assert.ok(authMiddleware.includes(snippet), `requireAuth must verify active DB user and fresh role: ${snippet}`);
 }
+assert.match(
+  authMiddleware,
+  /req\.user = \{\s*\.\.\.payload/s,
+  "requireAuth must preserve compatible JWT payload fields while replacing role/shop/user from DB"
+);
 
 for (const snippet of [
   "REFRESH_TOKEN_REUSE_DETECTED",

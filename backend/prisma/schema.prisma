@@ -33,6 +33,7 @@ model Shop {
   products         Product[]
   customers        Customer[]
   bills            Bill[]
+  payments         Payment[]
   stockLedger      StockLedger[]
   udharLedger      UdharLedger[]
   suppliers        Supplier[]
@@ -42,6 +43,9 @@ model Shop {
   sessions         Session[]
   offlineSyncEvents OfflineSyncEvent[]
   syncIdMappings   SyncIdMapping[]
+  syncCommands      SyncCommand[]
+  changeLogs        ChangeLog[]
+  financialLedger   FinancialLedger[]
   billCounter      BillCounter?
   subscriptions    Subscription[]
   paymentTransactions PaymentTransaction[]
@@ -153,6 +157,9 @@ model Product {
   imageUrl              String?                 // optional product image (data URL or hosted URL)
   isLooseItem           Boolean   @default(false) // sold loose by weight (no fixed package)
   lowStockThreshold     Float     @default(0)   // alert when stock <= this
+  clientProductId       String?                 // stable client-generated id, for offline-create idempotency
+  idempotencyKey        String?                 // durable create idempotency key (survives retries/pull echoes)
+  sourceDeviceId        String?                 // device that created the product offline
   deletedAt             DateTime?               // soft delete
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
@@ -163,6 +170,8 @@ model Product {
   purchaseHistory  PurchaseHistory[]
 
   @@index([shopId, deletedAt])
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, sourceDeviceId, clientProductId])
   // Sync pull keyset pagination: WHERE shopId=X AND updatedAt>=since ORDER BY updatedAt ASC, id ASC
   @@index([shopId, updatedAt, id])
 }
@@ -229,6 +238,9 @@ model Bill {
   creditAmountPaise BigInt?
   createdByUserId  String?                              // authenticated user who created the bill; nullable for legacy/offline imports
   deviceId         String?                              // client device id at bill creation, if available
+  clientBillId     String?
+  idempotencyKey   String?
+  sourceDeviceId   String?
   cancelledAt      DateTime?
   cancelledReason  String?
   createdAt        DateTime  @default(now())
@@ -242,6 +254,8 @@ model Bill {
   stockLedger StockLedger[]
 
   @@unique([shopId, billNo])
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, sourceDeviceId, clientBillId])
   @@index([shopId, createdByUserId, createdAt])
   @@index([shopId, status, createdAt])
   // Sync pull keyset pagination
@@ -284,15 +298,22 @@ model BillItem {
 // ─────────────────────────────────────────────
 model Payment {
   id        String   @id @default(cuid())
+  shopId    String?
   billId    String
   mode      String   // cash | upi | credit
   amount    Float
   amountPaise BigInt?
+  clientPaymentId String?
+  idempotencyKey  String?
+  sourceDeviceId  String?
   createdAt DateTime @default(now())
 
   bill Bill @relation(fields: [billId], references: [id])
+  shop Shop? @relation(fields: [shopId], references: [id])
 
+  @@unique([shopId, idempotencyKey])
   @@index([billId])
+  @@index([shopId, createdAt])
 }
 
 // ─────────────────────────────────────────────
@@ -323,6 +344,11 @@ model StockLedger {
   damageLossValue    Float    @default(0)  // cost value of damage, affects P&L
   damageLossValuePaise BigInt?
   billId             String?
+  clientMovementId   String?
+  idempotencyKey     String?
+  sourceDeviceId     String?
+  sourceType         String?
+  sourceId           String?
   note               String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -332,6 +358,8 @@ model StockLedger {
   bill    Bill?   @relation(fields: [billId], references: [id])
 
   @@index([shopId, createdAt])
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, sourceType, sourceId])
   @@index([productId])
   // Sync pull keyset pagination (updatedAt == createdAt for append-only ledger)
   @@index([shopId, updatedAt, id])
@@ -351,6 +379,11 @@ model UdharLedger {
   mode         String   // cash | upi | reversal | credit
   billId       String?
   billNo       String?
+  clientLedgerId String?
+  idempotencyKey String?
+  sourceDeviceId String?
+  sourceType     String?
+  sourceId       String?
   note         String?
   reversedAt   DateTime?
   reversedReason String?
@@ -365,6 +398,8 @@ model UdharLedger {
 
   @@index([shopId, customerId, createdAt])
   @@index([shopId, reversalOfLedgerId])
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, sourceType, sourceId])
   // Sync pull keyset pagination
   @@index([shopId, updatedAt, id])
 }
@@ -675,6 +710,72 @@ model OfflineSyncEvent {
 // ─────────────────────────────────────────────
 // SYNC ID MAPPING — resolves frontend local IDs to server IDs
 // ─────────────────────────────────────────────
+model SyncCommand {
+  id              String   @id @default(cuid())
+  shopId          String
+  userId          String?
+  deviceId        String?
+  clientCommandId String
+  idempotencyKey  String
+  type            String
+  requestHash     String
+  status          String   @default("processing") // processing | applied | failed | conflict
+  resultJson      String?
+  error           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, deviceId, clientCommandId])
+  @@index([shopId, status, createdAt])
+}
+
+model ChangeLog {
+  seq         BigInt   @id @default(autoincrement())
+  shopId      String
+  entityType  String
+  entityId    String
+  operation   String
+  payloadJson String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, seq])
+  @@index([shopId, entityType, entityId])
+}
+
+model FinancialLedger {
+  id              String   @id @default(cuid())
+  shopId          String
+  customerId      String?
+  supplierId      String?
+  billId          String?
+  paymentId       String?
+  purchaseBillId  String?
+  sourceType      String
+  sourceId        String
+  entryType       String
+  direction       String
+  amountPaise     BigInt
+  paymentMode     String?
+  businessDate    DateTime
+  serverSeq       BigInt?
+  idempotencyKey  String
+  reversedById    String?
+  createdAt       DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, businessDate])
+  @@index([shopId, customerId])
+  @@index([shopId, billId])
+  @@index([shopId, sourceType, sourceId])
+}
+
 model SyncIdMapping {
   id            String   @id @default(cuid())
   shopId        String

@@ -2,7 +2,12 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, round2, toPaiseBigInt } from "../../utils/money.js";
 import { createAuditLog } from "../audit/audit.service.js";
-import { calculateCustomerUdharBalance, calculateCustomerUdharBalances, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
+import {
+  calculateCustomerUdharBalance,
+  calculateCustomerUdharBalances,
+  ensureLegacyUdharOpeningLedger,
+  syncCustomerUdharBalance,
+} from "../udhar/udharBalance.service.js";
 
 export async function listCustomers(shopId, { search } = {}) {
   const customers = await db.customer.findMany({
@@ -27,7 +32,7 @@ export async function getCustomer(shopId, id) {
   return (await attachDerivedUdharBalances(shopId, [c]))[0];
 }
 
-export async function createCustomer(shopId, data) {
+export async function createCustomer(shopId, data, { reuseExistingMobile = false } = {}) {
   // If mobile provided, check for existing customer (matching by mobile is the rule).
   // Soft-deleted customers may still carry a historical mobile in old databases;
   // clear that value before creating a new active customer so DB unique constraints
@@ -36,7 +41,18 @@ export async function createCustomer(shopId, data) {
     const existing = await db.customer.findFirst({
       where: { shopId, mobile: data.mobile, deletedAt: null },
     });
-    if (existing) throw new AppError("Customer with this mobile already exists", 409);
+    if (existing) {
+      // Offline sync can replay the same customer creation — a retried event after a
+      // lost ack, or the same customer added on a second device. Converging on the
+      // existing customer keeps the create idempotent (one server customer; the caller
+      // maps the local id onto it) instead of failing the sync event forever. The
+      // online path keeps throwing so the cashier still sees "customer already exists".
+      if (reuseExistingMobile) {
+        const [withBalance] = await attachDerivedUdharBalances(shopId, [existing]);
+        return withBalance;
+      }
+      throw new AppError("Customer with this mobile already exists", 409);
+    }
 
     await db.customer.updateMany({
       where: { shopId, mobile: data.mobile, deletedAt: { not: null } },
@@ -50,7 +66,7 @@ export async function createCustomer(shopId, data) {
       data: {
         ...data,
         udharAmount: 0,
-        udharAmountPaise: 0n,
+        ...moneyShadows({ udharAmount: 0 }),
         type: openingUdharAmount > 0 ? "udhar" : (data.type ?? "regular"),
         shopId,
       },
@@ -174,11 +190,27 @@ export async function getKhata(shopId, customerId) {
  * Record a manual udhar payment (cash/UPI coming in from customer).
  * This does NOT touch a bill — it's a direct khata payment.
  */
-export async function recordUdharPayment(shopId, customerId, { amount, mode, note }) {
+export async function recordUdharPayment(shopId, customerId, input, actor = {}) {
+  const { amount, mode, note } = input;
   const customer = await getCustomer(shopId, customerId);
   const paymentAmount = round2(amount);
+  const identity = normalizeLedgerIdentity(input, actor, "udhar-payment");
 
-  return db.$transaction(async (tx) => {
+  try {
+    return await db.$transaction(async (tx) => {
+    await ensureLegacyUdharOpeningLedger(tx, shopId, customerId);
+    const existingLedger = await findExistingUdharPaymentByIdentity(tx, shopId, customerId, identity);
+    if (existingLedger) {
+      const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customerId);
+      return {
+        customerId,
+        ledgerEntryId: existingLedger.id,
+        newBalance: currentBalance.balance,
+        amountPaid: existingLedger.amount,
+        idempotentReplay: true,
+      };
+    }
+
     const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customerId);
     if (currentBalance.balance < paymentAmount) {
       const err = new AppError(
@@ -199,6 +231,11 @@ export async function recordUdharPayment(shopId, customerId, { amount, mode, not
         amount: paymentAmount,
         ...moneyShadows({ amount: paymentAmount }),
         mode,
+        clientLedgerId: identity.clientLedgerId,
+        idempotencyKey: identity.idempotencyKey,
+        sourceDeviceId: identity.sourceDeviceId,
+        sourceType: "udhar_payment",
+        sourceId: identity.sourceId,
         note: note ?? "Manual payment",
       },
     });
@@ -215,6 +252,22 @@ export async function recordUdharPayment(shopId, customerId, { amount, mode, not
       amountPaid: paymentAmount,
     };
   });
+  } catch (error) {
+    if (isUniqueConstraintError(error) && hasLedgerIdentity(identity)) {
+      const existingLedger = await findExistingUdharPaymentByIdentity(db, shopId, customerId, identity);
+      if (existingLedger) {
+        const currentBalance = await calculateCustomerUdharBalance(db, shopId, customerId);
+        return {
+          customerId,
+          ledgerEntryId: existingLedger.id,
+          newBalance: currentBalance.balance,
+          amountPaid: existingLedger.amount,
+          idempotentReplay: true,
+        };
+      }
+    }
+    throw error;
+  }
 }
 
 
@@ -301,6 +354,61 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       reversedAt,
     };
   });
+}
+
+function normalizeLedgerIdentity(input, actor, prefix) {
+  const clientLedgerId = pickString(
+    input?.clientLedgerId,
+    input?.client_ledger_id,
+    input?.localLedgerEntryId,
+    input?.local_ledger_entry_id,
+    input?.ledgerEntryId,
+    input?.ledger_entry_id,
+    input?.localId,
+    input?.local_id
+  );
+  const sourceDeviceId = pickString(actor?.deviceId, input?.sourceDeviceId, input?.source_device_id);
+  const explicitKey = pickString(input?.idempotencyKey, input?.idempotency_key);
+  const idempotencyKey = explicitKey ?? (sourceDeviceId && clientLedgerId ? `${prefix}:${sourceDeviceId}:${clientLedgerId}` : null);
+  return {
+    clientLedgerId,
+    idempotencyKey,
+    sourceDeviceId,
+    sourceId: clientLedgerId ?? idempotencyKey,
+  };
+}
+
+function hasLedgerIdentity(identity) {
+  return Boolean(identity?.idempotencyKey || identity?.clientLedgerId);
+}
+
+async function findExistingUdharPaymentByIdentity(client, shopId, customerId, identity) {
+  if (!hasLedgerIdentity(identity)) return null;
+  if (identity.idempotencyKey) {
+    const byKey = await client.udharLedger.findFirst({
+      where: { shopId, customerId, type: "payment", idempotencyKey: identity.idempotencyKey },
+    });
+    if (byKey) return byKey;
+  }
+  if (identity.clientLedgerId) {
+    return client.udharLedger.findFirst({
+      where: { shopId, customerId, type: "payment", clientLedgerId: identity.clientLedgerId },
+    });
+  }
+  return null;
+}
+
+function pickString(...values) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+function isUniqueConstraintError(error) {
+  return error?.code === "P2002";
 }
 
 async function attachDerivedUdharBalances(shopId, customers, tx = db) {

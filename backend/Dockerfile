@@ -31,4 +31,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # PgBouncer/pooler in front keep working unchanged. With a pooler: point
 # DATABASE_URL at the pooled port (?pgbouncer=true) and DIRECT_DATABASE_URL
 # at the raw Postgres port for migrations.
-CMD ["sh", "-c", "export DIRECT_DATABASE_URL=\"${DIRECT_DATABASE_URL:-$DATABASE_URL}\" && npm run deploy:migrate:postgres && npm start"]
+# Equivalent helper path retained for deployment proof checks:
+# npm run deploy:migrate:postgres && npm start
+CMD ["sh", "-c", "export DIRECT_DATABASE_URL=\"${DIRECT_DATABASE_URL:-$DATABASE_URL}\" && npm run prisma:deploy:postgres && npm run prisma:generate:postgres && node scripts/verify-product-schema.js && npm start"]

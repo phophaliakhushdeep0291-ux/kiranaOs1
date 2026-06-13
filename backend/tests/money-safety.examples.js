@@ -46,7 +46,7 @@ assert.match(suppliersService, /avgPrice: round2\(sumMoney\(prices\) \/ prices\.
 assert.doesNotMatch(suppliersService, /Math\.round\(\(prices\.reduce/, "supplier average must not use raw Math.round reduce");
 
 const udharService = read("src/modules/udhar/udhar.service.js");
-assert.match(udharService, /sumMoney\(customers\.map\(\(c\) => c\.udharAmount\)\)/, "udhar summary should use sumMoney");
+assert.match(udharService, /sumMoney\((customers|rows)\.map\(\(c\) => c\.udharAmount\)\)/, "udhar summary should use sumMoney");
 
 const moneyDocs = read("docs/MONEY_MIGRATION.md");
 for (const required of ["Float", "integer paise", "Bill", "BillItem", "Payment", "Product", "Customer", "StockLedger", "future migration"]) {
