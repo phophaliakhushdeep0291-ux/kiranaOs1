@@ -189,15 +189,18 @@ assert.match(
   "pullSince must still return syncedAt"
 );
 
+// Note: products/bills are role-redacted in the return (cashiers get cost/profit
+// stripped), so they read `products: privileged ? products : products.map(...)`.
+// Match the property regardless of inline redaction expression.
 assert.match(
   syncService,
-  /products,\s*\n\s*customers,/,
+  /products:[^\n]*\n\s*customers,/,
   "pullSince must still return products and customers arrays"
 );
 
 assert.match(
   syncService,
-  /bills,\s*\n\s*stockLedger,/,
+  /bills:[^\n]*\n\s*stockLedger,/,
   "pullSince must still return bills and stockLedger arrays"
 );
 

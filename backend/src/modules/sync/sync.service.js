@@ -281,8 +281,8 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role } 
   const returnedCount = Object.values(entitySets).reduce((sum, rows) => sum + rows.length, 0);
 
   // Role-aware redaction: a cashier/staff device must not receive cost or profit data (it
-  // lives in inspectable IndexedDB even when the UI hides it). Cursors still advance off the
-  // fetched rows, so the device keeps making progress; it just never accumulates margins,
+  // lives in inspectable IndexedDB even when the UI hides it). Cursors already advanced off
+  // the real rows above, so the device keeps syncing; it just never accumulates margins,
   // supplier records, or purchase-cost history. The server stays authoritative on profit.
   const privileged = role === "owner" || role === "admin";
 
