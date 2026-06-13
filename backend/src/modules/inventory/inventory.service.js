@@ -3,6 +3,29 @@ import { AppError } from "../../middleware/error.js";
 import { moneyShadows, multiplyMoney, round2, subtractMoney, weightedAvgCost } from "../../utils/money.js";
 import { toBaseQty, rateUnitToBase } from "../../utils/units.js";
 
+// Operation-level idempotency for replayed offline stock adjustments. The StockLedger row
+// carries a durable idempotencyKey (unique per shop), so a retried/replayed ADJUST_STOCK
+// — e.g. an event that committed but failed to mark SYNCED and then re-ran — returns the
+// prior result instead of mutating stock a second time. The online HTTP path passes no
+// identity, so the fast-path is skipped and behaviour is unchanged.
+function isUniqueConstraintError(error) {
+  return error?.code === "P2002";
+}
+
+function stockAdjustmentReplay(existing) {
+  return {
+    productId: existing.productId,
+    productName: existing.productName,
+    oldStock: existing.oldStockBaseQty,
+    newStock: existing.newStockBaseQty,
+    oldStockBaseQty: existing.oldStockBaseQty,
+    newStockBaseQty: existing.newStockBaseQty,
+    changeBaseQty: existing.changeBaseQty,
+    note: existing.note,
+    idempotentReplay: true,
+  };
+}
+
 export async function getInventory(shopId) {
   const products = await db.product.findMany({
     where: { shopId, deletedAt: null },
@@ -171,106 +194,144 @@ export async function recordPurchase(shopId, data) {
   });
 }
 
-export async function recordDamage(shopId, { productId, quantity, enteredUnit, note }) {
-  return db.$transaction(async (tx) => {
-    const product = await tx.product.findFirst({
-      where: { id: productId, shopId, deletedAt: null },
-    });
-    if (!product) throw new AppError("Product not found", 404);
+export async function recordDamage(shopId, { productId, quantity, enteredUnit, note }, identity = {}) {
+  const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
+  try {
+    return await db.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+        if (existing) return stockAdjustmentReplay(existing);
+      }
 
-    const qtyInBase = toBaseQty(quantity, enteredUnit, product.baseUnit);
-    const factor = rateUnitToBase(product.rateUnit, product.baseUnit);
-    const qtyInRateUnit = qtyInBase / factor;
-    const damageLossValue = multiplyMoney(product.costPerRateUnit, qtyInRateUnit);
+      const product = await tx.product.findFirst({
+        where: { id: productId, shopId, deletedAt: null },
+      });
+      if (!product) throw new AppError("Product not found", 404);
 
-    const updated = await tx.product.updateMany({
-      where: { id: productId, shopId, deletedAt: null, stockBaseQty: { gte: qtyInBase } },
-      data: { stockBaseQty: { decrement: qtyInBase } },
-    });
-    if (updated.count !== 1) {
-      const err = new AppError("Damage quantity exceeds current stock", 409);
-      err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
-      throw err;
-    }
+      const qtyInBase = toBaseQty(quantity, enteredUnit, product.baseUnit);
+      const factor = rateUnitToBase(product.rateUnit, product.baseUnit);
+      const qtyInRateUnit = qtyInBase / factor;
+      const damageLossValue = multiplyMoney(product.costPerRateUnit, qtyInRateUnit);
 
-    const freshProduct = await tx.product.findFirst({ where: { id: productId, shopId } });
-    const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
-    const oldStock = round2(newStock + qtyInBase);
+      const updated = await tx.product.updateMany({
+        where: { id: productId, shopId, deletedAt: null, stockBaseQty: { gte: qtyInBase } },
+        data: { stockBaseQty: { decrement: qtyInBase } },
+      });
+      if (updated.count !== 1) {
+        const err = new AppError("Damage quantity exceeds current stock", 409);
+        err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
+        throw err;
+      }
 
-    await tx.stockLedger.create({
-      data: {
-        shopId, productId,
+      const freshProduct = await tx.product.findFirst({ where: { id: productId, shopId } });
+      const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
+      const oldStock = round2(newStock + qtyInBase);
+
+      await tx.stockLedger.create({
+        data: {
+          shopId, productId,
+          productName: product.name,
+          action: "damage",
+          changeBaseQty: -qtyInBase,
+          oldStockBaseQty: oldStock,
+          newStockBaseQty: newStock,
+          damageLossValue,
+          ...moneyShadows({ damageLossValue }),
+          note: note ?? "Damage/loss",
+          idempotencyKey,
+          clientMovementId,
+          sourceDeviceId,
+          sourceType: idempotencyKey ? "adjustment" : null,
+          sourceId: idempotencyKey ? productId : null,
+        },
+      });
+
+      return {
+        productId,
         productName: product.name,
-        action: "damage",
+        quantity,
+        enteredUnit,
+        qtyRemoved: qtyInBase,
         changeBaseQty: -qtyInBase,
+        oldStock,
+        newStock,
         oldStockBaseQty: oldStock,
         newStockBaseQty: newStock,
         damageLossValue,
-        ...moneyShadows({ damageLossValue }),
         note: note ?? "Damage/loss",
-      },
+      };
     });
-
-    return {
-      productId,
-      productName: product.name,
-      quantity,
-      enteredUnit,
-      qtyRemoved: qtyInBase,
-      changeBaseQty: -qtyInBase,
-      oldStock,
-      newStock,
-      oldStockBaseQty: oldStock,
-      newStockBaseQty: newStock,
-      damageLossValue,
-      note: note ?? "Damage/loss",
-    };
-  });
+  } catch (error) {
+    if (isUniqueConstraintError(error) && idempotencyKey) {
+      const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) return stockAdjustmentReplay(existing);
+    }
+    throw error;
+  }
 }
 
-export async function correctStock(shopId, { productId, newStockBaseQty, note }) {
-  return db.$transaction(async (tx) => {
-    const product = await tx.product.findFirst({
-      where: { id: productId, shopId, deletedAt: null },
-    });
-    if (!product) throw new AppError("Product not found", 404);
+export async function correctStock(shopId, { productId, newStockBaseQty, note }, identity = {}) {
+  const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
+  try {
+    return await db.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+        if (existing) return stockAdjustmentReplay(existing);
+      }
 
-    const diff = subtractMoney(newStockBaseQty, product.stockBaseQty);
+      const product = await tx.product.findFirst({
+        where: { id: productId, shopId, deletedAt: null },
+      });
+      if (!product) throw new AppError("Product not found", 404);
 
-    const updated = await tx.product.updateMany({
-      where: { id: productId, shopId, deletedAt: null, stockBaseQty: product.stockBaseQty },
-      data: { stockBaseQty: newStockBaseQty },
-    });
-    if (updated.count !== 1) {
-      const err = new AppError("Stock changed while applying correction. Please retry.", 409);
-      err.code = "CONCURRENT_STOCK_MODIFICATION_RETRY";
-      throw err;
-    }
+      const diff = subtractMoney(newStockBaseQty, product.stockBaseQty);
 
-    await tx.stockLedger.create({
-      data: {
-        shopId, productId,
+      const updated = await tx.product.updateMany({
+        where: { id: productId, shopId, deletedAt: null, stockBaseQty: product.stockBaseQty },
+        data: { stockBaseQty: newStockBaseQty },
+      });
+      if (updated.count !== 1) {
+        const err = new AppError("Stock changed while applying correction. Please retry.", 409);
+        err.code = "CONCURRENT_STOCK_MODIFICATION_RETRY";
+        throw err;
+      }
+
+      await tx.stockLedger.create({
+        data: {
+          shopId, productId,
+          productName: product.name,
+          action: "correction",
+          changeBaseQty: diff,
+          oldStockBaseQty: product.stockBaseQty,
+          newStockBaseQty,
+          note: note ?? "Manual stock correction",
+          idempotencyKey,
+          clientMovementId,
+          sourceDeviceId,
+          sourceType: idempotencyKey ? "adjustment" : null,
+          sourceId: idempotencyKey ? productId : null,
+        },
+      });
+
+      return {
+        productId,
         productName: product.name,
-        action: "correction",
-        changeBaseQty: diff,
+        oldStock: product.stockBaseQty,
+        newStock: newStockBaseQty,
         oldStockBaseQty: product.stockBaseQty,
         newStockBaseQty,
+        changeBaseQty: diff,
+        diff,
         note: note ?? "Manual stock correction",
-      },
+      };
     });
-
-    return {
-      productId,
-      productName: product.name,
-      oldStock: product.stockBaseQty,
-      newStock: newStockBaseQty,
-      oldStockBaseQty: product.stockBaseQty,
-      newStockBaseQty,
-      changeBaseQty: diff,
-      diff,
-      note: note ?? "Manual stock correction",
-    };
-  });
+  } catch (error) {
+    if (isUniqueConstraintError(error) && idempotencyKey) {
+      const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) return stockAdjustmentReplay(existing);
+    }
+    throw error;
+  }
 }
 
 export async function getLedger(shopId, { productId, action, from, to, page, limit }) {

@@ -135,6 +135,36 @@ if (ctx.skip) {
       assert.equal(Number(ofType("udhar_debit")[0].amountPaise), 6000, "udhar_debit = ₹60");
     });
 
+    test("ADJUST_STOCK (damage) replayed under a new event id applies stock only once", async () => {
+      // A damage adjustment that committed but lost its ack gets re-pushed under a new event id.
+      // Event-level idempotency cannot catch this (different event ids), and damage is relative —
+      // re-applying would decrement stock twice and corrupt inventory. The durable StockLedger
+      // idempotencyKey guarantees exactly-once: stock moves once, one ledger row.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10 });
+      const payload = {
+        productId: product.id,
+        adjustmentType: "damage",
+        quantity: 3,
+        enteredUnit: product.baseUnit,
+        idempotencyKey: "adjust-stock:test:dmg:1",
+        clientMovementId: "adjust-stock:test:dmg:1",
+        ownerPin: tenant.ownerPin,
+      };
+      const event = { type: "ADJUST_STOCK", ownerPin: tenant.ownerPin, payload };
+
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      // Retry under a brand-new event id (event-level idempotency cannot catch this).
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const fresh = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(fresh.stockBaseQty, 7, "damage of 3 applied exactly once (10 → 7), not twice");
+      const damageRows = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "damage" },
+      });
+      assert.equal(damageRows.length, 1, "exactly one damage ledger row despite the retry");
+    });
+
     test("sync push CREATE_BILL works", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 30 });
