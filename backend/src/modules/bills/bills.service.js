@@ -425,6 +425,20 @@ export async function cancelBill(shopId, billId, { reason }) {
   if (bill.status === "cancelled") throw new AppError("Bill is already cancelled", 400);
 
   return db.$transaction(async (tx) => {
+    // Atomic claim: only one concurrent request can transition active -> cancelled, so two
+    // simultaneous cancels can't both restore stock / reverse udhar. The conditional update
+    // locks the row until commit; a read-then-act status check (the outer guard above) does not.
+    const cancelledAt = new Date();
+    const claimed = await tx.bill.updateMany({
+      where: { id: billId, shopId, status: "active" },
+      data: { status: "cancelled", cancelledAt, cancelledReason: reason },
+    });
+    if (claimed.count !== 1) {
+      const err = new AppError("Bill is already cancelled or not active", 409);
+      err.code = "BILL_NOT_CANCELLABLE";
+      throw err;
+    }
+
     // ── 1. Restore stock for every item ───────────────────────
     for (const item of bill.items) {
       if (!item.productId) continue;
@@ -482,18 +496,7 @@ export async function cancelBill(shopId, billId, { reason }) {
       }
     }
 
-    // ── 3. Mark bill as cancelled ─────────────────────────────
-    const cancelledAt = new Date();
-    const cancelled = await tx.bill.update({
-      where: { id: billId },
-      data: {
-        status: "cancelled",
-        cancelledAt,
-        cancelledReason: reason,
-      },
-    });
-
-    // ── 4. FinancialLedger: reverse the bill's money effect ───
+    // ── 3. FinancialLedger: reverse the bill's money effect ───
     // Same entryTypes, negated amounts, dated to the cancellation, so dashboard KPIs
     // net out. Estimates posted nothing on creation, so they reverse nothing.
     if (bill.billType !== "estimate") {
@@ -507,7 +510,7 @@ export async function cancelBill(shopId, billId, { reason }) {
       });
     }
 
-    return cancelled;
+    return tx.bill.findFirst({ where: { id: billId, shopId } });
   });
 }
 
@@ -528,6 +531,18 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
   const isEstimate = bill.billType === "estimate";
 
   return db.$transaction(async (tx) => {
+    // Atomic claim: cancelled -> active, so only one concurrent restore wins (mirrors cancel).
+    const restoredAt = new Date();
+    const claimed = await tx.bill.updateMany({
+      where: { id: billId, shopId, status: "cancelled" },
+      data: { status: "active", cancelledAt: null, cancelledReason: null },
+    });
+    if (claimed.count !== 1) {
+      const err = new AppError("Bill is already restored or not cancelled", 409);
+      err.code = "BILL_NOT_RESTORABLE";
+      throw err;
+    }
+
     if (!isEstimate) {
       // Re-deduct stock that was restored during cancellation.
       for (const item of bill.items) {
@@ -595,17 +610,6 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       }
     }
 
-    const restoredAt = new Date();
-    const restored = await tx.bill.update({
-      where: { id: billId },
-      data: {
-        status: "active",
-        cancelledAt: null,
-        cancelledReason: null,
-      },
-      include: { items: true, payments: true },
-    });
-
     // FinancialLedger: re-apply the bill's money effect, dated to the restore.
     if (!isEstimate) {
       await postBillRestoredLedger(tx, {
@@ -618,7 +622,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       });
     }
 
-    return restored;
+    return tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
   });
 }
 
