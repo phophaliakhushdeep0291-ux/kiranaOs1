@@ -26,6 +26,32 @@ function stockAdjustmentReplay(existing) {
   };
 }
 
+// A replayed purchase converges on the StockLedger row written the first time. Skipping the
+// whole operation also avoids a duplicate PurchaseHistory row (which would double the supplier
+// due) and a second weighted-average cost recalculation. newCost is read from the product as it
+// stands after the original purchase.
+async function purchaseReplay(client, shopId, existing) {
+  const product = await client.product.findFirst({ where: { id: existing.productId, shopId } });
+  return {
+    productId: existing.productId,
+    qtyAdded: existing.changeBaseQty,
+    newStock: existing.newStockBaseQty,
+    newCost: product?.costPerRateUnit ?? null,
+    pricePerRateUnit: existing.calculatedBuyRate,
+    stockLedgerId: existing.id,
+    purchaseHistoryId: null,
+    invoiceNumber: existing.invoiceNumber ?? null,
+    purchaseBillNo: existing.invoiceNumber ?? null,
+    supplierBillNo: existing.invoiceNumber ?? null,
+    purchasePaymentStatus: existing.purchasePaymentStatus ?? null,
+    purchasePaymentMode: existing.purchasePaymentMode ?? null,
+    purchasePaidAmount: existing.purchasePaidAmount ?? null,
+    purchaseDueAmount: existing.purchaseDueAmount ?? null,
+    purchaseDueDate: existing.purchaseDueDate ? existing.purchaseDueDate.toISOString().slice(0, 10) : null,
+    idempotentReplay: true,
+  };
+}
+
 export async function getInventory(shopId) {
   const products = await db.product.findMany({
     where: { shopId, deletedAt: null },
@@ -95,14 +121,21 @@ function normalizePurchasePayment(data) {
   };
 }
 
-export async function recordPurchase(shopId, data) {
+export async function recordPurchase(shopId, data, identity = {}) {
   const {
     productId, supplierId, supplierName,
     quantity, enteredUnit, billAmount,
     note, updateCost, updateMinPrice,
   } = data;
+  const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
 
-  return db.$transaction(async (tx) => {
+  try {
+    return await db.$transaction(async (tx) => {
+    if (idempotencyKey) {
+      const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) return purchaseReplay(tx, shopId, existing);
+    }
+
     const product = await tx.product.findFirst({
       where: { id: productId, shopId, deletedAt: null },
     });
@@ -155,6 +188,11 @@ export async function recordPurchase(shopId, data) {
         ...purchasePaymentShadows,
         supplierName,
         note: note ?? "",
+        idempotencyKey,
+        clientMovementId,
+        sourceDeviceId,
+        sourceType: idempotencyKey ? "purchase" : null,
+        sourceId: idempotencyKey ? productId : null,
       },
     });
 
@@ -191,7 +229,14 @@ export async function recordPurchase(shopId, data) {
       purchaseDueAmount: purchasePayment.purchaseDueAmount,
       purchaseDueDate: purchasePayment.purchaseDueDate?.toISOString?.().slice(0, 10) ?? null,
     };
-  });
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error) && idempotencyKey) {
+      const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) return purchaseReplay(db, shopId, existing);
+    }
+    throw error;
+  }
 }
 
 export async function recordDamage(shopId, { productId, quantity, enteredUnit, note }, identity = {}) {
