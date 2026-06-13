@@ -31,7 +31,8 @@ export function requireShop(req, _res, next) {
  * PIN input can be sent as:
  *   - body.ownerPin
  *   - x-owner-pin header
- *   - query.ownerPin
+ * The PIN is never accepted from the query string (it would leak into access logs,
+ * browser history, proxies, and analytics).
  *
  * The PIN is always compared with the bcrypt hash stored on the owner user.
  * It is never stored or returned by this middleware.
@@ -113,7 +114,9 @@ async function logOwnerPinVerified(req) {
 }
 
 function getOwnerPinFromRequest(req) {
-  const raw = req.body?.ownerPin ?? req.headers["x-owner-pin"] ?? req.query?.ownerPin;
+  // Never read from req.query — a PIN in the URL leaks into access logs, browser history,
+  // proxies, and analytics. Body or the x-owner-pin header only.
+  const raw = req.body?.ownerPin ?? req.headers["x-owner-pin"];
   if (Array.isArray(raw)) return String(raw[0] ?? "").trim();
   return raw === undefined || raw === null ? "" : String(raw).trim();
 }
