@@ -8,6 +8,7 @@ import {
   ensureLegacyUdharOpeningLedger,
   syncCustomerUdharBalance,
 } from "../udhar/udharBalance.service.js";
+import { postUdharPaymentLedger } from "../finance/financial-ledger.service.js";
 
 export async function listCustomers(shopId, { search } = {}) {
   const customers = await db.customer.findMany({
@@ -240,6 +241,16 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
       },
     });
 
+    // FinancialLedger: money in (cash_in/upi_in) + outstanding down (udhar_credit).
+    await postUdharPaymentLedger(tx, {
+      shopId,
+      ledgerEntryId: ledger.id,
+      customerId,
+      amount: paymentAmount,
+      mode,
+      sign: 1,
+    });
+
     const refreshed = await syncCustomerUdharBalance(tx, shopId, customerId, {
       repairNegative: true,
       repairNote: `System repair after payment ${ledger.id}: udhar balance went negative`,
@@ -326,6 +337,20 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
         reversedReason: reason,
         reversedByUserId: actorUserId,
       },
+    });
+
+    // FinancialLedger: undo the recovery — cash/upi back out + outstanding restored.
+    // Keyed on the reversal entry id (distinct from the original payment) and dated to
+    // the reversal, so it nets the original payment's ledger rows to zero.
+    await postUdharPaymentLedger(tx, {
+      shopId,
+      ledgerEntryId: reversal.id,
+      customerId,
+      amount: payment.amount,
+      mode: payment.mode,
+      businessDate: reversedAt,
+      sign: -1,
+      keyPrefix: "udhar-reversal",
     });
 
     const refreshed = await syncCustomerUdharBalance(tx, shopId, customerId, {

@@ -4,7 +4,7 @@ import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMon
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
 import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
-import { postBillCreatedLedger } from "../finance/financial-ledger.service.js";
+import { postBillCancelledLedger, postBillCreatedLedger, postBillRestoredLedger } from "../finance/financial-ledger.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -189,6 +189,18 @@ export async function confirmBill(shopId, body, actor = {}) {
     // Inclusive: tax already lives inside subtotal, so the payable is simply
     // subtotal − discount (matches what the counter UI shows and collects).
     // Exclusive: tax is added on top before the discount.
+    // A discount can never exceed the subtotal it applies to. Without this guard the
+    // bill total goes negative, and the only symptom is a confusing downstream
+    // "payment total does not match grand total" error instead of a clear cause.
+    if (billDiscount > subtotal) {
+      const err = new AppError(
+        `Discount (₹${billDiscount}) cannot exceed the bill subtotal (₹${subtotal})`,
+        400
+      );
+      err.code = "DISCOUNT_EXCEEDS_SUBTOTAL";
+      throw err;
+    }
+
     const grandTotal = gstMode === "exclusive"
       ? addMoney(subtractMoney(subtotal, billDiscount), totalGst)
       : subtractMoney(subtotal, billDiscount);
@@ -456,14 +468,31 @@ export async function cancelBill(shopId, billId, { reason }) {
     }
 
     // ── 3. Mark bill as cancelled ─────────────────────────────
-    return tx.bill.update({
+    const cancelledAt = new Date();
+    const cancelled = await tx.bill.update({
       where: { id: billId },
       data: {
         status: "cancelled",
-        cancelledAt: new Date(),
+        cancelledAt,
         cancelledReason: reason,
       },
     });
+
+    // ── 4. FinancialLedger: reverse the bill's money effect ───
+    // Same entryTypes, negated amounts, dated to the cancellation, so dashboard KPIs
+    // net out. Estimates posted nothing on creation, so they reverse nothing.
+    if (bill.billType !== "estimate") {
+      await postBillCancelledLedger(tx, {
+        shopId,
+        bill,
+        tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
+        creditAmount: Number(bill.creditAmount ?? 0),
+        customerId: bill.customerId ?? null,
+        reversalAt: cancelledAt,
+      });
+    }
+
+    return cancelled;
   });
 }
 
@@ -551,7 +580,8 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       }
     }
 
-    return tx.bill.update({
+    const restoredAt = new Date();
+    const restored = await tx.bill.update({
       where: { id: billId },
       data: {
         status: "active",
@@ -560,6 +590,20 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       },
       include: { items: true, payments: true },
     });
+
+    // FinancialLedger: re-apply the bill's money effect, dated to the restore.
+    if (!isEstimate) {
+      await postBillRestoredLedger(tx, {
+        shopId,
+        bill,
+        tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
+        creditAmount: Number(bill.creditAmount ?? 0),
+        customerId: bill.customerId ?? null,
+        restoreAt: restoredAt,
+      });
+    }
+
+    return restored;
   });
 }
 

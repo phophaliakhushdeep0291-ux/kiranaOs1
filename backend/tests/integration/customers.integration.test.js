@@ -57,6 +57,25 @@ if (ctx.skip) {
       assert.equal(ledger[0].amount, 40);
     });
 
+    test("udhar payment posts cash_in + udhar_credit to FinancialLedger", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { udharAmount: 100, type: "udhar" });
+      assertSuccess(await ctx.post(`/api/customers/${customer.id}/udhar-payment`, {
+        amount: 40,
+        mode: "cash",
+        note: "partial paid",
+      }, { token: ownerAuth.accessToken }));
+
+      // The recovery is one money-in row (cash_in) and one outstanding-reduction row
+      // (udhar_credit), so "cash collected" and "udhar recovered" KPIs both move by ₹40.
+      const rows = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, customerId: customer.id } });
+      const ofType = (entryType) => rows.filter((row) => row.entryType === entryType);
+      assert.equal(ofType("cash_in").length, 1, "money received recorded as cash_in");
+      assert.equal(Number(ofType("cash_in")[0].amountPaise), 4000, "cash_in = ₹40");
+      assert.equal(ofType("udhar_credit").length, 1, "outstanding reduction recorded as udhar_credit");
+      assert.equal(Number(ofType("udhar_credit")[0].amountPaise), 4000, "udhar_credit = ₹40");
+    });
+
     test("customer with udhar cannot be deleted", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { udharAmount: 1, type: "udhar" });

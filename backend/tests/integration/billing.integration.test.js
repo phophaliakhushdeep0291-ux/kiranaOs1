@@ -97,6 +97,22 @@ if (ctx.skip) {
       assertFailure(response, 400);
     });
 
+    test("discount greater than subtotal is rejected with a clear error", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+      // ₹1500 discount on a ₹100 subtotal would drive the bill total negative; it must be
+      // rejected up front, not surface later as a confusing payment-mismatch error.
+      const response = await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 1,
+        ratePerRateUnit: 100,
+        discount: 1500,
+        buyerPaidAmount: 0,
+        payments: [{ mode: "cash", amount: 1 }],
+      }), { token: ownerAuth.accessToken });
+      const body = assertFailure(response, 400);
+      assert.match(JSON.stringify(body), /[Dd]iscount/, "error message should name the discount as the cause");
+    });
+
     test("insufficient stock is rejected", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 1, defaultPricePerRateUnit: 50 });
@@ -140,6 +156,30 @@ if (ctx.skip) {
       const refreshedCustomer = await ctx.db.customer.findUnique({ where: { id: customer.id } });
       assert.equal(refreshedProduct.stockBaseQty, 10);
       assert.equal(refreshedCustomer.udharAmount, 0);
+    });
+
+    test("cancelling a bill nets its FinancialLedger entries to zero", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 2,
+        ratePerRateUnit: 50,
+        payments: [{ mode: "cash", amount: 100 }],
+      }), { token: ownerAuth.accessToken }), 201);
+
+      const sumOf = async (entryType) => {
+        const rows = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, entryType } });
+        return rows.reduce((total, row) => total + Number(row.amountPaise), 0);
+      };
+      // After creation: sale +₹100, cash_in +₹100.
+      assert.equal(await sumOf("sale"), 10000);
+      assert.equal(await sumOf("cash_in"), 10000);
+
+      assertSuccess(await ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Test cancellation" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
+
+      // The reversal rows (same entryType, negated amount) net every KPI back to zero.
+      assert.equal(await sumOf("sale"), 0, "sales net to zero after cancellation");
+      assert.equal(await sumOf("cash_in"), 0, "cash collected nets to zero after cancellation");
     });
 
     test("cancelled bill is not counted as active sale in P&L", async () => {

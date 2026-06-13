@@ -41,7 +41,10 @@ export async function calculateCustomerUdharBalances(tx, shopId, customerIds) {
   const totals = new Map(ids.map((id) => [id, 0]));
   const entryCounts = new Map(ids.map((id) => [id, 0]));
   for (const entry of entries) {
-    totals.set(entry.customerId, round2((totals.get(entry.customerId) ?? 0) + signedUdharLedgerAmount(entry)));
+    // Accumulate raw and round ONCE per customer below — matching
+    // calculateCustomerUdharRawBalance. Rounding after every addition here would let
+    // sub-paise drift accumulate, so the list view could disagree with the detail view.
+    totals.set(entry.customerId, (totals.get(entry.customerId) ?? 0) + signedUdharLedgerAmount(entry));
     entryCounts.set(entry.customerId, (entryCounts.get(entry.customerId) ?? 0) + 1);
   }
 
