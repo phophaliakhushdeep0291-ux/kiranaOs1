@@ -96,7 +96,8 @@ export async function pull(req, res, next) {
     const { since, cursor, limit } = req.query;
     const { cursors } = req.query;
     // Legacy contract kept for old tests/clients: pullSince(req.shopId, since, { cursor, limit })
-    const data = await svc.pullSince(req.shopId, since, { cursor, limit, cursors });
+    // Role drives field-level redaction so a cashier device never receives cost/profit data.
+    const data = await svc.pullSince(req.shopId, since, { cursor, limit, cursors, role: req.user?.role });
     incrementMetric("sync_pull_total", { status: "success" });
 
     if (shouldSyncLog()) {
