@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import db from "../../db.js";
+import { env } from "../../config/env.js";
 import { signToken } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
@@ -317,6 +318,13 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
 
 async function issueAuthResponse(user, shop, reqMeta = {}) {
   const deviceId = normalizeDeviceId(reqMeta.deviceId);
+  // Fail closed in production: without a device id the per-plan device cap can't be
+  // enforced (a null-device session isn't counted), so a client could bypass the limit
+  // simply by omitting the header. The app always sends x-device-id, so requiring it in
+  // production only blocks unsupported/bypassing clients. Dev/test stay lenient.
+  if (!deviceId && env.NODE_ENV === "production") {
+    throw new AppError("A device id is required to sign in. Please reload the app and try again.", 400, "DEVICE_ID_REQUIRED");
+  }
   if (deviceId) {
     await assertDeviceCanOwnLoginSession(user.shopId, user, deviceId);
   }

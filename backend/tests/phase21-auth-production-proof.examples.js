@@ -46,6 +46,19 @@ for (const snippet of [
   assert.ok(authService.includes(snippet), `auth service missing production session/staff hardening: ${snippet}`);
 }
 
+// Device cap must fail closed in production: a login with no device id can't be counted
+// toward the per-plan limit, so it must be rejected rather than silently allowed.
+assert.match(
+  authService,
+  /DEVICE_ID_REQUIRED/,
+  "login must reject a missing device id in production so the device cap cannot be bypassed"
+);
+assert.match(
+  authService,
+  /!deviceId && env\.NODE_ENV === "production"/,
+  "the device-id requirement must be gated to production"
+);
+
 assert.ok(!authService.includes("await db.user.delete({ where: { id: staffId } })"), "staff removal must not hard-delete audited users");
 assert.ok(authController.includes("{ req }"), "staff disable audit should receive request metadata");
 
