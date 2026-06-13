@@ -410,6 +410,11 @@ export async function getPnL(shopId, { range, from, to }) {
       where: {
         shopId,
         type: "debit",
+        // "Udhar given this period" = credit genuinely extended to customers: bill credit
+        // (mode "credit") and manual credit adjustments. Exclude system-generated debits —
+        // payment reversals, negative-balance repairs, and pre-existing opening balances —
+        // which would otherwise inflate the metric (e.g. every clamp adds a system_repair).
+        mode: { in: ["credit", "adjustment"] },
         createdAt: { gte: start, lte: end },
       },
       select: { amount: true },
