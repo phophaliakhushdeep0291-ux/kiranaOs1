@@ -62,7 +62,8 @@
     "proof:release": "npm run migration:safety && npm run release:gate && npm run proof:ops",
     "test:phase46": "node tests/phase46-multidevice-smoothness.examples.js",
     "loadtest": "node loadtest/loadtest.js",
-    "loadtest:smoke": "node loadtest/loadtest.js --smoke"
+    "loadtest:smoke": "node loadtest/loadtest.js --smoke",
+    "probe:adversarial": "node loadtest/adversarial.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
