@@ -71,6 +71,10 @@ export async function confirmBill(shopId, body, actor = {}) {
   // never from frontend/offline payload attribution fields.
   const createdByUserId = actor?.userId ?? null;
   const deviceId = actor?.deviceId ?? null;
+  // Offline-origin bills (replayed from a device's sync queue) represent sales that
+  // already physically happened, so they must never be dropped for being stock-short.
+  // The online counter path leaves this false and still rejects overselling live.
+  const allowStockShortfall = actor?.allowStockShortfall === true;
   const billPayments = isEstimate ? [] : payments;
   const legacyCreditAmount = sumMoney(billPayments.filter((p) => p.mode === "credit").map((p) => p.amount));
   const requestedCreditAmount = inputCreditAmount !== undefined
@@ -126,7 +130,9 @@ export async function confirmBill(shopId, body, actor = {}) {
         : item.quantity;
 
       // Stock check only applies to real sale bills. Estimates are quotes, not stock movements.
-      if (product && !isEstimate) {
+      // Offline-origin bills skip the rejection (the sale already happened) and instead
+      // reconcile the shortfall at decrement time.
+      if (product && !isEstimate && !allowStockShortfall) {
         if (product.stockBaseQty < qtyInBase) {
           throw new AppError(
             `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
@@ -246,14 +252,16 @@ export async function confirmBill(shopId, body, actor = {}) {
     }
 
     const stockUpdatesByProduct = aggregateStockUpdates(stockUpdates);
-    for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
-      if (product.stockBaseQty < qtyInBase) {
-        const err = new AppError(
-          `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
-          400
-        );
-        err.code = "INSUFFICIENT_STOCK";
-        throw err;
+    if (!allowStockShortfall) {
+      for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
+        if (product.stockBaseQty < qtyInBase) {
+          const err = new AppError(
+            `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
+            400
+          );
+          err.code = "INSUFFICIENT_STOCK";
+          throw err;
+        }
       }
     }
 
@@ -312,15 +320,19 @@ export async function confirmBill(shopId, body, actor = {}) {
         statusCode: 409,
         code: "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION",
         message: `Insufficient stock for "${product.name}". Another bill may have used this stock first.`,
+        allowShortfall: allowStockShortfall,
       });
 
+      // Record the actual stock removed (= qtyInBase normally; less on a floored shortfall),
+      // so the ledger entry stays internally consistent (old + change == new).
+      const removedBaseQty = round2(stockResult.oldStock - stockResult.newStock);
       await tx.stockLedger.create({
         data: {
           shopId,
           productId: product.id,
           productName: product.name,
           action: "sale",
-          changeBaseQty: -qtyInBase,
+          changeBaseQty: -removedBaseQty,
           oldStockBaseQty: stockResult.oldStock,
           newStockBaseQty: stockResult.newStock,
           billId: bill.id,
@@ -329,6 +341,9 @@ export async function confirmBill(shopId, body, actor = {}) {
           sourceDeviceId: billIdentity.sourceDeviceId,
           sourceType: "bill",
           sourceId: bill.id,
+          note: stockResult.shortfallBaseQty > 0
+            ? `Offline sale recorded with ${stockResult.shortfallBaseQty} ${product.baseUnit} stock shortfall — reconcile inventory`
+            : undefined,
         },
       });
     }
@@ -688,7 +703,7 @@ function isUniqueConstraintError(error) {
   return error?.code === "P2002";
 }
 
-async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, statusCode = 409, code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION", message }) {
+async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, statusCode = 409, code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION", message, allowShortfall = false }) {
   const updated = await tx.product.updateMany({
     where: {
       id: product.id,
@@ -700,9 +715,23 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
   });
 
   if (updated.count !== 1) {
-    const err = new AppError(message || `Insufficient stock for "${product.name}"`, statusCode);
-    err.code = code;
-    throw err;
+    if (!allowShortfall) {
+      const err = new AppError(message || `Insufficient stock for "${product.name}"`, statusCode);
+      err.code = code;
+      throw err;
+    }
+    // Offline-origin sale already happened: remove what stock is available and floor at
+    // zero (never negative) so the sale is recorded, not dropped. The caller flags the
+    // shortfall on the stock-ledger entry for the shopkeeper to reconcile.
+    const fresh = await tx.product.findFirst({
+      where: { id: product.id, shopId },
+      select: { stockBaseQty: true },
+    });
+    const available = round2(Math.max(0, fresh?.stockBaseQty ?? 0));
+    const newStock = round2(Math.max(0, available - qtyInBase));
+    const shortfallBaseQty = round2(Math.max(0, qtyInBase - available));
+    await tx.product.updateMany({ where: { id: product.id, shopId }, data: { stockBaseQty: newStock } });
+    return { oldStock: available, newStock, shortfallBaseQty };
   }
 
   const freshProduct = await tx.product.findFirst({
@@ -711,5 +740,5 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
   });
   const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
   const oldStock = round2(newStock + qtyInBase);
-  return { oldStock, newStock };
+  return { oldStock, newStock, shortfallBaseQty: 0 };
 }

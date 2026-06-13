@@ -570,6 +570,9 @@ async function applyCreateBill(shopId, event, user, context) {
   const bill = await confirmBill(shopId, parsed, {
     userId: user?.userId ?? null,
     deviceId: billIdentity.sourceDeviceId ?? user?.deviceId ?? null,
+    // Replayed offline sale: the goods already left the counter, so never drop it for
+    // being stock-short — record it and flag any shortfall for reconciliation.
+    allowStockShortfall: true,
   });
   return buildCreateBillSyncPayload(shopId, bill, payload, billBody);
 }

@@ -148,6 +148,47 @@ if (ctx.skip) {
       assert.equal(refreshedProduct.stockBaseQty, 8);
     });
 
+    test("offline CREATE_BILL with insufficient stock is recorded (not dropped), stock floored", async () => {
+      // The sale already happened at the counter offline; the server must record it rather
+      // than reject + drop it. Stock floors at 0 and the shortfall is flagged for reconcile.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 2, defaultPricePerRateUnit: 10 });
+      const localBillId = "local-bill-shortfall-1";
+      const response = await ctx.post("/api/sync/push", {
+        events: [{
+          eventId: "create-bill-shortfall-1",
+          type: "CREATE_BILL",
+          payload: {
+            localBillId,
+            clientBillId: localBillId,
+            idempotencyKey: "create-bill:test:shortfall:1",
+            bill: {
+              ...billPayload(product, { quantity: 5, ratePerRateUnit: 10, payments: [{ mode: "cash", amount: 50 }] }),
+              localBillId,
+              clientBillId: localBillId,
+              idempotencyKey: "create-bill:test:shortfall:1",
+            },
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+
+      const data = assertSuccess(response);
+      assert.equal(data.summary.synced, 1, "the completed offline sale is recorded, not rejected");
+      assert.equal(data.summary.failed, 0);
+      assert.equal(data.summary.conflicts, 0);
+
+      const billId = data.results[0].result.billId;
+      assert.ok(await ctx.db.bill.findUnique({ where: { id: billId } }), "bill is recorded");
+
+      const refreshed = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(refreshed.stockBaseQty, 0, "stock floored at zero, never negative");
+
+      const saleLedger = await ctx.db.stockLedger.findFirst({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "sale" },
+      });
+      assert.match(String(saleLedger?.note ?? ""), /shortfall/i, "shortfall flagged on the ledger for reconciliation");
+    });
+
     test("sync push CREATE_BILL accepts separated creditAmount for udhar bill", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id);
