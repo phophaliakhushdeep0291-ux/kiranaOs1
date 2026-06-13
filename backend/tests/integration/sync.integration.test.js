@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertSuccess } from "./setup.js";
-import { activateDeviceViaApi, billPayload, createCustomer, createProduct, createTenant, login, productPayload, unique } from "./factories.js";
+import { activateDeviceViaApi, billPayload, createCustomer, createProduct, createStaff, createTenant, login, productPayload, unique } from "./factories.js";
 
 const ctx = await createIntegrationContext();
 
@@ -340,6 +340,30 @@ if (ctx.skip) {
       const second = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&limit=1&cursor=${encodeURIComponent(first.sync.nextCursor)}`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       assert.ok("hasMore" in second.sync);
       assert.ok("nextCursor" in second.sync);
+    });
+
+    test("cashier sync pull excludes product cost + supplier/purchase data; owner pull includes cost", async () => {
+      // Synced data lives in inspectable IndexedDB, so a cashier device must never receive
+      // cost/profit/supplier/purchase-cost data even though the UI hides it.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const staff = await createStaff(ctx.db, tenant.shop.id);
+      const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
+      const staffDevice = await activateDeviceViaApi(ctx, staffAuth.accessToken, { deviceId: "cashier-pull-device" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50, costPerRateUnit: 30 });
+
+      const since = encodeURIComponent(new Date(0).toISOString());
+      const ownerPull = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&limit=200`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const cashierPull = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&limit=200`, { token: staffAuth.accessToken, headers: { "x-device-id": staffDevice.deviceId } }));
+
+      const ownerProduct = ownerPull.products.find((p) => p.id === product.id);
+      assert.equal(ownerProduct?.costPerRateUnit, 30, "owner receives product cost");
+
+      const cashierProduct = cashierPull.products.find((p) => p.id === product.id);
+      assert.ok(cashierProduct, "cashier still receives the product for billing");
+      assert.equal(cashierProduct.costPerRateUnit, undefined, "cashier must NOT receive product cost");
+      assert.equal(cashierProduct.defaultPricePerRateUnit, 50, "cashier still gets the selling price");
+      assert.equal(cashierPull.suppliers.length, 0, "cashier receives no supplier records");
+      assert.equal(cashierPull.purchaseHistory.length, 0, "cashier receives no purchase-cost history");
     });
 
     test("pull is shop-scoped", async () => {

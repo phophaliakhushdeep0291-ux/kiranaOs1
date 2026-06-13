@@ -223,7 +223,7 @@ async function enrichBillsWithSyncIdentity(shopId, bills) {
   });
 }
 
-export async function pullSince(shopId, since, { cursor, limit, cursors } = {}) {
+export async function pullSince(shopId, since, { cursor, limit, cursors, role } = {}) {
   const sinceDate = new Date(since);
   limit = Math.min(
     typeof limit === "number" ? limit : PULL_DEFAULT_LIMIT,
@@ -280,15 +280,21 @@ export async function pullSince(shopId, since, { cursor, limit, cursors } = {}) 
   const nextCursor = lastRecord ? encodeCursor(lastRecord.updatedAt, lastRecord.id) : null;
   const returnedCount = Object.values(entitySets).reduce((sum, rows) => sum + rows.length, 0);
 
+  // Role-aware redaction: a cashier/staff device must not receive cost or profit data (it
+  // lives in inspectable IndexedDB even when the UI hides it). Cursors already advanced off
+  // the real rows above, so the device keeps syncing; it just never accumulates margins,
+  // supplier records, or purchase-cost history. The server stays authoritative on profit.
+  const privileged = role === "owner" || role === "admin";
+
   return {
     syncedAt: new Date().toISOString(),
-    products,
+    products: privileged ? products : products.map(redactProductCostForCashier),
     customers,
-    bills,
+    bills: privileged ? bills : bills.map(redactBillProfitForCashier),
     stockLedger,
     udharLedger,
-    suppliers,
-    purchaseHistory,
+    suppliers: privileged ? suppliers : [],
+    purchaseHistory: privileged ? purchaseHistory : [],
     sync: {
       hasMore,
       hasMoreByEntity,
@@ -299,6 +305,33 @@ export async function pullSince(shopId, since, { cursor, limit, cursors } = {}) 
       returnedCount,
     },
   };
+}
+
+const CASHIER_HIDDEN_PRODUCT_FIELDS = ["costPerRateUnit", "costPerRateUnitPaise"];
+const CASHIER_HIDDEN_BILL_FIELDS = ["grossProfit", "grossProfitPaise"];
+const CASHIER_HIDDEN_BILL_ITEM_FIELDS = [
+  "costPerRateUnit", "costPerRateUnitPaise",
+  "lineCost", "lineCostPaise",
+  "lineProfit", "lineProfitPaise",
+];
+
+function omitFields(row, fields) {
+  if (!row || typeof row !== "object") return row;
+  const clone = { ...row };
+  for (const field of fields) delete clone[field];
+  return clone;
+}
+
+function redactProductCostForCashier(product) {
+  return omitFields(product, CASHIER_HIDDEN_PRODUCT_FIELDS);
+}
+
+function redactBillProfitForCashier(bill) {
+  const redacted = omitFields(bill, CASHIER_HIDDEN_BILL_FIELDS);
+  if (Array.isArray(redacted.items)) {
+    redacted.items = redacted.items.map((item) => omitFields(item, CASHIER_HIDDEN_BILL_ITEM_FIELDS));
+  }
+  return redacted;
 }
 
 function buildEntityCursorMap({ legacyCursor = null, cursors = null } = {}) {
