@@ -85,6 +85,18 @@ if (ctx.skip) {
       }), 403);
     });
 
+    test("owner PIN supplied only in the query string is ignored (rejected)", async () => {
+      const { tenant, staffAuth } = await authPair();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      // Correct PIN, but only in the URL query — it must be ignored (a PIN in the URL leaks
+      // into access logs, browser history, and proxies), so the delete is rejected.
+      assertFailure(await ctx.delete(`/api/customers/${customer.id}?ownerPin=${tenant.ownerPin}`, {
+        token: staffAuth.accessToken,
+      }), 403);
+      const stillThere = await ctx.db.customer.findUnique({ where: { id: customer.id } });
+      assert.ok(stillThere && stillThere.deletedAt == null, "customer must not be deletable via a query-string PIN");
+    });
+
     test("ownerPin is stripped from stored sync requestJson/resultJson", async () => {
       const { tenant, staffAuth } = await authPair();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10 });
