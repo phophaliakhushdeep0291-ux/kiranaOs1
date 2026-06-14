@@ -135,6 +135,69 @@ if (ctx.skip) {
       assert.equal(Number(ofType("udhar_debit")[0].amountPaise), 6000, "udhar_debit = ₹60");
     });
 
+    test("ADJUST_STOCK (damage) replayed under a new event id applies stock only once", async () => {
+      // A damage adjustment that committed but lost its ack gets re-pushed under a new event id.
+      // Event-level idempotency cannot catch this (different event ids), and damage is relative —
+      // re-applying would decrement stock twice and corrupt inventory. The durable StockLedger
+      // idempotencyKey guarantees exactly-once: stock moves once, one ledger row.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10 });
+      const payload = {
+        productId: product.id,
+        adjustmentType: "damage",
+        quantity: 3,
+        enteredUnit: product.baseUnit,
+        idempotencyKey: "adjust-stock:test:dmg:1",
+        clientMovementId: "adjust-stock:test:dmg:1",
+        ownerPin: tenant.ownerPin,
+      };
+      const event = { type: "ADJUST_STOCK", ownerPin: tenant.ownerPin, payload };
+
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      // Retry under a brand-new event id (event-level idempotency cannot catch this).
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const fresh = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(fresh.stockBaseQty, 7, "damage of 3 applied exactly once (10 → 7), not twice");
+      const damageRows = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "damage" },
+      });
+      assert.equal(damageRows.length, 1, "exactly one damage ledger row despite the retry");
+    });
+
+    test("STOCK_PURCHASE replayed under a new event id applies stock + cost + history once", async () => {
+      // A purchase that committed but lost its ack gets re-pushed under a new event id. A double
+      // apply would over-increment stock, recompute weighted-average cost off the inflated base,
+      // and write a second PurchaseHistory row (doubling the supplier's outstanding due). The
+      // durable StockLedger idempotencyKey guarantees exactly-once across all three.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, costPerRateUnit: 10 });
+      const payload = {
+        productId: product.id,
+        quantity: 10,
+        enteredUnit: product.baseUnit,
+        billAmount: 200, // 10 units @ ₹20 → weightedAvgCost(10,10,10,20) = 15
+        supplierName: "Acme Distributors",
+        idempotencyKey: "stock-purchase:test:1",
+        clientMovementId: "stock-purchase:test:1",
+      };
+      const event = { type: "STOCK_PURCHASE", payload };
+
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "purch-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      // Retry under a brand-new event id (event-level idempotency cannot catch this).
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "purch-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const fresh = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(fresh.stockBaseQty, 20, "purchase of 10 applied once (10 → 20), not twice");
+      assert.equal(fresh.costPerRateUnit, 15, "weighted-average cost computed once (15), not off an inflated base");
+      const purchaseRows = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "purchase" },
+      });
+      assert.equal(purchaseRows.length, 1, "exactly one purchase ledger row despite the retry");
+      const history = await ctx.db.purchaseHistory.findMany({ where: { shopId: tenant.shop.id, productId: product.id } });
+      assert.equal(history.length, 1, "exactly one PurchaseHistory row (supplier due not doubled)");
+    });
+
     test("sync push CREATE_BILL works", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 30 });

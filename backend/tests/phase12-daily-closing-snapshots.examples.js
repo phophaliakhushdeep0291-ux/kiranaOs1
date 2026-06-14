@@ -102,4 +102,11 @@ for (const snippet of [
 }
 assert(packageJson.scripts["test:billing"].includes("phase12-daily-closing-snapshots.examples.js"), "Phase 12 test must be wired into npm test");
 
+// Regression guard (CODE_REVIEW_LOGIC_FLAWS.md #2): the snapshot staleness check must use the
+// shop-timezone day window — the same window getDailyClosing uses to generate the snapshot — not
+// the server's local clock. A server-local .setHours() window is shifted by the UTC offset (5.5h
+// for IST) and queries the wrong rows, so it both misses real changes and falsely flags others.
+assert(snapshotService.includes("dateRangeForDateOnly(date, env.DAILY_CLOSING_TIMEZONE)"), "snapshot staleness must use the shop-timezone day window");
+assert(!snapshotService.includes(".setHours("), "snapshot staleness must not build day windows with server-local .setHours()");
+
 console.log("Phase 12 daily closing snapshots examples passed");

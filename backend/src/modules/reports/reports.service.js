@@ -35,6 +35,12 @@ function parseDateOnly(dateString) {
   }
 }
 
+// 1..12 month of a timestamp in the shop timezone. Date.getMonth() would use the server's local
+// clock, mis-bucketing rows within the UTC offset (5.5h for IST) of a month boundary.
+function monthInShopTz(date, timeZone = env.DAILY_CLOSING_TIMEZONE) {
+  return Number(formatDateInTimeZone(new Date(date), timeZone).slice(5, 7));
+}
+
 function normalizeDateRange({ range, from, to } = {}) {
   const now = new Date();
   if (range === "today" || range === "daily") {
@@ -513,8 +519,10 @@ export async function getGstReport(shopId, { range, from, to } = {}) {
 // MONTHLY BREAKDOWN — grouped query pattern avoids obvious N+1 bill fetching
 // ─────────────────────────────────────────────────────────────
 export async function getMonthlyBreakdown(shopId, { year, untilMonth }) {
-  const start = new Date(year, 0, 1);
-  const end = new Date(year, untilMonth, 0, 23, 59, 59, 999);
+  const tz = env.DAILY_CLOSING_TIMEZONE;
+  const daysInUntilMonth = new Date(Date.UTC(year, untilMonth, 0)).getUTCDate();
+  const start = dateRangeForDateOnly(`${year}-01-01`, tz).start;
+  const end = dateRangeForDateOnly(`${year}-${String(untilMonth).padStart(2, "0")}-${String(daysInUntilMonth).padStart(2, "0")}`, tz).end;
   const [bills, damageRows] = await Promise.all([
     db.bill.findMany({
       where: { shopId, status: "active", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
@@ -528,8 +536,8 @@ export async function getMonthlyBreakdown(shopId, { year, untilMonth }) {
 
   const months = [];
   for (let m = 1; m <= untilMonth; m++) {
-    const monthBills = bills.filter((b) => new Date(b.createdAt).getMonth() === m - 1);
-    const monthDamage = damageRows.filter((d) => new Date(d.createdAt).getMonth() === m - 1);
+    const monthBills = bills.filter((b) => monthInShopTz(b.createdAt, tz) === m);
+    const monthDamage = damageRows.filter((d) => monthInShopTz(d.createdAt, tz) === m);
     const grossSales = sumMoney(monthBills.map((b) => b.grandTotal));
     const grossProfit = sumMoney(monthBills.map((b) => b.grossProfit));
     const inventoryLoss = sumMoney(monthDamage.map((d) => d.damageLossValue));
@@ -920,4 +928,4 @@ export async function exportUdharData(shopId) {
   }));
 }
 
-export const __reportInternals = { toPaise, fromPaise, normalizeDateRange, enforceReportRangeLimit };
+export const __reportInternals = { toPaise, fromPaise, normalizeDateRange, enforceReportRangeLimit, monthInShopTz };

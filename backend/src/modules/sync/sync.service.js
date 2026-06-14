@@ -836,9 +836,71 @@ async function applyRestoreProduct(shopId, event, context) {
   };
 }
 
+// Stable per-event identity so a replayed ADJUST_STOCK (committed but not marked SYNCED,
+// then re-claimed) is recognised by inventory.service and never double-applies. The client
+// id (idempotencyKey/clientMovementId) is preferred; otherwise we derive a deterministic key
+// from the event id, which is stable across retries of the same logical event.
+function getAdjustStockIdentity(event, payload) {
+  const eventId = getClientEventId(event);
+  const idempotencyKey = pickString(
+    payload?.idempotencyKey,
+    payload?.idempotency_key,
+    payload?.clientMovementId,
+    payload?.client_movement_id,
+    event?.idempotencyKey,
+    event?.idempotency_key
+  ) ?? (eventId ? `adjust-stock:${eventId}` : null);
+  const clientMovementId = pickString(
+    payload?.clientMovementId,
+    payload?.client_movement_id,
+    payload?.localMovementId,
+    payload?.local_movement_id
+  ) ?? idempotencyKey;
+  const sourceDeviceId = pickString(
+    payload?.sourceDeviceId,
+    payload?.source_device_id,
+    event?.deviceId,
+    event?.device_id
+  );
+  return { idempotencyKey, clientMovementId, sourceDeviceId };
+}
+
+// Same stable-identity contract as ADJUST_STOCK, for STOCK_PURCHASE. A replayed purchase must
+// not increment stock twice, recompute weighted-average cost twice, or write a second
+// PurchaseHistory row (which would double the supplier's outstanding due).
+function getPurchaseIdentity(event, payload) {
+  const eventId = getClientEventId(event);
+  const idempotencyKey = pickString(
+    payload?.idempotencyKey,
+    payload?.idempotency_key,
+    payload?.clientMovementId,
+    payload?.client_movement_id,
+    payload?.movementId,
+    payload?.localMovementId,
+    payload?.local_movement_id,
+    event?.idempotencyKey,
+    event?.idempotency_key
+  ) ?? (eventId ? `stock-purchase:${eventId}` : null);
+  const clientMovementId = pickString(
+    payload?.clientMovementId,
+    payload?.client_movement_id,
+    payload?.movementId,
+    payload?.localMovementId,
+    payload?.local_movement_id
+  ) ?? idempotencyKey;
+  const sourceDeviceId = pickString(
+    payload?.sourceDeviceId,
+    payload?.source_device_id,
+    event?.deviceId,
+    event?.device_id
+  );
+  return { idempotencyKey, clientMovementId, sourceDeviceId };
+}
+
 async function applyAdjustStock(shopId, event, context) {
   const payload = adjustStockPayloadSchema.parse(getEventPayload(event));
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
+  const identity = getAdjustStockIdentity(event, payload);
 
   if (payload.adjustmentType === "damage") {
     if (!payload.quantity || !payload.enteredUnit) {
@@ -851,7 +913,7 @@ async function applyAdjustStock(shopId, event, context) {
       enteredUnit: payload.enteredUnit,
       note: payload.note,
     });
-    const data = await recordDamage(shopId, parsed);
+    const data = await recordDamage(shopId, parsed, identity);
     return { type: event.type, adjustmentType: "damage", ...data };
   }
 
@@ -864,7 +926,7 @@ async function applyAdjustStock(shopId, event, context) {
     newStockBaseQty: payload.newStockBaseQty,
     note: payload.note,
   });
-  const data = await correctStock(shopId, parsed);
+  const data = await correctStock(shopId, parsed, identity);
   return { type: event.type, adjustmentType: "correction", ...data };
 }
 
@@ -1032,10 +1094,14 @@ async function applyRestoreCustomer(shopId, event, context) {
 }
 
 async function applyStockPurchase(shopId, event, context) {
-  const payload = stockPurchasePayloadSchema.parse(getEventPayload(event));
+  const rawPayload = getEventPayload(event);
+  const payload = stockPurchasePayloadSchema.parse(rawPayload);
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_PURCHASE sync event", 400);
-  const data = await recordPurchase(shopId, payload);
+  // Derive identity from the raw payload (purchaseSchema may strip unknown keys) so a replayed
+  // purchase is recognised and never doubles stock, cost, or the supplier due.
+  const identity = getPurchaseIdentity(event, rawPayload);
+  const data = await recordPurchase(shopId, payload, identity);
   return {
     type: event.type,
     movementId: data.stockLedgerId,

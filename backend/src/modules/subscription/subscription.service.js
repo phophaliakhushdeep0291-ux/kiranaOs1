@@ -308,7 +308,14 @@ export function isSubscriptionActive(subscription) {
   if (["cancelled", "expired", "payment_failed"].includes(subscription.status)) return false;
   if (subscription.status === "trial") return !subscription.trialEndsAt || subscription.trialEndsAt > now;
   if (subscription.status === "grace") return !!subscription.graceEndsAt && subscription.graceEndsAt > now;
-  if (subscription.status === "active") return !subscription.currentPeriodEnd || subscription.currentPeriodEnd > now;
+  if (subscription.status === "active") {
+    if (!subscription.currentPeriodEnd || subscription.currentPeriodEnd > now) return true;
+    // The period has ended but nothing flipped the row to "grace" — this deployment runs no
+    // subscription scheduler, so status stays "active" indefinitely. Honor the grace window that
+    // was provisioned at activation (currentPeriodEnd + DEFAULT_GRACE_DAYS) so a paying shop is
+    // not cut off the instant the period rolls over; access ends only once grace itself elapses.
+    return !!subscription.graceEndsAt && subscription.graceEndsAt > now;
+  }
   return false;
 }
 

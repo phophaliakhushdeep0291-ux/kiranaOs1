@@ -7,13 +7,16 @@ import { createAuditLog } from "../modules/audit/audit.service.js";
 
 /**
  * requireShop — ensures every request carries a shopId.
- * For now, shopId comes from req.user (JWT payload).
- * Later, multi-shop admins can pass it in the header.
+ *
+ * shopId is taken ONLY from the authenticated JWT (req.user). A client-supplied x-shop-id header
+ * is deliberately not trusted: requireShop always runs behind requireAuth, and honoring a header
+ * would let any authenticated caller operate on another tenant's data if this were ever mounted
+ * without auth. Multi-shop admin switching, if ever added, must go through an explicit admin check.
  *
  * Attaches req.shopId for convenience in controllers/services.
  */
 export function requireShop(req, _res, next) {
-  const shopId = req.user?.shopId ?? req.headers["x-shop-id"];
+  const shopId = req.user?.shopId;
   if (!shopId) {
     return next(new AppError("Shop context required", 400));
   }
