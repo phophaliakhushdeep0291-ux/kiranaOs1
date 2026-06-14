@@ -11,6 +11,7 @@ import {
   dedupeBillsForDisplay,
   dedupePaymentsForDisplay,
   findDuplicateLocalPaymentForServerPayment,
+  hasDurableClientIdentity,
   isBillSynced,
   isLikelySyncedCopyOfPendingBill,
 } from "@/features/sync/bill-reconciliation";
@@ -223,11 +224,15 @@ export async function mergeServerChange(
     !isBillSynced(existing) &&
     isBillSynced(entity as Record<string, unknown>)
       ? // A pending local bill whose synced server echo shares the client-generated
-        // identity is provably the same bill — merge it deterministically and never
-        // raise a conflict. The content heuristic stays only as a legacy fallback for
-        // bills created before the backend stamped a durable client identity.
+        // identity (clientBillId/idempotencyKey) is provably the same bill — merge it
+        // deterministically and never raise a conflict. The content/time heuristic is
+        // ONLY a legacy fallback: it may run when at least one side lacks a durable
+        // identity, but two bills that both carry distinct client ids are different
+        // sales and must never be collapsed by it.
         billsShareClientIdentity(existing, entity as Record<string, unknown>) ||
-        isLikelySyncedCopyOfPendingBill(existing, entity as Record<string, unknown>)
+        ((!hasDurableClientIdentity(existing) ||
+          !hasDurableClientIdentity(entity as Record<string, unknown>)) &&
+          isLikelySyncedCopyOfPendingBill(existing, entity as Record<string, unknown>))
         ? existing
         : undefined
       : undefined;

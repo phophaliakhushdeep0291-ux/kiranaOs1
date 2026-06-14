@@ -191,12 +191,28 @@ const SYNC_PROCESSING_STALE_MS = 2 * 60 * 1000;
  *
  * Tenant isolation: every query is scoped by shopId from the JWT.
  */
-async function enrichBillsWithSyncIdentity(shopId, bills) {
-  if (!bills.length) return bills;
+/**
+ * Bills carry their durable client identity — clientBillId, idempotencyKey,
+ * sourceDeviceId — as real columns, persisted by confirmBill. pullSince returns
+ * those columns directly on EVERY bill (Prisma findMany with no `select` includes
+ * them), so the client can always collapse a pending local bill into its synced
+ * server twin by clientBillId, with no dependence on any recent-events window.
+ *
+ * This fallback exists ONLY for legacy rows whose clientBillId column is still
+ * null (created before the durable-identity migration). For those — and only
+ * those — it reconstructs the identity from the original CREATE_BILL sync event.
+ * Bills that already have the column are returned untouched and never re-query
+ * the event log. Capped at a recent window because null-id rows are old and rare;
+ * any that fall outside it are still covered by the client's content/time
+ * heuristic. Never clobbers a real column value.
+ */
+async function backfillLegacyBillIdentity(shopId, bills) {
+  const legacy = bills.filter((bill) => !bill.clientBillId && !bill.idempotencyKey);
+  if (legacy.length === 0) return bills; // common path: every bill already carries the columns
   const events = await db.offlineSyncEvent.findMany({
     where: { shopId, type: SYNC_EVENT_TYPES.CREATE_BILL, status: SYNC_EVENT_STATUSES.SYNCED },
     orderBy: { updatedAt: "desc" },
-    take: 200,
+    take: 500,
     select: { resultJson: true, requestJson: true },
   });
   const identityByBillId = new Map();
@@ -205,21 +221,27 @@ async function enrichBillsWithSyncIdentity(shopId, bills) {
     const request = safeJsonParse(event.requestJson);
     const billId = result?.billId ?? result?.serverBillId ?? result?.bill?.id;
     if (!billId || identityByBillId.has(billId)) continue;
-    const localBillId = result?.localBillId ?? result?.local_bill_id
-      ?? request?.payload?.localBillId ?? request?.payload?.local_bill_id ?? null;
     const clientBillId = result?.clientBillId ?? result?.client_bill_id
-      ?? request?.payload?.clientBillId ?? null;
-    const idempotency_key = result?.idempotencyKey ?? result?.idempotency_key
-      ?? request?.payload?.idempotency_key ?? null;
-    if (localBillId || clientBillId || idempotency_key) {
-      identityByBillId.set(billId, { localBillId, clientBillId, idempotency_key });
+      ?? request?.payload?.clientBillId ?? request?.payload?.localBillId
+      ?? request?.payload?.local_bill_id ?? null;
+    const idempotencyKey = result?.idempotencyKey ?? result?.idempotency_key
+      ?? request?.payload?.idempotencyKey ?? request?.payload?.idempotency_key ?? null;
+    const sourceDeviceId = result?.sourceDeviceId ?? request?.payload?.sourceDeviceId ?? null;
+    if (clientBillId || idempotencyKey) {
+      identityByBillId.set(billId, { clientBillId, idempotencyKey, sourceDeviceId });
     }
   }
   if (identityByBillId.size === 0) return bills;
   return bills.map((bill) => {
+    if (bill.clientBillId || bill.idempotencyKey) return bill; // never overwrite a real column
     const identity = identityByBillId.get(bill.id);
     if (!identity) return bill;
-    return { ...bill, ...identity };
+    return {
+      ...bill,
+      clientBillId: identity.clientBillId ?? bill.clientBillId ?? null,
+      idempotencyKey: identity.idempotencyKey ?? bill.idempotencyKey ?? null,
+      sourceDeviceId: bill.sourceDeviceId ?? identity.sourceDeviceId ?? null,
+    };
   });
 }
 
@@ -258,7 +280,7 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role } 
     db.supplier.findMany({ where: buildWhere("suppliers"), orderBy, take: limit }),
     db.purchaseHistory.findMany({ where: buildWhere("purchaseHistory"), orderBy, take: limit }),
   ]);
-  const bills = await enrichBillsWithSyncIdentity(shopId, rawBills);
+  const bills = await backfillLegacyBillIdentity(shopId, rawBills);
 
   const entitySets = { products, customers, bills, stockLedger, udharLedger, suppliers, purchaseHistory };
   const hasMoreByEntity = Object.fromEntries(
@@ -327,6 +349,10 @@ function redactProductCostForCashier(product) {
 }
 
 function redactBillProfitForCashier(bill) {
+  // Only profit/cost fields are stripped. The durable client identity
+  // (clientBillId, idempotencyKey, sourceDeviceId) is NOT cost data and MUST
+  // survive — the cashier device relies on it to collapse its pending local
+  // bill into this synced twin instead of double-counting it on the dashboard.
   const redacted = omitFields(bill, CASHIER_HIDDEN_BILL_FIELDS);
   if (Array.isArray(redacted.items)) {
     redacted.items = redacted.items.map((item) => omitFields(item, CASHIER_HIDDEN_BILL_ITEM_FIELDS));
@@ -1017,54 +1043,122 @@ async function applyReverseUdharPayment(shopId, event, user, context) {
   return { type: event.type, ...data };
 }
 
+// Stable identity for a replayed CREATE_LEDGER_ADJUSTMENT so a retried/replayed udhar adjustment
+// (committed but not marked SYNCED, or re-pushed under a new event id) is recognised by the
+// durable UdharLedger.idempotencyKey and never double-applies to the customer's balance.
+function getLedgerAdjustmentIdentity(event, payload) {
+  const eventId = getClientEventId(event);
+  const idempotencyKey = pickString(
+    payload?.idempotencyKey,
+    payload?.idempotency_key,
+    payload?.clientLedgerId,
+    payload?.client_ledger_id,
+    payload?.ledgerEntryId,
+    payload?.localLedgerEntryId,
+    payload?.local_ledger_entry_id,
+    payload?.localId,
+    event?.idempotencyKey,
+    event?.idempotency_key
+  ) ?? (eventId ? `ledger-adjust:${eventId}` : null);
+  const clientLedgerId = pickString(
+    payload?.clientLedgerId,
+    payload?.client_ledger_id,
+    payload?.ledgerEntryId,
+    payload?.localLedgerEntryId,
+    payload?.local_ledger_entry_id,
+    payload?.localId
+  ) ?? idempotencyKey;
+  const sourceDeviceId = pickString(
+    payload?.sourceDeviceId,
+    payload?.source_device_id,
+    event?.deviceId,
+    event?.device_id
+  );
+  return { idempotencyKey, clientLedgerId, sourceDeviceId };
+}
+
 async function applyLedgerAdjustment(shopId, event, context) {
-  const payload = ledgerAdjustmentPayloadSchema.parse(getEventPayload(event));
+  const rawPayload = getEventPayload(event);
+  const payload = ledgerAdjustmentPayloadSchema.parse(rawPayload);
   payload.customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId, context);
   if (!payload.customerId) throw new AppError("customerId required for CREATE_LEDGER_ADJUSTMENT sync event", 400);
   const amount = round2(payload.amount);
   if (amount === 0) throw new AppError("Ledger adjustment amount cannot be zero", 400);
+  // Identity from the raw payload (the schema may strip unknown keys) so a replay converges.
+  const { idempotencyKey, clientLedgerId, sourceDeviceId } = getLedgerAdjustmentIdentity(event, rawPayload);
 
-  return db.$transaction(async (tx) => {
-    const customer = await tx.customer.findFirst({ where: { id: payload.customerId, shopId, deletedAt: null } });
-    if (!customer) throw new AppError("Customer not found", 404);
-
-    const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customer.id);
-    const nextBalance = round2(currentBalance.balance + amount);
-    if (nextBalance < 0) {
-      const err = new AppError("Ledger adjustment would make udhar balance negative", 409);
-      err.code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
-      err.meta = { outstanding: currentBalance.balance, attemptedAdjustment: amount, rawBalance: currentBalance.rawBalance };
-      throw err;
-    }
-
-    const ledgerAmount = round2(Math.abs(amount));
-    const ledger = await tx.udharLedger.create({
-      data: {
-        shopId,
-        customerId: customer.id,
-        customerName: customer.name,
-        type: amount >= 0 ? "debit" : "payment",
-        amount: ledgerAmount,
-        ...moneyShadows({ amount: ledgerAmount }),
-        mode: "adjustment",
-        note: payload.note ?? "Offline ledger adjustment",
-      },
-    });
-
-    const refreshed = await syncCustomerUdharBalance(tx, shopId, customer.id, {
-      repairNegative: true,
-      repairNote: `System repair after ledger adjustment ${ledger.id}: udhar balance went negative`,
-    });
-
+  const buildReplay = async (client, existing) => {
+    const balance = await calculateCustomerUdharBalance(client, shopId, existing.customerId);
     return {
       type: event.type,
-      ledgerEntryId: ledger.id,
+      ledgerEntryId: existing.id,
       localLedgerEntryId: payload.ledgerEntryId ?? payload.localLedgerEntryId ?? payload.localId ?? null,
-      customerId: customer.id,
-      newBalance: refreshed.balance,
+      customerId: existing.customerId,
+      newBalance: balance.balance,
       amount,
+      idempotentReplay: true,
     };
-  });
+  };
+
+  try {
+    return await db.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.udharLedger.findFirst({ where: { shopId, idempotencyKey } });
+        if (existing) return buildReplay(tx, existing);
+      }
+
+      const customer = await tx.customer.findFirst({ where: { id: payload.customerId, shopId, deletedAt: null } });
+      if (!customer) throw new AppError("Customer not found", 404);
+
+      const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customer.id);
+      const nextBalance = round2(currentBalance.balance + amount);
+      if (nextBalance < 0) {
+        const err = new AppError("Ledger adjustment would make udhar balance negative", 409);
+        err.code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
+        err.meta = { outstanding: currentBalance.balance, attemptedAdjustment: amount, rawBalance: currentBalance.rawBalance };
+        throw err;
+      }
+
+      const ledgerAmount = round2(Math.abs(amount));
+      const ledger = await tx.udharLedger.create({
+        data: {
+          shopId,
+          customerId: customer.id,
+          customerName: customer.name,
+          type: amount >= 0 ? "debit" : "payment",
+          amount: ledgerAmount,
+          ...moneyShadows({ amount: ledgerAmount }),
+          mode: "adjustment",
+          note: payload.note ?? "Offline ledger adjustment",
+          idempotencyKey,
+          clientLedgerId,
+          sourceDeviceId,
+          sourceType: idempotencyKey ? "adjustment" : null,
+          sourceId: idempotencyKey ? customer.id : null,
+        },
+      });
+
+      const refreshed = await syncCustomerUdharBalance(tx, shopId, customer.id, {
+        repairNegative: true,
+        repairNote: `System repair after ledger adjustment ${ledger.id}: udhar balance went negative`,
+      });
+
+      return {
+        type: event.type,
+        ledgerEntryId: ledger.id,
+        localLedgerEntryId: payload.ledgerEntryId ?? payload.localLedgerEntryId ?? payload.localId ?? null,
+        customerId: customer.id,
+        newBalance: refreshed.balance,
+        amount,
+      };
+    });
+  } catch (error) {
+    if (error?.code === "P2002" && idempotencyKey) {
+      const existing = await db.udharLedger.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) return buildReplay(db, existing);
+    }
+    throw error;
+  }
 }
 
 async function applyDeleteCustomer(shopId, event, user, context) {
@@ -1334,49 +1428,111 @@ function applyDeletePurchaseBill(shopId, event) {
   return applyPurchaseBillLifecycle(shopId, event, { deleted: true });
 }
 
+// Same stable-identity contract as ADJUST_STOCK/STOCK_PURCHASE, for a manual STOCK_SALE
+// (offline stock-out not tied to a bill). A replay must not decrement stock twice.
+function getStockSaleIdentity(event, payload) {
+  const eventId = getClientEventId(event);
+  const idempotencyKey = pickString(
+    payload?.idempotencyKey,
+    payload?.idempotency_key,
+    payload?.clientMovementId,
+    payload?.client_movement_id,
+    payload?.movementId,
+    payload?.localMovementId,
+    payload?.local_movement_id,
+    event?.idempotencyKey,
+    event?.idempotency_key
+  ) ?? (eventId ? `stock-sale:${eventId}` : null);
+  const clientMovementId = pickString(
+    payload?.clientMovementId,
+    payload?.client_movement_id,
+    payload?.movementId,
+    payload?.localMovementId,
+    payload?.local_movement_id
+  ) ?? idempotencyKey;
+  const sourceDeviceId = pickString(
+    payload?.sourceDeviceId,
+    payload?.source_device_id,
+    event?.deviceId,
+    event?.device_id
+  );
+  return { idempotencyKey, clientMovementId, sourceDeviceId };
+}
+
 async function applyStockSale(shopId, event, context) {
-  const payload = stockSalePayloadSchema.parse(getEventPayload(event));
+  const rawPayload = getEventPayload(event);
+  const payload = stockSalePayloadSchema.parse(rawPayload);
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_SALE sync event", 400);
+  const { idempotencyKey, clientMovementId, sourceDeviceId } = getStockSaleIdentity(event, rawPayload);
 
-  return db.$transaction(async (tx) => {
-    const product = await tx.product.findFirst({ where: { id: payload.productId, shopId, deletedAt: null } });
-    if (!product) throw new AppError("Product not found", 404);
-    const qtyInBase = toBaseQty(payload.quantity, payload.enteredUnit, product.baseUnit);
-    const updated = await tx.product.updateMany({
-      where: { id: product.id, shopId, deletedAt: null, stockBaseQty: { gte: qtyInBase } },
-      data: { stockBaseQty: { decrement: qtyInBase } },
-    });
-    if (updated.count !== 1) {
-      const err = new AppError("Sale quantity exceeds current stock", 409);
-      err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
-      throw err;
-    }
-    const freshProduct = await tx.product.findFirst({ where: { id: product.id, shopId } });
-    const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
-    const oldStock = round2(newStock + qtyInBase);
-    const ledger = await tx.stockLedger.create({
-      data: {
-        shopId,
-        productId: product.id,
-        productName: product.name,
-        action: "sale",
-        changeBaseQty: -qtyInBase,
-        oldStockBaseQty: oldStock,
-        newStockBaseQty: newStock,
-        note: payload.note ?? "Offline manual stock sale",
-      },
-    });
-    return {
-      type: event.type,
-      movementId: ledger.id,
-      localMovementId: payload.movementId ?? payload.localMovementId ?? payload.localId ?? null,
-      productId: product.id,
-      qtyRemoved: qtyInBase,
-      oldStock,
-      newStock,
-    };
+  const buildReplay = (existing) => ({
+    type: event.type,
+    movementId: existing.id,
+    localMovementId: payload.movementId ?? payload.localMovementId ?? payload.localId ?? null,
+    productId: existing.productId,
+    qtyRemoved: round2(Math.abs(existing.changeBaseQty)),
+    oldStock: existing.oldStockBaseQty,
+    newStock: existing.newStockBaseQty,
+    idempotentReplay: true,
   });
+
+  try {
+    return await db.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+        if (existing) return buildReplay(existing);
+      }
+
+      const product = await tx.product.findFirst({ where: { id: payload.productId, shopId, deletedAt: null } });
+      if (!product) throw new AppError("Product not found", 404);
+      const qtyInBase = toBaseQty(payload.quantity, payload.enteredUnit, product.baseUnit);
+      const updated = await tx.product.updateMany({
+        where: { id: product.id, shopId, deletedAt: null, stockBaseQty: { gte: qtyInBase } },
+        data: { stockBaseQty: { decrement: qtyInBase } },
+      });
+      if (updated.count !== 1) {
+        const err = new AppError("Sale quantity exceeds current stock", 409);
+        err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
+        throw err;
+      }
+      const freshProduct = await tx.product.findFirst({ where: { id: product.id, shopId } });
+      const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
+      const oldStock = round2(newStock + qtyInBase);
+      const ledger = await tx.stockLedger.create({
+        data: {
+          shopId,
+          productId: product.id,
+          productName: product.name,
+          action: "sale",
+          changeBaseQty: -qtyInBase,
+          oldStockBaseQty: oldStock,
+          newStockBaseQty: newStock,
+          note: payload.note ?? "Offline manual stock sale",
+          idempotencyKey,
+          clientMovementId,
+          sourceDeviceId,
+          sourceType: idempotencyKey ? "sale" : null,
+          sourceId: idempotencyKey ? product.id : null,
+        },
+      });
+      return {
+        type: event.type,
+        movementId: ledger.id,
+        localMovementId: payload.movementId ?? payload.localMovementId ?? payload.localId ?? null,
+        productId: product.id,
+        qtyRemoved: qtyInBase,
+        oldStock,
+        newStock,
+      };
+    });
+  } catch (error) {
+    if (error?.code === "P2002" && idempotencyKey) {
+      const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) return buildReplay(existing);
+    }
+    throw error;
+  }
 }
 
 async function applyCreateSupplier(shopId, event) {

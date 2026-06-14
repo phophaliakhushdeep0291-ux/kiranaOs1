@@ -14,12 +14,15 @@ describe("bill reconciliation display dedupe", () => {
   });
 
 
-  it("uses isSynced boolean and content signature to hide local duplicate when backend returns the same bill without local_id", () => {
+  it("uses isSynced boolean and content signature to hide a LEGACY local duplicate (no durable client identity) when backend returns the same bill without local_id", () => {
+    // Legacy fallback path: neither row carries a clientBillId/idempotencyKey, so
+    // there is no durable identity to match on and the content/time signature is
+    // the only thing tying them together. Modern bills collapse via identity (the
+    // `seen` check) instead — see bill-sync-behavior.test.ts.
     const rows = dedupeBillsForDisplay([
       {
         id: "bill_local_abc",
         local_id: "bill_local_abc",
-        clientBillId: "bill_local_abc",
         billNo: "PENDING-LABC",
         billType: "normal_sale",
         status: "pending_sync",
