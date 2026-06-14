@@ -99,6 +99,12 @@ export function getDateRange(range, from, to, timeZone = DEFAULT_TIME_ZONE) {
   return dateRangeForDateOnly(todayKey, timeZone);
 }
 
+// `start` is the start-of-day (00:00:00.000) of the first day in the range and `end` the
+// end-of-day (23:59:59.999) of the last, as produced by the report date helpers. An N-day
+// inclusive range therefore spans (N − ε) days, so rounding recovers N exactly.
+// NOTE: a previous `Math.ceil(...) + 1` double-counted — it inflated every range by one day,
+// which rejected the standard 7-day report on the base plan (8 > 7) and the full 30/31-day
+// ranges on the paid plans. Do not reintroduce the +1.
 export function daysBetweenInclusive(start, end) {
-  return Math.ceil((end.getTime() - start.getTime()) / DAY_MS) + 1;
+  return Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY_MS));
 }
