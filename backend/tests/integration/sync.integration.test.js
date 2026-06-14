@@ -226,6 +226,33 @@ if (ctx.skip) {
       assert.equal(after.udharAmount, 200, "adjustment applied exactly once (balance ₹200, not ₹400)");
     });
 
+    test("STOCK_SALE replayed under a new event id decrements stock once", async () => {
+      // A manual offline stock-out that committed but lost its ack gets re-pushed under a new event
+      // id. STOCK_SALE is relative (decrement), so a double apply would remove stock twice. The
+      // durable StockLedger idempotencyKey guarantees exactly-once.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10 });
+      const payload = {
+        productId: product.id,
+        quantity: 3,
+        enteredUnit: product.baseUnit,
+        idempotencyKey: "stock-sale:test:1",
+        clientMovementId: "stock-sale:test:1",
+      };
+      const event = { type: "STOCK_SALE", payload };
+
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "ssale-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      // Retry under a brand-new event id (event-level idempotency cannot catch this).
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "ssale-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const fresh = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(fresh.stockBaseQty, 7, "sale of 3 applied exactly once (10 → 7), not twice");
+      const saleRows = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "sale" },
+      });
+      assert.equal(saleRows.length, 1, "exactly one sale ledger row despite the retry");
+    });
+
     test("sync push CREATE_BILL works", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 30 });

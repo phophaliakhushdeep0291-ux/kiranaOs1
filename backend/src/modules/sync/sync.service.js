@@ -1428,49 +1428,111 @@ function applyDeletePurchaseBill(shopId, event) {
   return applyPurchaseBillLifecycle(shopId, event, { deleted: true });
 }
 
+// Same stable-identity contract as ADJUST_STOCK/STOCK_PURCHASE, for a manual STOCK_SALE
+// (offline stock-out not tied to a bill). A replay must not decrement stock twice.
+function getStockSaleIdentity(event, payload) {
+  const eventId = getClientEventId(event);
+  const idempotencyKey = pickString(
+    payload?.idempotencyKey,
+    payload?.idempotency_key,
+    payload?.clientMovementId,
+    payload?.client_movement_id,
+    payload?.movementId,
+    payload?.localMovementId,
+    payload?.local_movement_id,
+    event?.idempotencyKey,
+    event?.idempotency_key
+  ) ?? (eventId ? `stock-sale:${eventId}` : null);
+  const clientMovementId = pickString(
+    payload?.clientMovementId,
+    payload?.client_movement_id,
+    payload?.movementId,
+    payload?.localMovementId,
+    payload?.local_movement_id
+  ) ?? idempotencyKey;
+  const sourceDeviceId = pickString(
+    payload?.sourceDeviceId,
+    payload?.source_device_id,
+    event?.deviceId,
+    event?.device_id
+  );
+  return { idempotencyKey, clientMovementId, sourceDeviceId };
+}
+
 async function applyStockSale(shopId, event, context) {
-  const payload = stockSalePayloadSchema.parse(getEventPayload(event));
+  const rawPayload = getEventPayload(event);
+  const payload = stockSalePayloadSchema.parse(rawPayload);
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_SALE sync event", 400);
+  const { idempotencyKey, clientMovementId, sourceDeviceId } = getStockSaleIdentity(event, rawPayload);
 
-  return db.$transaction(async (tx) => {
-    const product = await tx.product.findFirst({ where: { id: payload.productId, shopId, deletedAt: null } });
-    if (!product) throw new AppError("Product not found", 404);
-    const qtyInBase = toBaseQty(payload.quantity, payload.enteredUnit, product.baseUnit);
-    const updated = await tx.product.updateMany({
-      where: { id: product.id, shopId, deletedAt: null, stockBaseQty: { gte: qtyInBase } },
-      data: { stockBaseQty: { decrement: qtyInBase } },
-    });
-    if (updated.count !== 1) {
-      const err = new AppError("Sale quantity exceeds current stock", 409);
-      err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
-      throw err;
-    }
-    const freshProduct = await tx.product.findFirst({ where: { id: product.id, shopId } });
-    const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
-    const oldStock = round2(newStock + qtyInBase);
-    const ledger = await tx.stockLedger.create({
-      data: {
-        shopId,
-        productId: product.id,
-        productName: product.name,
-        action: "sale",
-        changeBaseQty: -qtyInBase,
-        oldStockBaseQty: oldStock,
-        newStockBaseQty: newStock,
-        note: payload.note ?? "Offline manual stock sale",
-      },
-    });
-    return {
-      type: event.type,
-      movementId: ledger.id,
-      localMovementId: payload.movementId ?? payload.localMovementId ?? payload.localId ?? null,
-      productId: product.id,
-      qtyRemoved: qtyInBase,
-      oldStock,
-      newStock,
-    };
+  const buildReplay = (existing) => ({
+    type: event.type,
+    movementId: existing.id,
+    localMovementId: payload.movementId ?? payload.localMovementId ?? payload.localId ?? null,
+    productId: existing.productId,
+    qtyRemoved: round2(Math.abs(existing.changeBaseQty)),
+    oldStock: existing.oldStockBaseQty,
+    newStock: existing.newStockBaseQty,
+    idempotentReplay: true,
   });
+
+  try {
+    return await db.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+        if (existing) return buildReplay(existing);
+      }
+
+      const product = await tx.product.findFirst({ where: { id: payload.productId, shopId, deletedAt: null } });
+      if (!product) throw new AppError("Product not found", 404);
+      const qtyInBase = toBaseQty(payload.quantity, payload.enteredUnit, product.baseUnit);
+      const updated = await tx.product.updateMany({
+        where: { id: product.id, shopId, deletedAt: null, stockBaseQty: { gte: qtyInBase } },
+        data: { stockBaseQty: { decrement: qtyInBase } },
+      });
+      if (updated.count !== 1) {
+        const err = new AppError("Sale quantity exceeds current stock", 409);
+        err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
+        throw err;
+      }
+      const freshProduct = await tx.product.findFirst({ where: { id: product.id, shopId } });
+      const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
+      const oldStock = round2(newStock + qtyInBase);
+      const ledger = await tx.stockLedger.create({
+        data: {
+          shopId,
+          productId: product.id,
+          productName: product.name,
+          action: "sale",
+          changeBaseQty: -qtyInBase,
+          oldStockBaseQty: oldStock,
+          newStockBaseQty: newStock,
+          note: payload.note ?? "Offline manual stock sale",
+          idempotencyKey,
+          clientMovementId,
+          sourceDeviceId,
+          sourceType: idempotencyKey ? "sale" : null,
+          sourceId: idempotencyKey ? product.id : null,
+        },
+      });
+      return {
+        type: event.type,
+        movementId: ledger.id,
+        localMovementId: payload.movementId ?? payload.localMovementId ?? payload.localId ?? null,
+        productId: product.id,
+        qtyRemoved: qtyInBase,
+        oldStock,
+        newStock,
+      };
+    });
+  } catch (error) {
+    if (error?.code === "P2002" && idempotencyKey) {
+      const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) return buildReplay(existing);
+    }
+    throw error;
+  }
 }
 
 async function applyCreateSupplier(shopId, event) {
