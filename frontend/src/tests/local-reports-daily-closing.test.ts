@@ -669,6 +669,65 @@ describe("local reports and daily closing", () => {
     expect(snapshot.today.udharSales).toBe(50);
   });
 
+  it("dashboard profit uses deduped bill profit instead of duplicate raw bill items", async () => {
+    const createdAt = "2026-06-06T10:00:00.000Z";
+    setRows({
+      bills: [
+        bill("server_bill_1", createdAt, {
+          grandTotal: 250,
+          grossProfit: 80,
+          localBillId: "local_bill_1",
+          local_bill_id: "local_bill_1",
+          idempotencyKey: "create-bill:tenant_reports:store_reports:device_reports:local_bill_1",
+          idempotency_key: "create-bill:tenant_reports:store_reports:device_reports:local_bill_1",
+        }),
+        bill("local_bill_1", createdAt, {
+          grandTotal: 250,
+          grossProfit: 80,
+          localBillId: "local_bill_1",
+          local_bill_id: "local_bill_1",
+          idempotencyKey: "create-bill:tenant_reports:store_reports:device_reports:local_bill_1",
+          idempotency_key: "create-bill:tenant_reports:store_reports:device_reports:local_bill_1",
+          sync_status: "pending_sync",
+        }),
+      ],
+      bill_items: [
+        billItem("local_item_1", "local_bill_1", { line_total: 250, local_id: "local_item_1" }),
+        billItem("server_item_1", "server_bill_1", { line_total: 250, local_id: "local_item_1", server_id: "server_item_1" }),
+      ],
+      products: [product("product_sugar", { costPrice: 60 })],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({
+      from: "2026-06-06",
+      to: "2026-06-06",
+    });
+
+    expect(snapshot.today.sales).toBe(250);
+    expect(snapshot.today.bills).toBe(1);
+    expect(snapshot.today.profitEstimate).toBe(80);
+  });
+
+  it("dashboard profit fallback dedupes local/server item echoes for a bill without stored grossProfit", async () => {
+    const createdAt = "2026-06-06T10:00:00.000Z";
+    setRows({
+      bills: [bill("local_bill_1", createdAt, { grandTotal: 100 })],
+      bill_items: [
+        billItem("local_item_1", "local_bill_1", { local_id: "local_item_1" }),
+        billItem("server_item_1", "local_bill_1", { local_id: "local_item_1", server_id: "server_item_1" }),
+      ],
+      products: [product("product_sugar", { costPrice: 60 })],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({
+      from: "2026-06-06",
+      to: "2026-06-06",
+    });
+
+    expect(snapshot.today.sales).toBe(100);
+    expect(snapshot.today.profitEstimate).toBe(40);
+  });
+
   it("dashboard pending udhar falls back to customer balances when ledger rows are not present yet", async () => {
     setRows({
       customers: [

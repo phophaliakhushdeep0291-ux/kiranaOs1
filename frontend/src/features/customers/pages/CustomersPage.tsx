@@ -259,6 +259,16 @@ export default function CustomersPage() {
     return () => window.removeEventListener("kirana:voice-customer-draft", handler);
   }, [dedupedCustomers, toast]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const query = String((event as CustomEvent<{ query?: unknown }>).detail?.query ?? "").trim();
+      if (!query) return;
+      setSearch(query);
+    };
+    window.addEventListener("kirana:voice-customer-search", handler);
+    return () => window.removeEventListener("kirana:voice-customer-search", handler);
+  }, []);
+
   function openCreate() {
     setEditing(null);
     setCustomerForm(blankCustomerForm());
@@ -382,6 +392,16 @@ export default function CustomersPage() {
     const amount = Number(paymentForm.amount);
     if (!paymentForm.customerId || !Number.isFinite(amount) || amount <= 0) {
       toast({ title: "Select customer and amount", variant: "destructive" });
+      return;
+    }
+    const customer = dedupedCustomers.find((row) => row.id === paymentForm.customerId);
+    const outstanding = Math.max(0, Number(customer?.ledgerBalance ?? 0));
+    if (amount > outstanding + 0.001) {
+      toast({
+        title: "Amount exceeds outstanding udhar",
+        description: `${customer?.name ?? "This customer"} owes ${fmtMoney(outstanding)}. Enter that amount or less.`,
+        variant: "destructive",
+      });
       return;
     }
     setSaving(true);

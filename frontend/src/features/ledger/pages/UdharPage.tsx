@@ -87,6 +87,53 @@ export default function UdharPage() {
     });
   }, [filter, search, udharCustomers]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const query = String((event as CustomEvent<{ query?: unknown }>).detail?.query ?? "").trim();
+      if (!query) return;
+      setSearch(query);
+    };
+    window.addEventListener("kirana:voice-udhar-search", handler);
+    return () => window.removeEventListener("kirana:voice-udhar-search", handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const draft = (event as CustomEvent<{
+        draft?: { customerName?: unknown; mobile?: unknown; amount?: unknown; mode?: unknown; note?: unknown };
+      }>).detail?.draft;
+      if (!draft) return;
+
+      const name = String(draft.customerName ?? "").trim().toLowerCase();
+      const mobile = String(draft.mobile ?? "").replace(/\D/g, "").slice(-10);
+      const customer = customers.find((row) => {
+        const rowMobile = String(row.mobile ?? "").replace(/\D/g, "").slice(-10);
+        return Boolean(
+          (mobile && rowMobile === mobile) ||
+          (name && row.name.toLowerCase().includes(name)) ||
+          (name && name.includes(row.name.toLowerCase())),
+        );
+      });
+
+      if (name) setSearch(name);
+      setPayment({
+        customerId: customer?.id ?? "",
+        amount: draft.amount !== undefined && Number.isFinite(Number(draft.amount)) ? String(draft.amount) : "",
+        mode: String(draft.mode ?? "cash").toLowerCase() === "upi" ? "upi" : "cash",
+        note: typeof draft.note === "string" ? draft.note : "",
+      });
+      setPaymentOpen(true);
+      if (!customer) {
+        toast({
+          title: "Choose customer",
+          description: "Voice filled the payment details. Select the matching customer before saving.",
+        });
+      }
+    };
+    window.addEventListener("kirana:voice-payment-draft", handler);
+    return () => window.removeEventListener("kirana:voice-payment-draft", handler);
+  }, [customers, toast]);
+
   function openPayment(customer?: CustomerWithLedger) {
     setPayment({ customerId: customer?.id ?? "", amount: "", mode: "cash", note: "" });
     setPaymentOpen(true);
