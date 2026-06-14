@@ -87,8 +87,13 @@ const SelectContent = React.forwardRef<
       <SelectPrimitive.Viewport
         className={cn(
           "p-1",
+          // NOTE: do NOT pin the viewport to `h-[var(--radix-select-trigger-height)]`.
+          // That fixes the scroll area to a single trigger-row tall, so long option
+          // lists (categories, units) get clipped and can't scroll despite the
+          // Content's max-h + overflow-y-auto. Width still tracks the trigger; height
+          // grows with content and the Content bounds + scrolls it.
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+            "w-full min-w-[var(--radix-select-trigger-width)]"
         )}
       >
         {children}

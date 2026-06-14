@@ -98,6 +98,19 @@ export default function UdharPage() {
       toast({ title: "Select customer and valid amount", variant: "destructive" });
       return;
     }
+    // Mirror the offline overpayment guard (recordPaymentLocalFirst /
+    // UDHAR_PAYMENT_EXCEEDS_OUTSTANDING): a collection can never exceed what the
+    // customer owes. Catch it here for a clear message before any write/sync.
+    const selectedCustomer = customers.find((customer) => customer.id === payment.customerId);
+    const outstanding = Math.max(0, Number(selectedCustomer?.ledgerBalance ?? 0));
+    if (amount > outstanding + 0.001) {
+      toast({
+        title: "Amount exceeds outstanding udhar",
+        description: `${selectedCustomer?.name ?? "This customer"} owes ₹${outstanding.toLocaleString("en-IN")}. Enter that amount or less.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       await recordPaymentLocalFirst(payment.customerId, { amount, mode: payment.mode, note: payment.note.trim() || undefined });

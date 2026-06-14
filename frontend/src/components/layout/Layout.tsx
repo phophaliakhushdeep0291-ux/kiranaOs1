@@ -34,6 +34,7 @@ import {
 import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/features/subscription";
 import { useBusinessType } from "@/features/settings/business-types";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
+import { CommandPalette } from "./CommandPalette";
 import { getApiBaseUrl } from "@/lib/api/http";
 import { cn } from "@/lib/utils";
 import {
@@ -237,6 +238,18 @@ export function Layout({ children }: { children: ReactNode }) {
 
   const [sidebarWidth, setSidebarWidth] = useState(() => clampW(Number(readLS(SIDEBAR_WIDTH_KEY, String(DEFAULT_WIDTH)))));
   const [collapsed, setCollapsed] = useState(() => readLS(SIDEBAR_COLLAPSED_KEY, "false") === "true");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && (event.key === "k" || event.key === "K")) {
+        event.preventDefault();
+        setPaletteOpen((value) => !value);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [isResizing, setIsResizing] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(readLS(SIDEBAR_GROUPS_KEY, "[]")) as string[]); }
@@ -438,11 +451,16 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
 
-          <div className="hidden h-11 w-[320px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-[#f8fbff] px-3 text-[#64748b] shadow-sm xl:flex">
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Search products, bills, and customers"
+            className="hidden h-11 w-[320px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-[#f8fbff] px-3 text-left text-[#64748b] shadow-sm transition-colors hover:border-primary/40 hover:bg-white xl:flex"
+          >
             <Search size={17} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium">Search products, bills, customers...</span>
             <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
-          </div>
+          </button>
 
           <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
@@ -537,6 +555,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </div>
 
       <VoiceAssistant />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

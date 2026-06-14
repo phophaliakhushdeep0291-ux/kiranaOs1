@@ -10,6 +10,12 @@ export interface ProductAliasesAiRequest {
 
 export interface AppCommandAiRequest {
   command: string;
+  context?: {
+    currentScreen?: string;
+    currentCart?: unknown[];
+    currentCustomer?: unknown;
+    visibleProducts?: unknown[];
+  };
 }
 
 export interface VoiceBillingParseAiRequest {
@@ -23,10 +29,20 @@ export interface FormFillAiRequest {
   currentValues?: Record<string, unknown>;
 }
 
-export async function requestAiAppCommand(payload: AppCommandAiRequest): Promise<unknown> {
-  return apiRequest<unknown>("/ai/app-command", {
+export async function requestAiAppCommand(
+  payload: AppCommandAiRequest,
+  init?: { signal?: AbortSignal },
+): Promise<unknown> {
+  // The backend AI router exposes POST /ai/parse-command (validated as
+  // { transcript, context }). The old "/ai/app-command" path never existed, so
+  // every voice command 404'd. Send the schema the backend actually validates.
+  return apiRequest<unknown>("/ai/parse-command", {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      transcript: payload.command,
+      ...(payload.context ? { context: payload.context } : {}),
+    }),
+    signal: init?.signal,
   });
 }
 
