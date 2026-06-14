@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -751,8 +752,23 @@ function isRazorpayPaymentPaid(payment) {
   return ["captured", "authorized"].includes(payment?.status) || payment?.captured === true;
 }
 
-function getWebhookEventId(payload) {
-  return payload?.id || payload?.event_id || payload?.payload?.payment?.entity?.id || payload?.payload?.order?.entity?.id || `razorpay-${Date.now()}`;
+export function getWebhookEventId(payload) {
+  const explicit =
+    payload?.id ||
+    payload?.event_id ||
+    payload?.payload?.payment?.entity?.id ||
+    payload?.payload?.order?.entity?.id;
+  if (explicit) return String(explicit);
+  // No provider id on the payload — derive a DETERMINISTIC fingerprint from the content so a
+  // retried id-less webhook dedups to the same provider_eventId row instead of being reprocessed
+  // on every delivery. A previous `razorpay-${Date.now()}` fallback made each retry unique, which
+  // defeated the idempotency the unique (provider, eventId) constraint is supposed to provide.
+  const fingerprint = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(payload ?? {}))
+    .digest("hex")
+    .slice(0, 32);
+  return `razorpay-fp-${fingerprint}`;
 }
 
 function extractPaymentEntity(payload) {

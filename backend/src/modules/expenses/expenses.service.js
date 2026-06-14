@@ -1,6 +1,8 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
+import { dateRangeForDateOnly, formatDateInTimeZone } from "../../utils/dates.js";
+import { env } from "../../config/env.js";
 
 function normalize(data) {
   const out = { ...data };
@@ -78,12 +80,22 @@ export async function getExpenseSummary(shopId, { from, to } = {}) {
  * portable across sqlite + postgres at kirana-shop data volumes.
  */
 export async function getExpenseOverview(shopId, { months = 6 } = {}) {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const trendStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
+  // All day/month boundaries and trend buckets are computed in the shop timezone, not the
+  // server's local clock — otherwise an expense near a day/month boundary lands in the wrong
+  // bucket by the UTC offset (5.5h for IST) on a UTC production server.
+  const tz = env.DAILY_CLOSING_TIMEZONE;
+  const todayKey = formatDateInTimeZone(new Date(), tz); // "YYYY-MM-DD" in the shop timezone
+  const [y, m, dayOfMonth] = todayKey.split("-").map(Number); // m is 1-based
+  const dayKeyOf = (yy, monthIndex0, day) => new Date(Date.UTC(yy, monthIndex0, day)).toISOString().slice(0, 10);
+  const monthKeyOf = (yy, monthIndex0) => {
+    const dt = new Date(Date.UTC(yy, monthIndex0, 1));
+    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+  };
+  const startOfToday = dateRangeForDateOnly(todayKey, tz).start;
+  const startOfYesterday = dateRangeForDateOnly(dayKeyOf(y, m - 1, dayOfMonth - 1), tz).start;
+  const startOfMonth = dateRangeForDateOnly(dayKeyOf(y, m - 1, 1), tz).start;
+  const startOfLastMonth = dateRangeForDateOnly(dayKeyOf(y, m - 2, 1), tz).start;
+  const trendStart = dateRangeForDateOnly(dayKeyOf(y, m - 1 - (months - 1), 1), tz).start;
 
   const rows = await db.expense.findMany({
     where: { shopId, deletedAt: null, spentAt: { gte: trendStart } },
@@ -94,8 +106,7 @@ export async function getExpenseOverview(shopId, { months = 6 } = {}) {
   const byCategory = {};
   const trendMap = new Map();
   for (let i = 0; i < months; i += 1) {
-    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
-    trendMap.set(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, 0);
+    trendMap.set(monthKeyOf(y, m - 1 - (months - 1 - i)), 0);
   }
 
   for (const e of rows) {
@@ -110,7 +121,7 @@ export async function getExpenseOverview(shopId, { months = 6 } = {}) {
       lastMonth += amt;
     }
     if (e.status === "pending") { pendingTotal += amt; pendingCount += 1; }
-    const key = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}`;
+    const key = formatDateInTimeZone(at, tz).slice(0, 7); // "YYYY-MM" in the shop timezone
     if (trendMap.has(key)) trendMap.set(key, round2(trendMap.get(key) + amt));
   }
 
