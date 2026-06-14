@@ -25,14 +25,20 @@ export function useRealtimeRefreshBridge() {
       if (timer !== null) window.clearTimeout(timer);
     };
 
-    const scheduleRefresh = (delayMs = FAST_REFRESH_DELAY_MS) => {
+    const scheduleRefresh = (
+      delayMs = FAST_REFRESH_DELAY_MS,
+      refetchType: "none" | "active" = "none",
+    ) => {
       if (!isVisible()) return;
       clearTimer(fastTimerRef.current);
       fastTimerRef.current = window.setTimeout(() => {
         fastTimerRef.current = null;
-        // Mark local-first queries stale without immediately hammering the backend.
-        // Pages that listen to local events still update instantly from IndexedDB.
-        void queryClient.invalidateQueries({ refetchType: "none" });
+        // A local-first WRITE refetches the queries actually on screen so every page
+        // reflects an add/edit without a manual reload — not only the few pages that
+        // wired their own listener. Other triggers (sync-queue churn, backend status)
+        // pass refetchType "none" to just mark queries stale and avoid hammering the
+        // backend. The debounce coalesces bursts and this is visibility-gated.
+        void queryClient.invalidateQueries({ refetchType });
       }, delayMs);
     };
 
@@ -48,7 +54,7 @@ export function useRealtimeRefreshBridge() {
       }, FULL_REFRESH_DELAY_MS);
     };
 
-    const onLocalDataChanged = () => scheduleRefresh();
+    const onLocalDataChanged = () => scheduleRefresh(FAST_REFRESH_DELAY_MS, "active");
     const onSyncQueueUpdated = () => scheduleRefresh();
     const channel = typeof BroadcastChannel !== "undefined"
       ? new BroadcastChannel(LOCAL_DATA_CHANGE_CHANNEL)

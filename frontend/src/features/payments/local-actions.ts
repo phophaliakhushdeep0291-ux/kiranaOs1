@@ -166,6 +166,19 @@ export async function recordPaymentLocalFirst(
 
   const existingLedgerEntries = await readCustomerLedgerEntries(customerId);
   const currentBalance = calculateLedgerBalance(existingLedgerEntries);
+  // Guard against overpayment: a udhar payment can never exceed the customer's
+  // outstanding balance. The backend already rejects this
+  // (UDHAR_PAYMENT_EXCEEDS_OUTSTANDING); the offline path must enforce the same
+  // rule so it can't drive the balance negative or queue an event that will fail
+  // to sync. A tiny epsilon absorbs paise-level float drift.
+  const outstanding = roundMoney(Math.max(0, currentBalance));
+  if (amount > outstanding + 0.001) {
+    const error = new Error(
+      `Payment ₹${amount.toLocaleString("en-IN")} exceeds outstanding udhar ₹${outstanding.toLocaleString("en-IN")}`,
+    );
+    (error as Error & { code?: string }).code = "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING";
+    throw error;
+  }
   const nextBalance = roundMoney(currentBalance - amount);
   const note = typeof validated.note === "string" ? validated.note : undefined;
   const paidAt = typeof validated.paidAt === "string" ? validated.paidAt : now;

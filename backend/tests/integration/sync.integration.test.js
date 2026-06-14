@@ -597,5 +597,106 @@ if (ctx.skip) {
       assert.ok(bill, "cashier still receives the bill's clientBillId so it can de-dupe its own pending row");
       assert.equal(bill.grossProfit, undefined, "cashier still must NOT receive profit");
     });
+
+    // ── Edit-after-finalize (void + recreate) and add-on ──────────────────────
+    // The frontend never mutates a finalized bill: "Edit" = cancelBill(old) +
+    // confirmBill(new) and "Add items" = confirmBill(new add-on), both over the
+    // existing CREATE_BILL / CANCEL_BILL outbox events. These prove the SERVER
+    // outcome of exactly that event sequence: one active bill, stock/udhar/totals
+    // reflecting only the surviving bill(s), and idempotent under lost-ack retries.
+
+    async function pushSale(ownerAuth, deviceHeaders, { product, customer, qty, rate, paid = 0, credit = 0, localBillId, idempotencyKey, eventId }) {
+      const billBody = {
+        ...billPayload(product, {
+          quantity: qty,
+          ratePerRateUnit: rate,
+          customerId: customer ? customer.id : undefined,
+          customerName: customer ? customer.name : "Walk-in",
+          buyerPaidAmount: paid,
+          payments: paid > 0 ? [{ mode: "cash", amount: paid }] : [],
+        }),
+        localBillId,
+        clientBillId: localBillId,
+        idempotencyKey,
+        ...(credit > 0 ? { creditAmount: credit } : {}),
+      };
+      return ctx.post("/api/sync/push", {
+        events: [{ eventId, type: "CREATE_BILL", payload: { localBillId, clientBillId: localBillId, idempotencyKey, bill: billBody } }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+    }
+
+    async function pushCancel(ownerAuth, deviceHeaders, { clientBillId, eventId, reason = "Edited — replaced by corrected bill" }) {
+      return ctx.post("/api/sync/push", {
+        events: [{ eventId, type: "CANCEL_BILL", ownerPin: "1234", payload: { billId: clientBillId, localBillId: clientBillId, reason, ownerPin: "1234" } }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+    }
+
+    test("edit-after-finalize (cancel old + create new) leaves exactly one active bill in totals, udhar and inventory", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+
+      // Original finalized udhar bill A: 2 @ ₹100 = ₹200 on credit.
+      assertSuccess(await pushSale(ownerAuth, deviceHeaders, { product, customer, qty: 2, rate: 100, credit: 200, localBillId: "edit-A", idempotencyKey: "ck:edit:A", eventId: "evt-edit-A" }));
+      // The "edit": the corrected bill B is created first, then the original is voided
+      // (exactly the order the frontend outbox emits).
+      assertSuccess(await pushSale(ownerAuth, deviceHeaders, { product, customer, qty: 3, rate: 100, credit: 300, localBillId: "edit-B", idempotencyKey: "ck:edit:B", eventId: "evt-edit-B" }));
+      assertSuccess(await pushCancel(ownerAuth, deviceHeaders, { clientBillId: "edit-A", eventId: "evt-edit-A-cancel" }));
+
+      const billA = await ctx.db.bill.findFirst({ where: { shopId: tenant.shop.id, clientBillId: "edit-A" } });
+      const billB = await ctx.db.bill.findFirst({ where: { shopId: tenant.shop.id, clientBillId: "edit-B" } });
+      assert.equal(billA.status, "cancelled", "the original bill is voided");
+      assert.equal(billB.status, "active", "the corrected bill stays active");
+      assert.notEqual(billA.clientBillId, billB.clientBillId, "the corrected bill has its own client identity");
+      const activeCount = await ctx.db.bill.count({ where: { shopId: tenant.shop.id, status: "active" } });
+      assert.equal(activeCount, 1, "exactly one active bill survives the edit");
+
+      // Inventory: A's 2 reversed, B's 3 applied → 10 - 3 = 7 (no stale double-deduction).
+      const stocked = await ctx.db.product.findFirst({ where: { id: product.id } });
+      assert.equal(stocked.stockBaseQty, 7, "stock reflects only the corrected bill");
+
+      // Udhar: only B's ₹300 remains (A's ₹200 reversed on cancel).
+      const ageing = assertSuccess(await ctx.get("/api/reports/udhar-ageing", { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(ageing.totalPendingUdharPaise, 30000, "udhar reflects only the corrected bill");
+    });
+
+    test("add items after finalize creates an independent add-on bill that sums with the original", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+
+      // Original cash bill A (2 @ ₹100 = ₹200) and an add-on C (1 @ ₹100 = ₹100). No void.
+      assertSuccess(await pushSale(ownerAuth, deviceHeaders, { product, qty: 2, rate: 100, paid: 200, localBillId: "addon-A", idempotencyKey: "ck:addon:A", eventId: "evt-addon-A" }));
+      assertSuccess(await pushSale(ownerAuth, deviceHeaders, { product, qty: 1, rate: 100, paid: 100, localBillId: "addon-C", idempotencyKey: "ck:addon:C", eventId: "evt-addon-C" }));
+
+      const activeCount = await ctx.db.bill.count({ where: { shopId: tenant.shop.id, status: "active" } });
+      assert.equal(activeCount, 2, "the original and the add-on both stay active");
+
+      const stocked = await ctx.db.product.findFirst({ where: { id: product.id } });
+      assert.equal(stocked.stockBaseQty, 7, "both bills deduct stock (10 - 2 - 1)");
+
+      const summary = assertSuccess(await ctx.get("/api/reports/payment-summary", { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(summary.total, 300, "dashboard total sums the original and the add-on");
+    });
+
+    test("re-pushing an offline edit (lost-ack retry) makes no duplicate bill and no stale stock", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+
+      assertSuccess(await pushSale(ownerAuth, deviceHeaders, { product, qty: 2, rate: 100, paid: 200, localBillId: "redo-A", idempotencyKey: "ck:redo:A", eventId: "evt-redo-A" }));
+      assertSuccess(await pushSale(ownerAuth, deviceHeaders, { product, qty: 3, rate: 100, paid: 300, localBillId: "redo-B", idempotencyKey: "ck:redo:B", eventId: "evt-redo-B" }));
+      assertSuccess(await pushCancel(ownerAuth, deviceHeaders, { clientBillId: "redo-A", eventId: "evt-redo-A-cancel" }));
+
+      // Lost-ack retry: the whole edit replays under brand-new event ids. Re-cancel of an
+      // already-cancelled bill and re-create under the same idempotency key are both no-ops.
+      await pushSale(ownerAuth, deviceHeaders, { product, qty: 3, rate: 100, paid: 300, localBillId: "redo-B", idempotencyKey: "ck:redo:B", eventId: "evt-redo-B-retry" });
+      await pushCancel(ownerAuth, deviceHeaders, { clientBillId: "redo-A", eventId: "evt-redo-A-cancel-retry" });
+
+      const bCount = await ctx.db.bill.count({ where: { shopId: tenant.shop.id, clientBillId: "redo-B" } });
+      assert.equal(bCount, 1, "the corrected bill is not duplicated by the retry");
+      const activeCount = await ctx.db.bill.count({ where: { shopId: tenant.shop.id, status: "active" } });
+      assert.equal(activeCount, 1, "still exactly one active bill after the retry");
+      const stocked = await ctx.db.product.findFirst({ where: { id: product.id } });
+      assert.equal(stocked.stockBaseQty, 7, "re-cancel doesn't restore stock twice and re-create doesn't deduct twice");
+    });
   });
 }

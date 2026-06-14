@@ -714,28 +714,57 @@ function calculateBillItemProfit(
   billItems: LocalBillItem[],
   products: Product[],
 ): number | null {
-  const billIds = new Set(rangeBills.map((bill) => bill.id));
+  // Profit is computed PER deduped bill, not by reducing the raw bill_items table.
+  // The bills array is already deduped (one row per canonical bill), but the
+  // bill_items table is NOT — after sync it can hold both a local copy and the
+  // synced-server copy of the same line, often pointing at the same bill id once
+  // ids are reconciled. The old global reduce summed both, so PROFIT double-counted
+  // while SALES (summed from the deduped bills table) stayed correct.
+  //
+  // For each deduped bill we prefer its own stored grossProfit (dedup-safe, and it
+  // already nets out discount/waived to match the backend P&L). Only when a bill has
+  // no stored grossProfit — e.g. a fresh local-only bill not yet synced — do we fall
+  // back to recomputing from THAT bill's items alone, which cannot double-count.
   const productById = new Map(products.map((product) => [product.id, product]));
-  let profit = 0;
-  let matchedItems = 0;
-
-  for (const item of billItems.filter((row) => !isDeleted(row))) {
+  const itemsByBillId = new Map<string, LocalBillItem[]>();
+  for (const item of billItems) {
+    if (isDeleted(item)) continue;
     const billId = getBillId(item);
-    if (!billId || !billIds.has(billId)) continue;
-    matchedItems += 1;
-    const product = productById.get(normalizeProductId(item) ?? "");
-    const quantity = Math.abs(readNumber(item.quantity, 0));
-    const rate = readNumber(
-      item.ratePerRateUnit ?? item.rate_per_rate_unit,
-      productPrice(product),
-    );
-    const revenue =
-      readNumber(item.line_total ?? item.lineTotal, 0) || quantity * rate;
-    const cost = quantity * billItemCost(item, product);
-    profit += revenue - cost;
+    if (!billId) continue;
+    const list = itemsByBillId.get(billId) ?? [];
+    list.push(item);
+    itemsByBillId.set(billId, list);
   }
 
-  return matchedItems > 0 ? roundMoney(profit) : null;
+  let profit = 0;
+  let matchedBills = 0;
+
+  for (const bill of rangeBills) {
+    const storedProfit = readNumber(bill.grossProfit, Number.NaN);
+    if (Number.isFinite(storedProfit)) {
+      profit += storedProfit;
+      matchedBills += 1;
+      continue;
+    }
+
+    const items = itemsByBillId.get(bill.id) ?? [];
+    if (items.length === 0) continue;
+    matchedBills += 1;
+    for (const item of items) {
+      const product = productById.get(normalizeProductId(item) ?? "");
+      const quantity = Math.abs(readNumber(item.quantity, 0));
+      const rate = readNumber(
+        item.ratePerRateUnit ?? item.rate_per_rate_unit,
+        productPrice(product),
+      );
+      const revenue =
+        readNumber(item.line_total ?? item.lineTotal, 0) || quantity * rate;
+      const cost = quantity * billItemCost(item, product);
+      profit += revenue - cost;
+    }
+  }
+
+  return matchedBills > 0 ? roundMoney(profit) : null;
 }
 
 function summarizeBills(

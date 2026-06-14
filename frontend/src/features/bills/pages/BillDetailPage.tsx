@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, FileText, Printer, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, Pencil, Plus, Printer, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
 import { buildPrintableBillSnapshot, openPrintableBill } from "@/features/bills/print";
 import { cancelBillWithOwnerPinLocalFirst, restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
+import { EditBillDialog } from "@/features/bills/components/EditBillDialog";
 import type { Bill, Customer } from "@/types/api";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { usePermission } from "@/features/staff/permissions";
@@ -110,6 +111,7 @@ export default function BillDetailPage() {
   const cancelPermission = usePermission("cancel_bill");
   const { data, isLoading, refetch } = useBillDetail(id);
   const [pinAction, setPinAction] = useState<PinAction | null>(null);
+  const [editMode, setEditMode] = useState<"edit" | "addon" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const bill = data?.bill;
@@ -136,6 +138,15 @@ export default function BillDetailPage() {
       return;
     }
     setPinAction(action);
+  }
+
+  // Editing voids the original (cancelBill), so it needs the same permission as cancel.
+  function startEdit() {
+    if (!cancelPermission.allowed) {
+      toast({ title: "Permission denied", description: cancelPermission.reason, variant: "destructive" });
+      return;
+    }
+    setEditMode("edit");
   }
 
   async function runPinAction(ownerPin: string, reason: string) {
@@ -185,6 +196,12 @@ export default function BillDetailPage() {
             <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />Restore</Button>
           ) : (
             <>
+              {bill.status !== "cancelled" && String(bill.billType ?? "normal_sale") !== "estimate" && (
+                <>
+                  <Button variant="outline" onClick={startEdit}><Pencil size={15} className="mr-1" />Edit bill</Button>
+                  <Button variant="outline" onClick={() => setEditMode("addon")}><Plus size={15} className="mr-1" />Add items</Button>
+                </>
+              )}
               {bill.status !== "cancelled" && <Button variant="outline" onClick={() => requestPinAction("cancel")}><ShieldCheck size={15} className="mr-1" />Cancel with PIN</Button>}
               <Button variant="outline" onClick={() => requestPinAction("delete")}><Trash2 size={15} className="mr-1" />Move to recycle bin</Button>
             </>
@@ -266,6 +283,15 @@ export default function BillDetailPage() {
         reasonRequired={pinAction === "cancel" || pinAction === "delete"}
         loading={isSaving}
         onConfirm={({ ownerPin, reason }) => runPinAction(ownerPin, reason)}
+      />
+
+      <EditBillDialog
+        open={editMode !== null}
+        mode={editMode ?? "edit"}
+        bill={bill}
+        itemRows={visibleItems}
+        onClose={() => setEditMode(null)}
+        onDone={() => { void refetch(); }}
       />
     </div>
   );
