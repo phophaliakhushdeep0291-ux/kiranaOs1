@@ -239,7 +239,7 @@ export function VoiceAssistant() {
     setStatus("Understanding command...");
     const local = parseLocalVoiceIntent(spoken, location);
     const preferLocalContext = location.startsWith("/products") && local.action === "product_draft";
-    const aiIntent = preferLocalContext ? null : await askAiIntent(spoken);
+    const aiIntent = preferLocalContext ? null : await askAiIntent(spoken, location);
     const intent = aiIntent && aiIntent.action !== "noop" ? aiIntent : local;
 
     await executeVoiceAction({
