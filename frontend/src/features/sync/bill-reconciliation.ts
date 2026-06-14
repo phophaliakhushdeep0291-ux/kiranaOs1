@@ -892,6 +892,20 @@ export function billIdentityKeys(bill: Record<string, unknown>): string[] {
  * only becomes true once the backend stamps the durable client identity onto the
  * bill, so legacy bills (no client identity) correctly fall through to the heuristic.
  */
+/**
+ * True when a bill carries a durable, client-generated identity (clientBillId or
+ * idempotencyKey). Such a bill is collapsed to its twin SOLELY by that identity;
+ * the createdAt/content heuristic must never be applied to it. Only legacy bills
+ * (created before the backend stamped a durable identity) fall back to the
+ * heuristic — which is why that path is gated on the absence of this.
+ */
+export function hasDurableClientIdentity(bill: Record<string, unknown>): boolean {
+  return Boolean(
+    getStringFrom(bill, ["clientBillId", "client_bill_id"]) ||
+      getStringFrom(bill, ["idempotencyKey", "idempotency_key"]),
+  );
+}
+
 export function billsShareClientIdentity(
   localBill: Record<string, unknown>,
   serverBill: Record<string, unknown>,
@@ -969,10 +983,17 @@ export function dedupeBillsForDisplay<T extends object>(bills: T[]): T[] {
 
     const contentSignature = billContentSignature(record);
     const synced = isBillSynced(record);
-    if (!synced && contentSignature && seenSyncedContentSignatures.has(contentSignature)) {
+    // The content/time heuristic is a LEGACY-ONLY fallback. A pending bill that
+    // carries a durable client identity was already collapsed against its synced
+    // twin by the identity `seen` check above; if it survived to here it is a
+    // genuinely distinct sale, so it must NOT be folded into an unrelated synced
+    // bill that merely shares a total/time bucket (e.g. the same item sold twice
+    // in five minutes). Only bills lacking a clientBillId/idempotencyKey fall back.
+    const legacyFallback = !hasDurableClientIdentity(record);
+    if (!synced && legacyFallback && contentSignature && seenSyncedContentSignatures.has(contentSignature)) {
       continue;
     }
-    if (!synced && picked.some((pickedBill) => isLikelySyncedCopyOfPendingBill(record, pickedBill as Record<string, unknown>))) {
+    if (!synced && legacyFallback && picked.some((pickedBill) => isLikelySyncedCopyOfPendingBill(record, pickedBill as Record<string, unknown>))) {
       continue;
     }
 

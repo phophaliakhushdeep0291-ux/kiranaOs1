@@ -198,6 +198,34 @@ if (ctx.skip) {
       assert.equal(history.length, 1, "exactly one PurchaseHistory row (supplier due not doubled)");
     });
 
+    test("CREATE_LEDGER_ADJUSTMENT replayed under a new event id applies to udhar once", async () => {
+      // A manual udhar adjustment that committed but lost its ack gets re-pushed under a new event
+      // id. Event-level idempotency cannot catch this (different event ids), and a double apply
+      // would move the customer's balance twice. The durable UdharLedger idempotencyKey guarantees
+      // exactly-once: one adjustment row, balance moved once.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id); // starts at balance 0
+      const payload = {
+        customerId: customer.id,
+        amount: 200, // debit adjustment: +₹200
+        note: "manual correction",
+        idempotencyKey: "ledger-adjust:test:1",
+        clientLedgerId: "ledger-adjust:test:1",
+      };
+      const event = { type: "CREATE_LEDGER_ADJUSTMENT", payload };
+
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "ladj-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      // Retry under a brand-new event id (event-level idempotency cannot catch this).
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "ladj-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const adjustments = await ctx.db.udharLedger.findMany({
+        where: { shopId: tenant.shop.id, customerId: customer.id, mode: "adjustment" },
+      });
+      assert.equal(adjustments.length, 1, "exactly one adjustment ledger row despite the retry");
+      const after = await ctx.db.customer.findUnique({ where: { id: customer.id } });
+      assert.equal(after.udharAmount, 200, "adjustment applied exactly once (balance ₹200, not ₹400)");
+    });
+
     test("sync push CREATE_BILL works", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 30 });
@@ -457,6 +485,90 @@ if (ctx.skip) {
       assert.ok(stored);
       assert.doesNotMatch(stored.requestJson || "", /ownerPin|1234/i);
       assert.doesNotMatch(stored.resultJson || "", /ownerPin|1234/i);
+    });
+
+    // ── Bill durable-identity on pull ─────────────────────────────────────────
+    // The offline double-count bug: a pulled server bill must carry its real
+    // clientBillId/idempotencyKey columns so the client can collapse the pending
+    // local row into it. These guard that pullSince returns them directly, with
+    // no dependence on any recent-events window.
+
+    async function pushOneBill(tenant, ownerAuth, deviceHeaders, { localBillId, idempotencyKey, eventId }) {
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+      const billBody = {
+        ...billPayload(product, {
+          quantity: 1, ratePerRateUnit: 100,
+          customerId: customer.id, customerName: customer.name,
+          buyerPaidAmount: 100, payments: [{ mode: "cash", amount: 100 }],
+        }),
+        localBillId, clientBillId: localBillId, idempotencyKey,
+      };
+      return ctx.post("/api/sync/push", {
+        events: [{ eventId, type: "CREATE_BILL", payload: { localBillId, clientBillId: localBillId, idempotencyKey, bill: billBody } }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+    }
+
+    const sinceEpoch = () => encodeURIComponent(new Date(0).toISOString());
+
+    test("pull returns each bill's real clientBillId/idempotencyKey/sourceDeviceId columns", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const localBillId = "local-bill-pullid-1";
+      const idempotencyKey = "create-bill:test:pullid:1";
+      assertSuccess(await pushOneBill(tenant, ownerAuth, deviceHeaders, { localBillId, idempotencyKey, eventId: "pull-id-1" }));
+
+      const pull = assertSuccess(await ctx.get(`/api/sync/pull?since=${sinceEpoch()}&limit=200`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const bill = pull.bills.find((b) => b.clientBillId === localBillId);
+      assert.ok(bill, "pulled bill carries its real clientBillId column");
+      assert.equal(bill.idempotencyKey, idempotencyKey, "pulled bill carries its idempotencyKey column");
+      assert.ok(bill.sourceDeviceId, "pulled bill carries its sourceDeviceId column");
+    });
+
+    test("clientBillId survives on pull even with no CREATE_BILL sync events left (column-sourced, window-independent)", async () => {
+      // Reproduces the >200-events / pruned-events case: the durable identity must
+      // come from the bill row itself, never a recent CREATE_BILL event window.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const localBillId = "local-bill-nowindow-1";
+      assertSuccess(await pushOneBill(tenant, ownerAuth, deviceHeaders, { localBillId, idempotencyKey: "create-bill:test:nowindow:1", eventId: "no-window-1" }));
+
+      // Drop every CREATE_BILL audit event — the old enrichment reconstructed
+      // identity from these, so with them gone a window-based impl returns nothing.
+      await ctx.db.offlineSyncEvent.deleteMany({ where: { shopId: tenant.shop.id, type: "CREATE_BILL" } });
+
+      const pull = assertSuccess(await ctx.get(`/api/sync/pull?since=${sinceEpoch()}&limit=200`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const bill = pull.bills.find((b) => b.clientBillId === localBillId);
+      assert.ok(bill, "clientBillId still returned with zero CREATE_BILL events (it comes from the column)");
+    });
+
+    test("re-pushing the same bill under a new event id never creates a second bill; pull returns exactly one", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const localBillId = "local-bill-rebush-1";
+      const idempotencyKey = "create-bill:test:repush:1";
+      assertSuccess(await pushOneBill(tenant, ownerAuth, deviceHeaders, { localBillId, idempotencyKey, eventId: "repush-1" }));
+      // Lost-ack retry: same bill, brand-new event id (event-level idempotency cannot catch this).
+      assertSuccess(await pushOneBill(tenant, ownerAuth, deviceHeaders, { localBillId, idempotencyKey, eventId: "repush-1-retry" }));
+
+      const count = await ctx.db.bill.count({ where: { shopId: tenant.shop.id, clientBillId: localBillId } });
+      assert.equal(count, 1, "the retried push must converge on a single bill");
+
+      const pull = assertSuccess(await ctx.get(`/api/sync/pull?since=${sinceEpoch()}&limit=200`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const matches = pull.bills.filter((b) => b.clientBillId === localBillId);
+      assert.equal(matches.length, 1, "pull returns exactly one bill for the client identity");
+    });
+
+    test("cashier pull still carries bill clientBillId (durable identity is not cost data)", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const localBillId = "local-bill-cashier-1";
+      assertSuccess(await pushOneBill(tenant, ownerAuth, deviceHeaders, { localBillId, idempotencyKey: "create-bill:test:cashier:1", eventId: "cashier-id-1" }));
+
+      const staff = await createStaff(ctx.db, tenant.shop.id);
+      const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
+      const staffDevice = await activateDeviceViaApi(ctx, staffAuth.accessToken, { deviceId: "cashier-identity-device" });
+
+      const cashierPull = assertSuccess(await ctx.get(`/api/sync/pull?since=${sinceEpoch()}&limit=200`, { token: staffAuth.accessToken, headers: { "x-device-id": staffDevice.deviceId } }));
+      const bill = cashierPull.bills.find((b) => b.clientBillId === localBillId);
+      assert.ok(bill, "cashier still receives the bill's clientBillId so it can de-dupe its own pending row");
+      assert.equal(bill.grossProfit, undefined, "cashier still must NOT receive profit");
     });
   });
 }

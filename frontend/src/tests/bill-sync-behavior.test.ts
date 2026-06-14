@@ -789,4 +789,119 @@ describe("bill sync behavior", () => {
     expect(status).toBe("conflict");
     expect(scopedRows("sync_conflicts").length).toBeGreaterThan(0);
   });
+
+  it("a locally FAILED offline bill merges with its pulled server twin by clientBillId — counted once, even hours apart", async () => {
+    // Lost-ack case: the backend saved the bill but the local row is stuck "failed".
+    // On the next pull the server twin carries the REAL durable identity columns
+    // (clientBillId/idempotencyKey) that pullSince now returns on every bill, so the
+    // match is by identity alone. The sale time (09:00) and the server sync time
+    // (14:30 — a *different* content/time bucket) differ by hours and must not matter.
+    // The server twin intentionally has NO localBillId: the backend no longer sends
+    // that reconstructed field, so the collapse must work off clientBillId alone.
+    dbState.putInto("bills", {
+      id: "bill_failed_echo",
+      local_id: "bill_failed_echo",
+      clientBillId: "bill_failed_echo",
+      client_bill_id: "bill_failed_echo",
+      idempotencyKey: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_failed_echo",
+      idempotency_key: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_failed_echo",
+      billNo: "PENDING-FAILED",
+      customerName: "Ramesh",
+      grandTotal: 100,
+      paidAmount: 100,
+      creditAmount: 0,
+      createdAt: "2026-06-07T09:00:00.000Z",
+      updatedAt: "2026-06-07T09:00:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "failed",
+      status: "pending_sync",
+      isSynced: false,
+      is_synced: false,
+      deleted_at: null,
+    });
+
+    const change = {
+      entity_type: "bill",
+      entity_id: "server_bill_failed",
+      entity: {
+        id: "server_bill_failed",
+        server_id: "server_bill_failed",
+        clientBillId: "bill_failed_echo",
+        idempotencyKey: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_failed_echo",
+        billNo: "KOS-2026-000303",
+        customerName: "Ramesh",
+        grandTotal: 100,
+        paidAmount: 100,
+        creditAmount: 0,
+        createdAt: "2026-06-07T14:30:00.000Z",
+        updatedAt: "2026-06-07T14:30:00.000Z",
+        tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id,
+        device_id: dbState.scope.device_id,
+        sync_status: "synced",
+        status: "completed",
+        isSynced: true,
+        is_synced: true,
+        deleted_at: null,
+      },
+    };
+
+    const status = await mergeServerChange(change as never);
+
+    expect(status).toBe("merged");
+    expect(scopedRows("sync_conflicts")).toHaveLength(0);
+    const billHistory = dedupeBillsForDisplay(scopedRows("bills"));
+    expect(billHistory).toHaveLength(1);
+    expect(billHistory[0]).toEqual(expect.objectContaining({ id: "server_bill_failed", sync_status: "synced" }));
+  });
+
+  it("two distinct sales with identical content but different clientBillIds are both kept (heuristic is legacy-only)", async () => {
+    // The same customer buys the same item twice inside one five-minute content
+    // bucket: two REAL sales with two distinct client ids. Now that each carries a
+    // durable identity, the content/time heuristic must NOT fold the pending one
+    // into the synced one — that would silently drop a sale from the dashboard.
+    const base = {
+      customerId: "server_customer_1",
+      customerName: "Ramesh",
+      grandTotal: 100,
+      items: [{ name: "Sugar", quantity: 2, ratePerRateUnit: 50 }],
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      deleted_at: null,
+    };
+    dbState.putInto("bills", {
+      ...base,
+      id: "server_sale_one",
+      server_id: "server_sale_one",
+      clientBillId: "cb_sale_one",
+      billNo: "KOS-SALE-1",
+      createdAt: "2026-06-07T09:00:00.000Z",
+      updatedAt: "2026-06-07T09:00:30.000Z",
+      sync_status: "synced",
+      status: "completed",
+      isSynced: true,
+      is_synced: true,
+    });
+    dbState.putInto("bills", {
+      ...base,
+      id: "cb_sale_two",
+      local_id: "cb_sale_two",
+      clientBillId: "cb_sale_two",
+      billNo: "PENDING-SALE-2",
+      createdAt: "2026-06-07T09:02:00.000Z",
+      updatedAt: "2026-06-07T09:02:00.000Z",
+      sync_status: "pending_sync",
+      status: "pending_sync",
+      isSynced: false,
+      is_synced: false,
+    });
+
+    const billHistory = dedupeBillsForDisplay(scopedRows("bills"));
+    // Both survive: identity is the only collapse key for bills that carry one.
+    expect(billHistory).toHaveLength(2);
+    expect(billHistory.map((b) => (b as Record<string, unknown>).clientBillId).sort()).toEqual(["cb_sale_one", "cb_sale_two"]);
+  });
 });
