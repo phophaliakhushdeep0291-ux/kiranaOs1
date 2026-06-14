@@ -41,20 +41,25 @@ function monthInShopTz(date, timeZone = env.DAILY_CLOSING_TIMEZONE) {
   return Number(formatDateInTimeZone(new Date(date), timeZone).slice(5, 7));
 }
 
+// Start-of-day (shop tz) for `daysBack` days before `now`, computed on the shop-tz calendar via
+// UTC date math. The old `Date.setDate(getDate() - n)` mutated using the SERVER's local calendar
+// and only happened to work because IST has no DST; this is robust regardless of the server clock.
+function zonedDayStartDaysAgo(now, daysBack, timeZone = env.DAILY_CLOSING_TIMEZONE) {
+  const [y, m, d] = formatDateInTimeZone(now, timeZone).split("-").map(Number);
+  const key = new Date(Date.UTC(y, m - 1, d - daysBack)).toISOString().slice(0, 10);
+  return dateRangeForDateOnly(key, timeZone).start;
+}
+
 function normalizeDateRange({ range, from, to } = {}) {
   const now = new Date();
   if (range === "today" || range === "daily") {
     return { start: startOfDay(now), end: endOfDay(now), label: "today" };
   }
   if (range === "7d") {
-    const start = startOfDay(now);
-    start.setDate(start.getDate() - 6);
-    return { start, end: endOfDay(now), label: "7d" };
+    return { start: zonedDayStartDaysAgo(now, 6), end: endOfDay(now), label: "7d" };
   }
   if (range === "30d") {
-    const start = startOfDay(now);
-    start.setDate(start.getDate() - 29);
-    return { start, end: endOfDay(now), label: "30d" };
+    return { start: zonedDayStartDaysAgo(now, 29), end: endOfDay(now), label: "30d" };
   }
   if (from || to) {
     if (!from || !to) {
@@ -602,8 +607,7 @@ export async function getTopProducts(shopId, { from, to, limit = DEFAULT_TOP_LIM
 // INVENTORY HEALTH
 // ─────────────────────────────────────────────────────────────
 export async function getInventoryHealth(shopId, { includeCost = false, windowDays = 30 } = {}) {
-  const since = startOfDay(new Date());
-  since.setDate(since.getDate() - Number(windowDays || 30));
+  const since = zonedDayStartDaysAgo(new Date(), Number(windowDays || 30));
   const [products, soldItems] = await Promise.all([
     db.product.findMany({ where: { shopId }, orderBy: { name: "asc" } }),
     db.billItem.findMany({
@@ -928,4 +932,4 @@ export async function exportUdharData(shopId) {
   }));
 }
 
-export const __reportInternals = { toPaise, fromPaise, normalizeDateRange, enforceReportRangeLimit, monthInShopTz };
+export const __reportInternals = { toPaise, fromPaise, normalizeDateRange, enforceReportRangeLimit, monthInShopTz, zonedDayStartDaysAgo };
