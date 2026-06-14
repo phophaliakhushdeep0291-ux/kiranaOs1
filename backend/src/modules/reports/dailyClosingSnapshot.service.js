@@ -1,6 +1,8 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { getDailyClosing } from "./reports.service.js";
+import { dateRangeForDateOnly } from "../../utils/dates.js";
+import { env } from "../../config/env.js";
 
 function normalizeDateInput(date) {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
@@ -19,18 +21,6 @@ function normalizeDateInput(date) {
 
 function dateKey(date) {
   return new Date(date).toISOString().slice(0, 10);
-}
-
-function startOfDay(date) {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-function endOfDay(date) {
-  const copy = new Date(date);
-  copy.setHours(23, 59, 59, 999);
-  return copy;
 }
 
 function parseJsonArray(raw) {
@@ -108,9 +98,12 @@ export async function getDailyClosingSnapshot(shopId, date) {
 
 export async function getSnapshotStaleness(shopId, date, snapshot) {
   if (!snapshot?.generatedAt) return { stale: false, reason: null, latestChangeAt: null };
-  const day = normalizeDateInput(date);
-  const start = startOfDay(day);
-  const end = endOfDay(day);
+  normalizeDateInput(date); // validates YYYY-MM-DD shape (throws a 400 with a stable code)
+  // Use the SAME shop-timezone day window the snapshot was generated with (getDailyClosing →
+  // startOfZonedDay/endOfZonedDay). A server-local setHours() window would be shifted by the UTC
+  // offset (5.5h for IST), querying the wrong rows — missing real early-morning changes and
+  // falsely flagging others near the day boundary.
+  const { start, end } = dateRangeForDateOnly(date, env.DAILY_CLOSING_TIMEZONE);
   const generatedAt = new Date(snapshot.generatedAt);
 
   const [billChange, udharChange, stockChange] = await Promise.all([
