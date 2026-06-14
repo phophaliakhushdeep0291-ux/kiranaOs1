@@ -1085,7 +1085,7 @@ async function applyLedgerAdjustment(shopId, event, context) {
   const amount = round2(payload.amount);
   if (amount === 0) throw new AppError("Ledger adjustment amount cannot be zero", 400);
   // Identity from the raw payload (the schema may strip unknown keys) so a replay converges.
-  const { clientLedgerId, sourceDeviceId } = getLedgerAdjustmentIdentity(event, rawPayload); const idempotencyKey = null;
+  const { idempotencyKey, clientLedgerId, sourceDeviceId } = getLedgerAdjustmentIdentity(event, rawPayload);
 
   const buildReplay = async (client, existing) => {
     const balance = await calculateCustomerUdharBalance(client, shopId, existing.customerId);
