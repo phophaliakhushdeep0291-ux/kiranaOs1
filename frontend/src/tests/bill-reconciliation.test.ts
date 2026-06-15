@@ -95,6 +95,18 @@ describe("payment reconciliation display dedupe", () => {
     expect(rows.map((row) => row.id).sort()).toEqual(["server_payment_cash", "server_payment_upi"]);
   });
 
+  it("dedupes exact duplicate payment rows already stored for the same bill", () => {
+    const rows = dedupePaymentsForDisplay([
+      { id: "cash_1", bill_id: "cmqexobma001f4zu4wk7xlvo8", mode: "cash", amount: 350, paid_at: "2026-06-15T08:10:39.000Z", sync_status: "synced" },
+      { id: "upi_1", bill_id: "cmqexobma001f4zu4wk7xlvo8", mode: "upi", amount: 190, paid_at: "2026-06-15T08:10:39.000Z", sync_status: "synced" },
+      { id: "upi_2", bill_id: "cmqexobma001f4zu4wk7xlvo8", mode: "upi", amount: 190, paid_at: "2026-06-15T08:10:40.000Z", sync_status: "synced" },
+      { id: "cash_2", bill_id: "cmqexobma001f4zu4wk7xlvo8", mode: "cash", amount: 350, paid_at: "2026-06-15T08:10:40.000Z", sync_status: "synced" },
+    ]);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(540);
+  });
+
   it("dedupes local pending and server payment rows even when bill ids have not been mapped yet", () => {
     const rows = dedupePaymentsForDisplay([
       { id: "payment_local_cash", bill_id: "bill_pending_123", customer_id: "customer_1", mode: "cash", amount: 650, paid_at: "2026-06-07T11:20:00.000Z", sync_status: "pending_sync" },

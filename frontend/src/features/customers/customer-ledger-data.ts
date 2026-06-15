@@ -2,7 +2,8 @@ import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
 import type { Bill, Customer } from "@/types/api";
 import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/ledger/accounting";
-import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
+import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
+import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 
 export interface CustomerWithLedger extends Customer, Record<string, unknown> {
   ledgerBalance: number;
@@ -171,6 +172,7 @@ function syntheticCustomerFromLedger(customerId: string, entries: CustomerLedger
 }
 
 export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
+  await hardenLocalFinancialData().catch(() => undefined);
   const cached = readInstantCache<Customer[]>("customers", []);
   const dbCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
   const customers = uniqueById([...cached, ...dbCustomers].filter((customer) => !isDeleted(customer as unknown as Record<string, unknown>)) as Array<Customer & Record<string, unknown>>);
@@ -226,11 +228,13 @@ export async function loadCustomerDetail(customerId: string): Promise<CustomerDe
       return id ? ids.has(id) : false;
     })
     .sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")));
-  const payments = (await offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []))
-    .filter((payment) => {
-      const id = getPaymentCustomerId(payment);
-      return id ? ids.has(id) : false;
-    })
+  const payments = dedupePaymentsForDisplay(
+    (await offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []))
+      .filter((payment) => {
+        const id = getPaymentCustomerId(payment);
+        return id ? ids.has(id) : false;
+      }),
+  )
     .sort((a, b) => String(b.paidAt ?? b.paid_at ?? b.createdAt ?? b.created_at ?? "").localeCompare(String(a.paidAt ?? a.paid_at ?? a.createdAt ?? a.created_at ?? "")));
   const audit = (await offlineDB.getAll<Record<string, unknown>>("local_audit_logs").catch(() => []))
     .filter((row) => String(row.entity_id ?? "") === customer.id || String(row.customerId ?? row.customer_id ?? "") === customer.id)

@@ -216,6 +216,41 @@ function ledgerEchoSignature(entry: Partial<CustomerLedgerEntry>): string | null
   return [type, customerId, amount.toFixed(2), ledgerEchoTimeBucket(entry)].join("|");
 }
 
+function openingBalanceSignature(entry: Partial<CustomerLedgerEntry>): string | null {
+  const customerId = getLedgerCustomerId(entry);
+  if (!customerId) return null;
+  const amount = Math.abs(readNumber(entry.amount, 0));
+  if (amount <= 0) return null;
+  return [customerId, amount.toFixed(2), ledgerEchoTimeBucket(entry)].join("|");
+}
+
+function isOpeningBalanceLedger(entry: Partial<CustomerLedgerEntry>): boolean {
+  const record = entry as Record<string, unknown>;
+  const note = String(entry.note ?? "").toLowerCase();
+  const source = String(entry.source_type ?? record.sourceType ?? record.source_id ?? record.sourceId ?? "").toLowerCase();
+  return (
+    (note.includes("opening") && (note.includes("udhar") || note.includes("balance"))) ||
+    source.includes("opening_balance") ||
+    source.includes("opening-udhar") ||
+    source.includes("opening_udhar")
+  );
+}
+
+function removeOpeningBalanceBillDuplicates<T extends CustomerLedgerEntry>(entries: T[]): T[] {
+  const billCreditSignatures = new Set<string>();
+  for (const entry of entries) {
+    if (isOpeningBalanceLedger(entry)) continue;
+    if (normaliseLedgerType(entry.type, entry.source_type) !== "BILL") continue;
+    const signature = openingBalanceSignature(entry);
+    if (signature) billCreditSignatures.add(signature);
+  }
+  return entries.filter((entry) => {
+    if (!isOpeningBalanceLedger(entry)) return true;
+    const signature = openingBalanceSignature(entry);
+    return !signature || !billCreditSignatures.has(signature);
+  });
+}
+
 function shouldCollapseLedgerEcho(previous: Partial<CustomerLedgerEntry>, current: Partial<CustomerLedgerEntry>): boolean {
   const previousType = normaliseLedgerType(previous.type, previous.source_type);
   const currentType = normaliseLedgerType(current.type, current.source_type);
@@ -246,7 +281,7 @@ export function dedupeLedgerEntries<T extends CustomerLedgerEntry>(entries: T[])
     if (echoSignature) pickedByEchoSignature.set(echoSignature, entry);
   }
 
-  return Array.from(pickedByBusinessKey.values());
+  return removeOpeningBalanceBillDuplicates(Array.from(pickedByBusinessKey.values()));
 }
 
 export function sortLedgerEntries<T extends Partial<CustomerLedgerEntry>>(entries: T[]): T[] {

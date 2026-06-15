@@ -459,14 +459,41 @@ describe("bill sync behavior", () => {
   it("offline bill creates a stable local_id and CREATE_BILL operation has idempotency_key", async () => {
     const bill = await createBillLocalFirst(billInput());
     const storedBill = scopedRows("bills")[0];
+    const storedPayment = scopedRows("payments")[0];
     const createBillOutbox = scopedRows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL");
+    const outboxPayload = createBillOutbox?.payload as Record<string, unknown> | undefined;
+    const localPayments = outboxPayload?.local_payments as Array<Record<string, unknown>> | undefined;
 
     expect(storedBill).toEqual(expect.objectContaining({ id: bill.id, local_id: bill.id, sync_status: "pending_sync" }));
     expect((bill as Record<string, unknown>).local_id).toBe(bill.id);
+    expect(storedPayment).toEqual(expect.objectContaining({
+      localPaymentId: storedPayment.id,
+      local_payment_id: storedPayment.id,
+      clientPaymentId: storedPayment.id,
+      client_payment_id: storedPayment.id,
+      idempotency_key: `bill-payment:${bill.id}:${storedPayment.id}`,
+      bill_id: bill.id,
+      local_bill_id: bill.id,
+      client_bill_id: bill.id,
+    }));
     expect(createBillOutbox).toBeDefined();
     expect(createBillOutbox).toEqual(expect.objectContaining({ entity_id: bill.id, operation_type: "CREATE_BILL" }));
     expect(createBillOutbox?.idempotency_key).toBe(`create-bill:${dbState.scope.tenant_id}:${dbState.scope.store_id}:${dbState.scope.device_id}:${bill.id}`);
     expect((createBillOutbox?.payload as Record<string, unknown>).localBillId).toBe(bill.id);
+    expect(localPayments).toEqual([
+      expect.objectContaining({
+        local_payment_id: storedPayment.id,
+        localPaymentId: storedPayment.id,
+        client_payment_id: storedPayment.id,
+        clientPaymentId: storedPayment.id,
+        idempotency_key: `bill-payment:${bill.id}:${storedPayment.id}`,
+        bill_id: bill.id,
+        local_bill_id: bill.id,
+        customer_id: "server_customer_1",
+        mode: BillPaymentMode.cash,
+        amount: 100,
+      }),
+    ]);
   });
 
 

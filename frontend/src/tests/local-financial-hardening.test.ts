@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { financialEchoSignature } from "@/features/sync/local-data-hardening";
+import { financialEchoSignature, paymentDuplicateSignature } from "@/features/sync/local-data-hardening";
 
 describe("local financial hardening", () => {
   it("matches local and server payment echoes even when bill IDs differ", () => {
@@ -48,5 +48,17 @@ describe("local financial hardening", () => {
     };
 
     expect(financialEchoSignature("customer_ledger", local)).toBe(financialEchoSignature("customer_ledger", server));
+  });
+
+  it("groups exact duplicate payment rows for repair even when both are already synced", () => {
+    const billId = "cmqexobma001f4zu4wk7xlvo8";
+    const cashA = { id: "cash_1", bill_id: billId, mode: "cash", amount: 350, paid_at: "2026-06-15T08:10:39.000Z", sync_status: "synced" };
+    const cashB = { id: "cash_2", bill_id: billId, mode: "cash", amount: 350, paid_at: "2026-06-15T08:10:40.000Z", sync_status: "synced" };
+    const upiA = { id: "upi_1", bill_id: billId, mode: "upi", amount: 190, paid_at: "2026-06-15T08:10:39.000Z", sync_status: "synced" };
+    const upiB = { id: "upi_2", bill_id: billId, mode: "upi", amount: 190, paid_at: "2026-06-15T08:10:40.000Z", sync_status: "synced" };
+
+    expect(paymentDuplicateSignature(cashA)).toBe(paymentDuplicateSignature(cashB));
+    expect(paymentDuplicateSignature(upiA)).toBe(paymentDuplicateSignature(upiB));
+    expect(paymentDuplicateSignature(cashA)).not.toBe(paymentDuplicateSignature(upiA));
   });
 });

@@ -11,6 +11,7 @@ export interface SyncQueueCounts {
 }
 
 type MutableRow = Record<string, unknown>;
+const STALE_SYNCING_TIMEOUT_MS = 2 * 60 * 1000;
 
 function isRecord(value: unknown): value is MutableRow {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -55,6 +56,45 @@ function isPendingOutbox(event: PendingSyncEvent): boolean {
     event.sync_status === "pending_sync" ||
     event.sync_status === "syncing"
   );
+}
+
+function isSyncingOutbox(event: PendingSyncEvent): boolean {
+  return event.status === "SYNCING" || event.sync_status === "syncing";
+}
+
+function eventAttemptTime(event: PendingSyncEvent): number {
+  const raw = event.last_attempt_at ?? event.client_created_at;
+  if (typeof raw !== "string") return 0;
+  const parsed = new Date(raw).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function repairStaleSyncingOutboxEvents(): Promise<number> {
+  const nowMs = Date.now();
+  const stale = filterRowsForCurrentScope(
+    await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
+  ).filter((event) => {
+    if (!isSyncingOutbox(event)) return false;
+    const attemptedAt = eventAttemptTime(event);
+    return attemptedAt === 0 || nowMs - attemptedAt > STALE_SYNCING_TIMEOUT_MS;
+  });
+  if (stale.length === 0) return 0;
+
+  let repaired = 0;
+  await dexieDB.transaction("rw", dexieDB.sync_outbox, async () => {
+    for (const event of stale) {
+      await dexieDB.sync_outbox.put({
+        ...event,
+        status: "PENDING",
+        sync_status: "pending_sync",
+        error_message: null,
+        last_error: null,
+        next_retry_at: null,
+      });
+      repaired += 1;
+    }
+  });
+  return repaired;
 }
 
 export function eventTargetsBill(event: PendingSyncEvent): boolean {
@@ -419,12 +459,13 @@ async function repairResolvedStoredConflicts(): Promise<number> {
 }
 
 export async function repairResolvedSyncStatusNoise(): Promise<number> {
+  const staleSyncingRepaired = await repairStaleSyncingOutboxEvents().catch(() => 0);
   const retryableValidationRepaired = await repairRetryableBillValidationConflicts().catch(() => 0);
   const financialRepaired = await hardenLocalFinancialData().then((result) => result.total).catch(() => 0);
   const billRepaired = await repairStaleSyncedBillOutboxFailures().catch(() => 0);
   const duplicateKeyRepaired = await repairResolvedDuplicateKeyOutboxFailures().catch(() => 0);
   const conflictsRepaired = await repairResolvedStoredConflicts().catch(() => 0);
-  const repaired = retryableValidationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired + conflictsRepaired;
+  const repaired = staleSyncingRepaired + retryableValidationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired + conflictsRepaired;
   if (repaired > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
   }

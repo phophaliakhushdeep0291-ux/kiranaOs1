@@ -1,6 +1,12 @@
 import { dexieDB, filterRowsForCurrentScope, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
 import { isLikelySyncedCopyOfPendingBill } from "@/features/sync/bill-reconciliation";
+import {
+  calculateLedgerBalance,
+  dedupeLedgerEntries,
+  normaliseLedgerType,
+  type CustomerLedgerEntry,
+} from "@/features/ledger/accounting";
 
 export interface LocalDataHardeningResult {
   billsMerged: number;
@@ -127,6 +133,29 @@ function paymentEchoSignature(row: MutableRow): string | undefined {
   if (!amount) return undefined;
   const customer = normalizedIdText(readStringFrom(row, ["customer_id", "customerId"]) ?? "walk-in");
   return `payment|${customer}|${mode}|${amount}|${timeBucket(row)}`;
+}
+
+export function paymentDuplicateSignature(row: MutableRow): string | undefined {
+  const mode = normalizedIdText(readStringFrom(row, ["mode", "paymentMode", "payment_mode"]));
+  if (mode !== "cash" && mode !== "upi" && mode !== "card") return undefined;
+  const amount = amountKey(readNumberFrom(row, ["amount", "paidAmount", "paid_amount"]));
+  if (!amount) return undefined;
+  const billId = readStringFrom(row, [
+    "bill_id",
+    "billId",
+    "localBillId",
+    "local_bill_id",
+    "serverBillId",
+    "server_bill_id",
+  ]);
+  const customer = readStringFrom(row, ["customer_id", "customerId"]);
+  const scope = billId ? `bill:${billId}` : `customer:${customer ?? "walk-in"}`;
+  const rawTime = readStringFrom(row, ["paid_at", "paidAt", "created_at", "createdAt", "updated_at", "updatedAt"]);
+  if (!rawTime) return undefined;
+  const time = new Date(rawTime).getTime();
+  if (!Number.isFinite(time)) return undefined;
+  const fiveMinuteBucket = Math.floor(time / (5 * 60 * 1000));
+  return `payment-duplicate|${scope}|${mode}|${amount}|${fiveMinuteBucket}`;
 }
 
 function ledgerKind(row: MutableRow): "bill" | "payment" | "correction" | undefined {
@@ -321,6 +350,150 @@ async function repairDuplicateFinancialEchoTable(tableName: FinancialTableName):
   return merged;
 }
 
+async function repairExactDuplicatePaymentRows(): Promise<number> {
+  await dexieDB.open();
+  const rows = filterRowsForCurrentScope(
+    await dexieDB.payments.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+  ) as MutableRow[];
+  const groups = new Map<string, MutableRow[]>();
+
+  for (const row of rows) {
+    if (isDeleted(row)) continue;
+    const signature = paymentDuplicateSignature(row);
+    if (!signature) continue;
+    const group = groups.get(signature) ?? [];
+    group.push(row);
+    groups.set(signature, group);
+  }
+
+  let merged = 0;
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const [winner, ...losers] = [...group].sort((a, b) => rowPriority(b) - rowPriority(a));
+    const winnerId = readStringFrom(winner, ["id"]);
+    for (const loser of losers) {
+      const loserId = readStringFrom(loser, ["id"]);
+      if (!loserId || loserId === winnerId) continue;
+      await dexieDB.payments.put({
+        ...tombstoneEchoRow(loser, winner),
+        hardening_reason: "exact duplicate payment row merged",
+      } as never);
+      merged += 1;
+    }
+  }
+  return merged;
+}
+
+function getLedgerCustomerId(row: MutableRow): string | undefined {
+  return readStringFrom(row, ["customer_id", "customerId", "serverCustomerId", "server_customer_id", "localCustomerId", "local_customer_id"]);
+}
+
+function isOpeningBalanceLedger(row: MutableRow): boolean {
+  const note = normalizedIdText(row.note);
+  const source = normalizedIdText(readStringFrom(row, ["source_type", "sourceType", "source_id", "sourceId"]));
+  return (
+    (note.includes("opening") && (note.includes("udhar") || note.includes("balance"))) ||
+    source.includes("opening_balance") ||
+    source.includes("opening-udhar") ||
+    source.includes("opening_udhar")
+  );
+}
+
+function openingLedgerSignature(row: MutableRow): string | undefined {
+  const customerId = getLedgerCustomerId(row);
+  const amount = amountKey(readNumberFrom(row, ["amount", "creditAmount", "credit_amount", "debitAmount", "debit_amount"]));
+  if (!customerId || !amount) return undefined;
+  return `${customerId}|${amount}|${timeBucket(row)}`;
+}
+
+function isBillDebtLedger(row: MutableRow): boolean {
+  return normaliseLedgerType(readStringFrom(row, ["type", "entryType", "entry_type"]), readStringFrom(row, ["source_type", "sourceType"])) === "BILL";
+}
+
+async function refreshCustomerBalancesFromLedger(customerIds: Set<string>): Promise<number> {
+  if (customerIds.size === 0) return 0;
+  const ledgerRows = filterRowsForCurrentScope(
+    await dexieDB.customer_ledger.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+  ) as unknown as CustomerLedgerEntry[];
+  const customers = filterRowsForCurrentScope(
+    await dexieDB.customers.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+  ) as MutableRow[];
+  const now = nowIso();
+  let updated = 0;
+
+  for (const customer of customers) {
+    const ids = [
+      readStringFrom(customer, ["id"]),
+      readStringFrom(customer, ["local_id", "localId"]),
+      readStringFrom(customer, ["server_id", "serverId"]),
+    ].filter((id): id is string => Boolean(id));
+    if (!ids.some((id) => customerIds.has(id))) continue;
+
+    const customerLedger = dedupeLedgerEntries(
+      ledgerRows.filter((row) => {
+        const customerId = getLedgerCustomerId(row as unknown as MutableRow);
+        return Boolean(customerId && ids.includes(customerId));
+      }),
+    );
+    const balance = Math.max(0, calculateLedgerBalance(customerLedger));
+    await dexieDB.customers.put({
+      ...customer,
+      type: balance > 0 ? "udhar" : typeof customer.type === "string" ? customer.type : "regular",
+      udharAmount: balance,
+      totalUdhar: balance,
+      updatedAt: now,
+      updated_at: now,
+    } as never);
+    updated += 1;
+  }
+
+  return updated;
+}
+
+async function repairDuplicateOpeningBalanceLedgerRows(): Promise<number> {
+  await dexieDB.open();
+  const rows = filterRowsForCurrentScope(
+    await dexieDB.customer_ledger.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+  ) as MutableRow[];
+  const activeRows = rows.filter((row) => !isDeleted(row));
+  const billDebtSignatures = new Set(
+    activeRows
+      .filter((row) => !isOpeningBalanceLedger(row) && isBillDebtLedger(row))
+      .map(openingLedgerSignature)
+      .filter((signature): signature is string => Boolean(signature)),
+  );
+  const now = nowIso();
+  const touchedCustomerIds = new Set<string>();
+  let merged = 0;
+
+  for (const row of activeRows) {
+    if (!isOpeningBalanceLedger(row)) continue;
+    const signature = openingLedgerSignature(row);
+    if (!signature || !billDebtSignatures.has(signature)) continue;
+    const id = readStringFrom(row, ["id"]);
+    if (!id) continue;
+    const customerId = getLedgerCustomerId(row);
+    if (customerId) touchedCustomerIds.add(customerId);
+    await dexieDB.customer_ledger.put({
+      ...row,
+      merged_into_id: row.merged_into_id ?? "duplicate_bill_credit",
+      mergedIntoId: row.mergedIntoId ?? "duplicate_bill_credit",
+      deleted_at: typeof row.deleted_at === "string" ? row.deleted_at : now,
+      deletedAt: typeof row.deletedAt === "string" ? row.deletedAt : now,
+      sync_status: "synced",
+      isSynced: true,
+      is_synced: true,
+      updated_at: now,
+      updatedAt: now,
+      hardening_reason: "duplicate opening udhar balance merged into bill credit",
+    } as never);
+    merged += 1;
+  }
+
+  if (merged > 0) await refreshCustomerBalancesFromLedger(touchedCustomerIds).catch(() => 0);
+  return merged;
+}
+
 function outboxStatusSynced(row: PendingSyncEvent): boolean {
   return row.status === "SYNCED" || row.sync_status === "synced";
 }
@@ -407,8 +580,10 @@ export async function hardenLocalFinancialData(): Promise<LocalDataHardeningResu
   if (hardeningInFlight) return hardeningInFlight;
   hardeningInFlight = (async () => {
     const billsMerged = await repairDuplicateBillEchoRows().catch(() => 0);
-    const paymentsMerged = await repairDuplicateFinancialEchoTable("payments").catch(() => 0);
-    const ledgerMerged = await repairDuplicateFinancialEchoTable("customer_ledger").catch(() => 0);
+    const paymentsMerged = (await repairDuplicateFinancialEchoTable("payments").catch(() => 0)) +
+      (await repairExactDuplicatePaymentRows().catch(() => 0));
+    const ledgerMerged = (await repairDuplicateFinancialEchoTable("customer_ledger").catch(() => 0)) +
+      (await repairDuplicateOpeningBalanceLedgerRows().catch(() => 0));
     const outboxResolved = await repairFinancialDuplicateOutboxFailures().catch(() => 0);
     const conflictsResolved = await repairConflictsWithoutBlockingOutbox().catch(() => 0);
     const total = billsMerged + paymentsMerged + ledgerMerged + outboxResolved + conflictsResolved;

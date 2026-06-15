@@ -51,12 +51,16 @@ export default function SyncSettingsPage() {
   useEffect(() => { if (wasSyncing.current && !isSyncing) setLastSynced(new Date()); wasSyncing.current = isSyncing; }, [isSyncing]);
 
   const update = (partial: Partial<BackupConfig>) => { const next = { ...backup, ...partial }; setBackup(next); patch({ backup: next }); };
-  const allSynced = isOnline && pendingCount === 0 && failedCount === 0 && conflictCount === 0;
+  const hasPending = pendingCount > 0;
+  const hasFailed = failedCount > 0;
+  const hasConflict = conflictCount > 0;
+  const allSynced = isOnline && !hasPending && !hasFailed && !hasConflict;
   const backupStatusLabel = isOnline
-    ? (isSyncing ? "Syncing" : "Synced")
+    ? (isSyncing ? "Syncing" : hasFailed || hasConflict ? "Review sync" : hasPending ? "Pending backup" : "Synced")
     : isBrowserOnline
       ? (backendStatus.checkedAt ? "Cloud paused" : "Checking")
       : "Offline";
+  const backupStatusTone = allSynced ? "green" : hasFailed || hasConflict ? "red" : isBrowserOnline ? "amber" : "gray";
 
   function handleSync() {
     void syncNow({ manual: true });
@@ -82,7 +86,7 @@ export default function SyncSettingsPage() {
             </div>
           } />
         <div className="grid grid-cols-2 gap-3 px-5 pb-5 lg:grid-cols-5">
-          <Kpi label="Sync Status" value={backupStatusLabel} tone={allSynced ? "green" : isBrowserOnline ? "amber" : "gray"} icon={allSynced ? <CheckCircle2 size={15} /> : <Clock size={15} />} />
+          <Kpi label="Sync Status" value={backupStatusLabel} tone={backupStatusTone} icon={allSynced ? <CheckCircle2 size={15} /> : <Clock size={15} />} />
           <Kpi label="Last Synced" value={timeAgo(lastSynced)} sub={lastSynced ? "today" : "this session"} tone="blue" />
           <Kpi label="Pending Uploads" value={pendingCount} tone={pendingCount ? "amber" : "green"} icon={<Upload size={15} />} />
           <Kpi label="Failed" value={failedCount} tone={failedCount ? "red" : "green"} />

@@ -33,6 +33,7 @@ export function deepReplaceMappedIds(
 }
 
 const LOCAL_IDENTITY_PAYLOAD_KEYS = new Set([
+  "id",
   "local_id",
   "localId",
   "localBillId",
@@ -53,6 +54,9 @@ const LOCAL_IDENTITY_PAYLOAD_KEYS = new Set([
   "local_ledger_id",
   "localMovementId",
   "local_movement_id",
+  "local_items",
+  "local_payments",
+  "local_ledger_entries",
 ]);
 
 export function collectUnmappedLocalIds(

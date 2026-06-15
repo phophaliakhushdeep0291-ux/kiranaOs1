@@ -9,6 +9,7 @@ import {
 } from "@/features/ledger/accounting";
 import {
   dedupeBillsForDisplay,
+  dedupeBillItemsForDisplay,
   dedupePaymentsForDisplay,
 } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
@@ -32,6 +33,7 @@ export interface FinancialAggregationInput {
   inventoryMovements?: LocalInventoryMovement[];
   purchaseBills?: LocalPurchaseBill[];
   date?: string;
+  range?: { from: string; to: string };
   generatedAt?: string;
 }
 
@@ -102,6 +104,7 @@ export interface FinancialAggregationSnapshot {
   revenueToday: number;
   profitToday: number;
   grossMarginPct: number;
+  discountToday: number;
   cashSalesToday: number;
   upiSalesToday: number;
   udharSalesToday: number;
@@ -183,11 +186,21 @@ function getDateValue(row: RecordLike): string {
 }
 
 function isWithinDate(row: RecordLike, date: string): boolean {
+  return isWithinDateRange(row, { from: date, to: date });
+}
+
+function dateFromInput(value: string, endOfDay = false): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, (month || 1) - 1, day || 1);
+  if (endOfDay) date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function isWithinDateRange(row: RecordLike, range: { from: string; to: string }): boolean {
   const raw = getDateValue(row);
   if (!raw) return false;
-  const [year, month, day] = date.split("-").map(Number);
-  const start = new Date(year, (month || 1) - 1, day || 1).getTime();
-  const end = new Date(year, (month || 1) - 1, day || 1, 23, 59, 59, 999).getTime();
+  const start = dateFromInput(range.from).getTime();
+  const end = dateFromInput(range.to, true).getTime();
   const time = new Date(raw).getTime();
   return Number.isFinite(time) && time >= start && time <= end;
 }
@@ -198,14 +211,39 @@ function billIdentityKeys(bill: RecordLike): string[] {
     readString(bill, ["local_id", "localId"]),
     readString(bill, ["server_id", "serverId"]),
     readString(bill, ["billId", "bill_id"]),
+    readString(bill, ["serverBillId", "server_bill_id"]),
+    readString(bill, ["localBillId", "local_bill_id"]),
     readString(bill, ["clientBillId", "client_bill_id"]),
   ].filter(Boolean);
 }
 
 function getBillId(row: RecordLike, includeOwnId = false): string | null {
   const keys = includeOwnId
-    ? ["billId", "bill_id", "reference_id", "source_id", "id"]
-    : ["billId", "bill_id", "reference_id", "source_id"];
+    ? [
+        "billId",
+        "bill_id",
+        "serverBillId",
+        "server_bill_id",
+        "localBillId",
+        "local_bill_id",
+        "clientBillId",
+        "client_bill_id",
+        "reference_id",
+        "source_id",
+        "id",
+      ]
+    : [
+        "billId",
+        "bill_id",
+        "serverBillId",
+        "server_bill_id",
+        "localBillId",
+        "local_bill_id",
+        "clientBillId",
+        "client_bill_id",
+        "reference_id",
+        "source_id",
+      ];
   const id = readString(row, keys);
   return id || null;
 }
@@ -288,6 +326,10 @@ function billCredit(bill: RecordLike): number {
   const explicit = readNumber(bill.creditAmount ?? bill.credit_amount ?? bill.dueAmount ?? bill.due_amount, NaN);
   if (Number.isFinite(explicit)) return roundMoney(Math.max(0, explicit));
   return roundMoney(Math.max(0, billTotal(bill) - billPaid(bill)));
+}
+
+function billDiscount(bill: RecordLike): number {
+  return roundMoney(readNumber(bill.discount ?? bill.discountAmount ?? bill.discount_amount, 0));
 }
 
 function productPrice(product?: Product): number {
@@ -520,23 +562,23 @@ function calculateOldUdharRecovery(
   payments: LocalPayment[],
   ledger: CustomerLedgerEntry[],
   bills: LocalBill[],
-  todayBills: LocalBill[],
-  date: string,
+  rangeBills: LocalBill[],
+  range: { from: string; to: string },
 ): { cash: number; upi: number } {
-  const { saleBillIds, todaySaleBillIds } = buildSaleBillIdSets(bills, todayBills);
+  const { saleBillIds, todaySaleBillIds: rangeSaleBillIds } = buildSaleBillIdSets(bills, rangeBills);
   const paymentsByIdentity = buildPaymentByIdentity(payments);
-  const todayTenderAllowance = buildTodayTenderAllowance(todayBills, payments);
+  const rangeTenderAllowance = buildTodayTenderAllowance(rangeBills, payments);
   const linkedPaymentIds = new Set<string>();
   const total = ledger
     .filter(
       (entry) =>
         isActiveLedgerEntry(entry) &&
-        isWithinDate(entry, date) &&
+        isWithinDateRange(entry, range) &&
         normaliseLedgerType(entry.type, entry.source_type) === "PAYMENT",
     )
     .filter((entry) => {
       const billId = getBillId(entry);
-      return !billId || !saleBillIds.has(billId) || !todaySaleBillIds.has(billId);
+      return !billId || !saleBillIds.has(billId) || !rangeSaleBillIds.has(billId);
     })
     .reduce<{ cash: number; upi: number }>(
       (sum, entry) => {
@@ -550,12 +592,12 @@ function calculateOldUdharRecovery(
   const oldBillPaymentFallback = { cash: 0, upi: 0 };
   const unlinkedPaymentFallback = { cash: 0, upi: 0 };
   for (const payment of dedupePaymentsForDisplay(
-    payments.filter((row) => isActivePayment(row) && isWithinDate(row, date)),
+    payments.filter((row) => isActivePayment(row) && isWithinDateRange(row, range)),
   )) {
     if (paymentIdentityKeys(payment).some((key) => linkedPaymentIds.has(key))) continue;
     const billId = getBillId(payment);
-    const isKnownOldSaleBillPayment = Boolean(billId && saleBillIds.has(billId) && !todaySaleBillIds.has(billId));
-    if (billId && todaySaleBillIds.has(billId)) continue;
+    const isKnownOldSaleBillPayment = Boolean(billId && saleBillIds.has(billId) && !rangeSaleBillIds.has(billId));
+    if (billId && rangeSaleBillIds.has(billId)) continue;
     if (isKnownOldSaleBillPayment) {
       addRecoveryTender(oldBillPaymentFallback, paymentMode(payment), paymentAmount(payment));
       continue;
@@ -564,7 +606,7 @@ function calculateOldUdharRecovery(
     addRecoveryTender(unlinkedPaymentFallback, paymentMode(payment), paymentAmount(payment));
   }
 
-  const unlinkedOldUdharFallback = subtractTenderAllowance(unlinkedPaymentFallback, todayTenderAllowance);
+  const unlinkedOldUdharFallback = subtractTenderAllowance(unlinkedPaymentFallback, rangeTenderAllowance);
   return {
     cash: roundMoney(total.cash + oldBillPaymentFallback.cash + unlinkedOldUdharFallback.cash),
     upi: roundMoney(total.upi + oldBillPaymentFallback.upi + unlinkedOldUdharFallback.upi),
@@ -644,16 +686,31 @@ function calculateProfitByProduct(
   billItems: LocalBillItem[],
   products: Product[],
 ): ProfitByProductRow[] {
-  const billIds = new Set<string>();
-  for (const bill of todayBills) {
-    for (const id of billIdentityKeys(bill)) billIds.add(id);
-  }
   const productById = new Map(products.map((product) => [product.id, product]));
-  const rows = new Map<string, ProfitByProductRow>();
-
+  const itemsByBillId = new Map<string, LocalBillItem[]>();
   for (const item of billItems.filter((row) => !isDeleted(row))) {
     const billId = getBillId(item);
-    if (!billId || !billIds.has(billId)) continue;
+    if (!billId) continue;
+    const list = itemsByBillId.get(billId) ?? [];
+    list.push(item);
+    itemsByBillId.set(billId, list);
+  }
+  const rows = new Map<string, ProfitByProductRow>();
+
+  for (const bill of todayBills) {
+    const rawItems: LocalBillItem[] = [];
+    const seenRows = new Set<LocalBillItem>();
+    for (const billId of billIdentityKeys(bill)) {
+      for (const item of itemsByBillId.get(billId) ?? []) {
+        if (seenRows.has(item)) continue;
+        seenRows.add(item);
+        rawItems.push(item);
+      }
+    }
+    const expectedItemTotal = readNumber(bill.subtotal ?? bill.subtotalAmount ?? bill.subtotal_amount, billTotal(bill) + billDiscount(bill));
+    const uniqueItems = dedupeBillItemsForDisplay(rawItems, expectedItemTotal) as LocalBillItem[];
+
+    for (const item of uniqueItems) {
     const productId = getProductId(item) ?? `custom:${readString(item, ["name", "productName", "product_name"], "item")}`;
     const product = productById.get(productId);
     const quantity = Math.abs(readNumber(item.quantity ?? item.qty, 0));
@@ -679,9 +736,31 @@ function calculateProfitByProduct(
     existing.profit = roundMoney(existing.profit + profit);
     existing.marginPct = existing.revenue > 0 ? Math.round((existing.profit / existing.revenue) * 100) : 0;
     rows.set(productId, existing);
+    }
   }
 
-  return [...rows.values()].sort((a, b) => b.profit - a.profit || b.revenue - a.revenue);
+  return [...rows.values()].sort((a, b) => b.revenue - a.revenue || b.profit - a.profit);
+}
+
+function billStoredProfit(bill: RecordLike): number | null {
+  const raw = bill.grossProfit ?? bill.gross_profit;
+  if (raw === undefined || raw === null || raw === "") return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? roundMoney(value) : null;
+}
+
+function calculateTotalBillProfit(
+  todayBills: LocalBill[],
+  billItems: LocalBillItem[],
+  products: Product[],
+): number {
+  return roundMoney(
+    todayBills.reduce((sum, bill) => {
+      const stored = billStoredProfit(bill);
+      if (stored !== null) return sum + stored;
+      return sum + calculateProfitByProduct([bill], billItems, products).reduce((itemSum, row) => itemSum + row.profit, 0);
+    }, 0),
+  );
 }
 
 function isPurchaseMovement(row: LocalInventoryMovement): boolean {
@@ -880,6 +959,7 @@ function buildSupplierDueRows(
 
 export function aggregateFinancialRows(input: FinancialAggregationInput): FinancialAggregationSnapshot {
   const date = input.date ?? todayInputValue();
+  const range = input.range ?? { from: date, to: date };
   const bills = dedupeBillsForDisplay((input.bills ?? []).filter((row) => !isDeleted(row)));
   const billItems = (input.billItems ?? []).filter((row) => !isDeleted(row));
   const payments = dedupePaymentsForDisplay((input.payments ?? []).filter((row) => !isDeleted(row)));
@@ -890,22 +970,21 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const inventoryMovements = input.inventoryMovements ?? [];
   const purchaseBills = input.purchaseBills ?? [];
 
-  const todayBills = bills.filter((bill) => isSaleBill(bill) && isWithinDate(bill, date));
+  const todayBills = bills.filter((bill) => isSaleBill(bill) && isWithinDateRange(bill, range));
   const revenueBreakdown = buildRevenueBreakdown(todayBills, payments, customers);
   const revenueToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.amount, 0));
+  const discountToday = roundMoney(todayBills.reduce((sum, bill) => sum + billDiscount(bill), 0));
   const cashSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.cash, 0));
   const upiSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.upi, 0));
   const udharSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.udhar, 0));
   const profitByProduct = calculateProfitByProduct(todayBills, billItems, products);
-  const itemProfit = roundMoney(profitByProduct.reduce((sum, row) => sum + row.profit, 0));
-  const billProfit = roundMoney(todayBills.reduce((sum, bill) => sum + readNumber(bill.grossProfit ?? bill.gross_profit, 0), 0));
-  const profitToday = itemProfit !== 0 || profitByProduct.length > 0 ? itemProfit : billProfit;
-  const oldUdhar = calculateOldUdharRecovery(payments, ledger, bills, todayBills, date);
+  const profitToday = calculateTotalBillProfit(todayBills, billItems, products);
+  const oldUdhar = calculateOldUdharRecovery(payments, ledger, bills, todayBills, range);
   const totalCashCollectedToday = roundMoney(cashSalesToday + oldUdhar.cash);
   const totalUpiCollectedToday = roundMoney(upiSalesToday + oldUdhar.upi);
   const outstandingCustomers = calculateOutstandingCustomers(ledger, customers);
   const supplierDueRows = buildSupplierDueRows(purchaseBills, inventoryMovements, suppliers);
-  const todaySupplierRows = supplierDueRows.filter((row) => row.date && isWithinDate({ created_at: row.date }, date));
+  const todaySupplierRows = supplierDueRows.filter((row) => row.date && isWithinDateRange({ created_at: row.date }, range));
   const supplierCashPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "cash").reduce((sum, row) => sum + row.paid, 0));
   const supplierUpiPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "upi").reduce((sum, row) => sum + row.paid, 0));
   const purchaseDueToday = roundMoney(todaySupplierRows.reduce((sum, row) => sum + row.due, 0));
@@ -928,6 +1007,7 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
     revenueToday,
     profitToday: roundMoney(profitToday),
     grossMarginPct: revenueToday > 0 ? Math.round((profitToday / revenueToday) * 100) : 0,
+    discountToday,
     cashSalesToday,
     upiSalesToday,
     udharSalesToday,

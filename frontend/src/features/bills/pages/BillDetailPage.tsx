@@ -14,13 +14,29 @@ import { EditBillDialog } from "@/features/bills/components/EditBillDialog";
 import type { Bill, Customer } from "@/types/api";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { usePermission } from "@/features/staff/permissions";
+import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry } from "@/features/ledger/accounting";
+import { dedupeBillItemsForDisplay, dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 type AnyRow = Record<string, unknown>;
 type PinAction = "cancel" | "delete" | "restore";
 
 function asIdSet(bill: BillRecord) {
-  return new Set([bill.id, bill.local_id, bill.server_id, bill.billNo, bill.billNumber].filter((value): value is string => typeof value === "string" && value.length > 0));
+  return new Set([
+    bill.id,
+    bill.local_id,
+    bill.localId,
+    bill.server_id,
+    bill.serverId,
+    bill.billNo,
+    bill.billNumber,
+    bill.localBillId,
+    bill.local_bill_id,
+    bill.clientBillId,
+    bill.client_bill_id,
+    bill.serverBillId,
+    bill.server_bill_id,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0));
 }
 
 function readNumber(value: unknown, fallback = 0) {
@@ -73,21 +89,32 @@ function paymentStatus(bill: BillRecord, payments: AnyRow[]) {
 async function loadBillDetail(id: string) {
   const bills = await offlineDB.getAll<BillRecord>("bills").catch(() => []);
   const cached = readInstantCache<BillRecord[]>("bills", []);
-  const allBills = [...cached, ...bills];
+  const allBills = dedupeBillsForDisplay([...cached, ...bills]) as BillRecord[];
   const bill = allBills.find((row) => row.id === id || row.local_id === id || row.server_id === id || row.billNo === id || row.billNumber === id);
   if (!bill) return null;
   const ids = asIdSet(bill);
-  const items = (await offlineDB.getAll<AnyRow>("bill_items").catch(() => []))
-    .filter((row) => ids.has(String(row.bill_id ?? row.billId ?? "")));
-  const payments = (await offlineDB.getAll<AnyRow>("payments").catch(() => []))
-    .filter((row) => ids.has(String(row.bill_id ?? row.billId ?? "")));
-  const ledger = (await offlineDB.getAll<AnyRow>("customer_ledger").catch(() => []))
-    .filter((row) => ids.has(String(row.bill_id ?? row.billId ?? row.source_id ?? "")));
+  const itemExpectedTotal = readNumber(bill.subtotal ?? bill.subtotalAmount ?? bill.subtotal_amount, billTotal(bill) + readNumber(bill.discount, 0));
+  const items = dedupeBillItemsForDisplay(
+    (await offlineDB.getAll<AnyRow>("bill_items").catch(() => []))
+      .filter((row) => ids.has(String(row.bill_id ?? row.billId ?? ""))),
+    itemExpectedTotal,
+  );
+  const payments = dedupePaymentsForDisplay((await offlineDB.getAll<AnyRow>("payments").catch(() => []))
+    .filter((row) => ids.has(String(row.bill_id ?? row.billId ?? row.localBillId ?? row.local_bill_id ?? ""))));
+  const allLedger = await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []);
+  const ledger = dedupeLedgerEntries(allLedger
+    .filter((row) => ids.has(String(row.bill_id ?? row.billId ?? row.localBillId ?? row.local_bill_id ?? row.source_id ?? row.sourceId ?? ""))));
   const audit = (await offlineDB.getAll<AnyRow>("local_audit_logs").catch(() => []))
     .filter((row) => ids.has(String(row.entity_id ?? row.bill_id ?? "")) || String(row.summary ?? "").includes(billNo(bill)));
   const customers = await offlineDB.getAll<Customer & AnyRow>("customers").catch(() => []);
   const customer = customers.find((row) => row.id === bill.customerId || row.local_id === bill.customerId || row.server_id === bill.customerId) ?? null;
-  return { bill, items, payments, ledger, audit, customer };
+  const customerIds = new Set([customer?.id, customer?.local_id, customer?.localId, customer?.server_id, customer?.serverId, bill.customerId, bill.customer_id].filter((value): value is string => typeof value === "string" && value.length > 0));
+  const customerLedger = dedupeLedgerEntries(allLedger.filter((row) => {
+    const customerId = row.customerId ?? row.customer_id;
+    return typeof customerId === "string" && customerIds.has(customerId);
+  }));
+  const customerLedgerBalance = Math.max(0, calculateLedgerBalance(customerLedger));
+  return { bill, items, payments, ledger, audit, customer, customerLedgerBalance };
 }
 
 function useBillDetail(id: string) {
@@ -119,7 +146,12 @@ export default function BillDetailPage() {
   const visibleItems = data?.items && data.items.length > 0 ? data.items : embeddedItems;
   const visiblePayments = data?.payments ?? [];
   const total = bill ? billTotal(bill) : 0;
-  const paid = Math.max(readNumber(bill?.paidAmount ?? bill?.buyerPaidAmount, 0), visiblePayments.reduce((sum, row) => String(row.mode ?? "") === "credit" ? sum : sum + readNumber(row.amount, 0), 0));
+  const paidFromRows = visiblePayments.reduce((sum, row) => String(row.mode ?? "") === "credit" ? sum : sum + readNumber(row.amount, 0), 0);
+  const explicitCredit = readNumber(bill?.creditAmount, Number.NaN);
+  const billLevelPaid = Number.isFinite(explicitCredit)
+    ? Math.max(0, total - explicitCredit)
+    : readNumber(bill?.paidAmount ?? bill?.buyerPaidAmount, 0);
+  const paid = visiblePayments.length > 0 ? paidFromRows : billLevelPaid;
   const credit = Math.max(0, readNumber(bill?.creditAmount, total - paid));
 
   function printBill() {
@@ -234,7 +266,7 @@ export default function BillDetailPage() {
           <CardContent className="space-y-2 text-sm">
             <div><span className="text-muted-foreground">Name: </span>{bill.customerName || data.customer?.name || "Walk-in"}</div>
             <div><span className="text-muted-foreground">Mobile: </span>{bill.customerMobile || data.customer?.mobile || "Not available"}</div>
-            <div><span className="text-muted-foreground">Current udhar: </span>{money(readNumber(data.customer?.udharAmount ?? data.customer?.totalUdhar, 0))}</div>
+            <div><span className="text-muted-foreground">Current udhar: </span>{money(data.customerLedgerBalance)}</div>
           </CardContent>
         </Card>
       </div>

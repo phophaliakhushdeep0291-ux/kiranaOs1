@@ -190,18 +190,34 @@ function buildPayments(billId: string, customerId: string | undefined, payments:
   const now = new Date().toISOString();
   return payments
     .filter((payment) => payment.mode !== BillPaymentMode.credit && readNumber(payment.amount, 0) > 0)
-    .map((payment) => makeLocalEntity({
-      id: createLocalId("payment"),
+    .map((payment) => {
+      const paymentId = createLocalId("payment");
+      const idempotencyKey = `bill-payment:${billId}:${paymentId}`;
+      return makeLocalEntity({
+      id: paymentId,
+      localPaymentId: paymentId,
+      local_payment_id: paymentId,
+      clientPaymentId: paymentId,
+      client_payment_id: paymentId,
+      idempotencyKey,
+      idempotency_key: idempotencyKey,
       billId,
       bill_id: billId,
+      localBillId: billId,
+      local_bill_id: billId,
+      clientBillId: billId,
+      client_bill_id: billId,
       customerId: customerId ?? null,
       customer_id: customerId ?? null,
+      localCustomerId: customerId ?? null,
+      local_customer_id: customerId ?? null,
       mode: payment.mode,
       amount: roundMoney(payment.amount),
       paidAt: now,
       paid_at: now,
       createdAt: now,
-    }, "payment", "pending_sync"));
+    }, "payment", "pending_sync");
+    });
 }
 
 function buildSaleMovements(billId: string, items: BillInputItem[]) {
@@ -501,9 +517,23 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
         name: item.name,
       })),
       local_payments: billPayments.map((payment) => ({
+        id: payment.id,
         local_payment_id: payment.id,
+        localPaymentId: payment.id,
+        client_payment_id: payment.id,
+        clientPaymentId: payment.id,
+        idempotency_key: payment.idempotency_key,
+        idempotencyKey: payment.idempotencyKey,
+        bill_id: billId,
+        billId,
+        local_bill_id: billId,
+        localBillId: billId,
+        customer_id: payment.customer_id ?? payment.customerId ?? null,
+        customerId: payment.customerId ?? payment.customer_id ?? null,
         mode: payment.mode,
         amount: payment.amount,
+        paid_at: payment.paid_at ?? payment.paidAt,
+        paidAt: payment.paidAt ?? payment.paid_at,
       })),
     },
   });

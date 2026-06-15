@@ -62,6 +62,38 @@ describe("customer ledger accounting", () => {
     expect(calculateLedgerBalance(rows)).toBe(540);
   });
 
+  it("collapses opening udhar balance when it duplicates the bill credit", () => {
+    const rows = dedupeLedgerEntries([
+      {
+        id: "server_bill_ledger",
+        customerId: "c1",
+        customer_id: "c1",
+        type: "debit",
+        source_type: "bill",
+        source_id: "server_bill_1",
+        billId: "server_bill_1",
+        bill_id: "server_bill_1",
+        amount: 200,
+        note: "Bill KOS-2026-000001",
+        entry_at: "2026-06-15T08:10:00.000Z",
+      },
+      {
+        id: "opening_balance_ledger",
+        customerId: "c1",
+        customer_id: "c1",
+        type: "debit",
+        source_type: "opening_balance",
+        amount: 200,
+        note: "Opening udhar balance",
+        entry_at: "2026-06-15T08:10:20.000Z",
+      },
+    ] as CustomerLedgerEntry[]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe("server_bill_ledger");
+    expect(calculateLedgerBalance(rows)).toBe(200);
+  });
+
   it("keeps statement append-only with running balance", () => {
     const rows = buildLedgerStatement([entry("b1", "BILL", 500, 2), entry("p1", "PAYMENT", 200, 1)]);
     expect(rows[0]?.running_balance).toBe(300);
