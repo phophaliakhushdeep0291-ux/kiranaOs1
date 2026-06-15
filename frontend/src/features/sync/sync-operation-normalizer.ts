@@ -166,15 +166,73 @@ function normaliseCreateBillPayload(payload: Record<string, unknown>): Record<st
 
 function normalisePaymentPayload(payload: Record<string, unknown>): Record<string, unknown> {
   const payment = isRecord(payload.payment) ? payload.payment : {};
+  const paymentId = readString(payload.paymentId) ?? readString(payload.payment_id) ?? readString(payment.paymentId) ?? readString(payment.payment_id);
+  const localPaymentId =
+    readString(payload.localPaymentId) ??
+    readString(payload.local_payment_id) ??
+    readString(payment.localPaymentId) ??
+    readString(payment.local_payment_id) ??
+    paymentId;
+  const clientPaymentId =
+    readString(payload.clientPaymentId) ??
+    readString(payload.client_payment_id) ??
+    readString(payment.clientPaymentId) ??
+    readString(payment.client_payment_id) ??
+    localPaymentId;
+  const ledgerEntryId =
+    readString(payload.ledgerEntryId) ??
+    readString(payload.ledger_entry_id) ??
+    readString(payment.ledgerEntryId) ??
+    readString(payment.ledger_entry_id);
+  const localLedgerEntryId =
+    readString(payload.localLedgerEntryId) ??
+    readString(payload.local_ledger_entry_id) ??
+    readString(payment.localLedgerEntryId) ??
+    readString(payment.local_ledger_entry_id) ??
+    ledgerEntryId;
+  const clientLedgerId =
+    readString(payload.clientLedgerId) ??
+    readString(payload.client_ledger_id) ??
+    readString(payment.clientLedgerId) ??
+    readString(payment.client_ledger_id) ??
+    localLedgerEntryId ??
+    ledgerEntryId ??
+    clientPaymentId;
+  const idempotencyKey =
+    readString(payload.idempotencyKey) ??
+    readString(payload.idempotency_key) ??
+    readString(payment.idempotencyKey) ??
+    readString(payment.idempotency_key);
+  const sourceDeviceId =
+    readString(payload.sourceDeviceId) ??
+    readString(payload.source_device_id) ??
+    readString(payment.sourceDeviceId) ??
+    readString(payment.source_device_id);
   return {
     ...payload,
     customerId: payload.customerId ?? payload.customer_id,
     localCustomerId: payload.localCustomerId ?? payload.local_customer_id,
+    ...(paymentId ? { paymentId, payment_id: paymentId } : {}),
+    ...(localPaymentId ? { localPaymentId, local_payment_id: localPaymentId } : {}),
+    ...(clientPaymentId ? { clientPaymentId, client_payment_id: clientPaymentId } : {}),
+    ...(ledgerEntryId ? { ledgerEntryId, ledger_entry_id: ledgerEntryId } : {}),
+    ...(localLedgerEntryId ? { localLedgerEntryId, local_ledger_entry_id: localLedgerEntryId } : {}),
+    ...(clientLedgerId ? { clientLedgerId, client_ledger_id: clientLedgerId } : {}),
+    ...(idempotencyKey ? { idempotencyKey, idempotency_key: idempotencyKey } : {}),
+    ...(sourceDeviceId ? { sourceDeviceId, source_device_id: sourceDeviceId } : {}),
     amount: payload.amount ?? payment.amount,
     mode: payload.mode ?? payment.mode,
     note: payload.note ?? payment.note,
     payment: {
       ...payment,
+      ...(paymentId ? { paymentId, payment_id: paymentId } : {}),
+      ...(localPaymentId ? { localPaymentId, local_payment_id: localPaymentId } : {}),
+      ...(clientPaymentId ? { clientPaymentId, client_payment_id: clientPaymentId } : {}),
+      ...(ledgerEntryId ? { ledgerEntryId, ledger_entry_id: ledgerEntryId } : {}),
+      ...(localLedgerEntryId ? { localLedgerEntryId, local_ledger_entry_id: localLedgerEntryId } : {}),
+      ...(clientLedgerId ? { clientLedgerId, client_ledger_id: clientLedgerId } : {}),
+      ...(idempotencyKey ? { idempotencyKey, idempotency_key: idempotencyKey } : {}),
+      ...(sourceDeviceId ? { sourceDeviceId, source_device_id: sourceDeviceId } : {}),
       amount: payload.amount ?? payment.amount,
       mode: payload.mode ?? payment.mode,
       note: payload.note ?? payment.note,

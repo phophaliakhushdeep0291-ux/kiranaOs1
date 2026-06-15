@@ -95,8 +95,14 @@ assert.match(
 );
 assert.match(customersService, /UDHAR_PAYMENT_EXCEEDS_OUTSTANDING/, "manual udhar payment overpay must have explicit error code");
 assert.match(customersService, /idempotentReplay: true/, "manual udhar payment retry must replay existing ledger entry safely");
+assert.match(customersService, /\$\{prefix\}:\$\{clientLedgerId\}/, "manual udhar payment must derive idempotency from client ledger id even without device id");
 assert.match(customersService, /NOT: \{ id \}/, "customer update must reject duplicate active mobile except self");
 assert.match(customersService, /data: \{ mobile: null \}/, "soft-deleted customer mobile should be cleared for reuse compatibility");
+
+const syncService = read("src/modules/sync/sync.service.js");
+assert.match(syncService, /function getUdharPaymentLocalReference/, "udhar payment sync must echo the local ledger identity for frontend reconciliation");
+assert.match(syncService, /udhar-payment:\$\{clientLedgerId\}/, "udhar payment sync must derive a stable idempotency key from the client ledger id");
+assert.match(syncService, /payload\.clientPaymentId/, "udhar payment sync must recognize legacy payment ids as identity fallbacks");
 
 const productsService = read("src/modules/products/products.service.js");
 assert.match(productsService, /assertNoActiveProductNameConflict\(shopId, data\.name\)/, "product create must check duplicate names");

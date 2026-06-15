@@ -46,16 +46,37 @@ export function getLocalUdharSummary() {
   const customers = readInstantCache<Customer[]>(CUSTOMER_CACHE_KEY, []).map(
     normaliseLocalCustomer,
   );
+  const ledgerEntries = dedupeLedgerEntries(
+    readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []),
+  );
+  const ledgerGroups = new Map<string, CustomerLedgerEntry[]>();
+  for (const entry of ledgerEntries) {
+    const id = typeof entry.customerId === "string" && entry.customerId.length > 0
+      ? entry.customerId
+      : typeof entry.customer_id === "string" && entry.customer_id.length > 0
+        ? entry.customer_id
+        : null;
+    if (!id) continue;
+    const group = ledgerGroups.get(id) ?? [];
+    group.push(entry);
+    ledgerGroups.set(id, group);
+  }
+  const ledgerBalances = new Map(
+    [...ledgerGroups.entries()].map(([customerId, entries]) => [
+      customerId,
+      roundMoney(calculateLedgerBalance(entries)),
+    ]),
+  );
   const rows = customers
     .map((customer) => ({
       customerId: customer.id,
       customerName: customer.name,
       mobile: customer.mobile ?? undefined,
       amount: roundMoney(
-        readNumber(customer.udharAmount ?? customer.totalUdhar, 0),
+        ledgerBalances.get(customer.id) ?? readNumber(customer.udharAmount ?? customer.totalUdhar, 0),
       ),
       outstanding: roundMoney(
-        readNumber(customer.udharAmount ?? customer.totalUdhar, 0),
+        ledgerBalances.get(customer.id) ?? readNumber(customer.udharAmount ?? customer.totalUdhar, 0),
       ),
       dueDate: (customer as unknown as Record<string, unknown>).dueDate as
         | string
@@ -118,6 +139,8 @@ const PAYMENT_TRANSACTION_TABLES = [
 function buildPaymentLedgerEntry(input: {
   customerId: string;
   paymentId: string;
+  ledgerEntryId: string;
+  idempotencyKey: string;
   amount: number;
   mode: "cash" | "upi";
   nextBalance: number;
@@ -126,7 +149,7 @@ function buildPaymentLedgerEntry(input: {
 }) {
   return makeLocalEntity(
     {
-      id: createLocalId("ledger"),
+      id: input.ledgerEntryId,
       customerId: input.customerId,
       customer_id: input.customerId,
       type: "PAYMENT",
@@ -134,6 +157,18 @@ function buildPaymentLedgerEntry(input: {
       source_id: input.paymentId,
       paymentId: input.paymentId,
       payment_id: input.paymentId,
+      localPaymentId: input.paymentId,
+      local_payment_id: input.paymentId,
+      clientPaymentId: input.paymentId,
+      client_payment_id: input.paymentId,
+      ledgerEntryId: input.ledgerEntryId,
+      ledger_entry_id: input.ledgerEntryId,
+      localLedgerEntryId: input.ledgerEntryId,
+      local_ledger_entry_id: input.ledgerEntryId,
+      clientLedgerId: input.ledgerEntryId,
+      client_ledger_id: input.ledgerEntryId,
+      idempotencyKey: input.idempotencyKey,
+      idempotency_key: input.idempotencyKey,
       mode: input.mode,
       paymentMode: input.mode,
       payment_mode: input.mode,
@@ -160,6 +195,8 @@ export async function recordPaymentLocalFirst(
   const now = new Date().toISOString();
   const amount = roundMoney(validated.amount);
   const paymentId = createLocalId("payment");
+  const ledgerEntryId = createLocalId("ledger");
+  const idempotencyKey = `record-payment:${customerId}:${paymentId}`;
 
   const existing = await findCustomer(customerId);
   if (!existing) throw new Error("Customer not found in local records");
@@ -188,6 +225,18 @@ export async function recordPaymentLocalFirst(
       id: paymentId,
       customerId,
       customer_id: customerId,
+      localPaymentId: paymentId,
+      local_payment_id: paymentId,
+      clientPaymentId: paymentId,
+      client_payment_id: paymentId,
+      ledgerEntryId,
+      ledger_entry_id: ledgerEntryId,
+      localLedgerEntryId: ledgerEntryId,
+      local_ledger_entry_id: ledgerEntryId,
+      clientLedgerId: ledgerEntryId,
+      client_ledger_id: ledgerEntryId,
+      idempotencyKey,
+      idempotency_key: idempotencyKey,
       mode: validated.mode,
       amount,
       note,
@@ -204,6 +253,8 @@ export async function recordPaymentLocalFirst(
   const ledgerEntry = buildPaymentLedgerEntry({
     customerId,
     paymentId,
+    ledgerEntryId,
+    idempotencyKey,
     amount,
     mode: validated.mode,
     nextBalance,
@@ -243,11 +294,41 @@ export async function recordPaymentLocalFirst(
     entity_type: "payment",
     entity_id: paymentId,
     operation_type: "RECORD_PAYMENT",
-    idempotency_key: `record-payment:${customerId}:${paymentId}`,
+    idempotency_key: idempotencyKey,
     payload: {
       paymentId,
+      localPaymentId: paymentId,
+      local_payment_id: paymentId,
+      clientPaymentId: paymentId,
+      client_payment_id: paymentId,
+      ledgerEntryId,
+      ledger_entry_id: ledgerEntryId,
+      localLedgerEntryId: ledgerEntryId,
+      local_ledger_entry_id: ledgerEntryId,
+      clientLedgerId: ledgerEntryId,
+      client_ledger_id: ledgerEntryId,
+      idempotencyKey,
+      idempotency_key: idempotencyKey,
       customerId,
-      payment: { ...data, amount, mode: validated.mode, paidAt },
+      payment: {
+        ...data,
+        amount,
+        mode: validated.mode,
+        paidAt,
+        paymentId,
+        localPaymentId: paymentId,
+        local_payment_id: paymentId,
+        clientPaymentId: paymentId,
+        client_payment_id: paymentId,
+        ledgerEntryId,
+        ledger_entry_id: ledgerEntryId,
+        localLedgerEntryId: ledgerEntryId,
+        local_ledger_entry_id: ledgerEntryId,
+        clientLedgerId: ledgerEntryId,
+        client_ledger_id: ledgerEntryId,
+        idempotencyKey,
+        idempotency_key: idempotencyKey,
+      },
     },
   });
 

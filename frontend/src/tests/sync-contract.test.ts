@@ -330,7 +330,7 @@ import {
   pushPendingOutboxOperations,
   retryFailedSyncOperations,
 } from "@/features/sync/engine";
-import { replaceLocalEntityId } from "@/features/sync/sync-id-mapping";
+import { applyIdMappingsFromResponse, replaceLocalEntityId } from "@/features/sync/sync-id-mapping";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 
@@ -674,6 +674,23 @@ describe("sync backend contract", () => {
         entity_type: "ledger_entry",
         local_id: "ledger_local_adjust_1",
         server_id: "server_ledger_adjust_1",
+      }),
+    );
+  });
+
+  it("ledgerEntries id mapping aliases do not create blank ledger rows", async () => {
+    await applyIdMappingsFromResponse({
+      ledgerEntries: {
+        payment_local_1: "server_ledger_1",
+      },
+    });
+
+    expect(scopedRows("customer_ledger")).toHaveLength(0);
+    expect(scopedRows("id_mappings")).toContainEqual(
+      expect.objectContaining({
+        entity_type: "ledger_entry",
+        local_id: "payment_local_1",
+        server_id: "server_ledger_1",
       }),
     );
   });

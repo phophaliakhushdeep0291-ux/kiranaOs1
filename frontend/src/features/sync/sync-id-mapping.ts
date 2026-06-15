@@ -120,6 +120,14 @@ const ID_MAPPING_ENTITY_ALIASES: Record<string, string> = {
   purchase_history: "purchase_history",
   purchaseBills: "purchase_bill",
   purchase_bills: "purchase_bill",
+  ledgerEntries: "ledger_entry",
+  ledger_entries: "ledger_entry",
+  ledgerEntry: "ledger_entry",
+  ledger_entry: "ledger_entry",
+  customerLedger: "ledger_entry",
+  customer_ledger: "ledger_entry",
+  udharLedger: "ledger_entry",
+  udhar_ledger: "ledger_entry",
   stockLedger: "stock_ledger",
   stock_ledger: "stock_ledger",
   inventoryMovements: "inventory_movement",
@@ -424,6 +432,10 @@ export async function replaceLocalEntityId(
     serverCandidate && rowMatchesCurrentScope(serverCandidate)
       ? serverCandidate
       : undefined;
+  if (!localRow && !serverRow && !serverEntity) {
+    if (localId && localId !== serverId) await replaceReferences(localId, serverId);
+    return;
+  }
   const baseRow = serverRow ?? localRow ?? {};
   const merged = withSyncedBillFlagIfNeeded(
     tableName,
