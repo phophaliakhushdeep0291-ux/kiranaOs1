@@ -106,6 +106,17 @@ describe("payment recording transaction safety", () => {
     expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ id: "customer_1", udharAmount: 300, totalUdhar: 300, sync_status: "pending_sync" }));
   });
 
+  it("rejects udhar overpayment before writing local rows", async () => {
+    await expect(recordPaymentLocalFirst("customer_1", { amount: 600, mode: "cash" }))
+      .rejects.toMatchObject({ code: "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING" });
+
+    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+    expect(tableRows("payments")).toHaveLength(0);
+    expect(tableRows("customer_ledger").filter((row) => row.type === "PAYMENT")).toHaveLength(0);
+    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 500, totalUdhar: 500 }));
+    expect(tableRows("sync_outbox")).toHaveLength(0);
+  });
+
   it("creates a payment ledger entry", async () => {
     await recordPaymentLocalFirst("customer_1", { amount: 125, mode: "upi" });
 

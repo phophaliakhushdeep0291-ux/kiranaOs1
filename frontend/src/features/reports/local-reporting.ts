@@ -739,6 +739,33 @@ function calculateBillItemProfit(
   let profit = 0;
   let matchedBills = 0;
 
+  const uniqueItemsForBill = (bill: LocalBill) => {
+    const seen = new Set<string>();
+    const items: LocalBillItem[] = [];
+    for (const billId of billIdentityIds(bill)) {
+      for (const item of itemsByBillId.get(billId) ?? []) {
+        const identity = readIdentityValues(item as unknown as RecordLike, [
+          "local_id",
+          "localId",
+          "server_id",
+          "serverId",
+          "id",
+          "billItemId",
+          "bill_item_id",
+        ])[0] ?? [
+          normalizeProductId(item) ?? "",
+          readNumber(item.quantity, 0),
+          readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit, 0),
+          readNumber(item.line_total ?? item.lineTotal, 0),
+        ].join("|");
+        if (seen.has(identity)) continue;
+        seen.add(identity);
+        items.push(item);
+      }
+    }
+    return items;
+  };
+
   for (const bill of rangeBills) {
     const storedProfit = readNumber(bill.grossProfit, Number.NaN);
     if (Number.isFinite(storedProfit)) {
@@ -747,7 +774,7 @@ function calculateBillItemProfit(
       continue;
     }
 
-    const items = itemsByBillId.get(bill.id) ?? [];
+    const items = uniqueItemsForBill(bill);
     if (items.length === 0) continue;
     matchedBills += 1;
     for (const item of items) {

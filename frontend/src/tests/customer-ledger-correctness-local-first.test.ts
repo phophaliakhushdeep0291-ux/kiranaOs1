@@ -100,6 +100,7 @@ import { createBillLocalFirst } from "@/features/billing/local-actions";
 import { cancelBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { readCustomerLedgerEntries } from "@/features/ledger/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
+import { loadCustomerDetail, loadCustomersWithLedger } from "@/features/customers/customer-ledger-data";
 
 function resetTables() {
   dbState.idCounter = 0;
@@ -400,5 +401,84 @@ describe("customer ledger correctness", () => {
 
     expect(rows).toEqual([expect.objectContaining({ id: "ledger_current", tenant_id: dbState.scope.tenant_id, store_id: dbState.scope.store_id })]);
     expect(calculateLedgerBalance(rows)).toBe(100);
+  });
+
+  it("customer detail hides pending bill echoes after the synced bill arrives", async () => {
+    putInto("bills", {
+      id: "bill_local_echo_1",
+      local_id: "bill_local_echo_1",
+      clientBillId: "bill_local_echo_1",
+      client_bill_id: "bill_local_echo_1",
+      customerId: "customer_1",
+      customer_id: "customer_1",
+      customerName: "Ramesh",
+      billNo: "PENDING-LOCAL",
+      grandTotal: 280,
+      actualAmount: 280,
+      status: "pending_sync",
+      sync_status: "pending_sync",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      createdAt: "2026-06-06T10:00:00.000Z",
+      created_at: "2026-06-06T10:00:00.000Z",
+      deleted_at: null,
+    });
+    putInto("bills", {
+      id: "server_bill_echo_1",
+      server_id: "server_bill_echo_1",
+      local_id: "bill_local_echo_1",
+      clientBillId: "bill_local_echo_1",
+      client_bill_id: "bill_local_echo_1",
+      customerId: "customer_1",
+      customer_id: "customer_1",
+      customerName: "Ramesh",
+      billNo: "KOS-2026-000010",
+      grandTotal: 280,
+      actualAmount: 280,
+      status: "completed",
+      sync_status: "synced",
+      isSynced: true,
+      is_synced: true,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      createdAt: "2026-06-06T10:00:00.000Z",
+      created_at: "2026-06-06T10:00:00.000Z",
+      deleted_at: null,
+    });
+
+    const detail = await loadCustomerDetail("customer_1");
+
+    expect(detail?.bills).toHaveLength(1);
+    expect(detail?.bills[0]).toEqual(expect.objectContaining({ id: "server_bill_echo_1", billNo: "KOS-2026-000010" }));
+  });
+
+  it("ledger-only customer balances remain visible when customer cache identity is missing", async () => {
+    dbState.committed.customers = [];
+    seedLedger({
+      id: "ledger_orphan_1",
+      customerId: "server_customer_orphan",
+      customer_id: "server_customer_orphan",
+      customerName: "Khushdeep phophalia",
+      type: "BILL",
+      source_type: "bill",
+      amount: 63,
+      balance_after: 63,
+      entry_at: "2026-06-06T10:00:00.000Z",
+      created_at: "2026-06-06T10:00:00.000Z",
+    });
+
+    const customers = await loadCustomersWithLedger();
+
+    expect(customers).toHaveLength(1);
+    expect(customers[0]).toEqual(expect.objectContaining({
+      id: "server_customer_orphan",
+      name: "Khushdeep phophalia",
+      ledgerBalance: 63,
+      totalUdhar: 63,
+      udharAmount: 63,
+      ledger_only: true,
+    }));
   });
 });

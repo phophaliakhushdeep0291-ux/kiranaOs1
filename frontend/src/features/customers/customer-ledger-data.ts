@@ -2,6 +2,7 @@ import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
 import type { Bill, Customer } from "@/types/api";
 import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/ledger/accounting";
+import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
 
 export interface CustomerWithLedger extends Customer, Record<string, unknown> {
   ledgerBalance: number;
@@ -41,19 +42,46 @@ function isDeleted(row: Record<string, unknown>): boolean {
   return typeof row.deleted_at === "string" || typeof row.deletedAt === "string";
 }
 
+function readStringField(row: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+
 function getCustomerId(row: Partial<CustomerLedgerEntry>): string | null {
-  const id = row.customerId ?? row.customer_id;
-  return typeof id === "string" && id.length > 0 ? id : null;
+  return readStringField(row as Record<string, unknown>, [
+    "customerId",
+    "customer_id",
+    "serverCustomerId",
+    "server_customer_id",
+    "localCustomerId",
+    "local_customer_id",
+  ]);
 }
 
 function getBillCustomerId(row: Record<string, unknown>): string | null {
-  const id = row.customerId ?? row.customer_id;
-  return typeof id === "string" && id.length > 0 ? id : null;
+  return readStringField(row, [
+    "customerId",
+    "customer_id",
+    "serverCustomerId",
+    "server_customer_id",
+    "localCustomerId",
+    "local_customer_id",
+  ]);
 }
 
 function getPaymentCustomerId(row: Record<string, unknown>): string | null {
-  const id = row.customerId ?? row.customer_id;
-  return typeof id === "string" && id.length > 0 ? id : null;
+  return readStringField(row, [
+    "customerId",
+    "customer_id",
+    "serverCustomerId",
+    "server_customer_id",
+    "localCustomerId",
+    "local_customer_id",
+  ]);
 }
 
 function uniqueById<T extends { id: string }>(rows: T[]): T[] {
@@ -62,13 +90,111 @@ function uniqueById<T extends { id: string }>(rows: T[]): T[] {
   return Array.from(map.values());
 }
 
+function customerIds(customer: Customer & Record<string, unknown>): Set<string> {
+  return new Set(
+    [
+      customer.id,
+      customer.local_id,
+      customer.localId,
+      customer.server_id,
+      customer.serverId,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0),
+  );
+}
+
+function expandIdsWithMappings(ids: Set<string>, mappings: Array<Record<string, unknown>>): Set<string> {
+  const expanded = new Set(ids);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const mapping of mappings) {
+      const entityType = String(mapping.entity_type ?? mapping.entityType ?? "");
+      if (entityType && entityType !== "customer" && entityType !== "customers") continue;
+      const localId = readStringField(mapping, ["local_id", "localId"]);
+      const serverId = readStringField(mapping, ["server_id", "serverId"]);
+      if (!localId || !serverId) continue;
+      if (expanded.has(localId) && !expanded.has(serverId)) {
+        expanded.add(serverId);
+        changed = true;
+      }
+      if (expanded.has(serverId) && !expanded.has(localId)) {
+        expanded.add(localId);
+        changed = true;
+      }
+    }
+  }
+  return expanded;
+}
+
+function ledgerCustomerName(entry?: CustomerLedgerEntry): string | null {
+  if (!entry) return null;
+  return readStringField(entry as Record<string, unknown>, [
+    "customerName",
+    "customer_name",
+    "name",
+  ]);
+}
+
+function ledgerCustomerMobile(entry?: CustomerLedgerEntry): string | null {
+  if (!entry) return null;
+  return readStringField(entry as Record<string, unknown>, [
+    "customerMobile",
+    "customer_mobile",
+    "mobile",
+    "phone",
+  ]);
+}
+
+function syntheticCustomerFromLedger(customerId: string, entries: CustomerLedgerEntry[]): Customer & Record<string, unknown> {
+  const latest = [...entries].sort((a, b) => String(b.createdAt ?? b.created_at ?? b.entry_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? a.entry_at ?? "")))[0];
+  const at = typeof latest?.createdAt === "string"
+    ? latest.createdAt
+    : typeof latest?.created_at === "string"
+      ? latest.created_at
+      : typeof latest?.entry_at === "string"
+        ? latest.entry_at
+        : new Date().toISOString();
+  return {
+    id: customerId,
+    name: ledgerCustomerName(latest) ?? "Ledger customer",
+    mobile: ledgerCustomerMobile(latest),
+    type: "udhar",
+    udharAmount: 0,
+    totalUdhar: 0,
+    createdAt: at,
+    updatedAt: at,
+    created_at: at,
+    updated_at: at,
+    sync_status: "synced",
+    ledger_only: true,
+  };
+}
+
 export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
   const cached = readInstantCache<Customer[]>("customers", []);
   const dbCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
   const customers = uniqueById([...cached, ...dbCustomers].filter((customer) => !isDeleted(customer as unknown as Record<string, unknown>)) as Array<Customer & Record<string, unknown>>);
   const ledger = dedupeLedgerEntries(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []));
-  return customers.map((customer) => {
-    const entries = ledger.filter((entry) => getCustomerId(entry) === customer.id || getCustomerId(entry) === customer.local_id || getCustomerId(entry) === customer.server_id);
+  const idMappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
+  const knownCustomerIds = new Set(customers.flatMap((customer) => [...expandIdsWithMappings(customerIds(customer), idMappings)]));
+  const ledgerOnlyGroups = new Map<string, CustomerLedgerEntry[]>();
+  for (const entry of ledger) {
+    const id = getCustomerId(entry);
+    if (!id || knownCustomerIds.has(id)) continue;
+    const group = ledgerOnlyGroups.get(id) ?? [];
+    group.push(entry);
+    ledgerOnlyGroups.set(id, group);
+  }
+  const allCustomers = [
+    ...customers,
+    ...Array.from(ledgerOnlyGroups, ([id, entries]) => syntheticCustomerFromLedger(id, entries)),
+  ];
+  return allCustomers.map((customer) => {
+    const ids = expandIdsWithMappings(customerIds(customer), idMappings);
+    const entries = ledger.filter((entry) => {
+      const id = getCustomerId(entry);
+      return id ? ids.has(id) : false;
+    });
     const metrics = metricsWithCustomerBalanceFallback(customer, entries);
     return {
       ...customer,
@@ -82,16 +208,19 @@ export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
 
 export async function loadCustomerDetail(customerId: string): Promise<CustomerDetailData | null> {
   const customers = await loadCustomersWithLedger();
-  const customer = customers.find((row) => row.id === customerId || row.local_id === customerId || row.server_id === customerId);
+  const idMappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
+  const customer = customers.find((row) => expandIdsWithMappings(customerIds(row), idMappings).has(customerId));
   if (!customer) return null;
-  const ids = new Set([customer.id, customer.local_id, customer.server_id].filter((value): value is string => typeof value === "string" && value.length > 0));
+  const ids = expandIdsWithMappings(customerIds(customer), idMappings);
   const ledgerSource = dedupeLedgerEntries(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []));
   const ledgerEntries = ledgerSource
     .filter((entry) => {
       const id = getCustomerId(entry);
       return id ? ids.has(id) : false;
     });
-  const bills = (await offlineDB.getAll<Bill & Record<string, unknown>>("bills").catch(() => []))
+  const cachedBills = readInstantCache<Array<Bill & Record<string, unknown>>>("bills", []);
+  const dbBills = await offlineDB.getAll<Bill & Record<string, unknown>>("bills").catch(() => []);
+  const bills = dedupeBillsForDisplay(uniqueById([...cachedBills, ...dbBills].filter((bill) => !isDeleted(bill)) as Array<Bill & Record<string, unknown>>))
     .filter((bill) => {
       const id = getBillCustomerId(bill);
       return id ? ids.has(id) : false;

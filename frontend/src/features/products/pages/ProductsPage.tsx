@@ -138,6 +138,17 @@ export default function ProductsPage() {
     return () => window.removeEventListener("kirana:voice-product-draft", handler);
   }, [editing, form, manageProducts.allowed, manageProducts.reason, open, products.data, toast]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const query = String((event as CustomEvent<{ query?: unknown }>).detail?.query ?? "").trim();
+      if (!query) return;
+      setSearch(query);
+      setPage(1);
+    };
+    window.addEventListener("kirana:voice-product-search", handler);
+    return () => window.removeEventListener("kirana:voice-product-search", handler);
+  }, []);
+
   const createProduct = useCreateProduct({
     mutation: {
       onSuccess: () => {

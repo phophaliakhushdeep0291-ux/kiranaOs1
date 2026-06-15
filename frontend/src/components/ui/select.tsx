@@ -75,7 +75,12 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-[--radix-select-content-available-height] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[--radix-select-content-transform-origin]",
+        // Tailwind v4 does NOT auto-wrap the bare-variable arbitrary-value shorthand in
+        // var(), so the previous max-height arbitrary value compiled to an invalid
+        // "max-height:--radix-..." that the browser drops -> no cap -> long unit/category
+        // lists ran off-screen with no scroll. Use an explicit var() and keep at
+        // least 12rem available when Radix reports a tiny/zero modal height.
+        "relative z-50 max-h-[min(max(var(--radix-select-content-available-height,0px),12rem),24rem)] min-w-[8rem] overflow-y-auto overflow-x-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[var(--radix-select-content-transform-origin)]",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
         className
@@ -87,7 +92,7 @@ const SelectContent = React.forwardRef<
       <SelectPrimitive.Viewport
         className={cn(
           "p-1",
-          // NOTE: do NOT pin the viewport to `h-[var(--radix-select-trigger-height)]`.
+          // NOTE: do NOT pin the viewport height to the trigger-height variable.
           // That fixes the scroll area to a single trigger-row tall, so long option
           // lists (categories, units) get clipped and can't scroll despite the
           // Content's max-h + overflow-y-auto. Width still tracks the trigger; height

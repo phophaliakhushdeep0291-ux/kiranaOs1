@@ -9,16 +9,66 @@ import { calculateLedgerBalance, type CustomerLedgerEntry } from "@/features/led
 const CUSTOMER_CACHE_KEY = "customers";
 const LEDGER_CACHE_KEY = "customer_ledger";
 
+function customerIdentitySet(customer: (Customer & Record<string, unknown>) | undefined): Set<string> {
+  return new Set(
+    [
+      customer?.id,
+      customer?.local_id,
+      customer?.localId,
+      customer?.server_id,
+      customer?.serverId,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0),
+  );
+}
+
+function readStringField(row: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+
+function expandIdsWithMappings(ids: Set<string>, mappings: Array<Record<string, unknown>>): Set<string> {
+  const expanded = new Set(ids);
+  for (const mapping of mappings) {
+    const entityType = String(mapping.entity_type ?? mapping.entityType ?? "");
+    if (entityType && entityType !== "customer" && entityType !== "customers") continue;
+    const localId = readStringField(mapping, ["local_id", "localId"]);
+    const serverId = readStringField(mapping, ["server_id", "serverId"]);
+    if (!localId || !serverId) continue;
+    if (expanded.has(localId)) expanded.add(serverId);
+    if (expanded.has(serverId)) expanded.add(localId);
+  }
+  return expanded;
+}
+
+async function resolveCustomerIdentitySet(customerId: string): Promise<Set<string>> {
+  const customers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
+  const mappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
+  const customer = customers.find((row) => {
+    const ids = expandIdsWithMappings(customerIdentitySet(row), mappings);
+    return ids.has(customerId);
+  });
+  return new Set([customerId, ...expandIdsWithMappings(customerIdentitySet(customer), mappings)]);
+}
+
 export async function readCustomerLedgerEntries(customerId: string): Promise<CustomerLedgerEntry[]> {
+  const customerIds = await resolveCustomerIdentitySet(customerId);
   const rows = await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []);
-  return rows.filter((row) => row.customerId === customerId || row.customer_id === customerId);
+  return rows.filter((row) => {
+    const id = row.customerId ?? row.customer_id;
+    return typeof id === "string" && customerIds.has(id);
+  });
 }
 
 export async function refreshCustomerBalanceFromLedger(customerId: string): Promise<number> {
   const ledger = await readCustomerLedgerEntries(customerId);
   const balance = roundMoney(calculateLedgerBalance(ledger));
   const customers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
-  const customer = customers.find((row) => row.id === customerId || row.local_id === customerId || row.server_id === customerId);
+  const mappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
+  const customer = customers.find((row) => expandIdsWithMappings(customerIdentitySet(row), mappings).has(customerId));
   if (customer) {
     const updated = {
       ...customer,

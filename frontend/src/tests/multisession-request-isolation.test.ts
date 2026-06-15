@@ -24,6 +24,12 @@ describe("multi-session request isolation", () => {
     expect(realtimeBridge).toContain("shouldRunInteractiveNetworkWork");
   });
 
+  it("actively refetches visible queries after local writes without hammering sync status churn", () => {
+    expect(realtimeBridge).toContain("const onLocalDataChanged = () => scheduleRefresh(FAST_REFRESH_DELAY_MS, \"active\")");
+    expect(realtimeBridge).toContain("const onSyncQueueUpdated = () => scheduleRefresh()");
+    expect(realtimeBridge).toContain("void queryClient.invalidateQueries({ refetchType })");
+  });
+
   it("lets the visible tab with local backup items recover its own queue", () => {
     expect(offlineStatus).toContain("LOCAL_QUEUE_RECOVERY_THROTTLE_KEY");
     expect(offlineStatus).toContain("counts.totalBlocking === 0");

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { CornerDownLeft, Package, ReceiptText, Search, Users, X } from "lucide-react";
 import { offlineDB } from "@/lib/offline/db";
+import { readInstantCache } from "@/lib/offline/instant-cache";
 import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,24 @@ function field(row: AnyRow, keys: string[]): string {
 
 function isDeleted(row: AnyRow): boolean {
   return row.deleted_at != null || row.deletedAt != null;
+}
+
+function identity(row: AnyRow): string {
+  return field(row, ["id", "server_id", "serverId", "local_id", "localId"]);
+}
+
+function mergeLocalRows(cacheKey: string, dbRows: AnyRow[]): AnyRow[] {
+  const cachedRows = readInstantCache<AnyRow[]>(cacheKey, []);
+  const rows = new Map<string, AnyRow>();
+  for (const row of cachedRows) {
+    const key = identity(row);
+    if (key) rows.set(key, row);
+  }
+  for (const row of dbRows) {
+    const key = identity(row);
+    if (key) rows.set(key, { ...(rows.get(key) ?? {}), ...row });
+  }
+  return Array.from(rows.values());
 }
 
 function money(value: unknown): string {
@@ -63,9 +82,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         offlineDB.getAll<AnyRow>("bills").catch(() => []),
       ]);
       if (!alive) return;
-      setProducts(productRows.filter((row) => !isDeleted(row) && field(row, ["name"])));
-      setCustomers(customerRows.filter((row) => !isDeleted(row) && field(row, ["name"])));
-      setBills(dedupeBillsForDisplay(billRows.filter((row) => !isDeleted(row))));
+      setProducts(mergeLocalRows("products", productRows).filter((row) => !isDeleted(row) && field(row, ["name"])));
+      setCustomers(mergeLocalRows("customers", customerRows).filter((row) => !isDeleted(row) && field(row, ["name"])));
+      setBills(dedupeBillsForDisplay(mergeLocalRows("bills", billRows).filter((row) => !isDeleted(row))));
     })();
     return () => { alive = false; };
   }, [open]);
@@ -123,6 +142,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const go = (item: PaletteItem | undefined) => {
     if (!item) return;
     setLocation(item.route);
+    if (item.kind === "product") {
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("kirana:voice-product-search", {
+          detail: { query: item.title, target: "product", sourceCommand: "command-palette" },
+        }));
+      }, 100);
+    }
     onClose();
   };
 

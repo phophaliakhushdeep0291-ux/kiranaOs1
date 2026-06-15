@@ -200,6 +200,16 @@ export default function BillsPage() {
   }, [bills, fromDate, toDate, filter, modeFilter, search]);
 
   useEffect(() => { setPage(1); }, [search, filter, modeFilter, fromDate, toDate, perPage]);
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const query = String((event as CustomEvent<{ query?: unknown }>).detail?.query ?? "").trim();
+      if (!query) return;
+      setSearch(query);
+      setPage(1);
+    };
+    window.addEventListener("kirana:voice-bill-search", handler);
+    return () => window.removeEventListener("kirana:voice-bill-search", handler);
+  }, []);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(page, pageCount);
