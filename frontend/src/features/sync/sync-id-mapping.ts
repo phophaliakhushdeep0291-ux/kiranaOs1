@@ -152,6 +152,19 @@ export async function loadIdMap(): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map((row) => [row.local_id, row.server_id]));
 }
 
+const NON_REFERENCE_IDENTITY_KEYS = new Set([
+  "id",
+  "local_id",
+  "localId",
+  "server_id",
+  "serverId",
+  "clientEventId",
+  "op_id",
+  "opId",
+  "idempotency_key",
+  "idempotencyKey",
+]);
+
 function deepReplaceExact(value: unknown, from: string, to: string): unknown {
   if (value === from) return to;
   if (Array.isArray(value))
@@ -160,6 +173,10 @@ function deepReplaceExact(value: unknown, from: string, to: string): unknown {
   let changed = false;
   const next: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
+    if (NON_REFERENCE_IDENTITY_KEYS.has(key)) {
+      next[key] = item;
+      continue;
+    }
     const replaced = deepReplaceExact(item, from, to);
     if (replaced !== item) changed = true;
     next[key] = replaced;

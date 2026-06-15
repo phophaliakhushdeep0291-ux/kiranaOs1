@@ -29,6 +29,7 @@ const dbState = vi.hoisted(() => {
     "customer_ledger",
     "inventory_movements",
     "suppliers",
+    "purchase_bills",
     "settings",
     "sync_outbox",
     "sync_cursor",
@@ -329,6 +330,7 @@ import {
   pushPendingOutboxOperations,
   retryFailedSyncOperations,
 } from "@/features/sync/engine";
+import { replaceLocalEntityId } from "@/features/sync/sync-id-mapping";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 
@@ -564,6 +566,64 @@ describe("sync backend contract", () => {
     expect(activeServerBills).toHaveLength(1);
     expect(scopedRows("sync_outbox")[0]).toEqual(
       expect.objectContaining({ status: "SYNCED", idempotency_key: "idem-create-bill-1" }),
+    );
+  });
+
+  it("ledger id replacement keeps local tombstone and id mapping primary keys stable", async () => {
+    dbState.putInto("customer_ledger", {
+      id: "ledger_local_adjust_1",
+      customerId: "customer_1",
+      customer_id: "customer_1",
+      type: "ADJUSTMENT",
+      source_type: "manual_adjustment",
+      amount: 1,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "pending_sync",
+      deleted_at: null,
+      created_at: "2026-06-06T12:00:00.000Z",
+      updated_at: "2026-06-06T12:00:00.000Z",
+      version: 1,
+    });
+    dbState.putInto("id_mappings", {
+      local_id: "ledger_local_adjust_1",
+      server_id: "server_ledger_adjust_1",
+      entity_type: "ledger_entry",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      updated_at: "2026-06-06T12:00:00.000Z",
+    });
+
+    await replaceLocalEntityId("ledger_entry", "ledger_local_adjust_1", "server_ledger_adjust_1", {
+      ledgerEntryId: "server_ledger_adjust_1",
+      customerId: "customer_1",
+      amount: 1,
+    });
+
+    expect(scopedRows("customer_ledger")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "server_ledger_adjust_1",
+          local_id: "ledger_local_adjust_1",
+          server_id: "server_ledger_adjust_1",
+          sync_status: "synced",
+          deleted_at: null,
+        }),
+        expect.objectContaining({
+          id: "ledger_local_adjust_1",
+          merged_into_id: "server_ledger_adjust_1",
+          server_id: "server_ledger_adjust_1",
+          deleted_at: "2026-06-06T12:00:00.000Z",
+        }),
+      ]),
+    );
+    expect(scopedRows("id_mappings")).toContainEqual(
+      expect.objectContaining({
+        entity_type: "ledger_entry",
+        local_id: "ledger_local_adjust_1",
+        server_id: "server_ledger_adjust_1",
+      }),
     );
   });
 

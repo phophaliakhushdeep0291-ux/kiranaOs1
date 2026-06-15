@@ -237,6 +237,7 @@ export function localIdKeys(entityType: string) {
     purchase_bill: ["localPurchaseHistoryId", "local_purchase_history_id", "localPurchaseBillId", "local_purchase_bill_id"],
     purchase_history: ["localPurchaseHistoryId", "local_purchase_history_id", "localPurchaseBillId", "local_purchase_bill_id"],
     inventory_movement: ["localMovementId", "local_movement_id", "localInventoryMovementId", "local_inventory_movement_id"],
+    ledger_entry: ["localLedgerEntryId", "local_ledger_entry_id", "localLedgerId", "local_ledger_id", "clientLedgerId", "client_ledger_id"],
   };
   return ["local_id", "localId", ...(specific[normalized] ?? [])];
 }
