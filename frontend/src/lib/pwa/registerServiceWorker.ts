@@ -56,7 +56,7 @@ export async function unregisterStaleLocalServiceWorkers(): Promise<void> {
 
 export function registerServiceWorker(): void {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
-  if (!import.meta.env.PROD || isLocalAppHost()) {
+  if (import.meta.env.DEV && isLocalAppHost()) {
     void unregisterStaleLocalServiceWorkers().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "Local service worker cleanup failed";
       window.dispatchEvent(new CustomEvent("kirana:pwa-local-cleanup-failed", { detail: { message } }));

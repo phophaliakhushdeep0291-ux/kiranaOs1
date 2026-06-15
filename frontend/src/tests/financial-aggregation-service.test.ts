@@ -204,6 +204,81 @@ describe("FinancialAggregationService", () => {
     expect(snapshot.totalOutstandingUdhar).toBe(2000);
   });
 
+  it("keeps reports consistent when bill items and opening udhar are duplicated after sync", () => {
+    const snapshot = aggregateFinancialRows({
+      date,
+      bills: [
+        bill("server_bill_740", {
+          grandTotal: 740,
+          totalAmount: 740,
+          subtotal: 742,
+          discount: 2,
+          paidAmount: 540,
+          buyerPaidAmount: 540,
+          creditAmount: 200,
+          customerId: "customer_1",
+          customer_id: "customer_1",
+          payments: [
+            { id: "pay_cash", mode: "cash", amount: 350, paidAt: `${date}T10:00:00.000`, paid_at: `${date}T10:00:00.000` },
+            { id: "pay_upi", mode: "upi", amount: 190, paidAt: `${date}T10:00:00.000`, paid_at: `${date}T10:00:00.000` },
+          ],
+        }),
+      ],
+      billItems: [
+        { id: "sugar_local", billId: "server_bill_740", bill_id: "server_bill_740", productId: "sugar", product_id: "sugar", name: "sugar", quantity: 2, ratePerRateUnit: 43, rate_per_rate_unit: 43, line_total: 86, cost_per_rate_unit: 39 },
+        { id: "sugar_server", billId: "server_bill_740", bill_id: "server_bill_740", productId: "sugar", product_id: "sugar", name: "sugar", quantity: 2, ratePerRateUnit: 43, rate_per_rate_unit: 43, line_total: 86, cost_per_rate_unit: 39 },
+        { id: "chai_local", billId: "server_bill_740", bill_id: "server_bill_740", productId: "chai", product_id: "chai", name: "chai pati", quantity: 2, ratePerRateUnit: 290, rate_per_rate_unit: 290, line_total: 580, cost_per_rate_unit: 260 },
+        { id: "chai_server", billId: "server_bill_740", bill_id: "server_bill_740", productId: "chai", product_id: "chai", name: "chai pati", quantity: 2, ratePerRateUnit: 290, rate_per_rate_unit: 290, line_total: 580, cost_per_rate_unit: 260 },
+        { id: "aata_local", billId: "server_bill_740", bill_id: "server_bill_740", productId: "aata", product_id: "aata", name: "aata", quantity: 2, ratePerRateUnit: 38, rate_per_rate_unit: 38, line_total: 76, cost_per_rate_unit: 32 },
+        { id: "aata_server", billId: "server_bill_740", bill_id: "server_bill_740", productId: "aata", product_id: "aata", name: "aata", quantity: 2, ratePerRateUnit: 38, rate_per_rate_unit: 38, line_total: 76, cost_per_rate_unit: 32 },
+      ],
+      ledger: [
+        {
+          id: "ledger_bill_credit",
+          customerId: "customer_1",
+          customer_id: "customer_1",
+          type: "debit",
+          source_type: "bill",
+          source_id: "server_bill_740",
+          billId: "server_bill_740",
+          bill_id: "server_bill_740",
+          amount: 200,
+          note: "Bill KOS-2026-000001",
+          createdAt: `${date}T10:00:00.000`,
+          created_at: `${date}T10:00:00.000`,
+        },
+        {
+          id: "ledger_opening_duplicate",
+          customerId: "customer_1",
+          customer_id: "customer_1",
+          type: "debit",
+          source_type: "opening_balance",
+          amount: 200,
+          note: "Opening udhar balance",
+          createdAt: `${date}T10:00:20.000`,
+          created_at: `${date}T10:00:20.000`,
+        },
+      ],
+      products: [
+        { id: "sugar", name: "sugar", costPrice: 39 },
+        { id: "chai", name: "chai pati", costPrice: 260 },
+        { id: "aata", name: "aata", costPrice: 32 },
+      ],
+      customers: [{ id: "customer_1", name: "khushdeep", mobile: "9571738238" }],
+    });
+
+    expect(snapshot.revenueToday).toBe(740);
+    expect(snapshot.cashSalesToday).toBe(350);
+    expect(snapshot.upiSalesToday).toBe(190);
+    expect(snapshot.udharSalesToday).toBe(200);
+    expect(snapshot.totalOutstandingUdhar).toBe(200);
+    expect(snapshot.profitByProduct.map((row) => [row.productId, row.revenue])).toEqual([
+      ["chai", 580],
+      ["sugar", 86],
+      ["aata", 76],
+    ]);
+  });
+
   it("counts ledger udhar payments once and keeps their cash or UPI mode", () => {
     const snapshot = aggregateFinancialRows({
       date,

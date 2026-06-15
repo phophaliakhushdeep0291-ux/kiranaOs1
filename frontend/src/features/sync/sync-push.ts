@@ -329,12 +329,29 @@ async function handlePushResults(
     .map((item) => item.event)
     .filter((event) => !handled.has(event.clientEventId));
   if (unreported.length > 0) {
-    await updateOutboxStatus(
-      unreported,
-      "FAILED",
-      "No sync result returned by server",
-    );
-    failed += unreported.length;
+    const idMap = await loadIdMap();
+    const mapped = unreported.filter((event) => typeof idMap[event.entity_id] === "string");
+    const unmapped = unreported.filter((event) => typeof idMap[event.entity_id] !== "string");
+
+    for (const event of mapped) {
+      const entityType = entityTypeFromOperation(event.operation_type, event.entity_type);
+      const serverId = idMap[event.entity_id];
+      await putIdMapping(entityType, event.entity_id, serverId);
+      await replaceLocalEntityId(entityType, event.entity_id, serverId);
+      await markEntitySynced(event, undefined, serverId);
+    }
+    if (mapped.length > 0) {
+      await updateOutboxStatus(mapped, "SYNCED");
+      pushed += mapped.length;
+    }
+    if (unmapped.length > 0) {
+      await updateOutboxStatus(
+        unmapped,
+        "FAILED",
+        "No sync result returned by server",
+      );
+      failed += unmapped.length;
+    }
   }
 
   return { pushed, failed, conflicts };

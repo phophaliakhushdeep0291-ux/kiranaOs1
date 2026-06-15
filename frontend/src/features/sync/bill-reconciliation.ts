@@ -1077,6 +1077,34 @@ function paymentEchoSignature(payment: Record<string, unknown>): string | null {
   return `payment-echo:${customerKey}|${mode}|${amount.toFixed(2)}|${fifteenMinuteBucket}`;
 }
 
+function paymentBillDisplaySignature(payment: Record<string, unknown>): string | null {
+  const billId = getStringFrom(payment, [
+    "bill_id",
+    "billId",
+    "localBillId",
+    "local_bill_id",
+    "serverBillId",
+    "server_bill_id",
+  ]);
+  const customerId = getStringFrom(payment, ["customer_id", "customerId"]);
+  const mode = getStringFrom(payment, ["mode"])?.toLowerCase();
+  const amount = getNumberFrom(payment, ["amount"]);
+  if (!mode || amount === undefined || amount <= 0) return null;
+
+  const paidAt = getStringFrom(payment, [
+    "paid_at",
+    "paidAt",
+    "created_at",
+    "createdAt",
+  ]);
+  const time = paidAt ? new Date(paidAt).getTime() : NaN;
+  if (!Number.isFinite(time)) return null;
+
+  const billKey = billId ?? `customer:${customerId ?? "walk-in"}`;
+  const fiveMinuteBucket = Math.floor(time / (5 * 60 * 1000));
+  return `payment-display:${billKey}|${mode}|${amount.toFixed(2)}|${fiveMinuteBucket}`;
+}
+
 function shouldCollapsePaymentEcho(previous: Record<string, unknown>, current: Record<string, unknown>): boolean {
   const previousMode = getStringFrom(previous, ["mode"])?.toLowerCase();
   const currentMode = getStringFrom(current, ["mode"])?.toLowerCase();
@@ -1092,6 +1120,7 @@ export function dedupePaymentsForDisplay<T extends object>(payments: T[]): T[] {
   );
   const seenIdentity = new Set<string>();
   const pickedByEchoSignature = new Map<string, T>();
+  const pickedByDisplaySignature = new Map<string, T>();
   const picked: T[] = [];
 
   for (const payment of candidates.sort((a, b) => {
@@ -1108,6 +1137,12 @@ export function dedupePaymentsForDisplay<T extends object>(payments: T[]): T[] {
     const identityKeys = paymentIdentityKeys(record);
     if (identityKeys.some((key) => seenIdentity.has(key))) continue;
 
+    const displaySignature = paymentBillDisplaySignature(record);
+    if (displaySignature && pickedByDisplaySignature.has(displaySignature)) {
+      identityKeys.forEach((key) => seenIdentity.add(key));
+      continue;
+    }
+
     const echoSignature = paymentEchoSignature(record);
     const previousEcho = echoSignature ? pickedByEchoSignature.get(echoSignature) : undefined;
     if (previousEcho && shouldCollapsePaymentEcho(previousEcho as Record<string, unknown>, record)) {
@@ -1118,6 +1153,9 @@ export function dedupePaymentsForDisplay<T extends object>(payments: T[]): T[] {
     identityKeys.forEach((key) => seenIdentity.add(key));
     if (echoSignature && !pickedByEchoSignature.has(echoSignature)) {
       pickedByEchoSignature.set(echoSignature, payment);
+    }
+    if (displaySignature && !pickedByDisplaySignature.has(displaySignature)) {
+      pickedByDisplaySignature.set(displaySignature, payment);
     }
     picked.push(payment);
   }
@@ -1140,6 +1178,90 @@ export function dedupePaymentsForDisplay<T extends object>(payments: T[]): T[] {
       ),
     );
   });
+}
+
+function billItemIdentityKeys(item: Record<string, unknown>): string[] {
+  return [
+    getStringFrom(item, ["id"]),
+    getStringFrom(item, ["server_id", "serverId"]),
+    getStringFrom(item, ["local_id", "localId"]),
+    getStringFrom(item, [
+      "billItemId",
+      "bill_item_id",
+      "clientBillItemId",
+      "client_bill_item_id",
+      "localBillItemId",
+      "local_bill_item_id",
+      "localItemId",
+      "local_item_id",
+    ]),
+  ].filter((key): key is string => Boolean(key));
+}
+
+function itemAmount(item: Record<string, unknown>): number {
+  const quantity = getNumberFrom(item, ["quantity", "qty"]) ?? 0;
+  const rate = getNumberFrom(item, ["ratePerRateUnit", "rate_per_rate_unit", "rate", "price"]) ?? 0;
+  return roundMoney(getNumberFrom(item, ["line_total", "lineTotal", "total"]) ?? quantity * rate);
+}
+
+function billItemBusinessSignature(item: Record<string, unknown>): string | null {
+  const product = normalizeBillSignatureText(getStringFrom(item, ["productId", "product_id", "product_local_id"]));
+  const name = normalizeBillSignatureText(getStringFrom(item, ["name", "productName", "product_name"]));
+  const quantity = getNumberFrom(item, ["quantity", "qty"]);
+  const rate = getNumberFrom(item, ["ratePerRateUnit", "rate_per_rate_unit", "rate", "price"]);
+  const total = itemAmount(item);
+  if (!product && !name) return null;
+  if (quantity === undefined && rate === undefined && total <= 0) return null;
+  return [
+    product || name,
+    (quantity ?? 0).toFixed(3),
+    (rate ?? 0).toFixed(2),
+    total.toFixed(2),
+  ].join("|");
+}
+
+function billItemPriority(item: Record<string, unknown>): number {
+  let score = syncPriority(item);
+  if (getStringFrom(item, ["server_id", "serverId"])) score += 3;
+  if (getStringFrom(item, ["local_id", "localId", "localItemId", "local_item_id"])) score += 1;
+  return score;
+}
+
+export function dedupeBillItemsForDisplay<T extends object>(items: T[], expectedTotal?: number): T[] {
+  const candidates = items
+    .filter((item) => !isDeleted(item as Record<string, unknown>))
+    .sort((a, b) => billItemPriority(b as Record<string, unknown>) - billItemPriority(a as Record<string, unknown>));
+  const seenIdentity = new Set<string>();
+  const picked: T[] = [];
+
+  for (const item of candidates) {
+    const record = item as Record<string, unknown>;
+    const identityKeys = billItemIdentityKeys(record);
+    if (identityKeys.length > 0 && identityKeys.some((key) => seenIdentity.has(key))) continue;
+    identityKeys.forEach((key) => seenIdentity.add(key));
+    picked.push(item);
+  }
+
+  const expected = Number(expectedTotal ?? 0);
+  const total = picked.reduce((sum, item) => sum + itemAmount(item as Record<string, unknown>), 0);
+  if (!Number.isFinite(expected) || expected <= 0 || total <= expected + 0.01) {
+    return picked.sort((a, b) => String((a as Record<string, unknown>).createdAt ?? (a as Record<string, unknown>).created_at ?? "").localeCompare(String((b as Record<string, unknown>).createdAt ?? (b as Record<string, unknown>).created_at ?? "")));
+  }
+
+  const bySignature = new Map<string, T>();
+  for (const item of picked) {
+    const signature = billItemBusinessSignature(item as Record<string, unknown>);
+    if (!signature) {
+      bySignature.set(`id:${picked.indexOf(item)}`, item);
+      continue;
+    }
+    const previous = bySignature.get(signature);
+    if (!previous || billItemPriority(item as Record<string, unknown>) > billItemPriority(previous as Record<string, unknown>)) {
+      bySignature.set(signature, item);
+    }
+  }
+
+  return [...bySignature.values()].sort((a, b) => String((a as Record<string, unknown>).createdAt ?? (a as Record<string, unknown>).created_at ?? "").localeCompare(String((b as Record<string, unknown>).createdAt ?? (b as Record<string, unknown>).created_at ?? "")));
 }
 
 export async function findDuplicateLocalPaymentForServerPayment(

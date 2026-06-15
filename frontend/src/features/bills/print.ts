@@ -1,5 +1,6 @@
 import type { Bill } from "@/types/api";
 import { buildReceiptHtml, openReceiptWindow, type ReceiptPaymentLine, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
+import { dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 
 export interface PrintableBillRow {
   name: string;
@@ -85,13 +86,17 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
   });
 
   const embeddedPayments = Array.isArray(bill.payments) ? bill.payments : [];
-  const payments = paymentRows.length > 0 ? paymentRows : embeddedPayments;
+  const payments = dedupePaymentsForDisplay((paymentRows.length > 0 ? paymentRows : embeddedPayments).map((raw) => asRecord(raw)));
   const paidFromRows = payments.reduce<number>((sum, raw) => {
     const payment = asRecord(raw);
     return String(payment.mode ?? "").toLowerCase() === "credit" ? sum : sum + readNumber(payment.amount, 0);
   }, 0);
-  const paid = Math.max(readNumber(bill.paidAmount ?? bill.buyerPaidAmount, 0), paidFromRows);
   const total = readNumber(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount, 0);
+  const explicitCredit = readNumber(bill.creditAmount, Number.NaN);
+  const billLevelPaid = Number.isFinite(explicitCredit)
+    ? Math.max(0, total - explicitCredit)
+    : readNumber(bill.paidAmount ?? bill.buyerPaidAmount, 0);
+  const paid = payments.length > 0 ? paidFromRows : billLevelPaid;
   const credit = readNumber(bill.creditAmount, Math.max(0, total - paid));
   const paymentLines: ReceiptPaymentLine[] = payments
     .map((raw) => {

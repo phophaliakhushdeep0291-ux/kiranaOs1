@@ -1,5 +1,5 @@
 /* KiranaOS service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
-const CACHE_VERSION = "kiranaos-shell-v3";
+const CACHE_VERSION = "kiranaos-shell-v4";
 const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/offline.html"];
 const NEVER_CACHE_PATTERNS = [
   /\/api\//i,

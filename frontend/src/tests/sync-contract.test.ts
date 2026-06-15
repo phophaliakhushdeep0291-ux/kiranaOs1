@@ -553,6 +553,57 @@ describe("sync backend contract", () => {
     );
   });
 
+  it("POST /sync/push treats mapped operations without per-op results as synced", async () => {
+    seedBillRows();
+    const event = seedCreateBillOutbox();
+    mockedSyncPush.mockResolvedValueOnce({
+      idMappings: {
+        bills: { bill_local_1: "server_bill_id" },
+        payments: { payment_local_1: "server_payment_id" },
+      },
+      results: [],
+      cursor: "cursor_after_mapping_only_push",
+    });
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual(expect.objectContaining({ pushed: 1, failed: 0 }));
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({
+        clientEventId: event.clientEventId,
+        status: "SYNCED",
+        sync_status: "synced",
+        error_message: null,
+      }),
+    );
+    expect(scopedRows("bills")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "server_bill_id",
+          local_id: "bill_local_1",
+          server_id: "server_bill_id",
+          sync_status: "synced",
+        }),
+        expect.objectContaining({
+          id: "bill_local_1",
+          merged_into_id: "server_bill_id",
+          deleted_at: "2026-06-06T12:00:00.000Z",
+        }),
+      ]),
+    );
+    expect(scopedRows("payments")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "server_payment_id",
+          local_id: "payment_local_1",
+          server_id: "server_payment_id",
+          bill_id: "server_bill_id",
+          sync_status: "synced",
+        }),
+      ]),
+    );
+  });
+
   it("POST /sync/push duplicate idempotency returns the same server bill without duplicating history", async () => {
     seedBillRows();
     const event = seedCreateBillOutbox();
