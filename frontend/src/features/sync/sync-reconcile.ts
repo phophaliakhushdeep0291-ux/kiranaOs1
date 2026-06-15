@@ -118,19 +118,53 @@ function ledgerSourceId(row: Record<string, unknown>): string | undefined {
   ]);
 }
 
+function ledgerIdentitySet(row: Record<string, unknown>): Set<string> {
+  return new Set(
+    [
+      row.id,
+      row.local_id,
+      row.localId,
+      row.server_id,
+      row.serverId,
+      row.source_id,
+      row.sourceId,
+      row.clientLedgerId,
+      row.client_ledger_id,
+      row.localLedgerEntryId,
+      row.local_ledger_entry_id,
+      row.ledgerEntryId,
+      row.ledger_entry_id,
+      row.paymentId,
+      row.payment_id,
+      row.localPaymentId,
+      row.local_payment_id,
+      row.clientPaymentId,
+      row.client_payment_id,
+      row.idempotencyKey,
+      row.idempotency_key,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0),
+  );
+}
+
+function isPaymentLedgerRow(row: Record<string, unknown>): boolean {
+  const sourceType = normalizeLedgerSourceType(row);
+  const rawType = String(row.type ?? "").trim().toLowerCase();
+  return rawType === "payment" || sourceType === "payment" || sourceType === "udhar_payment";
+}
+
 async function findDuplicateLocalLedgerForServerLedger(
   serverLedger: Record<string, unknown>,
   serverId: string,
 ): Promise<Record<string, unknown> | undefined> {
   const sourceType = normalizeLedgerSourceType(serverLedger);
-  if (!(sourceType === "bill" || sourceType === "debit" || String(serverLedger.type ?? "").toUpperCase() === "BILL")) {
-    return undefined;
-  }
+  const isServerPayment = isPaymentLedgerRow(serverLedger);
+  const isServerBill = sourceType === "bill" || sourceType === "debit" || String(serverLedger.type ?? "").toUpperCase() === "BILL";
+  if (!isServerPayment && !isServerBill) return undefined;
 
   const serverBillId = ledgerSourceId(serverLedger);
-  if (!serverBillId) return undefined;
-  const mappedLocalBillId = await findLocalIdForServerId(serverBillId);
+  const mappedLocalBillId = serverBillId ? await findLocalIdForServerId(serverBillId) : undefined;
   const billIds = new Set([serverBillId, mappedLocalBillId].filter((value): value is string => Boolean(value)));
+  const serverIdentities = ledgerIdentitySet(serverLedger);
   const amount = Math.abs(readNumberField(serverLedger, ["amount"], 0));
   const customerId = getStringFrom(serverLedger, ["customerId", "customer_id"]);
 
@@ -145,9 +179,14 @@ async function findDuplicateLocalLedgerForServerLedger(
     if (getStringFrom(row, ["server_id", "serverId"])) return false;
     const rowSourceType = normalizeLedgerSourceType(row);
     const rowIsBill = rowSourceType === "bill" || rowSourceType === "debit" || String(row.type ?? "").toUpperCase() === "BILL";
-    if (!rowIsBill) return false;
+    const rowIsPayment = isPaymentLedgerRow(row);
+    if (isServerBill && !rowIsBill) return false;
+    if (isServerPayment && !rowIsPayment) return false;
     const rowSourceId = ledgerSourceId(row);
-    if (!rowSourceId || !billIds.has(rowSourceId)) return false;
+    const rowIdentities = ledgerIdentitySet(row);
+    const identityMatch = [...serverIdentities].some((identity) => rowIdentities.has(identity));
+    if (isServerBill && (!rowSourceId || !billIds.has(rowSourceId))) return false;
+    if (isServerPayment && !identityMatch) return false;
     const rowAmount = Math.abs(readNumberField(row, ["amount"], 0));
     if (Math.abs(rowAmount - amount) > 0.005) return false;
     const rowCustomerId = getStringFrom(row, ["customerId", "customer_id"]);

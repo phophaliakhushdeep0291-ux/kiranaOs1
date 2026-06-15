@@ -1021,9 +1021,50 @@ async function applyUdharPayment(shopId, event, context) {
   });
   return {
     type: event.type,
-    localLedgerEntryId: payload.localLedgerEntryId ?? payload.ledgerEntryId ?? payload.localId ?? null,
+    localLedgerEntryId: getUdharPaymentLocalReference(event, payload, payment, paymentIdentity),
+    localPaymentId: pickString(
+      payload.localPaymentId,
+      payload.local_payment_id,
+      payment.localPaymentId,
+      payment.local_payment_id,
+      payload.paymentId,
+      payload.payment_id,
+      payment.paymentId,
+      payment.payment_id,
+      event.entity_id
+    ),
+    idempotencyKey: paymentIdentity.idempotencyKey,
     ...data,
   };
+}
+
+function getUdharPaymentLocalReference(event, payload, payment, identity) {
+  return pickString(
+    payload?.localLedgerEntryId,
+    payload?.local_ledger_entry_id,
+    payload?.ledgerEntryId,
+    payload?.ledger_entry_id,
+    payment?.localLedgerEntryId,
+    payment?.local_ledger_entry_id,
+    payment?.ledgerEntryId,
+    payment?.ledger_entry_id,
+    payload?.clientLedgerId,
+    payload?.client_ledger_id,
+    payment?.clientLedgerId,
+    payment?.client_ledger_id,
+    identity?.clientLedgerId,
+    payload?.localPaymentId,
+    payload?.local_payment_id,
+    payment?.localPaymentId,
+    payment?.local_payment_id,
+    payload?.paymentId,
+    payload?.payment_id,
+    payment?.paymentId,
+    payment?.payment_id,
+    event?.entity_id,
+    payload?.localId,
+    payload?.local_id
+  );
 }
 
 
@@ -1739,8 +1780,43 @@ async function rememberMappingsFromResult(shopId, event, result, context) {
     if (localSupplierId) mappings.push({ entityType: SYNC_ENTITY_TYPES.SUPPLIER, localId: localSupplierId, serverId: result.supplierId });
   }
   if (result?.ledgerEntryId) {
-    const localLedgerEntryId = result.localLedgerEntryId ?? payload.localLedgerEntryId ?? payload.ledgerEntryId ?? payload.localId;
-    if (localLedgerEntryId) mappings.push({ entityType: SYNC_ENTITY_TYPES.LEDGER_ENTRY, localId: localLedgerEntryId, serverId: result.ledgerEntryId });
+    const payment = payload?.payment && typeof payload.payment === "object" && !Array.isArray(payload.payment)
+      ? payload.payment
+      : {};
+    const localLedgerEntryIds = [
+      result.localLedgerEntryId,
+      result.local_ledger_entry_id,
+      payload.localLedgerEntryId,
+      payload.local_ledger_entry_id,
+      payload.ledgerEntryId,
+      payload.ledger_entry_id,
+      payload.clientLedgerId,
+      payload.client_ledger_id,
+      payment.localLedgerEntryId,
+      payment.local_ledger_entry_id,
+      payment.ledgerEntryId,
+      payment.ledger_entry_id,
+      payment.clientLedgerId,
+      payment.client_ledger_id,
+      payload.paymentId,
+      payload.payment_id,
+      payload.localPaymentId,
+      payload.local_payment_id,
+      payload.clientPaymentId,
+      payload.client_payment_id,
+      payment.paymentId,
+      payment.payment_id,
+      payment.localPaymentId,
+      payment.local_payment_id,
+      payment.clientPaymentId,
+      payment.client_payment_id,
+      event.entity_id,
+      payload.localId,
+      payload.local_id,
+    ].filter((value) => typeof value === "string" && value.trim().length > 0);
+    for (const localLedgerEntryId of [...new Set(localLedgerEntryIds)]) {
+      mappings.push({ entityType: SYNC_ENTITY_TYPES.LEDGER_ENTRY, localId: localLedgerEntryId, serverId: result.ledgerEntryId });
+    }
   }
   if (result?.purchaseHistoryId) {
     const localPurchaseHistoryId = result.localPurchaseHistoryId ?? payload.localPurchaseHistoryId ?? payload.purchaseHistoryId ?? payload.purchaseBillId ?? payload.localId;
@@ -1967,6 +2043,7 @@ async function findExistingBillByCreateIdentity(shopId, identity) {
 }
 
 function getUdharPaymentIdentity(event, payload, payment) {
+  const eventId = getClientEventId(event);
   const clientLedgerId = pickString(
     payment?.clientLedgerId,
     payment?.client_ledger_id,
@@ -1976,6 +2053,18 @@ function getUdharPaymentIdentity(event, payload, payment) {
     payload?.local_ledger_entry_id,
     payload?.ledgerEntryId,
     payload?.ledger_entry_id,
+    payment?.clientPaymentId,
+    payment?.client_payment_id,
+    payload?.clientPaymentId,
+    payload?.client_payment_id,
+    payment?.localPaymentId,
+    payment?.local_payment_id,
+    payload?.localPaymentId,
+    payload?.local_payment_id,
+    payment?.paymentId,
+    payment?.payment_id,
+    payload?.paymentId,
+    payload?.payment_id,
     payload?.localId,
     payload?.local_id,
     event?.entity_id
@@ -1987,7 +2076,7 @@ function getUdharPaymentIdentity(event, payload, payment) {
     payload?.idempotency_key,
     event?.idempotencyKey,
     event?.idempotency_key
-  );
+  ) ?? (clientLedgerId ? `udhar-payment:${clientLedgerId}` : eventId ? `udhar-payment:${eventId}` : null);
   const sourceDeviceId = pickString(
     payment?.sourceDeviceId,
     payment?.source_device_id,

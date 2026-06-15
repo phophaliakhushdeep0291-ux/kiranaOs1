@@ -4,7 +4,7 @@ import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/off
 import { enqueueOutboxOperation } from "@/features/sync/outbox";
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
 import type { Customer } from "@/types/api";
-import { calculateLedgerBalance, type CustomerLedgerEntry } from "@/features/ledger/accounting";
+import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry } from "@/features/ledger/accounting";
 
 const CUSTOMER_CACHE_KEY = "customers";
 const LEDGER_CACHE_KEY = "customer_ledger";
@@ -57,7 +57,7 @@ async function resolveCustomerIdentitySet(customerId: string): Promise<Set<strin
 export async function readCustomerLedgerEntries(customerId: string): Promise<CustomerLedgerEntry[]> {
   const customerIds = await resolveCustomerIdentitySet(customerId);
   const rows = await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []);
-  return rows.filter((row) => {
+  return dedupeLedgerEntries(rows).filter((row) => {
     const id = row.customerId ?? row.customer_id;
     return typeof id === "string" && customerIds.has(id);
   });

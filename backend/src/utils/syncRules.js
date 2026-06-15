@@ -119,6 +119,12 @@ function promoteSyncResultFields(result) {
     'customer',
     'udharLedgerEntry',
     'stockLedgerEntries',
+    'ledgerEntryId',
+    'localLedgerEntryId',
+    'localPaymentId',
+    'amountPaid',
+    'newBalance',
+    'idempotentReplay',
   ];
   return Object.fromEntries(keys.filter((key) => result[key] !== undefined).map((key) => [key, result[key]]));
 }

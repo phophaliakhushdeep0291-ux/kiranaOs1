@@ -72,15 +72,17 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
-import { upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { recordPaymentLocalFirst } from "@/features/payments/local-actions";
+import { readInstantCache, upsertCachedListItem } from "@/lib/offline/instant-cache";
+import { getLocalUdharSummary, recordPaymentLocalFirst } from "@/features/payments/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
+const mockedReadInstantCache = vi.mocked(readInstantCache);
 const mockedUpsertCachedListItem = vi.mocked(upsertCachedListItem);
 
 describe("payment recording transaction safety", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedReadInstantCache.mockImplementation((_key: string, fallback: unknown) => fallback);
     dbState.idCounter = 0;
     dbState.failOnTable = null;
     dbState.committed = {
@@ -127,6 +129,9 @@ describe("payment recording transaction safety", () => {
       source_type: "payment",
       source_id: "payment_1",
       payment_id: "payment_1",
+      local_ledger_entry_id: "ledger_2",
+      client_ledger_id: "ledger_2",
+      idempotency_key: "record-payment:customer_1:payment_1",
       mode: "upi",
       payment_mode: "upi",
       amount: 125,
@@ -157,9 +162,37 @@ describe("payment recording transaction safety", () => {
         entity_type: "payment",
         entity_id: "payment_1",
         idempotency_key: "record-payment:customer_1:payment_1",
-        payload: expect.objectContaining({ paymentId: "payment_1", customerId: "customer_1" }),
+        payload: expect.objectContaining({
+          paymentId: "payment_1",
+          customerId: "customer_1",
+          localLedgerEntryId: "ledger_2",
+          clientLedgerId: "ledger_2",
+          idempotencyKey: "record-payment:customer_1:payment_1",
+          payment: expect.objectContaining({
+            localLedgerEntryId: "ledger_2",
+            clientLedgerId: "ledger_2",
+            idempotencyKey: "record-payment:customer_1:payment_1",
+          }),
+        }),
       }),
     ]));
+  });
+
+  it("uses append-only ledger balance for local udhar summary even when customer cache is stale", () => {
+    mockedReadInstantCache.mockImplementation((key: string, fallback: unknown) => {
+      if (key === "customers") {
+        return [{ id: "customer_1", name: "Ramesh", type: "udhar", udharAmount: 500, totalUdhar: 500 }];
+      }
+      if (key === "customer_ledger") {
+        return [
+          { id: "ledger_bill_1", customerId: "customer_1", type: "BILL", amount: 500, entry_at: "2026-06-01T10:00:00.000Z" },
+          { id: "ledger_payment_1", customerId: "customer_1", type: "PAYMENT", source_type: "payment", amount: 500, entry_at: "2026-06-01T10:05:00.000Z" },
+        ];
+      }
+      return fallback;
+    });
+
+    expect(getLocalUdharSummary()).toEqual({ totalOutstanding: 0, customers: [] });
   });
 
   it("creates an audit log for the payment", async () => {

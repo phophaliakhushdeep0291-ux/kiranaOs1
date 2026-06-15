@@ -389,12 +389,18 @@ function normalizeLedgerIdentity(input, actor, prefix) {
     input?.local_ledger_entry_id,
     input?.ledgerEntryId,
     input?.ledger_entry_id,
+    input?.clientPaymentId,
+    input?.client_payment_id,
+    input?.localPaymentId,
+    input?.local_payment_id,
+    input?.paymentId,
+    input?.payment_id,
     input?.localId,
     input?.local_id
   );
   const sourceDeviceId = pickString(actor?.deviceId, input?.sourceDeviceId, input?.source_device_id);
   const explicitKey = pickString(input?.idempotencyKey, input?.idempotency_key);
-  const idempotencyKey = explicitKey ?? (sourceDeviceId && clientLedgerId ? `${prefix}:${sourceDeviceId}:${clientLedgerId}` : null);
+  const idempotencyKey = explicitKey ?? (clientLedgerId ? `${prefix}:${clientLedgerId}` : null);
   return {
     clientLedgerId,
     idempotencyKey,
