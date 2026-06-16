@@ -330,7 +330,11 @@ import {
   pushPendingOutboxOperations,
   retryFailedSyncOperations,
 } from "@/features/sync/engine";
-import { applyIdMappingsFromResponse, replaceLocalEntityId } from "@/features/sync/sync-id-mapping";
+import {
+  applyIdMappingsFromResponse,
+  collectUnmappedLocalIds,
+  replaceLocalEntityId,
+} from "@/features/sync/sync-id-mapping";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 
@@ -691,6 +695,102 @@ describe("sync backend contract", () => {
         entity_type: "ledger_entry",
         local_id: "payment_local_1",
         server_id: "server_ledger_1",
+      }),
+    );
+  });
+
+  it("payment and ledger identity ids do not block RECORD_PAYMENT upload", () => {
+    const unresolved = collectUnmappedLocalIds(
+      {
+        paymentId: "payment_local_1",
+        localPaymentId: "payment_local_1",
+        clientPaymentId: "payment_local_1",
+        ledgerEntryId: "ledger_local_1",
+        localLedgerEntryId: "ledger_local_1",
+        clientLedgerId: "ledger_local_1",
+        payment: {
+          paymentId: "payment_local_1",
+          payment_id: "payment_local_1",
+          clientPaymentId: "payment_local_1",
+          client_payment_id: "payment_local_1",
+          ledgerEntryId: "ledger_local_1",
+          ledger_entry_id: "ledger_local_1",
+          clientLedgerId: "ledger_local_1",
+          client_ledger_id: "ledger_local_1",
+        },
+        customerId: "server_customer_1",
+        amount: 200,
+      },
+      {},
+      new Set(["payment_local_1"]),
+    );
+
+    expect(unresolved).toEqual([]);
+  });
+
+  it("pushes RECORD_PAYMENT operations that carry local payment and ledger identities", async () => {
+    dbState.putInto("sync_outbox", {
+      op_id: "op_record_payment_1",
+      clientEventId: "op_record_payment_1",
+      idempotency_key: "idem-record-payment-1",
+      type: "RECORD_PAYMENT",
+      operation_type: "RECORD_PAYMENT",
+      entity_type: "payment",
+      entity_id: "payment_local_1",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      payload: {
+        customerId: "server_customer_1",
+        amount: 200,
+        mode: "cash",
+        paymentId: "payment_local_1",
+        clientPaymentId: "payment_local_1",
+        ledgerEntryId: "ledger_local_1",
+        clientLedgerId: "ledger_local_1",
+        payment: {
+          paymentId: "payment_local_1",
+          clientPaymentId: "payment_local_1",
+          ledgerEntryId: "ledger_local_1",
+          clientLedgerId: "ledger_local_1",
+          amount: 200,
+          mode: "cash",
+        },
+      },
+      client_created_at: "2026-06-06T11:57:00.000Z",
+      status: "PENDING",
+      sync_status: "pending_sync",
+      retry_count: 0,
+      attempts: 0,
+      createdAt: 3,
+      next_retry_at: null,
+    });
+    mockedSyncPush.mockResolvedValueOnce({
+      results: [{ op_id: "op_record_payment_1", status: "SYNCED" }],
+    });
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual(
+      expect.objectContaining({ pushed: 1, failed: 0, skipped: 0 }),
+    );
+    expect(syncPush).toHaveBeenCalledTimes(1);
+    const request = mockedSyncPush.mock.calls[0][0] as {
+      operations: Array<Record<string, unknown>>;
+    };
+    expect(request.operations[0]).toEqual(
+      expect.objectContaining({
+        op_id: "op_record_payment_1",
+        operation_type: "UDHAR_PAYMENT",
+        entity_type: "payment",
+      }),
+    );
+    expect(request.operations[0].payload).toEqual(
+      expect.objectContaining({
+        paymentId: "payment_local_1",
+        clientPaymentId: "payment_local_1",
+        ledgerEntryId: "ledger_local_1",
+        clientLedgerId: "ledger_local_1",
       }),
     );
   });
