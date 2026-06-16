@@ -192,9 +192,15 @@ function operationSubject(operation: PendingSyncEvent) {
     readStringFromRecord(payload, ["reason", "note", "message"]);
   const entityId = readStringFromRecord(operation, ["entity_id"]) ?? operation.entity_id;
   const parts = [name, billNo, mode?.toUpperCase(), moneyLabel(amount)].filter(Boolean);
+  const pendingUpload =
+    operation.status === "PENDING" || operation.sync_status === "pending_sync";
   return {
     title: parts.length ? parts.join(" - ") : `${operation.entity_type} - ${entityId}`,
-    reason: reason ?? "No detailed reason received from backend yet.",
+    reason:
+      reason ??
+      (pendingUpload
+        ? "Waiting for cloud backup. Press Force sync when backend is online."
+        : "No detailed reason received from backend yet."),
     amount,
     mode,
     entityId,
