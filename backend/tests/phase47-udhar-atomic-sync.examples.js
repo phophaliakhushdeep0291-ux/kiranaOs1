@@ -9,11 +9,11 @@ const syncService = fs.readFileSync("src/modules/sync/sync.service.js", "utf8");
 assert.match(billSchema, /creditAmount:\s*moneyAmount\(\)\.default\(0\)\.optional\(\)/, "CREATE_BILL schema must accept creditAmount separately from payments");
 assert.match(billSchema, /At least one real payment or credit amount required/, "Full udhar bills with zero tender payments must be accepted");
 
-assert.match(billService, /tenderPayments\s*=\s*rawBillPayments\.filter\(\(p\)\s*=>\s*p\.mode\s*!==\s*"credit"\)/, "Credit must be filtered out of backend payment rows");
+assert.match(billService, /paymentRows\s*=\s*billPayments\s*[\s\S]*?\.filter\(\(payment\)\s*=>\s*payment\.mode\s*!==\s*"credit"\)/, "Credit must be filtered out of backend payment rows");
 assert.match(billService, /requestedCreditAmount/, "Backend must calculate udhar from creditAmount\/legacy credit exactly once");
-assert.match(billService, /paymentRows\s*=\s*billPayments\.map/, "Payment table rows must come only from real tender payments");
+assert.match(billService, /payments:\s*\{\s*create:\s*paymentRows\s*\}/, "Payment table rows must come only from real tender payments");
 assert.match(billService, /udharLedgerEntry\s*=\s*await tx\.udharLedger\.create/, "Udhar bill must create one ledger entry inside the bill transaction");
-assert.match(billService, /udharAmount:\s*\{ increment:\s*creditAmount \}/, "Customer udhar balance must be incremented atomically with bill creation");
+assert.match(billService, /await syncCustomerUdharBalance\(tx,\s*shopId,\s*customerId/, "Customer udhar balance must be ledger-derived atomically with bill creation");
 assert.match(billService, /payments:\s*bill\.payments\.filter\(\(payment\)\s*=>\s*payment\.mode\s*!==\s*"credit"\)/, "Backend response must not return fake credit as a payment row");
 
 assert.match(syncService, /findExistingCreateBillResultByIdempotency/, "CREATE_BILL sync retries must dedupe by idempotency/client bill keys");

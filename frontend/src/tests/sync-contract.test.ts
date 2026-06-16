@@ -728,6 +728,98 @@ describe("sync backend contract", () => {
     expect(unresolved).toEqual([]);
   });
 
+  it("movement and purchase identity ids do not block stock or purchase sync", () => {
+    const unresolved = collectUnmappedLocalIds(
+      {
+        movementId: "stock_purchase_local_1",
+        movement_id: "stock_purchase_local_1",
+        clientMovementId: "stock_purchase_local_1",
+        client_movement_id: "stock_purchase_local_1",
+        localMovementId: "stock_purchase_local_1",
+        local_movement_id: "stock_purchase_local_1",
+        inventoryMovementId: "stock_purchase_local_1",
+        localInventoryMovementId: "stock_purchase_local_1",
+        purchaseHistoryId: "local_purchase_history_1",
+        purchaseBillId: "local_purchase_history_1",
+        localPurchaseHistoryId: "local_purchase_history_1",
+        localPurchaseBillId: "local_purchase_history_1",
+        productId: "server_product_1",
+        supplierId: "server_supplier_1",
+        quantity: 10,
+      },
+      {},
+      new Set(["stock_purchase_local_1"]),
+    );
+
+    expect(unresolved).toEqual([]);
+  });
+
+  it("settles STOCK_PURCHASE when backend replies with stock/purchase ids", async () => {
+    dbState.putInto("inventory_movements", {
+      id: "stock_purchase_local_1",
+      local_id: "stock_purchase_local_1",
+      productId: "server_product_1",
+      quantity: 10,
+      movementType: "purchase",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      sync_status: "pending_sync",
+    });
+    dbState.putInto("sync_outbox", {
+      op_id: "op_stock_purchase_1",
+      clientEventId: "op_stock_purchase_1",
+      idempotency_key: "idem-stock-purchase-1",
+      type: "STOCK_PURCHASE",
+      operation_type: "STOCK_PURCHASE",
+      entity_type: "inventory_movement",
+      entity_id: "stock_purchase_local_1",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      payload: {
+        movementId: "stock_purchase_local_1",
+        localMovementId: "stock_purchase_local_1",
+        clientMovementId: "stock_purchase_local_1",
+        productId: "server_product_1",
+        quantity: 10,
+      },
+      client_created_at: "2026-06-06T11:58:00.000Z",
+      status: "PENDING",
+      sync_status: "pending_sync",
+      retry_count: 0,
+      attempts: 0,
+      createdAt: 4,
+      next_retry_at: null,
+    });
+    mockedSyncPush.mockResolvedValueOnce({
+      results: [
+        {
+          status: "SYNCED",
+          stockLedgerId: "server_stock_1",
+          localMovementId: "stock_purchase_local_1",
+          purchaseHistoryId: "server_purchase_1",
+        },
+      ],
+    });
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual(
+      expect.objectContaining({ pushed: 1, failed: 0, skipped: 0 }),
+    );
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({ status: "SYNCED", sync_status: "synced" }),
+    );
+    expect(scopedRows("id_mappings")).toContainEqual(
+      expect.objectContaining({
+        entity_type: "inventory_movement",
+        local_id: "stock_purchase_local_1",
+        server_id: "server_stock_1",
+      }),
+    );
+  });
+
   it("pushes RECORD_PAYMENT operations that carry local payment and ledger identities", async () => {
     dbState.putInto("sync_outbox", {
       op_id: "op_record_payment_1",
