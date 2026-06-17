@@ -62,6 +62,56 @@ describe("customer ledger accounting", () => {
     expect(calculateLedgerBalance(rows)).toBe(540);
   });
 
+  it("keeps separate same-amount udhar payments in the same sync window", () => {
+    const rows = dedupeLedgerEntries([
+      {
+        id: "ledger_bill_1",
+        customerId: "c1",
+        customer_id: "c1",
+        type: "BILL",
+        amount: 200,
+        source_type: "bill",
+        source_id: "bill_1",
+        entry_at: "2026-06-07T11:20:00.000Z",
+      },
+      {
+        id: "server_payment_1",
+        customerId: "c1",
+        customer_id: "c1",
+        type: "payment",
+        amount: 100,
+        source_type: "udhar_payment",
+        source_id: "ledger_1",
+        clientLedgerId: "ledger_1",
+        client_ledger_id: "ledger_1",
+        idempotencyKey: "record-payment:c1:payment_1",
+        idempotency_key: "record-payment:c1:payment_1",
+        sync_status: "synced",
+        entry_at: "2026-06-07T11:24:00.000Z",
+      },
+      {
+        id: "ledger_2",
+        customerId: "c1",
+        customer_id: "c1",
+        type: "PAYMENT",
+        amount: 100,
+        source_type: "payment",
+        source_id: "payment_2",
+        paymentId: "payment_2",
+        payment_id: "payment_2",
+        clientLedgerId: "ledger_2",
+        client_ledger_id: "ledger_2",
+        idempotencyKey: "record-payment:c1:payment_2",
+        idempotency_key: "record-payment:c1:payment_2",
+        sync_status: "pending_sync",
+        entry_at: "2026-06-07T11:25:00.000Z",
+      },
+    ] as CustomerLedgerEntry[]);
+
+    expect(rows.filter((row) => row.type.toString().toUpperCase().includes("PAYMENT") || row.source_type === "udhar_payment")).toHaveLength(2);
+    expect(calculateLedgerBalance(rows)).toBe(0);
+  });
+
   it("collapses opening udhar balance when it duplicates the bill credit", () => {
     const rows = dedupeLedgerEntries([
       {

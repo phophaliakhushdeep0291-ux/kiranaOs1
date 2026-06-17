@@ -7,7 +7,7 @@ describe("bill history connection badge", () => {
   it("uses live backup status instead of a hardcoded offline label", () => {
     expect(source).toContain("useOfflineStatus");
     // The badge must branch on live connection state, not render a fixed label.
-    expect(source).toContain("isOnline\n    ?");
+    expect(source).toMatch(/isOnline\s*\?/);
     expect(source).toContain("isBrowserOnline");
     expect(source).toContain("backendStatus");
     expect(source).toContain("isSyncing ?");

@@ -61,4 +61,35 @@ describe("local financial hardening", () => {
     expect(paymentDuplicateSignature(upiA)).toBe(paymentDuplicateSignature(upiB));
     expect(paymentDuplicateSignature(cashA)).not.toBe(paymentDuplicateSignature(upiA));
   });
+
+  it("does not group separate customer-only udhar payments by amount and time", () => {
+    const first = {
+      id: "server_payment_1",
+      customer_id: "customer_1",
+      type: "payment",
+      source_type: "udhar_payment",
+      clientLedgerId: "ledger_1",
+      idempotencyKey: "record-payment:customer_1:payment_1",
+      mode: "cash",
+      amount: 100,
+      paid_at: "2026-06-07T12:01:00.000Z",
+      sync_status: "synced",
+    };
+    const second = {
+      id: "payment_2",
+      customer_id: "customer_1",
+      type: "payment",
+      source_type: "payment",
+      clientLedgerId: "ledger_2",
+      idempotencyKey: "record-payment:customer_1:payment_2",
+      mode: "cash",
+      amount: 100,
+      paid_at: "2026-06-07T12:07:00.000Z",
+      sync_status: "pending_sync",
+    };
+
+    expect(financialEchoSignature("payments", first)).not.toBe(financialEchoSignature("payments", second));
+    expect(financialEchoSignature("customer_ledger", first)).not.toBe(financialEchoSignature("customer_ledger", second));
+    expect(paymentDuplicateSignature(first)).not.toBe(paymentDuplicateSignature(second));
+  });
 });

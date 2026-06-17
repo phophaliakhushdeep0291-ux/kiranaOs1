@@ -61,6 +61,7 @@ assert.match(syncService, /applyUpdatePurchaseBill/, "sync push must apply purch
 assert.match(syncService, /applyDeletePurchaseBill/, "sync push must apply purchase bill delete/void");
 assert.match(syncService, /stockLedgerId: data\.stockLedgerId/, "stock purchase sync must return server stock ledger id");
 assert.match(syncService, /localMovementId: payload\.movementId/, "stock purchase sync must preserve local movement id");
+assert.match(syncService, /resolvePurchaseLocatorIds[\s\S]*SYNC_ENTITY_TYPES\.STOCK_LEDGER[\s\S]*localMovementId/, "purchase bill updates must resolve local stock movement ids through sync mappings");
 assert.match(syncService, /ledgerEntries/, "sync id mapping must include ledger entries");
 assert.match(syncService, /purchaseHistory/, "sync id mapping must include purchase history");
 assert.match(syncService, /stockLedger/, "sync id mapping must include stock ledger");

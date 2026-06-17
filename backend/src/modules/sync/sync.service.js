@@ -1259,10 +1259,19 @@ function readPurchaseLocator(payload, key) {
   return payload[key] ?? payload.match?.[key] ?? null;
 }
 
-function purchaseLocatorIds(payload, keys) {
-  return keys
-    .map((key) => compactText(payload[key]))
-    .filter((value) => value && !looksLikeClientLocalId(value));
+async function resolvePurchaseLocatorIds(shopId, entityType, payload, keys, context) {
+  const resolved = [];
+  for (const key of keys) {
+    const raw = compactText(payload[key]);
+    if (!raw) continue;
+    try {
+      const id = await resolveEntityReference(shopId, entityType, raw, context);
+      if (id && !looksLikeClientLocalId(id)) resolved.push(id);
+    } catch (error) {
+      if (error?.code !== "SYNC_DEPENDENCY_PENDING") throw error;
+    }
+  }
+  return [...new Set(resolved)];
 }
 
 function purchaseDateBucket(value) {
@@ -1302,8 +1311,16 @@ function purchaseCandidateMatches(row, match, amountKey) {
   return true;
 }
 
-async function findPurchaseHistoryTarget(shopId, payload) {
-  for (const id of purchaseLocatorIds(payload, ["purchaseHistoryId", "purchaseBillId", "serverId", "id"])) {
+async function findPurchaseHistoryTarget(shopId, payload, context) {
+  const ids = await resolvePurchaseLocatorIds(shopId, SYNC_ENTITY_TYPES.PURCHASE_HISTORY, payload, [
+    "purchaseHistoryId",
+    "purchaseBillId",
+    "localPurchaseHistoryId",
+    "localPurchaseBillId",
+    "serverId",
+    "id",
+  ], context);
+  for (const id of ids) {
     const row = await db.purchaseHistory.findFirst({ where: { shopId, id } });
     if (row) return row;
   }
@@ -1323,8 +1340,17 @@ async function findPurchaseHistoryTarget(shopId, payload) {
   return candidates.find((row) => purchaseCandidateMatches(row, match, "billAmount")) ?? null;
 }
 
-async function findStockLedgerPurchaseTarget(shopId, payload) {
-  for (const id of purchaseLocatorIds(payload, ["stockLedgerId", "inventoryMovementId", "movementId", "serverId"])) {
+async function findStockLedgerPurchaseTarget(shopId, payload, context) {
+  const ids = await resolvePurchaseLocatorIds(shopId, SYNC_ENTITY_TYPES.STOCK_LEDGER, payload, [
+    "stockLedgerId",
+    "inventoryMovementId",
+    "movementId",
+    "localMovementId",
+    "localInventoryMovementId",
+    "serverId",
+    "id",
+  ], context);
+  for (const id of ids) {
     const row = await db.stockLedger.findFirst({ where: { shopId, id, action: "purchase" } });
     if (row) return row;
   }
@@ -1421,11 +1447,11 @@ function stockLedgerPurchaseUpdateData(fields) {
   };
 }
 
-async function applyPurchaseBillLifecycle(shopId, event, { deleted = false } = {}) {
+async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = false } = {}) {
   const payload = purchaseBillLifecyclePayloadSchema.parse(getEventPayload(event));
   const [purchaseHistory, stockLedger] = await Promise.all([
-    findPurchaseHistoryTarget(shopId, payload),
-    findStockLedgerPurchaseTarget(shopId, payload),
+    findPurchaseHistoryTarget(shopId, payload, context),
+    findStockLedgerPurchaseTarget(shopId, payload, context),
   ]);
   if (!purchaseHistory && !stockLedger) {
     throw new AppError("Purchase bill not found for sync event", 404);
@@ -1461,12 +1487,12 @@ async function applyPurchaseBillLifecycle(shopId, event, { deleted = false } = {
   });
 }
 
-function applyUpdatePurchaseBill(shopId, event) {
-  return applyPurchaseBillLifecycle(shopId, event, { deleted: false });
+function applyUpdatePurchaseBill(shopId, event, context) {
+  return applyPurchaseBillLifecycle(shopId, event, context, { deleted: false });
 }
 
-function applyDeletePurchaseBill(shopId, event) {
-  return applyPurchaseBillLifecycle(shopId, event, { deleted: true });
+function applyDeletePurchaseBill(shopId, event, context) {
+  return applyPurchaseBillLifecycle(shopId, event, context, { deleted: true });
 }
 
 // Same stable-identity contract as ADJUST_STOCK/STOCK_PURCHASE, for a manual STOCK_SALE

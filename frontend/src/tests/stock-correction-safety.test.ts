@@ -104,7 +104,7 @@ describe("stock adjustment transaction safety", () => {
   });
 
   it("purchase increases stock inside the stock transaction", async () => {
-    const result = await recordPurchaseLocalFirst({ productId: "product_1", quantity: 5, unit: "kg", costPerRateUnit: 50, supplierName: "Test Supplier" });
+    const result = await recordPurchaseLocalFirst({ productId: "product_1", quantity: 5, unit: "kg", costPerRateUnit: 50, supplierName: "Test Supplier", invoiceNumber: "PUR-100" });
 
     expect(result.success).toBe(true);
     expect(mockedOfflineDB.transaction).toHaveBeenCalledWith(
@@ -113,7 +113,19 @@ describe("stock adjustment transaction safety", () => {
     );
     expect(tableRows("products")[0]).toEqual(expect.objectContaining({ id: "product_1", stockBaseQty: 15, sync_status: "pending_sync" }));
     expect(tableRows("inventory_movements")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "stock_purchase_1", type: "purchase", quantity_delta: 5, stock_before: 10, stock_after: 15 }),
+      expect.objectContaining({
+        id: "stock_purchase_1",
+        type: "purchase",
+        quantity_delta: 5,
+        stock_before: 10,
+        stock_after: 15,
+        invoiceNumber: "PUR-100",
+        invoice_number: "PUR-100",
+        purchaseBillNo: "PUR-100",
+        purchase_bill_no: "PUR-100",
+        supplierBillNo: "PUR-100",
+        supplier_bill_no: "PUR-100",
+      }),
     ]));
     expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
       expect.objectContaining({ operation_type: "STOCK_PURCHASE", entity_type: "inventory_movement", entity_id: "stock_purchase_1" }),

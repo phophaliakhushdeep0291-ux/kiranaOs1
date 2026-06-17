@@ -213,6 +213,25 @@ function ledgerEchoSignature(entry: Partial<CustomerLedgerEntry>): string | null
   const amount = Math.abs(readNumber(entry.amount, 0));
   if (amount <= 0) return null;
   const type = normaliseLedgerType(entry.type, entry.source_type).toLowerCase();
+  if (type === "payment") {
+    const paymentIdentity = getStringField(entry, [
+      "idempotencyKey",
+      "idempotency_key",
+      "clientLedgerId",
+      "client_ledger_id",
+      "localLedgerEntryId",
+      "local_ledger_entry_id",
+      "ledgerEntryId",
+      "ledger_entry_id",
+      "clientPaymentId",
+      "client_payment_id",
+      "localPaymentId",
+      "local_payment_id",
+      "paymentId",
+      "payment_id",
+    ]);
+    return paymentIdentity ? [type, customerId, "identity", paymentIdentity].join("|") : null;
+  }
   return [type, customerId, amount.toFixed(2), ledgerEchoTimeBucket(entry)].join("|");
 }
 

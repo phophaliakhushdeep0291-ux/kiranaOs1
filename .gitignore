@@ -17,6 +17,9 @@ dev.db
 
 *.log
 
+# Local archives / handoff bundles should not be committed.
+*.zip
+
 .vscode/
 .idea/
 .DS_Store

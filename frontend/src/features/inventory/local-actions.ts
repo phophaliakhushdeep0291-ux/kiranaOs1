@@ -144,6 +144,14 @@ async function stockMovementLocalFirst(data: StockMovementInput, movementType: S
   const updatedProduct = buildUpdatedProduct(product, productId, validated.quantityDelta, movementType, typeof data.costPerRateUnit === "number" ? data.costPerRateUnit : undefined);
   const negativeStockWarning = nextStock < 0 ? "Negative stock override used" : undefined;
   const warning = [negativeStockWarning, unitMismatchWarning].filter(Boolean).join(" | ") || undefined;
+  const purchaseInvoiceNumber =
+    typeof data.invoiceNumber === "string" && data.invoiceNumber.trim()
+      ? data.invoiceNumber.trim()
+      : typeof data.purchaseBillNo === "string" && data.purchaseBillNo.trim()
+        ? data.purchaseBillNo.trim()
+        : typeof data.supplierBillNo === "string" && data.supplierBillNo.trim()
+          ? data.supplierBillNo.trim()
+          : undefined;
   const movement = makeLocalEntity({
     id: movementId,
     productId,
@@ -158,12 +166,14 @@ async function stockMovementLocalFirst(data: StockMovementInput, movementType: S
     stockAfter: nextStock,
     stock_after: nextStock,
     unit: enteredUnit,
+    invoiceNumber: purchaseInvoiceNumber,
+    invoice_number: purchaseInvoiceNumber,
     billAmount: data.billAmount,
     bill_amount: data.billAmount,
-    purchaseBillNo: data.purchaseBillNo,
-    purchase_bill_no: data.purchaseBillNo,
-    supplierBillNo: data.supplierBillNo,
-    supplier_bill_no: data.supplierBillNo,
+    purchaseBillNo: purchaseInvoiceNumber,
+    purchase_bill_no: purchaseInvoiceNumber,
+    supplierBillNo: purchaseInvoiceNumber,
+    supplier_bill_no: purchaseInvoiceNumber,
     purchasePaymentStatus: data.purchasePaymentStatus,
     purchase_payment_status: data.purchasePaymentStatus,
     purchasePaymentMode: data.purchasePaymentMode,

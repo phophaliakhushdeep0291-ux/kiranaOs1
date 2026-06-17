@@ -32,11 +32,11 @@ assert.equal(dates.daysBetweenInclusive(s7, dates.endOfZonedDay(now, TZ)), 7, "7
 assert.equal(dates.daysBetweenInclusive(s30, dates.endOfZonedDay(now, TZ)), 30, "30d range counts as 30");
 
 // Source guard: normalizeDateRange must use the shop-tz helper, not server-local setDate().
-const src = fs.readFileSync("src/modules/reports/reports.service.js", "utf8");
+const src = fs.readFileSync("src/modules/reports/reports.service.js", "utf8").replace(/\r\n/g, "\n");
 const fn = src.slice(src.indexOf("function normalizeDateRange"));
 const body = fn.slice(0, fn.indexOf("\n}\n") + 2);
-assert.ok(body.includes("zonedDayStartDaysAgo(now, 6)"), "7d must use zonedDayStartDaysAgo");
-assert.ok(body.includes("zonedDayStartDaysAgo(now, 29)"), "30d must use zonedDayStartDaysAgo");
+assert.ok(/zonedDayStartDaysAgo\(now,\s*6\)/.test(body), "7d must use zonedDayStartDaysAgo");
+assert.ok(/zonedDayStartDaysAgo\(now,\s*29\)/.test(body), "30d must use zonedDayStartDaysAgo");
 assert.ok(!body.includes(".setDate("), "range starts must not use server-local .setDate()");
 
 console.log("report-range-start-timezone.examples.js OK");

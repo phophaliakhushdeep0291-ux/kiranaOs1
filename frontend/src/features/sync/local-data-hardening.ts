@@ -126,12 +126,43 @@ function amountKey(value: number | undefined): string | undefined {
   return Math.abs(roundMoney(value)).toFixed(2);
 }
 
+function explicitPaymentIdentity(row: MutableRow): string | undefined {
+  return readStringFrom(row, [
+    "idempotencyKey",
+    "idempotency_key",
+    "clientLedgerId",
+    "client_ledger_id",
+    "localLedgerEntryId",
+    "local_ledger_entry_id",
+    "ledgerEntryId",
+    "ledger_entry_id",
+    "clientPaymentId",
+    "client_payment_id",
+    "localPaymentId",
+    "local_payment_id",
+    "paymentId",
+    "payment_id",
+  ]);
+}
+
 function paymentEchoSignature(row: MutableRow): string | undefined {
   const mode = normalizedIdText(readStringFrom(row, ["mode", "paymentMode", "payment_mode"]));
   if (mode !== "cash" && mode !== "upi" && mode !== "card") return undefined;
   const amount = amountKey(readNumberFrom(row, ["amount", "paidAmount", "paid_amount"]));
   if (!amount) return undefined;
+  const billId = readStringFrom(row, [
+    "bill_id",
+    "billId",
+    "localBillId",
+    "local_bill_id",
+    "serverBillId",
+    "server_bill_id",
+  ]);
   const customer = normalizedIdText(readStringFrom(row, ["customer_id", "customerId"]) ?? "walk-in");
+  if (!billId) {
+    const identity = explicitPaymentIdentity(row);
+    return identity ? `payment|${customer}|${mode}|identity:${identity}` : undefined;
+  }
   return `payment|${customer}|${mode}|${amount}|${timeBucket(row)}`;
 }
 
@@ -149,6 +180,10 @@ export function paymentDuplicateSignature(row: MutableRow): string | undefined {
     "server_bill_id",
   ]);
   const customer = readStringFrom(row, ["customer_id", "customerId"]);
+  if (!billId) {
+    const identity = explicitPaymentIdentity(row);
+    return identity ? `payment-duplicate|customer:${customer ?? "walk-in"}|${mode}|identity:${identity}` : undefined;
+  }
   const scope = billId ? `bill:${billId}` : `customer:${customer ?? "walk-in"}`;
   const rawTime = readStringFrom(row, ["paid_at", "paidAt", "created_at", "createdAt", "updated_at", "updatedAt"]);
   if (!rawTime) return undefined;
@@ -173,6 +208,10 @@ function ledgerEchoSignature(row: MutableRow): string | undefined {
   const amount = amountKey(readNumberFrom(row, ["amount", "creditAmount", "credit_amount", "debitAmount", "debit_amount"]));
   if (!amount) return undefined;
   const customer = normalizedIdText(readStringFrom(row, ["customer_id", "customerId"]) ?? "unknown-customer");
+  if (kind === "payment") {
+    const identity = explicitPaymentIdentity(row);
+    return identity ? `ledger|${customer}|payment|identity:${identity}` : undefined;
+  }
   return `ledger|${customer}|${kind}|${amount}|${timeBucket(row)}`;
 }
 
