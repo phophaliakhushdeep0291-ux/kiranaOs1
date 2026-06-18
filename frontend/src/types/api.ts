@@ -478,6 +478,14 @@ export interface PaymentSummary {
   upi: number;
   credit: number;
   total: number;
+  oldUdharRecovered?: number;
+  cashInHand?: number;
+  upiReceived?: number;
+  purchaseCashPaid?: number;
+  purchaseUpiPaid?: number;
+  purchaseDue?: number;
+  totalCollected?: number;
+  netCashInHand?: number;
 }
 
 export interface TopProductRow {

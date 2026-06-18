@@ -20,6 +20,11 @@ const starterFeatures = [
   // Minimum two devices means Starter must include real two-way sync too.
   "auto_two_way_sync",
   "basic_recycle_bin",
+  // Core shopkeeping workflows are visible in the main app shell, so they must
+  // stay usable on Starter instead of failing after the user opens the page.
+  "supplier_entry",
+  "purchase_entry",
+  "stock_adjustment",
 ];
 
 const standardOnlyFeatures = [
@@ -40,9 +45,6 @@ const growthOnlyFeatures = [
   "profit_estimate",
   "dynamic_customer_pricing",
   "quantity_based_pricing",
-  "supplier_entry",
-  "purchase_entry",
-  "stock_adjustment",
   "payment_mode_reports",
   "monthly_reports",
   "csv_import_export",

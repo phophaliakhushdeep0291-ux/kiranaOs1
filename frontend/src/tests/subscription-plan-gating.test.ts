@@ -110,13 +110,12 @@ describe("subscription and plan gating", () => {
     mockState.subscriptionRows = [];
   });
 
-  it("Starter does not unlock Growth features", () => {
+  it("Starter unlocks visible core inventory workflows", () => {
     const decision = decideFeature(snapshot("starter"), "stock_adjustment");
 
-    expect(decision.allowed).toBe(false);
-    expect(decision.upgradeRequired).toBe(true);
-    expect(decision.requiredPlan.code).toBe("growth");
-    expect(decision.reason).toMatch(/requires Growth/i);
+    expect(decision.allowed).toBe(true);
+    expect(decision.upgradeRequired).toBe(false);
+    expect(decision.requiredPlan.code).toBe("starter");
   });
 
   it("Starter does not unlock Pro features", () => {

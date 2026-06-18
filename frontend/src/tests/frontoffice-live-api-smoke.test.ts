@@ -216,7 +216,7 @@ describeLive("frontend live API smoke", () => {
     const summary = await getUdharSummary();
     expect(summary.customers.some((row) => row.customerId === customer.id && row.outstanding === 100)).toBe(true);
 
-    const purchase = await recordPurchase({
+    const purchasePayload = {
       productId: product.id,
       supplierName: `QA Supplier ${id}`,
       quantity: 10,
@@ -230,7 +230,9 @@ describeLive("frontend live API smoke", () => {
       note: "Frontend smoke purchase",
       updateCost: true,
       ownerPin,
-    }) as {
+    };
+
+    const purchase = await recordPurchase(purchasePayload as never) as {
       productId: string;
       qtyAdded: number;
       newStock: number;
@@ -259,7 +261,11 @@ describeLive("frontend live API smoke", () => {
     expect(bills.bills.some((row) => row.id === creditBill.id)).toBe(true);
 
     const payments = await getPaymentSummary();
-    expect(asNumber(payments.cash)).toBeGreaterThanOrEqual(100);
+    expect(asNumber(payments.cash)).toBe(0);
     expect(asNumber(payments.credit)).toBeGreaterThanOrEqual(200);
+    expect(asNumber(payments.oldUdharRecovered)).toBeGreaterThanOrEqual(100);
+    expect(asNumber(payments.cashInHand)).toBeGreaterThanOrEqual(100);
+    expect(asNumber(payments.purchaseCashPaid)).toBeGreaterThanOrEqual(200);
+    expect(asNumber(payments.purchaseDue)).toBeGreaterThanOrEqual(300);
   }, 45_000);
 });

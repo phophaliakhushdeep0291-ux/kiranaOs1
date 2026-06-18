@@ -28,7 +28,8 @@ assert.match(postgresMigration, /AuditLog_shopId_fkey/, 'PostgreSQL migration mu
 assert.match(postgresMigration, /AuditLog_userId_fkey/, 'PostgreSQL migration must add AuditLog user FK');
 
 assert.match(auditService, /export async function createAuditLog/, 'audit service must expose createAuditLog');
-assert.match(auditService, /db\.auditLog\.create/, 'audit service must write to AuditLog');
+assert.match(auditService, /client = db/, 'audit service must default to the app Prisma client');
+assert.match(auditService, /client\.auditLog\.create/, 'audit service must write to AuditLog through the active client/transaction');
 assert.match(auditService, /JSON\.stringify/, 'audit service must serialize audit payloads');
 
 assert.match(billsController, /createAuditLog/, 'bill controller must use audit service');
