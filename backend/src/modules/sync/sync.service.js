@@ -1229,7 +1229,7 @@ async function applyRestoreCustomer(shopId, event, context) {
 }
 
 async function applyStockPurchase(shopId, event, context) {
-  const rawPayload = getEventPayload(event);
+  const rawPayload = normalizeStockPurchaseSyncPayload(getEventPayload(event));
   const payload = stockPurchasePayloadSchema.parse(rawPayload);
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_PURCHASE sync event", 400);
@@ -1272,6 +1272,33 @@ async function resolvePurchaseLocatorIds(shopId, entityType, payload, keys, cont
     }
   }
   return [...new Set(resolved)];
+}
+
+function normalizeStockPurchaseSyncPayload(payload) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const billAmount = round2(Number(source.billAmount ?? source.bill_amount ?? source.purchaseBillAmount ?? source.purchase_bill_amount ?? 0));
+  const statusHint = normalizedText(source.purchasePaymentStatus ?? source.purchase_payment_status);
+  const rawPaid = source.purchasePaidAmount ?? source.purchase_paid_amount ?? source.paidAmount ?? source.paid_amount;
+  const numericPaid = rawPaid === undefined || rawPaid === null || rawPaid === "" ? null : Number(rawPaid);
+  const paid = round2(Math.max(0, Math.min(
+    Number.isFinite(numericPaid) ? numericPaid : statusHint === "paid" ? billAmount : 0,
+    Math.max(0, billAmount),
+  )));
+  const due = round2(Math.max(0, billAmount - paid));
+  const status = due <= 0 ? "paid" : paid > 0 ? "partial" : "due";
+  const dueDateText = compactText(source.purchaseDueDate ?? source.purchase_due_date);
+  const dueDate = dueDateText && /^\d{4}-\d{2}-\d{2}/.test(dueDateText)
+    ? dueDateText.slice(0, 10)
+    : undefined;
+
+  return {
+    ...source,
+    purchasePaymentStatus: status,
+    purchasePaidAmount: paid,
+    purchaseDueAmount: due,
+    purchasePaymentMode: paid > 0 ? source.purchasePaymentMode ?? source.purchase_payment_mode : undefined,
+    purchaseDueDate: due > 0 ? dueDate : undefined,
+  };
 }
 
 function purchaseDateBucket(value) {
@@ -1393,9 +1420,8 @@ function normalizePurchaseLifecycleFields(payload, { deleted = false } = {}) {
 
   const billAmount = round2(Number(payload.billAmount ?? payload.purchaseBillAmount ?? payload.amount ?? 0));
   const paid = round2(Math.max(0, Number(payload.purchasePaidAmount ?? payload.paidAmount ?? payload.paid ?? 0)));
-  const explicitDue = payload.purchaseDueAmount ?? payload.dueAmount ?? payload.due;
-  const due = round2(Math.max(0, explicitDue === undefined || explicitDue === null ? billAmount - paid : Number(explicitDue)));
   const safePaid = round2(Math.min(paid, Math.max(0, billAmount)));
+  const due = round2(Math.max(0, billAmount - safePaid));
   const status = due <= 0 ? "paid" : safePaid > 0 ? "partial" : "due";
   const mode = safePaid > 0 ? normalizedText(payload.purchasePaymentMode ?? payload.paymentMode ?? "cash") : null;
 
@@ -1405,7 +1431,7 @@ function normalizePurchaseLifecycleFields(payload, { deleted = false } = {}) {
     billAmount,
     purchasePaidAmount: safePaid,
     purchaseDueAmount: due,
-    purchasePaymentStatus: compactText(payload.purchasePaymentStatus) ?? status,
+    purchasePaymentStatus: status,
     purchasePaymentMode: mode === "bank" || mode === "card" ? "upi" : mode,
     purchaseDueDate: parsePurchaseLifecycleDueDate(payload.purchaseDueDate, due),
   };

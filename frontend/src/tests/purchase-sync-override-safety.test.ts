@@ -5,6 +5,7 @@ import {
   rowMatchesPurchaseOverride,
   withLocalPurchaseOverride,
 } from "@/features/purchases/sync-guards";
+import { buildBackendSyncOperation } from "@/features/sync/sync-operation-normalizer";
 
 describe("purchase sync override safety", () => {
   it("keeps previous purchase keys so edited rows block stale cloud re-imports", () => {
@@ -63,5 +64,60 @@ describe("purchase sync override safety", () => {
     expect(normalizer).toContain("DELETE_PURCHASE_BILL");
     expect(syncTypes).toContain("stockLedgerId");
     expect(syncTypes).toContain("localMovementId");
+  });
+
+  it("repairs queued stock purchase payment fields before backend sync", () => {
+    const operation = buildBackendSyncOperation({
+      operation_type: "STOCK_PURCHASE",
+      entity_type: "inventory_movement",
+      entity_id: "stock_purchase_1",
+      payload: {},
+    } as never, {
+      productId: "product_1",
+      quantity: 1,
+      enteredUnit: "kg",
+      billAmount: 200,
+      purchasePaymentStatus: "partial",
+      purchaseDueDate: "2026-06-18T12:00:00.000Z",
+    });
+
+    expect(operation?.payload).toEqual(expect.objectContaining({
+      purchasePaymentStatus: "due",
+      purchase_payment_status: "due",
+      purchasePaidAmount: 0,
+      purchase_paid_amount: 0,
+      purchaseDueAmount: 200,
+      purchase_due_amount: 200,
+      purchaseDueDate: "2026-06-18",
+      purchase_due_date: "2026-06-18",
+    }));
+    expect(operation?.payload.purchasePaymentMode).toBeUndefined();
+  });
+
+  it("repairs queued purchase edit payment fields before backend sync", () => {
+    const operation = buildBackendSyncOperation({
+      operation_type: "UPDATE_PURCHASE_BILL",
+      entity_type: "purchase_history",
+      entity_id: "purchase_1",
+      payload: {},
+    } as never, {
+      purchaseHistoryId: "purchase_1",
+      billAmount: 500,
+      purchasePaidAmount: 500,
+      purchaseDueAmount: 200,
+      purchasePaymentStatus: "partial",
+      purchasePaymentMode: "upi",
+      purchaseDueDate: "2026-06-18T12:00:00.000Z",
+    });
+
+    expect(operation?.payload).toEqual(expect.objectContaining({
+      purchasePaymentStatus: "paid",
+      purchase_payment_status: "paid",
+      purchasePaidAmount: 500,
+      purchase_paid_amount: 500,
+      purchaseDueAmount: 0,
+      purchase_due_amount: 0,
+    }));
+    expect(operation?.payload.purchaseDueDate).toBeUndefined();
   });
 });

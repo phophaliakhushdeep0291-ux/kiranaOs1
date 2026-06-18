@@ -96,8 +96,12 @@ function normaliseStockPayload(
   }
 
   if (backendType === "STOCK_PURCHASE" || backendType === "STOCK_SALE") {
+    const purchaseFields = backendType === "STOCK_PURCHASE"
+      ? normalisePurchaseMoneyFields(payload)
+      : {};
     return {
       ...payload,
+      ...purchaseFields,
       productId: payload.productId ?? payload.product_id,
       localProductId: payload.localProductId ?? payload.local_product_id,
       quantity: Math.abs(readNumber(payload.quantity ?? payload.quantityDelta ?? payload.quantity_delta, 0)),
@@ -112,6 +116,64 @@ function normaliseStockPayload(
 
 function roundMoney(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function readOptionalNumber(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    if (value === "" || value === null || value === undefined) continue;
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) return numberValue;
+  }
+  return undefined;
+}
+
+function normaliseDateOnly(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const raw = value.trim();
+  if (!raw) return undefined;
+  const direct = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (direct) return direct[1];
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return undefined;
+}
+
+function normalisePurchaseMoneyFields(payload: Record<string, unknown>): Record<string, unknown> {
+  const billAmount = roundMoney(readNumber(
+    payload.billAmount ?? payload.bill_amount ?? payload.purchaseBillAmount ?? payload.purchase_bill_amount,
+    0,
+  ));
+  const paidInput = readOptionalNumber(
+    payload.purchasePaidAmount,
+    payload.purchase_paid_amount,
+    payload.paidAmount,
+    payload.paid_amount,
+  );
+  const initialStatus = String(payload.purchasePaymentStatus ?? payload.purchase_payment_status ?? "").toLowerCase();
+  const paid = roundMoney(Math.max(0, Math.min(
+    paidInput ?? (initialStatus === "paid" ? billAmount : 0),
+    billAmount > 0 ? billAmount : Number.MAX_SAFE_INTEGER,
+  )));
+  const due = roundMoney(Math.max(0, billAmount - paid));
+  const status = billAmount > 0 && paid >= billAmount - 0.01
+    ? "paid"
+    : paid > 0
+      ? "partial"
+      : "due";
+  const dueDate = normaliseDateOnly(payload.purchaseDueDate ?? payload.purchase_due_date);
+
+  return {
+    purchasePaymentStatus: status,
+    purchase_payment_status: status,
+    purchasePaidAmount: paid,
+    purchase_paid_amount: paid,
+    purchaseDueAmount: due,
+    purchase_due_amount: due,
+    purchasePaymentMode: paid > 0 ? payload.purchasePaymentMode ?? payload.purchase_payment_mode : undefined,
+    purchase_payment_mode: paid > 0 ? payload.purchasePaymentMode ?? payload.purchase_payment_mode : undefined,
+    purchaseDueDate: due > 0 ? dueDate : undefined,
+    purchase_due_date: due > 0 ? dueDate : undefined,
+  };
 }
 
 function isCreditPayment(payment: unknown): boolean {
@@ -311,6 +373,7 @@ export function buildBackendSyncOperation(
 
   if (backendType === "CREATE_BILL") payload = normaliseCreateBillPayload(payload);
   if (backendType === "UDHAR_PAYMENT") payload = normalisePaymentPayload(payload);
+  if (backendType === "UPDATE_PURCHASE_BILL") payload = { ...payload, ...normalisePurchaseMoneyFields(payload) };
   payload = normaliseBillLifecyclePayload(backendType, payload);
   payload = normaliseProductLifecyclePayload(backendType, payload);
   payload = normaliseCustomerLifecyclePayload(backendType, payload);

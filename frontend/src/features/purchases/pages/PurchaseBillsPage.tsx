@@ -731,7 +731,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [purchaseNo, setPurchaseNo] = useState("");
   const [payMode, setPayMode] = useState("upi");
-  const [payStatus, setPayStatus] = useState<"paid" | "partial" | "due">("partial");
+  const [payStatus, setPayStatus] = useState<"paid" | "partial" | "due">("due");
   const [paidInput, setPaidInput] = useState("");
   const [lines, setLines] = useState<PurchaseLine[]>([{ key: 1, productId: "", qty: "", cost: "" }]);
   const [notes, setNotes] = useState("");
@@ -765,16 +765,20 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
 
   function reset() {
     setSupplierId(""); setNewSupplierName(""); setContact(""); setMobile("");
-    setDate(new Date().toISOString().slice(0, 10)); setPurchaseNo(""); setPayMode("upi"); setPayStatus("partial");
+    setDate(new Date().toISOString().slice(0, 10)); setPurchaseNo(""); setPayMode("upi"); setPayStatus("due");
     setPaidInput(""); setLines([{ key: keyRef.current++, productId: "", qty: "", cost: "" }]); setNotes(""); setFileName("");
   }
 
   async function save() {
     if (saving) return;
-    const validLines = lines.filter((line) => line.productId && (Number(line.qty) || 0) > 0);
+    const validLines = lines.filter((line) => line.productId && (Number(line.qty) || 0) > 0 && (Number(line.cost) || 0) > 0);
     const supplierName = supplierId === "new" ? newSupplierName.trim() : selectedSupplier?.name ?? "";
     if (!supplierName) { toast({ title: "Choose a supplier", description: "Pick an existing supplier or add a new one.", variant: "destructive" }); return; }
-    if (validLines.length === 0) { toast({ title: "Add at least one product", description: "Each line needs a product and quantity.", variant: "destructive" }); return; }
+    if (validLines.length === 0) { toast({ title: "Add at least one product", description: "Each line needs a product, quantity, and cost.", variant: "destructive" }); return; }
+    if (payStatus === "partial" && (paidAmount <= 0 || paidAmount >= totalAmount)) {
+      toast({ title: "Enter partial paid amount", description: "Partial purchases need a paid amount greater than zero and less than the bill total.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       let resolvedSupplierId: string | undefined = supplierId !== "new" ? supplierId : undefined;
@@ -783,12 +787,13 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
         resolvedSupplierId = created.id;
       }
       const invoice = purchaseNo.trim() || `PUR-${format(new Date(), "yyMMdd-HHmmss")}`;
-      const spentAt = new Date(`${date}T12:00:00`).toISOString();
       for (const line of validLines) {
         const product = products.find((p) => p.id === line.productId);
         const amount = lineTotal(line);
         const share = totalAmount > 0 ? amount / totalAmount : 0;
         const linePaid = Math.round(paidAmount * share * 100) / 100;
+        const lineDue = Math.max(0, Math.round((amount - linePaid) * 100) / 100);
+        const lineStatus = lineDue <= 0 ? "paid" : linePaid > 0 ? "partial" : "due";
         await recordPurchaseLocalFirst({
           productId: line.productId,
           productName: product?.name,
@@ -800,11 +805,11 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
           invoiceNumber: invoice,
           billAmount: amount,
           costPerRateUnit: Number(line.cost) || 0,
-          purchasePaymentStatus: payStatus,
-          purchasePaymentMode: payMode,
+          purchasePaymentStatus: lineStatus,
+          purchasePaymentMode: linePaid > 0 ? payMode : undefined,
           purchasePaidAmount: linePaid,
-          purchaseDueAmount: Math.max(0, amount - linePaid),
-          purchaseDueDate: spentAt,
+          purchaseDueAmount: lineDue,
+          purchaseDueDate: lineDue > 0 ? date : undefined,
           note: notes.trim() || undefined,
         });
       }

@@ -2,7 +2,7 @@ import { requestAiAppCommand } from "@/lib/ai/ai-client";
 import { normalizeAiIntent } from "./voice-command-parser";
 import type { VoiceIntent } from "./voice-types";
 
-// The AI enhancement is optional: a missing GROQ_API_KEY (backend 503), an
+// The AI enhancement is optional: a missing backend AI provider key (backend 503), an
 // unreachable/slow proxy, or any error must never block the reliable local
 // parser. Bound the call so it can't hang the command at "Understanding…".
 const AI_COMMAND_TIMEOUT_MS = 3500;

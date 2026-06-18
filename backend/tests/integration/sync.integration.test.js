@@ -198,6 +198,35 @@ if (ctx.skip) {
       assert.equal(history.length, 1, "exactly one PurchaseHistory row (supplier due not doubled)");
     });
 
+    test("STOCK_PURCHASE normalizes legacy partial purchase payloads before validation", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, costPerRateUnit: 10 });
+      const result = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          type: "STOCK_PURCHASE",
+          eventId: "legacy-purchase-normalize-1",
+          payload: {
+            productId: product.id,
+            quantity: 10,
+            enteredUnit: product.baseUnit,
+            billAmount: 200,
+            supplierName: "Legacy Supplier",
+            purchasePaymentStatus: "partial",
+            purchaseDueDate: "2026-06-18T12:00:00.000Z",
+            idempotencyKey: "stock-purchase:legacy-normalize-1",
+            clientMovementId: "stock-purchase:legacy-normalize-1",
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      assert.equal(String(result.results[0].status).toLowerCase(), "synced");
+      const history = await ctx.db.purchaseHistory.findFirst({ where: { shopId: tenant.shop.id, productId: product.id } });
+      assert.equal(history.purchasePaymentStatus, "due");
+      assert.equal(history.purchasePaidAmount, 0);
+      assert.equal(history.purchaseDueAmount, 200);
+      assert.equal(history.purchaseDueDate.toISOString().slice(0, 10), "2026-06-18");
+    });
+
     test("CREATE_LEDGER_ADJUSTMENT replayed under a new event id applies to udhar once", async () => {
       // A manual udhar adjustment that committed but lost its ack gets re-pushed under a new event
       // id. Event-level idempotency cannot catch this (different event ids), and a double apply
@@ -355,6 +384,70 @@ if (ctx.skip) {
       assert.equal(updatedCustomer.udharAmount, 80);
       const ledger = await ctx.db.udharLedger.findFirst({ where: { shopId: tenant.shop.id, billId: bill.id, type: "debit" } });
       assert.equal(ledger.amount, 80);
+    });
+
+    test("two same-amount udhar payments can clear balance and retry idempotently", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, {
+        name: "Split Pay Customer",
+        type: "udhar",
+        udharAmount: 200,
+      });
+      const eventA = {
+        eventId: "udhar-split-pay-1",
+        type: "UDHAR_PAYMENT",
+        payload: {
+          customerId: customer.id,
+          localPaymentId: "local-payment-100-a",
+          localLedgerEntryId: "local-ledger-100-a",
+          idempotencyKey: "record-payment:test:split:a",
+          payment: {
+            amount: 100,
+            mode: "cash",
+            localPaymentId: "local-payment-100-a",
+            localLedgerEntryId: "local-ledger-100-a",
+            idempotencyKey: "record-payment:test:split:a",
+          },
+        },
+      };
+      const eventB = {
+        eventId: "udhar-split-pay-2",
+        type: "UDHAR_PAYMENT",
+        payload: {
+          customerId: customer.id,
+          localPaymentId: "local-payment-100-b",
+          localLedgerEntryId: "local-ledger-100-b",
+          idempotencyKey: "record-payment:test:split:b",
+          payment: {
+            amount: 100,
+            mode: "cash",
+            localPaymentId: "local-payment-100-b",
+            localLedgerEntryId: "local-ledger-100-b",
+            idempotencyKey: "record-payment:test:split:b",
+          },
+        },
+      };
+
+      let data = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [eventA, eventB],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(data.summary.synced, 2);
+      assert.equal(data.summary.failed, 0);
+
+      data = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{ ...eventA, eventId: "udhar-split-pay-1-retry" }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(data.summary.synced, 1);
+      assert.equal(data.results[0].result.idempotentReplay, true);
+
+      const updatedCustomer = await ctx.db.customer.findUnique({ where: { id: customer.id } });
+      assert.equal(updatedCustomer.udharAmount, 0);
+      const paymentLedgers = await ctx.db.udharLedger.findMany({
+        where: { shopId: tenant.shop.id, customerId: customer.id, type: "payment" },
+        orderBy: { createdAt: "asc" },
+      });
+      assert.equal(paymentLedgers.length, 2);
+      assert.deepEqual(paymentLedgers.map((row) => row.amount), [100, 100]);
     });
 
     test("same batch resolves local product and customer ids before creating bill", async () => {
