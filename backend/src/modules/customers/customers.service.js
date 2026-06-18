@@ -368,6 +368,7 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       after: { reversedAt, reversalLedgerEntryId: reversal.id, newBalance: round2(refreshed?.balance ?? 0) },
       metadata: { reason },
       req,
+      client: tx,
     });
 
     return {

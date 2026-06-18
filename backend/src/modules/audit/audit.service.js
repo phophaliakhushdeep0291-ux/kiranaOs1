@@ -18,11 +18,12 @@ export async function createAuditLog({
   after = undefined,
   metadata = undefined,
   req = null,
+  client = db,
 }) {
   if (!shopId || !action) return null;
 
   try {
-    return await db.auditLog.create({
+    return await client.auditLog.create({
       data: {
         shopId,
         userId: userId ?? null,
