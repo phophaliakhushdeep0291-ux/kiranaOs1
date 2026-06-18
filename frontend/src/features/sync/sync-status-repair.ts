@@ -1,6 +1,7 @@
 import { dexieDB, filterRowsForCurrentScope, offlineDB, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
+import { buildBackendSyncOperation } from "@/features/sync/sync-operation-normalizer";
 
 export interface SyncQueueCounts {
   pending: number;
@@ -309,6 +310,73 @@ function retryableBillPaymentValidationConflict(event: PendingSyncEvent): boolea
   );
 }
 
+function retryablePurchaseValidationConflict(event: PendingSyncEvent): boolean {
+  const kind = operationKind(event);
+  const entityType = String(event.entity_type || "").toLowerCase();
+  const message = eventErrorMessage(event);
+  const isPurchaseOperation =
+    kind === "STOCK_PURCHASE" ||
+    kind === "UPDATE_PURCHASE_BILL" ||
+    kind === "DELETE_PURCHASE_BILL" ||
+    entityType === "purchase_history" ||
+    (entityType.includes("inventory") && message.includes("purchase"));
+  if (!isPurchaseOperation || (!isConflictOutbox(event) && !isFailedOutbox(event))) return false;
+  return (
+    message.includes("purchaseduedate") ||
+    message.includes("purchase due date") ||
+    message.includes("purchasepaidamount") ||
+    message.includes("partial purchase") ||
+    message.includes("purchasehistoryid") ||
+    message.includes("purchasebillid") ||
+    message.includes("stockledgerid") ||
+    message.includes("localpurchasehistoryid") ||
+    message.includes("localpurchasebillid") ||
+    message.includes("invalid_string") ||
+    message.includes("too_small")
+  );
+}
+
+function retryableLedgerAdjustmentValidationConflict(event: PendingSyncEvent): boolean {
+  const kind = operationKind(event);
+  const message = eventErrorMessage(event);
+  const amount = readNumberFrom(payloadRecord(event), ["amount"]);
+  return (
+    kind === "CREATE_LEDGER_ADJUSTMENT" &&
+    (isConflictOutbox(event) || isFailedOutbox(event)) &&
+    typeof amount === "number" &&
+    amount !== 0 &&
+    (message.includes("amount") ||
+      message.includes("too_small") ||
+      message.includes("greater than or equal to 0"))
+  );
+}
+
+async function repairRetryablePurchaseAndLedgerValidationConflicts(): Promise<number> {
+  await dexieDB.open();
+  const rows = filterRowsForCurrentScope(
+    await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
+  ).filter((event) => retryablePurchaseValidationConflict(event) || retryableLedgerAdjustmentValidationConflict(event));
+
+  if (rows.length === 0) return 0;
+  const now = nowIso();
+  let repaired = 0;
+  for (const event of rows) {
+    const normalizedPayload = buildBackendSyncOperation(event, payloadRecord(event))?.payload ?? event.payload;
+    await dexieDB.sync_outbox.put({
+      ...event,
+      payload: normalizedPayload,
+      status: "PENDING",
+      sync_status: "pending_sync",
+      error_message: null,
+      last_error: null,
+      next_retry_at: null,
+      last_attempt_at: now,
+    });
+    repaired += 1;
+  }
+  return repaired;
+}
+
 function hasServerProof(row: MutableRow | undefined): boolean {
   if (!row) return false;
   if (readStringFrom(row, ["server_id", "serverId"])) return true;
@@ -461,11 +529,12 @@ async function repairResolvedStoredConflicts(): Promise<number> {
 export async function repairResolvedSyncStatusNoise(): Promise<number> {
   const staleSyncingRepaired = await repairStaleSyncingOutboxEvents().catch(() => 0);
   const retryableValidationRepaired = await repairRetryableBillValidationConflicts().catch(() => 0);
+  const retryablePurchaseAndLedgerRepaired = await repairRetryablePurchaseAndLedgerValidationConflicts().catch(() => 0);
   const financialRepaired = await hardenLocalFinancialData().then((result) => result.total).catch(() => 0);
   const billRepaired = await repairStaleSyncedBillOutboxFailures().catch(() => 0);
   const duplicateKeyRepaired = await repairResolvedDuplicateKeyOutboxFailures().catch(() => 0);
   const conflictsRepaired = await repairResolvedStoredConflicts().catch(() => 0);
-  const repaired = staleSyncingRepaired + retryableValidationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired + conflictsRepaired;
+  const repaired = staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + financialRepaired + billRepaired + duplicateKeyRepaired + conflictsRepaired;
   if (repaired > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
   }

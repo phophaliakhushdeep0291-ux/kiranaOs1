@@ -255,6 +255,47 @@ if (ctx.skip) {
       assert.equal(after.udharAmount, 200, "adjustment applied exactly once (balance ₹200, not ₹400)");
     });
 
+    test("CREATE_LEDGER_ADJUSTMENT accepts negative repair amounts without schema conflicts", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          type: "CREATE_LEDGER_ADJUSTMENT",
+          eventId: "ladj-negative-seed",
+          payload: {
+            customerId: customer.id,
+            amount: 200,
+            note: "opening correction",
+            idempotencyKey: "ledger-adjust:negative-seed",
+            clientLedgerId: "ledger-adjust:negative-seed",
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const result = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          type: "CREATE_LEDGER_ADJUSTMENT",
+          eventId: "ladj-negative-1",
+          payload: {
+            customerId: customer.id,
+            amount: -60,
+            note: "reduce wrong opening balance",
+            idempotencyKey: "ledger-adjust:negative-1",
+            clientLedgerId: "ledger-adjust:negative-1",
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      assert.equal(String(result.results[0].status).toLowerCase(), "synced");
+      const after = await ctx.db.customer.findUnique({ where: { id: customer.id } });
+      assert.equal(after.udharAmount, 140);
+      const adjustments = await ctx.db.udharLedger.findMany({
+        where: { shopId: tenant.shop.id, customerId: customer.id, mode: "adjustment" },
+        orderBy: { createdAt: "asc" },
+      });
+      assert.deepEqual(adjustments.map((row) => row.type), ["debit", "payment"]);
+    });
+
     test("STOCK_SALE replayed under a new event id decrements stock once", async () => {
       // A manual offline stock-out that committed but lost its ack gets re-pushed under a new event
       // id. STOCK_SALE is relative (decrement), so a double apply would remove stock twice. The

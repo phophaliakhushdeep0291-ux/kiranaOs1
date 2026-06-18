@@ -89,7 +89,7 @@ const udharPaymentPayloadSchema = z.object({
 const ledgerAdjustmentPayloadSchema = z.object({
   ledgerEntryId: z.string().min(1).optional(),
   customerId: z.string().min(1),
-  amount: moneyAmount(),
+  amount: moneyAmount({ min: -100_000_000 }),
   note: z.string().optional(),
 }).passthrough();
 

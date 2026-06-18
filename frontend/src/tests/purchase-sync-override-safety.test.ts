@@ -120,4 +120,44 @@ describe("purchase sync override safety", () => {
     }));
     expect(operation?.payload.purchaseDueDate).toBeUndefined();
   });
+
+  it("strips blank purchase lifecycle ids before backend validation", () => {
+    const operation = buildBackendSyncOperation({
+      operation_type: "UPDATE_PURCHASE_BILL",
+      entity_type: "purchase_history",
+      entity_id: "stock_purchase_3209ba21",
+      payload: {},
+    } as never, {
+      purchaseHistoryId: "",
+      purchaseBillId: "",
+      stockLedgerId: "",
+      localPurchaseHistoryId: "",
+      localPurchaseBillId: "",
+      supplierName: "sugar",
+      invoiceNumber: "",
+      billAmount: 336,
+      purchasePaidAmount: 336,
+      purchasePaymentStatus: "partial",
+      purchasePaymentMode: "cash",
+      purchaseDueDate: "not-a-date",
+      match: {
+        productId: "server_product_1",
+        supplierName: "sugar",
+        billAmount: 336,
+      },
+    });
+
+    expect(operation?.payload).toEqual(expect.objectContaining({
+      purchaseHistoryId: undefined,
+      purchaseBillId: undefined,
+      stockLedgerId: undefined,
+      localPurchaseHistoryId: "stock_purchase_3209ba21",
+      localPurchaseBillId: "stock_purchase_3209ba21",
+      purchasePaymentStatus: "paid",
+      purchasePaidAmount: 336,
+      purchaseDueAmount: 0,
+    }));
+    expect(operation?.payload.purchaseDueDate).toBeUndefined();
+    expect(operation?.payload.invoiceNumber).toBeNull();
+  });
 });

@@ -609,6 +609,81 @@ describe("sync engine reliability", () => {
     );
   });
 
+  it("force sync requeues recoverable purchase validation conflicts with cleaned payloads", async () => {
+    const conflict = seedOutbox({
+      op_id: "op_stock_purchase_conflict",
+      clientEventId: "op_stock_purchase_conflict",
+      idempotency_key: "idem-stock-purchase-conflict",
+      type: "STOCK_PURCHASE",
+      operation_type: "STOCK_PURCHASE",
+      entity_type: "inventory_movement",
+      entity_id: "stock_purchase_conflict",
+      payload: {
+        movementId: "stock_purchase_conflict",
+        localMovementId: "stock_purchase_conflict",
+        productId: "server_product_1",
+        quantity: 1,
+        enteredUnit: "kg",
+        supplierName: "sugar",
+        billAmount: 336,
+        purchasePaymentStatus: "partial",
+        purchasePaidAmount: 336,
+        purchaseDueDate: "not-a-date",
+      },
+      status: "CONFLICT",
+      sync_status: "conflict",
+      retry_count: 1,
+      attempts: 1,
+      error_message: `[{"validation":"regex","code":"invalid_string","message":"Purchase due date must be YYYY-MM-DD","path":["purchaseDueDate"]},{"code":"custom","path":["purchasePaidAmount"],"message":"Partial purchase paid amount must be less than bill amount"}]`,
+      next_retry_at: null,
+    });
+    dbState.putInto("sync_conflicts", {
+      id: "conflict_inventory_movement_stock_purchase_conflict_op_stock_purchase_conflict",
+      entity_type: "inventory_movement",
+      entity_id: "stock_purchase_conflict",
+      sourceId: "op_stock_purchase_conflict",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "conflict",
+      resolution: "unresolved",
+      local_snapshot: conflict.payload,
+      server_snapshot: { error: "Purchase due date must be YYYY-MM-DD" },
+    });
+    mockedSyncPush.mockResolvedValueOnce({
+      results: [{
+        clientEventId: "op_stock_purchase_conflict",
+        eventId: "op_stock_purchase_conflict",
+        op_id: "op_stock_purchase_conflict",
+        idempotency_key: "idem-stock-purchase-conflict",
+        success: true,
+        status: "synced",
+        entity_type: "inventory_movement",
+        stockLedgerId: "server_stock_purchase_conflict",
+        localMovementId: "stock_purchase_conflict",
+        purchaseHistoryId: "server_purchase_conflict",
+      }],
+    });
+
+    const result = await runSyncCycle();
+
+    expect(result).toEqual(expect.objectContaining({ pushed: 1, failed: 0, conflicts: 0, pending: 0 }));
+    const request = mockedSyncPush.mock.calls[0][0] as {
+      operations: Array<{ payload: Record<string, unknown> }>;
+    };
+    expect(request.operations[0]?.payload).toEqual(expect.objectContaining({
+      purchasePaymentStatus: "paid",
+      purchasePaidAmount: 336,
+      purchaseDueAmount: 0,
+    }));
+    expect(request.operations[0]?.payload.purchaseDueDate).toBeUndefined();
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({ status: "SYNCED", sync_status: "synced" }),
+    );
+    expect(scopedRows("sync_conflicts")[0]).toEqual(
+      expect.objectContaining({ resolution: "auto_resolved", sync_status: "synced" }),
+    );
+  });
+
   it("pull merges server changes", async () => {
     syncPullMock.mockResolvedValueOnce({
       changes: [

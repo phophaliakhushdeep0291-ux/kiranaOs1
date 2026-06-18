@@ -154,6 +154,36 @@ function moneyLabel(value: number | null): string | null {
   return `Rs ${Math.abs(value).toLocaleString("en-IN")}`;
 }
 
+function userSafeSyncReason(rawReason: unknown, fallback = "Something went wrong while backing this up. Please try sync again."): string {
+  const text = typeof rawReason === "string" ? rawReason.trim() : "";
+  if (!text) return fallback;
+  const lower = text.toLowerCase();
+  if (lower.includes("purchase") || lower.includes("stockledgerid") || lower.includes("purchasehistoryid") || lower.includes("purchasebillid")) {
+    return "Purchase backup needs one more retry. Your purchase is safe on this device.";
+  }
+  if (lower.includes("ledger") || (lower.includes("amount") && (lower.includes("too_small") || lower.includes("greater than or equal")))) {
+    return "Udhar backup needs one more retry. Your local ledger is safe on this device.";
+  }
+  if (lower.includes("payment") || lower.includes("udhar")) {
+    return "Payment backup needs one more retry. Your local payment is safe on this device.";
+  }
+  if (lower.includes("server changed") || lower.includes("unsynced local changes")) {
+    return "This record changed on another device before backup finished. Review it when you are free.";
+  }
+  if (
+    lower.includes("validation") ||
+    lower.includes("invalid_string") ||
+    lower.includes("too_small") ||
+    lower.includes("\"path\"") ||
+    lower.includes("\"code\"") ||
+    text.startsWith("[") ||
+    text.startsWith("{")
+  ) {
+    return fallback;
+  }
+  return text.length > 160 ? fallback : text;
+}
+
 function recordPath(entityType: string | undefined, entityId?: string | null) {
   const entity = String(entityType ?? "").toLowerCase();
   if (entity.includes("bill")) return entityId ? `/bills/${entityId}` : "/bills";
@@ -196,9 +226,9 @@ function operationSubject(operation: PendingSyncEvent) {
     operation.status === "PENDING" || operation.sync_status === "pending_sync";
   return {
     title: parts.length ? parts.join(" - ") : `${operation.entity_type} - ${entityId}`,
-    reason:
-      reason ??
-      (pendingUpload
+    reason: reason
+      ? userSafeSyncReason(reason)
+      : (pendingUpload
         ? "Waiting for cloud backup. Press Force sync when backend is online."
         : "No detailed reason received from backend yet."),
     amount,
@@ -222,7 +252,7 @@ function conflictSubject(conflict: ConflictRow) {
   const parts = [name, billNo, moneyLabel(amount)].filter(Boolean);
   return {
     title: parts.length ? parts.join(" - ") : `${safeString(conflict.entity_type)} - ${safeString(conflict.entity_id)}`,
-    reason: conflict.error_message ?? "Backend and local data did not match.",
+    reason: userSafeSyncReason(conflict.error_message, "Something went wrong while backing this up. Please try sync again."),
   };
 }
 
@@ -519,17 +549,17 @@ function ConflictList({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Conflicts</CardTitle>
+        <CardTitle className="text-lg">Backup review</CardTitle>
         <CardDescription>
           {conflicts.length === 0
-            ? "No cloud/local mismatch found."
-            : "These items need owner review before backup can finish."}
+            ? "No cloud backup item needs review."
+            : "These items are safe locally and need a retry or quick review."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {conflicts.length === 0 ? (
           <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            No conflicts. Data is clean for sync.
+            No review items. Data is clean for backup.
           </div>
         ) : (
           conflicts.slice(0, 25).map((conflict) => (
@@ -540,7 +570,7 @@ function ConflictList({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="font-medium">
-                    Same data changed in shop and cloud
+                    Backup needs attention
                   </div>
                   <div className="mt-1 text-sm font-medium text-foreground">
                     {conflictSubject(conflict).title}
@@ -551,7 +581,7 @@ function ConflictList({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">Needs review</Badge>
+                  <Badge variant="outline">Retry / review</Badge>
                   <Button asChild size="sm" variant="outline">
                     <a href={recordPath(conflict.entity_type, conflict.entity_id)}>
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -571,7 +601,7 @@ function ConflictList({
                 </div>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
-                {conflictSubject(conflict).reason} Keep billing running; resolve this from Sync Status when you are ready.
+                {conflictSubject(conflict).reason} You can keep billing; local data has not been deleted.
               </p>
               <details className="mt-3 rounded-md bg-background/70 p-3 text-xs">
                 <summary className="cursor-pointer font-medium text-muted-foreground">
@@ -704,7 +734,7 @@ export default function SyncStatusPage() {
       };
     if (conflictCount > 0)
       return {
-        title: "Backup paused: conflict needs review",
+        title: "Backup needs retry or review",
         tone: "conflict" as const,
         icon: AlertCircle,
       };
@@ -840,8 +870,8 @@ export default function SyncStatusPage() {
       });
       window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
       toast({
-        title: resolution === "resolved_by_owner" ? "Conflict marked resolved" : "Conflict ignored",
-        description: "Sync Status will no longer block on this conflict row.",
+        title: resolution === "resolved_by_owner" ? "Review marked resolved" : "Review item ignored",
+        description: "Sync Status will no longer block on this backup review item.",
       });
     } catch {
       toast({
@@ -951,7 +981,7 @@ export default function SyncStatusPage() {
       {failedCount > 0 && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Sync failed, retry needed</AlertTitle>
+          <AlertTitle>Backup did not finish</AlertTitle>
           <AlertDescription>
             Your data was not deleted. Tap Retry failed after internet/backend
             is working.
@@ -964,7 +994,7 @@ export default function SyncStatusPage() {
           <CardHeader>
             <CardTitle className="text-lg">Needs attention</CardTitle>
             <CardDescription>
-              Local changes waiting for backup, retry, or owner review.
+              Local changes are safe on this device. Retry backup when ready.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -972,7 +1002,7 @@ export default function SyncStatusPage() {
               {groupOperationsByType([...snapshot.pendingOperations, ...snapshot.failedOperations]).map(([group, count]) => (
                 <Badge key={group} variant="outline">{group.replace(":", " - ")} x {count}</Badge>
               ))}
-              {conflictCount > 0 && <Badge variant="destructive">conflicts x {conflictCount}</Badge>}
+              {conflictCount > 0 && <Badge variant="destructive">review needed x {conflictCount}</Badge>}
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {[...snapshot.failedOperations, ...snapshot.pendingOperations].slice(0, 6).map((operation) => (
@@ -1006,8 +1036,8 @@ export default function SyncStatusPage() {
               {snapshot.conflicts.slice(0, 4).map((conflict) => (
                 <div key={conflict.id} className="rounded-lg border border-amber-300/70 bg-background p-3 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">Conflict</span>
-                    <Badge variant="outline">Needs review</Badge>
+                    <span className="font-semibold">Backup review</span>
+                    <Badge variant="outline">Retry / review</Badge>
                   </div>
                   <div className="mt-1 text-muted-foreground">{conflictSubject(conflict).title}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{conflictSubject(conflict).reason}</div>
@@ -1037,7 +1067,7 @@ export default function SyncStatusPage() {
         <StatCard label="Backend" value={snapshot.isBackendReachable ? "Online" : "Offline"} description={snapshot.isBackendReachable ? "Cloud backup can run." : "Cloud backup paused; local billing works."} icon={snapshot.isBackendReachable ? <Cloud className="h-5 w-5" /> : <CloudOff className="h-5 w-5" />} tone={snapshot.isBackendReachable ? "green" : "amber"} />
         <StatCard label="Last backup" value={formatTimeAgo(snapshot.lastSuccessfulSyncAt)} description={snapshot.lastSuccessfulSyncAt ? "Last successful cloud backup." : "No successful backup found."} icon={<Cloud className="h-5 w-5" />} />
         <StatCard label="Pending" value={pendingCount} description={pendingCount === 1 ? "1 change pending cloud backup." : `${pendingCount} changes pending cloud backup.`} icon={<Database className="h-5 w-5" />} tone={pendingCount > 0 ? "amber" : "green"} />
-        <StatCard label="Failed / conflicts" value={`${failedCount} / ${conflictCount}`} description="Retry failed changes. Review conflicts later." icon={<AlertCircle className="h-5 w-5" />} tone={failedCount || conflictCount ? "red" : "green"} />
+        <StatCard label="Retry / review" value={`${failedCount} / ${conflictCount}`} description="Retry failed backup items. Review only if it remains blocked." icon={<AlertCircle className="h-5 w-5" />} tone={failedCount || conflictCount ? "red" : "green"} />
       </StatsGrid>
 
       <Card>

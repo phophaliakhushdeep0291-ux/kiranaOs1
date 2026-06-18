@@ -55,6 +55,7 @@ export async function runSyncCycle(): Promise<SyncRunResult> {
     return emptySyncResult(statusCursor);
   }
 
+  await repairResolvedSyncStatusNoise().catch(() => 0);
   await repairRetryableBillValidationConflicts().catch(() => 0);
   const push = await pushPendingOutboxOperations();
   const pull = await pullServerChanges();

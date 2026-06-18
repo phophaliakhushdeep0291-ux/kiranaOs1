@@ -176,6 +176,80 @@ function normalisePurchaseMoneyFields(payload: Record<string, unknown>): Record<
   };
 }
 
+function optionalPayloadText(value: unknown): string | null | undefined {
+  const text = readString(value);
+  if (!text) return undefined;
+  return text;
+}
+
+function normalisePurchaseLifecyclePayload(
+  event: PendingSyncEvent,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const money = normalisePurchaseMoneyFields(payload);
+  const localPurchaseId =
+    optionalPayloadText(payload.localPurchaseHistoryId) ??
+    optionalPayloadText(payload.local_purchase_history_id) ??
+    optionalPayloadText(payload.localPurchaseBillId) ??
+    optionalPayloadText(payload.local_purchase_bill_id) ??
+    optionalPayloadText(event.entity_id);
+  const purchaseId =
+    optionalPayloadText(payload.purchaseHistoryId) ??
+    optionalPayloadText(payload.purchase_history_id) ??
+    optionalPayloadText(payload.purchaseBillId) ??
+    optionalPayloadText(payload.purchase_bill_id) ??
+    optionalPayloadText(payload.serverId) ??
+    optionalPayloadText(payload.server_id) ??
+    undefined;
+  const localMovementId =
+    optionalPayloadText(payload.localMovementId) ??
+    optionalPayloadText(payload.local_movement_id) ??
+    optionalPayloadText(payload.localInventoryMovementId) ??
+    optionalPayloadText(payload.local_inventory_movement_id) ??
+    optionalPayloadText(payload.movementId) ??
+    optionalPayloadText(payload.movement_id);
+  const stockLedgerId =
+    optionalPayloadText(payload.stockLedgerId) ??
+    optionalPayloadText(payload.stock_ledger_id) ??
+    optionalPayloadText(payload.inventoryMovementId) ??
+    optionalPayloadText(payload.inventory_movement_id);
+
+  return {
+    ...payload,
+    ...money,
+    purchaseHistoryId: purchaseId,
+    purchase_history_id: purchaseId,
+    purchaseBillId: optionalPayloadText(payload.purchaseBillId) ?? optionalPayloadText(payload.purchase_bill_id) ?? purchaseId,
+    purchase_bill_id: optionalPayloadText(payload.purchaseBillId) ?? optionalPayloadText(payload.purchase_bill_id) ?? purchaseId,
+    localPurchaseHistoryId: localPurchaseId,
+    local_purchase_history_id: localPurchaseId,
+    localPurchaseBillId: optionalPayloadText(payload.localPurchaseBillId) ?? optionalPayloadText(payload.local_purchase_bill_id) ?? localPurchaseId,
+    local_purchase_bill_id: optionalPayloadText(payload.localPurchaseBillId) ?? optionalPayloadText(payload.local_purchase_bill_id) ?? localPurchaseId,
+    stockLedgerId,
+    stock_ledger_id: stockLedgerId,
+    inventoryMovementId: optionalPayloadText(payload.inventoryMovementId) ?? optionalPayloadText(payload.inventory_movement_id) ?? stockLedgerId,
+    inventory_movement_id: optionalPayloadText(payload.inventoryMovementId) ?? optionalPayloadText(payload.inventory_movement_id) ?? stockLedgerId,
+    localMovementId,
+    local_movement_id: localMovementId,
+    productId: optionalPayloadText(payload.productId) ?? optionalPayloadText(payload.product_id),
+    product_id: optionalPayloadText(payload.productId) ?? optionalPayloadText(payload.product_id),
+    supplierId: optionalPayloadText(payload.supplierId) ?? optionalPayloadText(payload.supplier_id),
+    supplier_id: optionalPayloadText(payload.supplierId) ?? optionalPayloadText(payload.supplier_id),
+    supplierName: optionalPayloadText(payload.supplierName) ?? optionalPayloadText(payload.supplier_name) ?? null,
+    supplier_name: optionalPayloadText(payload.supplierName) ?? optionalPayloadText(payload.supplier_name) ?? null,
+    invoiceNumber: optionalPayloadText(payload.invoiceNumber) ?? optionalPayloadText(payload.invoice_number) ?? null,
+    invoice_number: optionalPayloadText(payload.invoiceNumber) ?? optionalPayloadText(payload.invoice_number) ?? null,
+    purchasePaymentMode:
+      money.purchasePaidAmount && Number(money.purchasePaidAmount) > 0
+        ? optionalPayloadText(payload.purchasePaymentMode) ?? optionalPayloadText(payload.purchase_payment_mode) ?? "cash"
+        : null,
+    purchase_payment_mode:
+      money.purchasePaidAmount && Number(money.purchasePaidAmount) > 0
+        ? optionalPayloadText(payload.purchasePaymentMode) ?? optionalPayloadText(payload.purchase_payment_mode) ?? "cash"
+        : null,
+  };
+}
+
 function isCreditPayment(payment: unknown): boolean {
   return isRecord(payment) && String(payment.mode ?? "").toLowerCase() === "credit";
 }
@@ -373,7 +447,9 @@ export function buildBackendSyncOperation(
 
   if (backendType === "CREATE_BILL") payload = normaliseCreateBillPayload(payload);
   if (backendType === "UDHAR_PAYMENT") payload = normalisePaymentPayload(payload);
-  if (backendType === "UPDATE_PURCHASE_BILL") payload = { ...payload, ...normalisePurchaseMoneyFields(payload) };
+  if (backendType === "UPDATE_PURCHASE_BILL" || backendType === "DELETE_PURCHASE_BILL") {
+    payload = normalisePurchaseLifecyclePayload(event, payload);
+  }
   payload = normaliseBillLifecyclePayload(backendType, payload);
   payload = normaliseProductLifecyclePayload(backendType, payload);
   payload = normaliseCustomerLifecyclePayload(backendType, payload);
