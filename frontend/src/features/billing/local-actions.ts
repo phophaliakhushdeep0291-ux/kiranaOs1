@@ -127,6 +127,12 @@ async function prepareCustomerForCreditBill(data: BillInput, creditAmount: numbe
     updatedAt: now,
   }), "customer", "pending_sync") as unknown as Customer & Record<string, unknown>;
 
+  // The customer is created with ZERO opening balance on the server: the bill's own
+  // credit ledger entry (sent with CREATE_BILL) is the single source of this debt.
+  // Seeding udharAmount here too would make the backend post an "opening balance"
+  // ledger row AND the bill credit, double-counting the udhar (server diverging to
+  // 2x the real balance). The local customer row still carries the balance for
+  // instant UI; the server derives it from the bill ledger.
   const customerCreateOutbox = buildOutboxOperation({
     entity_type: "customer",
     entity_id: customer.id,
@@ -137,10 +143,10 @@ async function prepareCustomerForCreditBill(data: BillInput, creditAmount: numbe
         name: customer.name,
         mobile: customer.mobile,
         type: "udhar",
-        udharAmount: creditAmount,
-        totalUdhar: creditAmount,
-        udhar_amount: creditAmount,
-        total_udhar: creditAmount,
+        udharAmount: 0,
+        totalUdhar: 0,
+        udhar_amount: 0,
+        total_udhar: 0,
       },
     },
   });
