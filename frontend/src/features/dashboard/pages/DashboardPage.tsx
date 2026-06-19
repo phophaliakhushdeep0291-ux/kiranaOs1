@@ -9,7 +9,7 @@ import {
   ArrowDownRight, RefreshCw, CheckCircle2, XCircle, ChevronRight, Users,
 } from "lucide-react";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts";
 import { useAuth } from "@/features/auth/useAuth";
@@ -27,6 +27,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/types/api";
+
+const DASH_CARD = "rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.045)] ring-1 ring-black/[0.015] dark:border-slate-800 dark:bg-card";
+const DASH_CARD_INTERACTIVE = "transition-all duration-200 hover:-translate-y-0.5 hover:border-[#c7d8ee] hover:shadow-[0_14px_34px_rgba(15,35,80,0.075)] active:translate-y-0";
+const DASH_TITLE = "font-display text-[15px] font-black tracking-tight text-[#102347] dark:text-card-foreground";
+const DASH_MUTED = "text-[#62708a] dark:text-muted-foreground";
 
 // Recent-bills payment label: derive the real tender/credit mode from the saved
 // bill instead of assuming cash. A bill with any outstanding credit must read
@@ -302,6 +307,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
   const today = format(new Date(), "yyyy-MM-dd");
   const weekAgo = format(new Date(Date.now() - 6 * 86_400_000), "yyyy-MM-dd");
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
+  const [productsById, setProductsById] = useState<Record<string, Product>>({});
 
   const recentBillsQuery = useListBills({ from: today, to: today, limit: 10 }, { query: { staleTime: 60_000 } });
   const weeklyBillsQuery = useListBills({ from: weekAgo, to: today, limit: 500 }, { query: { staleTime: 5 * 60_000 } });
@@ -314,15 +320,19 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       void offlineDB.getAll<Product & Record<string, unknown>>("products")
         .then((rows) => {
           if (cancelled) return;
+          const activeRows = rows.filter(activeProduct);
+          setProductsById(Object.fromEntries(activeRows.map((product) => [product.id, product])));
           setRecentProducts(
-            rows
-              .filter(activeProduct)
+            activeRows
               .sort((a, b) => sortTime(b.updatedAt ?? b.updated_at ?? b.createdAt ?? b.created_at) - sortTime(a.updatedAt ?? a.updated_at ?? a.createdAt ?? a.created_at))
               .slice(0, 8),
           );
         })
         .catch(() => {
-          if (!cancelled) setRecentProducts([]);
+          if (!cancelled) {
+            setProductsById({});
+            setRecentProducts([]);
+          }
         });
     };
     refreshProducts();
@@ -355,10 +365,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
   const paymentBreakdown = useMemo<PaymentSlice[]>(() => {
     const other = Math.max(0, roundMoney(dashboard.revenue - dashboard.cash - dashboard.upi - dashboard.credit));
     return [
-      { label: "Cash", value: dashboard.cash, color: "#22c55e", dot: "bg-emerald-500" },
-      { label: "UPI", value: dashboard.upi, color: "#2563eb", dot: "bg-blue-600" },
-      { label: "Udhar", value: dashboard.credit, color: "#7c3aed", dot: "bg-violet-600" },
-      { label: "Other", value: other, color: "#f59e0b", dot: "bg-amber-500" },
+      { label: "Cash", value: dashboard.cash, color: "#22c55e", dot: "bg-[#22c55e]" },
+      { label: "UPI", value: dashboard.upi, color: "#0057ff", dot: "bg-[#0057ff]" },
+      { label: "Udhar", value: dashboard.credit, color: "#6d5dfc", dot: "bg-[#6d5dfc]" },
+      { label: "Other", value: other, color: "#f59e0b", dot: "bg-[#f59e0b]" },
     ].filter((row) => row.value > 0);
   }, [dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi]);
 
@@ -370,17 +380,17 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
   const syncHealthGood = failedCount === 0 && pendingCount === 0;
 
   return (
-    <div className="space-y-4 p-4 sm:p-5 lg:p-6">
+    <div className="space-y-4 p-4 sm:p-5 lg:space-y-5 lg:p-6">
 
       {/* Counter focus */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Today's Sales"
           value={fmtRs(dashboard.revenue)}
           delta={salesDelta}
           deltaLabel="vs yesterday"
           icon={<ShoppingCart size={18} />}
-          iconBg="bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
+          iconBg="bg-[#eef5ff] text-[#0057ff] shadow-[0_8px_18px_rgba(0,87,255,0.10)]"
           loading={isLoading}
           onClick={() => openDrilldown("revenue")}
         />
@@ -390,7 +400,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           delta={null}
           footer={<span className="text-xs font-semibold text-emerald-600">Drawer {fmtRs(cashInDrawer)}</span>}
           icon={<Wallet size={18} />}
-          iconBg="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+          iconBg="bg-[#e9fbef] text-[#16a34a] shadow-[0_8px_18px_rgba(34,197,94,0.10)]"
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
@@ -400,7 +410,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           delta={null}
           footer={<span className="text-xs font-semibold text-blue-600">Bank/UPI today</span>}
           icon={<Smartphone size={18} />}
-          iconBg="bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+          iconBg="bg-[#f2edff] text-[#6d5dfc] shadow-[0_8px_18px_rgba(109,93,252,0.10)]"
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
@@ -411,7 +421,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
             delta={null}
             footer={<span className={cn("text-xs font-semibold", dashboard.totalOutstanding > 0 ? "text-red-600" : "text-emerald-600")}>{dashboard.totalOutstanding > 0 ? "Needs follow-up" : "All clear"}</span>}
             icon={<AlertTriangle size={18} />}
-            iconBg="bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300"
+            iconBg="bg-[#fff0f2] text-[#ff304f] shadow-[0_8px_18px_rgba(255,48,79,0.10)]"
             loading={isLoading}
           />
         </Link>
@@ -421,7 +431,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           delta={null}
           footer={<span className="text-xs font-semibold text-emerald-600">{Math.round(dashboard.grossMarginPct)}% margin</span>}
           icon={<TrendingUp size={18} />}
-          iconBg="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+          iconBg="bg-[#eafbf0] text-[#16a34a] shadow-[0_8px_18px_rgba(34,197,94,0.10)]"
           loading={isLoading}
           onClick={() => openDrilldown("profit")}
         />
@@ -432,7 +442,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
             delta={null}
             footer={<span className="text-xs font-semibold text-primary">View all</span>}
             icon={<Package size={18} />}
-            iconBg={lowStockCount > 0 ? "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"}
+            iconBg={lowStockCount > 0 ? "bg-[#fff4e6] text-[#ff8a00] shadow-[0_8px_18px_rgba(255,138,0,0.12)]" : "bg-[#eafbf0] text-[#16a34a] shadow-[0_8px_18px_rgba(34,197,94,0.10)]"}
             loading={isLoading}
           />
         </Link>
@@ -442,45 +452,66 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.85fr)_minmax(280px,0.85fr)]">
 
         {/* Sales Overview */}
-        <section className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
+        <section className={cn(DASH_CARD, "overflow-hidden p-5")}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <p className="text-sm font-bold text-foreground">Sales Overview</p>
-                <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">i</span>
+                <p className={DASH_TITLE}>Sales Overview</p>
+                <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#b9c7dc] text-[10px] font-black text-[#60708a]">i</span>
               </div>
-              <div className="mt-2 flex flex-wrap items-end gap-3">
-                <p className="font-display text-2xl font-black text-foreground">{fmtRs(dashboard.revenue)}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <p className="font-display text-[27px] font-black leading-none tracking-tight text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
                 {salesDelta !== null && (
-                  <span className={cn("mb-1 flex items-center gap-1 text-xs font-bold", salesDelta >= 0 ? "text-emerald-600" : "text-red-500")}>
+                  <span className={cn("flex items-center gap-1 text-[12px] font-bold", salesDelta >= 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
                     {salesDelta >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
                     {Math.abs(salesDelta)}% vs yesterday
                   </span>
                 )}
               </div>
             </div>
-            <Link href="/reports" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+            <Link href="/reports" className="rounded-[9px] border border-[#bfd3ff] bg-[#eef5ff] px-4 py-2 text-[12px] font-black text-[#0057ff] shadow-[0_6px_14px_rgba(0,87,255,0.06)] transition-colors hover:bg-[#e2edff]">
               View Report
             </Link>
           </div>
-          <div className="mt-4 h-64 min-h-64">
+          <div className="mt-5 h-[258px] min-h-[258px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={salesChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `Rs ${Math.round(v / 1000)}k` : `Rs ${v}`} />
+              <AreaChart data={salesChartData} margin={{ top: 12, right: 10, left: -8, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="salesOverviewFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0057ff" stopOpacity={0.20} />
+                    <stop offset="48%" stopColor="#3b82f6" stopOpacity={0.10} />
+                    <stop offset="100%" stopColor="#0057ff" stopOpacity={0.015} />
+                  </linearGradient>
+                  <filter id="salesOverviewGlow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#0057ff" floodOpacity="0.18" />
+                  </filter>
+                </defs>
+                <CartesianGrid vertical={false} strokeDasharray="4 7" stroke="#dce7f5" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#63718a", fontWeight: 600 }} tickLine={false} axisLine={false} tickMargin={12} />
+                <YAxis tick={{ fontSize: 11, fill: "#63718a", fontWeight: 600 }} tickLine={false} axisLine={false} width={46} tickFormatter={v => v >= 1000 ? `₹${Math.round(v / 1000)}K` : `₹${v}`} />
                 <Tooltip
-                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }}
+                  cursor={{ stroke: "#9bb7ff", strokeWidth: 1, strokeDasharray: "4 4" }}
+                  contentStyle={{ background: "#071735", border: "0", borderRadius: "10px", boxShadow: "0 14px 30px rgba(15,35,80,0.20)", color: "#fff", fontSize: 12, fontWeight: 700 }}
+                  labelStyle={{ color: "#dce7ff", fontSize: 11, marginBottom: 4 }}
                   formatter={(v: number) => [fmtRs(v), "Sales"]}
                 />
-                <Line type="monotone" dataKey="sales" stroke="hsl(221 83% 53%)" strokeWidth={2.5} dot={{ r: 4, fill: "hsl(221 83% 53%)", strokeWidth: 0 }} activeDot={{ r: 6 }} />
-              </LineChart>
+                <Area
+                  type="monotone"
+                  dataKey="sales"
+                  stroke="#0057ff"
+                  strokeWidth={3}
+                  fill="url(#salesOverviewFill)"
+                  filter="url(#salesOverviewGlow)"
+                  dot={{ r: 4, fill: "#ffffff", stroke: "#0057ff", strokeWidth: 3 }}
+                  activeDot={{ r: 6, fill: "#ffffff", stroke: "#0057ff", strokeWidth: 3 }}
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         </section>
 
         <PaymentModeBreakdown rows={paymentBreakdown} total={dashboard.revenue} />
-        <LowStockAlerts items={lowStockItems} />
+        <LowStockAlerts items={lowStockItems} productsById={productsById} />
 
       </div>
 
@@ -488,17 +519,17 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.85fr)_minmax(280px,0.85fr)]">
 
         {/* Recent Bills */}
-        <section className="rounded-xl border bg-card shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b p-4">
-            <p className="font-semibold text-foreground">Recent Bills</p>
-            <Link href="/bills" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+        <section className={cn(DASH_CARD, "overflow-hidden")}>
+          <div className="flex items-center justify-between gap-3 border-b border-[#e6ecf4] px-5 py-4">
+            <p className={DASH_TITLE}>Recent Bills</p>
+            <Link href="/bills" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-muted/30">
+                <tr className="border-b border-[#e6ecf4] bg-[#f8fbff]">
                   {["Bill No.", "Time", "Customer", "Items", "Amount", "Payment"].map(h => (
-                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">{h}</th>
+                    <th key={h} className="px-5 py-3 text-left text-[11px] font-black uppercase tracking-[0.02em] text-[#6b7890]">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -507,12 +538,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                   Array.from({ length: 4 }).map((_, i) => (
                     <tr key={i} className="border-b last:border-0">
                       {Array.from({ length: 6 }).map((_, j) => (
-                        <td key={j} className="px-4 py-3"><div className="h-3 rounded bg-muted animate-pulse" style={{ width: `${50 + j * 10}%` }} /></td>
+                        <td key={j} className="px-5 py-3"><div className="h-3 animate-pulse rounded bg-[#edf2f8]" style={{ width: `${50 + j * 10}%` }} /></td>
                       ))}
                     </tr>
                   ))
                 ) : recentBills.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">No bills today yet</td></tr>
+                  <tr><td colSpan={6} className={cn("px-5 py-8 text-center text-sm", DASH_MUTED)}>No bills today yet</td></tr>
                 ) : (
                   recentBills.slice(0, 7).map(bill => {
                     const href = `/bills/${bill.id ?? ""}`;
@@ -528,14 +559,14 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                             navigate(href);
                           }
                         }}
-                        className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        className="cursor-pointer border-b border-[#edf2f8] text-[#102347] transition-colors last:border-0 hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0057ff]/40 dark:text-card-foreground"
                       >
-                        <td className="px-4 py-3 font-semibold text-primary">{bill.billNo ?? "—"}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
-                        <td className="max-w-32 px-4 py-3 truncate">{bill.customerName ?? "Walk-in"}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
-                        <td className="px-4 py-3 font-semibold">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-5 py-3 font-black text-[#102347] dark:text-card-foreground">{bill.billNo ?? "—"}</td>
+                        <td className={cn("px-5 py-3 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
+                        <td className="max-w-32 truncate px-5 py-3 font-semibold">{bill.customerName ?? "Walk-in"}</td>
+                        <td className={cn("px-5 py-3 font-semibold", DASH_MUTED)}>{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
+                        <td className="px-5 py-3 font-black">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
+                        <td className="px-5 py-3">
                           <PaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} compact />
                         </td>
                       </tr>
@@ -545,19 +576,19 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
               </tbody>
             </table>
           </div>
-          <div className="grid border-t text-sm sm:grid-cols-2">
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+          <div className="grid border-t border-[#e6ecf4] bg-[#fbfdff] text-sm sm:grid-cols-2">
+            <div className="flex items-center gap-3 px-5 py-4">
+              <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#eef5ff] text-[#0057ff]">
                 <ReceiptText size={16} />
               </span>
               <div>
-                <p className="text-xs text-muted-foreground">Total Bills</p>
-                <p className="font-black">{recentBillsQuery.data?.total ?? dashboard.billCount}</p>
+                <p className={cn("text-xs font-semibold", DASH_MUTED)}>Total Bills</p>
+                <p className="font-display text-[18px] font-black text-[#102347] dark:text-card-foreground">{recentBillsQuery.data?.total ?? dashboard.billCount}</p>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-4 py-3 sm:border-l">
-              <p className="text-xs text-muted-foreground">Total Amount</p>
-              <p className="font-display text-lg font-black">{fmtRs(dashboard.revenue)}</p>
+            <div className="flex items-center justify-between gap-3 px-5 py-4 sm:border-l sm:border-[#e6ecf4]">
+              <p className={cn("text-xs font-semibold", DASH_MUTED)}>Total Amount</p>
+              <p className="font-display text-[19px] font-black text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
             </div>
           </div>
         </section>
@@ -566,8 +597,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         <div className="contents">
 
           {/* Quick Insights */}
-          <div className="rounded-xl border bg-card p-4 shadow-sm">
-            <p className="mb-3 text-sm font-semibold text-foreground">Quick Insights</p>
+          <div className={cn(DASH_CARD, "p-4")}>
+            <p className={cn(DASH_TITLE, "mb-3")}>Quick Insights</p>
             <div className="space-y-2">
               <InsightRow icon={<Package size={16} className="text-emerald-600" />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Sales leaders" : "No sales yet"} href="/reports" />
               <InsightRow icon={<PackagePlus size={16} className="text-blue-600" />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "No product yet"} href="/reports" />
@@ -577,12 +608,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           </div>
 
           {/* Sync & Health */}
-          <div className="rounded-xl border bg-card p-4 shadow-sm">
-            <p className="mb-3 text-sm font-semibold text-foreground">Sync & Health</p>
-            <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <div className={cn(DASH_CARD, "p-4")}>
+            <p className={cn(DASH_TITLE, "mb-3")}>Sync & Health</p>
+            <div className="rounded-[10px] border border-[#bceecd] bg-[#ecfff2] px-3 py-2 text-sm font-black text-[#16a34a] dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
               <CheckCircle2 className="mr-2 inline h-4 w-4" />
               {syncHealthGood ? "All systems operational" : "Backup needs attention"}
-              <p className="ml-6 mt-0.5 text-xs font-medium text-muted-foreground">
+              <p className={cn("ml-6 mt-0.5 text-xs font-semibold", DASH_MUTED)}>
                 {isSyncing ? "Sync running now" : syncHealthGood ? "Last synced just now" : "Local data is safe"}
               </p>
             </div>
@@ -593,11 +624,11 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
               <HealthRow label="Device Status" status="ok" value="Active" />
             </div>
             <Link href="/sync-status">
-              <button type="button" className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700">
+              <button type="button" className="mt-4 flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#0057ff] py-3 text-sm font-black text-white shadow-[0_12px_24px_rgba(0,87,255,0.22)] transition-all hover:-translate-y-0.5 hover:bg-[#004de0] active:translate-y-0">
                 <RefreshCw size={15} aria-hidden="true" /> Sync Now
               </button>
             </Link>
-            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            <p className={cn("mt-2 text-center text-[11px] font-semibold", DASH_MUTED)}>
               <span className={cn("mr-1 inline-block h-1.5 w-1.5 rounded-full", syncHealthGood ? "bg-emerald-500" : "bg-amber-500")} /> Auto sync is enabled
             </p>
           </div>
@@ -605,7 +636,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           {/* Demo seed */}
           {!dashboard.hasBusinessData && (
             <button type="button" onClick={onLoadDemo} disabled={seedingDemo}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed py-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
+              className="flex w-full items-center justify-center gap-2 rounded-[14px] border border-dashed border-[#cbd8ea] py-3 text-sm font-bold text-[#62708a] transition-colors hover:border-[#0057ff]/40 hover:text-[#0057ff]">
               <Sparkles size={15} aria-hidden="true" />
               {seedingDemo ? "Loading demo…" : "Load demo shop data"}
             </button>
@@ -634,25 +665,25 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
-      className={cn("min-h-[132px] rounded-xl border bg-card p-4 shadow-sm", onClick && "cursor-pointer transition-shadow hover:shadow-md")}
+      className={cn(DASH_CARD, "min-h-[142px] p-5", onClick && ["cursor-pointer", DASH_CARD_INTERACTIVE])}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", iconBg)}>{icon}</div>
+        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]", iconBg)}>{icon}</div>
       </div>
       <div className="mt-3">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <p className={cn("text-[13px] font-bold leading-tight", DASH_MUTED)}>{label}</p>
         {loading ? (
-          <div className="mt-1 h-6 w-3/4 animate-pulse rounded bg-muted" />
+          <div className="mt-2 h-7 w-3/4 animate-pulse rounded bg-[#edf2f8]" />
         ) : (
-          <p className="mt-0.5 break-words font-display text-xl font-black tracking-tight text-foreground">{value}</p>
+          <p className="mt-2 break-words font-display text-[23px] font-black leading-none tracking-tight text-[#102347] dark:text-card-foreground">{value}</p>
         )}
         {delta !== null && delta !== undefined && (
-          <div className={cn("mt-1 flex items-center gap-1 text-xs font-semibold", isBad ? "text-red-500" : "text-emerald-600")}>
+          <div className={cn("mt-3 flex items-center gap-1 text-[12px] font-black", isBad ? "text-[#ff304f]" : "text-[#16a34a]")}>
             <DeltaIcon size={12} aria-hidden="true" />
             {Math.abs(delta)}% {deltaLabel}
           </div>
         )}
-        {footer && <div className="mt-1">{footer}</div>}
+        {footer && <div className="mt-3 leading-none">{footer}</div>}
       </div>
     </div>
   );
@@ -664,12 +695,12 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
   const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
 
   return (
-    <section className="rounded-xl border bg-card p-4 shadow-sm">
+    <section className={cn(DASH_CARD, "p-4")}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-foreground">Payment Mode Breakdown</p>
-        <span className="rounded-lg border px-2 py-1 text-xs font-semibold text-muted-foreground">This Week</span>
+        <p className={DASH_TITLE}>Payment Mode Breakdown</p>
+        <span className="rounded-[8px] border border-[#dce7f5] bg-white px-2.5 py-1 text-[11px] font-black text-[#102347] shadow-[0_3px_8px_rgba(15,35,80,0.035)]">This Week</span>
       </div>
-      <div className="relative mt-3 h-44">
+      <div className="relative mt-4 h-[172px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -690,21 +721,21 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
           <div>
-            <p className="font-display text-lg font-black">{fmtRs(displayTotal)}</p>
-            <p className="text-[11px] text-muted-foreground">Total Sales</p>
+            <p className="font-display text-[17px] font-black leading-none text-[#102347] dark:text-card-foreground">{fmtRs(displayTotal)}</p>
+            <p className={cn("mt-1 text-[11px] font-semibold", DASH_MUTED)}>Total Sales</p>
           </div>
         </div>
       </div>
-      <div className="space-y-2">
+      <div className="mt-1 space-y-2">
         {(rows.length > 0 ? rows : chartRows).map((row) => {
           const pct = realTotal > 0 ? Math.round((row.value / realTotal) * 1000) / 10 : 0;
           return (
             <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
-              <span className="flex items-center gap-2 text-muted-foreground">
+              <span className={cn("flex items-center gap-2 font-semibold", DASH_MUTED)}>
                 <span className={cn("h-2 w-2 rounded-full", row.dot)} />
                 {row.label}
               </span>
-              <span className="font-semibold text-foreground">{fmtRs(row.value)} {realTotal > 0 ? `(${pct}%)` : ""}</span>
+              <span className="font-black text-[#102347] dark:text-card-foreground">{fmtRs(row.value)} {realTotal > 0 ? `(${pct}%)` : ""}</span>
             </div>
           );
         })}
@@ -713,33 +744,32 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
   );
 }
 
-function LowStockAlerts({ items }: { items: LocalReportSnapshot["lowStock"] }) {
+function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["lowStock"]; productsById: Record<string, Product> }) {
   return (
-    <section className="rounded-xl border bg-card p-4 shadow-sm">
+    <section className={cn(DASH_CARD, "p-4")}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-foreground">Low Stock Alerts</p>
-        <Link href="/inventory" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+        <p className={DASH_TITLE}>Low Stock Alerts</p>
+        <Link href="/inventory" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
       </div>
       <div className="mt-3 space-y-3">
         {items.length === 0 ? (
-          <div className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
+          <div className={cn("rounded-[10px] border border-dashed border-[#dce7f5] px-3 py-8 text-center text-sm font-semibold", DASH_MUTED)}>
             All stock healthy
           </div>
         ) : (
           items.slice(0, 5).map((item, i) => {
             const threshold = item.threshold || 5;
             const isCritical = item.stock <= Math.max(1, Math.round(threshold * 0.4));
+            const product = productsById[item.productId];
             return (
               <Link key={item.productId ?? i} href="/inventory">
-                <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40">
-                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-muted/50">
-                    <Package size={16} className="text-muted-foreground" aria-hidden="true" />
-                  </div>
+                <div className="flex items-center gap-3 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[#f8fbff]">
+                  <ProductAvatar product={product ?? { id: item.productId, name: item.name } as Product} compact />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold leading-tight">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">Stock: {item.stock} {item.unit ?? "pcs"}</p>
+                    <p className="truncate text-sm font-black leading-tight text-[#102347] dark:text-card-foreground">{item.name}</p>
+                    <p className={cn("text-xs font-semibold", DASH_MUTED)}>Stock: {item.stock} {item.unit ?? "pcs"}</p>
                   </div>
-                  <span className={cn("shrink-0 rounded-md px-2 py-1 text-[11px] font-bold", isCritical ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
+                  <span className={cn("shrink-0 rounded-[7px] px-2 py-1 text-[11px] font-black", isCritical ? "bg-[#fff0f2] text-[#ff304f]" : "bg-[#fff4e6] text-[#ff8a00]")}>
                     {isCritical ? "Critical" : "Low"}
                   </span>
                 </div>
@@ -754,15 +784,15 @@ function LowStockAlerts({ items }: { items: LocalReportSnapshot["lowStock"] }) {
 
 function InsightRow({ icon, label, value, href }: { icon: ReactNode; label: string; value: string; href?: string }) {
   const content = (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-3 transition-colors hover:bg-muted/50">
+    <div className="flex items-center justify-between gap-3 rounded-[10px] bg-[#f8fbff] px-3 py-3 transition-colors hover:bg-[#eef5ff]">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-background">{icon}</span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white shadow-[0_6px_14px_rgba(15,35,80,0.04)]">{icon}</span>
         <span className="min-w-0">
-          <span className="block truncate text-xs text-muted-foreground">{label}</span>
-          <span className="block truncate text-xs font-bold text-foreground">{value}</span>
+          <span className={cn("block truncate text-[11px] font-semibold", DASH_MUTED)}>{label}</span>
+          <span className="block truncate text-[12px] font-black text-[#102347] dark:text-card-foreground">{value}</span>
         </span>
       </div>
-      {href ? <ChevronRight size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
+      {href ? <ChevronRight size={14} className="shrink-0 text-[#5f6f88]" aria-hidden="true" /> : null}
     </div>
   );
   return href ? <Link href={href}>{content}</Link> : content;
@@ -773,7 +803,7 @@ function HealthRow({ label, status, value }: { label: string; status: "ok" | "wa
   const Icon = status === "ok" ? CheckCircle2 : status === "warn" ? RefreshCw : XCircle;
   return (
     <div className="flex items-center justify-between gap-3 text-xs">
-      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("font-semibold", DASH_MUTED)}>{label}</span>
       <span className={cn("flex items-center gap-1 font-semibold", color)}>
         <Icon size={11} aria-hidden="true" /> {value}
       </span>
@@ -783,31 +813,31 @@ function HealthRow({ label, status, value }: { label: string; status: "ok" | "wa
 
 function RecentProductsRail({ products }: { products: Product[] }) {
   return (
-    <section className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
+    <section className={cn(DASH_CARD, "p-5")}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-foreground">Recently Added Products</p>
-        <Link href="/products" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+        <p className={DASH_TITLE}>Recently Added Products</p>
+        <Link href="/products" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
       </div>
       {products.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+        <div className={cn("mt-4 rounded-[10px] border border-dashed border-[#dce7f5] px-4 py-8 text-center text-sm font-semibold", DASH_MUTED)}>
           Products will appear here after you add stock.
         </div>
       ) : (
-        <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+        <div className="mt-4 flex gap-4 overflow-x-auto pb-1">
           {products.slice(0, 8).map((product) => (
             <Link key={product.id} href={`/products?highlight=${encodeURIComponent(product.id)}`}>
-              <div className="flex min-w-[190px] items-center gap-3 rounded-lg border bg-background/70 px-3 py-3 transition-all hover:-translate-y-0.5 hover:shadow-sm">
+              <div className="flex min-w-[190px] items-center gap-3 rounded-[12px] border border-[#e6ecf4] bg-white px-3 py-3 shadow-[0_6px_16px_rgba(15,35,80,0.035)] transition-all hover:-translate-y-0.5 hover:border-[#c7d8ee] hover:shadow-[0_12px_24px_rgba(15,35,80,0.07)]">
                 <ProductAvatar product={product} />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">{product.name}</p>
-                  <p className="text-xs text-muted-foreground">{productUnitLabel(product)}</p>
-                  <p className="mt-1 text-sm font-black">{fmtRs(productPrice(product))}</p>
+                  <p className="truncate text-sm font-black text-[#102347]">{product.name}</p>
+                  <p className={cn("text-xs font-semibold", DASH_MUTED)}>{productUnitLabel(product)}</p>
+                  <p className="mt-1 text-sm font-black text-[#102347]">{fmtRs(productPrice(product))}</p>
                 </div>
               </div>
             </Link>
           ))}
           <Link href="/products">
-            <div className="grid min-w-[52px] place-items-center rounded-full border bg-background/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
+            <div className="grid min-w-[52px] place-items-center rounded-full border border-[#dce7f5] bg-white text-[#5f6f88] shadow-[0_8px_20px_rgba(15,35,80,0.05)] transition-colors hover:border-[#0057ff]/40 hover:text-[#0057ff]">
               <ChevronRight size={18} />
             </div>
           </Link>
@@ -817,16 +847,18 @@ function RecentProductsRail({ products }: { products: Product[] }) {
   );
 }
 
-function ProductAvatar({ product }: { product: Product }) {
+function ProductAvatar({ product, compact = false }: { product: Product; compact?: boolean }) {
+  const size = compact ? "h-10 w-10" : "h-14 w-14";
+  const radius = compact ? "rounded-[9px]" : "rounded-[10px]";
   if (product.imageUrl) {
     return (
-      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border bg-white">
+      <div className={cn(size, radius, "shrink-0 overflow-hidden border border-[#e6ecf4] bg-white shadow-[0_6px_14px_rgba(15,35,80,0.04)]")}>
         <img src={product.imageUrl} alt="" className="h-full w-full object-contain" />
       </div>
     );
   }
   return (
-    <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-blue-50 text-sm font-black text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+    <div className={cn(size, radius, "grid shrink-0 place-items-center bg-[#eef5ff] text-sm font-black text-[#0057ff] shadow-[0_6px_14px_rgba(0,87,255,0.08)]")}>
       {product.name.slice(0, 2).toUpperCase()}
     </div>
   );
