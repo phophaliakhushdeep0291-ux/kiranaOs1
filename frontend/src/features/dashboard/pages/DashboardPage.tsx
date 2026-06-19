@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import {
   ShoppingCart, AlertTriangle, TrendingUp, Minus,
   Wallet, CreditCard, Smartphone, CalendarCheck, Sparkles, HandCoins,
   ReceiptText, Truck, PackagePlus, Layers, BarChart3, Building2,
   ChefHat, Wrench, Pill, ClipboardList, Package, ArrowUpRight,
-  ArrowDownRight, RefreshCw, CheckCircle2, XCircle,
+  ArrowDownRight, RefreshCw, CheckCircle2, XCircle, ChevronRight, Users,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell,
 } from "recharts";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLocalDashboardSnapshot, useGetPaymentSummary, useGetPnL, useGetUdharSummary, useListBills, warmRecentLocalCache, type LocalDashboardSnapshot } from "@/lib/api/client";
 import { buildLocalReportSnapshot, type LocalReportSnapshot } from "@/features/reports/local-reporting";
 import { FinancialAggregationService, type FinancialAggregationSnapshot } from "@/features/finance/services/FinancialAggregationService";
+import { offlineDB } from "@/lib/offline/db";
 import { seedDemoShopData } from "@/features/demo/demo-shop-data";
 import { useAppLanguage } from "@/features/settings/i18n";
 import { useFeature } from "@/features/subscription";
@@ -24,6 +26,38 @@ import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard,
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
 import { cn } from "@/lib/utils";
+import type { Product } from "@/types/api";
+
+// Recent-bills payment label: derive the real tender/credit mode from the saved
+// bill instead of assuming cash. A bill with any outstanding credit must read
+// "Udhar" (not "Cash") so the owner can tell collected sales from money owed.
+function recentBillPaymentMode(bill: Record<string, unknown>): string {
+  const num = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const outstanding = Math.max(
+    num(bill.creditAmount ?? bill.credit_amount),
+    num(bill.udharAmount ?? bill.udhar_amount),
+    num(bill.dueAmount ?? bill.due_amount),
+    num(bill.outstandingAmount ?? bill.outstanding_amount),
+  );
+  const status = String(bill.paymentStatus ?? bill.payment_status ?? "").toLowerCase();
+  if (outstanding > 0 || ["credit", "partial", "unpaid", "due"].includes(status)) return "udhar";
+
+  const explicit = String(bill.paymentMode ?? bill.payment_mode ?? "").toLowerCase();
+  if (explicit && explicit !== "credit") return explicit;
+
+  const payments = Array.isArray(bill.payments) ? (bill.payments as Array<Record<string, unknown>>) : [];
+  const tenderModes = [...new Set(
+    payments
+      .filter((payment) => String(payment.mode ?? "").toLowerCase() !== "credit" && num(payment.amount) > 0)
+      .map((payment) => String(payment.mode ?? "").toLowerCase()),
+  )];
+  if (tenderModes.length > 1) return "split";
+  if (tenderModes.length === 1) return tenderModes[0];
+  return "cash";
+}
 
 // ─── icon / color maps ───────────────────────────────────────────────────────
 
@@ -62,6 +96,24 @@ function roundMoney(n: number) {
 
 function fmt(n: number | undefined | null) {
   return `Rs ${money(n).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
+
+function pctChange(current: number, previous: number): number | null {
+  const prev = money(previous);
+  if (prev <= 0) return null;
+  return Math.round(((money(current) - prev) / prev) * 1000) / 10;
+}
+
+function sortTime(value: unknown): number {
+  if (typeof value !== "string") return 0;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function activeProduct(product: Product & Record<string, unknown>): boolean {
+  if (product.deletedAt || product.deleted_at) return false;
+  if (product.isActive === false) return false;
+  return String(product.status ?? "active").toLowerCase() !== "deleted";
 }
 
 // ─── shared prop types ────────────────────────────────────────────────────────
@@ -242,16 +294,46 @@ export default function Dashboard() {
 
 // ─── GENERAL layout (kirana, clothing, footwear, electronics, etc.) ───────────
 
-function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
-  const { t } = useAppLanguage();
+type PaymentSlice = { label: string; value: number; color: string; dot: string };
+
+function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
   const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
+  const [, navigate] = useLocation();
   const today = format(new Date(), "yyyy-MM-dd");
   const weekAgo = format(new Date(Date.now() - 6 * 86_400_000), "yyyy-MM-dd");
+  const [recentProducts, setRecentProducts] = useState<Product[]>([]);
 
   const recentBillsQuery = useListBills({ from: today, to: today, limit: 10 }, { query: { staleTime: 60_000 } });
   const weeklyBillsQuery = useListBills({ from: weekAgo, to: today, limit: 500 }, { query: { staleTime: 5 * 60_000 } });
 
   const lowStockItems = ownerReport?.lowStock ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshProducts = () => {
+      void offlineDB.getAll<Product & Record<string, unknown>>("products")
+        .then((rows) => {
+          if (cancelled) return;
+          setRecentProducts(
+            rows
+              .filter(activeProduct)
+              .sort((a, b) => sortTime(b.updatedAt ?? b.updated_at ?? b.createdAt ?? b.created_at) - sortTime(a.updatedAt ?? a.updated_at ?? a.createdAt ?? a.created_at))
+              .slice(0, 8),
+          );
+        })
+        .catch(() => {
+          if (!cancelled) setRecentProducts([]);
+        });
+    };
+    refreshProducts();
+    window.addEventListener("kirana:local-data-changed", refreshProducts);
+    window.addEventListener("kirana:sync-queue-updated", refreshProducts);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("kirana:local-data-changed", refreshProducts);
+      window.removeEventListener("kirana:sync-queue-updated", refreshProducts);
+    };
+  }, []);
 
   // Build weekly sales chart data
   const salesChartData = useMemo(() => {
@@ -270,19 +352,35 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
     return days.map(d => ({ date: d.label, sales: Math.round(d.value) }));
   }, [weeklyBillsQuery.data, dashboard.revenue]);
 
+  const paymentBreakdown = useMemo<PaymentSlice[]>(() => {
+    const other = Math.max(0, roundMoney(dashboard.revenue - dashboard.cash - dashboard.upi - dashboard.credit));
+    return [
+      { label: "Cash", value: dashboard.cash, color: "#22c55e", dot: "bg-emerald-500" },
+      { label: "UPI", value: dashboard.upi, color: "#2563eb", dot: "bg-blue-600" },
+      { label: "Udhar", value: dashboard.credit, color: "#7c3aed", dot: "bg-violet-600" },
+      { label: "Other", value: other, color: "#f59e0b", dot: "bg-amber-500" },
+    ].filter((row) => row.value > 0);
+  }, [dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi]);
+
   const recentBills = recentBillsQuery.data?.bills ?? [];
+  const yesterdaySales = salesChartData[5]?.sales ?? 0;
+  const salesDelta = pctChange(dashboard.revenue, yesterdaySales);
+  const avgBillValue = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
+  const syncStatusValue = failedCount > 0 ? "Review needed" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date";
+  const syncHealthGood = failedCount === 0 && pendingCount === 0;
 
   return (
-    <div className="space-y-5 p-5">
+    <div className="space-y-4 p-4 sm:p-5 lg:p-6">
 
       {/* Counter focus */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Today's Sales"
           value={fmtRs(dashboard.revenue)}
-          delta={null}
+          delta={salesDelta}
+          deltaLabel="vs yesterday"
           icon={<ShoppingCart size={18} />}
-          iconBg="bg-blue-50 text-blue-600"
+          iconBg="bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
           loading={isLoading}
           onClick={() => openDrilldown("revenue")}
         />
@@ -290,8 +388,19 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
           label="Cash Collected"
           value={fmtRs(dashboard.cashCollected)}
           delta={null}
+          footer={<span className="text-xs font-semibold text-emerald-600">Drawer {fmtRs(cashInDrawer)}</span>}
           icon={<Wallet size={18} />}
-          iconBg="bg-emerald-50 text-emerald-600"
+          iconBg="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+          loading={isLoading}
+          onClick={() => openDrilldown("collection")}
+        />
+        <KpiCard
+          label="UPI Collected"
+          value={fmtRs(dashboard.upiCollected)}
+          delta={null}
+          footer={<span className="text-xs font-semibold text-blue-600">Bank/UPI today</span>}
+          icon={<Smartphone size={18} />}
+          iconBg="bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
@@ -300,8 +409,9 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
             label="Outstanding Udhar"
             value={fmtRs(dashboard.totalOutstanding)}
             delta={null}
+            footer={<span className={cn("text-xs font-semibold", dashboard.totalOutstanding > 0 ? "text-red-600" : "text-emerald-600")}>{dashboard.totalOutstanding > 0 ? "Needs follow-up" : "All clear"}</span>}
             icon={<AlertTriangle size={18} />}
-            iconBg="bg-red-50 text-red-500"
+            iconBg="bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300"
             loading={isLoading}
           />
         </Link>
@@ -309,36 +419,56 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
           label="Profit (Est.)"
           value={fmtRs(dashboard.grossProfit)}
           delta={null}
+          footer={<span className="text-xs font-semibold text-emerald-600">{Math.round(dashboard.grossMarginPct)}% margin</span>}
           icon={<TrendingUp size={18} />}
-          iconBg="bg-amber-50 text-amber-600"
+          iconBg="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
           loading={isLoading}
           onClick={() => openDrilldown("profit")}
         />
+        <Link href="/inventory">
+          <KpiCard
+            label="Low Stock Items"
+            value={String(lowStockCount)}
+            delta={null}
+            footer={<span className="text-xs font-semibold text-primary">View all</span>}
+            icon={<Package size={18} />}
+            iconBg={lowStockCount > 0 ? "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"}
+            loading={isLoading}
+          />
+        </Link>
       </div>
 
-      {/* Sales and stock */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {/* Sales, payments, and stock */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.85fr)_minmax(280px,0.85fr)]">
 
         {/* Sales Overview */}
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
+        <section className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-muted-foreground">Sales Overview</p>
-              <p className="mt-1 font-display text-2xl font-black text-foreground">{fmtRs(dashboard.revenue)}</p>
-              <p className="mt-0.5 text-xs font-semibold text-muted-foreground">
-                {dashboard.billCount} bill{dashboard.billCount === 1 ? "" : "s"} recorded today
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-foreground">Sales Overview</p>
+                <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">i</span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-end gap-3">
+                <p className="font-display text-2xl font-black text-foreground">{fmtRs(dashboard.revenue)}</p>
+                {salesDelta !== null && (
+                  <span className={cn("mb-1 flex items-center gap-1 text-xs font-bold", salesDelta >= 0 ? "text-emerald-600" : "text-red-500")}>
+                    {salesDelta >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                    {Math.abs(salesDelta)}% vs yesterday
+                  </span>
+                )}
+              </div>
             </div>
-            <Link href="/reports" className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
+            <Link href="/reports" className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
               View Report
             </Link>
           </div>
-          <div className="mt-4 h-44">
+          <div className="mt-4 h-64 min-h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={salesChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={v => v >= 1000 ? `Rs ${Math.round(v / 1000)}k` : `Rs ${v}`} />
                 <Tooltip
                   contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }}
                   formatter={(v: number) => [fmtRs(v), "Sales"]}
@@ -347,45 +477,18 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </section>
 
-        {/* Low Stock Alerts */}
-        <div className="rounded-xl border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-foreground">Low Stock Alerts</p>
-            <Link href="/inventory" className="text-xs font-semibold text-primary hover:underline">View all</Link>
-          </div>
-          <div className="mt-3 space-y-2.5">
-            {lowStockItems.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">All stock healthy ✓</p>
-            ) : (
-              lowStockItems.slice(0, 6).map((item, i) => {
-                const isCritical = item.stock <= Math.round((item.threshold ?? 5) * 0.4);
-                return (
-                  <div key={item.productId ?? i} className="flex items-center gap-2.5">
-                    <div className="h-9 w-9 shrink-0 rounded-lg bg-muted/50 flex items-center justify-center">
-                      <Package size={15} className="text-muted-foreground" aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold leading-tight">{item.name}</p>
-                      <p className="text-[10px] text-muted-foreground">Stock: {item.stock} {item.unit ?? "pcs"}</p>
-                    </div>
-                    <span className={cn("shrink-0 rounded-md px-2 py-0.5 text-[10px] font-bold", isCritical ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
-                      {isCritical ? "Critical" : "Low"}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+        <PaymentModeBreakdown rows={paymentBreakdown} total={dashboard.revenue} />
+        <LowStockAlerts items={lowStockItems} />
+
       </div>
 
       {/* ── Recent Bills + Quick Insights ── */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.85fr)_minmax(280px,0.85fr)]">
 
         {/* Recent Bills */}
-        <div className="rounded-xl border bg-card shadow-sm">
+        <section className="rounded-xl border bg-card shadow-sm">
           <div className="flex items-center justify-between gap-3 border-b p-4">
             <p className="font-semibold text-foreground">Recent Bills</p>
             <Link href="/bills" className="text-xs font-semibold text-primary hover:underline">View all</Link>
@@ -411,62 +514,91 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
                 ) : recentBills.length === 0 ? (
                   <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">No bills today yet</td></tr>
                 ) : (
-                  recentBills.slice(0, 7).map(bill => (
-                    <Link key={bill.id ?? bill.billNo} href={`/bills/${bill.id ?? ""}`}>
-                      <tr className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/30">
+                  recentBills.slice(0, 7).map(bill => {
+                    const href = `/bills/${bill.id ?? ""}`;
+                    return (
+                      <tr
+                        key={bill.id ?? bill.billNo}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => navigate(href)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(href);
+                          }
+                        }}
+                        className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      >
                         <td className="px-4 py-3 font-semibold text-primary">{bill.billNo ?? "—"}</td>
                         <td className="px-4 py-3 text-muted-foreground">{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
                         <td className="max-w-32 px-4 py-3 truncate">{bill.customerName ?? "Walk-in"}</td>
                         <td className="px-4 py-3 text-muted-foreground">{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
                         <td className="px-4 py-3 font-semibold">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
                         <td className="px-4 py-3">
-                          <PaymentBadge mode={"cash"} compact />
+                          <PaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} compact />
                         </td>
                       </tr>
-                    </Link>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
-          {recentBills.length > 0 && (
-            <div className="flex items-center justify-between border-t px-4 py-3 text-xs text-muted-foreground">
-              <span>Total Bills: {recentBillsQuery.data?.total ?? recentBills.length}</span>
-              <span className="font-semibold">Total Amount: {fmtRs(dashboard.revenue)}</span>
+          <div className="grid border-t text-sm sm:grid-cols-2">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                <ReceiptText size={16} />
+              </span>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Bills</p>
+                <p className="font-black">{recentBillsQuery.data?.total ?? dashboard.billCount}</p>
+              </div>
             </div>
-          )}
-        </div>
+            <div className="flex items-center justify-between gap-3 px-4 py-3 sm:border-l">
+              <p className="text-xs text-muted-foreground">Total Amount</p>
+              <p className="font-display text-lg font-black">{fmtRs(dashboard.revenue)}</p>
+            </div>
+          </div>
+        </section>
 
         {/* Right column: Quick Insights + Sync & Health */}
-        <div className="space-y-4">
+        <div className="contents">
 
           {/* Quick Insights */}
           <div className="rounded-xl border bg-card p-4 shadow-sm">
             <p className="mb-3 text-sm font-semibold text-foreground">Quick Insights</p>
             <div className="space-y-2">
-              <InsightRow icon={<Package size={16} className="text-emerald-600" />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "—"} />
-              <InsightRow icon={<CreditCard size={16} className="text-violet-600" />} label="Average Bill Value" value={dashboard.billCount > 0 ? fmtRs(Math.round(dashboard.revenue / dashboard.billCount)) : "₹0"} />
-              <InsightRow icon={<Smartphone size={16} className="text-sky-600" />} label="UPI Collected" value={fmtRs(dashboard.upiCollected)} />
-              <InsightRow icon={<Truck size={16} className="text-amber-600" />} label="Supplier Due" value={dashboard.supplierDue > 0 ? fmtRs(dashboard.supplierDue) : "Clear"} />
+              <InsightRow icon={<Package size={16} className="text-emerald-600" />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Sales leaders" : "No sales yet"} href="/reports" />
+              <InsightRow icon={<PackagePlus size={16} className="text-blue-600" />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "No product yet"} href="/reports" />
+              <InsightRow icon={<CreditCard size={16} className="text-violet-600" />} label="Average Bill Value" value={avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0)} href="/bills" />
+              <InsightRow icon={<Users size={16} className="text-orange-600" />} label="New Customers Today" value={String(ownerReport?.topCustomers.length ?? 0)} href="/customers" />
             </div>
           </div>
 
           {/* Sync & Health */}
           <div className="rounded-xl border bg-card p-4 shadow-sm">
             <p className="mb-3 text-sm font-semibold text-foreground">Sync & Health</p>
-            <div className="space-y-2">
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-sm font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
+              <CheckCircle2 className="mr-2 inline h-4 w-4" />
+              {syncHealthGood ? "All systems operational" : "Backup needs attention"}
+              <p className="ml-6 mt-0.5 text-xs font-medium text-muted-foreground">
+                {isSyncing ? "Sync running now" : syncHealthGood ? "Last synced just now" : "Local data is safe"}
+              </p>
+            </div>
+            <div className="mt-3 space-y-3">
               <HealthRow label="Internet Connection" status={isOnline ? "ok" : "warn"} value={isOnline ? "Online" : "Offline"} />
-              <HealthRow label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={failedCount > 0 ? "Needs review" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date"} />
-              <HealthRow label="Backup Status" status={pendingCount > 0 ? "warn" : "ok"} value={isSyncing ? "Syncing" : pendingCount > 0 ? "Queued" : "Local safe"} />
+              <HealthRow label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
+              <HealthRow label="Backup Status" status={pendingCount > 0 || failedCount > 0 ? "warn" : "ok"} value={isSyncing ? "Syncing" : pendingCount > 0 ? "Queued" : "Secure"} />
               <HealthRow label="Device Status" status="ok" value="Active" />
             </div>
             <Link href="/sync-status">
-              <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90">
-                <RefreshCw size={15} aria-hidden="true" /> Review Sync
+              <button type="button" className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700">
+                <RefreshCw size={15} aria-hidden="true" /> Sync Now
               </button>
             </Link>
             <p className="mt-2 text-center text-[11px] text-muted-foreground">
-              <span className={cn("mr-1 inline-block h-1.5 w-1.5 rounded-full", pendingCount > 0 ? "bg-amber-500" : "bg-emerald-500")} /> Auto backup stays queued safely
+              <span className={cn("mr-1 inline-block h-1.5 w-1.5 rounded-full", syncHealthGood ? "bg-emerald-500" : "bg-amber-500")} /> Auto sync is enabled
             </p>
           </div>
 
@@ -480,6 +612,8 @@ function GeneralLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
           )}
         </div>
       </div>
+
+      <RecentProductsRail products={recentProducts} />
 
     </div>
   );
@@ -500,7 +634,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
-      className={cn("rounded-xl border bg-card p-4 shadow-sm", onClick && "cursor-pointer transition-shadow hover:shadow-md")}
+      className={cn("min-h-[132px] rounded-xl border bg-card p-4 shadow-sm", onClick && "cursor-pointer transition-shadow hover:shadow-md")}
     >
       <div className="flex items-start justify-between gap-2">
         <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", iconBg)}>{icon}</div>
@@ -510,7 +644,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
         {loading ? (
           <div className="mt-1 h-6 w-3/4 animate-pulse rounded bg-muted" />
         ) : (
-          <p className="mt-0.5 font-display text-xl font-black tracking-tight text-foreground">{value}</p>
+          <p className="mt-0.5 break-words font-display text-xl font-black tracking-tight text-foreground">{value}</p>
         )}
         {delta !== null && delta !== undefined && (
           <div className={cn("mt-1 flex items-center gap-1 text-xs font-semibold", isBad ? "text-red-500" : "text-emerald-600")}>
@@ -524,16 +658,114 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
   );
 }
 
-function InsightRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: number }) {
+  const realTotal = rows.reduce((sum, row) => sum + row.value, 0);
+  const displayTotal = total > 0 ? total : realTotal;
+  const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-2.5">
+    <section className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-foreground">Payment Mode Breakdown</p>
+        <span className="rounded-lg border px-2 py-1 text-xs font-semibold text-muted-foreground">This Week</span>
+      </div>
+      <div className="relative mt-3 h-44">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={chartRows}
+              dataKey="value"
+              nameKey="label"
+              innerRadius={48}
+              outerRadius={72}
+              paddingAngle={3}
+              stroke="hsl(var(--card))"
+              strokeWidth={3}
+            >
+              {chartRows.map((entry) => (
+                <Cell key={entry.label} fill={entry.color} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+          <div>
+            <p className="font-display text-lg font-black">{fmtRs(displayTotal)}</p>
+            <p className="text-[11px] text-muted-foreground">Total Sales</p>
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {(rows.length > 0 ? rows : chartRows).map((row) => {
+          const pct = realTotal > 0 ? Math.round((row.value / realTotal) * 1000) / 10 : 0;
+          return (
+            <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <span className={cn("h-2 w-2 rounded-full", row.dot)} />
+                {row.label}
+              </span>
+              <span className="font-semibold text-foreground">{fmtRs(row.value)} {realTotal > 0 ? `(${pct}%)` : ""}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function LowStockAlerts({ items }: { items: LocalReportSnapshot["lowStock"] }) {
+  return (
+    <section className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-foreground">Low Stock Alerts</p>
+        <Link href="/inventory" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+      </div>
+      <div className="mt-3 space-y-3">
+        {items.length === 0 ? (
+          <div className="rounded-lg border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
+            All stock healthy
+          </div>
+        ) : (
+          items.slice(0, 5).map((item, i) => {
+            const threshold = item.threshold || 5;
+            const isCritical = item.stock <= Math.max(1, Math.round(threshold * 0.4));
+            return (
+              <Link key={item.productId ?? i} href="/inventory">
+                <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/40">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-muted/50">
+                    <Package size={16} className="text-muted-foreground" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold leading-tight">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">Stock: {item.stock} {item.unit ?? "pcs"}</p>
+                  </div>
+                  <span className={cn("shrink-0 rounded-md px-2 py-1 text-[11px] font-bold", isCritical ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
+                    {isCritical ? "Critical" : "Low"}
+                  </span>
+                </div>
+              </Link>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
+function InsightRow({ icon, label, value, href }: { icon: ReactNode; label: string; value: string; href?: string }) {
+  const content = (
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-3 transition-colors hover:bg-muted/50">
       <div className="flex items-center gap-2.5">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-background">{icon}</span>
-        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="min-w-0">
+          <span className="block truncate text-xs text-muted-foreground">{label}</span>
+          <span className="block truncate text-xs font-bold text-foreground">{value}</span>
+        </span>
       </div>
-      <span className="text-xs font-bold text-foreground">{value}</span>
+      {href ? <ChevronRight size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
     </div>
   );
+  return href ? <Link href={href}>{content}</Link> : content;
 }
 
 function HealthRow({ label, status, value }: { label: string; status: "ok" | "warn" | "error"; value: string }) {
@@ -547,6 +779,68 @@ function HealthRow({ label, status, value }: { label: string; status: "ok" | "wa
       </span>
     </div>
   );
+}
+
+function RecentProductsRail({ products }: { products: Product[] }) {
+  return (
+    <section className="rounded-xl border bg-card p-4 shadow-sm sm:p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-foreground">Recently Added Products</p>
+        <Link href="/products" className="text-xs font-semibold text-primary hover:underline">View all</Link>
+      </div>
+      {products.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+          Products will appear here after you add stock.
+        </div>
+      ) : (
+        <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+          {products.slice(0, 8).map((product) => (
+            <Link key={product.id} href={`/products?highlight=${encodeURIComponent(product.id)}`}>
+              <div className="flex min-w-[190px] items-center gap-3 rounded-lg border bg-background/70 px-3 py-3 transition-all hover:-translate-y-0.5 hover:shadow-sm">
+                <ProductAvatar product={product} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">{product.name}</p>
+                  <p className="text-xs text-muted-foreground">{productUnitLabel(product)}</p>
+                  <p className="mt-1 text-sm font-black">{fmtRs(productPrice(product))}</p>
+                </div>
+              </div>
+            </Link>
+          ))}
+          <Link href="/products">
+            <div className="grid min-w-[52px] place-items-center rounded-full border bg-background/70 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
+              <ChevronRight size={18} />
+            </div>
+          </Link>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ProductAvatar({ product }: { product: Product }) {
+  if (product.imageUrl) {
+    return (
+      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border bg-white">
+        <img src={product.imageUrl} alt="" className="h-full w-full object-contain" />
+      </div>
+    );
+  }
+  return (
+    <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg bg-blue-50 text-sm font-black text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+      {product.name.slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
+function productPrice(product: Product): number {
+  return money(product.sellingPrice ?? product.defaultPricePerRateUnit ?? product.retailPrice ?? 0);
+}
+
+function productUnitLabel(product: Product): string {
+  const unit = product.displayUnit ?? product.unit ?? product.rateUnit ?? "piece";
+  const stock = Number(product.stockQuantity ?? product.stockBaseQty);
+  if (Number.isFinite(stock) && stock >= 0) return `${stock.toLocaleString("en-IN")} ${unit}`;
+  return unit;
 }
 
 function fmtRs(n: number | undefined | null) {

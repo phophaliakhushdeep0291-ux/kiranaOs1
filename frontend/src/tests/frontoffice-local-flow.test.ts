@@ -235,7 +235,7 @@ describe("front office local-first cashier flow", () => {
     expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 100, totalUdhar: 100 }));
     expect(rows("sync_outbox").filter((row) => row.operation_type === "REVERSE_PAYMENT")).toHaveLength(1);
 
-    await recordPurchaseLocalFirst({
+    const purchase = await recordPurchaseLocalFirst({
       productId: "product_sugar",
       quantity: 10,
       enteredUnit: "kg",
@@ -250,6 +250,9 @@ describe("front office local-first cashier flow", () => {
       costPerRateUnit: 50,
       note: "Counter test purchase",
     });
+    // Use the id the engine actually assigned (a global counter) instead of guessing it,
+    // so the edit/mark-paid flow resolves the same row the purchase just created.
+    const purchaseRowId = (purchase.movement as { id: string }).id;
 
     expect(rows("products")[0]).toEqual(expect.objectContaining({ id: "product_sugar", stockBaseQty: 20, costPerRateUnit: 45 }));
     expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
@@ -269,7 +272,7 @@ describe("front office local-first cashier flow", () => {
       }),
     }));
 
-    await updatePurchaseLocal(purchaseDisplayRow({ id: "stock_purchase_17" }), {
+    await updatePurchaseLocal(purchaseDisplayRow({ id: purchaseRowId }), {
       supplierName: "Govind Traders",
       invoiceNumber: "INV-100",
       amount: 500,
@@ -284,7 +287,7 @@ describe("front office local-first cashier flow", () => {
       purchase_payment_status: "partial",
     }));
 
-    await markPurchasePaidLocal(purchaseDisplayRow({ id: "stock_purchase_17", paid: 250, due: 250 }), "upi");
+    await markPurchasePaidLocal(purchaseDisplayRow({ id: purchaseRowId, paid: 250, due: 250 }), "upi");
     expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
       purchase_paid_amount: 500,
       purchase_due_amount: 0,
