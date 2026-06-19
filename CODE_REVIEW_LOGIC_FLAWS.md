@@ -5,6 +5,35 @@ Each item lists location, what's wrong, impact, and a suggested fix. Severity is
 
 ---
 
+## ✅ Resolution status — re-verified against current code on 2026-06-19
+
+The original review below was a 2026-06-16 snapshot. Most items have since been fixed
+(each now carries an explanatory code comment). Verified item-by-item against current code:
+
+| # | Item | Status (2026-06-19) |
+|---|------|---------------------|
+| 1 | `daysBetweenInclusive` +1 over-count | **FIXED** — `Math.round(...)`, no `+1` (`utils/dates.js:108`) |
+| 2 | Daily-closing staleness uses server TZ | **FIXED** — `dateRangeForDateOnly(date, DAILY_CLOSING_TIMEZONE)` (`dailyClosingSnapshot.service.js:106`) |
+| 3 | Grace period never applied on organic expiry | **FIXED** — `isSubscriptionActive` honors `graceEndsAt` for active rows (`subscription.service.js:311-318`) |
+| 4 | `FinancialLedger` written but never read | **OPEN (architectural)** — still write-only; not a user-facing calc bug. Consume it in reports or drop the "source of truth" framing. |
+| 5 | Inclusive GST counted as gross profit | **INTENTIONAL** — correct for unregistered/composition kirana shops (full MRP = revenue). Revisit only for GST-registered tenants. |
+| 6 | Exclusive-GST discount applied after GST | **OPEN (minor, by-design)** — exclusive-mode + discount only; tax-treatment choice, not changed without a compliance decision. |
+| 7 | `getMonthlyBreakdown` buckets by server month | **FIXED** — shop-tz via `dateRangeForDateOnly` + `monthInShopTz` (`reports.service.js:40,526-530`) |
+| 8 | Expense overview boundaries server-local | **FIXED** — all boundaries via `DAILY_CLOSING_TIMEZONE` (`expenses.service.js:82-98`) |
+| 9 | `requireShop` trusts `x-shop-id` header | **FIXED** — shopId taken only from `req.user` (`middleware/permissions.js:18-25`) |
+| 10 | `looksLikeClientLocalId` treats all UUIDs as local | **OPEN (dormant/low)** — harmless while server ids are cuid; revisit only if server ids become UUIDs. |
+| 11 | Razorpay webhook id `Date.now()` fallback | **FIXED** — deterministic SHA-256 fingerprint when no provider id (`paymentProvider.service.js:755-768`) |
+| 12 | `7d`/`30d` range start in server-local time | **FIXED** — shop-tz date math via `zonedDayStartDaysAgo` (`reports.service.js:47-51`) |
+
+Also fixed in this pass (frontend, not in the original list): a **udhar double-count on
+credit-bill sync** — a new inline customer was created with an opening balance *and* a bill
+credit ledger entry, so the server balance diverged to 2× (local correct). Fixed in
+`frontend/src/features/billing/local-actions.ts` (inline `CREATE_CUSTOMER` seeds `udharAmount: 0`).
+
+The original analysis is kept verbatim below for history.
+
+---
+
 ## HIGH
 
 ### 1. `daysBetweenInclusive` over-counts by exactly 1 day → breaks report plan-gating
