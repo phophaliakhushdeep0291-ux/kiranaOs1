@@ -359,7 +359,7 @@ export function BillingSearch({
                     <p className="text-[13px] font-black text-[#13274d]">
                       ₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}
                     </p>
-                    <p className="text-[10px] text-[#7a89a3]">Tax (5%)</p>
+                    <p className="text-[10px] text-[#7a89a3]">GST</p>
                   </div>
                 </div>
               )}

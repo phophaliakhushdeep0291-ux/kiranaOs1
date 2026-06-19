@@ -171,13 +171,6 @@ export function BillingSummary({
     }
   }
 
-  /* GST calculation (informational — grandTotal unchanged) */
-  const totalGst = cart.reduce((sum, item) => {
-    const rate = item.product.gstRate ?? 0;
-    if (rate <= 0) return sum;
-    return sum + Math.round(item.quantity * item.rate * rate) / 100;
-  }, 0);
-
   const selectedCustomerName = (() => {
     if (selectedCustomerId !== "walk_in") {
       return customers.find((c) => c.id === selectedCustomerId)?.name ?? "Customer";
@@ -407,14 +400,6 @@ export function BillingSummary({
               </button>
             </div>
             {couponMsg && <p className={`pt-0.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
-
-            {/* Tax */}
-            {totalGst > 0 && (
-              <div className="flex h-[29px] items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#536383]">Tax (GST 5%)</span>
-                <span className="font-black text-[#13274d]">{fmtRs(Math.round(totalGst * 100) / 100)}</span>
-              </div>
-            )}
 
             {/* Grand total */}
             <div className="mt-2 flex items-center justify-between border-t border-[#edf1f6] pt-3">
