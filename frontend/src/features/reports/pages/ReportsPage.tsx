@@ -326,7 +326,7 @@ export default function ReportsPage() {
   ];
 
   return (
-    <PageShell className="space-y-3 bg-white pb-8 text-[#10224a] sm:space-y-3.5 2xl:pt-0">
+    <PageShell className="min-h-full space-y-3 !bg-[#ffffff] pb-8 text-[#10224a] sm:space-y-3.5 2xl:pt-0">
       <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between 2xl:fixed 2xl:right-[276px] 2xl:top-[18px] 2xl:z-[60] 2xl:flex-row 2xl:gap-3">
         <div className="flex min-w-0 items-center gap-2 text-[11px] text-[#6c7c98]">
           {snapshot?.hasUnsyncedOperations ? (
