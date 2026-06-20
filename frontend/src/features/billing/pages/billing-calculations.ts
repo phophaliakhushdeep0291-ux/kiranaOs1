@@ -71,3 +71,25 @@ export function calculateDiscount(subtotal: number, discount: number): number {
 export function calculateGrandTotal(subtotal: number, discount: number): number {
   return roundMoney(Math.max(0, subtotal - calculateDiscount(subtotal, discount)));
 }
+
+/**
+ * Whether a bill must have a customer attached (udhar/credit needs a khata owner).
+ *
+ * The split-udhar remainder only counts in Split mode — outside Split that value is
+ * `grandTotal - 0 - 0 = grandTotal`, which would wrongly force a customer on every plain
+ * walk-in cash/UPI sale. Non-split udhar is already captured by `creditAmount`.
+ */
+export function billNeedsCustomer(params: {
+  isUdharEntry: boolean;
+  creditAmount: number;
+  isCreditMode: boolean;
+  isSplitMode: boolean;
+  splitUdharAmount: number;
+}): boolean {
+  return (
+    params.isUdharEntry ||
+    params.creditAmount > 0 ||
+    params.isCreditMode ||
+    (params.isSplitMode && params.splitUdharAmount > 0)
+  );
+}

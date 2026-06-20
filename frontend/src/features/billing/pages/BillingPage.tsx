@@ -13,7 +13,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
+import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
 import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config";
@@ -570,7 +570,13 @@ export default function Billing() {
       toast({ title: "Discount too high", description: "Discount cannot exceed bill subtotal.", variant: "destructive" });
       return false;
     }
-    const needsCustomer = nextBillType === BillInputBillType.udhar_entry || creditAmount > 0 || paymentMode === BillPaymentMode.credit || splitUdharAmount > 0;
+    const needsCustomer = billNeedsCustomer({
+      isUdharEntry: nextBillType === BillInputBillType.udhar_entry,
+      creditAmount,
+      isCreditMode: paymentMode === BillPaymentMode.credit,
+      isSplitMode: paymentMode === SPLIT_PAYMENT,
+      splitUdharAmount,
+    });
     if (needsCustomer && !hasCreditCustomerIdentity) {
       toast({ title: "Customer required for udhar", description: "Select a customer or type customer name + mobile number.", variant: "destructive" });
       customerNameInputRef.current?.focus();
@@ -844,7 +850,7 @@ export default function Billing() {
 
   return (
     <div className="min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] bg-[#f7fbff] lg:h-[calc(100dvh-var(--app-desktop-topbar-height))] lg:min-h-0 lg:overflow-hidden">
-      <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 sm:px-3 sm:py-3 lg:h-full lg:flex-row lg:gap-4 lg:px-4">
+      <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 pb-24 sm:px-3 sm:py-3 sm:pb-24 lg:h-full lg:flex-row lg:gap-4 lg:px-4 lg:pb-3">
       {/* ── LEFT PANEL: product search + grid ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-visible lg:min-h-0 lg:overflow-hidden">
         <BillingSearch
@@ -948,6 +954,37 @@ export default function Billing() {
         onRemoveItem={removeItem}
       />
       </div>
+
+      {/* Sticky mobile pay bar — keeps the running total + Save reachable one-thumb
+          without scrolling to the bottom of the summary. Desktop shows the full
+          summary panel always, so this is mobile-only. Sits above the bottom nav. */}
+      {cart.length > 0 && (
+        <div
+          className="fixed inset-x-0 z-40 border-t border-[#e6ecf4] bg-white px-3 py-2.5 shadow-[0_-6px_22px_rgba(15,35,80,0.10)] lg:hidden"
+          style={{ bottom: "var(--app-mobile-nav-height, 0px)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] font-bold text-[#64748b]">
+                {cart.length} item{cart.length === 1 ? "" : "s"}
+                {creditAmount > 0 ? " · udhar" : ""}
+              </div>
+              <div className="font-display text-[20px] font-black leading-tight text-[#0f1e3d]">
+                ₹{grandTotal.toLocaleString("en-IN")}
+              </div>
+            </div>
+            <button
+              type="button"
+              data-testid="mobile-save-bill"
+              onClick={() => handleConfirm()}
+              disabled={confirmBill.isPending || !newBillingFeature.allowed}
+              className="inline-flex h-12 min-w-[150px] items-center justify-center rounded-xl bg-[#0057ff] px-5 text-[15px] font-black text-white shadow-sm transition-transform active:scale-[0.99] disabled:opacity-50"
+            >
+              {confirmBill.isPending ? "Saving…" : "Save Bill"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <OwnerPinModal
         open={sensitivePinOpen}
