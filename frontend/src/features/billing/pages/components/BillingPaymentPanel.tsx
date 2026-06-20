@@ -1,8 +1,9 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
+import { ArrowLeftRight, Banknote, QrCode, UserRound } from "lucide-react";
 
 interface BillingPaymentPanelProps {
   billType: BillTypeSelection;
@@ -49,6 +50,7 @@ export function BillingPaymentPanel({
   creditAmount,
   advanceAmount,
 }: BillingPaymentPanelProps) {
+  const [showReceivedAmount, setShowReceivedAmount] = useState(false);
   const showPaymentMode =
     billType !== BillInputBillType.udhar_entry && billType !== BillInputBillType.estimate;
 
@@ -61,7 +63,7 @@ export function BillingPaymentPanel({
         <div className="grid grid-cols-4 gap-2">
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.cash}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e9fff0] text-lg font-black text-[#16a34a]">₹</span>}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]"><Banknote size={17} /></span>}
             label="Cash"
             selected={paymentMode === BillPaymentMode.cash}
             activeClass="border-[#b9f0cb] bg-[#effff5] text-[#16a34a]"
@@ -69,7 +71,7 @@ export function BillingPaymentPanel({
           />
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.upi}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#f3e8ff] text-[#7c3aed]"><UpiIcon /></span>}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#f3e8ff] text-[#7c3aed]"><QrCode size={17} /></span>}
             label="UPI"
             selected={paymentMode === BillPaymentMode.upi}
             activeClass="border-[#e6d5ff] bg-[#faf5ff] text-[#7c3aed]"
@@ -77,7 +79,7 @@ export function BillingPaymentPanel({
           />
           <PayModeBtn
             testId={`button-payment-${SPLIT_PAYMENT}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eef4ff] text-[#2563eb]"><SplitIcon /></span>}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eef4ff] text-[#2563eb]"><ArrowLeftRight size={17} /></span>}
             label="Split"
             selected={paymentMode === SPLIT_PAYMENT}
             activeClass="border-[#cfe0ff] bg-[#f4f8ff] text-[#2563eb]"
@@ -85,7 +87,7 @@ export function BillingPaymentPanel({
           />
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.credit}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff3e4] text-[#f97316]"><UdharIcon /></span>}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff3e4] text-[#f97316]"><UserRound size={17} /></span>}
             label="Udhar"
             selected={paymentMode === BillPaymentMode.credit}
             activeClass="border-[#fed7aa] bg-[#fff7ed] text-[#f97316]"
@@ -95,7 +97,13 @@ export function BillingPaymentPanel({
       ) : null}
 
       {/* Amount received (cash/UPI mode) */}
-      {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit ? (
+      {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && !(showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
+        <button type="button" onClick={() => setShowReceivedAmount(true)} className="w-full rounded-[8px] border border-dashed border-[#d7e2f1] py-2 text-[11px] font-semibold text-[#536383] transition-colors hover:border-[#b9cdf6] hover:bg-[#f8fbff] hover:text-[#075fff]">
+          Enter partial or advance payment
+        </button>
+      ) : null}
+
+      {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && (showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
         <div>
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
             Amount Received
@@ -264,35 +272,3 @@ function PayModeBtn({
   );
 }
 
-function UpiIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[17px] w-[17px] fill-current" aria-hidden="true">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="3" height="3" rx="0.5" />
-      <rect x="18" y="14" width="3" height="3" rx="0.5" />
-      <rect x="14" y="18" width="3" height="3" rx="0.5" />
-      <rect x="18" y="18" width="3" height="3" rx="0.5" />
-    </svg>
-  );
-}
-
-function SplitIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[17px] w-[17px] stroke-current" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M16 3h5v5" />
-      <path d="M8 3H3v5" />
-      <path d="M21 3l-7 7-4-4-7 7" />
-    </svg>
-  );
-}
-
-function UdharIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[17px] w-[17px] stroke-current" fill="none" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="7" r="4" />
-      <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
-    </svg>
-  );
-}

@@ -137,6 +137,7 @@ interface GroupItem {
   id: string;
   label: string;
   Icon: React.ElementType;
+  overviewHref?: string;
   triggerPaths: string[];
   children: SubItem[];
 }
@@ -147,7 +148,7 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { kind: "link", href: "/billing", label: "Billing", Icon: ShoppingCart, badge: "F2", emphasis: true },
   {
-    kind: "group", id: "inventory", label: "Inventory", Icon: Package,
+    kind: "group", id: "inventory", label: "Inventory", Icon: Package, overviewHref: "/inventory",
     triggerPaths: ["/products", "/categories", "/inventory"],
     children: [
       { href: "/products", label: "Products" },
@@ -579,7 +580,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
         )}
 
-        <main id="main-content" className="app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain bg-[#f7fbff] pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0">
+        <main id="main-content" className="app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto scroll-smooth overscroll-contain bg-white pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
 
@@ -654,7 +655,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
   const groupActive = item.triggerPaths.some(p => isActive(loc, p)) || item.children.some(c => isActive(loc, c.href));
 
   if (collapsed) {
-    const firstHref = item.triggerPaths[0] ?? item.children[0]?.href ?? "#";
+    const firstHref = item.overviewHref ?? item.triggerPaths[0] ?? item.children[0]?.href ?? "#";
     return (
       <Link href={firstHref}>
         <div title={item.label}
@@ -663,6 +664,45 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
           <item.Icon size={18} aria-hidden="true" />
         </div>
       </Link>
+    );
+  }
+
+  if (item.overviewHref) {
+    const overviewActive = loc === item.overviewHref;
+    return (
+      <div>
+        <div className={cn("group flex min-h-[44px] w-full items-center rounded-[10px] transition-all duration-150",
+          groupActive ? "bg-white/10 text-white" : "text-white/76 hover:bg-white/8 hover:text-white")}>
+          <Link href={item.overviewHref} className="flex min-h-[44px] min-w-0 flex-1 items-center gap-3 rounded-l-[10px] px-3">
+            <item.Icon size={18} aria-hidden="true" />
+            <span className="flex-1 truncate text-left text-[14px] font-semibold">{item.label}</span>
+            {overviewActive ? <span className="sr-only">Current page</span> : null}
+          </Link>
+          <button type="button" onClick={onToggle} aria-label={`${expanded ? "Collapse" : "Expand"} ${item.label} menu`} aria-expanded={expanded}
+            className="grid min-h-[44px] w-10 shrink-0 place-items-center rounded-r-[10px] text-sidebar-foreground/50 transition-colors hover:bg-white/10 hover:text-white">
+            <ChevronDown size={13} aria-hidden="true" className={cn("transition-transform duration-200", expanded && "rotate-180")} />
+          </button>
+        </div>
+
+        {expanded && (
+          <div className="mb-1 mt-1 space-y-0.5 pl-[42px]">
+            {item.children.map(child => {
+              const active = isActive(loc, child.href);
+              const label = labelOverrides[child.href] ?? child.label;
+              return (
+                <Link key={child.href} href={child.href}>
+                  <div aria-current={active ? "page" : undefined}
+                    className={cn("flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      active ? "bg-sidebar-primary text-white" : "text-sidebar-foreground/55 hover:bg-white/8 hover:text-white")}>
+                    <span className={cn("text-[8px]", active ? "text-white" : "text-sidebar-foreground/30")}>â—</span>
+                    {label}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
     );
   }
 

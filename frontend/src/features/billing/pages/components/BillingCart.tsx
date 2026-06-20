@@ -70,8 +70,8 @@ function CartRow({
       className="grid grid-cols-[34px_1fr_84px_60px_22px] items-center gap-[9px] border-b border-[#edf1f6] px-2.5 py-3 last:border-b-0"
     >
       {/* Thumbnail */}
-      <div className={`grid h-[34px] w-[34px] shrink-0 place-items-center rounded-lg text-lg ${color}`}>
-        {emoji}
+      <div className={`grid h-[34px] w-[34px] shrink-0 place-items-center overflow-hidden rounded-[7px] text-lg ${color}`}>
+        {item.product.imageUrl ? <img src={item.product.imageUrl} alt="" className="h-full w-full object-contain" /> : emoji}
       </div>
 
       {/* Name + rate */}

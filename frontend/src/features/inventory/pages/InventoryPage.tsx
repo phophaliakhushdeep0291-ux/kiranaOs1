@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   getGetInventoryQueryKey,
   getGetLowStockQueryKey,
@@ -25,8 +25,37 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, BarChart3, CalendarClock, ClipboardList, Loader2, PackageCheck, ShieldAlert, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  AlertTriangle,
+  BarChart3,
+  Boxes,
+  CalendarClock,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
+  ClipboardList,
+  Download,
+  Ellipsis,
+  History,
+  IndianRupee,
+  Layers3,
+  Loader2,
+  Package,
+  PackageCheck,
+  PackagePlus,
+  PackageX,
+  Search,
+  ShieldAlert,
+  SlidersHorizontal,
+  Tags,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+  Wrench,
+} from "lucide-react";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { patchProductLocalFirst } from "@/features/products/local-actions";
@@ -39,7 +68,7 @@ import {
   calculateInventoryPriceSuggestions,
   roundInventoryValue,
 } from "@/features/inventory/calculations";
-import { FilterBar, PageHeader, PageShell, SearchInputWithIcon, StatCard, StatsGrid } from "@/components/shared";
+import { PageShell, StatCard, StatsGrid } from "@/components/shared";
 
 const UNITS = [
   "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
@@ -52,6 +81,9 @@ const UNITS = [
 ];
 
 type MovementType = "purchase" | "sale" | "damage" | "correction";
+type InventoryTab = "dashboard" | "movements" | "purchase-bills" | "reports" | "batch";
+
+const STOCK_ROWS_PER_PAGE = 8;
 
 type MovementForm = {
   productId: string;
@@ -173,7 +205,7 @@ function money(value: unknown) {
 }
 
 function fmtMoney(value: unknown) {
-  return `Rs ${money(value).toLocaleString("en-IN")}`;
+  return `\u20B9${money(value).toLocaleString("en-IN")}`;
 }
 
 function purchaseTotal(row: MovementEntry) {
@@ -207,6 +239,12 @@ export default function InventoryPage() {
   const manageInventory = usePermission("manage_inventory");
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<InventoryTab>("dashboard");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [brandFilter, setBrandFilter] = useState("all");
+  const [unitFilter, setUnitFilter] = useState("all");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [stockPage, setStockPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<MovementForm>(initialForm);
   const [savingManualSale, setSavingManualSale] = useState(false);
@@ -240,25 +278,62 @@ export default function InventoryPage() {
     toast({ title, description: "Inventory is updated locally and will sync when internet is available." });
   }
 
+  const allInventoryRows = useMemo(
+    () => (inventory.data ?? [])
+      .filter((item) => !(item as { deletedAt?: unknown; deleted_at?: unknown }).deletedAt && !(item as { deleted_at?: unknown }).deleted_at),
+    [inventory.data],
+  );
+
+  const filterOptions = useMemo(() => ({
+    categories: [...new Set(allInventoryRows.map((item) => item.category?.trim()).filter(Boolean) as string[])].sort(),
+    brands: [...new Set(allInventoryRows.map((item) => item.brand?.trim()).filter(Boolean) as string[])].sort(),
+    units: [...new Set(allInventoryRows.map((item) => (item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece").trim()).filter(Boolean))].sort(),
+  }), [allInventoryRows]);
+
   const inventoryRows = useMemo(() => {
     const q = search.toLowerCase();
-    return (inventory.data ?? [])
-      .filter((item) => !(item as { deletedAt?: unknown; deleted_at?: unknown }).deletedAt && !(item as { deleted_at?: unknown }).deleted_at)
-      .filter((item) => !q || [item.name, item.category, item.barcode, ...(item.aliases ?? [])].filter(Boolean).join(" ").toLowerCase().includes(q));
-  }, [inventory.data, search]);
+    return allInventoryRows
+      .filter((item) => !q || [item.name, item.category, item.brand, item.barcode, item.sku, ...(item.aliases ?? [])].filter(Boolean).join(" ").toLowerCase().includes(q))
+      .filter((item) => categoryFilter === "all" || item.category === categoryFilter)
+      .filter((item) => brandFilter === "all" || item.brand === brandFilter)
+      .filter((item) => unitFilter === "all" || (item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece") === unitFilter)
+      .filter((item) => {
+        const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
+        const qty = Number(item.stockBaseQty ?? 0);
+        if (stockFilter === "out") return tracked && qty <= 0;
+        if (stockFilter === "low") return tracked && qty > 0 && isLowStock(item);
+        if (stockFilter === "in") return !tracked || (qty > 0 && !isLowStock(item));
+        return true;
+      });
+  }, [allInventoryRows, brandFilter, categoryFilter, search, stockFilter, unitFilter]);
 
   const movementRows = useMemo(() => ((ledger.data?.entries ?? []) as MovementEntry[]), [ledger.data]);
 
   const stockStats = useMemo(() => {
-    const rows = (inventory.data ?? []).filter((item) => !(item as { deletedAt?: unknown }).deletedAt);
+    const rows = allInventoryRows;
     const tracked = rows.filter((item) => (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false);
     const stockValue = tracked.reduce((sum, item) => sum + Number(item.stockBaseQty ?? 0) * Number(item.costPerRateUnit ?? item.costPrice ?? 0) / (CONVERSION[item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece"] ?? 1), 0);
+    const totalQuantity = tracked.reduce((sum, item) => sum + displayQtyFromBase(item.stockBaseQty, item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece"), 0);
+    const soldLast30Days = movementRows
+      .filter((row) => (row.action ?? row.type) === "sale" && safeDate(row.createdAt ?? row.created_at).getTime() >= Date.now() - 30 * 86_400_000)
+      .reduce((sum, row) => sum + Math.abs(Number(row.quantityDelta ?? row.quantity_delta ?? 0)), 0);
     return {
       products: rows.length,
       lowStock: (lowStock.data ?? rows.filter(isLowStock)).length,
+      outOfStock: tracked.filter((item) => Number(item.stockBaseQty ?? 0) <= 0).length,
+      totalQuantity: round2(totalQuantity),
       stockValue: round2(stockValue),
+      turnover30: totalQuantity > 0 ? Math.round((soldLast30Days / totalQuantity) * 10) / 10 : 0,
     };
-  }, [inventory.data, lowStock.data]);
+  }, [allInventoryRows, lowStock.data, movementRows]);
+
+  useEffect(() => {
+    setStockPage(1);
+  }, [brandFilter, categoryFilter, search, stockFilter, unitFilter]);
+
+  const stockTotalPages = Math.max(1, Math.ceil(inventoryRows.length / STOCK_ROWS_PER_PAGE));
+  const safeStockPage = Math.min(stockPage, stockTotalPages);
+  const pagedInventoryRows = inventoryRows.slice((safeStockPage - 1) * STOCK_ROWS_PER_PAGE, safeStockPage * STOCK_ROWS_PER_PAGE);
 
   const movementSummary = useMemo(() => {
     const purchaseRows = movementRows.filter((row) => (row.action ?? row.type) === "purchase");
@@ -383,6 +458,26 @@ export default function InventoryPage() {
     setDialogOpen(true);
   }
 
+  function exportInventory() {
+    const header = ["Product", "SKU / Barcode", "Category", "Brand", "Unit", "Stock", "Cost Price", "Stock Value", "Status"];
+    const lines = inventoryRows.map((item) => {
+      const unit = item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece";
+      const qty = displayQtyFromBase(item.stockBaseQty, unit);
+      const cost = round2(item.averageCostPrice ?? item.costPerRateUnit ?? item.costPrice ?? 0);
+      const status = Number(item.stockBaseQty ?? 0) <= 0 ? "Out of stock" : isLowStock(item) ? "Low stock" : "In stock";
+      return [item.name, item.sku ?? item.barcode ?? "", item.category ?? "", item.brand ?? "", unit, qty, cost, round2(qty * cost), status];
+    });
+    const csv = [header, ...lines]
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `inventory-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleSubmit() {
     const quantity = Number(form.quantity);
     if (!form.productId) {
@@ -481,76 +576,137 @@ export default function InventoryPage() {
 
   const isSaving = recordPurchase.isPending || recordDamage.isPending || stockCorrection.isPending || savingManualSale;
 
+  const lowStockRows = (lowStock.data ?? allInventoryRows.filter(isLowStock))
+    .filter((item) => Number(item.stockBaseQty ?? 0) > 0)
+    .sort((a, b) => Number(a.stockBaseQty ?? 0) - Number(b.stockBaseQty ?? 0));
+  const recentMovements = [...movementRows]
+    .sort((a, b) => safeDate(b.createdAt ?? b.created_at).getTime() - safeDate(a.createdAt ?? a.created_at).getTime())
+    .slice(0, 4);
+
   return (
-    <PageShell className="space-y-5">
-      <PageHeader
-        title="Inventory"
-        description="Stock health, purchase entries, and corrections in one offline-ready workspace."
-        actions={(
-          <>
-            <Button variant="outline" onClick={() => openMovement("correction")}><ShieldAlert size={16} className="mr-1.5" />Correct</Button>
-            <Button onClick={() => openMovement("purchase")}><PackageCheck size={16} className="mr-1.5" />Stock entry</Button>
-          </>
-        )}
-      />
+    <PageShell className="space-y-4 bg-white pb-8">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <InventoryMetricCard label="Total Stock Value" value={fmtMoney(stockStats.stockValue)} detail="At current cost" tone="blue" icon={<IndianRupee size={19} />} />
+        <InventoryMetricCard label="Total SKUs" value={stockStats.products.toLocaleString("en-IN")} detail={`${stockStats.totalQuantity.toLocaleString("en-IN")} units tracked`} tone="violet" icon={<Tags size={19} />} />
+        <InventoryMetricCard label="Low Stock Items" value={stockStats.lowStock.toLocaleString("en-IN")} detail="Require attention" tone="amber" icon={<AlertTriangle size={19} />} />
+        <InventoryMetricCard label="Out of Stock Items" value={stockStats.outOfStock.toLocaleString("en-IN")} detail="Take immediate action" tone="rose" icon={<PackageX size={19} />} />
+        <InventoryMetricCard label="Stock Turnover (30D)" value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? "Based on sold quantity" : "No sales movement yet"} tone="green" icon={<TrendingUp size={19} />} />
+      </div>
 
-      <StatsGrid columns={3}>
-        <StatCard label="Products" value={stockStats.products} />
-        <StatCard label="Low stock alerts" value={stockStats.lowStock} tone="amber" />
-        <StatCard label="Approx. stock value" value={fmtMoney(stockStats.stockValue)} tone="green" />
-      </StatsGrid>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <InventoryActionCard label="Add Stock" detail="Increase inventory" tone="blue" icon={<PackagePlus size={20} />} onClick={() => openMovement("purchase")} />
+        <InventoryActionCard label="Stock Correction" detail="Adjust stock levels" tone="green" icon={<Wrench size={20} />} onClick={() => openMovement("correction")} />
+        <InventoryActionCard label="Damage Entry" detail="Record damaged items" tone="orange" icon={<ShieldAlert size={20} />} onClick={() => openMovement("damage")} />
+        <InventoryActionCard label="Supplier Purchase" detail="Create purchase entry" tone="violet" icon={<CircleDollarSign size={20} />} onClick={() => openMovement("purchase")} />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="group flex min-h-[66px] w-full items-center gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)]">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#eef4ff] text-[#075fff]"><Ellipsis size={20} /></span>
+              <span><span className="block text-[13px] font-semibold text-[#13223f]">More Actions</span><span className="mt-0.5 block text-[11px] text-[#6d7c98]">History, bills and insights</span></span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem onClick={() => setActiveTab("movements")}><History size={15} className="mr-2" />Movement history</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setActiveTab("purchase-bills")}><ClipboardList size={15} className="mr-2" />Purchase bills</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setActiveTab("reports")}><BarChart3 size={15} className="mr-2" />Inventory insights</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setActiveTab("batch")}><CalendarClock size={15} className="mr-2" />Batch and expiry</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
-      <Tabs defaultValue="dashboard" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5 md:max-w-3xl">
-          <TabsTrigger value="dashboard">Stock</TabsTrigger>
-          <TabsTrigger value="movements">History</TabsTrigger>
-          <TabsTrigger value="purchase-bills">Bills</TabsTrigger>
-          <TabsTrigger value="reports">Insights</TabsTrigger>
-          <TabsTrigger value="batch">Batch</TabsTrigger>
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as InventoryTab)} className="space-y-4">
+        {activeTab !== "dashboard" ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 py-3">
+            <div><p className="text-[14px] font-semibold text-[#13223f]">{activeTab === "movements" ? "Movement History" : activeTab === "purchase-bills" ? "Purchase Bills" : activeTab === "reports" ? "Inventory Insights" : "Batch & Expiry"}</p><p className="text-[11px] text-[#718096]">Detailed inventory records and controls.</p></div>
+            <Button variant="outline" className="h-9 rounded-[8px] text-[11px]" onClick={() => setActiveTab("dashboard")}><ChevronLeft size={14} className="mr-1.5" />Back to stock</Button>
+          </div>
+        ) : null}
+        <TabsContent value="dashboard" className="mt-0 space-y-4">
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2.15fr)_minmax(300px,0.95fr)]">
+            <section className="overflow-hidden rounded-[12px] border border-[#e2e8f1] bg-white shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
+              <div className="border-b border-[#e8edf4] p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h2 className="text-[15px] font-semibold text-[#13223f]">Product Stock</h2>
+                    <p className="mt-0.5 text-[11px] text-[#6d7c98]">Real-time stock from local data, ready to sync.</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative min-w-[240px] flex-1 lg:w-[340px]">
+                      <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#7a89a3]" />
+                      <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, SKU, barcode..." className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
+                    </div>
+                    <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />Filters</Button>
+                    <Button className="h-10 rounded-[8px] bg-[#075fff] px-4 text-[12px] shadow-[0_7px_16px_rgba(7,95,255,0.18)] hover:bg-[#0054e8]" onClick={exportInventory}><Download size={14} className="mr-1.5" />Export</Button>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <InventoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} placeholder="All Categories" options={filterOptions.categories} />
+                  <InventoryFilterSelect value={brandFilter} onChange={setBrandFilter} placeholder="All Brands" options={filterOptions.brands} />
+                  <InventoryFilterSelect value={unitFilter} onChange={setUnitFilter} placeholder="All Units" options={filterOptions.units} />
+                  <Select value={stockFilter} onValueChange={setStockFilter}>
+                    <SelectTrigger className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="all">All Stock Status</SelectItem><SelectItem value="in">In Stock</SelectItem><SelectItem value="low">Low Stock</SelectItem><SelectItem value="out">Out of Stock</SelectItem></SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-        <TabsContent value="dashboard" className="space-y-4">
-          <FilterBar>
-            <SearchInputWithIcon label="Search stock" placeholder="Search stock by product, alias, barcode..." value={search} onChange={(event) => setSearch(event.target.value)} />
-          </FilterBar>
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/60 border-b">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Product</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Stock</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cost</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inventory.isLoading ? (
-                    Array.from({ length: 5 }).map((_, i) => <tr key={i}><td colSpan={5} className="p-4"><Skeleton className="h-6 w-full" /></td></tr>)
-                  ) : inventoryRows.length === 0 ? (
-                    <tr><td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">No inventory rows found</td></tr>
-                  ) : inventoryRows.map((item) => {
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] text-left text-[12px]">
+                  <thead><tr className="border-b border-[#e4eaf2] bg-[#f8fafc] text-[10px] font-semibold uppercase tracking-[0.02em] text-[#718096]">
+                    <th className="px-4 py-3">Product</th><th className="px-3 py-3">SKU / Barcode</th><th className="px-3 py-3">Category</th><th className="px-3 py-3">Unit</th><th className="px-3 py-3 text-right">Stock</th><th className="px-3 py-3 text-right">Cost</th><th className="px-3 py-3 text-right">Total Value</th><th className="px-4 py-3 text-center">Status</th>
+                  </tr></thead>
+                  <tbody>
+                    {inventory.isLoading ? Array.from({ length: 7 }).map((_, index) => <tr key={index}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-7 w-full" /></td></tr>) : pagedInventoryRows.length === 0 ? (
+                      <tr><td colSpan={8} className="px-4 py-16 text-center"><Package className="mx-auto text-[#a2aec0]" size={28} /><p className="mt-2 text-sm font-semibold text-[#243653]">No stock matches these filters</p><p className="mt-1 text-xs text-[#718096]">Clear a filter or add stock to continue.</p></td></tr>
+                    ) : pagedInventoryRows.map((item) => {
+                      const unit = item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece";
+                      const qty = displayQtyFromBase(item.stockBaseQty, unit);
+                      const cost = round2(item.averageCostPrice ?? item.costPerRateUnit ?? item.costPrice ?? 0);
+                      const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
+                      const out = tracked && Number(item.stockBaseQty ?? 0) <= 0;
+                      const low = tracked && !out && isLowStock(item);
+                      return <tr key={item.id} onClick={() => openMovement("purchase", item)} className="cursor-pointer border-b border-[#eef2f6] text-[#243653] transition-colors last:border-0 hover:bg-[#f8fbff]">
+                        <td className="px-4 py-2.5"><div className="flex min-w-[160px] items-center gap-2.5"><InventoryProductAvatar item={item} /><div className="min-w-0"><p className="truncate font-semibold text-[#13223f]">{item.name}</p><p className="truncate text-[10px] text-[#7a89a3]">{item.brand ?? "Unbranded"}</p></div></div></td>
+                        <td className="px-3 py-2.5 font-mono text-[10px] text-[#52627d]">{item.sku ?? item.barcode ?? "-"}</td>
+                        <td className="px-3 py-2.5 text-[#52627d]">{item.category ?? "General"}</td>
+                        <td className="px-3 py-2.5 capitalize text-[#52627d]">{unit}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold">{tracked ? qty.toLocaleString("en-IN") : "Not tracked"}</td>
+                        <td className="px-3 py-2.5 text-right text-[#52627d]">{fmtMoney(cost)}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold">{fmtMoney(qty * cost)}</td>
+                        <td className="px-4 py-2.5 text-center"><InventoryStatusBadge status={out ? "out" : low ? "low" : "in"} /></td>
+                      </tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <InventoryPagination page={safeStockPage} pages={stockTotalPages} total={inventoryRows.length} onChange={setStockPage} />
+            </section>
+
+            <aside className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+              <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
+                <h2 className="text-[14px] font-semibold text-[#13223f]">Stock Overview by Location</h2><p className="mt-0.5 text-[11px] text-[#718096]">Current stock distribution</p>
+                <div className="mt-2 grid grid-cols-[132px_1fr] items-center gap-3">
+                  <div className="h-[128px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ name: "Main Store", value: Math.max(stockStats.stockValue, 1) }]} dataKey="value" innerRadius={36} outerRadius={56} strokeWidth={0}><Cell fill="#075fff" /></Pie></PieChart></ResponsiveContainer></div>
+                  <div><div className="flex items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full bg-[#075fff]" /><span className="font-semibold text-[#243653]">Main Store</span></div><p className="ml-4 mt-1 text-[11px] text-[#718096]">100% of tracked stock</p></div>
+                </div>
+                <div className="flex items-center justify-between border-t border-[#edf1f6] pt-3 text-[11px]"><span className="text-[#718096]">Total Value</span><span className="font-bold text-[#13223f]">{fmtMoney(stockStats.stockValue)}</span></div>
+              </section>
+
+              <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
+                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Low Stock Alerts</h2><p className="mt-0.5 text-[11px] text-[#718096]">Items needing immediate attention</p></div><button type="button" onClick={() => setStockFilter("low")} className="text-[11px] font-semibold text-[#075fff]">View all</button></div>
+                <div className="mt-2 divide-y divide-[#edf1f6]">
+                  {lowStockRows.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">All tracked products have healthy stock.</p> : lowStockRows.slice(0, 3).map((item) => {
                     const unit = item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece";
-                    const qty = displayQtyFromBase(item.stockBaseQty, unit);
-                    const alertQty = displayQtyFromBase(item.lowStockThreshold, unit);
-                    const low = isLowStock(item);
-                    return (
-                      <tr key={item.id} className="border-b last:border-0 hover:bg-muted/30">
-                        <td className="px-4 py-3 min-w-[240px]"><p className="font-semibold flex items-center gap-2">{item.name}{low ? <AlertTriangle size={14} className="text-orange-600" /> : null}</p><p className="text-xs text-muted-foreground">{item.category ?? "general"}</p></td>
-                        <td className="px-4 py-3 text-right">
-                          <p className="font-semibold">{(item.stockTrackingEnabled ?? item.trackStock ?? true) === false ? "Not tracked" : `${qty} ${unit}`}</p>
-                          <p className="text-[10px] text-muted-foreground">Alert at {alertQty} {unit}</p>
-                        </td>
-                        <td className="px-4 py-3 text-right">{fmtMoney(round2(item.averageCostPrice ?? item.costPerRateUnit ?? item.costPrice ?? 0))}</td>
-                        <td className="px-4 py-3 text-center"><Badge variant={low ? "destructive" : "secondary"}>{low ? "Low stock" : "OK"}</Badge></td>
-                        <td className="px-4 py-3"><div className="flex justify-center gap-2"><Button size="sm" variant="outline" onClick={() => openMovement("purchase", item)}>Purchase</Button><Button size="sm" variant="outline" onClick={() => openMovement("correction", item)}>Correct</Button></div></td>
-                      </tr>
-                    );
+                    return <div key={item.id} className="flex items-center gap-2.5 py-2.5"><InventoryProductAvatar item={item} compact /><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{item.name}</p><p className="mt-0.5 text-[10px] text-[#ff304f]">{displayQtyFromBase(item.stockBaseQty, unit)} {unit} left</p></div><Button variant="outline" size="sm" className="h-7 rounded-[7px] border-[#ffd7a6] bg-[#fff9ef] px-2.5 text-[10px] font-semibold text-[#f08a00]" onClick={() => openMovement("purchase", item)}>Reorder</Button></div>;
                   })}
-                </tbody>
-              </table>
-            </div>
+                </div>
+              </section>
+
+              <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)] md:col-span-2 xl:col-span-1">
+                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Recent Stock Updates</h2><p className="mt-0.5 text-[11px] text-[#718096]">Latest inventory movements</p></div><button type="button" onClick={() => setActiveTab("movements")} className="text-[11px] font-semibold text-[#075fff]">View all</button></div>
+                <div className="mt-2 divide-y divide-[#edf1f6]">{recentMovements.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">No stock updates recorded yet.</p> : recentMovements.map((entry) => <RecentMovementRow key={entry.id} entry={entry} />)}</div>
+              </section>
+            </aside>
           </div>
         </TabsContent>
 
@@ -718,5 +874,85 @@ export default function InventoryPage() {
         }}
       />
     </PageShell>
+  );
+}
+
+type InventoryTone = "blue" | "violet" | "amber" | "rose" | "green" | "orange";
+
+const INVENTORY_TONES: Record<InventoryTone, string> = {
+  blue: "border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]",
+  violet: "border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]",
+  amber: "border-[#ffdca8] bg-[#fff2df] text-[#f08a00]",
+  rose: "border-[#ffcfd7] bg-[#ffecef] text-[#ff304f]",
+  green: "border-[#c8f1d5] bg-[#e7faee] text-[#11a84b]",
+  orange: "border-[#ffd7ae] bg-[#fff3e7] text-[#ff7a00]",
+};
+
+function InventoryMetricCard({ label, value, detail, tone, icon }: { label: string; value: string; detail: string; tone: InventoryTone; icon: ReactNode }) {
+  return (
+    <div className="min-h-[108px] rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-medium text-[#6d7c98]">{label}</p><p className="mt-2 text-[21px] font-bold leading-none text-[#13223f]">{value}</p></div><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${INVENTORY_TONES[tone]}`}>{icon}</span></div>
+      <p className={`mt-3 text-[10px] font-medium ${tone === "green" ? "text-[#16a34a]" : "text-[#718096]"}`}>{detail}</p>
+    </div>
+  );
+}
+
+function InventoryActionCard({ label, detail, tone, icon, onClick }: { label: string; detail: string; tone: InventoryTone; icon: ReactNode; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="group flex min-h-[66px] w-full items-center gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)]">
+      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${INVENTORY_TONES[tone]}`}>{icon}</span>
+      <span><span className="block text-[13px] font-semibold text-[#13223f]">{label}</span><span className="mt-0.5 block text-[11px] text-[#6d7c98]">{detail}</span></span>
+    </button>
+  );
+}
+
+function InventoryFilterSelect({ value, onChange, placeholder, options }: { value: string; onChange: (value: string) => void; placeholder: string; options: string[] }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-9 rounded-[8px] border-[#dfe6ef] text-[11px] font-medium"><SelectValue /></SelectTrigger>
+      <SelectContent><SelectItem value="all">{placeholder}</SelectItem>{options.map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+    </Select>
+  );
+}
+
+function InventoryProductAvatar({ item, compact = false }: { item: InventoryItem; compact?: boolean }) {
+  const size = compact ? "h-8 w-8 rounded-[7px]" : "h-9 w-9 rounded-[8px]";
+  return (
+    <span className={`grid shrink-0 place-items-center overflow-hidden border border-[#e4eaf2] bg-[#f7f9fc] text-xs font-bold text-[#075fff] ${size}`}>
+      {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-full w-full object-contain" /> : item.name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
+function InventoryStatusBadge({ status }: { status: "in" | "low" | "out" }) {
+  const style = status === "in" ? "border-[#c7ecd4] bg-[#eaf9ef] text-[#169447]" : status === "low" ? "border-[#ffddb1] bg-[#fff5e8] text-[#ed8a00]" : "border-[#ffcdd4] bg-[#fff0f2] text-[#f2384f]";
+  return <span className={`inline-flex rounded-[6px] border px-2 py-1 text-[10px] font-semibold ${style}`}>{status === "in" ? "In Stock" : status === "low" ? "Low Stock" : "Out of Stock"}</span>;
+}
+
+function InventoryPagination({ page, pages, total, onChange }: { page: number; pages: number; total: number; onChange: (page: number) => void }) {
+  const first = total === 0 ? 0 : (page - 1) * STOCK_ROWS_PER_PAGE + 1;
+  const last = Math.min(page * STOCK_ROWS_PER_PAGE, total);
+  const visible = Array.from({ length: Math.min(pages, 3) }, (_, index) => Math.min(Math.max(1, page - 1) + index, pages)).filter((value, index, rows) => rows.indexOf(value) === index);
+  return (
+    <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e8edf4] px-4 py-3 sm:flex-row">
+      <p className="text-[10px] text-[#718096]">Showing {first} to {last} of {total.toLocaleString("en-IN")} products</p>
+      <div className="flex items-center gap-1"><button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} onClick={() => onChange(number)} className={`grid h-8 min-w-8 place-items-center rounded-[7px] px-2 text-[11px] font-semibold ${number === page ? "bg-[#075fff] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label="Next page" disabled={page === pages} onClick={() => onChange(page + 1)} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35"><ChevronRight size={14} /></button></div>
+      <p className="text-[10px] text-[#718096]">{STOCK_ROWS_PER_PAGE} rows per page</p>
+    </div>
+  );
+}
+
+function RecentMovementRow({ entry }: { entry: MovementEntry }) {
+  const type = entry.action ?? entry.type ?? "correction";
+  const quantity = Number(entry.quantityDelta ?? entry.quantity_delta ?? 0);
+  const positive = quantity > 0;
+  const tone = type === "damage" || type === "sale" ? "rose" : type === "correction" ? "orange" : "green";
+  const icon = type === "damage" ? <ShieldAlert size={13} /> : type === "sale" ? <PackageX size={13} /> : type === "correction" ? <Wrench size={13} /> : <PackagePlus size={13} />;
+  return (
+    <div className="flex items-center gap-2.5 py-2.5">
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-[8px] border ${INVENTORY_TONES[tone]}`}>{icon}</span>
+      <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{movementLabel(type)}</p><p className="truncate text-[10px] text-[#718096]">{entry.productName ?? "Inventory item"} - {format(safeDate(entry.createdAt ?? entry.created_at), "d MMM, h:mm a")}</p></div>
+      <span className={`text-[11px] font-semibold ${positive ? "text-[#16a34a]" : "text-[#ff304f]"}`}>{positive ? "+" : ""}{quantity} {entry.unit ?? ""}</span>
+    </div>
   );
 }

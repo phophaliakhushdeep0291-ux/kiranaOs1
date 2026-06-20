@@ -100,6 +100,9 @@ interface BillingSearchProps {
   cartTax: number;
   cartDiscount: number;
   cartGrandTotal: number;
+  onApplyDiscount: () => void;
+  onApplyCoupon: () => void;
+  onChooseCustomer: () => void;
 }
 
 /* ─── main component ─── */
@@ -126,10 +129,14 @@ export function BillingSearch({
   cartTax,
   cartDiscount,
   cartGrandTotal,
+  onApplyDiscount,
+  onApplyCoupon,
+  onChooseCustomer,
 }: BillingSearchProps) {
   const [showAll, setShowAll] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
   const displayedProducts = showAll ? filteredProducts : filteredProducts.slice(0, 10);
-  const visibleCategories = categories.slice(0, CATEGORY_LIMIT);
+  const visibleCategories = showAllCategories ? categories : categories.slice(0, CATEGORY_LIMIT);
   const hasMoreCategories = categories.length > CATEGORY_LIMIT;
 
   return (
@@ -153,7 +160,7 @@ export function BillingSearch({
       )}
 
       {/* ── 1. Product Browser Card ── */}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.045)]">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
 
         {/* Top section: search + recent products */}
         <div className="shrink-0 px-4 pt-4">
@@ -161,7 +168,7 @@ export function BillingSearch({
 
             {/* Search box */}
             <div className="min-w-0 flex-1">
-              <div className="relative flex h-12 items-center gap-3 rounded-[14px] border border-[#e3eaf3] bg-white px-4 transition-colors focus-within:border-[#0057ff] sm:h-[52px]">
+              <div className="relative flex h-12 items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-white px-4 shadow-[0_3px_12px_rgba(30,55,90,0.035)] transition-colors focus-within:border-[#0057ff] sm:h-[50px]">
                 <Search size={18} className="shrink-0 text-[#6b7a9a]" aria-hidden="true" />
                 <Input
                   ref={searchInputRef}
@@ -180,6 +187,7 @@ export function BillingSearch({
                 <button
                   type="button"
                   title="Scan barcode"
+                  onClick={() => searchInputRef.current?.focus()}
                   className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff]"
                 >
                   <ScanLine size={16} aria-hidden="true" />
@@ -197,8 +205,8 @@ export function BillingSearch({
 
             {/* Recent products — its own bordered box */}
             {recentProducts.length > 0 && !search && (
-              <div className="hidden shrink-0 rounded-[10px] border border-[#e6ecf4] bg-[#fafbfe] px-3 py-2 xl:block">
-                <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-[#536383]">Recent Products</p>
+              <div className="hidden shrink-0 px-1 py-1 xl:block">
+                <p className="mb-1.5 text-[11px] font-semibold text-[#536383]">Recent Products</p>
                 <div className="flex items-center gap-2.5">
                   {recentProducts.slice(0, 3).map((p) => {
                     const price = productSellingPrice(p, 1);
@@ -209,8 +217,8 @@ export function BillingSearch({
                         onClick={() => onAddProduct(p)}
                         className="flex min-w-[104px] items-center gap-2 rounded-lg border border-transparent bg-white px-2 py-1.5 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition-all hover:border-[#cfe0ff]"
                       >
-                        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-lg ${color}`}>
-                          {getProductEmoji(p.name, p.category)}
+                        <span className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[7px] text-lg ${color}`}>
+                          {p.imageUrl ? <img src={p.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(p.name, p.category)}
                         </span>
                         <div className="min-w-0 text-left">
                           <p className="max-w-[120px] truncate text-[11px] font-extrabold leading-[1.15] text-[#14284e]">
@@ -222,7 +230,7 @@ export function BillingSearch({
                     );
                   })}
                   {recentProducts.length > 3 && (
-                    <button className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#f7f9fd]">
+                    <button onClick={() => setShowAll(true)} title="Show all products" className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#f7f9fd]">
                       <ChevronRight size={13} className="text-[#536383]" />
                     </button>
                   )}
@@ -247,8 +255,8 @@ export function BillingSearch({
               />
             ))}
             {hasMoreCategories && (
-              <button className="shrink-0 h-[36px] rounded-full border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-bold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd]">
-                More ▾
+              <button onClick={() => setShowAllCategories((value) => !value)} className="h-[36px] shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd]">
+                {showAllCategories ? "Less" : "More"} ▾
               </button>
             )}
           </div>
@@ -282,7 +290,7 @@ export function BillingSearch({
               )}
 
               {/* 5-column grid */}
-              <div className="grid grid-cols-2 gap-3 min-[520px]:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 min-[520px]:grid-cols-3 xl:grid-cols-5">
                 {displayedProducts.map((product) => (
                   <ProductCard
                     key={product.id}
@@ -296,7 +304,7 @@ export function BillingSearch({
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={() => setShowAll((v) => !v)}
-                  className="flex h-[38px] items-center justify-center gap-2 rounded-full border border-[#dfe8f5] bg-white px-7 text-[12.5px] font-extrabold text-[#0057ff] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff]"
+                  className="flex h-[38px] items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white px-7 text-[12px] font-semibold text-[#0057ff] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff]"
                 >
                   {showAll ? (
                     <>Show less <ChevronUp size={13} /></>
@@ -314,7 +322,7 @@ export function BillingSearch({
       {!search && (
         <div className="hidden shrink-0 grid-cols-[1.45fr_0.95fr_1.15fr] gap-3 xl:grid" style={{ height: "260px" }}>
           <RecentBillsPanel />
-          <QuickActionsPanel onHoldBill={onHoldBill} />
+          <QuickActionsPanel onHoldBill={onHoldBill} onApplyDiscount={onApplyDiscount} onApplyCoupon={onApplyCoupon} onChooseCustomer={onChooseCustomer} />
           <BillingTipsPanel />
         </div>
       )}
@@ -406,11 +414,11 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
     <button
       data-testid={`product-card-${product.id}`}
       onClick={onAdd}
-      className="group relative h-[182px] overflow-hidden rounded-[16px] border border-[#e8edf5] bg-white p-3 pb-[46px] text-left transition-all duration-150 hover:-translate-y-px hover:border-[#bcd0ff] hover:shadow-[0_10px_24px_rgba(15,23,42,0.07)]"
+      className="group relative h-[176px] overflow-hidden rounded-[10px] border border-[#e3e9f2] bg-white p-3 pb-[44px] text-left transition-all duration-150 hover:-translate-y-px hover:border-[#bcd0ff] hover:shadow-[0_9px_22px_rgba(15,23,42,0.065)]"
     >
       {/* Image area — neutral photo placeholder */}
-      <div className="relative mb-2.5 flex h-[78px] items-center justify-center overflow-hidden rounded-[12px] bg-[#f7f9fc]">
-        <span className="text-[40px] leading-none" aria-hidden="true">{emoji}</span>
+      <div className="relative mb-2.5 flex h-[76px] items-center justify-center overflow-hidden rounded-[7px] bg-[#f8fafc]">
+        {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain p-1" /> : <span className="text-[40px] leading-none" aria-hidden="true">{emoji}</span>}
         {stock <= 0 ? (
           <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">Out</span>
         ) : stock <= 5 ? (
@@ -442,7 +450,7 @@ function CategoryChip({ label, active, onClick }: { label: string; active: boole
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 h-[36px] rounded-full border px-5 text-[12.5px] font-bold capitalize transition-all ${
+      className={`h-[36px] shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all ${
         active
           ? "border-[#0057ff] bg-[#0057ff] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
           : "border-[#e6ecf4] bg-white text-[#3a4a6b] hover:bg-[#f7f9fd]"
@@ -462,7 +470,7 @@ function RecentBillsPanel() {
   );
   const bills: Bill[] = Array.isArray(result)
     ? result
-    : (result as { entries?: Bill[] } | undefined)?.entries ?? [];
+    : (result as { bills?: Bill[]; entries?: Bill[] } | undefined)?.bills ?? (result as { entries?: Bill[] } | undefined)?.entries ?? [];
 
   function paymentLabel(bill: Bill): string {
     const payments = bill.payments as Array<{ mode?: string }> | undefined;
@@ -501,7 +509,9 @@ function RecentBillsPanel() {
       ) : (
         <div className="space-y-0">
           {bills.map((bill, i) => {
-            const billNo = bill.billNo ?? bill.billNumber ?? `#${i + 1}`;
+            const fullBillNo = bill.billNo ?? bill.billNumber ?? `#${i + 1}`;
+            const suffix = String(fullBillNo).match(/(\d+)$/)?.[1];
+            const billNo = suffix ? `#${Number(suffix)}` : String(fullBillNo);
             const time = bill.createdAt
               ? new Date(bill.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
               : "";
@@ -534,7 +544,7 @@ function RecentBillsPanel() {
 }
 
 /* ─── Quick Actions panel ─── */
-function QuickActionsPanel({ onHoldBill }: { onHoldBill: () => void }) {
+function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChooseCustomer }: { onHoldBill: () => void; onApplyDiscount: () => void; onApplyCoupon: () => void; onChooseCustomer: () => void }) {
   const actions = [
     {
       iconEl: <Zap size={15} />,
@@ -542,7 +552,7 @@ function QuickActionsPanel({ onHoldBill }: { onHoldBill: () => void }) {
       title: "Apply Discount",
       description: "Give flat or % discount",
       hint: "F4",
-      onClick: undefined as (() => void) | undefined,
+      onClick: onApplyDiscount,
     },
     {
       iconEl: <Ticket size={15} />,
@@ -550,7 +560,7 @@ function QuickActionsPanel({ onHoldBill }: { onHoldBill: () => void }) {
       title: "Coupons",
       description: "Apply promo code",
       hint: null as string | null,
-      onClick: undefined as (() => void) | undefined,
+      onClick: onApplyCoupon,
     },
     {
       iconEl: <Users size={15} />,
@@ -558,7 +568,7 @@ function QuickActionsPanel({ onHoldBill }: { onHoldBill: () => void }) {
       title: "Recent Customers",
       description: "Select from history",
       hint: null as string | null,
-      onClick: undefined as (() => void) | undefined,
+      onClick: onChooseCustomer,
     },
     {
       iconEl: <PauseCircle size={15} />,
