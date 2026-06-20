@@ -579,7 +579,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
         )}
 
-        <main id="main-content" className="app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain bg-[#f7fbff] pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0">
+        <main id="main-content" className="app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto scroll-smooth overscroll-contain bg-white pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
 

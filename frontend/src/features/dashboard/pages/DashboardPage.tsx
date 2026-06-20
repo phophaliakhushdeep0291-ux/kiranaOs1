@@ -29,9 +29,9 @@ import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, 
 import { cn } from "@/lib/utils";
 import type { Bill, Product } from "@/types/api";
 
-const DASH_CARD = "rounded-[14px] border border-[#dfe8f4] bg-white shadow-[0_10px_30px_rgba(26,57,112,0.075),0_2px_7px_rgba(26,57,112,0.035)] ring-1 ring-[#edf3fa] dark:border-slate-800 dark:bg-card dark:ring-slate-800";
-const DASH_CARD_INTERACTIVE = "transition-all duration-200 hover:-translate-y-0.5 hover:border-[#c7d8ee] hover:shadow-[0_14px_34px_rgba(15,35,80,0.075)] active:translate-y-0";
-const DASH_TITLE = "font-display text-[15px] font-black tracking-tight text-[#102347] dark:text-card-foreground";
+const DASH_CARD = "rounded-[14px] border border-[#e2e8f1] bg-white shadow-[0_5px_20px_rgba(32,55,92,0.05),0_1px_3px_rgba(32,55,92,0.025)] ring-1 ring-white transition-[border-color,box-shadow,transform] duration-300 ease-out dark:border-slate-800 dark:bg-card dark:ring-slate-800";
+const DASH_CARD_INTERACTIVE = "hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_10px_26px_rgba(32,55,92,0.075)] active:translate-y-0";
+const DASH_TITLE = "font-sans text-[15px] font-bold leading-5 text-[#13223f] dark:text-card-foreground";
 const DASH_MUTED = "text-[#62708a] dark:text-muted-foreground";
 
 // Recent-bills payment label: derive the real tender/credit mode from the saved
@@ -63,6 +63,13 @@ function recentBillPaymentMode(bill: Record<string, unknown>): string {
   if (tenderModes.length > 1) return "split";
   if (tenderModes.length === 1) return tenderModes[0];
   return "cash";
+}
+
+function compactBillNumber(value: unknown): string {
+  const billNumber = String(value ?? "").trim();
+  const numericSuffix = billNumber.match(/(\d+)(?!.*\d)/)?.[1];
+  if (!numericSuffix) return billNumber || "—";
+  return String(Number.parseInt(numericSuffix, 10));
 }
 
 function RecentBillPaymentBadge({ mode }: { mode: string }) {
@@ -455,7 +462,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         profitDelta={profitDelta}
         expenseDelta={expenseDelta}
       />
-      <div className="mx-auto hidden w-full max-w-[1440px] space-y-4 p-4 sm:p-5 lg:block lg:space-y-5 lg:p-6">
+      <div className="hidden w-full space-y-4 bg-white p-4 font-sans sm:p-5 lg:block lg:space-y-5 lg:p-6">
 
       {/* Counter focus */}
       <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
@@ -525,10 +532,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       </div>
 
       {/* Sales, payments, and stock */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.9fr)_minmax(220px,0.78fr)_minmax(280px,1fr)]">
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[316px] xl:grid-cols-[calc(50%_-_8px)_calc(21%_-_10px)_calc(29%_-_14px)]">
 
         {/* Sales Overview */}
-        <section className={cn(DASH_CARD, "h-full min-h-[316px] overflow-hidden p-5 lg:col-span-2 xl:col-span-1 xl:h-[316px]")}>
+        <section className={cn(DASH_CARD, "flex h-full min-h-[316px] flex-col overflow-hidden p-5 lg:col-span-2 xl:col-span-1 xl:min-h-0")}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -536,14 +543,17 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                 <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#b9c7dc] text-[10px] font-black text-[#60708a]">i</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2.5">
-                <p className="font-display text-[27px] font-black leading-none tracking-tight text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
+                <p className="font-sans text-[26px] font-extrabold leading-none text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
                 <span className="inline-flex items-center gap-1.5 rounded-[7px] border border-[#d5deeb] bg-white px-2 py-1 text-[10px] font-bold text-[#314766] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                   This Week <ChevronDown size={11} aria-hidden="true" />
                 </span>
                 {salesDelta !== null && (
-                  <span className={cn("flex items-center gap-1 text-[12px] font-bold", salesDelta === 0 ? "text-[#62708a]" : salesDelta > 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
-                    {salesDelta === 0 ? <Minus size={12} /> : salesDelta > 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                    {Math.abs(salesDelta)}% vs yesterday
+                  <span className="flex items-center gap-1.5 text-[11px] font-semibold">
+                    <span className={cn("inline-flex items-center gap-0.5 font-bold", salesDelta === 0 ? "text-[#62708a]" : salesDelta > 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
+                      {salesDelta === 0 ? <Minus size={11} /> : salesDelta > 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+                      {Math.abs(salesDelta)}%
+                    </span>
+                    <span className="text-[#7a879b]">vs yesterday</span>
                   </span>
                 )}
               </div>
@@ -552,7 +562,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
               View Report
             </Link>
           </div>
-          <div className="mt-4 h-[205px] min-h-[205px]">
+          <div className="mt-4 min-h-0 flex-1">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesChartData} margin={{ top: 12, right: 10, left: -8, bottom: 0 }}>
                 <defs>
@@ -562,10 +572,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                     <stop offset="100%" stopColor="#075fff" stopOpacity={0.02} />
                   </linearGradient>
                   <filter id="salesOverviewGlow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="#075fff" floodOpacity="0.30" />
+                    <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#075fff" floodOpacity="0.18" />
                   </filter>
                 </defs>
-                <CartesianGrid vertical={false} strokeDasharray="4 7" stroke="#d7e3f2" />
+                <CartesianGrid vertical={false} strokeDasharray="2 4" stroke="#dbe5f1" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#63718a", fontWeight: 600 }} tickLine={false} axisLine={false} tickMargin={12} />
                 <YAxis
                   domain={[0, (dataMax: number) => Math.max(1_000, Math.ceil((dataMax * 1.2) / 1_000) * 1_000)]}
@@ -586,11 +596,11 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                   type="monotone"
                   dataKey="sales"
                   stroke="#075fff"
-                  strokeWidth={3.25}
+                  strokeWidth={3}
                   fill="url(#salesOverviewFill)"
                   filter="url(#salesOverviewGlow)"
-                  dot={{ r: 4, fill: "#ffffff", stroke: "#075fff", strokeWidth: 2.75 }}
-                  activeDot={{ r: 6, fill: "#ffffff", stroke: "#075fff", strokeWidth: 3 }}
+                  dot={{ r: 3.5, fill: "#ffffff", stroke: "#075fff", strokeWidth: 2.25 }}
+                  activeDot={{ r: 5, fill: "#ffffff", stroke: "#075fff", strokeWidth: 2.5 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -603,20 +613,20 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       </div>
 
       {/* ── Recent Bills + Quick Insights ── */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.9fr)_minmax(220px,0.78fr)_minmax(280px,1fr)]">
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[318px] xl:grid-cols-[calc(48%_-_8px)_calc(23%_-_10px)_calc(29%_-_14px)]">
 
         {/* Recent Bills */}
-        <section className={cn(DASH_CARD, "flex h-full min-h-[316px] flex-col overflow-hidden lg:col-span-2 xl:col-span-1 xl:h-[318px]")}>
-          <div className="flex items-center justify-between gap-3 border-b border-[#e6ecf4] px-5 py-4">
+        <section className={cn(DASH_CARD, "flex h-full min-h-[316px] flex-col overflow-hidden lg:col-span-2 xl:col-span-1 xl:min-h-0")}>
+          <div className="flex min-h-[52px] items-center justify-between gap-3 border-b border-[#e8edf4] px-4 py-4">
             <p className={DASH_TITLE}>Recent Bills</p>
-            <Link href="/bills" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
+            <Link href="/bills" className="text-[11px] font-bold text-[#075fff] hover:underline">View all</Link>
           </div>
           <div className="min-h-0 flex-1 overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-[#e6ecf4] bg-[#f8fbff]">
+                <tr className="border-b border-[#e8edf4] bg-[#f7f9fc]">
                   {["Bill No.", "Time", "Customer", "Items", "Amount", "Payment"].map(h => (
-                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-black uppercase tracking-[0.02em] text-[#6b7890]">{h}</th>
+                    <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#66758d]">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -625,12 +635,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                   Array.from({ length: 4 }).map((_, i) => (
                     <tr key={i} className="border-b last:border-0">
                       {Array.from({ length: 6 }).map((_, j) => (
-                        <td key={j} className="px-5 py-2"><div className="h-3 animate-pulse rounded bg-[#edf2f8]" style={{ width: `${50 + j * 10}%` }} /></td>
+                        <td key={j} className="px-4 py-2"><div className="h-3 animate-pulse rounded bg-[#edf2f8]" style={{ width: `${50 + j * 10}%` }} /></td>
                       ))}
                     </tr>
                   ))
                 ) : recentBills.length === 0 ? (
-                  <tr><td colSpan={6} className={cn("px-5 py-8 text-center text-sm", DASH_MUTED)}>No bills today yet</td></tr>
+                  <tr><td colSpan={6} className={cn("px-5 py-8 text-center text-sm", DASH_MUTED)}>No recent bills yet</td></tr>
                 ) : (
                   recentBills.slice(0, 5).map(bill => {
                     const href = `/bills/${bill.id ?? ""}`;
@@ -648,12 +658,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                         }}
                         className="cursor-pointer border-b border-[#edf2f8] text-[#102347] transition-colors last:border-0 hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0057ff]/40 dark:text-card-foreground"
                       >
-                        <td className="whitespace-nowrap px-5 py-2 font-black text-[#102347] dark:text-card-foreground">{bill.billNo ?? "—"}</td>
-                        <td className={cn("whitespace-nowrap px-5 py-2 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
-                        <td className="max-w-32 truncate px-5 py-2 font-semibold">{bill.customerName ?? "Walk-in"}</td>
-                        <td className={cn("px-5 py-2 font-semibold", DASH_MUTED)}>{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
-                        <td className="whitespace-nowrap px-5 py-2 font-black">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
-                        <td className="px-5 py-2">
+                        <td className="whitespace-nowrap px-4 py-2 font-semibold text-[#152744] dark:text-card-foreground">{compactBillNumber(bill.billNo ?? bill.billNumber)}</td>
+                        <td className={cn("whitespace-nowrap px-4 py-2 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
+                        <td className="max-w-32 truncate px-4 py-2 font-medium">{bill.customerName ?? "Walk-in"}</td>
+                        <td className={cn("px-4 py-2 font-medium", DASH_MUTED)}>{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
+                        <td className="whitespace-nowrap px-4 py-2 font-semibold">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
+                        <td className="px-4 py-2">
                           <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
                         </td>
                       </tr>
@@ -663,19 +673,19 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
               </tbody>
             </table>
           </div>
-          <div className="grid border-t border-[#e6ecf4] bg-[#fbfdff] text-sm sm:grid-cols-2">
-            <div className="flex items-center gap-3 px-5 py-4">
-              <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#eef5ff] text-[#0057ff]">
-                <ReceiptText size={16} />
+          <div className="grid min-h-[58px] border-t border-[#e8edf4] bg-[#fbfcfe] text-sm sm:grid-cols-2">
+            <div className="flex items-center gap-2.5 px-4 py-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-[#eef4ff] text-[#075fff]">
+                <ReceiptText size={14} />
               </span>
               <div>
-                <p className={cn("text-xs font-semibold", DASH_MUTED)}>Total Bills</p>
-                <p className="font-display text-[18px] font-black text-[#102347] dark:text-card-foreground">{dashboard.billCount}</p>
+                <p className={cn("text-[10px] font-medium", DASH_MUTED)}>Total Bills</p>
+                <p className="text-[15px] font-extrabold text-[#13223f] dark:text-card-foreground">{dashboard.billCount}</p>
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-5 py-4 sm:border-l sm:border-[#e6ecf4]">
-              <p className={cn("text-xs font-semibold", DASH_MUTED)}>Total Amount</p>
-              <p className="font-display text-[19px] font-black text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 sm:border-l sm:border-[#e8edf4]">
+              <p className={cn("text-[10px] font-medium", DASH_MUTED)}>Total Amount</p>
+              <p className="text-[15px] font-extrabold text-[#13223f] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
             </div>
           </div>
         </section>
@@ -684,7 +694,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         <div className="contents">
 
           {/* Quick Insights */}
-          <div className={cn(DASH_CARD, "h-full min-h-[316px] p-4 xl:h-[318px]")}>
+          <div className={cn(DASH_CARD, "h-full min-h-[316px] p-4 xl:min-h-0")}>
             <p className={cn(DASH_TITLE, "mb-3")}>Quick Insights</p>
             <div className="space-y-2">
               <InsightRow tone="emerald" icon={<Package size={16} />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Sales leaders" : "No sales yet"} href="/reports" />
@@ -695,31 +705,31 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           </div>
 
           {/* Sync & Health */}
-          <div className={cn(DASH_CARD, "h-full min-h-[316px] p-4 xl:h-[318px]")}>
-            <p className={cn(DASH_TITLE, "mb-3")}>Sync & Health</p>
-            <div className="border-b border-[#edf2f8] pb-3">
-              <div className="flex items-center gap-2 text-sm font-black text-[#11a84b] dark:text-emerald-300">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-[#e7faee] shadow-[0_4px_12px_rgba(17,168,75,0.16)]">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
+          <div className={cn(DASH_CARD, "h-full min-h-[316px] overflow-hidden p-4 xl:min-h-0")}>
+            <p className={cn(DASH_TITLE, "mb-2")}>Sync & Health</p>
+            <div className="border-b border-[#edf2f8] pb-2.5">
+              <div className="flex items-center gap-2 text-[13px] font-bold text-[#11a84b] dark:text-emerald-300">
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-[#e7faee]">
+                  <CheckCircle2 className="h-3 w-3" />
                 </span>
                 {syncHealthGood ? "All systems operational" : "Backup needs attention"}
               </div>
-              <p className={cn("ml-7 mt-1 text-[11px] font-semibold", DASH_MUTED)}>
+              <p className={cn("ml-7 mt-0.5 text-[10px] font-medium", DASH_MUTED)}>
                 {isSyncing ? "Sync running now" : syncHealthGood ? "Last synced just now" : "Local data is safe"}
               </p>
             </div>
-            <div className="mt-3 space-y-3.5">
+            <div className="mt-2.5 space-y-2">
               <HealthRow icon={<Wifi size={13} />} label="Internet Connection" status={isOnline ? "ok" : "warn"} value={isOnline ? "Online" : "Offline"} />
               <HealthRow icon={<RefreshCw size={13} />} label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
               <HealthRow icon={<Cloud size={13} />} label="Backup Status" status={pendingCount > 0 || failedCount > 0 ? "warn" : "ok"} value={isSyncing ? "Syncing" : pendingCount > 0 ? "Queued" : "Secure"} />
               <HealthRow icon={<MonitorSmartphone size={13} />} label="Device Status" status="ok" value="Active" />
             </div>
             <Link href="/sync-status">
-              <button type="button" className="mt-4 flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#0057ff] py-3 text-sm font-black text-white shadow-[0_12px_24px_rgba(0,87,255,0.22)] transition-all hover:-translate-y-0.5 hover:bg-[#004de0] active:translate-y-0">
-                <RefreshCw size={15} aria-hidden="true" /> Sync Now
+              <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-[9px] bg-[#075fff] py-2.5 text-[12px] font-bold text-white shadow-[0_8px_18px_rgba(7,95,255,0.18)] transition-colors duration-200 hover:bg-[#0054e8]">
+                <RefreshCw size={13} aria-hidden="true" /> Sync Now
               </button>
             </Link>
-            <p className={cn("mt-2 text-center text-[11px] font-semibold", DASH_MUTED)}>
+            <p className={cn("mt-1.5 text-center text-[10px] font-medium", DASH_MUTED)}>
               <span className={cn("mr-1 inline-block h-1.5 w-1.5 rounded-full", syncHealthGood ? "bg-emerald-500" : "bg-amber-500")} /> Auto sync is enabled
             </p>
           </div>
@@ -890,7 +900,7 @@ function MobileGeneralDashboard({
             {recentBills.slice(0, 5).map((bill) => (
               <Link key={bill.id ?? bill.billNo} href={`/bills/${bill.id ?? ""}`} className="block py-2">
                 <div className="flex items-center justify-between gap-1">
-                  <span className="truncate text-[9px] font-black text-[#102347]">{bill.billNo ?? "Bill"}</span>
+                  <span className="truncate text-[9px] font-black text-[#102347]">{compactBillNumber(bill.billNo ?? bill.billNumber)}</span>
                   <span className="whitespace-nowrap text-[9px] font-black text-[#102347]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
                 </div>
                 <div className="mt-1 flex items-center justify-between gap-1">
@@ -948,7 +958,12 @@ function MobileMetricCard({ label, value, previous, delta, color, icon, iconClas
 
 function MobileDelta({ delta }: { delta: number }) {
   const color = delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
-  return <span className={cn("inline-flex items-center gap-0.5 text-[9px] font-black", color)}>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}% vs yesterday</span>;
+  return (
+    <span className="inline-flex items-center gap-1 text-[9px] font-semibold">
+      <span className={cn("inline-flex items-center gap-0.5 font-bold", color)}>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}%</span>
+      <span className="text-[#7b8799]">vs yesterday</span>
+    </span>
+  );
 }
 
 function MobileInsight({ tone, icon, title, subtitle }: { tone: "emerald" | "orange" | "rose"; icon: ReactNode; title: string; subtitle: string }) {
@@ -995,16 +1010,19 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
         <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]", iconBg)}>{icon}</div>
       </div>
       <div className="mt-3">
-        <p className={cn("text-[13px] font-bold leading-tight", DASH_MUTED)}>{label}</p>
+        <p className={cn("text-[13px] font-semibold leading-tight", DASH_MUTED)}>{label}</p>
         {loading ? (
           <div className="mt-2 h-7 w-3/4 animate-pulse rounded bg-[#edf2f8]" />
         ) : (
-          <p className="mt-2 break-words font-display text-[23px] font-black leading-none tracking-tight text-[#102347] dark:text-card-foreground">{value}</p>
+          <p className="mt-2 break-words font-sans text-[22px] font-extrabold leading-none text-[#102347] dark:text-card-foreground">{value}</p>
         )}
         {delta !== null && delta !== undefined && (
-          <div className={cn("mt-3 flex items-center gap-1 text-[12px] font-black", delta === 0 ? "text-[#62708a]" : isBad ? "text-[#ff304f]" : "text-[#16a34a]")}>
-            <DeltaIcon size={12} aria-hidden="true" />
-            {Math.abs(delta)}% {deltaLabel}
+          <div className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold">
+            <span className={cn("inline-flex items-center gap-0.5 font-bold", delta === 0 ? "text-[#62708a]" : isBad ? "text-[#ff304f]" : "text-[#16a34a]")}>
+              <DeltaIcon size={11} aria-hidden="true" />
+              {Math.abs(delta)}%
+            </span>
+            <span className="text-[#7a879b]">{deltaLabel}</span>
           </div>
         )}
         {footer && <div className="mt-3 leading-none">{footer}</div>}
@@ -1019,9 +1037,9 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
   const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
 
   return (
-    <section className={cn(DASH_CARD, "h-full min-h-[316px] p-5 xl:h-[316px]")}>
+    <section className={cn(DASH_CARD, "h-full min-h-[316px] p-5 xl:min-h-0")}>
       <div>
-        <p className={cn(DASH_TITLE, "text-[14px]")}>Payment Mode Breakdown</p>
+        <p className={DASH_TITLE}>Payment Mode Breakdown</p>
         <span className="mt-2 inline-flex items-center gap-1.5 rounded-[7px] border border-[#d5deeb] bg-white px-2 py-1 text-[10px] font-bold text-[#314766] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
           This Week <ChevronDown size={11} aria-hidden="true" />
         </span>
@@ -1047,7 +1065,7 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
           <div>
-            <p className="font-display text-[17px] font-black leading-none text-[#102347] dark:text-card-foreground">{fmtRs(displayTotal)}</p>
+            <p className="font-sans text-[17px] font-extrabold leading-none text-[#102347] dark:text-card-foreground">{fmtRs(displayTotal)}</p>
             <p className={cn("mt-1 text-[11px] font-semibold", DASH_MUTED)}>Total Sales</p>
           </div>
         </div>
@@ -1072,7 +1090,7 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
 
 function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["lowStock"]; productsById: Record<string, Product> }) {
   return (
-    <section className={cn(DASH_CARD, "h-full min-h-[316px] p-5 xl:h-[316px]")}>
+    <section className={cn(DASH_CARD, "h-full min-h-[316px] p-5 xl:min-h-0")}>
       <div className="flex items-center justify-between gap-3">
         <p className={DASH_TITLE}>Low Stock Alerts</p>
         <Link href="/inventory" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
@@ -1145,13 +1163,13 @@ function HealthRow({ icon, label, status, value }: {
   const color = status === "ok" ? "text-emerald-600" : status === "warn" ? "text-amber-600" : "text-red-600";
   const Icon = status === "ok" ? CheckCircle2 : status === "warn" ? RefreshCw : XCircle;
   return (
-    <div className="flex items-center justify-between gap-3 text-xs">
-      <span className={cn("flex items-center gap-2 font-semibold", DASH_MUTED)}>
-        <span className={cn("grid h-6 w-6 place-items-center rounded-[7px] bg-[#f4f7fb]", color)}>{icon}</span>
+    <div className="flex min-h-[23px] items-center justify-between gap-3 text-[11px]">
+      <span className={cn("flex items-center gap-2 font-medium", DASH_MUTED)}>
+        <span className={cn("grid h-5 w-5 place-items-center rounded-[6px] bg-[#f4f7fb]", color)}>{icon}</span>
         {label}
       </span>
-      <span className={cn("flex items-center gap-1 font-semibold", color)}>
-        <Icon size={11} aria-hidden="true" /> {value}
+      <span className={cn("flex items-center gap-1 font-medium", color)}>
+        <Icon size={10} aria-hidden="true" /> {value}
       </span>
     </div>
   );
