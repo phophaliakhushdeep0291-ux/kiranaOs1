@@ -127,6 +127,13 @@ async function main() {
     await navigate(client, `${FRONTEND_URL}/reports`);
     await waitForPage(client, "document.body.innerText.includes('Sales Trend') && document.querySelectorAll('article').length >= 10");
     await sleep(1_500);
+    await client.evaluate(`(() => {
+      const candidates = [...document.querySelectorAll('div')]
+        .filter((element) => element.textContent?.includes("You're exploring with sample data") && element.textContent?.includes('Clear & start fresh'))
+        .sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0));
+      if (candidates[0]) candidates[0].style.display = 'none';
+      return Boolean(candidates[0]);
+    })()`);
 
     const desktop = await screenshot(client, path.resolve("reports-desktop.png"), 1680, 980);
     const mobileMetrics = await screenshot(client, path.resolve("reports-mobile.png"), 390, 844);

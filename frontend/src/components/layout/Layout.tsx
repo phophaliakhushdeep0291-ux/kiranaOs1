@@ -460,7 +460,7 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         {/* Desktop topbar */}
         <header className="sticky top-0 z-40 hidden min-h-[var(--app-desktop-topbar-height)] items-center gap-4 border-b border-[#e6ecf4] bg-white/94 px-5 shadow-[0_1px_0_rgba(15,35,80,0.02)] backdrop-blur-xl lg:flex xl:px-6">
-          {loc !== "/reports" && <button
+          <button
             type="button"
             aria-label="Toggle sidebar"
             onClick={() => setCollapsed((c) => !c)}
@@ -475,7 +475,7 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
 
-          <button
+          {loc !== "/reports" && <button
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label="Search products, bills, and customers"
