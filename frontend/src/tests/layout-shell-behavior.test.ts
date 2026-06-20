@@ -5,8 +5,11 @@ const layout = readFileSync("src/components/layout/Layout.tsx", "utf8");
 
 describe("desktop app shell behavior", () => {
   it("keeps the sidebar fixed while the page content scrolls", () => {
-    // Desktop shell locks its own height so only the main region scrolls.
-    expect(layout).toContain("lg:h-screen lg:overflow-hidden");
+    // Shell locks its own height (mobile via 100dvh, desktop via h-screen) and hides its own
+    // overflow, so the <main> region is the only scroll container — never the body. This is what
+    // lets mobile swipe-scroll work instead of forcing the user to drag the scrollbar.
+    expect(layout).toContain("h-[100dvh] overflow-hidden");
+    expect(layout).toContain("lg:h-screen");
     // Sidebar is pinned to the viewport, content is offset by its (variable) width.
     expect(layout).toContain("fixed inset-y-0 left-0");
     expect(layout).toContain("lg:ml-[var(--app-sidebar-width)]");

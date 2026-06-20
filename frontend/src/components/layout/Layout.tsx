@@ -339,7 +339,7 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div ref={shellRef} className="app-shell isolate min-h-screen bg-background text-foreground lg:h-screen lg:overflow-hidden" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
+    <div ref={shellRef} className="app-shell isolate h-[100dvh] overflow-hidden bg-background text-foreground lg:h-screen" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
 
       {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
       <aside
@@ -451,7 +451,7 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* ── Main wrapper ────────────────────────────────────────────────────── */}
       <div
         className={cn(
-          "flex min-h-screen min-w-0 flex-1 flex-col will-change-[margin-left] lg:ml-[var(--app-sidebar-width)] lg:h-screen lg:min-h-0 lg:overflow-hidden",
+          "flex h-[100dvh] min-h-0 min-w-0 flex-1 flex-col overflow-hidden will-change-[margin-left] lg:ml-[var(--app-sidebar-width)] lg:h-screen",
           isResizing ? "transition-none" : "transition-[margin-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
         )}
       >
