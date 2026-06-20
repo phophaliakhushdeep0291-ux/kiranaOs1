@@ -64,6 +64,20 @@ async function navigate(client, url) {
   await waitForPage(client, "document.readyState === 'complete'");
 }
 
+async function clickVisibleButton(client, label, index = 0) {
+  const clicked = await client.evaluate(`(() => {
+    const matches = [...document.querySelectorAll('button')]
+      .filter((button) => button.offsetParent !== null && button.textContent?.trim() === ${JSON.stringify(label)});
+    matches[${index}]?.click();
+    return matches.length;
+  })()`);
+  if (clicked <= index) throw new Error(`Visible button not found: ${label} at index ${index}`);
+}
+
+function assertEqual(actual, expected, label) {
+  if (actual !== expected) throw new Error(`${label}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+}
+
 async function screenshot(client, output, width, height) {
   await client.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width < 600 });
   await sleep(500);
@@ -103,6 +117,11 @@ async function main() {
     await client.connect();
     await client.send("Page.enable");
     await client.send("Runtime.enable");
+    await client.send("Page.addScriptToEvaluateOnNewDocument", { source: `
+      window.__kiranaQaErrors = [];
+      window.addEventListener('error', (event) => window.__kiranaQaErrors.push(String(event.error?.stack || event.message || event.error)));
+      window.addEventListener('unhandledrejection', (event) => window.__kiranaQaErrors.push(String(event.reason?.stack || event.reason)));
+    ` });
     await navigate(client, `${FRONTEND_URL}/register`);
 
     const runId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -135,9 +154,77 @@ async function main() {
       return Boolean(candidates[0]);
     })()`);
 
+    const reportAudit = await client.evaluate(`(() => {
+      const text = document.body.innerText;
+      const periodButtons = [...document.querySelectorAll('button')].filter((button) => button.textContent?.trim() === 'This Week').length;
+      const areaFills = [...document.querySelectorAll('.recharts-area-area')].map((path) => path.getAttribute('fill'));
+      return {
+        sales: text.includes('₹574'),
+        profit: text.includes('₹88'),
+        cash: text.includes('₹300'),
+        upi: text.includes('₹154'),
+        udhar: text.includes('₹120'),
+        periodButtons,
+        coloredAreaFills: areaFills.filter((fill) => fill && fill !== 'none' && fill !== 'transparent').length,
+      };
+    })()`);
+    assertEqual(reportAudit.sales, true, "reports sales total");
+    assertEqual(reportAudit.profit, true, "reports profit total");
+    assertEqual(reportAudit.cash, true, "reports cash total");
+    assertEqual(reportAudit.upi, true, "reports UPI total");
+    assertEqual(reportAudit.udhar, true, "reports udhar total");
+    if (reportAudit.periodButtons < 5) throw new Error(`Expected shared report period controls, found ${reportAudit.periodButtons}`);
+    if (reportAudit.coloredAreaFills < 7) throw new Error(`Expected colored KPI area fills, found ${reportAudit.coloredAreaFills}`);
+
+    await clickVisibleButton(client, "This Week");
+    await waitForPage(client, `[...document.querySelectorAll('button')].some((button) => button.offsetParent !== null && button.textContent?.trim() === 'Today')`);
+    await clickVisibleButton(client, "Today");
+    await waitForPage(client, `[...document.querySelectorAll('button')].filter((button) => button.offsetParent !== null && button.textContent?.trim() === 'Today').length >= 5`);
+
+    await clickVisibleButton(client, "Today");
+    await waitForPage(client, `[...document.querySelectorAll('button')].some((button) => button.offsetParent !== null && button.textContent?.trim() === 'This Month')`);
+    await clickVisibleButton(client, "This Month");
+    await waitForPage(client, `[...document.querySelectorAll('button')].filter((button) => button.offsetParent !== null && button.textContent?.trim() === 'This Month').length >= 5`);
+
     const desktop = await screenshot(client, path.resolve("reports-desktop.png"), 1680, 980);
     const mobileMetrics = await screenshot(client, path.resolve("reports-mobile.png"), 390, 844);
-    console.log(JSON.stringify({ setup, desktop, mobile: mobileMetrics }, null, 2));
+
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 1680, height: 980, deviceScaleFactor: 1, mobile: false });
+    await navigate(client, `${FRONTEND_URL}/dashboard`);
+    await waitForPage(client, "document.body.innerText.includes('Sales Overview') && document.body.innerText.includes('Payment Mode Breakdown')");
+    await sleep(1_000);
+    const dashboardAudit = await client.evaluate(`(() => {
+      const text = document.body.innerText;
+      return {
+        sales: text.includes('₹574'),
+        profit: text.includes('₹88'),
+        cash: text.includes('₹300'),
+        upi: text.includes('₹154'),
+        udhar: text.includes('₹120'),
+        weekControls: [...document.querySelectorAll('button')].filter((button) => button.offsetParent !== null && button.textContent?.trim() === 'This Week').length,
+      };
+    })()`);
+    assertEqual(dashboardAudit.sales, true, "dashboard sales total");
+    assertEqual(dashboardAudit.profit, true, "dashboard profit total");
+    assertEqual(dashboardAudit.cash, true, "dashboard cash breakdown");
+    assertEqual(dashboardAudit.upi, true, "dashboard UPI breakdown");
+    assertEqual(dashboardAudit.udhar, true, "dashboard udhar breakdown");
+    if (dashboardAudit.weekControls < 2) throw new Error(`Expected synchronized dashboard period controls, found ${dashboardAudit.weekControls}`);
+
+    await clickVisibleButton(client, "This Week");
+    await waitForPage(client, `[...document.querySelectorAll('button')].some((button) => button.offsetParent !== null && button.textContent?.trim() === 'Today')`);
+    await clickVisibleButton(client, "Today");
+    await waitForPage(client, `[...document.querySelectorAll('button')].filter((button) => button.offsetParent !== null && button.textContent?.trim() === 'Today').length >= 2`);
+    await clickVisibleButton(client, "Today");
+    await waitForPage(client, `[...document.querySelectorAll('button')].some((button) => button.offsetParent !== null && button.textContent?.trim() === 'This Week')`);
+    await clickVisibleButton(client, "This Week");
+    await waitForPage(client, `[...document.querySelectorAll('button')].filter((button) => button.offsetParent !== null && button.textContent?.trim() === 'This Week').length >= 2`);
+
+    const dashboardDesktop = await screenshot(client, path.resolve("dashboard-desktop.png"), 1680, 980);
+    const dashboardMobile = await screenshot(client, path.resolve("dashboard-mobile.png"), 390, 844);
+    const runtimeErrors = await client.evaluate("window.__kiranaQaErrors || []");
+    if (runtimeErrors.length > 0) throw new Error(`Browser runtime errors: ${runtimeErrors.join(' | ')}`);
+    console.log(JSON.stringify({ setup, reportAudit, dashboardAudit, desktop, mobile: mobileMetrics, dashboardDesktop, dashboardMobile, runtimeErrors }, null, 2));
   } finally {
     client?.close();
     chrome.kill();
