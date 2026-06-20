@@ -29,9 +29,9 @@ import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, 
 import { cn } from "@/lib/utils";
 import type { Bill, Product } from "@/types/api";
 
-const DASH_CARD = "rounded-[14px] border border-[#e2e8f1] bg-white shadow-[0_5px_20px_rgba(32,55,92,0.05),0_1px_3px_rgba(32,55,92,0.025)] ring-1 ring-white transition-[border-color,box-shadow,transform] duration-300 ease-out dark:border-slate-800 dark:bg-card dark:ring-slate-800";
+const DASH_CARD = "rounded-[12px] border border-[#e2e8f1] bg-white shadow-[0_4px_16px_rgba(32,55,92,0.045),0_1px_2px_rgba(32,55,92,0.025)] ring-1 ring-white transition-[border-color,box-shadow,transform] duration-300 ease-out dark:border-slate-800 dark:bg-card dark:ring-slate-800";
 const DASH_CARD_INTERACTIVE = "hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_10px_26px_rgba(32,55,92,0.075)] active:translate-y-0";
-const DASH_TITLE = "font-sans text-[15px] font-bold leading-5 text-[#13223f] dark:text-card-foreground";
+const DASH_TITLE = "font-sans text-[14px] font-semibold leading-5 text-[#13223f] dark:text-card-foreground";
 const DASH_MUTED = "text-[#62708a] dark:text-muted-foreground";
 
 // Recent-bills payment label: derive the real tender/credit mode from the saved
@@ -462,7 +462,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         profitDelta={profitDelta}
         expenseDelta={expenseDelta}
       />
-      <div className="hidden w-full space-y-4 bg-white p-4 font-sans sm:p-5 lg:block lg:space-y-5 lg:p-6">
+      <div className="hidden w-full space-y-4 bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
 
       {/* Counter focus */}
       <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
@@ -532,10 +532,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       </div>
 
       {/* Sales, payments, and stock */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[316px] xl:grid-cols-[calc(50%_-_8px)_calc(21%_-_10px)_calc(29%_-_14px)]">
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[clamp(226px,27dvh,380px)] xl:grid-cols-[calc(50%_-_8px)_calc(21%_-_10px)_calc(29%_-_14px)]">
 
         {/* Sales Overview */}
-        <section className={cn(DASH_CARD, "flex h-full min-h-[316px] flex-col overflow-hidden p-5 lg:col-span-2 xl:col-span-1 xl:min-h-0")}>
+        <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col overflow-hidden p-4 lg:col-span-2 xl:col-span-1 xl:min-h-0 2xl:p-5")}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -543,7 +543,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                 <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#b9c7dc] text-[10px] font-black text-[#60708a]">i</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2.5">
-                <p className="font-sans text-[26px] font-extrabold leading-none text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
+                <p className="font-sans text-[24px] font-bold leading-none text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
                 <span className="inline-flex items-center gap-1.5 rounded-[7px] border border-[#d5deeb] bg-white px-2 py-1 text-[10px] font-bold text-[#314766] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
                   This Week <ChevronDown size={11} aria-hidden="true" />
                 </span>
@@ -562,7 +562,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
               View Report
             </Link>
           </div>
-          <div className="mt-4 min-h-0 flex-1">
+          <div className="mt-3 min-h-0 flex-1 2xl:mt-4">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesChartData} margin={{ top: 12, right: 10, left: -8, bottom: 0 }}>
                 <defs>
@@ -613,20 +613,20 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       </div>
 
       {/* ── Recent Bills + Quick Insights ── */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[318px] xl:grid-cols-[calc(48%_-_8px)_calc(23%_-_10px)_calc(29%_-_14px)]">
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[clamp(222px,25dvh,350px)] xl:grid-cols-[calc(48%_-_8px)_calc(23%_-_10px)_calc(29%_-_14px)]">
 
         {/* Recent Bills */}
-        <section className={cn(DASH_CARD, "flex h-full min-h-[316px] flex-col overflow-hidden lg:col-span-2 xl:col-span-1 xl:min-h-0")}>
-          <div className="flex min-h-[52px] items-center justify-between gap-3 border-b border-[#e8edf4] px-4 py-4">
+        <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col overflow-hidden lg:col-span-2 xl:col-span-1 xl:min-h-0")}>
+          <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#e8edf4] px-4 py-3">
             <p className={DASH_TITLE}>Recent Bills</p>
             <Link href="/bills" className="text-[11px] font-bold text-[#075fff] hover:underline">View all</Link>
           </div>
           <div className="min-h-0 flex-1 overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="h-full w-full text-xs">
               <thead>
                 <tr className="border-b border-[#e8edf4] bg-[#f7f9fc]">
                   {["Bill No.", "Time", "Customer", "Items", "Amount", "Payment"].map(h => (
-                    <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#66758d]">{h}</th>
+                    <th key={h} className="px-4 py-2 text-left text-[10px] font-medium uppercase tracking-[0.02em] text-[#66758d]">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -658,12 +658,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                         }}
                         className="cursor-pointer border-b border-[#edf2f8] text-[#102347] transition-colors last:border-0 hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0057ff]/40 dark:text-card-foreground"
                       >
-                        <td className="whitespace-nowrap px-4 py-2 font-semibold text-[#152744] dark:text-card-foreground">{compactBillNumber(bill.billNo ?? bill.billNumber)}</td>
-                        <td className={cn("whitespace-nowrap px-4 py-2 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
-                        <td className="max-w-32 truncate px-4 py-2 font-medium">{bill.customerName ?? "Walk-in"}</td>
-                        <td className={cn("px-4 py-2 font-medium", DASH_MUTED)}>{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
-                        <td className="whitespace-nowrap px-4 py-2 font-semibold">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
-                        <td className="px-4 py-2">
+                        <td className="whitespace-nowrap px-4 py-1.5 font-semibold text-[#152744] dark:text-card-foreground">{compactBillNumber(bill.billNo ?? bill.billNumber)}</td>
+                        <td className={cn("whitespace-nowrap px-4 py-1.5 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
+                        <td className="max-w-32 truncate px-4 py-1.5 font-medium">{bill.customerName ?? "Walk-in"}</td>
+                        <td className={cn("px-4 py-1.5 font-medium", DASH_MUTED)}>{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
+                        <td className="whitespace-nowrap px-4 py-1.5 font-semibold">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
+                        <td className="px-4 py-1.5">
                           <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
                         </td>
                       </tr>
@@ -673,7 +673,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
               </tbody>
             </table>
           </div>
-          <div className="grid min-h-[58px] border-t border-[#e8edf4] bg-[#fbfcfe] text-sm sm:grid-cols-2">
+          <div className="grid min-h-[50px] border-t border-[#e8edf4] bg-[#fbfcfe] text-sm sm:grid-cols-2">
             <div className="flex items-center gap-2.5 px-4 py-2.5">
               <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-[#eef4ff] text-[#075fff]">
                 <ReceiptText size={14} />
@@ -694,9 +694,9 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         <div className="contents">
 
           {/* Quick Insights */}
-          <div className={cn(DASH_CARD, "h-full min-h-[316px] p-4 xl:min-h-0")}>
+          <div className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col p-4 xl:min-h-0")}>
             <p className={cn(DASH_TITLE, "mb-3")}>Quick Insights</p>
-            <div className="space-y-2">
+            <div className="grid min-h-0 flex-1 grid-rows-4 gap-2">
               <InsightRow tone="emerald" icon={<Package size={16} />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Sales leaders" : "No sales yet"} href="/reports" />
               <InsightRow tone="blue" icon={<PackagePlus size={16} />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "No product yet"} href="/reports" />
               <InsightRow tone="violet" icon={<CreditCard size={16} />} label="Average Bill Value" value={avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0)} href="/bills" />
@@ -705,7 +705,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           </div>
 
           {/* Sync & Health */}
-          <div className={cn(DASH_CARD, "h-full min-h-[316px] overflow-hidden p-4 xl:min-h-0")}>
+          <div className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col overflow-hidden p-4 xl:min-h-0")}>
             <p className={cn(DASH_TITLE, "mb-2")}>Sync & Health</p>
             <div className="border-b border-[#edf2f8] pb-2.5">
               <div className="flex items-center gap-2 text-[13px] font-bold text-[#11a84b] dark:text-emerald-300">
@@ -718,7 +718,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                 {isSyncing ? "Sync running now" : syncHealthGood ? "Last synced just now" : "Local data is safe"}
               </p>
             </div>
-            <div className="mt-2.5 space-y-2">
+            <div className="mt-2.5 flex min-h-0 flex-1 flex-col justify-evenly gap-2">
               <HealthRow icon={<Wifi size={13} />} label="Internet Connection" status={isOnline ? "ok" : "warn"} value={isOnline ? "Online" : "Offline"} />
               <HealthRow icon={<RefreshCw size={13} />} label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
               <HealthRow icon={<Cloud size={13} />} label="Backup Status" status={pendingCount > 0 || failedCount > 0 ? "warn" : "ok"} value={isSyncing ? "Syncing" : pendingCount > 0 ? "Queued" : "Secure"} />
@@ -1004,20 +1004,20 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
-      className={cn(DASH_CARD, "h-full min-h-[142px] overflow-hidden p-5", onClick && ["cursor-pointer", DASH_CARD_INTERACTIVE])}
+      className={cn(DASH_CARD, "h-full min-h-[clamp(102px,11.5dvh,142px)] overflow-hidden p-4 2xl:p-5", onClick && ["cursor-pointer", DASH_CARD_INTERACTIVE])}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]", iconBg)}>{icon}</div>
+        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] 2xl:h-10 2xl:w-10", iconBg)}>{icon}</div>
       </div>
-      <div className="mt-3">
-        <p className={cn("text-[13px] font-semibold leading-tight", DASH_MUTED)}>{label}</p>
+      <div className="mt-2.5 2xl:mt-3">
+        <p className={cn("text-[12px] font-medium leading-tight 2xl:text-[13px]", DASH_MUTED)}>{label}</p>
         {loading ? (
           <div className="mt-2 h-7 w-3/4 animate-pulse rounded bg-[#edf2f8]" />
         ) : (
-          <p className="mt-2 break-words font-sans text-[22px] font-extrabold leading-none text-[#102347] dark:text-card-foreground">{value}</p>
+          <p className="mt-1.5 break-words font-sans text-[20px] font-bold leading-none text-[#102347] dark:text-card-foreground 2xl:mt-2 2xl:text-[22px]">{value}</p>
         )}
         {delta !== null && delta !== undefined && (
-          <div className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold">
+          <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-medium 2xl:mt-3 2xl:text-[11px]">
             <span className={cn("inline-flex items-center gap-0.5 font-bold", delta === 0 ? "text-[#62708a]" : isBad ? "text-[#ff304f]" : "text-[#16a34a]")}>
               <DeltaIcon size={11} aria-hidden="true" />
               {Math.abs(delta)}%
@@ -1037,14 +1037,14 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
   const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
 
   return (
-    <section className={cn(DASH_CARD, "h-full min-h-[316px] p-5 xl:min-h-0")}>
+    <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col p-4 xl:min-h-0 2xl:p-5")}>
       <div>
         <p className={DASH_TITLE}>Payment Mode Breakdown</p>
         <span className="mt-2 inline-flex items-center gap-1.5 rounded-[7px] border border-[#d5deeb] bg-white px-2 py-1 text-[10px] font-bold text-[#314766] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
           This Week <ChevronDown size={11} aria-hidden="true" />
         </span>
       </div>
-      <div className="relative mt-2 h-[132px]">
+      <div className="relative mt-2 min-h-[132px] flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -1090,12 +1090,12 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
 
 function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["lowStock"]; productsById: Record<string, Product> }) {
   return (
-    <section className={cn(DASH_CARD, "h-full min-h-[316px] p-5 xl:min-h-0")}>
+    <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col p-4 xl:min-h-0 2xl:p-5")}>
       <div className="flex items-center justify-between gap-3">
         <p className={DASH_TITLE}>Low Stock Alerts</p>
         <Link href="/inventory" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
       </div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col justify-evenly gap-2">
         {items.length === 0 ? (
           <div className={cn("rounded-[10px] border border-dashed border-[#dce7f5] px-3 py-8 text-center text-sm font-semibold", DASH_MUTED)}>
             All stock healthy
@@ -1140,7 +1140,7 @@ function InsightRow({ icon, label, value, href, tone }: {
     orange: "border-[#ffdca8] bg-[#fff2df] text-[#ff8500] shadow-[0_6px_16px_rgba(255,133,0,0.14)]",
   }[tone];
   const content = (
-    <div className="flex min-h-[57px] items-center justify-between gap-3 border-b border-[#edf2f8] px-1 py-2 transition-colors hover:bg-[#f8fbff]">
+    <div className="flex h-full min-h-[57px] items-center justify-between gap-3 border-b border-[#edf2f8] px-1 py-2 transition-colors hover:bg-[#f8fbff]">
       <div className="flex items-center gap-2.5">
         <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border", toneClass)}>{icon}</span>
         <span className="min-w-0">
@@ -1178,7 +1178,7 @@ function HealthRow({ icon, label, status, value }: {
 function RecentProductsRail({ products }: { products: Product[] }) {
   return (
     <section className={cn(DASH_CARD, "overflow-hidden")}>
-      <div className="flex items-center justify-between gap-3 border-b border-[#edf2f8] px-5 py-3.5">
+      <div className="flex items-center justify-between gap-3 border-b border-[#edf2f8] px-5 py-3">
         <p className={DASH_TITLE}>Recently Added Products</p>
         <Link href="/products" className="text-[12px] font-black text-[#075fff] hover:underline">View all</Link>
       </div>
@@ -1187,7 +1187,7 @@ function RecentProductsRail({ products }: { products: Product[] }) {
           Products will appear here after you add stock.
         </div>
       ) : (
-        <div className="flex min-h-[88px] items-stretch overflow-x-auto px-2">
+        <div className="flex min-h-[78px] items-stretch overflow-x-auto px-2 2xl:min-h-[88px]">
           {products.slice(0, 8).map((product) => (
             <Link key={product.id} href={`/products?highlight=${encodeURIComponent(product.id)}`} className="group min-w-[190px] flex-1 border-r border-[#edf2f8] last:border-r-0">
               <div className="flex h-full items-center gap-3 px-4 py-3 transition-colors group-hover:bg-[#f8fbff]">
