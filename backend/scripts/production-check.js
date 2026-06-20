@@ -88,6 +88,8 @@ const requiredFiles = [
   "tests/phase29-release-gate.examples.js",
   "tests/product-loose-item-migration.examples.js",
   "prisma-postgres/migrations/000020_add_product_loose_item_fields/migration.sql",
+  "tests/bill-return-reference-migration.examples.js",
+  "prisma-postgres/migrations/000025_add_bill_return_reference/migration.sql",
   "scripts/verify-product-schema.js",
   "scripts/money-paise-reconciliation.js",
   "prisma-postgres/migrations/000009_money_paise_shadow_columns/migration.sql",

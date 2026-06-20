@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRegister, type AuthResponse } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/useAuth";
+import { seedDemoShopData } from "@/features/demo/demo-shop-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,6 +62,9 @@ export default function Register() {
         localStorage.setItem("kirana-os:ui-theme:v1", accent);
         applyAccent(accent);
         auth.login(data.accessToken || data.token, data.refreshToken, data.user, data.shop);
+        // Brand-new shop: seed local-only sample data so the first screen isn't blank.
+        // It never syncs to the server and can be cleared with one tap from the demo banner.
+        await seedDemoShopData().catch(() => {});
         setLocation("/dashboard");
       },
       onError: (err: unknown) => {
