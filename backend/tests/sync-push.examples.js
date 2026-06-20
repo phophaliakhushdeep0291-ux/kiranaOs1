@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   buildSyncResult,
   classifySyncError,
@@ -80,6 +81,12 @@ function run() {
   assert.equal(resultFromClientEventId.eventId, 'client_evt_1');
   assert.equal(resultFromClientEventId.clientEventId, 'client_evt_1');
   assert.equal(resultFromClientEventId.serverId, 'prod_1');
+
+  const syncService = fs.readFileSync(new URL('../src/modules/sync/sync.service.js', import.meta.url), 'utf8');
+  const billsService = fs.readFileSync(new URL('../src/modules/bills/bills.service.js', import.meta.url), 'utf8');
+  assert.match(syncService, /getCreateBillCreditLedgerClientId\(payload, billBody\)/, 'CREATE_BILL sync must retain the optimistic ledger identity');
+  assert.match(syncService, /localLedgerEntryId/, 'CREATE_BILL response must return the local ledger identity');
+  assert.match(billsService, /actor\?\.creditLedgerClientId \?\? buildChildIdempotencyKey/, 'server udhar ledger must reuse the client ledger identity when supplied');
 
   console.log('Sync push examples passed');
 }

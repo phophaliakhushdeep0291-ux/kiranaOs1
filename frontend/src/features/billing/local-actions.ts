@@ -105,7 +105,14 @@ async function prepareCustomerForCreditBill(data: BillInput, creditAmount: numbe
           customerName: data.customerName ?? existing.name,
           customerMobile: data.customerMobile ?? existing.mobile ?? undefined,
         } as unknown as BillInput,
-        customerToPut: { ...updated, sync_status: "pending_sync" },
+        // This is an optimistic projection of the append-only ledger entry below,
+        // not an independent customer edit. Marking the customer pending created a
+        // false customer conflict when the server returned the same derived balance.
+        customerToPut: {
+          ...updated,
+          sync_status: String(existing.sync_status ?? "synced"),
+          balance_derived_from_local_ledger: true,
+        },
         customerCacheItem: updated,
         previousCustomerBalance,
       };
@@ -573,7 +580,6 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
       await tx.put("customers", tagDemo(customerPreparation.customerToPut, isDemoBill));
     }
     const billToWrite = tagDemo(bill, isDemoBill);
-    console.warn("QA-DEMO-BILL", JSON.stringify({ isDemoBill, hasTag: (billToWrite as Record<string, unknown>).demo_data === true, sync: (billToWrite as Record<string, unknown>).sync_status }));
     await tx.put("bills", billToWrite);
     await tx.putMany("bill_items", billItems.map((row) => tagDemo(row, isDemoBill)));
     await tx.putMany("payments", billPayments.map((row) => tagDemo(row, isDemoBill)));

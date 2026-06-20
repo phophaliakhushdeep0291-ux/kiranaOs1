@@ -167,6 +167,14 @@ async function findDuplicateLocalLedgerForServerLedger(
   const serverIdentities = ledgerIdentitySet(serverLedger);
   const amount = Math.abs(readNumberField(serverLedger, ["amount"], 0));
   const customerId = getStringFrom(serverLedger, ["customerId", "customer_id"]);
+  const mappedLocalCustomerId = customerId
+    ? await findLocalIdForServerId(customerId)
+    : undefined;
+  const equivalentCustomerIds = new Set(
+    [customerId, mappedLocalCustomerId].filter(
+      (value): value is string => Boolean(value),
+    ),
+  );
 
   const rows = await dexieDB.customer_ledger
     .filter(rowMatchesCurrentScope)
@@ -190,7 +198,11 @@ async function findDuplicateLocalLedgerForServerLedger(
     const rowAmount = Math.abs(readNumberField(row, ["amount"], 0));
     if (Math.abs(rowAmount - amount) > 0.005) return false;
     const rowCustomerId = getStringFrom(row, ["customerId", "customer_id"]);
-    return !customerId || !rowCustomerId || customerId === rowCustomerId;
+    return (
+      equivalentCustomerIds.size === 0 ||
+      !rowCustomerId ||
+      equivalentCustomerIds.has(rowCustomerId)
+    );
   });
 }
 

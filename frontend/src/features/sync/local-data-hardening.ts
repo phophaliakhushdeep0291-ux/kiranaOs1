@@ -389,6 +389,82 @@ async function repairDuplicateFinancialEchoTable(tableName: FinancialTableName):
   return merged;
 }
 
+function canonicalMappedId(id: string | undefined, idMap: Map<string, string>): string | undefined {
+  if (!id) return undefined;
+  let current = id;
+  const visited = new Set<string>();
+  while (idMap.has(current) && !visited.has(current)) {
+    visited.add(current);
+    current = idMap.get(current) ?? current;
+  }
+  return current;
+}
+
+function mappedBillLedgerSignature(row: MutableRow, idMap: Map<string, string>): string | undefined {
+  if (ledgerKind(row) !== "bill") return undefined;
+  const customerId = canonicalMappedId(getLedgerCustomerId(row), idMap);
+  const sourceId = canonicalMappedId(
+    readStringFrom(row, ["source_id", "sourceId", "bill_id", "billId", "local_bill_id", "localBillId"]),
+    idMap,
+  );
+  const amount = amountKey(
+    readNumberFrom(row, ["amount", "creditAmount", "credit_amount", "debitAmount", "debit_amount"]),
+  );
+  if (!customerId || !sourceId || !amount) return undefined;
+  return `mapped-bill-ledger|${customerId}|${sourceId}|${amount}`;
+}
+
+async function repairMappedBillLedgerEchoRows(): Promise<number> {
+  await dexieDB.open();
+  const [rows, mappings] = await Promise.all([
+    dexieDB.customer_ledger.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+    dexieDB.id_mappings.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+  ]);
+  const idMap = new Map<string, string>();
+  for (const mapping of mappings) {
+    const localId = readStringFrom(mapping, ["local_id", "localId"]);
+    const serverId = readStringFrom(mapping, ["server_id", "serverId"]);
+    if (localId && serverId && localId !== serverId) idMap.set(localId, serverId);
+  }
+  if (idMap.size === 0) return 0;
+
+  const groups = new Map<string, MutableRow[]>();
+  for (const row of rows as MutableRow[]) {
+    if (isDeleted(row)) continue;
+    const signature = mappedBillLedgerSignature(row, idMap);
+    if (!signature) continue;
+    const group = groups.get(signature) ?? [];
+    group.push(row);
+    groups.set(signature, group);
+  }
+
+  let merged = 0;
+  const touchedCustomerIds = new Set<string>();
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const serverRows = group.filter((row) => Boolean(readStringFrom(row, ["server_id", "serverId"])));
+    const localRows = group.filter((row) => rowLooksLocalEcho(row));
+    if (serverRows.length === 0 || localRows.length === 0) continue;
+    const winner = [...serverRows].sort((a, b) => rowPriority(b) - rowPriority(a))[0];
+    const winnerId = readStringFrom(winner, ["id", "server_id", "serverId"]);
+    const winnerCustomerId = getLedgerCustomerId(winner);
+    if (winnerCustomerId) touchedCustomerIds.add(winnerCustomerId);
+    for (const loser of localRows) {
+      const loserId = readStringFrom(loser, ["id"]);
+      if (!loserId || loserId === winnerId || isDeleted(loser)) continue;
+      const customerId = getLedgerCustomerId(loser);
+      if (customerId) touchedCustomerIds.add(customerId);
+      await dexieDB.customer_ledger.put({
+        ...tombstoneEchoRow(loser, winner),
+        hardening_reason: "mapped local/server bill ledger echo merged",
+      } as never);
+      merged += 1;
+    }
+  }
+  if (merged > 0) await refreshCustomerBalancesFromLedger(touchedCustomerIds).catch(() => 0);
+  return merged;
+}
+
 async function repairExactDuplicatePaymentRows(): Promise<number> {
   await dexieDB.open();
   const rows = filterRowsForCurrentScope(
@@ -621,7 +697,8 @@ export async function hardenLocalFinancialData(): Promise<LocalDataHardeningResu
     const billsMerged = await repairDuplicateBillEchoRows().catch(() => 0);
     const paymentsMerged = (await repairDuplicateFinancialEchoTable("payments").catch(() => 0)) +
       (await repairExactDuplicatePaymentRows().catch(() => 0));
-    const ledgerMerged = (await repairDuplicateFinancialEchoTable("customer_ledger").catch(() => 0)) +
+    const ledgerMerged = (await repairMappedBillLedgerEchoRows().catch(() => 0)) +
+      (await repairDuplicateFinancialEchoTable("customer_ledger").catch(() => 0)) +
       (await repairDuplicateOpeningBalanceLedgerRows().catch(() => 0));
     const outboxResolved = await repairFinancialDuplicateOutboxFailures().catch(() => 0);
     const conflictsResolved = await repairConflictsWithoutBlockingOutbox().catch(() => 0);

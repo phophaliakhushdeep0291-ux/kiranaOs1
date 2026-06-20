@@ -750,6 +750,129 @@ describe("bill sync behavior", () => {
     expect(billHistory[0]).toEqual(expect.objectContaining({ id: "server_bill_echo", sync_status: "synced" }));
   });
 
+  it("pulling a synced udhar ledger replaces the optimistic row when customer and bill IDs were remapped", async () => {
+    dbState.putInto("id_mappings", {
+      local_id: "local_customer_echo",
+      server_id: "server_customer_echo",
+      entity_type: "customer",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+    });
+    dbState.putInto("id_mappings", {
+      local_id: "local_bill_echo",
+      server_id: "server_bill_echo",
+      entity_type: "bill",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+    });
+    dbState.putInto("customer_ledger", {
+      id: "ledger_local_bill_echo_credit",
+      customer_id: "local_customer_echo",
+      customerId: "local_customer_echo",
+      type: "BILL",
+      source_type: "bill",
+      source_id: "local_bill_echo",
+      bill_id: "local_bill_echo",
+      amount: 200,
+      entry_at: "2026-06-20T10:00:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+      deleted_at: null,
+    });
+
+    const status = await mergeServerChange({
+      entity_type: "udhar_ledger",
+      entity_id: "server_ledger_echo",
+      entity: {
+        id: "server_ledger_echo",
+        server_id: "server_ledger_echo",
+        customer_id: "server_customer_echo",
+        customerId: "server_customer_echo",
+        type: "debit",
+        source_type: "bill",
+        source_id: "server_bill_echo",
+        bill_id: "server_bill_echo",
+        amount: 200,
+        entry_at: "2026-06-20T10:04:00.000Z",
+        tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id,
+        sync_status: "synced",
+        deleted_at: null,
+      },
+    } as never);
+
+    expect(status).toBe("merged");
+    expect(activeRows("customer_ledger")).toEqual([
+      expect.objectContaining({
+        id: "server_ledger_echo",
+        local_id: "ledger_local_bill_echo_credit",
+        server_id: "server_ledger_echo",
+        amount: 200,
+      }),
+    ]);
+    expect(scopedRows("customer_ledger")).toContainEqual(
+      expect.objectContaining({
+        id: "ledger_local_bill_echo_credit",
+        merged_into_id: "server_ledger_echo",
+        deleted_at: expect.any(String),
+      }),
+    );
+  });
+
+  it("repairs an already-stored mapped local/server udhar bill echo to one balance effect", async () => {
+    dbState.putInto("id_mappings", {
+      local_id: "local_customer_old",
+      server_id: "server_customer_old",
+      entity_type: "customer",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+    });
+    dbState.putInto("id_mappings", {
+      local_id: "local_bill_old",
+      server_id: "server_bill_old",
+      entity_type: "bill",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+    });
+    dbState.putInto("customer_ledger", {
+      id: "ledger_local_bill_old_credit",
+      customer_id: "local_customer_old",
+      type: "BILL",
+      source_type: "bill",
+      source_id: "local_bill_old",
+      bill_id: "local_bill_old",
+      amount: 200,
+      entry_at: "2026-06-20T10:00:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+      deleted_at: null,
+    });
+    dbState.putInto("customer_ledger", {
+      id: "server_ledger_old",
+      server_id: "server_ledger_old",
+      customer_id: "server_customer_old",
+      type: "debit",
+      source_type: "bill",
+      source_id: "server_bill_old",
+      bill_id: "server_bill_old",
+      amount: 200,
+      entry_at: "2026-06-20T10:04:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+      deleted_at: null,
+    });
+
+    const result = await hardenLocalFinancialData();
+
+    expect(result.ledgerMerged).toBeGreaterThanOrEqual(1);
+    expect(activeRows("customer_ledger")).toEqual([
+      expect.objectContaining({ id: "server_ledger_old", amount: 200 }),
+    ]);
+  });
+
   it("product created offline merges with its synced server echo instead of conflicting", async () => {
     // Unsynced LOCAL create (no server_id). Its synced server copy arrives via pull, matched
     // back by clientProductId. Must merge, not raise a false conflict.
