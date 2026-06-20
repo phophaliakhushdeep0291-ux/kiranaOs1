@@ -218,7 +218,7 @@ export function BillingSummary({
             </div>
             <button
               onClick={() => setShowCustomerOptions((v) => !v)}
-              className="ml-auto shrink-0 text-[12px] font-extrabold text-[#0057ff] hover:underline"
+              className="ml-auto inline-flex min-h-[40px] shrink-0 items-center px-2 text-[12px] font-extrabold text-[#0057ff] hover:underline"
             >
               Change
             </button>
@@ -375,7 +375,7 @@ export function BillingSummary({
                 )}
                 <button
                   onClick={() => setEditingDiscount((v) => !v)}
-                  className="inline-flex h-6 items-center rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-2 text-[10px] font-extrabold text-[#0057ff] hover:bg-[#eaf2ff]"
+                  className="inline-flex h-9 items-center rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-3 text-[11px] font-extrabold text-[#0057ff] hover:bg-[#eaf2ff]"
                 >
                   {safeDiscount > 0 && !editingDiscount ? "Edit" : "Apply"}
                 </button>
@@ -389,12 +389,12 @@ export function BillingSummary({
                 onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()}
                 placeholder="Coupon code"
-                className="h-7 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-2 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]"
+                className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-2 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]"
               />
               <button
                 onClick={() => void handleApplyCoupon()}
                 disabled={couponBusy || !couponCode.trim() || subtotal <= 0}
-                className="inline-flex h-7 items-center gap-1 rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-2 text-[10px] font-extrabold text-[#0057ff] hover:bg-[#eaf2ff] disabled:opacity-50"
+                className="inline-flex h-9 items-center gap-1 rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-3 text-[11px] font-extrabold text-[#0057ff] hover:bg-[#eaf2ff] disabled:opacity-50"
               >
                 {couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply
               </button>

@@ -4,7 +4,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
-import { cancelBill, confirmBill, restoreCancelledBill } from "../bills/bills.service.js";
+import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill } from "../bills/bills.service.js";
 import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "../customers/customers.schema.js";
 import { createCustomer, recordUdharPayment, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
@@ -558,6 +558,9 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.RESTORE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyRestoreBill(shopId, event, context);
+    case SYNC_EVENT_TYPES.SALE_RETURN:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyCreateSaleReturn(shopId, event, user, context);
     case SYNC_EVENT_TYPES.CREATE_PRODUCT:
       return applyCreateProduct(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_PRODUCT:
@@ -751,6 +754,53 @@ async function applyCancelBill(shopId, event, context) {
   };
 }
 
+
+async function applyCreateSaleReturn(shopId, event, user, context) {
+  const payload = getEventPayload(event);
+  // Resolve client product/customer ids to server ids (reuses the CREATE_BILL resolver).
+  const resolved = await resolveBillBodyReferences(shopId, payload, context);
+  // The original sale this return reverses (bill-linked); standalone returns omit it.
+  const originalRef = payload.returnOfBillId ?? payload.originalBillId ?? payload.serverBillId ?? payload.localBillId ?? payload.billId;
+  let returnOfBillId = null;
+  if (originalRef) {
+    returnOfBillId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, originalRef, context).catch(() => null);
+  }
+
+  const bill = await createSaleReturn(shopId, {
+    ...resolved,
+    returnOfBillId,
+  }, {
+    userId: user?.userId ?? null,
+    deviceId: pickString(payload.sourceDeviceId, payload.source_device_id, user?.deviceId) || null,
+  });
+
+  return buildSaleReturnSyncPayload(bill, payload);
+}
+
+function buildSaleReturnSyncPayload(bill, payload) {
+  const localBillId =
+    payload.localBillId ?? payload.local_bill_id ?? payload.clientBillId ?? payload.client_bill_id ?? bill.clientBillId ?? null;
+  const clientBillId =
+    payload.clientBillId ?? payload.client_bill_id ?? bill.clientBillId ?? localBillId;
+  const idempotencyKey =
+    payload.idempotencyKey ?? payload.idempotency_key ?? bill.idempotencyKey ?? null;
+  return {
+    entity: "bill",
+    action: "SALE_RETURN",
+    type: SYNC_EVENT_TYPES.SALE_RETURN,
+    billId: bill.id,
+    serverBillId: bill.id,
+    billNo: bill.billNo,
+    localBillId,
+    clientBillId,
+    idempotencyKey,
+    idempotency_key: idempotencyKey,
+    bill: toSyncJsonSafe(bill),
+    billItems: toSyncJsonSafe(bill.items ?? []),
+    payments: toSyncJsonSafe(bill.payments ?? []),
+    grandTotal: bill.grandTotal,
+  };
+}
 
 async function applyRestoreBill(shopId, event, context) {
   const payload = restoreBillPayloadSchema.parse(getEventPayload(event));

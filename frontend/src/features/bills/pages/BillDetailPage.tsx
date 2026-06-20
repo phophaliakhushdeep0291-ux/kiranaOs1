@@ -11,6 +11,7 @@ import { readInstantCache } from "@/lib/offline/instant-cache";
 import { buildPrintableBillSnapshot, openPrintableBill } from "@/features/bills/print";
 import { cancelBillWithOwnerPinLocalFirst, restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { EditBillDialog } from "@/features/bills/components/EditBillDialog";
+import { ReturnDialog, type ReturnLineInput } from "@/features/returns/components/ReturnDialog";
 import type { Bill, Customer } from "@/types/api";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { usePermission } from "@/features/staff/permissions";
@@ -139,6 +140,7 @@ export default function BillDetailPage() {
   const { data, isLoading, refetch } = useBillDetail(id);
   const [pinAction, setPinAction] = useState<PinAction | null>(null);
   const [editMode, setEditMode] = useState<"edit" | "addon" | null>(null);
+  const [returnOpen, setReturnOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const bill = data?.bill;
@@ -153,6 +155,17 @@ export default function BillDetailPage() {
     : readNumber(bill?.paidAmount ?? bill?.buyerPaidAmount, 0);
   const paid = visiblePayments.length > 0 ? paidFromRows : billLevelPaid;
   const credit = Math.max(0, readNumber(bill?.creditAmount, total - paid));
+
+  const billTypeStr = String(bill?.billType ?? "normal_sale");
+  const canReturn = Boolean(bill) && bill?.status !== "cancelled" && billTypeStr !== "estimate" && billTypeStr !== "sales_return";
+  const returnLines: ReturnLineInput[] = useMemo(() => visibleItems.map((item) => ({
+    productId: (item.productId ?? item.product_id) as string | undefined,
+    name: String(item.name ?? item.productName ?? "Item"),
+    soldQty: Math.abs(readNumber(item.quantity, 0)),
+    enteredUnit: String(item.enteredUnit ?? item.entered_unit ?? "piece"),
+    ratePerRateUnit: readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0),
+    gstRate: readNumber(item.gstRate ?? item.gst_rate, 0),
+  })), [visibleItems]);
 
   function printBill() {
     if (!bill) return;
@@ -234,6 +247,7 @@ export default function BillDetailPage() {
                   <Button variant="outline" onClick={() => setEditMode("addon")}><Plus size={15} className="mr-1" />Add items</Button>
                 </>
               )}
+              {canReturn && <Button variant="outline" onClick={() => setReturnOpen(true)}><RotateCcw size={15} className="mr-1" />Return items</Button>}
               {bill.status !== "cancelled" && <Button variant="outline" onClick={() => requestPinAction("cancel")}><ShieldCheck size={15} className="mr-1" />Cancel with PIN</Button>}
               <Button variant="outline" onClick={() => requestPinAction("delete")}><Trash2 size={15} className="mr-1" />Move to recycle bin</Button>
             </>
@@ -305,6 +319,17 @@ export default function BillDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ReturnDialog
+        open={returnOpen}
+        onOpenChange={setReturnOpen}
+        lines={returnLines}
+        customerId={(bill.customerId as string | undefined) ?? undefined}
+        customerName={(bill.customerName as string | undefined) ?? undefined}
+        originalBillId={bill.id}
+        gstMode={(bill.gstMode as "inclusive" | "exclusive" | "none" | undefined) ?? "inclusive"}
+        onDone={() => { void refetch(); }}
+      />
 
       <OwnerPinModal
         open={!!pinAction}

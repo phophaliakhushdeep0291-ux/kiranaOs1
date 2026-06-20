@@ -516,6 +516,256 @@ export async function cancelBill(shopId, billId, { reason }) {
 
 
 // ─────────────────────────────────────────────────────────────
+// SALE RETURN — a partial or full return of a sale.
+// Modeled as a Bill with billType "sales_return" and NEGATIVE amounts, so every
+// report that already sums bills (sales, profit, cash) reverses automatically with
+// no report changes. Resellable items are restocked; damaged ones are written off
+// as a damage loss. Refund goes out in the chosen mode (cash/upi) or reduces the
+// customer's udhar. Reuses the reversal primitives proven in cancelBill; runs in one
+// transaction; idempotent on the same bill identity as CREATE_BILL.
+// ─────────────────────────────────────────────────────────────
+export async function createSaleReturn(shopId, body, actor = {}) {
+  const {
+    items = [],
+    refundMode = "cash",
+    gstMode = "inclusive",
+    customerId,
+    customerName,
+    returnOfBillId,
+    reason,
+  } = body;
+
+  const normalizedRefundMode = ["cash", "upi", "udhar"].includes(String(refundMode)) ? String(refundMode) : "cash";
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new AppError("A return needs at least one item", 400);
+  }
+  const isCashLike = normalizedRefundMode === "cash" || normalizedRefundMode === "upi";
+  if (normalizedRefundMode === "udhar" && !customerId) {
+    throw new AppError("Customer is required to refund a return to udhar", 400);
+  }
+
+  const billIdentity = normalizeBillIdentity(shopId, body, actor);
+
+  let bill;
+  try {
+    bill = await db.$transaction(async (tx) => {
+      const existing = await findExistingBillByIdentity(tx, shopId, billIdentity);
+      if (existing) return existing;
+
+      // Optional link to the original sale (bill-linked returns).
+      const original = returnOfBillId
+        ? await tx.bill.findFirst({ where: { id: returnOfBillId, shopId } })
+        : null;
+
+      const productIds = items.filter((i) => i.productId).map((i) => i.productId);
+      const dbProducts = await tx.product.findMany({ where: { id: { in: productIds }, shopId } });
+      const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
+
+      let subtotal = 0;
+      let totalGst = 0;
+      let itemProfit = 0;
+      const billItems = [];
+      const restockPlan = []; // { product, qtyInBase, lineCost, damaged }
+
+      for (const item of items) {
+        const product = item.productId ? productMap[item.productId] : null;
+        if (item.productId && !product) throw new AppError(`Product not found: ${item.productId}`, 404);
+
+        const baseUnit = product?.baseUnit ?? item.enteredUnit;
+        const rateUnit = product?.rateUnit ?? item.enteredUnit;
+        const costPerRateUnit = product?.costPerRateUnit ?? 0;
+        const qtyInBase = product ? toBaseQty(item.quantity, item.enteredUnit, product.baseUnit) : item.quantity;
+        const qtyInRateUnit = product ? baseQtyToRateQty(qtyInBase, rateUnit, baseUnit) : item.quantity;
+
+        const lineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
+        const rate = Number(item.gstRate ?? product?.gstRate ?? 0);
+        const gstAmount = gstMode === "exclusive"
+          ? multiplyMoney(lineTotal, rate / 100)
+          : gstMode === "none" || rate <= 0
+            ? 0
+            : subtractMoney(lineTotal, round2(lineTotal / (1 + rate / 100)));
+        const lineCost = multiplyMoney(costPerRateUnit, qtyInRateUnit);
+        const lineProfit = subtractMoney(lineTotal, lineCost);
+        const damaged = item.damaged === true;
+
+        subtotal = addMoney(subtotal, lineTotal);
+        totalGst = addMoney(totalGst, gstAmount);
+        itemProfit = addMoney(itemProfit, lineProfit);
+
+        // Stored NEGATIVE on the return bill so reports net the original sale down.
+        billItems.push({
+          productId: item.productId ?? null,
+          name: product?.name ?? item.name ?? "Item",
+          quantity: -Math.abs(item.quantity),
+          enteredUnit: item.enteredUnit,
+          baseUnit,
+          quantityInBaseUnit: -Math.abs(qtyInBase),
+          rateUnit,
+          ratePerRateUnit: item.ratePerRateUnit,
+          costPerRateUnit,
+          gstRate: rate,
+          lineTotal: -lineTotal,
+          lineCost: -lineCost,
+          lineProfit: -lineProfit,
+          ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
+        });
+
+        if (product) restockPlan.push({ product, qtyInBase: round2(qtyInBase), lineCost, damaged });
+      }
+
+      const grandTotalMagnitude = gstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;
+      const refundAmount = round2(grandTotalMagnitude);
+      const resolvedCustomerId = customerId ?? original?.customerId ?? null;
+
+      const billNo = await generateBillNo(shopId, tx);
+      const paymentRows = isCashLike
+        ? [{
+            shopId,
+            mode: normalizedRefundMode,
+            amount: -refundAmount,
+            idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `refund:${normalizedRefundMode}`),
+            sourceDeviceId: billIdentity.sourceDeviceId,
+            ...moneyShadows({ amount: -refundAmount }),
+          }]
+        : [];
+
+      const negativeMoney = {
+        subtotal: -subtotal,
+        discount: 0,
+        gst: -totalGst,
+        grandTotal: -grandTotalMagnitude,
+        actualAmount: -grandTotalMagnitude,
+        buyerPaidAmount: isCashLike ? -refundAmount : 0,
+        waivedAmount: 0,
+        grossProfit: -itemProfit,
+        paidAmount: isCashLike ? -refundAmount : 0,
+        creditAmount: normalizedRefundMode === "udhar" ? -refundAmount : 0,
+      };
+
+      const returnBill = await tx.bill.create({
+        data: {
+          shopId,
+          billNo,
+          billType: "sales_return",
+          status: "active",
+          customerId: resolvedCustomerId,
+          customerName: customerName ?? original?.customerName ?? "Walk-in",
+          gstMode,
+          ...negativeMoney,
+          ...moneyShadows(negativeMoney),
+          createdByUserId: actor?.userId ?? null,
+          deviceId: actor?.deviceId ?? null,
+          clientBillId: billIdentity.clientBillId,
+          idempotencyKey: billIdentity.idempotencyKey,
+          sourceDeviceId: billIdentity.sourceDeviceId,
+          returnOfBillId: returnOfBillId ?? null,
+          items: { create: billItems },
+          payments: { create: paymentRows },
+        },
+        include: { items: true, payments: true },
+      });
+
+      // Restock resellable items; write off damaged ones (no restock, records the cost loss).
+      for (const { product, qtyInBase, lineCost, damaged } of restockPlan) {
+        if (damaged) {
+          await tx.stockLedger.create({
+            data: {
+              shopId,
+              productId: product.id,
+              productName: product.name,
+              action: "damage",
+              changeBaseQty: 0,
+              oldStockBaseQty: product.stockBaseQty,
+              newStockBaseQty: product.stockBaseQty,
+              damageLossValue: lineCost,
+              billId: returnBill.id,
+              clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `damage:${product.id}`),
+              idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `damage:${product.id}`),
+              sourceDeviceId: billIdentity.sourceDeviceId,
+              sourceType: "bill",
+              sourceId: returnBill.id,
+              note: `Damaged sale return: ${reason ?? returnBill.billNo}`,
+            },
+          });
+          continue;
+        }
+        const updated = await tx.product.updateMany({
+          where: { id: product.id, shopId },
+          data: { stockBaseQty: { increment: qtyInBase } },
+        });
+        if (updated.count !== 1) continue;
+        const fresh = await tx.product.findFirst({ where: { id: product.id, shopId } });
+        const newStock = fresh?.stockBaseQty ?? round2(product.stockBaseQty + qtyInBase);
+        await tx.stockLedger.create({
+          data: {
+            shopId,
+            productId: product.id,
+            productName: product.name,
+            action: "return",
+            changeBaseQty: qtyInBase,
+            oldStockBaseQty: round2(newStock - qtyInBase),
+            newStockBaseQty: newStock,
+            billId: returnBill.id,
+            clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `return:${product.id}`),
+            idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `return:${product.id}`),
+            sourceDeviceId: billIdentity.sourceDeviceId,
+            sourceType: "bill",
+            sourceId: returnBill.id,
+            note: `Sale return: ${reason ?? returnBill.billNo}`,
+          },
+        });
+      }
+
+      // Refund to udhar: reduce the customer's outstanding balance (mirrors cancelBill).
+      if (normalizedRefundMode === "udhar" && resolvedCustomerId) {
+        const customer = await tx.customer.findFirst({ where: { id: resolvedCustomerId, shopId, deletedAt: null } });
+        if (!customer) throw new AppError("Customer not found", 404);
+        await tx.udharLedger.create({
+          data: {
+            shopId,
+            customerId: resolvedCustomerId,
+            customerName: customer.name,
+            type: "payment",
+            amount: refundAmount,
+            ...moneyShadows({ amount: refundAmount }),
+            mode: "return",
+            billId: returnBill.id,
+            billNo: returnBill.billNo,
+            clientLedgerId: buildChildIdempotencyKey(billIdentity.clientBillId, "udhar:return"),
+            idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, "udhar:return"),
+            sourceDeviceId: billIdentity.sourceDeviceId,
+            sourceType: "bill",
+            sourceId: returnBill.id,
+            note: `Sale return refunded to udhar: ${returnBill.billNo}`,
+          },
+        });
+        await syncCustomerUdharBalance(tx, shopId, resolvedCustomerId, {
+          repairNegative: true,
+          repairNote: `System repair after sale return ${returnBill.billNo}: udhar balance went negative`,
+        });
+      }
+
+      // NOTE: FinancialLedger is intentionally not posted for returns. It is append-only
+      // and not read by any report/dashboard — all user-facing KPIs derive from
+      // bill / udharLedger / stockLedger, which this return already reverses. Revisit
+      // if the FinancialLedger is ever wired into reporting.
+
+      return returnBill;
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {
+      const existingBill = await findExistingBillByIdentity(db, shopId, billIdentity);
+      if (!existingBill) throw error;
+      bill = existingBill;
+    } else {
+      throw error;
+    }
+  }
+
+  return bill;
+}
+
+// ─────────────────────────────────────────────────────────────
 // RESTORE CANCELLED BILL — reapplies sale effects safely
 // Used by offline sync RESTORE_BILL events.
 // ─────────────────────────────────────────────────────────────

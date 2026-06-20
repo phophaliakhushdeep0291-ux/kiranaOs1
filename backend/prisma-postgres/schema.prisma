@@ -244,6 +244,7 @@ model Bill {
   sourceDeviceId   String?
   cancelledAt      DateTime?
   cancelledReason  String?
+  returnOfBillId   String?                              // set on billType "sales_return": the original sale this return reverses
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -259,6 +260,7 @@ model Bill {
   @@unique([shopId, sourceDeviceId, clientBillId])
   @@index([shopId, createdByUserId, createdAt])
   @@index([shopId, status, createdAt])
+  @@index([shopId, returnOfBillId])
   @@index([shopId, updatedAt, id])
 }
 
