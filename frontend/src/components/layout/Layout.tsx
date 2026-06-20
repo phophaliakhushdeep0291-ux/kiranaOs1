@@ -69,6 +69,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/inventory/adjustments": "Adjust inventory quantities and review corrections",
   "/inventory/stock-transfers": "Transfer stock between locations",
   "/purchase-bills": "Manage purchase bills, suppliers, and purchase dues",
+  "/returns/new": "Record a customer return — restock items and refund",
   "/customers": "Track credit, payments, and customer trust",
   "/reports": "Track performance, trends, and data-driven decisions",
   "/daily-closing": "Cash drawer and daily business summary",
@@ -90,6 +91,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/inventory/adjustments": "Adjustments",
   "/inventory/stock-transfers": "Stock Transfers",
   "/purchase-bills": "Purchases",
+  "/returns/new": "New Return",
   "/customers": "Customers / Udhar",
   "/udhar": "Udhar",
   "/reports": "Reports & Analytics",
@@ -160,9 +162,10 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/purchase-bills", label: "Purchases", Icon: Truck },
   {
     kind: "group", id: "sales", label: "Sales", Icon: TrendingUp,
-    triggerPaths: ["/bills"],
+    triggerPaths: ["/bills", "/returns"],
     children: [
       { href: "/bills", label: "Bills History" },
+      { href: "/returns/new", label: "New Return" },
       { href: "/reports", label: "Sales Overview" },
     ],
   },

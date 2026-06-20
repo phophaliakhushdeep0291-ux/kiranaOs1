@@ -6,7 +6,8 @@ import {
   Wallet, CreditCard, Smartphone, CalendarCheck, Sparkles, HandCoins,
   ReceiptText, Truck, PackagePlus, Layers, BarChart3, Building2,
   ChefHat, Wrench, Pill, ClipboardList, Package, ArrowUpRight,
-  ArrowDownRight, RefreshCw, CheckCircle2, XCircle, ChevronRight, Users,
+  ArrowDownRight, RefreshCw, CheckCircle2, XCircle, ChevronRight, ChevronDown, Users,
+  Wifi, Cloud, MonitorSmartphone,
 } from "lucide-react";
 import {
   LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -22,13 +23,13 @@ import { useAppLanguage } from "@/features/settings/i18n";
 import { useFeature } from "@/features/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
-import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge, PaymentBadge } from "@/components/shared";
+import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/types/api";
 
-const DASH_CARD = "rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.045)] ring-1 ring-black/[0.015] dark:border-slate-800 dark:bg-card";
+const DASH_CARD = "rounded-[14px] border border-[#dfe8f4] bg-white shadow-[0_10px_30px_rgba(26,57,112,0.075),0_2px_7px_rgba(26,57,112,0.035)] ring-1 ring-[#edf3fa] dark:border-slate-800 dark:bg-card dark:ring-slate-800";
 const DASH_CARD_INTERACTIVE = "transition-all duration-200 hover:-translate-y-0.5 hover:border-[#c7d8ee] hover:shadow-[0_14px_34px_rgba(15,35,80,0.075)] active:translate-y-0";
 const DASH_TITLE = "font-display text-[15px] font-black tracking-tight text-[#102347] dark:text-card-foreground";
 const DASH_MUTED = "text-[#62708a] dark:text-muted-foreground";
@@ -62,6 +63,29 @@ function recentBillPaymentMode(bill: Record<string, unknown>): string {
   if (tenderModes.length > 1) return "split";
   if (tenderModes.length === 1) return tenderModes[0];
   return "cash";
+}
+
+function RecentBillPaymentBadge({ mode }: { mode: string }) {
+  const normalized = mode.trim().toLowerCase();
+  const style = normalized === "cash"
+    ? "border-[#c7efd4] bg-[#e8f9ee] text-[#159447]"
+    : normalized === "upi" || normalized === "bank" || normalized === "bank_transfer"
+      ? "border-[#ccdcff] bg-[#eaf1ff] text-[#2864e8]"
+      : normalized === "udhar" || normalized === "credit"
+        ? "border-[#ffdda8] bg-[#fff3e1] text-[#e98400]"
+        : normalized === "split" || normalized === "card"
+          ? "border-[#ded3ff] bg-[#f1edff] text-[#6e4ce1]"
+          : "border-[#dce4ef] bg-[#f4f7fb] text-[#5d6d84]";
+  const label = normalized === "upi"
+    ? "UPI"
+    : normalized === "bank_transfer"
+      ? "Bank"
+      : normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return (
+    <span className={cn("inline-flex min-w-[44px] items-center justify-center rounded-[6px] border px-2 py-1 text-[10px] font-black leading-none", style)}>
+      {label}
+    </span>
+  );
 }
 
 // ─── icon / color maps ───────────────────────────────────────────────────────
@@ -141,6 +165,11 @@ interface DashboardStats {
   supplierUpiPaid: number;
   supplierDue: number;
   purchaseDue: number;
+  previousRevenue: number;
+  previousGrossProfit: number;
+  previousCashCollected: number;
+  previousUpiCollected: number;
+  previousOutstanding: number;
   source: string;
   hasBusinessData: boolean;
 }
@@ -170,9 +199,11 @@ export default function Dashboard() {
   const { def: btDef } = useBusinessType();
   const { toast } = useToast();
   const today = format(new Date(), "yyyy-MM-dd");
+  const yesterday = format(new Date(Date.now() - 86_400_000), "yyyy-MM-dd");
   const [localSnapshot, setLocalSnapshot] = useState<LocalDashboardSnapshot>(() => getLocalDashboardSnapshot());
   const [ownerReport, setOwnerReport] = useState<LocalReportSnapshot | null>(null);
   const [financialSnapshot, setFinancialSnapshot] = useState<FinancialAggregationSnapshot | null>(null);
+  const [previousFinancialSnapshot, setPreviousFinancialSnapshot] = useState<FinancialAggregationSnapshot | null>(null);
   const [drilldown, setDrilldown] = useState<DrilldownType | null>(null);
   const [seedingDemo, setSeedingDemo] = useState(false);
   const profitEstimateFeature = useFeature("profit_loss_estimate");
@@ -185,7 +216,13 @@ export default function Dashboard() {
     void warmRecentLocalCache(30).then(setLocalSnapshot).catch(() => refreshLocal());
     const refreshReport = () => {
       void buildLocalReportSnapshot({ from: format(new Date(Date.now() - 6 * 86_400_000), "yyyy-MM-dd"), to: today }).then(setOwnerReport).catch(() => undefined);
-      void FinancialAggregationService.buildSnapshot(today).then(setFinancialSnapshot).catch(() => undefined);
+      void Promise.all([
+        FinancialAggregationService.buildSnapshot(today),
+        FinancialAggregationService.buildSnapshot(yesterday),
+      ]).then(([current, previous]) => {
+        setFinancialSnapshot(current);
+        setPreviousFinancialSnapshot(previous);
+      }).catch(() => undefined);
     };
     refreshReport();
     window.addEventListener("kirana:sync-queue-updated", refreshReport);
@@ -195,7 +232,7 @@ export default function Dashboard() {
       window.removeEventListener("kirana:local-data-changed", refreshReport);
       window.removeEventListener("kirana:sync-queue-updated", refreshReport);
     };
-  }, [today]);
+  }, [today, yesterday]);
 
   const pnl = useGetPnL({ from: today, to: today }, { query: { enabled: canFetchBackendPnL, staleTime: 2 * 60_000, retry: 0 } });
   const udharSummary = useGetUdharSummary({ query: { staleTime: 2 * 60_000, retry: 1 } });
@@ -225,6 +262,8 @@ export default function Dashboard() {
       ? Math.round((grossProfit / revenue) * 100)
       : roundMoney(money(localSnapshot.grossMarginPct ?? backendPnL?.grossMarginPct));
     const totalOutstanding = roundMoney(money(finance?.totalOutstandingUdhar ?? ownerReport?.pendingUdhar ?? localSnapshot.totalOutstanding ?? udharSummary.data?.totalOutstanding));
+    const recoveredToday = roundMoney(money(finance?.cashUdharRecoveryToday) + money(finance?.upiUdharRecoveryToday));
+    const previousOutstanding = roundMoney(Math.max(0, totalOutstanding - todayUdhar + recoveredToday));
     const outstandingCustomers = finance?.outstandingCustomers?.length
       ? finance.outstandingCustomers
       : localSnapshot.outstandingCustomers.length > 0
@@ -237,10 +276,15 @@ export default function Dashboard() {
       totalOutstanding, outstandingCustomers,
       cash: cashIn, upi: upiIn, credit: todayUdhar,
       cashCollected, upiCollected, supplierCashPaid, supplierUpiPaid, supplierDue, purchaseDue,
+      previousRevenue: roundMoney(money(previousFinancialSnapshot?.revenueToday)),
+      previousGrossProfit: roundMoney(money(previousFinancialSnapshot?.profitToday)),
+      previousCashCollected: roundMoney(money(previousFinancialSnapshot?.totalCashCollectedToday)),
+      previousUpiCollected: roundMoney(money(previousFinancialSnapshot?.totalUpiCollectedToday)),
+      previousOutstanding,
       source: useLocal ? "IndexedDB" : "backend refresh",
       hasBusinessData: Boolean(useLocal || revenue > 0 || totalOutstanding > 0 || billsToday.data?.total),
     };
-  }, [financialSnapshot, ownerReport, localSnapshot, backendPnL, billsToday.data, udharSummary.data, paymentSummary.data]);
+  }, [financialSnapshot, previousFinancialSnapshot, ownerReport, localSnapshot, backendPnL, billsToday.data, udharSummary.data, paymentSummary.data]);
 
   const isLoading = !financialSnapshot && !ownerReport && !localSnapshot.hasCache && (pnl.isLoading || udharSummary.isLoading || paymentSummary.isLoading);
   const cashInDrawer = Math.max(
@@ -309,7 +353,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
   const [productsById, setProductsById] = useState<Record<string, Product>>({});
 
-  const recentBillsQuery = useListBills({ from: today, to: today, limit: 10 }, { query: { staleTime: 60_000 } });
+  const recentBillsQuery = useListBills({ limit: 10 }, { query: { staleTime: 60_000 } });
   const weeklyBillsQuery = useListBills({ from: weekAgo, to: today, limit: 500 }, { query: { staleTime: 5 * 60_000 } });
 
   const lowStockItems = ownerReport?.lowStock ?? [];
@@ -365,105 +409,117 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
   const paymentBreakdown = useMemo<PaymentSlice[]>(() => {
     const other = Math.max(0, roundMoney(dashboard.revenue - dashboard.cash - dashboard.upi - dashboard.credit));
     return [
-      { label: "Cash", value: dashboard.cash, color: "#22c55e", dot: "bg-[#22c55e]" },
-      { label: "UPI", value: dashboard.upi, color: "#0057ff", dot: "bg-[#0057ff]" },
-      { label: "Udhar", value: dashboard.credit, color: "#6d5dfc", dot: "bg-[#6d5dfc]" },
-      { label: "Other", value: other, color: "#f59e0b", dot: "bg-[#f59e0b]" },
+      { label: "Cash", value: dashboard.cash, color: "#2fc45a", dot: "bg-[#2fc45a]" },
+      { label: "UPI", value: dashboard.upi, color: "#316df4", dot: "bg-[#316df4]" },
+      { label: "Udhar", value: dashboard.credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
+      { label: "Other", value: other, color: "#7557e8", dot: "bg-[#7557e8]" },
     ].filter((row) => row.value > 0);
   }, [dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi]);
 
-  const recentBills = recentBillsQuery.data?.bills ?? [];
-  const yesterdaySales = salesChartData[5]?.sales ?? 0;
-  const salesDelta = pctChange(dashboard.revenue, yesterdaySales);
+  const recentBills = useMemo(
+    () => [...(recentBillsQuery.data?.bills ?? [])]
+      .sort((a, b) => sortTime(b.createdAt) - sortTime(a.createdAt)),
+    [recentBillsQuery.data?.bills],
+  );
+  const yesterdaySales = dashboard.previousRevenue || salesChartData[5]?.sales || 0;
+  const salesDelta = pctChange(dashboard.revenue, yesterdaySales) ?? 0;
+  const cashDelta = pctChange(dashboard.cashCollected, dashboard.previousCashCollected) ?? 0;
+  const upiDelta = pctChange(dashboard.upiCollected, dashboard.previousUpiCollected) ?? 0;
+  const outstandingDelta = pctChange(dashboard.totalOutstanding, dashboard.previousOutstanding) ?? 0;
+  const profitDelta = pctChange(dashboard.grossProfit, dashboard.previousGrossProfit) ?? 0;
   const avgBillValue = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
   const syncStatusValue = failedCount > 0 ? "Review needed" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date";
   const syncHealthGood = failedCount === 0 && pendingCount === 0;
 
   return (
-    <div className="space-y-4 p-4 sm:p-5 lg:space-y-5 lg:p-6">
+    <div className="mx-auto w-full max-w-[1440px] space-y-4 p-4 sm:p-5 lg:space-y-5 lg:p-6">
 
       {/* Counter focus */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Today's Sales"
           value={fmtRs(dashboard.revenue)}
           delta={salesDelta}
           deltaLabel="vs yesterday"
           icon={<ShoppingCart size={18} />}
-          iconBg="bg-[#eef5ff] text-[#0057ff] shadow-[0_8px_18px_rgba(0,87,255,0.10)]"
+          iconBg="border border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.22)]"
           loading={isLoading}
           onClick={() => openDrilldown("revenue")}
         />
         <KpiCard
           label="Cash Collected"
           value={fmtRs(dashboard.cashCollected)}
-          delta={null}
-          footer={<span className="text-xs font-semibold text-emerald-600">Drawer {fmtRs(cashInDrawer)}</span>}
+          delta={cashDelta}
+          deltaLabel="vs yesterday"
           icon={<Wallet size={18} />}
-          iconBg="bg-[#e9fbef] text-[#16a34a] shadow-[0_8px_18px_rgba(34,197,94,0.10)]"
+          iconBg="border border-[#c8f1d5] bg-[#e7faee] text-[#11a84b] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]"
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
         <KpiCard
           label="UPI Collected"
           value={fmtRs(dashboard.upiCollected)}
-          delta={null}
-          footer={<span className="text-xs font-semibold text-blue-600">Bank/UPI today</span>}
+          delta={upiDelta}
+          deltaLabel="vs yesterday"
           icon={<Smartphone size={18} />}
-          iconBg="bg-[#f2edff] text-[#6d5dfc] shadow-[0_8px_18px_rgba(109,93,252,0.10)]"
+          iconBg="border border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb] shadow-[0_0_0_4px_rgba(112,71,235,0.035),0_10px_26px_rgba(112,71,235,0.20)]"
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
-        <Link href="/udhar?filter=outstanding">
+        <Link href="/udhar?filter=outstanding" className="block h-full">
           <KpiCard
             label="Outstanding Udhar"
             value={fmtRs(dashboard.totalOutstanding)}
-            delta={null}
-            footer={<span className={cn("text-xs font-semibold", dashboard.totalOutstanding > 0 ? "text-red-600" : "text-emerald-600")}>{dashboard.totalOutstanding > 0 ? "Needs follow-up" : "All clear"}</span>}
+            delta={outstandingDelta}
+            deltaLabel="vs yesterday"
+            deltaPositiveIsBad
             icon={<AlertTriangle size={18} />}
-            iconBg="bg-[#fff0f2] text-[#ff304f] shadow-[0_8px_18px_rgba(255,48,79,0.10)]"
+            iconBg="border border-[#ffcfd7] bg-[#ffecef] text-[#ff2748] shadow-[0_0_0_4px_rgba(255,39,72,0.035),0_10px_26px_rgba(255,39,72,0.20)]"
             loading={isLoading}
           />
         </Link>
         <KpiCard
           label="Profit (Est.)"
           value={fmtRs(dashboard.grossProfit)}
-          delta={null}
-          footer={<span className="text-xs font-semibold text-emerald-600">{Math.round(dashboard.grossMarginPct)}% margin</span>}
+          delta={profitDelta}
+          deltaLabel="vs yesterday"
           icon={<TrendingUp size={18} />}
-          iconBg="bg-[#eafbf0] text-[#16a34a] shadow-[0_8px_18px_rgba(34,197,94,0.10)]"
+          iconBg="border border-[#c8f1d5] bg-[#e7faee] text-[#11a84b] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]"
           loading={isLoading}
           onClick={() => openDrilldown("profit")}
         />
-        <Link href="/inventory">
+        <Link href="/inventory" className="block h-full">
           <KpiCard
             label="Low Stock Items"
             value={String(lowStockCount)}
             delta={null}
             footer={<span className="text-xs font-semibold text-primary">View all</span>}
             icon={<Package size={18} />}
-            iconBg={lowStockCount > 0 ? "bg-[#fff4e6] text-[#ff8a00] shadow-[0_8px_18px_rgba(255,138,0,0.12)]" : "bg-[#eafbf0] text-[#16a34a] shadow-[0_8px_18px_rgba(34,197,94,0.10)]"}
+            iconBg={lowStockCount > 0 ? "border border-[#ffdca8] bg-[#fff2df] text-[#ff8500] shadow-[0_0_0_4px_rgba(255,133,0,0.035),0_10px_26px_rgba(255,133,0,0.22)]" : "border border-[#c8f1d5] bg-[#e7faee] text-[#11a84b] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]"}
             loading={isLoading}
           />
         </Link>
       </div>
 
       {/* Sales, payments, and stock */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.85fr)_minmax(280px,0.85fr)]">
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.9fr)_minmax(220px,0.78fr)_minmax(280px,1fr)]">
 
         {/* Sales Overview */}
-        <section className={cn(DASH_CARD, "overflow-hidden p-5")}>
+        <section className={cn(DASH_CARD, "h-full min-h-[316px] overflow-hidden p-5 lg:col-span-2 xl:col-span-1 xl:h-[316px]")}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <p className={DASH_TITLE}>Sales Overview</p>
                 <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#b9c7dc] text-[10px] font-black text-[#60708a]">i</span>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-2.5">
                 <p className="font-display text-[27px] font-black leading-none tracking-tight text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
+                <span className="inline-flex items-center gap-1.5 rounded-[7px] border border-[#d5deeb] bg-white px-2 py-1 text-[10px] font-bold text-[#314766] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                  This Week <ChevronDown size={11} aria-hidden="true" />
+                </span>
                 {salesDelta !== null && (
-                  <span className={cn("flex items-center gap-1 text-[12px] font-bold", salesDelta >= 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
-                    {salesDelta >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                  <span className={cn("flex items-center gap-1 text-[12px] font-bold", salesDelta === 0 ? "text-[#62708a]" : salesDelta > 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
+                    {salesDelta === 0 ? <Minus size={12} /> : salesDelta > 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
                     {Math.abs(salesDelta)}% vs yesterday
                   </span>
                 )}
@@ -473,22 +529,30 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
               View Report
             </Link>
           </div>
-          <div className="mt-5 h-[258px] min-h-[258px]">
+          <div className="mt-4 h-[205px] min-h-[205px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={salesChartData} margin={{ top: 12, right: 10, left: -8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="salesOverviewFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0057ff" stopOpacity={0.20} />
-                    <stop offset="48%" stopColor="#3b82f6" stopOpacity={0.10} />
-                    <stop offset="100%" stopColor="#0057ff" stopOpacity={0.015} />
+                    <stop offset="0%" stopColor="#075fff" stopOpacity={0.30} />
+                    <stop offset="46%" stopColor="#2f7dff" stopOpacity={0.14} />
+                    <stop offset="100%" stopColor="#075fff" stopOpacity={0.02} />
                   </linearGradient>
                   <filter id="salesOverviewGlow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="7" stdDeviation="5" floodColor="#0057ff" floodOpacity="0.18" />
+                    <feDropShadow dx="0" dy="8" stdDeviation="6" floodColor="#075fff" floodOpacity="0.30" />
                   </filter>
                 </defs>
-                <CartesianGrid vertical={false} strokeDasharray="4 7" stroke="#dce7f5" />
+                <CartesianGrid vertical={false} strokeDasharray="4 7" stroke="#d7e3f2" />
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#63718a", fontWeight: 600 }} tickLine={false} axisLine={false} tickMargin={12} />
-                <YAxis tick={{ fontSize: 11, fill: "#63718a", fontWeight: 600 }} tickLine={false} axisLine={false} width={46} tickFormatter={v => v >= 1000 ? `₹${Math.round(v / 1000)}K` : `₹${v}`} />
+                <YAxis
+                  domain={[0, (dataMax: number) => Math.max(1_000, Math.ceil((dataMax * 1.2) / 1_000) * 1_000)]}
+                  tickCount={5}
+                  tick={{ fontSize: 11, fill: "#63718a", fontWeight: 600 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={46}
+                  tickFormatter={v => v >= 1000 ? `₹${Math.round(v / 1000)}K` : `₹${v}`}
+                />
                 <Tooltip
                   cursor={{ stroke: "#9bb7ff", strokeWidth: 1, strokeDasharray: "4 4" }}
                   contentStyle={{ background: "#071735", border: "0", borderRadius: "10px", boxShadow: "0 14px 30px rgba(15,35,80,0.20)", color: "#fff", fontSize: 12, fontWeight: 700 }}
@@ -498,12 +562,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                 <Area
                   type="monotone"
                   dataKey="sales"
-                  stroke="#0057ff"
-                  strokeWidth={3}
+                  stroke="#075fff"
+                  strokeWidth={3.25}
                   fill="url(#salesOverviewFill)"
                   filter="url(#salesOverviewGlow)"
-                  dot={{ r: 4, fill: "#ffffff", stroke: "#0057ff", strokeWidth: 3 }}
-                  activeDot={{ r: 6, fill: "#ffffff", stroke: "#0057ff", strokeWidth: 3 }}
+                  dot={{ r: 4, fill: "#ffffff", stroke: "#075fff", strokeWidth: 2.75 }}
+                  activeDot={{ r: 6, fill: "#ffffff", stroke: "#075fff", strokeWidth: 3 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -516,20 +580,20 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       </div>
 
       {/* ── Recent Bills + Quick Insights ── */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(280px,0.85fr)_minmax(280px,0.85fr)]">
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.9fr)_minmax(220px,0.78fr)_minmax(280px,1fr)]">
 
         {/* Recent Bills */}
-        <section className={cn(DASH_CARD, "overflow-hidden")}>
+        <section className={cn(DASH_CARD, "flex h-full min-h-[316px] flex-col overflow-hidden lg:col-span-2 xl:col-span-1 xl:h-[318px]")}>
           <div className="flex items-center justify-between gap-3 border-b border-[#e6ecf4] px-5 py-4">
             <p className={DASH_TITLE}>Recent Bills</p>
             <Link href="/bills" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="min-h-0 flex-1 overflow-x-auto">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-[#e6ecf4] bg-[#f8fbff]">
                   {["Bill No.", "Time", "Customer", "Items", "Amount", "Payment"].map(h => (
-                    <th key={h} className="px-5 py-3 text-left text-[11px] font-black uppercase tracking-[0.02em] text-[#6b7890]">{h}</th>
+                    <th key={h} className="px-5 py-2.5 text-left text-[10px] font-black uppercase tracking-[0.02em] text-[#6b7890]">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -538,14 +602,14 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                   Array.from({ length: 4 }).map((_, i) => (
                     <tr key={i} className="border-b last:border-0">
                       {Array.from({ length: 6 }).map((_, j) => (
-                        <td key={j} className="px-5 py-3"><div className="h-3 animate-pulse rounded bg-[#edf2f8]" style={{ width: `${50 + j * 10}%` }} /></td>
+                        <td key={j} className="px-5 py-2"><div className="h-3 animate-pulse rounded bg-[#edf2f8]" style={{ width: `${50 + j * 10}%` }} /></td>
                       ))}
                     </tr>
                   ))
                 ) : recentBills.length === 0 ? (
                   <tr><td colSpan={6} className={cn("px-5 py-8 text-center text-sm", DASH_MUTED)}>No bills today yet</td></tr>
                 ) : (
-                  recentBills.slice(0, 7).map(bill => {
+                  recentBills.slice(0, 5).map(bill => {
                     const href = `/bills/${bill.id ?? ""}`;
                     return (
                       <tr
@@ -561,13 +625,13 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                         }}
                         className="cursor-pointer border-b border-[#edf2f8] text-[#102347] transition-colors last:border-0 hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0057ff]/40 dark:text-card-foreground"
                       >
-                        <td className="px-5 py-3 font-black text-[#102347] dark:text-card-foreground">{bill.billNo ?? "—"}</td>
-                        <td className={cn("px-5 py-3 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
-                        <td className="max-w-32 truncate px-5 py-3 font-semibold">{bill.customerName ?? "Walk-in"}</td>
-                        <td className={cn("px-5 py-3 font-semibold", DASH_MUTED)}>{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
-                        <td className="px-5 py-3 font-black">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
-                        <td className="px-5 py-3">
-                          <PaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} compact />
+                        <td className="whitespace-nowrap px-5 py-2 font-black text-[#102347] dark:text-card-foreground">{bill.billNo ?? "—"}</td>
+                        <td className={cn("whitespace-nowrap px-5 py-2 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
+                        <td className="max-w-32 truncate px-5 py-2 font-semibold">{bill.customerName ?? "Walk-in"}</td>
+                        <td className={cn("px-5 py-2 font-semibold", DASH_MUTED)}>{Array.isArray(bill.items) ? bill.items.length : "—"}</td>
+                        <td className="whitespace-nowrap px-5 py-2 font-black">{fmtRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</td>
+                        <td className="px-5 py-2">
+                          <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
                         </td>
                       </tr>
                     );
@@ -583,7 +647,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
               </span>
               <div>
                 <p className={cn("text-xs font-semibold", DASH_MUTED)}>Total Bills</p>
-                <p className="font-display text-[18px] font-black text-[#102347] dark:text-card-foreground">{recentBillsQuery.data?.total ?? dashboard.billCount}</p>
+                <p className="font-display text-[18px] font-black text-[#102347] dark:text-card-foreground">{dashboard.billCount}</p>
               </div>
             </div>
             <div className="flex items-center justify-between gap-3 px-5 py-4 sm:border-l sm:border-[#e6ecf4]">
@@ -597,31 +661,35 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         <div className="contents">
 
           {/* Quick Insights */}
-          <div className={cn(DASH_CARD, "p-4")}>
+          <div className={cn(DASH_CARD, "h-full min-h-[316px] p-4 xl:h-[318px]")}>
             <p className={cn(DASH_TITLE, "mb-3")}>Quick Insights</p>
             <div className="space-y-2">
-              <InsightRow icon={<Package size={16} className="text-emerald-600" />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Sales leaders" : "No sales yet"} href="/reports" />
-              <InsightRow icon={<PackagePlus size={16} className="text-blue-600" />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "No product yet"} href="/reports" />
-              <InsightRow icon={<CreditCard size={16} className="text-violet-600" />} label="Average Bill Value" value={avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0)} href="/bills" />
-              <InsightRow icon={<Users size={16} className="text-orange-600" />} label="New Customers Today" value={String(ownerReport?.topCustomers.length ?? 0)} href="/customers" />
+              <InsightRow tone="emerald" icon={<Package size={16} />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Sales leaders" : "No sales yet"} href="/reports" />
+              <InsightRow tone="blue" icon={<PackagePlus size={16} />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "No product yet"} href="/reports" />
+              <InsightRow tone="violet" icon={<CreditCard size={16} />} label="Average Bill Value" value={avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0)} href="/bills" />
+              <InsightRow tone="orange" icon={<Users size={16} />} label="New Customers Today" value={String(ownerReport?.topCustomers.length ?? 0)} href="/customers" />
             </div>
           </div>
 
           {/* Sync & Health */}
-          <div className={cn(DASH_CARD, "p-4")}>
+          <div className={cn(DASH_CARD, "h-full min-h-[316px] p-4 xl:h-[318px]")}>
             <p className={cn(DASH_TITLE, "mb-3")}>Sync & Health</p>
-            <div className="rounded-[10px] border border-[#bceecd] bg-[#ecfff2] px-3 py-2 text-sm font-black text-[#16a34a] dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-              <CheckCircle2 className="mr-2 inline h-4 w-4" />
-              {syncHealthGood ? "All systems operational" : "Backup needs attention"}
-              <p className={cn("ml-6 mt-0.5 text-xs font-semibold", DASH_MUTED)}>
+            <div className="border-b border-[#edf2f8] pb-3">
+              <div className="flex items-center gap-2 text-sm font-black text-[#11a84b] dark:text-emerald-300">
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-[#e7faee] shadow-[0_4px_12px_rgba(17,168,75,0.16)]">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                </span>
+                {syncHealthGood ? "All systems operational" : "Backup needs attention"}
+              </div>
+              <p className={cn("ml-7 mt-1 text-[11px] font-semibold", DASH_MUTED)}>
                 {isSyncing ? "Sync running now" : syncHealthGood ? "Last synced just now" : "Local data is safe"}
               </p>
             </div>
-            <div className="mt-3 space-y-3">
-              <HealthRow label="Internet Connection" status={isOnline ? "ok" : "warn"} value={isOnline ? "Online" : "Offline"} />
-              <HealthRow label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
-              <HealthRow label="Backup Status" status={pendingCount > 0 || failedCount > 0 ? "warn" : "ok"} value={isSyncing ? "Syncing" : pendingCount > 0 ? "Queued" : "Secure"} />
-              <HealthRow label="Device Status" status="ok" value="Active" />
+            <div className="mt-3 space-y-3.5">
+              <HealthRow icon={<Wifi size={13} />} label="Internet Connection" status={isOnline ? "ok" : "warn"} value={isOnline ? "Online" : "Offline"} />
+              <HealthRow icon={<RefreshCw size={13} />} label="Data Sync" status={failedCount > 0 ? "error" : pendingCount > 0 ? "warn" : "ok"} value={syncStatusValue} />
+              <HealthRow icon={<Cloud size={13} />} label="Backup Status" status={pendingCount > 0 || failedCount > 0 ? "warn" : "ok"} value={isSyncing ? "Syncing" : pendingCount > 0 ? "Queued" : "Secure"} />
+              <HealthRow icon={<MonitorSmartphone size={13} />} label="Device Status" status="ok" value="Active" />
             </div>
             <Link href="/sync-status">
               <button type="button" className="mt-4 flex w-full items-center justify-center gap-2 rounded-[10px] bg-[#0057ff] py-3 text-sm font-black text-white shadow-[0_12px_24px_rgba(0,87,255,0.22)] transition-all hover:-translate-y-0.5 hover:bg-[#004de0] active:translate-y-0">
@@ -656,16 +724,17 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
   label: string; value: string; delta?: number | null; deltaLabel?: string; deltaPositiveIsBad?: boolean;
   icon: ReactNode; iconBg: string; loading?: boolean; footer?: ReactNode; onClick?: () => void;
 }) {
-  const isPositive = (delta ?? 0) >= 0;
-  const isBad = deltaPositiveIsBad ? isPositive : !isPositive;
-  const DeltaIcon = delta === null || delta === undefined ? Minus : isPositive ? ArrowUpRight : ArrowDownRight;
+  const isPositive = (delta ?? 0) > 0;
+  const isNegative = (delta ?? 0) < 0;
+  const isBad = deltaPositiveIsBad ? isPositive : isNegative;
+  const DeltaIcon = delta === null || delta === undefined || delta === 0 ? Minus : isPositive ? ArrowUpRight : ArrowDownRight;
   return (
     <div
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
-      className={cn(DASH_CARD, "min-h-[142px] p-5", onClick && ["cursor-pointer", DASH_CARD_INTERACTIVE])}
+      className={cn(DASH_CARD, "h-full min-h-[142px] overflow-hidden p-5", onClick && ["cursor-pointer", DASH_CARD_INTERACTIVE])}
     >
       <div className="flex items-start justify-between gap-2">
         <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]", iconBg)}>{icon}</div>
@@ -678,7 +747,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
           <p className="mt-2 break-words font-display text-[23px] font-black leading-none tracking-tight text-[#102347] dark:text-card-foreground">{value}</p>
         )}
         {delta !== null && delta !== undefined && (
-          <div className={cn("mt-3 flex items-center gap-1 text-[12px] font-black", isBad ? "text-[#ff304f]" : "text-[#16a34a]")}>
+          <div className={cn("mt-3 flex items-center gap-1 text-[12px] font-black", delta === 0 ? "text-[#62708a]" : isBad ? "text-[#ff304f]" : "text-[#16a34a]")}>
             <DeltaIcon size={12} aria-hidden="true" />
             {Math.abs(delta)}% {deltaLabel}
           </div>
@@ -695,20 +764,22 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
   const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
 
   return (
-    <section className={cn(DASH_CARD, "p-4")}>
-      <div className="flex items-center justify-between gap-3">
-        <p className={DASH_TITLE}>Payment Mode Breakdown</p>
-        <span className="rounded-[8px] border border-[#dce7f5] bg-white px-2.5 py-1 text-[11px] font-black text-[#102347] shadow-[0_3px_8px_rgba(15,35,80,0.035)]">This Week</span>
+    <section className={cn(DASH_CARD, "h-full min-h-[316px] p-5 xl:h-[316px]")}>
+      <div>
+        <p className={cn(DASH_TITLE, "text-[14px]")}>Payment Mode Breakdown</p>
+        <span className="mt-2 inline-flex items-center gap-1.5 rounded-[7px] border border-[#d5deeb] bg-white px-2 py-1 text-[10px] font-bold text-[#314766] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          This Week <ChevronDown size={11} aria-hidden="true" />
+        </span>
       </div>
-      <div className="relative mt-4 h-[172px]">
+      <div className="relative mt-2 h-[132px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={chartRows}
               dataKey="value"
               nameKey="label"
-              innerRadius={48}
-              outerRadius={72}
+              innerRadius={45}
+              outerRadius={68}
               paddingAngle={3}
               stroke="hsl(var(--card))"
               strokeWidth={3}
@@ -726,7 +797,7 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
           </div>
         </div>
       </div>
-      <div className="mt-1 space-y-2">
+      <div className="mt-1 space-y-1.5">
         {(rows.length > 0 ? rows : chartRows).map((row) => {
           const pct = realTotal > 0 ? Math.round((row.value / realTotal) * 1000) / 10 : 0;
           return (
@@ -746,12 +817,12 @@ function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: nu
 
 function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["lowStock"]; productsById: Record<string, Product> }) {
   return (
-    <section className={cn(DASH_CARD, "p-4")}>
+    <section className={cn(DASH_CARD, "h-full min-h-[316px] p-5 xl:h-[316px]")}>
       <div className="flex items-center justify-between gap-3">
         <p className={DASH_TITLE}>Low Stock Alerts</p>
         <Link href="/inventory" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
       </div>
-      <div className="mt-3 space-y-3">
+      <div className="mt-3 space-y-2">
         {items.length === 0 ? (
           <div className={cn("rounded-[10px] border border-dashed border-[#dce7f5] px-3 py-8 text-center text-sm font-semibold", DASH_MUTED)}>
             All stock healthy
@@ -763,7 +834,7 @@ function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["l
             const product = productsById[item.productId];
             return (
               <Link key={item.productId ?? i} href="/inventory">
-                <div className="flex items-center gap-3 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[#f8fbff]">
+                <div className="flex min-h-[48px] items-center gap-3 rounded-[10px] px-2 py-1 transition-colors hover:bg-[#f8fbff]">
                   <ProductAvatar product={product ?? { id: item.productId, name: item.name } as Product} compact />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black leading-tight text-[#102347] dark:text-card-foreground">{item.name}</p>
@@ -782,11 +853,23 @@ function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["l
   );
 }
 
-function InsightRow({ icon, label, value, href }: { icon: ReactNode; label: string; value: string; href?: string }) {
+function InsightRow({ icon, label, value, href, tone }: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  href?: string;
+  tone: "emerald" | "blue" | "violet" | "orange";
+}) {
+  const toneClass = {
+    emerald: "border-[#c8f1d5] bg-[#e7faee] text-[#11a84b] shadow-[0_6px_16px_rgba(17,168,75,0.14)]",
+    blue: "border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_6px_16px_rgba(7,95,255,0.14)]",
+    violet: "border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb] shadow-[0_6px_16px_rgba(112,71,235,0.14)]",
+    orange: "border-[#ffdca8] bg-[#fff2df] text-[#ff8500] shadow-[0_6px_16px_rgba(255,133,0,0.14)]",
+  }[tone];
   const content = (
-    <div className="flex items-center justify-between gap-3 rounded-[10px] bg-[#f8fbff] px-3 py-3 transition-colors hover:bg-[#eef5ff]">
+    <div className="flex min-h-[57px] items-center justify-between gap-3 border-b border-[#edf2f8] px-1 py-2 transition-colors hover:bg-[#f8fbff]">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white shadow-[0_6px_14px_rgba(15,35,80,0.04)]">{icon}</span>
+        <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border", toneClass)}>{icon}</span>
         <span className="min-w-0">
           <span className={cn("block truncate text-[11px] font-semibold", DASH_MUTED)}>{label}</span>
           <span className="block truncate text-[12px] font-black text-[#102347] dark:text-card-foreground">{value}</span>
@@ -795,15 +878,23 @@ function InsightRow({ icon, label, value, href }: { icon: ReactNode; label: stri
       {href ? <ChevronRight size={14} className="shrink-0 text-[#5f6f88]" aria-hidden="true" /> : null}
     </div>
   );
-  return href ? <Link href={href}>{content}</Link> : content;
+  return href ? <Link href={href} className="block last:[&>div]:border-b-0">{content}</Link> : content;
 }
 
-function HealthRow({ label, status, value }: { label: string; status: "ok" | "warn" | "error"; value: string }) {
+function HealthRow({ icon, label, status, value }: {
+  icon: ReactNode;
+  label: string;
+  status: "ok" | "warn" | "error";
+  value: string;
+}) {
   const color = status === "ok" ? "text-emerald-600" : status === "warn" ? "text-amber-600" : "text-red-600";
   const Icon = status === "ok" ? CheckCircle2 : status === "warn" ? RefreshCw : XCircle;
   return (
     <div className="flex items-center justify-between gap-3 text-xs">
-      <span className={cn("font-semibold", DASH_MUTED)}>{label}</span>
+      <span className={cn("flex items-center gap-2 font-semibold", DASH_MUTED)}>
+        <span className={cn("grid h-6 w-6 place-items-center rounded-[7px] bg-[#f4f7fb]", color)}>{icon}</span>
+        {label}
+      </span>
       <span className={cn("flex items-center gap-1 font-semibold", color)}>
         <Icon size={11} aria-hidden="true" /> {value}
       </span>
@@ -813,31 +904,31 @@ function HealthRow({ label, status, value }: { label: string; status: "ok" | "wa
 
 function RecentProductsRail({ products }: { products: Product[] }) {
   return (
-    <section className={cn(DASH_CARD, "p-5")}>
-      <div className="flex items-center justify-between gap-3">
+    <section className={cn(DASH_CARD, "overflow-hidden")}>
+      <div className="flex items-center justify-between gap-3 border-b border-[#edf2f8] px-5 py-3.5">
         <p className={DASH_TITLE}>Recently Added Products</p>
-        <Link href="/products" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
+        <Link href="/products" className="text-[12px] font-black text-[#075fff] hover:underline">View all</Link>
       </div>
       {products.length === 0 ? (
-        <div className={cn("mt-4 rounded-[10px] border border-dashed border-[#dce7f5] px-4 py-8 text-center text-sm font-semibold", DASH_MUTED)}>
+        <div className={cn("m-4 rounded-[10px] border border-dashed border-[#dce7f5] px-4 py-7 text-center text-sm font-semibold", DASH_MUTED)}>
           Products will appear here after you add stock.
         </div>
       ) : (
-        <div className="mt-4 flex gap-4 overflow-x-auto pb-1">
+        <div className="flex min-h-[88px] items-stretch overflow-x-auto px-2">
           {products.slice(0, 8).map((product) => (
-            <Link key={product.id} href={`/products?highlight=${encodeURIComponent(product.id)}`}>
-              <div className="flex min-w-[190px] items-center gap-3 rounded-[12px] border border-[#e6ecf4] bg-white px-3 py-3 shadow-[0_6px_16px_rgba(15,35,80,0.035)] transition-all hover:-translate-y-0.5 hover:border-[#c7d8ee] hover:shadow-[0_12px_24px_rgba(15,35,80,0.07)]">
-                <ProductAvatar product={product} />
+            <Link key={product.id} href={`/products?highlight=${encodeURIComponent(product.id)}`} className="group min-w-[190px] flex-1 border-r border-[#edf2f8] last:border-r-0">
+              <div className="flex h-full items-center gap-3 px-4 py-3 transition-colors group-hover:bg-[#f8fbff]">
+                <ProductAvatar product={product} compact />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-black text-[#102347]">{product.name}</p>
-                  <p className={cn("text-xs font-semibold", DASH_MUTED)}>{productUnitLabel(product)}</p>
-                  <p className="mt-1 text-sm font-black text-[#102347]">{fmtRs(productPrice(product))}</p>
+                  <p className="truncate text-[12px] font-black text-[#102347]">{product.name}</p>
+                  <p className={cn("mt-0.5 text-[11px] font-semibold", DASH_MUTED)}>{productUnitLabel(product)}</p>
+                  <p className="mt-1 text-[12px] font-black text-[#102347]">{fmtRs(productPrice(product))}</p>
                 </div>
               </div>
             </Link>
           ))}
-          <Link href="/products">
-            <div className="grid min-w-[52px] place-items-center rounded-full border border-[#dce7f5] bg-white text-[#5f6f88] shadow-[0_8px_20px_rgba(15,35,80,0.05)] transition-colors hover:border-[#0057ff]/40 hover:text-[#0057ff]">
+          <Link href="/products" className="grid min-w-[72px] place-items-center px-3">
+            <div className="grid h-10 w-10 place-items-center rounded-full border border-[#cfdaea] bg-white text-[#5f6f88] shadow-[0_7px_18px_rgba(26,57,112,0.10)] transition-all hover:border-[#075fff]/40 hover:text-[#075fff] hover:shadow-[0_9px_22px_rgba(7,95,255,0.16)]">
               <ChevronRight size={18} />
             </div>
           </Link>
