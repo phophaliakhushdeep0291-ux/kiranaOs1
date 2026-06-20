@@ -758,7 +758,13 @@ function calculateTotalBillProfit(
     todayBills.reduce((sum, bill) => {
       const stored = billStoredProfit(bill);
       if (stored !== null) return sum + stored;
-      return sum + calculateProfitByProduct([bill], billItems, products).reduce((itemSum, row) => itemSum + row.profit, 0);
+      const itemProfit = calculateProfitByProduct([bill], billItems, products)
+        .reduce((itemSum, row) => itemSum + row.profit, 0);
+      // Older/offline bills may not have a stored grossProfit. Their item rows hold
+      // pre-discount selling prices, so the bill discount must be netted once here.
+      // Keeping this calculation inside the deduped bill loop prevents both item
+      // echoes and local/server bill echoes from inflating dashboard profit.
+      return sum + itemProfit - billDiscount(bill);
     }, 0),
   );
 }

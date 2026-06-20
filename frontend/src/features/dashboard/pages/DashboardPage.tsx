@@ -23,8 +23,10 @@ import { useAppLanguage } from "@/features/settings/i18n";
 import { useFeature } from "@/features/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
+import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
 import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
 import { cn } from "@/lib/utils";
 import type { Bill, Product } from "@/types/api";
@@ -150,6 +152,113 @@ function activeProduct(product: Product & Record<string, unknown>): boolean {
   if (product.deletedAt || product.deleted_at) return false;
   if (product.isActive === false) return false;
   return String(product.status ?? "active").toLowerCase() !== "deleted";
+}
+
+type DashboardPeriod = "today" | "week" | "month";
+
+const DASHBOARD_PERIOD_LABELS: Record<DashboardPeriod, string> = {
+  today: "Today",
+  week: "This Week",
+  month: "This Month",
+};
+
+function dashboardPeriodRange(period: DashboardPeriod) {
+  const now = new Date();
+  const to = format(now, "yyyy-MM-dd");
+  if (period === "today") return { from: to, to };
+  if (period === "month") return { from: format(new Date(now.getFullYear(), now.getMonth(), 1), "yyyy-MM-dd"), to };
+  return { from: format(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6), "yyyy-MM-dd"), to };
+}
+
+function previousDashboardRange(range: { from: string; to: string }) {
+  const start = new Date(`${range.from}T00:00:00`);
+  const end = new Date(`${range.to}T00:00:00`);
+  const dayCount = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+  const previousTo = new Date(start);
+  previousTo.setDate(previousTo.getDate() - 1);
+  const previousFrom = new Date(previousTo);
+  previousFrom.setDate(previousFrom.getDate() - dayCount + 1);
+  return { from: format(previousFrom, "yyyy-MM-dd"), to: format(previousTo, "yyyy-MM-dd") };
+}
+
+function billDateKey(bill: Bill): string {
+  const record = bill as Bill & { created_at?: string; billDate?: string; date?: string };
+  return String(bill.createdAt ?? record.created_at ?? record.billDate ?? record.date ?? "").slice(0, 10);
+}
+
+function dashboardBillAmount(bill: Bill): number {
+  return roundMoney(money(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount));
+}
+
+function isDashboardSaleBill(bill: Bill): boolean {
+  const status = String(bill.status ?? "").toLowerCase();
+  const billType = String(bill.billType ?? "").toLowerCase();
+  return !status.includes("cancel") && !status.includes("rough") && !billType.includes("estimate") && !billType.includes("rough");
+}
+
+function billsInsideRange(bills: Bill[], range: { from: string; to: string }): Bill[] {
+  return bills.filter((bill) => {
+    const date = billDateKey(bill);
+    return isDashboardSaleBill(bill) && date >= range.from && date <= range.to;
+  });
+}
+
+function buildDashboardSalesChart(period: DashboardPeriod, range: { from: string; to: string }, bills: Bill[]) {
+  if (period === "today") {
+    const points = Array.from({ length: 6 }, (_, index) => ({ key: index, date: `${String(index * 4).padStart(2, "0")}:00`, sales: 0 }));
+    for (const bill of bills) {
+      const record = bill as Bill & { created_at?: string };
+      const raw = String(bill.createdAt ?? record.created_at ?? "");
+      const parsed = new Date(raw);
+      const hour = Number.isFinite(parsed.getTime()) ? parsed.getHours() : 0;
+      points[Math.min(5, Math.floor(hour / 4))].sales += dashboardBillAmount(bill);
+    }
+    return points.map(({ date, sales }) => ({ date, sales: roundMoney(sales) }));
+  }
+
+  const start = new Date(`${range.from}T00:00:00`);
+  const end = new Date(`${range.to}T00:00:00`);
+  const points: Array<{ dateKey: string; date: string; sales: number }> = [];
+  for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+    points.push({ dateKey: format(cursor, "yyyy-MM-dd"), date: format(cursor, "d MMM"), sales: 0 });
+  }
+  const byDate = new Map(points.map((point) => [point.dateKey, point]));
+  for (const bill of bills) {
+    const point = byDate.get(billDateKey(bill));
+    if (point) point.sales += dashboardBillAmount(bill);
+  }
+  return points.map(({ date, sales }) => ({ date, sales: roundMoney(sales) }));
+}
+
+function summariseDashboardPayments(bills: Bill[]) {
+  const summary = { cash: 0, upi: 0, credit: 0, other: 0, total: 0 };
+  for (const bill of bills) {
+    const record = bill as Bill & Record<string, unknown>;
+    const total = dashboardBillAmount(bill);
+    const paid = Math.max(0, money(bill.paidAmount ?? bill.buyerPaidAmount));
+    const explicitCredit = money(Number(bill.creditAmount ?? record.credit_amount ?? record.dueAmount ?? record.due_amount ?? 0));
+    const mode = recentBillPaymentMode(record);
+    const credit = Math.max(0, Math.min(total, explicitCredit || (mode === "udhar" ? total - paid : 0)));
+    const payments = Array.isArray(bill.payments) ? bill.payments as Array<Record<string, unknown>> : [];
+    let tenderAccounted = 0;
+    for (const payment of payments) {
+      const amount = Math.max(0, money(payment.amount as number));
+      const paymentMode = String(payment.mode ?? "").toLowerCase();
+      if (paymentMode === "cash") summary.cash += amount;
+      else if (["upi", "bank", "bank_transfer", "card"].includes(paymentMode)) summary.upi += amount;
+      else if (paymentMode !== "credit") summary.other += amount;
+      if (paymentMode !== "credit") tenderAccounted += amount;
+    }
+    const remainingPaid = Math.max(0, Math.min(total - credit, paid || total - credit) - tenderAccounted);
+    if (remainingPaid > 0) {
+      if (mode === "cash") summary.cash += remainingPaid;
+      else if (["upi", "bank", "bank_transfer", "card"].includes(mode)) summary.upi += remainingPaid;
+      else summary.other += remainingPaid;
+    }
+    summary.credit += credit;
+    summary.total += total;
+  }
+  return Object.fromEntries(Object.entries(summary).map(([key, value]) => [key, roundMoney(value)])) as typeof summary;
 }
 
 // ─── shared prop types ────────────────────────────────────────────────────────
@@ -359,15 +468,36 @@ type PaymentSlice = { label: string; value: number; color: string; dot: string }
 function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
   const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
   const [, navigate] = useLocation();
-  const today = format(new Date(), "yyyy-MM-dd");
-  const weekAgo = format(new Date(Date.now() - 6 * 86_400_000), "yyyy-MM-dd");
+  const [period, setPeriod] = useState<DashboardPeriod>("week");
+  const periodRange = useMemo(() => dashboardPeriodRange(period), [period]);
+  const previousPeriodRange = useMemo(() => previousDashboardRange(periodRange), [periodRange]);
+  const [periodReport, setPeriodReport] = useState<LocalReportSnapshot | null>(null);
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
   const [productsById, setProductsById] = useState<Record<string, Product>>({});
+  const [localRecentBills, setLocalRecentBills] = useState<Bill[]>([]);
 
   const recentBillsQuery = useListBills({ limit: 10 }, { query: { staleTime: 60_000 } });
-  const weeklyBillsQuery = useListBills({ from: weekAgo, to: today, limit: 500 }, { query: { staleTime: 5 * 60_000 } });
+  const periodBillsQuery = useListBills({ ...periodRange, limit: 1000 }, { query: { staleTime: 60_000 } });
+  const previousPeriodBillsQuery = useListBills({ ...previousPeriodRange, limit: 1000 }, { query: { staleTime: 60_000 } });
 
   const lowStockItems = ownerReport?.lowStock ?? [];
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshPeriodReport = () => {
+      void buildLocalReportSnapshot(periodRange).then((next) => {
+        if (!cancelled) setPeriodReport(next);
+      }).catch(() => undefined);
+    };
+    refreshPeriodReport();
+    window.addEventListener("kirana:local-data-changed", refreshPeriodReport);
+    window.addEventListener("kirana:sync-queue-updated", refreshPeriodReport);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("kirana:local-data-changed", refreshPeriodReport);
+      window.removeEventListener("kirana:sync-queue-updated", refreshPeriodReport);
+    };
+  }, [periodRange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -400,37 +530,113 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
     };
   }, []);
 
-  // Build weekly sales chart data
+  useEffect(() => {
+    let cancelled = false;
+    const refreshBills = () => {
+      void Promise.all([
+        offlineDB.getAll<Bill>("bills"),
+        offlineDB.getAll<Record<string, unknown>>("bill_items"),
+        offlineDB.getAll<Record<string, unknown>>("payments"),
+      ]).then(([rows, items, payments]) => {
+        const itemsByBill = new Map<string, Record<string, unknown>[]>();
+        const paymentsByBill = new Map<string, Record<string, unknown>[]>();
+        for (const item of items) {
+          const billId = String(item.billId ?? item.bill_id ?? "");
+          if (billId) itemsByBill.set(billId, [...(itemsByBill.get(billId) ?? []), item]);
+        }
+        for (const payment of payments) {
+          const billId = String(payment.billId ?? payment.bill_id ?? "");
+          if (billId) paymentsByBill.set(billId, [...(paymentsByBill.get(billId) ?? []), payment]);
+        }
+        if (!cancelled) {
+          setLocalRecentBills(rows.filter(isDashboardSaleBill).map((bill) => ({
+            ...bill,
+            items: Array.isArray(bill.items) ? bill.items : itemsByBill.get(bill.id) ?? [],
+            payments: Array.isArray(bill.payments) ? bill.payments : paymentsByBill.get(bill.id) ?? [],
+          })));
+        }
+      }).catch(() => {
+        if (!cancelled) setLocalRecentBills([]);
+      });
+    };
+    refreshBills();
+    window.addEventListener("kirana:local-data-changed", refreshBills);
+    window.addEventListener("kirana:sync-queue-updated", refreshBills);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("kirana:local-data-changed", refreshBills);
+      window.removeEventListener("kirana:sync-queue-updated", refreshBills);
+    };
+  }, []);
+
+  const periodBills = useMemo(
+    () => billsInsideRange(periodBillsQuery.data?.bills ?? [], periodRange),
+    [periodBillsQuery.data?.bills, periodRange],
+  );
+  const previousPeriodBills = useMemo(
+    () => billsInsideRange(previousPeriodBillsQuery.data?.bills ?? [], previousPeriodRange),
+    [previousPeriodBillsQuery.data?.bills, previousPeriodRange],
+  );
+  const periodPaymentSummary = useMemo(() => summariseDashboardPayments(periodBills), [periodBills]);
+  const previousPeriodSales = useMemo(
+    () => previousPeriodBills.reduce((sum, bill) => sum + dashboardBillAmount(bill), 0),
+    [previousPeriodBills],
+  );
+  const activePeriodReport = periodReport?.range.from === periodRange.from && periodReport.range.to === periodRange.to
+    ? periodReport
+    : null;
+  const periodSales = activePeriodReport
+    ? activePeriodReport.selected.sales
+    : periodBills.length > 0
+      ? periodPaymentSummary.total
+    : period === "today"
+      ? dashboard.revenue
+      : period === "week"
+        ? ownerReport?.selected.sales ?? 0
+        : 0;
+  const periodSalesDelta = pctChange(periodSales, activePeriodReport?.previousSelected.sales ?? previousPeriodSales) ?? 0;
+
+  // Build chart points from the selected period. The query may initially paint
+  // from the offline cache, so bills are filtered locally as well as by the API.
   const salesChartData = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(Date.now() - (6 - i) * 86_400_000);
-      return { dateKey: format(d, "yyyy-MM-dd"), label: format(d, "d MMM"), value: 0 };
-    });
-    const bills = weeklyBillsQuery.data?.bills ?? [];
-    for (const bill of bills) {
-      const dateStr = bill.createdAt?.slice(0, 10);
-      const slot = days.find(d => d.dateKey === dateStr);
-      if (slot) slot.value += Number(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0);
+    if (activePeriodReport) {
+      if (period === "today") {
+        return Array.from({ length: 6 }, (_, index) => ({
+          date: `${String(index * 4).padStart(2, "0")}:00`,
+          sales: index === 5 ? activePeriodReport.selected.sales : 0,
+        }));
+      }
+      return activePeriodReport.dailyTrend.map((point) => ({ date: point.label, sales: point.sales }));
     }
-    // Use today's known revenue for today's slot
-    if (days[6]) days[6].value = Math.max(days[6].value, dashboard.revenue);
-    return days.map(d => ({ date: d.label, sales: Math.round(d.value) }));
-  }, [weeklyBillsQuery.data, dashboard.revenue]);
+    const points = buildDashboardSalesChart(period, periodRange, periodBills);
+    if (period === "today" && periodBills.length === 0 && dashboard.revenue > 0 && points.length > 0) {
+      points[points.length - 1].sales = dashboard.revenue;
+    }
+    return points;
+  }, [activePeriodReport, period, periodRange, periodBills, dashboard.revenue]);
 
   const paymentBreakdown = useMemo<PaymentSlice[]>(() => {
-    const other = Math.max(0, roundMoney(dashboard.revenue - dashboard.cash - dashboard.upi - dashboard.credit));
+    const useDailyFallback = !activePeriodReport && periodBills.length === 0 && period === "today";
+    const cash = activePeriodReport?.selected.cashSales ?? (useDailyFallback ? dashboard.cash : periodPaymentSummary.cash);
+    const upi = activePeriodReport?.selected.upiSales ?? (useDailyFallback ? dashboard.upi : periodPaymentSummary.upi);
+    const credit = activePeriodReport?.selected.udharSales ?? (useDailyFallback ? dashboard.credit : periodPaymentSummary.credit);
+    const other = useDailyFallback
+      ? Math.max(0, roundMoney(dashboard.revenue - cash - upi - credit))
+      : activePeriodReport
+        ? Math.max(0, roundMoney(periodSales - cash - upi - credit))
+        : periodPaymentSummary.other;
     return [
-      { label: "Cash", value: dashboard.cash, color: "#2fc45a", dot: "bg-[#2fc45a]" },
-      { label: "UPI", value: dashboard.upi, color: "#316df4", dot: "bg-[#316df4]" },
-      { label: "Udhar", value: dashboard.credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
+      { label: "Cash", value: cash, color: "#2fc45a", dot: "bg-[#2fc45a]" },
+      { label: "UPI", value: upi, color: "#316df4", dot: "bg-[#316df4]" },
+      { label: "Udhar", value: credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
       { label: "Other", value: other, color: "#7557e8", dot: "bg-[#7557e8]" },
     ].filter((row) => row.value > 0);
-  }, [dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi]);
+  }, [activePeriodReport, dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi, period, periodBills.length, periodPaymentSummary, periodSales]);
 
   const recentBills = useMemo(
-    () => [...(recentBillsQuery.data?.bills ?? [])]
+    () => (dedupeBillsForDisplay([...(recentBillsQuery.data?.bills ?? []), ...localRecentBills]) as unknown as Bill[])
       .sort((a, b) => sortTime(b.createdAt) - sortTime(a.createdAt)),
-    [recentBillsQuery.data?.bills],
+    [recentBillsQuery.data?.bills, localRecentBills],
   );
   const yesterdaySales = dashboard.previousRevenue || salesChartData[5]?.sales || 0;
   const salesDelta = pctChange(dashboard.revenue, yesterdaySales) ?? 0;
@@ -461,6 +667,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         outstandingDelta={outstandingDelta}
         profitDelta={profitDelta}
         expenseDelta={expenseDelta}
+        period={period}
+        onPeriodChange={setPeriod}
+        periodSales={periodSales}
+        periodSalesDelta={periodSalesDelta}
       />
       <div className="hidden w-full space-y-4 bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
 
@@ -543,17 +753,15 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                 <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#b9c7dc] text-[10px] font-black text-[#60708a]">i</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2.5">
-                <p className="font-sans text-[24px] font-bold leading-none text-[#102347] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
-                <span className="inline-flex items-center gap-1.5 rounded-[7px] border border-[#d5deeb] bg-white px-2 py-1 text-[10px] font-bold text-[#314766] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                  This Week <ChevronDown size={11} aria-hidden="true" />
-                </span>
-                {salesDelta !== null && (
+                <p className="font-sans text-[24px] font-bold leading-none text-[#102347] dark:text-card-foreground">{fmtRs(periodSales)}</p>
+                <DashboardPeriodSelect value={period} onChange={setPeriod} />
+                {periodSalesDelta !== null && (
                   <span className="flex items-center gap-1.5 text-[11px] font-semibold">
-                    <span className={cn("inline-flex items-center gap-0.5 font-bold", salesDelta === 0 ? "text-[#62708a]" : salesDelta > 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
-                      {salesDelta === 0 ? <Minus size={11} /> : salesDelta > 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
-                      {Math.abs(salesDelta)}%
+                    <span className={cn("inline-flex items-center gap-0.5 font-bold", periodSalesDelta === 0 ? "text-[#62708a]" : periodSalesDelta > 0 ? "text-[#16a34a]" : "text-[#ff304f]")}>
+                      {periodSalesDelta === 0 ? <Minus size={11} /> : periodSalesDelta > 0 ? <ArrowUpRight size={11} /> : <ArrowDownRight size={11} />}
+                      {Math.abs(periodSalesDelta)}%
                     </span>
-                    <span className="text-[#7a879b]">vs yesterday</span>
+                    <span className="text-[#7a879b]">vs previous period</span>
                   </span>
                 )}
               </div>
@@ -607,13 +815,13 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           </div>
         </section>
 
-        <PaymentModeBreakdown rows={paymentBreakdown} total={dashboard.revenue} />
+        <PaymentModeBreakdown rows={paymentBreakdown} total={periodSales} period={period} onPeriodChange={setPeriod} />
         <LowStockAlerts items={lowStockItems} productsById={productsById} />
 
       </div>
 
       {/* ── Recent Bills + Quick Insights ── */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[clamp(222px,25dvh,350px)] xl:grid-cols-[calc(48%_-_8px)_calc(23%_-_10px)_calc(29%_-_14px)]">
+      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[clamp(252px,27dvh,350px)] xl:grid-cols-[calc(48%_-_8px)_calc(23%_-_10px)_calc(29%_-_14px)]">
 
         {/* Recent Bills */}
         <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col overflow-hidden lg:col-span-2 xl:col-span-1 xl:min-h-0")}>
@@ -770,6 +978,10 @@ interface MobileGeneralDashboardProps {
   outstandingDelta: number;
   profitDelta: number;
   expenseDelta: number;
+  period: DashboardPeriod;
+  onPeriodChange: (period: DashboardPeriod) => void;
+  periodSales: number;
+  periodSalesDelta: number;
 }
 
 function MobileGeneralDashboard({
@@ -788,11 +1000,14 @@ function MobileGeneralDashboard({
   outstandingDelta,
   profitDelta,
   expenseDelta,
+  period,
+  onPeriodChange,
+  periodSales,
+  periodSalesDelta,
 }: MobileGeneralDashboardProps) {
   const syncHealthy = failedCount === 0 && pendingCount === 0;
   const topRows = ownerReport?.topProducts.slice(0, 5) ?? [];
   const productsById = new Map(recentProducts.map((product) => [product.id, product]));
-  const dateRange = `${format(new Date(Date.now() - 6 * 86_400_000), "d MMM")} - ${format(new Date(), "d MMM yyyy")}`;
 
   return (
     <div className="mx-auto w-full max-w-[520px] space-y-4 bg-[#f8fbff] px-3 pb-24 pt-3 lg:hidden">
@@ -817,7 +1032,7 @@ function MobileGeneralDashboard({
         <div className="mb-2.5 flex items-center justify-between gap-3">
           <h2 className="font-display text-[14px] font-black text-[#102347]">Business Overview</h2>
           <span className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#d7e0ec] bg-white px-2 py-1.5 text-[9px] font-bold text-[#344865]">
-            <CalendarCheck size={11} /> {dateRange} <ChevronDown size={10} />
+            <CalendarCheck size={11} /> Today
           </span>
         </div>
         <div className="grid auto-rows-fr grid-cols-3 gap-2">
@@ -836,11 +1051,11 @@ function MobileGeneralDashboard({
             <h2 className="font-display text-[14px] font-black text-[#102347]">Sales Trend</h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <span className="text-[10px] font-semibold text-[#64748b]">Total Sales</span>
-              <span className="text-[12px] font-black text-[#102347]">{fmtCompactRs(dashboard.revenue)}</span>
-              <MobileDelta delta={salesDelta} />
+              <span className="text-[12px] font-black text-[#102347]">{fmtCompactRs(periodSales)}</span>
+              <MobileDelta delta={periodSalesDelta} />
             </div>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-[7px] border border-[#d5deeb] px-2 py-1 text-[9px] font-bold text-[#314766]">This Week <ChevronDown size={10} /></span>
+          <DashboardPeriodSelect value={period} onChange={onPeriodChange} compact />
         </div>
         <div className="mt-2 h-[185px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -932,6 +1147,7 @@ function MobileMetricCard({ label, value, previous, delta, color, icon, iconClas
   positiveIsBad?: boolean;
 }) {
   const spark = mobileSparkline(previous, value);
+  const gradientId = `dashboard-mobile-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   const bad = positiveIsBad ? delta > 0 : delta < 0;
   const deltaColor = delta === 0 ? "text-[#718096]" : bad ? "text-[#ef3340]" : "text-[#16a34a]";
   return (
@@ -947,9 +1163,10 @@ function MobileMetricCard({ label, value, previous, delta, color, icon, iconClas
       </div>
       <div className="mt-auto h-7 pt-1">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={spark}>
-            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.8} dot={false} isAnimationActive={false} />
-          </LineChart>
+          <AreaChart data={spark} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
+            <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.28} /><stop offset="70%" stopColor={color} stopOpacity={0.08} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
+            <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.8} fill={`url(#${gradientId})`} dot={false} isAnimationActive={false} />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>
@@ -988,6 +1205,37 @@ function mobileSparkline(previous: number, current: number): Array<{ value: numb
 
 function fmtCompactRs(n: number | undefined | null): string {
   return `₹${money(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function DashboardPeriodSelect({ value, onChange, compact = false }: { value: DashboardPeriod; onChange: (period: DashboardPeriod) => void; compact?: boolean }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex shrink-0 items-center justify-between gap-2 rounded-[7px] border border-[#d5deeb] bg-white font-bold text-[#314766] transition-colors hover:border-[#bdcbe0] hover:bg-[#fbfcfe] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200",
+            compact ? "h-7 min-w-[88px] px-2 text-[9px]" : "h-8 min-w-[104px] px-2.5 text-[10px]",
+          )}
+        >
+          {DASHBOARD_PERIOD_LABELS[value]}
+          <ChevronDown size={compact ? 10 : 11} aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" sideOffset={5} className="w-36 rounded-[8px] border-[#dfe7f2] p-1.5">
+        {(Object.keys(DASHBOARD_PERIOD_LABELS) as DashboardPeriod[]).map((period) => (
+          <button
+            key={period}
+            type="button"
+            onClick={() => onChange(period)}
+            className={cn("w-full rounded-[6px] px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[#edf4ff] text-[#075fff]")}
+          >
+            {DASHBOARD_PERIOD_LABELS[period]}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, iconBg, loading, footer, onClick }: {
@@ -1031,18 +1279,16 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
   );
 }
 
-function PaymentModeBreakdown({ rows, total }: { rows: PaymentSlice[]; total: number }) {
+function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: PaymentSlice[]; total: number; period: DashboardPeriod; onPeriodChange: (period: DashboardPeriod) => void }) {
   const realTotal = rows.reduce((sum, row) => sum + row.value, 0);
   const displayTotal = total > 0 ? total : realTotal;
   const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
 
   return (
     <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col p-4 xl:min-h-0 2xl:p-5")}>
-      <div>
+      <div className="flex min-h-7 items-center justify-between gap-2">
         <p className={DASH_TITLE}>Payment Mode Breakdown</p>
-        <span className="mt-2 inline-flex items-center gap-1.5 rounded-[7px] border border-[#d5deeb] bg-white px-2 py-1 text-[10px] font-bold text-[#314766] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-          This Week <ChevronDown size={11} aria-hidden="true" />
-        </span>
+        <DashboardPeriodSelect value={period} onChange={onPeriodChange} compact />
       </div>
       <div className="relative mt-2 min-h-[132px] flex-1">
         <ResponsiveContainer width="100%" height="100%">

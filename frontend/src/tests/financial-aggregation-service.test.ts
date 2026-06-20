@@ -127,6 +127,72 @@ describe("FinancialAggregationService", () => {
     expect(snapshot.cashDrawer.expectedClosingCash).toBe(85);
   });
 
+  it("nets a bill-level discount from fallback profit exactly once", () => {
+    const snapshot = aggregateFinancialRows({
+      date,
+      bills: [bill("discounted_bill", {
+        subtotal: 200,
+        discount: 20,
+        grandTotal: 180,
+        totalAmount: 180,
+        paidAmount: 180,
+        buyerPaidAmount: 180,
+        creditAmount: 0,
+      })],
+      billItems: [{
+        id: "discounted_item",
+        billId: "discounted_bill",
+        bill_id: "discounted_bill",
+        productId: "product_rice",
+        product_id: "product_rice",
+        quantity: 2,
+        ratePerRateUnit: 100,
+        rate_per_rate_unit: 100,
+        line_total: 200,
+        cost_per_rate_unit: 60,
+      }],
+      products: [{ id: "product_rice", name: "Rice", costPrice: 60 }],
+    });
+
+    expect(snapshot.revenueToday).toBe(180);
+    expect(snapshot.discountToday).toBe(20);
+    expect(snapshot.profitToday).toBe(60);
+  });
+
+  it("keeps discounted profit stable when local and server item echoes coexist", () => {
+    const sharedItem = {
+      billId: "discounted_bill",
+      bill_id: "discounted_bill",
+      productId: "product_rice",
+      product_id: "product_rice",
+      quantity: 2,
+      ratePerRateUnit: 100,
+      rate_per_rate_unit: 100,
+      line_total: 200,
+      cost_per_rate_unit: 60,
+      local_id: "local_item",
+    };
+    const snapshot = aggregateFinancialRows({
+      date,
+      bills: [bill("discounted_bill", {
+        subtotal: 200,
+        discount: 20,
+        grandTotal: 180,
+        totalAmount: 180,
+        paidAmount: 180,
+        buyerPaidAmount: 180,
+        creditAmount: 0,
+      })],
+      billItems: [
+        { id: "local_item", ...sharedItem },
+        { id: "server_item", server_id: "server_item", ...sharedItem },
+      ],
+      products: [{ id: "product_rice", name: "Rice", costPrice: 60 }],
+    });
+
+    expect(snapshot.profitToday).toBe(60);
+  });
+
   it("collapses local/server bill echoes before calculating dashboard totals", () => {
     const snapshot = aggregateFinancialRows({
       date,

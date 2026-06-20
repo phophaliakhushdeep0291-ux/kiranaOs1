@@ -27,6 +27,7 @@ import {
   Box,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   Download,
   Filter,
@@ -108,6 +109,30 @@ function rangeLabel(from: string, to: string) {
   return from === to ? dateLabel(from) : `${dateLabel(from)} - ${dateLabel(to)}`;
 }
 
+type ReportPeriod = "today" | "week" | "month" | "custom";
+
+const REPORT_PERIOD_LABELS: Record<ReportPeriod, string> = {
+  today: "Today",
+  week: "This Week",
+  month: "This Month",
+  custom: "Custom",
+};
+
+function reportPeriodRange(period: Exclude<ReportPeriod, "custom">) {
+  const today = new Date();
+  if (period === "today") {
+    const value = toDateInputValue(today);
+    return { from: value, to: value };
+  }
+  if (period === "month") {
+    return {
+      from: toDateInputValue(new Date(today.getFullYear(), today.getMonth(), 1)),
+      to: toDateInputValue(today),
+    };
+  }
+  return { from: daysAgoInput(6), to: toDateInputValue(today) };
+}
+
 function delta(current: number, previous: number) {
   if (Math.abs(previous) < 0.005) return current > 0 ? 100 : 0;
   return Math.round(((current - previous) / Math.abs(previous)) * 1_000) / 10;
@@ -121,6 +146,7 @@ export default function ReportsPage() {
   const { toast } = useToast();
   const [from, setFrom] = useState(daysAgoInput(6));
   const [to, setTo] = useState(todayInput());
+  const [period, setPeriod] = useState<ReportPeriod>("week");
   const [snapshot, setSnapshot] = useState<LocalReportSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportPinOpen, setExportPinOpen] = useState(false);
@@ -149,6 +175,13 @@ export default function ReportsPage() {
     queryFn: () => listExpenses(expenseParams),
     retry: 1,
   });
+
+  const applyPeriod = (nextPeriod: Exclude<ReportPeriod, "custom">) => {
+    const nextRange = reportPeriodRange(nextPeriod);
+    setPeriod(nextPeriod);
+    setFrom(nextRange.from);
+    setTo(nextRange.to);
+  };
 
   const loadReports = async () => {
     setLoading(true);
@@ -345,16 +378,16 @@ export default function ReportsPage() {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[320px] rounded-[8px] border-[#dfe7f2] p-3">
               <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">From</Label><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 h-9 rounded-[6px]" /></div>
-                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">To</Label><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 h-9 rounded-[6px]" /></div>
+                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">From</Label><Input type="date" value={from} onChange={(event) => { setPeriod("custom"); setFrom(event.target.value); }} className="mt-1 h-9 rounded-[6px]" /></div>
+                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">To</Label><Input type="date" value={to} onChange={(event) => { setPeriod("custom"); setTo(event.target.value); }} className="mt-1 h-9 rounded-[6px]" /></div>
               </div>
             </PopoverContent>
           </Popover>
           <Popover>
             <PopoverTrigger asChild><Button variant="outline" className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-semibold"><Filter size={14} className="mr-2" />Filters</Button></PopoverTrigger>
             <PopoverContent align="end" className="w-48 rounded-[8px] p-2">
-              {[{ label: "Today", days: 0 }, { label: "This week", days: 6 }, { label: "Last 30 days", days: 29 }].map((item) => (
-                <button key={item.label} className="w-full rounded-[6px] px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc]" onClick={() => { setFrom(daysAgoInput(item.days)); setTo(todayInput()); }}>{item.label}</button>
+              {(["today", "week", "month"] as const).map((item) => (
+                <button key={item} className={cn("w-full rounded-[6px] px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc]", period === item && "bg-[#edf4ff] text-[#075fff]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
               ))}
               <Link href="/daily-closing" className="mt-1 block border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[#1264f6]">Open daily closing</Link>
             </PopoverContent>
@@ -371,7 +404,7 @@ export default function ReportsPage() {
       </section>
 
       <section className="grid gap-3 xl:grid-cols-[1.04fr_1.12fr_1.18fr]">
-        <Panel title="Sales Trend" info action={<PeriodPill />}>
+        <Panel title="Sales Trend" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="flex items-baseline gap-4 px-3.5 pt-1 text-[11px]">
             <span className="text-[#60708e]">Total Sales</span>
             <strong className="text-[16px] text-[#14264c]">{fmt(selected?.sales)}</strong>
@@ -391,7 +424,7 @@ export default function ReportsPage() {
           </ChartFrame>
         </Panel>
 
-        <Panel title="Category Performance" info action={<PeriodPill />}>
+        <Panel title="Category Performance" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <ChartFrame loading={loading} empty={!snapshot?.categoryPerformance.length}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={snapshot?.categoryPerformance ?? []} margin={{ top: 20, right: 8, left: -10, bottom: 2 }} barCategoryGap="28%">
@@ -406,7 +439,7 @@ export default function ReportsPage() {
           </ChartFrame>
         </Panel>
 
-        <Panel title="Payment Mode Breakdown" info action={<PeriodPill />}>
+        <Panel title="Payment Mode Breakdown" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           {loading ? <Skeleton className="m-4 h-[178px]" /> : paymentModes.length === 0 ? <EmptyChart /> : (
             <div className="grid min-h-[208px] grid-cols-[minmax(150px,0.85fr)_1.15fr] items-center gap-3 px-3 pb-2">
               <div className="relative mx-auto h-[162px] w-[162px]">
@@ -438,7 +471,7 @@ export default function ReportsPage() {
       </section>
 
       <section className="grid gap-3 xl:grid-cols-[0.86fr_1.1fr_1.04fr]">
-        <Panel title="Stock Movement Snapshot" info action={<PeriodPill />}>
+        <Panel title="Stock Movement Snapshot" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="grid grid-cols-2 divide-x divide-y divide-[#e8edf5] px-3 pb-3">
             <StockStat icon={<PackagePlus size={15} />} label="Total Stock In" value={fmt(snapshot?.stockMovement.totalIn)} deltaValue="Value received" tone="blue" />
             <StockStat icon={<Box size={15} />} label="Total Stock Out" value={fmt(snapshot?.stockMovement.totalOut)} deltaValue="Value issued" tone="red" />
@@ -447,7 +480,7 @@ export default function ReportsPage() {
           </div>
         </Panel>
 
-        <Panel title="Stock Movement Trend" subtitle="(Value)" info action={<PeriodPill />}>
+        <Panel title="Stock Movement Trend" subtitle="(Value)" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="flex gap-5 px-4 pt-1 text-[10px] font-semibold"><span className="text-[#15a94d]">→ Stock In</span><span className="text-[#ff3b45]">→ Stock Out</span></div>
           <div className="h-[138px] px-2 pb-2">
             {loading ? <Skeleton className="h-full" /> : <ResponsiveContainer width="100%" height="100%"><LineChart data={trend} margin={{ top: 12, right: 8, left: -12, bottom: 0 }}><CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" /><XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} /><YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} /><Tooltip content={<MoneyTooltip />} /><Line type="monotone" dataKey="stockIn" name="Stock In" stroke="#15a94d" strokeWidth={2} dot={{ r: 2.4, fill: "white", strokeWidth: 1.5 }} /><Line type="monotone" dataKey="stockOut" name="Stock Out" stroke="#ff3b45" strokeWidth={2} dot={{ r: 2.4, fill: "white", strokeWidth: 1.5 }} /></LineChart></ResponsiveContainer>}
@@ -471,12 +504,13 @@ function KpiCard({ label, value, previous, icon, iconClass, color, spark, positi
   const change = delta(value ?? 0, previous);
   const favorable = positiveIsBad ? change <= 0 : change >= 0;
   const points = spark.length > 1 ? spark.map((item, index) => ({ index, value: item })) : [{ index: 0, value: 0 }, { index: 1, value: value ?? 0 }];
+  const gradientId = `report-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return <article className={cn(PANEL, "min-h-[126px] p-3")}>
     {loading ? <Skeleton className="h-full min-h-[98px]" /> : <>
       <div className="flex items-center gap-2"><span className={cn("grid h-8 w-8 place-items-center rounded-[7px]", iconClass)}>{icon}</span><p className="min-w-0 text-[10.5px] font-semibold leading-tight text-[#34486e]">{label}</p></div>
       <p className="mt-2 whitespace-nowrap text-[20px] font-black leading-none text-[#101f40]">{fmt(value)}</p>
       <div className="mt-2 flex items-center gap-1 text-[9.5px]"><span className={cn("inline-flex items-center gap-0.5 font-bold", favorable ? "text-[#10a948]" : "text-[#ff334d]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span><span className="text-[#7a879f]">vs last period</span></div>
-      <div className="mt-1 h-[24px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={points}><Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.6} dot={{ r: 1.6, fill: color, strokeWidth: 0 }} isAnimationActive={false} /></LineChart></ResponsiveContainer></div>
+      <div className="mt-1 h-[24px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={points} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}><defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.28} /><stop offset="70%" stopColor={color} stopOpacity={0.08} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs><Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.7} fill={`url(#${gradientId})`} dot={{ r: 1.5, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>
     </>}
   </article>;
 }
@@ -488,8 +522,23 @@ function Panel({ title, subtitle, info, action, children }: { title: string; sub
   </article>;
 }
 
-function PeriodPill() {
-  return <span className="rounded-[5px] border border-[#dfe6f0] bg-[#fbfcfe] px-2 py-1 text-[9px] font-semibold text-[#405273]">This Week⌄</span>;
+function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (period: Exclude<ReportPeriod, "custom">) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" className="inline-flex h-7 min-w-[92px] items-center justify-between gap-2 rounded-[6px] border border-[#dfe6f0] bg-[#fbfcfe] px-2.5 text-[9.5px] font-semibold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white">
+          {REPORT_PERIOD_LABELS[value]} <ChevronDown size={11} aria-hidden="true" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" sideOffset={5} className="w-36 rounded-[7px] border-[#dfe7f2] p-1.5">
+        {(["today", "week", "month"] as const).map((period) => (
+          <button key={period} type="button" onClick={() => onChange(period)} className={cn("w-full rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[#edf4ff] text-[#075fff]")}>
+            {REPORT_PERIOD_LABELS[period]}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function ChartFrame({ loading, empty, children }: { loading: boolean; empty: boolean; children: ReactNode }) {
