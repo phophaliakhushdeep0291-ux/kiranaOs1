@@ -56,9 +56,37 @@ export interface ReportTopCustomer {
 export interface ReportTopProduct {
   productId: string;
   name: string;
+  category: string;
   quantitySold: number;
   revenue: number;
   profitEstimate: number;
+  marginPct: number;
+}
+
+export interface ReportDailyPoint {
+  date: string;
+  label: string;
+  sales: number;
+  collection: number;
+  profit: number;
+  cash: number;
+  upi: number;
+  udhar: number;
+  stockIn: number;
+  stockOut: number;
+}
+
+export interface ReportCategoryPerformance {
+  name: string;
+  revenue: number;
+  profit: number;
+}
+
+export interface ReportStockMovementSummary {
+  totalIn: number;
+  totalOut: number;
+  newProducts: number;
+  lowStockItems: number;
 }
 
 export interface ReportLowStockItem {
@@ -84,10 +112,14 @@ export interface LocalReportSnapshot {
   sevenDay: ReportMetricWindow;
   thirtyDay: ReportMetricWindow;
   selected: ReportMetricWindow;
+  previousSelected: ReportMetricWindow;
   paymentBreakdown: ReportPaymentBreakdown;
   pendingUdhar: number;
   topCustomers: ReportTopCustomer[];
   topProducts: ReportTopProduct[];
+  dailyTrend: ReportDailyPoint[];
+  categoryPerformance: ReportCategoryPerformance[];
+  stockMovement: ReportStockMovementSummary;
   lowStock: ReportLowStockItem[];
   staffSales: StaffSalesRow[];
   pendingSyncCount: number;
@@ -276,14 +308,110 @@ function topCustomersFromSnapshot(snapshot: FinancialAggregationSnapshot): Repor
   return [...rows.values()].sort((a, b) => b.sales - a.sales || b.balance - a.balance).slice(0, 10);
 }
 
-function topProductsFromSnapshot(snapshot: FinancialAggregationSnapshot): ReportTopProduct[] {
+function topProductsFromSnapshot(snapshot: FinancialAggregationSnapshot, products: Product[]): ReportTopProduct[] {
+  const productById = new Map(products.map((product) => [product.id, product]));
   return snapshot.profitByProduct.slice(0, 10).map((row) => ({
     productId: row.productId,
     name: row.productName,
+    category: productById.get(row.productId)?.category || "Uncategorised",
     quantitySold: row.quantity,
     revenue: row.revenue,
     profitEstimate: row.profit,
+    marginPct: row.marginPct,
   }));
+}
+
+function categoryPerformanceFromSnapshot(
+  snapshot: FinancialAggregationSnapshot,
+  products: Product[],
+): ReportCategoryPerformance[] {
+  const categoryByProduct = new Map(products.map((product) => [product.id, product.category || "Uncategorised"]));
+  const categories = new Map<string, ReportCategoryPerformance>();
+  for (const row of snapshot.profitByProduct) {
+    const name = categoryByProduct.get(row.productId) || "Uncategorised";
+    const current = categories.get(name) ?? { name, revenue: 0, profit: 0 };
+    current.revenue = roundMoney(current.revenue + row.revenue);
+    current.profit = roundMoney(current.profit + row.profit);
+    categories.set(name, current);
+  }
+  return [...categories.values()]
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 6);
+}
+
+function previousRange(range: DateRange): DateRange {
+  const start = dateFromInput(range.from);
+  const end = dateFromInput(range.to);
+  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+  const previousTo = addDays(start, -1);
+  const previousFrom = addDays(previousTo, -(days - 1));
+  return { from: toDateInputValue(previousFrom), to: toDateInputValue(previousTo) };
+}
+
+function chartDays(range: DateRange): string[] {
+  const start = dateFromInput(range.from);
+  const end = dateFromInput(range.to);
+  const result: string[] = [];
+  for (let date = start; date <= end; date = addDays(date, 1)) {
+    result.push(toDateInputValue(date));
+  }
+  return result.slice(-31);
+}
+
+function movementValue(
+  movement: LocalInventoryMovement,
+  productsById: Map<string, Product>,
+): { inbound: number; outbound: number } {
+  const action = readString(movement, ["action", "type", "movementType", "movement_type"]).toLowerCase();
+  const change = readNumber(
+    movement.changeBaseQty ?? movement.change_base_qty ?? movement.quantityChange ?? movement.quantity_change ?? movement.quantity,
+    0,
+  );
+  const productId = readString(movement, ["productId", "product_id"]);
+  const product = productsById.get(productId);
+  const unitCost = readNumber(
+    product?.costPerRateUnit ?? product?.costPrice ?? product?.averageCostPrice,
+    0,
+  );
+  const explicitValue = readNumber(
+    movement.totalCost ?? movement.total_cost ?? movement.purchaseBillAmount ?? movement.purchase_bill_amount ??
+      movement.damageLossValue ?? movement.damage_loss_value ?? movement.valueImpact ?? movement.value_impact,
+    0,
+  );
+  const value = roundMoney(Math.abs(explicitValue || change * unitCost));
+  const outbound = change < 0 || /sale|out|damage|return_to_supplier|expired/.test(action);
+  const inbound = change > 0 || /purchase|stock_in|add|receive|return_from_customer/.test(action);
+  return {
+    inbound: inbound && !outbound ? value : 0,
+    outbound: outbound ? value : 0,
+  };
+}
+
+function buildDailyTrend(rows: LocalFinanceRows, range: DateRange): ReportDailyPoint[] {
+  const productsById = new Map(rows.products.map((product) => [product.id, product]));
+  return chartDays(range).map((date) => {
+    const dayRange = { from: date, to: date };
+    const snapshot = aggregate(rows, dayRange);
+    const stock = rows.inventoryMovements
+      .filter((movement) => isWithinRange(movement, dayRange))
+      .reduce<{ inbound: number; outbound: number }>((total, movement) => {
+        const value = movementValue(movement, productsById);
+        return { inbound: roundMoney(total.inbound + value.inbound), outbound: roundMoney(total.outbound + value.outbound) };
+      }, { inbound: 0, outbound: 0 });
+    const parsed = dateFromInput(date);
+    return {
+      date,
+      label: parsed.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+      sales: snapshot.revenueToday,
+      collection: roundMoney(snapshot.totalCashCollectedToday + snapshot.totalUpiCollectedToday),
+      profit: snapshot.profitToday,
+      cash: snapshot.totalCashCollectedToday,
+      upi: snapshot.totalUpiCollectedToday,
+      udhar: snapshot.udharSalesToday,
+      stockIn: stock.inbound,
+      stockOut: stock.outbound,
+    };
+  });
 }
 
 function calculateLowStock(products: Product[]): ReportLowStockItem[] {
@@ -384,10 +512,13 @@ export async function buildLocalReportSnapshot(range: DateRange): Promise<LocalR
   const sevenDayRange = { from: toDateInputValue(addDays(startOfLocalDay(), -6)), to: today };
   const thirtyDayRange = { from: toDateInputValue(addDays(startOfLocalDay(), -29)), to: today };
   const selectedSnapshot = aggregate(rows, range);
+  const previousSelectedSnapshot = aggregate(rows, previousRange(range));
   const todaySnapshot = aggregate(rows, todayRange);
   const sevenDaySnapshot = aggregate(rows, sevenDayRange);
   const thirtyDaySnapshot = aggregate(rows, thirtyDayRange);
   const counters = syncCounters(rows.outbox);
+  const lowStock = calculateLowStock(rows.products);
+  const dailyTrend = buildDailyTrend(rows, range);
   const hasLocalData = Boolean(
     rows.bills.length ||
       rows.payments.length ||
@@ -404,11 +535,20 @@ export async function buildLocalReportSnapshot(range: DateRange): Promise<LocalR
     sevenDay: toMetricWindow(sevenDaySnapshot),
     thirtyDay: toMetricWindow(thirtyDaySnapshot),
     selected: toMetricWindow(selectedSnapshot),
+    previousSelected: toMetricWindow(previousSelectedSnapshot),
     paymentBreakdown: toPaymentBreakdown(selectedSnapshot),
     pendingUdhar: selectedSnapshot.totalOutstandingUdhar,
     topCustomers: topCustomersFromSnapshot(selectedSnapshot),
-    topProducts: topProductsFromSnapshot(selectedSnapshot),
-    lowStock: calculateLowStock(rows.products),
+    topProducts: topProductsFromSnapshot(selectedSnapshot, rows.products),
+    dailyTrend,
+    categoryPerformance: categoryPerformanceFromSnapshot(selectedSnapshot, rows.products),
+    stockMovement: {
+      totalIn: roundMoney(dailyTrend.reduce((sum, point) => sum + point.stockIn, 0)),
+      totalOut: roundMoney(dailyTrend.reduce((sum, point) => sum + point.stockOut, 0)),
+      newProducts: rows.products.filter((product) => !isDeleted(product as unknown as RecordLike) && isWithinRange(product as unknown as RecordLike, range)).length,
+      lowStockItems: lowStock.length,
+    },
+    lowStock,
     staffSales: calculateStaffSales(rows.bills, range),
     pendingSyncCount: counters.pending,
     failedSyncCount: counters.failed,

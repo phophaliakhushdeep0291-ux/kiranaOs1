@@ -460,7 +460,7 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         {/* Desktop topbar */}
         <header className="sticky top-0 z-40 hidden min-h-[var(--app-desktop-topbar-height)] items-center gap-4 border-b border-[#e6ecf4] bg-white/94 px-5 shadow-[0_1px_0_rgba(15,35,80,0.02)] backdrop-blur-xl lg:flex xl:px-6">
-          <button
+          {loc !== "/reports" && <button
             type="button"
             aria-label="Toggle sidebar"
             onClick={() => setCollapsed((c) => !c)}
@@ -484,15 +484,15 @@ export function Layout({ children }: { children: ReactNode }) {
             <Search size={17} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium">Search products, bills, customers...</span>
             <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
-          </button>
+          </button>}
 
-          <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
+          {loc !== "/reports" && <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
             <span className="truncate">{connectionLabel}</span>
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
-          </div>
+          </div>}
 
-          {snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+          {loc !== "/reports" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"
