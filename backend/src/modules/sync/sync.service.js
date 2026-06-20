@@ -628,6 +628,7 @@ async function applyCreateBill(shopId, event, user, context) {
   await validateBillProductExpectations(shopId, resolvedBillBody.items ?? []);
 
   const parsed = confirmBillSchema.parse(resolvedBillBody);
+  const creditLedgerClientId = getCreateBillCreditLedgerClientId(payload, billBody);
   // Cashier attribution is server-authoritative. Ignore any frontend-created createdByUserId.
   const bill = await confirmBill(shopId, parsed, {
     userId: user?.userId ?? null,
@@ -635,8 +636,43 @@ async function applyCreateBill(shopId, event, user, context) {
     // Replayed offline sale: the goods already left the counter, so never drop it for
     // being stock-short — record it and flag any shortfall for reconciliation.
     allowStockShortfall: true,
+    // Preserve the optimistic ledger row identity so push and pull echoes replace
+    // that row instead of posting the same udhar effect a second time locally.
+    creditLedgerClientId,
   });
   return buildCreateBillSyncPayload(shopId, bill, payload, billBody);
+}
+
+function getCreateBillCreditLedgerClientId(...sources) {
+  const arrayKeys = [
+    "ledgerEntries",
+    "ledger_entries",
+    "customerLedgerEntries",
+    "customer_ledger_entries",
+    "udharLedgerEntries",
+    "udhar_ledger_entries",
+    "local_ledger_entries",
+  ];
+  for (const source of sources) {
+    if (!source || typeof source !== "object") continue;
+    for (const key of arrayKeys) {
+      const rows = Array.isArray(source[key]) ? source[key] : [];
+      for (const row of rows) {
+        const identity = pickString(
+          row?.localLedgerEntryId,
+          row?.local_ledger_entry_id,
+          row?.localLedgerId,
+          row?.local_ledger_id,
+          row?.clientLedgerId,
+          row?.client_ledger_id,
+          row?.ledgerEntryId,
+          row?.ledger_entry_id,
+        );
+        if (identity) return identity;
+      }
+    }
+  }
+  return null;
 }
 
 async function findExistingCreateBillResultByIdempotency(shopId, event, payload, billBody) {
@@ -715,6 +751,16 @@ async function buildCreateBillSyncPayload(shopId, bill, payload, billBody) {
     billBody.idempotency_key ??
     bill.idempotencyKey ??
     null;
+  const localLedgerEntryId = getCreateBillCreditLedgerClientId(payload, billBody);
+  const syncUdharLedgerEntry = udharLedgerEntry
+    ? {
+        ...udharLedgerEntry,
+        ...(localLedgerEntryId && {
+          localLedgerEntryId,
+          local_ledger_entry_id: localLedgerEntryId,
+        }),
+      }
+    : null;
 
   return {
     entity: "bill",
@@ -734,7 +780,7 @@ async function buildCreateBillSyncPayload(shopId, bill, payload, billBody) {
     billItems: toSyncJsonSafe(bill.items),
     payments: toSyncJsonSafe(bill.payments.filter((payment) => payment.mode !== "credit")),
     customer: toSyncJsonSafe(customer),
-    udharLedgerEntry: toSyncJsonSafe(udharLedgerEntry),
+    udharLedgerEntry: toSyncJsonSafe(syncUdharLedgerEntry),
     stockLedgerEntries: toSyncJsonSafe(stockLedgerEntries),
     grandTotal: bill.grandTotal,
   };

@@ -365,7 +365,7 @@ export async function confirmBill(shopId, body, actor = {}) {
           mode: "credit",
           billId: bill.id,
           billNo: bill.billNo,
-          clientLedgerId: buildChildIdempotencyKey(billIdentity.clientBillId, "udhar:debit"),
+          clientLedgerId: actor?.creditLedgerClientId ?? buildChildIdempotencyKey(billIdentity.clientBillId, "udhar:debit"),
           idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, "udhar:debit"),
           sourceDeviceId: billIdentity.sourceDeviceId,
           sourceType: "bill",

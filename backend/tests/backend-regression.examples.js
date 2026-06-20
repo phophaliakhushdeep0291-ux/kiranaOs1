@@ -289,6 +289,7 @@ try {
     },
   });
 
+  const creditLedgerClientId = `ledger_offline_credit_${suffix}`;
   const creditBill = await confirmBill(shopA.id, {
     billType: 'normal_sale',
     customerId: customer.id,
@@ -308,10 +309,19 @@ try {
     actualAmount: 11.5,
     buyerPaidAmount: 0,
     waivedAmount: 0,
-  });
+  }, { creditLedgerClientId });
 
   const customerAfterCredit = await db.customer.findUnique({ where: { id: customer.id } });
   assert.equal(customerAfterCredit.udharAmount, 11.5, 'credit bill must add udhar balance');
+
+  const creditLedger = await db.udharLedger.findFirst({
+    where: { shopId: shopA.id, billId: creditBill.id, type: 'debit' },
+  });
+  assert.equal(
+    creditLedger?.clientLedgerId,
+    creditLedgerClientId,
+    'credit bill must persist the optimistic client ledger identity for echo reconciliation'
+  );
 
   const sugarAfterCredit = await db.product.findUnique({ where: { id: sugar.id } });
   assert.equal(sugarAfterCredit.stockBaseQty, 1250, 'credit sale must deduct stock');
