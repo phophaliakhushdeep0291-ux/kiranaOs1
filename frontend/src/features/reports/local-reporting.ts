@@ -51,6 +51,7 @@ export interface ReportTopCustomer {
   sales: number;
   balance: number;
   bills: number;
+  lastPurchase?: string | null;
 }
 
 export interface ReportTopProduct {
@@ -289,9 +290,11 @@ function topCustomersFromSnapshot(snapshot: FinancialAggregationSnapshot): Repor
       sales: 0,
       balance: outstandingById.get(customerId) ?? 0,
       bills: 0,
+      lastPurchase: bill.date,
     };
     existing.sales = roundMoney(existing.sales + bill.amount);
     existing.bills += 1;
+    if (!existing.lastPurchase || bill.date > existing.lastPurchase) existing.lastPurchase = bill.date;
     rows.set(customerId, existing);
   }
   for (const customer of snapshot.outstandingCustomers) {
@@ -303,6 +306,7 @@ function topCustomersFromSnapshot(snapshot: FinancialAggregationSnapshot): Repor
       sales: 0,
       balance: customer.outstanding,
       bills: 0,
+      lastPurchase: null,
     });
   }
   return [...rows.values()].sort((a, b) => b.sales - a.sales || b.balance - a.balance).slice(0, 10);

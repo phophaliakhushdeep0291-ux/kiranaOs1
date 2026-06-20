@@ -428,7 +428,7 @@ export default function ReportsPage() {
         </DenseTable>
 
         <DenseTable title="Top Customers (Udhar)" action="View all" actionHref="/customers" headers={["Customer", "Total Due (₹)", "Last Purchase", "Risk"]} loading={loading} empty={!snapshot?.topCustomers.length}>
-          {snapshot?.topCustomers.slice(0, 5).map((row) => <tr key={row.customerId}><Td strong>{row.name}</Td><Td right strong>{fmt(row.balance)}</Td><Td right>{row.bills ? `${row.bills} bills` : "—"}</Td><Td right><RiskChip balance={row.balance} /></Td></tr>)}
+          {snapshot?.topCustomers.slice(0, 5).map((row) => <tr key={row.customerId}><Td strong>{row.name}</Td><Td right strong>{fmt(row.balance)}</Td><Td right>{row.lastPurchase ? dateLabel(row.lastPurchase.slice(0, 10)) : "—"}</Td><Td right><RiskChip balance={row.balance} /></Td></tr>)}
           {snapshot?.topCustomers.length ? <tr className="font-bold"><Td>Total Outstanding</Td><Td right>{fmt(snapshot.topCustomers.reduce((sum, row) => sum + row.balance, 0))}</Td><Td /><Td /></tr> : null}
         </DenseTable>
 
