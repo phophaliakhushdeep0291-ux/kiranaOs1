@@ -27,7 +27,7 @@ import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard,
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
 import { cn } from "@/lib/utils";
-import type { Product } from "@/types/api";
+import type { Bill, Product } from "@/types/api";
 
 const DASH_CARD = "rounded-[14px] border border-[#dfe8f4] bg-white shadow-[0_10px_30px_rgba(26,57,112,0.075),0_2px_7px_rgba(26,57,112,0.035)] ring-1 ring-[#edf3fa] dark:border-slate-800 dark:bg-card dark:ring-slate-800";
 const DASH_CARD_INTERACTIVE = "transition-all duration-200 hover:-translate-y-0.5 hover:border-[#c7d8ee] hover:shadow-[0_14px_34px_rgba(15,35,80,0.075)] active:translate-y-0";
@@ -170,6 +170,8 @@ interface DashboardStats {
   previousCashCollected: number;
   previousUpiCollected: number;
   previousOutstanding: number;
+  expensesToday: number;
+  previousExpenses: number;
   source: string;
   hasBusinessData: boolean;
 }
@@ -281,6 +283,8 @@ export default function Dashboard() {
       previousCashCollected: roundMoney(money(previousFinancialSnapshot?.totalCashCollectedToday)),
       previousUpiCollected: roundMoney(money(previousFinancialSnapshot?.totalUpiCollectedToday)),
       previousOutstanding,
+      expensesToday: roundMoney(money(finance?.expensesToday)),
+      previousExpenses: roundMoney(money(previousFinancialSnapshot?.expensesToday)),
       source: useLocal ? "IndexedDB" : "backend refresh",
       hasBusinessData: Boolean(useLocal || revenue > 0 || totalOutstanding > 0 || billsToday.data?.total),
     };
@@ -427,12 +431,31 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
   const upiDelta = pctChange(dashboard.upiCollected, dashboard.previousUpiCollected) ?? 0;
   const outstandingDelta = pctChange(dashboard.totalOutstanding, dashboard.previousOutstanding) ?? 0;
   const profitDelta = pctChange(dashboard.grossProfit, dashboard.previousGrossProfit) ?? 0;
+  const expenseDelta = pctChange(dashboard.expensesToday, dashboard.previousExpenses) ?? 0;
   const avgBillValue = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
   const syncStatusValue = failedCount > 0 ? "Review needed" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date";
   const syncHealthGood = failedCount === 0 && pendingCount === 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] space-y-4 p-4 sm:p-5 lg:space-y-5 lg:p-6">
+    <>
+      <MobileGeneralDashboard
+        dashboard={dashboard}
+        ownerReport={ownerReport}
+        salesChartData={salesChartData}
+        recentBills={recentBills}
+        recentProducts={recentProducts}
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+        pendingCount={pendingCount}
+        failedCount={failedCount}
+        salesDelta={salesDelta}
+        cashDelta={cashDelta}
+        upiDelta={upiDelta}
+        outstandingDelta={outstandingDelta}
+        profitDelta={profitDelta}
+        expenseDelta={expenseDelta}
+      />
+      <div className="mx-auto hidden w-full max-w-[1440px] space-y-4 p-4 sm:p-5 lg:block lg:space-y-5 lg:p-6">
 
       {/* Counter focus */}
       <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
@@ -714,11 +737,243 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
 
       <RecentProductsRail products={recentProducts} />
 
-    </div>
+      </div>
+    </>
   );
 }
 
 // ─── General layout sub-components ────────────────────────────────────────────
+
+interface MobileGeneralDashboardProps {
+  dashboard: DashboardStats;
+  ownerReport: LocalReportSnapshot | null;
+  salesChartData: Array<{ date: string; sales: number }>;
+  recentBills: Bill[];
+  recentProducts: Product[];
+  isOnline: boolean;
+  isSyncing: boolean;
+  pendingCount: number;
+  failedCount: number;
+  salesDelta: number;
+  cashDelta: number;
+  upiDelta: number;
+  outstandingDelta: number;
+  profitDelta: number;
+  expenseDelta: number;
+}
+
+function MobileGeneralDashboard({
+  dashboard,
+  ownerReport,
+  salesChartData,
+  recentBills,
+  recentProducts,
+  isOnline,
+  isSyncing,
+  pendingCount,
+  failedCount,
+  salesDelta,
+  cashDelta,
+  upiDelta,
+  outstandingDelta,
+  profitDelta,
+  expenseDelta,
+}: MobileGeneralDashboardProps) {
+  const syncHealthy = failedCount === 0 && pendingCount === 0;
+  const topRows = ownerReport?.topProducts.slice(0, 5) ?? [];
+  const productsById = new Map(recentProducts.map((product) => [product.id, product]));
+  const dateRange = `${format(new Date(Date.now() - 6 * 86_400_000), "d MMM")} - ${format(new Date(), "d MMM yyyy")}`;
+
+  return (
+    <div className="mx-auto w-full max-w-[520px] space-y-4 bg-[#f8fbff] px-3 pb-24 pt-3 lg:hidden">
+      <section className="flex items-center justify-between rounded-[12px] border border-[#d7eadf] bg-white px-3 py-2.5 shadow-[0_6px_18px_rgba(26,57,112,0.05)]">
+        <div className="flex items-center gap-2.5">
+          <span className={cn("grid h-8 w-8 place-items-center rounded-full text-white shadow-[0_6px_16px_rgba(17,168,75,0.22)]", syncHealthy && isOnline ? "bg-[#18b957]" : "bg-[#f59e0b]") }>
+            {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={17} />}
+          </span>
+          <div>
+            <p className={cn("text-[12px] font-black", syncHealthy && isOnline ? "text-[#159447]" : "text-[#b96d00]")}>
+              {isSyncing ? "Syncing" : !isOnline ? "Offline safe" : syncHealthy ? "Synced" : failedCount > 0 ? "Review needed" : `${pendingCount} pending`}
+            </p>
+            <p className="text-[10px] font-semibold text-[#6a7890]">{isOnline ? "Just now" : "Offline safe"}</p>
+          </div>
+        </div>
+        <Link href="/sync-status" className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#cfe0ff] bg-white px-3 py-2 text-[11px] font-black text-[#075fff]">
+          <RefreshCw size={13} /> Sync Now
+        </Link>
+      </section>
+
+      <section>
+        <div className="mb-2.5 flex items-center justify-between gap-3">
+          <h2 className="font-display text-[14px] font-black text-[#102347]">Business Overview</h2>
+          <span className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#d7e0ec] bg-white px-2 py-1.5 text-[9px] font-bold text-[#344865]">
+            <CalendarCheck size={11} /> {dateRange} <ChevronDown size={10} />
+          </span>
+        </div>
+        <div className="grid auto-rows-fr grid-cols-3 gap-2">
+          <MobileMetricCard label="Total Sales" value={dashboard.revenue} previous={dashboard.previousRevenue} delta={salesDelta} color="#075fff" icon={<ShoppingCart size={13} />} iconClass="border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]" />
+          <MobileMetricCard label="Cash Collection" value={dashboard.cashCollected} previous={dashboard.previousCashCollected} delta={cashDelta} color="#18ad50" icon={<Wallet size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
+          <MobileMetricCard label="UPI Collection" value={dashboard.upiCollected} previous={dashboard.previousUpiCollected} delta={upiDelta} color="#7447eb" icon={<Smartphone size={13} />} iconClass="border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]" />
+          <MobileMetricCard label="Profit (Est.)" value={dashboard.grossProfit} previous={dashboard.previousGrossProfit} delta={profitDelta} color="#18ad50" icon={<TrendingUp size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
+          <MobileMetricCard label="Outstanding Udhar" value={dashboard.totalOutstanding} previous={dashboard.previousOutstanding} delta={outstandingDelta} color="#ff304f" icon={<AlertTriangle size={13} />} iconClass="border-[#ffcfd7] bg-[#ffecef] text-[#ff304f]" positiveIsBad />
+          <MobileMetricCard label="Expense Total" value={dashboard.expensesToday} previous={dashboard.previousExpenses} delta={expenseDelta} color="#f39a0b" icon={<Wallet size={13} />} iconClass="border-[#ffdca8] bg-[#fff2df] text-[#f39a0b]" positiveIsBad />
+        </div>
+      </section>
+
+      <section className="border-y border-[#e7edf5] bg-white px-1 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-[14px] font-black text-[#102347]">Sales Trend</h2>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold text-[#64748b]">Total Sales</span>
+              <span className="text-[12px] font-black text-[#102347]">{fmtCompactRs(dashboard.revenue)}</span>
+              <MobileDelta delta={salesDelta} />
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-[7px] border border-[#d5deeb] px-2 py-1 text-[9px] font-bold text-[#314766]">This Week <ChevronDown size={10} /></span>
+        </div>
+        <div className="mt-2 h-[185px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={salesChartData} margin={{ top: 10, right: 8, left: -15, bottom: 0 }}>
+              <defs>
+                <linearGradient id="mobileSalesFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#075fff" stopOpacity={0.24} />
+                  <stop offset="100%" stopColor="#075fff" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} strokeDasharray="4 6" stroke="#dbe6f4" />
+              <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} tickMargin={8} />
+              <YAxis tick={{ fontSize: 8, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} width={38} tickFormatter={(value) => value >= 1000 ? `₹${Math.round(value / 1000)}K` : `₹${value}`} />
+              <Tooltip formatter={(value: number) => [fmtCompactRs(value), "Sales"]} />
+              <Area type="monotone" dataKey="sales" stroke="#075fff" strokeWidth={2.5} fill="url(#mobileSalesFill)" dot={{ r: 3, fill: "white", stroke: "#075fff", strokeWidth: 2 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2.5 font-display text-[14px] font-black text-[#102347]">Quick Insights</h2>
+        <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white shadow-[0_7px_22px_rgba(26,57,112,0.05)]">
+          <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={`Sales ${salesDelta >= 0 ? "increased" : "changed"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
+          <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? "Your top product"} is leading sales.`} subtitle="Keep the best sellers available in stock." />
+          <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle="Follow up to improve cash flow." />
+          <Link href="/reports" className="flex items-center justify-center gap-2 border-t border-[#e7edf5] py-2.5 text-[11px] font-black text-[#075fff]">View Detailed Insights <ArrowUpRight size={12} /></Link>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-2">
+        <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white">
+          <div className="flex items-center justify-between border-b border-[#edf2f8] px-2.5 py-2.5">
+            <h2 className="text-[11px] font-black text-[#102347]">Top Products</h2>
+            <Link href="/products" className="text-[9px] font-black text-[#075fff]">View all</Link>
+          </div>
+          <div className="divide-y divide-[#edf2f8] px-2">
+            {(topRows.length > 0 ? topRows : recentProducts.slice(0, 5).map((product) => ({ productId: product.id, name: product.name, quantitySold: Number(product.stockQuantity ?? 0), revenue: productPrice(product), profitEstimate: 0 }))).map((row) => (
+              <Link key={row.productId} href="/products" className="flex items-center gap-1.5 py-2">
+                <ProductAvatar product={productsById.get(row.productId) ?? ({ id: row.productId, name: row.name } as Product)} compact />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[9px] font-black text-[#102347]">{row.name}</p>
+                  <p className="text-[8px] font-semibold text-[#718096]">{row.quantitySold.toLocaleString("en-IN")} qty</p>
+                </div>
+                <span className="whitespace-nowrap text-[9px] font-black text-[#102347]">{fmtCompactRs(row.revenue)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white">
+          <div className="flex items-center justify-between border-b border-[#edf2f8] px-2.5 py-2.5">
+            <h2 className="text-[11px] font-black text-[#102347]">Recent Bills</h2>
+            <Link href="/bills" className="text-[9px] font-black text-[#075fff]">View all</Link>
+          </div>
+          <div className="divide-y divide-[#edf2f8] px-2">
+            {recentBills.slice(0, 5).map((bill) => (
+              <Link key={bill.id ?? bill.billNo} href={`/bills/${bill.id ?? ""}`} className="block py-2">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="truncate text-[9px] font-black text-[#102347]">{bill.billNo ?? "Bill"}</span>
+                  <span className="whitespace-nowrap text-[9px] font-black text-[#102347]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between gap-1">
+                  <span className="truncate text-[8px] font-semibold text-[#718096]">{bill.customerName ?? "Walk-in"}</span>
+                  <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
+                </div>
+              </Link>
+            ))}
+          </div>
+          <Link href="/bills" className="flex items-center justify-center gap-1 border-t border-[#edf2f8] py-2.5 text-[9px] font-black text-[#075fff]">View All Bills <ArrowUpRight size={10} /></Link>
+        </div>
+      </section>
+
+      <Link href="/billing" aria-label="Create new bill" className="fixed left-1/2 z-50 grid h-12 w-12 -translate-x-1/2 place-items-center rounded-full bg-[#075fff] text-white shadow-[0_12px_28px_rgba(7,95,255,0.34)] lg:hidden" style={{ bottom: "calc(var(--app-mobile-nav-height) + env(safe-area-inset-bottom) + 10px)" }}>
+        <PackagePlus size={22} />
+      </Link>
+    </div>
+  );
+}
+
+function MobileMetricCard({ label, value, previous, delta, color, icon, iconClass, positiveIsBad = false }: {
+  label: string;
+  value: number;
+  previous: number;
+  delta: number;
+  color: string;
+  icon: ReactNode;
+  iconClass: string;
+  positiveIsBad?: boolean;
+}) {
+  const spark = mobileSparkline(previous, value);
+  const bad = positiveIsBad ? delta > 0 : delta < 0;
+  const deltaColor = delta === 0 ? "text-[#718096]" : bad ? "text-[#ef3340]" : "text-[#16a34a]";
+  return (
+    <div className="flex min-w-0 flex-col rounded-[11px] border border-[#e2eaf4] bg-white p-2.5 shadow-[0_7px_20px_rgba(26,57,112,0.055)]">
+      <div className="flex min-h-[28px] items-center gap-1.5">
+        <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-[8px] border", iconClass)}>{icon}</span>
+        <span className="min-w-0 text-[9px] font-bold leading-tight text-[#3f506b]">{label}</span>
+      </div>
+      <p className="mt-2 truncate font-display text-[16px] font-black tracking-tight text-[#102347]">{fmtCompactRs(value)}</p>
+      <div className={cn("mt-1 flex items-center gap-0.5 text-[8px] font-black", deltaColor)}>
+        {delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}
+        {Math.abs(delta)}% <span className="font-semibold text-[#7b8799]">vs yesterday</span>
+      </div>
+      <div className="mt-auto h-7 pt-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={spark}>
+            <Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.8} dot={false} isAnimationActive={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+function MobileDelta({ delta }: { delta: number }) {
+  const color = delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
+  return <span className={cn("inline-flex items-center gap-0.5 text-[9px] font-black", color)}>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}% vs yesterday</span>;
+}
+
+function MobileInsight({ tone, icon, title, subtitle }: { tone: "emerald" | "orange" | "rose"; icon: ReactNode; title: string; subtitle: string }) {
+  const toneClass = tone === "emerald" ? "bg-[#e8f9ee] text-[#159447]" : tone === "orange" ? "bg-[#fff3e1] text-[#e98400]" : "bg-[#ffecef] text-[#ef3340]";
+  return (
+    <div className="flex gap-2.5 border-b border-[#edf2f8] px-3 py-2.5">
+      <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", toneClass)}>{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-black leading-snug text-[#253854]">{title}</p>
+        <p className="mt-0.5 text-[9px] font-medium leading-snug text-[#718096]">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+function mobileSparkline(previous: number, current: number): Array<{ value: number }> {
+  const start = previous > 0 ? previous : current > 0 ? current * 0.72 : 1;
+  const end = current > 0 ? current : start;
+  const spread = Math.max(start, end) * 0.08;
+  return [start, start + spread, start - spread * 0.35, start + spread * 1.35, start + spread * 0.2, end + spread * 0.55, end].map((value) => ({ value: Math.max(0, value) }));
+}
+
+function fmtCompactRs(n: number | undefined | null): string {
+  return `₹${money(n).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
 
 function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, iconBg, loading, footer, onClick }: {
   label: string; value: string; delta?: number | null; deltaLabel?: string; deltaPositiveIsBad?: boolean;

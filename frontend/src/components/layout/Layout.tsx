@@ -176,11 +176,23 @@ const NAV: NavItem[] = [
 ];
 
 const MOBILE_NAV: { href: string; label: string; Icon: React.ElementType }[] = [
+  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/billing", label: "Billing", Icon: ShoppingCart },
-  { href: "/products", label: "Products", Icon: Package },
+  { href: "/inventory", label: "Inventory", Icon: Package },
   { href: "/customers", label: "Customers", Icon: Users },
+  { href: "/settings", label: "More", Icon: Settings },
+];
+
+const MOBILE_MENU: { href: string; label: string; Icon: React.ElementType }[] = [
+  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+  { href: "/billing", label: "Billing", Icon: ShoppingCart },
+  { href: "/inventory", label: "Inventory", Icon: Package },
+  { href: "/customers", label: "Customers / Udhar", Icon: Users },
+  { href: "/purchase-bills", label: "Purchases", Icon: Truck },
+  { href: "/bills", label: "Bills History", Icon: TrendingUp },
   { href: "/reports", label: "Reports", Icon: BarChart3 },
-  { href: "/dashboard", label: "More", Icon: LayoutDashboard },
+  { href: "/expenses", label: "Expenses", Icon: Wallet },
+  { href: "/settings", label: "Settings", Icon: Settings },
 ];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -196,6 +208,12 @@ function clampW(w: number) {
 }
 function isActive(loc: string, href: string) {
   return loc === href || (href !== "/dashboard" && loc.startsWith(href + "/"));
+}
+function isMobileNavActive(loc: string, href: string) {
+  if (href === "/inventory") {
+    return ["/inventory", "/products", "/categories"].some((path) => isActive(loc, path));
+  }
+  return isActive(loc, href);
 }
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map(s => s[0] ?? "").join("").toUpperCase() || "O";
@@ -510,20 +528,48 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Mobile topbar */}
-        <header className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b bg-background/92 px-3.5 py-2.5 backdrop-blur-xl lg:hidden">
-          <div className="flex items-center justify-between gap-3">
-            <Link href="/dashboard" className="flex min-w-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow">
-                <ShoppingCart size={17} aria-hidden="true" />
-              </div>
-              <span className="min-w-0 truncate font-display text-lg font-black tracking-tight">KiranaOS</span>
-            </Link>
-            <div className="flex min-w-0 items-center justify-end gap-2">
-              <div className={cn("flex min-w-0 max-w-[42vw] items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold", connectionBadgeClass)}>
-                <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
-                <span className="truncate">{connectionLabel}</span>
-              </div>
-              {snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+        <header className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b border-[#e4ebf4] bg-white/95 px-3 py-2.5 backdrop-blur-xl lg:hidden">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" aria-label="Open navigation" className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-[#075fff] transition-colors hover:bg-[#eef4ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#075fff]/30">
+                    <Menu size={22} aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-60 p-2">
+                  {MOBILE_MENU.map(({ href, label, Icon }) => (
+                    <DropdownMenuItem key={href} asChild>
+                      <Link href={href} className="flex cursor-pointer items-center gap-3 rounded-[8px] px-3 py-2.5 font-semibold">
+                        <Icon size={16} aria-hidden="true" /> {label}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="block truncate font-display text-[19px] font-black tracking-tight text-[#102347]">Kirana<span className="text-[#075fff]">OS</span></span>
+                <span className="block truncate text-[8px] font-semibold text-[#64748b]">Smart POS for Modern Stores</span>
+              </Link>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Link href="/sync-status" aria-label="Notifications" className="relative grid h-9 w-9 place-items-center rounded-full text-[#102347] transition-colors hover:bg-[#f3f7fc]">
+                <Bell size={18} aria-hidden="true" />
+                {attentionCount > 0 && <span className="absolute right-0.5 top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-[#ef233c] px-1 text-[8px] font-black text-white">{attentionCount}</span>}
+              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" aria-label="Open profile menu" className="grid h-9 w-9 place-items-center rounded-full bg-[#075fff] text-[11px] font-black text-white ring-2 ring-[#e6efff]">
+                    {initials(storeName)}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive"><LogOut size={14} className="mr-2" /> Logout</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
@@ -541,7 +587,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(15,35,80,0.08)] backdrop-blur lg:hidden">
           <div className="grid grid-cols-5">
             {MOBILE_NAV.map(({ href, label, Icon }) => {
-              const active = isActive(loc, href);
+              const active = isMobileNavActive(loc, href);
               return (
                 <Link key={href} href={href}>
                   <div className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>
