@@ -90,6 +90,9 @@ async function cleanupTestData(ids) {
     await tx.offlineSyncEvent.deleteMany({ where: { shopId: { in: ids } } });
     await tx.aiActionLog.deleteMany({ where: { shopId: { in: ids } } });
     await tx.auditLog.deleteMany({ where: { shopId: { in: ids } } });
+    // FinancialLedger is written by every bill (postBillCreatedLedger) and references the
+    // shop, so it must be cleared before the shop row or the final delete fails its FK.
+    await tx.financialLedger.deleteMany({ where: { shopId: { in: ids } } });
     if (billIds.length) {
       await tx.payment.deleteMany({ where: { billId: { in: billIds } } });
       await tx.billItem.deleteMany({ where: { billId: { in: billIds } } });

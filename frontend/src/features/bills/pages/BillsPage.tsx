@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Ban, CalendarDays, CheckCircle2, Clock3, CloudOff, Download, Eye, FileText, IndianRupee, MoreVertical,
@@ -160,6 +160,7 @@ function useLocalBills() {
 
 export default function BillsPage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const cancelPermission = usePermission("cancel_bill");
   const { isOnline, isBrowserOnline, backendStatus, isSyncing } = useOfflineStatus();
   const { data: bills = [], isLoading, refetch } = useLocalBills();
@@ -285,8 +286,10 @@ export default function BillsPage() {
     toast({ title: "PDF/share architecture ready", description: "This bill snapshot can be rendered to PDF and shared by WhatsApp/email after adding a PDF blob service." });
   }
 
-  function refundReverse() {
-    toast({ title: "Refund / reverse coming soon", description: "Returns and refunds arrive with the Returns module. Use Cancel Bill (owner PIN) to void this bill." });
+  function refundReverse(bill: BillRecord) {
+    // Returns are processed against the original bill (pick items, refund mode, restock)
+    // on the Bill Detail page, which hosts the Return dialog.
+    navigate(`/bills/${bill.id}`);
   }
 
   function exportCsv() {
@@ -589,7 +592,7 @@ export default function BillsPage() {
                       <>
                         <button onClick={() => selectedBill.status !== "cancelled" && requestPinAction("cancel", selectedBill)} disabled={selectedBill.status === "cancelled"}
                           className="flex items-center justify-center gap-1.5 rounded-[9px] border border-rose-200 px-2 py-2 text-[11.5px] font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-40"><X size={13} /> Cancel Bill</button>
-                        <button onClick={refundReverse} className="flex items-center justify-center gap-1.5 rounded-[9px] border border-amber-300 px-2 py-2 text-[11.5px] font-bold text-amber-700 hover:bg-amber-50"><RotateCcw size={13} /> Refund / Reverse</button>
+                        <button onClick={() => refundReverse(selectedBill)} className="flex items-center justify-center gap-1.5 rounded-[9px] border border-amber-300 px-2 py-2 text-[11.5px] font-bold text-amber-700 hover:bg-amber-50"><RotateCcw size={13} /> Return / Refund</button>
                       </>
                     )}
                   </div>

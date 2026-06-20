@@ -11,6 +11,7 @@ const Dashboard = lazy(() => import("@/features/dashboard/pages/DashboardPage"))
 const Billing = lazy(() => import("@/features/billing/pages/BillingPage"));
 const BillsPage = lazy(() => import("@/features/bills/pages/BillsPage"));
 const BillDetailPage = lazy(() => import("@/features/bills/pages/BillDetailPage"));
+const NewReturnPage = lazy(() => import("@/features/returns/pages/NewReturnPage"));
 const Products = lazy(() => import("@/features/products/pages/ProductsPage"));
 const Customers = lazy(() => import("@/features/customers/pages/CustomersPage"));
 const CustomerDetailPage = lazy(() => import("@/features/customers/pages/CustomerDetailPage"));
@@ -112,6 +113,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/billing">
         <ProtectedRoute component={Billing} />
+      </Route>
+      <Route path="/returns/new">
+        <ProtectedRoute component={NewReturnPage} />
       </Route>
       <Route path="/bills/:id">
         <ProtectedRoute component={BillDetailPage} />
