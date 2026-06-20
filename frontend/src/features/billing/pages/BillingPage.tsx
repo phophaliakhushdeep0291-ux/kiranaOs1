@@ -837,19 +837,49 @@ export default function Billing() {
     localStorage.setItem(BILL_SUMMARY_WIDTH_KEY, String(summaryWidth));
   }, [summaryWidth]);
 
+  function requestSummaryAction(action: "discount" | "coupon" | "customer") {
+    window.dispatchEvent(new CustomEvent("kirana:billing-summary-action", { detail: { action } }));
+  }
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return;
       if (event.key === "Escape" && search) {
         event.preventDefault();
         setSearch("");
+        return;
+      }
+      if (event.key === "F2") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (event.key === "F4") {
+        event.preventDefault();
+        requestSummaryAction("discount");
+        return;
+      }
+      if (event.key === "F6") {
+        event.preventDefault();
+        requestSummaryAction("customer");
+        return;
+      }
+      if (event.key === "F9" && cart.length > 0) {
+        event.preventDefault();
+        holdCurrentBill();
+        return;
+      }
+      if ((event.key === "F12" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s")) && cart.length > 0) {
+        event.preventDefault();
+        void handleConfirm();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [search]);
+  });
 
   return (
-    <div className="min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] bg-[#f7fbff] lg:h-[calc(100dvh-var(--app-desktop-topbar-height))] lg:min-h-0 lg:overflow-hidden">
+    <div className="min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] bg-white lg:h-[calc(100dvh-var(--app-desktop-topbar-height))] lg:min-h-0 lg:overflow-hidden">
       <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 pb-24 sm:px-3 sm:py-3 sm:pb-24 lg:h-full lg:flex-row lg:gap-4 lg:px-4 lg:pb-3">
       {/* ── LEFT PANEL: product search + grid ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-visible lg:min-h-0 lg:overflow-hidden">
@@ -876,6 +906,9 @@ export default function Billing() {
           cartTax={totalGst}
           cartDiscount={safeDiscount}
           cartGrandTotal={grandTotal}
+          onApplyDiscount={() => requestSummaryAction("discount")}
+          onApplyCoupon={() => requestSummaryAction("coupon")}
+          onChooseCustomer={() => requestSummaryAction("customer")}
         />
         {voiceVisible && (
           <div className="shrink-0 border-t">

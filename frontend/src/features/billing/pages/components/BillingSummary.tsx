@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
+import { useEffect, useState, type CSSProperties, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -147,6 +147,7 @@ export function BillingSummary({
 }: BillingSummaryProps) {
   const [showCustomerOptions, setShowCustomerOptions] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
+  const [couponExpanded, setCouponExpanded] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -180,6 +181,20 @@ export function BillingSummary({
 
   const needsOptionsVisible =
     billType !== BillInputBillType.normal_sale || selectedCustomerId !== "walk_in";
+
+  useEffect(() => {
+    const onAction = (event: Event) => {
+      const action = (event as CustomEvent<{ action?: string }>).detail?.action;
+      if (action === "discount") setEditingDiscount(true);
+      if (action === "coupon") setCouponExpanded(true);
+      if (action === "customer") {
+        setShowCustomerOptions(true);
+        window.setTimeout(() => customerNameInputRef.current?.focus(), 0);
+      }
+    };
+    window.addEventListener("kirana:billing-summary-action", onAction);
+    return () => window.removeEventListener("kirana:billing-summary-action", onAction);
+  }, [customerNameInputRef]);
 
   return (
     <div
@@ -382,25 +397,6 @@ export function BillingSummary({
               </div>
             </div>
 
-            {/* Coupon / offer */}
-            <div className="flex items-center gap-2 pt-0.5">
-              <input
-                value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()}
-                placeholder="Coupon code"
-                className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-2 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]"
-              />
-              <button
-                onClick={() => void handleApplyCoupon()}
-                disabled={couponBusy || !couponCode.trim() || subtotal <= 0}
-                className="inline-flex h-9 items-center gap-1 rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-3 text-[11px] font-extrabold text-[#0057ff] hover:bg-[#eaf2ff] disabled:opacity-50"
-              >
-                {couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply
-              </button>
-            </div>
-            {couponMsg && <p className={`pt-0.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
-
             {/* Grand total */}
             <div className="mt-2 flex items-center justify-between border-t border-[#edf1f6] pt-3">
               <span className="font-display text-[18px] font-black tracking-tight text-[#0f1e3d]">Grand Total</span>
@@ -411,11 +407,20 @@ export function BillingSummary({
           </div>
 
           {/* Coupon box — dashed blue */}
-          <button className="flex h-[42px] w-full items-center gap-2.5 rounded-[9px] border border-dashed border-[#b9cdf6] bg-white px-3.5 transition-colors hover:bg-[#f5f9ff]">
+          <button onClick={() => setCouponExpanded((value) => !value)} aria-expanded={couponExpanded} className="flex h-[42px] w-full items-center gap-2.5 rounded-[9px] border border-dashed border-[#b9cdf6] bg-white px-3.5 transition-colors hover:bg-[#f5f9ff]">
             <Tag size={15} className="text-[#0057ff]" />
             <span className="text-[12px] font-extrabold text-[#0057ff]">Apply Coupon Code</span>
-            <ChevronRight size={15} className="ml-auto text-[#0057ff]" />
+            <ChevronRight size={15} className={`ml-auto text-[#0057ff] transition-transform ${couponExpanded ? "rotate-90" : ""}`} />
           </button>
+          {couponExpanded && (
+            <div className="rounded-[9px] border border-[#dbe8ff] bg-[#f8fbff] p-2.5">
+              <div className="flex items-center gap-2">
+                <input autoFocus value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder="Enter coupon code" className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]" />
+                <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-[#075fff] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
+              </div>
+              {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
+            </div>
+          )}
 
           {/* Payment panel */}
           <BillingPaymentPanel
