@@ -9,6 +9,10 @@ export interface ConfirmBillVariables { data: BillInput }
 export function useConfirmBill(options?: MutationHookOptions<Bill, ConfirmBillVariables>) {
   return useMutation<Bill, ApiClientError, ConfirmBillVariables>({
     ...getMutationOptions<Bill, ConfirmBillVariables>(options),
+    // This mutation writes to IndexedDB first. TanStack's default "online"
+    // mode pauses it before mutationFn when navigator.onLine is false, leaving
+    // the billing UI stuck on Saving and never creating the outbox record.
+    networkMode: "always",
     mutationFn: ({ data }) => createBillLocalFirst(data),
   });
 }

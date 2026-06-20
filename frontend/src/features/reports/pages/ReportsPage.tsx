@@ -1,25 +1,82 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, Database, Download, FileBarChart, Lightbulb, PieChart as PieIcon, RefreshCw, ShieldAlert, TrendingDown, TrendingUp, Users, Wallet, XCircle } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip } from "recharts";
-import { getExpenseSummary } from "@/features/expenses/api";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  LabelList,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Banknote,
+  BarChart3,
+  Box,
+  CalendarDays,
+  CheckCircle2,
+  CircleDollarSign,
+  Download,
+  Filter,
+  IndianRupee,
+  Info,
+  PackagePlus,
+  ReceiptIndianRupee,
+  RefreshCw,
+  ShoppingBag,
+  Sparkles,
+  TrendingUp,
+  Users,
+  WalletCards,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { buildLocalReportSnapshot, toDateInputValue, type LocalReportSnapshot } from "@/features/reports/local-reporting";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
-import { useToast } from "@/hooks/use-toast";
+import { PageShell, SyncBadge } from "@/components/shared";
+import { getExpenseSummary, listExpenses } from "@/features/expenses/api";
+import {
+  buildLocalReportSnapshot,
+  toDateInputValue,
+  type LocalReportSnapshot,
+  type ReportDailyPoint,
+} from "@/features/reports/local-reporting";
 import { recordDataExportLocalFirst } from "@/features/reports/local-actions";
-import { FilterBar, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+const PANEL = "overflow-hidden rounded-[8px] border border-[#e2e9f3] bg-white shadow-[0_4px_18px_rgba(31,60,110,0.045)]";
+const GRID_STROKE = "#e7edf5";
+const AXIS_COLOR = "#6f7f9b";
+
 function fmt(value: number | undefined) {
-  return "Rs " + Math.round(value ?? 0).toLocaleString("en-IN");
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `₹${Math.round(value).toLocaleString("en-IN")}`;
 }
 
-function todayInput() { return toDateInputValue(new Date()); }
+function fmtAxis(value: number) {
+  if (Math.abs(value) >= 100_000) return `₹${Math.round(value / 100_000)}L`;
+  if (Math.abs(value) >= 1_000) return `₹${Math.round(value / 1_000)}K`;
+  return `₹${Math.round(value)}`;
+}
+
+function todayInput() {
+  return toDateInputValue(new Date());
+}
 
 function daysAgoInput(days: number) {
   const date = new Date();
@@ -27,23 +84,42 @@ function daysAgoInput(days: number) {
   return toDateInputValue(date);
 }
 
-function formatRangeLabel(from: string, to: string) {
-  const today = todayInput();
-  if (from === today && to === today) return "Today";
-  if (from === daysAgoInput(6) && to === today) return "Last 7 days";
-  if (from === daysAgoInput(29) && to === today) return "Last 30 days";
-  if (from === to) return from;
-  return `${from} to ${to}`;
-}
-
 function safeDateRange(from: string, to: string) {
   if (!from || !to) return { from: todayInput(), to: todayInput() };
   return from <= to ? { from, to } : { from: to, to: from };
 }
 
-export default function Reports() {
+function previousRange(from: string, to: string) {
+  const start = new Date(`${from}T00:00:00`);
+  const end = new Date(`${to}T00:00:00`);
+  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+  const previousTo = new Date(start);
+  previousTo.setDate(previousTo.getDate() - 1);
+  const previousFrom = new Date(previousTo);
+  previousFrom.setDate(previousFrom.getDate() - days + 1);
+  return { from: toDateInputValue(previousFrom), to: toDateInputValue(previousTo) };
+}
+
+function dateLabel(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function rangeLabel(from: string, to: string) {
+  return from === to ? dateLabel(from) : `${dateLabel(from)} - ${dateLabel(to)}`;
+}
+
+function delta(current: number, previous: number) {
+  if (Math.abs(previous) < 0.005) return current > 0 ? 100 : 0;
+  return Math.round(((current - previous) / Math.abs(previous)) * 1_000) / 10;
+}
+
+function shortText(value: string, max = 18) {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+export default function ReportsPage() {
   const { toast } = useToast();
-  const [from, setFrom] = useState(todayInput());
+  const [from, setFrom] = useState(daysAgoInput(6));
   const [to, setTo] = useState(todayInput());
   const [snapshot, setSnapshot] = useState<LocalReportSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,48 +128,35 @@ export default function Reports() {
   const [exportError, setExportError] = useState<string | null>(null);
 
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
-  const rangeLabel = useMemo(() => formatRangeLabel(range.from, range.to), [range.from, range.to]);
+  const priorRange = useMemo(() => previousRange(range.from, range.to), [range.from, range.to]);
+  const expenseParams = useMemo(() => ({
+    from: `${range.from}T00:00:00.000Z`,
+    to: `${range.to}T23:59:59.999Z`,
+  }), [range.from, range.to]);
 
-  // Operating expenses come from the server (online-first feature); when offline
-  // the cards show an em dash rather than a wrong zero.
-  const expenseQ = useQuery({
+  const expenseSummary = useQuery({
     queryKey: ["reports-expense-summary", range],
-    queryFn: () => getExpenseSummary({ from: `${range.from}T00:00:00.000Z`, to: `${range.to}T23:59:59.999Z` }),
+    queryFn: () => getExpenseSummary(expenseParams),
     retry: 1,
   });
-  const expenseTotal = expenseQ.data?.total;
-  const netProfit = expenseQ.data != null && snapshot?.selected != null
-    ? (snapshot.selected.profitEstimate ?? 0) - expenseQ.data.total
-    : undefined;
-
-  const payModeData = useMemo(() => {
-    const s = snapshot?.selected;
-    if (!s) return [];
-    return [
-      { name: "Cash", value: s.cashSales ?? 0, color: "#16a34a" },
-      { name: "UPI", value: s.upiSales ?? 0, color: "#8b5cf6" },
-      { name: "Udhar", value: s.udharSales ?? 0, color: "#f59e0b" },
-    ].filter((d) => d.value > 0);
-  }, [snapshot]);
-
-  const insights = useMemo(() => {
-    const s = snapshot?.selected;
-    if (!s || !s.bills) return [];
-    const out: { text: string; tone: "green" | "amber" | "blue" }[] = [];
-    out.push({ tone: "blue", text: `${fmt(s.sales)} across ${s.bills} bill${s.bills === 1 ? "" : "s"} — average ${fmt(s.sales / s.bills)} per bill.` });
-    const top = payModeData.length ? payModeData.reduce((a, b) => (b.value > a.value ? b : a)) : null;
-    if (top && s.sales > 0) out.push({ tone: "green", text: `${top.name} leads payments with ${Math.round((top.value / s.sales) * 100)}% of sales.` });
-    const topProduct = snapshot?.topProducts?.[0];
-    if (topProduct && s.sales > 0) out.push({ tone: "blue", text: `${topProduct.name} is your top seller — ${fmt(topProduct.revenue)} (${Math.round((topProduct.revenue / s.sales) * 100)}% of sales).` });
-    if ((s.udharSales ?? 0) > 0) out.push({ tone: "amber", text: `${fmt(s.udharSales)} went out as udhar this period — follow up to protect cash flow.` });
-    if (netProfit != null) out.push({ tone: netProfit >= 0 ? "green" : "amber", text: `Net profit ${fmt(netProfit)} after ${fmt(expenseTotal ?? 0)} operating expenses.` });
-    return out.slice(0, 4);
-  }, [snapshot, payModeData, netProfit, expenseTotal]);
+  const previousExpenseSummary = useQuery({
+    queryKey: ["reports-expense-summary", priorRange],
+    queryFn: () => getExpenseSummary({ from: `${priorRange.from}T00:00:00.000Z`, to: `${priorRange.to}T23:59:59.999Z` }),
+    retry: 1,
+  });
+  const expenses = useQuery({
+    queryKey: ["reports-expenses", range],
+    queryFn: () => listExpenses(expenseParams),
+    retry: 1,
+  });
 
   const loadReports = async () => {
     setLoading(true);
-    try { setSnapshot(await buildLocalReportSnapshot(range)); }
-    finally { setLoading(false); }
+    try {
+      setSnapshot(await buildLocalReportSnapshot(range));
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -107,35 +170,77 @@ export default function Reports() {
     };
   }, [range.from, range.to]);
 
-  const quickRanges = useMemo(() => [
-    { label: "Today", from: todayInput(), to: todayInput() },
-    { label: "7 days", from: daysAgoInput(6), to: todayInput() },
-    { label: "30 days", from: daysAgoInput(29), to: todayInput() },
-  ], []);
-
   const selected = snapshot?.selected;
-  const selectedCashCollected = snapshot?.paymentBreakdown.netCashInHand ?? 0;
-  const selectedTotalReceived = (snapshot?.paymentBreakdown.cashIn ?? 0) + (snapshot?.paymentBreakdown.upiIn ?? 0);
-  const maxProductRevenue = useMemo(() =>
-    Math.max(...(snapshot?.topProducts.map((p) => p.revenue) ?? [0]), 1),
-  [snapshot?.topProducts]);
-  const maxCustomerSales = useMemo(() =>
-    Math.max(...(snapshot?.topCustomers.map((c) => c.sales) ?? [0]), 1),
-  [snapshot?.topCustomers]);
+  const previous = snapshot?.previousSelected;
+  const expenseTotal = expenseSummary.data?.total;
+  const previousExpenseTotal = previousExpenseSummary.data?.total ?? 0;
+  const netProfit = expenseTotal == null ? undefined : (selected?.profitEstimate ?? 0) - expenseTotal;
+  const previousNetProfit = (previous?.profitEstimate ?? 0) - previousExpenseTotal;
 
-  async function confirmDataExport(ownerPin: string, reason: string) {
+  const paymentModes = useMemo(() => {
+    const payment = snapshot?.paymentBreakdown;
+    if (!payment) return [];
+    return [
+      { name: "Cash", value: payment.cashIn, color: "#20b75a" },
+      { name: "UPI", value: payment.upiIn, color: "#1264f6" },
+      { name: "Udhar", value: payment.udhar, color: "#f5a30a" },
+    ].filter((item) => item.value > 0);
+  }, [snapshot]);
+
+  const paymentTotal = paymentModes.reduce((sum, item) => sum + item.value, 0);
+  const expenseByDay = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const expense of expenses.data ?? []) {
+      if (expense.deletedAt) continue;
+      const date = expense.spentAt?.slice(0, 10);
+      if (date) map.set(date, (map.get(date) ?? 0) + Number(expense.amount || 0));
+    }
+    return map;
+  }, [expenses.data]);
+
+  const dailyRows = useMemo(() => (snapshot?.dailyTrend ?? []).slice(-7).reverse().map((point) => {
+    const dayExpense = expenseByDay.get(point.date) ?? 0;
+    return { ...point, expense: dayExpense, net: point.profit - dayExpense };
+  }), [snapshot?.dailyTrend, expenseByDay]);
+
+  const insights = useMemo(() => {
+    if (!snapshot || !selected) return [];
+    const salesDelta = delta(selected.sales, previous?.sales ?? 0);
+    const topCategory = snapshot.categoryPerformance[0];
+    return [
+      {
+        tone: "green" as const,
+        title: `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared to the previous period.`,
+        detail: `${paymentModes[0]?.name ?? "Cash"} currently leads collected payments.`,
+      },
+      topCategory ? {
+        tone: "amber" as const,
+        title: `${topCategory.name} contributes ${selected.sales ? Math.round((topCategory.revenue / selected.sales) * 100) : 0}% of total sales.`,
+        detail: "Review product margins and stock depth in this category.",
+      } : null,
+      {
+        tone: "red" as const,
+        title: `${snapshot.topCustomers.filter((customer) => customer.balance > 0).length} customers have outstanding dues.`,
+        detail: "Follow up from Customers / Udhar to improve cash flow.",
+      },
+    ].filter(Boolean) as Array<{ tone: "green" | "amber" | "red"; title: string; detail: string }>;
+  }, [snapshot, selected, previous?.sales, paymentModes]);
+
+  async function confirmExport(ownerPin: string, reason: string) {
     if (!snapshot) return;
     setExporting(true);
     setExportError(null);
     try {
       await recordDataExportLocalFirst({
-        ownerPin, reason,
+        ownerPin,
+        reason,
         reportType: "local_reports_snapshot",
-        from: range.from, to: range.to, format: "json",
+        from: range.from,
+        to: range.to,
+        format: "json",
         rowCount: snapshot.topProducts.length + snapshot.topCustomers.length + snapshot.lowStock.length + snapshot.staffSales.length,
       });
-      const payload = JSON.stringify({ exportedAt: new Date().toISOString(), from: range.from, to: range.to, snapshot }, null, 2);
-      const blob = new Blob([payload], { type: "application/json" });
+      const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), range, snapshot }, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -143,454 +248,288 @@ export default function Reports() {
       anchor.click();
       URL.revokeObjectURL(url);
       setExportPinOpen(false);
-      toast({ title: "Report exported", description: "Owner approval was saved in the audit log." });
+      toast({ title: "Report exported", description: "Owner approval was recorded in the audit log." });
     } catch (error) {
-      setExportError(error instanceof Error ? error.message : "Owner PIN is required to export data.");
-    } finally { setExporting(false); }
+      setExportError(error instanceof Error ? error.message : "Owner approval is required.");
+    } finally {
+      setExporting(false);
+    }
   }
 
+  const trend = snapshot?.dailyTrend ?? [];
+  const kpis = [
+    {
+      label: "Total Sales",
+      value: selected?.sales ?? 0,
+      previous: previous?.sales ?? 0,
+      icon: <ShoppingBag size={16} />,
+      color: "#1264f6",
+      iconClass: "bg-[#edf4ff] text-[#1264f6]",
+      spark: trend.map((point) => point.sales),
+    },
+    {
+      label: "Cash Collection",
+      value: snapshot?.paymentBreakdown.cashIn ?? 0,
+      previous: previous?.cashSales ?? 0,
+      icon: <Banknote size={16} />,
+      color: "#16ad52",
+      iconClass: "bg-[#eaf9ef] text-[#16ad52]",
+      spark: trend.map((point) => point.cash),
+    },
+    {
+      label: "UPI Collection",
+      value: snapshot?.paymentBreakdown.upiIn ?? 0,
+      previous: previous?.upiSales ?? 0,
+      icon: <WalletCards size={16} />,
+      color: "#7c3df0",
+      iconClass: "bg-[#f3edff] text-[#7c3df0]",
+      spark: trend.map((point) => point.upi),
+    },
+    {
+      label: "Profit (Est.)",
+      value: selected?.profitEstimate ?? 0,
+      previous: previous?.profitEstimate ?? 0,
+      icon: <CircleDollarSign size={16} />,
+      color: "#16ad52",
+      iconClass: "bg-[#eaf9ef] text-[#16ad52]",
+      spark: trend.map((point) => point.profit),
+    },
+    {
+      label: "Outstanding Udhar",
+      value: snapshot?.pendingUdhar ?? 0,
+      previous: previous?.udharSales ?? 0,
+      icon: <ReceiptIndianRupee size={16} />,
+      color: "#ff334d",
+      iconClass: "bg-[#ffedef] text-[#ff334d]",
+      spark: trend.map((point) => point.udhar),
+      positiveIsBad: true,
+    },
+    {
+      label: "Expense Total",
+      value: expenseTotal,
+      previous: previousExpenseTotal,
+      icon: <Box size={16} />,
+      color: "#ff8a00",
+      iconClass: "bg-[#fff3e8] text-[#ff8a00]",
+      spark: trend.map((point) => expenseByDay.get(point.date) ?? 0),
+      positiveIsBad: true,
+    },
+    {
+      label: "Net Profit",
+      value: netProfit,
+      previous: previousNetProfit,
+      icon: <BarChart3 size={16} />,
+      color: "#1264f6",
+      iconClass: "bg-[#edf4ff] text-[#1264f6]",
+      spark: trend.map((point) => point.profit - (expenseByDay.get(point.date) ?? 0)),
+    },
+  ];
+
   return (
-    <PageShell className="space-y-5 sm:space-y-6">
-      <PageHeader
-        title="Reports"
-        description={`${rangeLabel} — sales, cash, udhar, stock, and staff performance.`}
-        eyebrow={snapshot?.hasUnsyncedOperations
-          ? <SyncBadge status="estimate" label={`Local estimate — ${snapshot.pendingSyncCount} pending, ${snapshot.failedSyncCount} failed`} />
-          : <span className="inline-flex items-center gap-1.5"><Database size={13} className="opacity-60" /> Calculated from local saved data</span>}
-        actions={(
-          <>
-            <Link href="/daily-closing"><Button variant="outline" className="w-full sm:w-auto"><CalendarDays size={15} className="mr-1.5" /> Daily closing</Button></Link>
-            <Button onClick={loadReports} disabled={loading} className="w-full sm:w-auto"><RefreshCw size={15} className="mr-1.5" /> Refresh</Button>
-          </>
-        )}
-      />
-
-      {/* ── Date Range Filter ─────────────────────────────────────────────── */}
-      <FilterBar actions={
-        <Button variant="outline" className="h-10 w-full sm:w-auto" disabled={loading || !snapshot} onClick={() => { setExportError(null); setExportPinOpen(true); }}>
-          <Download size={15} className="mr-1.5" />Export
-        </Button>
-      }>
-        <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:w-auto">
-          <div className="space-y-1.5">
-            <Label className="app-muted-label">From</Label>
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 rounded-xl" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="app-muted-label">To</Label>
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 rounded-xl" />
-          </div>
+    <PageShell className="space-y-3 bg-white pb-8 text-[#10224a] sm:space-y-3.5 2xl:pt-0">
+      <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between 2xl:fixed 2xl:right-[276px] 2xl:top-[18px] 2xl:z-[60] 2xl:flex-row 2xl:gap-3">
+        <div className="flex min-w-0 items-center gap-2 text-[11px] text-[#6c7c98]">
+          {snapshot?.hasUnsyncedOperations ? (
+            <SyncBadge status="estimate" label={`${snapshot.pendingSyncCount + snapshot.failedSyncCount} changes awaiting sync`} />
+          ) : (
+            <SyncBadge status="synced" label="Synced · Local reports ready" />
+          )}
         </div>
-        <div className="grid w-full grid-cols-3 gap-2 lg:flex lg:w-auto">
-          {quickRanges.map((item) => (
-            <Button key={item.label} className="h-10 rounded-xl px-4" variant={range.from === item.from && range.to === item.to ? "default" : "outline"} onClick={() => { setFrom(item.from); setTo(item.to); }}>
-              {item.label}
-            </Button>
-          ))}
-        </div>
-      </FilterBar>
-
-      {/* ── KPI Hero Section ─────────────────────────────────────────────── */}
-      <section className="premium-hero overflow-hidden">
-        <div className="border-b px-5 py-4 sm:px-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="app-muted-label">Summary</p>
-              <p className="mt-0.5 font-display text-xl font-black tracking-tight">{rangeLabel}</p>
-            </div>
-            {selected && !loading && (
-              <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary ring-1 ring-primary/20">
-                <TrendingUp size={13} />
-                {selected.bills ?? 0} bills
+        <div className="flex flex-wrap items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="h-9 min-w-[220px] justify-between rounded-[7px] border-[#dfe7f2] bg-white px-3 text-[12px] font-semibold text-[#24385f]">
+                <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[#1264f6]" />{rangeLabel(range.from, range.to)}</span>
+                <span className="text-[#7e8ba3]">⌄</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[320px] rounded-[8px] border-[#dfe7f2] p-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">From</Label><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 h-9 rounded-[6px]" /></div>
+                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">To</Label><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="mt-1 h-9 rounded-[6px]" /></div>
               </div>
-            )}
-          </div>
-        </div>
-        <div className="p-4 sm:p-5">
-          <StatsGrid columns={4}>
-            <StatCard
-              label="Total sales"
-              value={loading ? "" : fmt(selected?.sales)}
-              description={`${selected?.bills ?? 0} bills`}
-              icon={<TrendingUp size={18} />}
-              loading={loading}
-              tone="green"
-            />
-            <StatCard
-              label="Profit estimate"
-              value={loading ? "" : fmt(selected?.profitEstimate)}
-              description="From saved bill items"
-              icon={<FileBarChart size={18} />}
-              loading={loading}
-              tone="blue"
-            />
-            <StatCard
-              label="Udhar given"
-              value={loading ? "" : fmt(selected?.udharSales)}
-              description="Credit issued this period"
-              icon={<Users size={18} />}
-              loading={loading}
-              tone="amber"
-            />
-            <StatCard
-              label="Cash in hand"
-              value={loading ? "" : fmt(selectedCashCollected)}
-              description="Received minus supplier paid"
-              icon={<Wallet size={18} />}
-              loading={loading}
-              tone="green"
-            />
-            <StatCard
-              label="Expense total"
-              value={expenseQ.isLoading ? "" : expenseTotal != null ? fmt(expenseTotal) : "—"}
-              description={expenseQ.isError ? "Connect to load expenses" : "Operating costs this period"}
-              icon={<TrendingDown size={18} />}
-              loading={expenseQ.isLoading}
-              tone="amber"
-            />
-            <StatCard
-              label="Net profit"
-              value={loading || expenseQ.isLoading ? "" : netProfit != null ? fmt(netProfit) : "—"}
-              description={netProfit != null ? "Profit estimate minus expenses" : "Needs expenses (online)"}
-              icon={<FileBarChart size={18} />}
-              loading={loading || expenseQ.isLoading}
-              tone="blue"
-            />
-          </StatsGrid>
+            </PopoverContent>
+          </Popover>
+          <Popover>
+            <PopoverTrigger asChild><Button variant="outline" className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-semibold"><Filter size={14} className="mr-2" />Filters</Button></PopoverTrigger>
+            <PopoverContent align="end" className="w-48 rounded-[8px] p-2">
+              {[{ label: "Today", days: 0 }, { label: "This week", days: 6 }, { label: "Last 30 days", days: 29 }].map((item) => (
+                <button key={item.label} className="w-full rounded-[6px] px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc]" onClick={() => { setFrom(daysAgoInput(item.days)); setTo(todayInput()); }}>{item.label}</button>
+              ))}
+              <Link href="/daily-closing" className="mt-1 block border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[#1264f6]">Open daily closing</Link>
+            </PopoverContent>
+          </Popover>
+          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-9 rounded-[7px] bg-[#075fff] px-4 text-[12px] font-bold shadow-[0_7px_16px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Download size={14} className="mr-2" />Export</Button>
+          <Button variant="ghost" size="icon" title="Refresh reports" onClick={loadReports} disabled={loading} className="h-9 w-9 rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
         </div>
       </section>
 
-      {/* ── Payment Mode Breakdown + Insights ────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-          <div className="border-b px-5 py-4">
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><PieIcon size={16} /></span>
-              <h2 className="font-display text-base font-black tracking-tight">Payment mode breakdown</h2>
-            </div>
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
+        {kpis.map((kpi) => (
+          <KpiCard key={kpi.label} {...kpi} loading={loading || (kpi.label.includes("Expense") && expenseSummary.isLoading)} />
+        ))}
+      </section>
+
+      <section className="grid gap-3 xl:grid-cols-[1.04fr_1.12fr_1.18fr]">
+        <Panel title="Sales Trend" info action={<PeriodPill />}>
+          <div className="flex items-baseline gap-4 px-3.5 pt-1 text-[11px]">
+            <span className="text-[#60708e]">Total Sales</span>
+            <strong className="text-[16px] text-[#14264c]">{fmt(selected?.sales)}</strong>
+            <TrendLabel current={selected?.sales ?? 0} previous={previous?.sales ?? 0} />
           </div>
-          {loading ? (
-            <div className="p-5"><Skeleton className="h-40 w-full" /></div>
-          ) : payModeData.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-muted-foreground">No sales in this period yet.</p>
-          ) : (
-            <div className="flex items-center gap-4 p-5">
-              <div className="relative h-[130px] w-[130px] shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={payModeData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2} strokeWidth={0}>
-                      {payModeData.map((d) => <Cell key={d.name} fill={d.color} />)}
-                    </Pie>
-                    <ChartTooltip formatter={(v: number) => fmt(v)} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-                  <div>
-                    <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">Sales</p>
-                    <p className="font-display text-sm font-black">{fmt(selected?.sales)}</p>
-                  </div>
-                </div>
+          <ChartFrame loading={loading} empty={trend.length === 0}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trend} margin={{ top: 14, right: 10, left: -12, bottom: 0 }}>
+                <defs><linearGradient id="salesArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1264f6" stopOpacity={0.2} /><stop offset="100%" stopColor="#1264f6" stopOpacity={0.01} /></linearGradient></defs>
+                <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
+                <XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} />
+                <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
+                <Tooltip content={<MoneyTooltip />} />
+                <Area type="monotone" dataKey="sales" name="Sales" stroke="#075fff" strokeWidth={2.2} fill="url(#salesArea)" dot={{ r: 2.7, fill: "white", stroke: "#075fff", strokeWidth: 1.7 }} activeDot={{ r: 4 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+        </Panel>
+
+        <Panel title="Category Performance" info action={<PeriodPill />}>
+          <ChartFrame loading={loading} empty={!snapshot?.categoryPerformance.length}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={snapshot?.categoryPerformance ?? []} margin={{ top: 20, right: 8, left: -10, bottom: 2 }} barCategoryGap="28%">
+                <defs><linearGradient id="categoryBars" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#075fff" /><stop offset="100%" stopColor="#8bb5ff" /></linearGradient></defs>
+                <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
+                <XAxis dataKey="name" tickFormatter={(value) => shortText(String(value), 10)} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} interval={0} />
+                <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
+                <Tooltip content={<MoneyTooltip />} />
+                <Bar dataKey="revenue" name="Revenue" fill="url(#categoryBars)" radius={[3, 3, 0, 0]} maxBarSize={34}><LabelList dataKey="revenue" position="top" formatter={(value: unknown) => fmt(Number(value))} style={{ fontSize: 8, fontWeight: 700, fill: "#24385f" }} /></Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+        </Panel>
+
+        <Panel title="Payment Mode Breakdown" info action={<PeriodPill />}>
+          {loading ? <Skeleton className="m-4 h-[178px]" /> : paymentModes.length === 0 ? <EmptyChart /> : (
+            <div className="grid min-h-[208px] grid-cols-[minmax(150px,0.85fr)_1.15fr] items-center gap-3 px-3 pb-2">
+              <div className="relative mx-auto h-[162px] w-[162px]">
+                <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={paymentModes} dataKey="value" nameKey="name" innerRadius={51} outerRadius={76} paddingAngle={1} stroke="#fff" strokeWidth={2}>{paymentModes.map((mode) => <Cell key={mode.name} fill={mode.color} />)}</Pie><Tooltip content={<MoneyTooltip />} /></PieChart></ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center"><div><strong className="block text-[15px] text-[#13244a]">{fmt(paymentTotal)}</strong><span className="text-[10px] text-[#7886a0]">Total Collection</span></div></div>
               </div>
-              <ul className="min-w-0 flex-1 space-y-2">
-                {payModeData.map((d) => (
-                  <li key={d.name} className="flex items-center gap-2 text-xs">
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.color }} />
-                    <span className="flex-1 font-semibold">{d.name}</span>
-                    <span className="font-bold">{fmt(d.value)}</span>
-                    <span className="text-[10px] text-muted-foreground">({selected?.sales ? Math.round((d.value / selected.sales) * 100) : 0}%)</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm lg:col-span-2">
-          <div className="border-b px-5 py-4">
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"><Lightbulb size={16} /></span>
-              <h2 className="font-display text-base font-black tracking-tight">Report insights</h2>
-            </div>
-          </div>
-          {loading ? (
-            <div className="p-5"><Skeleton className="h-40 w-full" /></div>
-          ) : insights.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-muted-foreground">Insights appear once this period has bills.</p>
-          ) : (
-            <ul className="space-y-3 p-5">
-              {insights.map((ins, i) => (
-                <li key={i} className="flex items-start gap-3 rounded-xl border bg-background/60 px-4 py-3">
-                  <span className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg ${ins.tone === "green" ? "bg-emerald-50 text-emerald-600" : ins.tone === "amber" ? "bg-amber-50 text-amber-600" : "bg-sky-50 text-sky-600"}`}>
-                    {ins.tone === "green" ? <TrendingUp size={14} /> : ins.tone === "amber" ? <AlertTriangle size={14} /> : <FileBarChart size={14} />}
-                  </span>
-                  <p className="text-sm font-medium leading-snug">{ins.text}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* ── Money Flow + Sync Status ─────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm lg:col-span-2">
-          <div className="border-b px-5 py-4">
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary"><Wallet size={16} /></span>
-              <h2 className="font-display text-base font-black tracking-tight">Money flow</h2>
-            </div>
-          </div>
-          {loading ? (
-            <div className="p-5"><Skeleton className="h-32 w-full" /></div>
-          ) : (
-            <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3">
-              <MoneyCell label="Sales — cash" value={fmt(snapshot?.paymentBreakdown.cash)} positive />
-              <MoneyCell label="Sales — UPI" value={fmt(snapshot?.paymentBreakdown.upi)} positive />
-              <MoneyCell label="Total received" value={fmt(selectedTotalReceived)} positive highlight hint={`Incl. old udhar: ${fmt(snapshot?.paymentBreakdown.oldUdharReceived)}`} />
-              <MoneyCell label="Supplier cash paid" value={fmt(snapshot?.paymentBreakdown.purchaseCashPaid)} negative />
-              <MoneyCell label="Supplier due" value={fmt(snapshot?.paymentBreakdown.purchaseDue)} negative />
-              <MoneyCell label="Pending udhar" value={fmt(snapshot?.pendingUdhar)} />
-            </div>
-          )}
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-          <div className="border-b px-5 py-4">
-            <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"><ShieldAlert size={16} /></span>
-              <h2 className="font-display text-base font-black tracking-tight">Sync status</h2>
-            </div>
-          </div>
-          {loading ? (
-            <div className="p-5"><Skeleton className="h-24 w-full" /></div>
-          ) : (
-            <div className="divide-y p-1">
-              <SyncRow label="Pending backup" count={snapshot?.pendingSyncCount ?? 0} />
-              <SyncRow label="Failed sync" count={snapshot?.failedSyncCount ?? 0} critical />
-              <SyncRow label="Conflicts" count={snapshot?.conflictCount ?? 0} critical />
-              <div className="px-4 py-3">
-                <Link href="/sync-status"><Button variant="outline" size="sm" className="w-full rounded-xl">Open sync status</Button></Link>
+              <div className="space-y-3 pr-2">
+                {paymentModes.map((mode) => <div key={mode.name} className="grid grid-cols-[10px_1fr_auto] items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} /><span className="font-semibold text-[#2c3f64]">{mode.name}</span><span className="font-bold text-[#15264b]">{fmt(mode.value)} <em className="font-normal not-italic text-[#75839d]">({paymentTotal ? ((mode.value / paymentTotal) * 100).toFixed(1) : 0}%)</em></span></div>)}
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </Panel>
+      </section>
 
-      {/* ── Data Tables ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <ReportTable
-          title="Top customers"
-          icon={<Users size={16} className="text-sky-600" />}
-          empty="No customer sales in this period"
-          headers={["Customer", "Sales", "Balance", "Bills"]}
-          loading={loading}
-        >
-          {snapshot?.topCustomers.map((row, index) => (
-            <tr key={row.customerId} className="border-b transition-colors last:border-0 hover:bg-muted/30">
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <RankBadge rank={index + 1} />
-                  <div>
-                    <p className="font-semibold">{row.name}</p>
-                    <p className="text-xs text-muted-foreground">{row.mobile || "No mobile"}</p>
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <p className="font-bold">{fmt(row.sales)}</p>
-                <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-muted ml-auto">
-                  <div className="h-full rounded-full bg-sky-400" style={{ width: `${Math.round((row.sales / maxCustomerSales) * 100)}%` }} />
-                </div>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <span className={row.balance > 0 ? "font-semibold text-amber-600" : "text-muted-foreground"}>{fmt(row.balance)}</span>
-              </td>
-              <td className="px-4 py-3 text-right text-muted-foreground">{row.bills}</td>
-            </tr>
-          ))}
-        </ReportTable>
+      <section className="grid gap-3 xl:grid-cols-3">
+        <DenseTable title="Top Products" action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
+          {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{row.category}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
+          {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>{snapshot.topProducts.reduce((sum, row) => sum + row.quantitySold, 0)}</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
+        </DenseTable>
 
-        <ReportTable
-          title="Top products"
-          icon={<TrendingUp size={16} className="text-emerald-600" />}
-          empty="No product sales in this period"
-          headers={["Product", "Qty", "Revenue", "Profit"]}
-          loading={loading}
-        >
-          {snapshot?.topProducts.map((row, index) => (
-            <tr key={row.productId} className="border-b transition-colors last:border-0 hover:bg-muted/30">
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <RankBadge rank={index + 1} />
-                  <span className="font-semibold">{row.name}</span>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-right text-muted-foreground">{row.quantitySold}</td>
-              <td className="px-4 py-3 text-right">
-                <p className="font-bold">{fmt(row.revenue)}</p>
-                <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-muted ml-auto">
-                  <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.round((row.revenue / maxProductRevenue) * 100)}%` }} />
-                </div>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <span className={row.profitEstimate > 0 ? "font-semibold text-emerald-600" : "text-muted-foreground"}>{fmt(row.profitEstimate)}</span>
-              </td>
-            </tr>
-          ))}
-        </ReportTable>
+        <DenseTable title="Top Customers (Udhar)" action="View all" actionHref="/customers" headers={["Customer", "Total Due (₹)", "Last Purchase", "Risk"]} loading={loading} empty={!snapshot?.topCustomers.length}>
+          {snapshot?.topCustomers.slice(0, 5).map((row) => <tr key={row.customerId}><Td strong>{row.name}</Td><Td right strong>{fmt(row.balance)}</Td><Td right>{row.bills ? `${row.bills} bills` : "—"}</Td><Td right><RiskChip balance={row.balance} /></Td></tr>)}
+          {snapshot?.topCustomers.length ? <tr className="font-bold"><Td>Total Outstanding</Td><Td right>{fmt(snapshot.topCustomers.reduce((sum, row) => sum + row.balance, 0))}</Td><Td /><Td /></tr> : null}
+        </DenseTable>
 
-        <ReportTable
-          title="Low stock alerts"
-          icon={<AlertTriangle size={16} className="text-amber-600" />}
-          empty="No low-stock products"
-          headers={["Product", "Current stock", "Alert threshold"]}
-          loading={loading}
-        >
-          {snapshot?.lowStock.map((row) => {
-            const pct = row.threshold > 0 ? Math.round((row.stock / row.threshold) * 100) : 0;
-            return (
-              <tr key={row.productId} className="border-b transition-colors last:border-0 hover:bg-muted/30">
-                <td className="px-4 py-3">
-                  <p className="font-semibold">{row.name}</p>
-                  <p className="text-xs text-muted-foreground">{row.category || "Uncategorised"}</p>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div>
-                    <span className={cn("font-bold", pct <= 25 ? "text-destructive" : "text-amber-600")}>
-                      {row.stock} {row.unit || ""}
-                    </span>
-                    <div className="mt-1 h-1.5 w-20 overflow-hidden rounded-full bg-muted ml-auto">
-                      <div className={cn("h-full rounded-full", pct <= 25 ? "bg-destructive" : "bg-amber-400")} style={{ width: `${Math.min(pct, 100)}%` }} />
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-right text-muted-foreground">{row.threshold} {row.unit || ""}</td>
-              </tr>
-            );
-          })}
-        </ReportTable>
+        <DenseTable title="Daily Closing Summary" action="View all" actionHref="/daily-closing" headers={["Date", "Sales (₹)", "Collection (₹)", "Expense (₹)", "Net Profit (₹)"]} loading={loading || expenses.isLoading} empty={!dailyRows.length}>
+          {dailyRows.map((row) => <tr key={row.date}><Td strong>{new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</Td><Td right>{fmt(row.sales)}</Td><Td right>{fmt(row.collection)}</Td><Td right>{fmt(row.expense)}</Td><Td right strong>{fmt(row.net)}</Td></tr>)}
+        </DenseTable>
+      </section>
 
-        <ReportTable
-          title="Staff-wise sales"
-          icon={<Users size={16} className="text-violet-600" />}
-          empty="No staff sales in this period"
-          headers={["Staff", "Sales", "Bills"]}
-          loading={loading}
-        >
-          {snapshot?.staffSales.map((row, index) => (
-            <tr key={row.staffId} className="border-b transition-colors last:border-0 hover:bg-muted/30">
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2.5">
-                  <RankBadge rank={index + 1} tone="violet" />
-                  <span className="font-semibold">{row.staffName}</span>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-right font-bold">{fmt(row.sales)}</td>
-              <td className="px-4 py-3 text-right text-muted-foreground">{row.bills}</td>
-            </tr>
-          ))}
-        </ReportTable>
-      </div>
+      <section className="grid gap-3 xl:grid-cols-[0.86fr_1.1fr_1.04fr]">
+        <Panel title="Stock Movement Snapshot" info action={<PeriodPill />}>
+          <div className="grid grid-cols-2 divide-x divide-y divide-[#e8edf5] px-3 pb-3">
+            <StockStat icon={<PackagePlus size={15} />} label="Total Stock In" value={fmt(snapshot?.stockMovement.totalIn)} deltaValue="Value received" tone="blue" />
+            <StockStat icon={<Box size={15} />} label="Total Stock Out" value={fmt(snapshot?.stockMovement.totalOut)} deltaValue="Value issued" tone="red" />
+            <StockStat icon={<ShoppingBag size={15} />} label="New Products Added" value={String(snapshot?.stockMovement.newProducts ?? 0)} deltaValue="In selected period" tone="green" />
+            <StockStat icon={<AlertTriangle size={15} />} label="Low Stock Items" value={String(snapshot?.stockMovement.lowStockItems ?? 0)} deltaValue="Require attention" tone="amber" />
+          </div>
+        </Panel>
 
-      <OwnerPinModal
-        open={exportPinOpen}
-        onCancel={() => { if (!exporting) setExportPinOpen(false); }}
-        title="Approve data export"
-        description="Reports contain sensitive shop data. Owner PIN and reason are required before the export file is generated."
-        confirmLabel="Export data"
-        reasonRequired
-        loading={exporting}
-        error={exportError}
-        onConfirm={({ ownerPin, reason }) => confirmDataExport(ownerPin, reason)}
-      />
+        <Panel title="Stock Movement Trend" subtitle="(Value)" info action={<PeriodPill />}>
+          <div className="flex gap-5 px-4 pt-1 text-[10px] font-semibold"><span className="text-[#15a94d]">→ Stock In</span><span className="text-[#ff3b45]">→ Stock Out</span></div>
+          <div className="h-[138px] px-2 pb-2">
+            {loading ? <Skeleton className="h-full" /> : <ResponsiveContainer width="100%" height="100%"><LineChart data={trend} margin={{ top: 12, right: 8, left: -12, bottom: 0 }}><CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" /><XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} /><YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} /><Tooltip content={<MoneyTooltip />} /><Line type="monotone" dataKey="stockIn" name="Stock In" stroke="#15a94d" strokeWidth={2} dot={{ r: 2.4, fill: "white", strokeWidth: 1.5 }} /><Line type="monotone" dataKey="stockOut" name="Stock Out" stroke="#ff3b45" strokeWidth={2} dot={{ r: 2.4, fill: "white", strokeWidth: 1.5 }} /></LineChart></ResponsiveContainer>}
+          </div>
+        </Panel>
+
+        <Panel title="Report Insights">
+          <div className="divide-y divide-[#e8edf5] px-3">
+            {loading ? <Skeleton className="my-3 h-28" /> : insights.map((insight) => <InsightRow key={insight.title} {...insight} />)}
+          </div>
+          <Link href="/daily-closing" className="mx-3 mb-3 flex h-8 items-center justify-center rounded-[6px] border border-[#dfe7f2] text-[11px] font-bold text-[#075fff] hover:bg-[#f6f9ff]">View Detailed Insights <span className="ml-2">→</span></Link>
+        </Panel>
+      </section>
+
+      <OwnerPinModal open={exportPinOpen} onCancel={() => { if (!exporting) setExportPinOpen(false); }} title="Approve data export" description="Reports contain sensitive shop data. Owner PIN and reason are required before export." confirmLabel="Export data" reasonRequired loading={exporting} error={exportError} onConfirm={({ ownerPin, reason }) => confirmExport(ownerPin, reason)} />
     </PageShell>
   );
 }
 
-/* ── Local components ────────────────────────────────────────────────────── */
-
-function RankBadge({ rank, tone = "default" }: { rank: number; tone?: "default" | "violet" }) {
-  const colors = tone === "violet"
-    ? "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-    : rank === 1 ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
-    : "bg-muted text-muted-foreground";
-  return (
-    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-black ${colors}`}>
-      {rank}
-    </span>
-  );
+function KpiCard({ label, value, previous, icon, iconClass, color, spark, positiveIsBad, loading }: { label: string; value: number | undefined; previous: number; icon: ReactNode; iconClass: string; color: string; spark: number[]; positiveIsBad?: boolean; loading: boolean }) {
+  const change = delta(value ?? 0, previous);
+  const favorable = positiveIsBad ? change <= 0 : change >= 0;
+  const points = spark.length > 1 ? spark.map((item, index) => ({ index, value: item })) : [{ index: 0, value: 0 }, { index: 1, value: value ?? 0 }];
+  return <article className={cn(PANEL, "min-h-[126px] p-3")}>
+    {loading ? <Skeleton className="h-full min-h-[98px]" /> : <>
+      <div className="flex items-center gap-2"><span className={cn("grid h-8 w-8 place-items-center rounded-[7px]", iconClass)}>{icon}</span><p className="min-w-0 text-[10.5px] font-semibold leading-tight text-[#34486e]">{label}</p></div>
+      <p className="mt-2 whitespace-nowrap text-[20px] font-black leading-none text-[#101f40]">{fmt(value)}</p>
+      <div className="mt-2 flex items-center gap-1 text-[9.5px]"><span className={cn("inline-flex items-center gap-0.5 font-bold", favorable ? "text-[#10a948]" : "text-[#ff334d]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span><span className="text-[#7a879f]">vs last period</span></div>
+      <div className="mt-1 h-[24px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={points}><Line type="monotone" dataKey="value" stroke={color} strokeWidth={1.6} dot={{ r: 1.6, fill: color, strokeWidth: 0 }} isAnimationActive={false} /></LineChart></ResponsiveContainer></div>
+    </>}
+  </article>;
 }
 
-function MoneyCell({ label, value, positive, negative, highlight, hint }: { label: string; value: string; positive?: boolean; negative?: boolean; highlight?: boolean; hint?: string }) {
-  return (
-    <div className={cn("bg-card p-4", highlight && "bg-primary/[0.04]")}>
-      <p className="app-muted-label">{label}</p>
-      <div className="mt-1.5 flex items-center gap-1.5">
-        {positive && <ArrowUpRight size={14} className="shrink-0 text-emerald-500" />}
-        {negative && <ArrowDownRight size={14} className="shrink-0 text-orange-500" />}
-        <p className={cn(
-          "font-display text-lg font-black tabular-nums",
-          positive && "text-emerald-700 dark:text-emerald-400",
-          negative && "text-orange-600 dark:text-orange-400",
-          highlight && "text-primary",
-        )}>{value}</p>
-      </div>
-      {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
+function Panel({ title, subtitle, info, action, children }: { title: string; subtitle?: string; info?: boolean; action?: ReactNode; children: ReactNode }) {
+  return <article className={PANEL}>
+    <header className="flex h-10 items-center justify-between gap-2 px-3.5"><div className="flex items-center gap-1.5"><h2 className="text-[12px] font-extrabold text-[#13254a]">{title}</h2>{subtitle ? <span className="text-[9px] text-[#72809a]">{subtitle}</span> : null}{info ? <Info size={11} className="text-[#7e8ca4]" /> : null}</div>{action}</header>
+    {children}
+  </article>;
 }
 
-function SyncRow({ label, count, critical }: { label: string; count: number; critical?: boolean }) {
-  const ok = count === 0;
-  return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <div className="flex items-center gap-2.5">
-        {ok
-          ? <CheckCircle2 size={16} className="text-emerald-500" />
-          : critical
-            ? <XCircle size={16} className="text-destructive" />
-            : <AlertTriangle size={16} className="text-amber-500" />}
-        <span className="text-sm font-medium">{label}</span>
-      </div>
-      <span className={cn(
-        "rounded-full px-2.5 py-0.5 text-xs font-bold",
-        ok ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-          : critical ? "bg-destructive/10 text-destructive"
-          : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
-      )}>{count}</span>
-    </div>
-  );
+function PeriodPill() {
+  return <span className="rounded-[5px] border border-[#dfe6f0] bg-[#fbfcfe] px-2 py-1 text-[9px] font-semibold text-[#405273]">This Week⌄</span>;
 }
 
-function ReportTable({ title, icon, empty, headers, loading, children }: { title: string; icon?: React.ReactNode; empty: string; headers: string[]; loading: boolean; children?: React.ReactNode }) {
-  const hasRows = Boolean(children && (!Array.isArray(children) || (children as React.ReactNode[]).filter(Boolean).length > 0));
-  return (
-    <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <div className="flex items-center gap-2.5 border-b px-5 py-4">
-        {icon && <span className="grid h-7 w-7 place-items-center rounded-lg bg-muted">{icon}</span>}
-        <h2 className="font-display text-base font-black tracking-tight">{title}</h2>
-      </div>
-      {loading ? (
-        <div className="p-5"><Skeleton className="h-32 w-full" /></div>
-      ) : !hasRows ? (
-        <div className="flex flex-col items-center gap-2 py-12 text-center">
-          <span className="text-2xl">—</span>
-          <p className="text-sm text-muted-foreground">{empty}</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[400px] text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40">
-                {headers.map((header, index) => (
-                  <th key={header} className={cn("px-4 py-2.5 text-[11px] font-bold uppercase tracking-widest text-muted-foreground", index === 0 ? "text-left" : "text-right")}>{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>{children}</tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
+function ChartFrame({ loading, empty, children }: { loading: boolean; empty: boolean; children: ReactNode }) {
+  return <div className="h-[166px] px-2 pb-2">{loading ? <Skeleton className="h-full" /> : empty ? <EmptyChart /> : children}</div>;
+}
+
+function EmptyChart() {
+  return <div className="grid h-full min-h-[150px] place-items-center text-[11px] text-[#8290a8]">No activity in this period</div>;
+}
+
+function MoneyTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name?: string; value?: number; color?: string }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return <div className="rounded-[6px] border border-[#dfe7f2] bg-white px-3 py-2 text-[10px] shadow-lg"><p className="mb-1 font-bold text-[#536483]">{label}</p>{payload.map((item) => <p key={item.name} style={{ color: item.color }}><span className="font-semibold">{item.name}:</span> {fmt(item.value)}</p>)}</div>;
+}
+
+function TrendLabel({ current, previous }: { current: number; previous: number }) {
+  const change = delta(current, previous);
+  return <span className={cn("inline-flex items-center gap-0.5 text-[10px] font-bold", change >= 0 ? "text-[#10a948]" : "text-[#ff334d]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}% <em className="font-normal not-italic text-[#75839d]">vs last period</em></span>;
+}
+
+function DenseTable({ title, action, actionHref, headers, loading, empty, children }: { title: string; action: string; actionHref: string; headers: string[]; loading: boolean; empty: boolean; children: ReactNode }) {
+  return <article className={PANEL}><header className="flex h-9 items-center justify-between px-3.5"><h2 className="text-[12px] font-extrabold text-[#13254a]">{title}</h2><Link href={actionHref} className="text-[10px] font-bold text-[#075fff] hover:underline">{action}</Link></header>{loading ? <Skeleton className="m-3 h-32" /> : empty ? <div className="grid h-32 place-items-center text-[11px] text-[#8290a8]">No records in this period</div> : <div className="overflow-x-auto px-2 pb-1.5"><table className="w-full min-w-[430px] border-collapse text-[9px]"><thead><tr className="bg-[#f5f7fb]">{headers.map((header, index) => <th key={header} className={cn("border-y border-[#e5ebf3] px-2 py-1 font-bold text-[#52617c]", index ? "text-right" : "text-left")}>{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{children}</tbody></table></div>}</article>;
+}
+
+function Td({ children, right, strong }: { children?: ReactNode; right?: boolean; strong?: boolean }) {
+  return <td className={cn("whitespace-nowrap px-2 py-1 text-[#344666]", right && "text-right", strong && "font-bold text-[#17294d]")}>{children}</td>;
+}
+
+function RiskChip({ balance }: { balance: number }) {
+  const level = balance >= 10_000 ? "High" : balance >= 3_000 ? "Medium" : "Low";
+  return <span className={cn("inline-flex rounded-[4px] px-2 py-0.5 text-[9px] font-semibold", level === "High" ? "bg-[#ffeded] text-[#ff334d]" : level === "Medium" ? "bg-[#fff3df] text-[#f08a00]" : "bg-[#eaf9ef] text-[#14a94f]")}>{level}</span>;
+}
+
+function StockStat({ icon, label, value, deltaValue, tone }: { icon: ReactNode; label: string; value: string; deltaValue: string; tone: "blue" | "red" | "green" | "amber" }) {
+  const colors = { blue: "bg-[#edf4ff] text-[#1264f6]", red: "bg-[#ffedef] text-[#ff334d]", green: "bg-[#eaf9ef] text-[#16ad52]", amber: "bg-[#fff3e8] text-[#ff8a00]" }[tone];
+  return <div className="flex min-h-[68px] gap-2.5 p-3"><span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[7px]", colors)}>{icon}</span><div className="min-w-0"><p className="text-[9px] font-semibold text-[#64738e]">{label}</p><p className="mt-0.5 text-[14px] font-black text-[#15264b]">{value}</p><p className="mt-0.5 text-[8.5px] text-[#7b89a0]">{deltaValue}</p></div></div>;
+}
+
+function InsightRow({ tone, title, detail }: { tone: "green" | "amber" | "red"; title: string; detail: string }) {
+  const colors = { green: "bg-[#eaf9ef] text-[#16ad52]", amber: "bg-[#fff3e8] text-[#ff8a00]", red: "bg-[#ffedef] text-[#ff334d]" }[tone];
+  const icon = tone === "green" ? <TrendingUp size={14} /> : tone === "amber" ? <Sparkles size={14} /> : <AlertTriangle size={14} />;
+  return <div className="flex gap-2.5 py-2.5"><span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", colors)}>{icon}</span><div><p className="text-[10px] font-semibold leading-4 text-[#20345a]">{title}</p><p className="text-[9px] leading-4 text-[#76839b]">{detail}</p></div></div>;
 }

@@ -166,7 +166,10 @@ export default function Billing() {
   const advanceAmount = allowAdvancePayment && paymentMode !== SPLIT_PAYMENT ? roundMoney(Math.max(0, effectivePaidAmount - grandTotal)) : 0;
   const creditAmount = billType === BillInputBillType.estimate ? 0 : billType === BillInputBillType.udhar_entry ? grandTotal : roundMoney(Math.max(0, grandTotal - Math.min(effectivePaidAmount, grandTotal)));
 
-  const allProducts = useMemo(() => (products.data ?? []).filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null), [products.data]);
+  // Demo "sample" products (id starts with "demo_") are example data for the dashboard tour
+  // only — they don't exist on the server, so a real bill that referenced them would land in
+  // permanent sync CONFLICT ("Product not found: demo_product_…"). Keep them out of billing.
+  const allProducts = useMemo(() => (products.data ?? []).filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null && !String(product.id ?? "").startsWith("demo_")), [products.data]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
