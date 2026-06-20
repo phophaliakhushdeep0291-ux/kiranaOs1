@@ -34,6 +34,7 @@ import {
 import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/features/subscription";
 import { useBusinessType } from "@/features/settings/business-types";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
+import { DemoModeBanner } from "@/features/demo/DemoModeBanner";
 import { CommandPalette } from "./CommandPalette";
 import { getApiBaseUrl } from "@/lib/api/http";
 import { cn } from "@/lib/utils";
@@ -581,6 +582,7 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
 
         <main id="main-content" className="app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto scroll-smooth overscroll-contain bg-white pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0">
+          <DemoModeBanner />
           {children}
         </main>
 

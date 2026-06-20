@@ -304,3 +304,86 @@ export async function seedDemoShopData(): Promise<{ created: boolean }> {
 
   return { created: true };
 }
+
+// Every demo row is tagged demo_data:true with a "demo_" id and written sync_status:"synced"
+// (never enqueued), so demo data is local-only and never reaches the server. That makes both
+// detection and removal a pure local-data operation — no sync deletes required.
+const DEMO_TABLES = [
+  "products",
+  "customers",
+  "suppliers",
+  "bills",
+  "bill_items",
+  "payments",
+  "customer_ledger",
+  "inventory_movements",
+  "local_audit_logs",
+];
+
+function isDemoRow(row: Record<string, unknown> | undefined): boolean {
+  if (!row) return false;
+  return row.demo_data === true || String(row.id ?? "").startsWith("demo_");
+}
+
+/** True if any demo sample data is currently present locally. */
+export async function hasDemoData(): Promise<boolean> {
+  for (const table of ["products", "bills"]) {
+    const rows = await offlineDB.getAll<Record<string, unknown>>(table).catch(() => []);
+    if (rows.some(isDemoRow)) return true;
+  }
+  return false;
+}
+
+/**
+ * Removes every demo sample record (Start fresh). Safe because demo rows are local-only and
+ * tagged; real records the user added are left untouched. Also resets the seed guard so the
+ * "Load demo shop data" button can be used again later.
+ */
+export async function clearDemoShopData(): Promise<{ removed: number }> {
+  let removed = 0;
+  for (const table of DEMO_TABLES) {
+    const rows = await offlineDB.getAll<Record<string, unknown>>(table).catch(() => []);
+    for (const r of rows) {
+      if (isDemoRow(r) && typeof r.id === "string") {
+        await offlineDB.delete(table, r.id).catch(() => {});
+        removed += 1;
+      }
+    }
+  }
+  // Catch pre-fix orphans: any local row whose serialized contents reference a demo_ id
+  // (a real bill made with a demo product before the demo-tag fix, the audit logs that go
+  // with it, and the CONFLICT outbox op that will never sync). The server doesn't know
+  // demo_ ids, so this data is unrecoverable — better cleaned than left dangling.
+  const orphanRegex = /(^|")demo_/;
+  const sweepTables: { table: string; keyFields: string[] }[] = [
+    { table: "bills", keyFields: ["id"] },
+    { table: "bill_items", keyFields: ["id"] },
+    { table: "payments", keyFields: ["id"] },
+    { table: "customer_ledger", keyFields: ["id"] },
+    { table: "inventory_movements", keyFields: ["id"] },
+    { table: "local_audit_logs", keyFields: ["id"] },
+    // sync_outbox's Dexie primary key is `clientEventId`, not `id`.
+    { table: "sync_outbox", keyFields: ["clientEventId", "op_id", "id"] },
+  ];
+  for (const { table, keyFields } of sweepTables) {
+    const rows = await offlineDB.getAll<Record<string, unknown>>(table).catch(() => []);
+    for (const r of rows) {
+      const ref = JSON.stringify(r);
+      if (!orphanRegex.test(ref)) continue;
+      let key: string | null = null;
+      for (const f of keyFields) {
+        const v = r[f];
+        if (typeof v === "string" && v) { key = v; break; }
+      }
+      if (!key) continue;
+      await offlineDB.delete(table, key).catch(() => {});
+      removed += 1;
+    }
+  }
+  await offlineDB.setSetting(DEMO_SETTING_KEY, null).catch(() => {});
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("kirana:local-data-changed"));
+    window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
+  }
+  return { removed };
+}

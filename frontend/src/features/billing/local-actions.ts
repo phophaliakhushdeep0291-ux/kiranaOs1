@@ -354,12 +354,26 @@ const BILL_CREATION_TRANSACTION_TABLES = [
 const BILL_CREATION_CACHE_DAYS = 30;
 const BILL_CREATION_CACHE_EXPIRES_MS = BILL_CREATION_CACHE_DAYS * 24 * 60 * 60 * 1000;
 
+// Detect bills that touch the sample demo shop (the seed uses "demo_" ids). Such bills must
+// stay local-only: pushing them would 404 on the server ("Product not found: demo_product_…")
+// and stick forever as a CONFLICT. They're flagged demo_data:true so "Clear & start fresh"
+// wipes them along with the rest of the sample data.
+function billReferencesDemoData(input: BillInput): boolean {
+  if (typeof input.customerId === "string" && input.customerId.startsWith("demo_")) return true;
+  return (input.items ?? []).some((item) => typeof item.productId === "string" && item.productId.startsWith("demo_"));
+}
+
+function tagDemo<T extends object>(row: T, isDemo: boolean): T {
+  return isDemo ? ({ ...row, demo_data: true, sync_status: "synced" } as T) : row;
+}
+
 export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const sensitiveActions = readSensitiveBillActions(input);
   validateSensitiveBillApproval(input, sensitiveActions);
   const validated = parseOrThrow(billCreationSchema, input) as BillInput;
   validateBillCreationBusinessRules(validated);
 
+  const isDemoBill = billReferencesDemoData(validated);
   const billId = createLocalId("bill");
   const scope = getOfflineScope();
   const idempotencyKey = `create-bill:${scope.tenant_id}:${scope.store_id}:${scope.device_id}:${billId}`;
@@ -556,23 +570,29 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
 
   await offlineDB.transaction(BILL_CREATION_TRANSACTION_TABLES, async (tx) => {
     if (customerPreparation.customerToPut) {
-      await tx.put("customers", customerPreparation.customerToPut);
+      await tx.put("customers", tagDemo(customerPreparation.customerToPut, isDemoBill));
     }
-    await tx.put("bills", bill);
-    await tx.putMany("bill_items", billItems);
-    await tx.putMany("payments", billPayments);
-    await tx.putMany("inventory_movements", saleMovements);
+    const billToWrite = tagDemo(bill, isDemoBill);
+    console.warn("QA-DEMO-BILL", JSON.stringify({ isDemoBill, hasTag: (billToWrite as Record<string, unknown>).demo_data === true, sync: (billToWrite as Record<string, unknown>).sync_status }));
+    await tx.put("bills", billToWrite);
+    await tx.putMany("bill_items", billItems.map((row) => tagDemo(row, isDemoBill)));
+    await tx.putMany("payments", billPayments.map((row) => tagDemo(row, isDemoBill)));
+    await tx.putMany("inventory_movements", saleMovements.map((row) => tagDemo(row, isDemoBill)));
     if (ledgerEntry) {
-      await tx.put("customer_ledger", ledgerEntry);
+      await tx.put("customer_ledger", tagDemo(ledgerEntry, isDemoBill));
     }
-    await tx.putMany("local_audit_logs", auditLogs);
-    if (customerPreparation.customerCreateOutbox) {
-      await tx.enqueueOutboxOperation(customerPreparation.customerCreateOutbox);
+    await tx.putMany("local_audit_logs", auditLogs.map((row) => tagDemo(row, isDemoBill)));
+    // Demo bills must never be enqueued to the outbox — they reference demo_ ids the server
+    // doesn't know about and would land in permanent CONFLICT ("Product not found: demo_…").
+    if (!isDemoBill) {
+      if (customerPreparation.customerCreateOutbox) {
+        await tx.enqueueOutboxOperation(customerPreparation.customerCreateOutbox);
+      }
+      for (const auditOutbox of auditOutboxes) {
+        await tx.enqueueOutboxOperation(auditOutbox);
+      }
+      await tx.enqueueOutboxOperation(billOutbox);
     }
-    for (const auditOutbox of auditOutboxes) {
-      await tx.enqueueOutboxOperation(auditOutbox);
-    }
-    await tx.enqueueOutboxOperation(billOutbox);
     await tx.setSetting(`cache:${BILL_CACHE_KEY}`, nextBillsCache, cacheExpiresAt);
     if (nextCustomersCache) await tx.setSetting(`cache:${CUSTOMER_CACHE_KEY}`, nextCustomersCache, cacheExpiresAt);
     if (nextLedgerCache) await tx.setSetting("cache:customer_ledger", nextLedgerCache, cacheExpiresAt);
