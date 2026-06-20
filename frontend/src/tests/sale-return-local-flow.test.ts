@@ -112,6 +112,12 @@ describe("sale return local-first", () => {
     expect(op).toBeTruthy();
     expect((op?.payload as Record<string, unknown>)?.refundMode).toBe("cash");
     expect(((op?.payload as Record<string, unknown>)?.items as unknown[]).length).toBe(1);
+    // Push-safety regression: the payload must NOT carry a standalone "device_…" id.
+    // collectUnmappedLocalIds treats "device_" as a local-id prefix and would block the
+    // push forever as an unresolved dependency. The device id rides on the outbox event.
+    expect(op?.payload as Record<string, unknown>).not.toHaveProperty("sourceDeviceId");
+    const payloadJson = JSON.stringify(op?.payload ?? {});
+    expect(/":\s*"device_/.test(payloadJson)).toBe(false);
   });
 
   it("damaged refund: no restock, damage movement recorded", async () => {

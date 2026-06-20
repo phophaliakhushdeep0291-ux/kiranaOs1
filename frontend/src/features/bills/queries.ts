@@ -20,6 +20,17 @@ function isNetworkLikeError(error: unknown) {
   return !(error instanceof ApiClientError) || !isBrowserOnline();
 }
 
+function billCreatedAtMs(bill: Bill): number {
+  const record = bill as Bill & { created_at?: unknown; billDate?: unknown; date?: unknown };
+  const raw = bill.createdAt ?? record.created_at ?? record.billDate ?? record.date;
+  const parsed = typeof raw === "string" || raw instanceof Date ? new Date(raw).getTime() : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function newestBillsFirst(bills: Bill[]): Bill[] {
+  return [...bills].sort((a, b) => billCreatedAtMs(b) - billCreatedAtMs(a));
+}
+
 function withDedupedBillPayments(bill: Bill): Bill {
   const record = bill as Bill & { payments?: Array<Record<string, unknown>> };
   if (!Array.isArray(record.payments)) return bill;
@@ -61,17 +72,24 @@ export async function cacheBills(bills: Bill[]) {
 }
 
 function readCachedBills(): Bill[] {
-  return dedupeBillsForDisplay(readInstantCache<Bill[]>(BILLS_CACHE_KEY, []).map(withBillAliases)) as unknown as Bill[];
+  return newestBillsFirst(
+    dedupeBillsForDisplay(readInstantCache<Bill[]>(BILLS_CACHE_KEY, []).map(withBillAliases)) as unknown as Bill[],
+  );
 }
 
 async function readBillsFromIndexedDB(params?: ListBillsParams): Promise<Bill[]> {
   try {
     const rows = await offlineDB.getAll<Bill>("bills");
     const q = String(params?.search ?? "").trim().toLowerCase();
-    const recent = rows.filter((b) => (b as { deletedAt?: unknown }).deletedAt == null);
-    const filtered = q ? recent.filter((b) => String((b as { billNumber?: unknown }).billNumber ?? "").includes(q)) : recent;
+    const recent = rows
+      .filter((b) => (b as { deletedAt?: unknown }).deletedAt == null)
+      .map(withBillAliases);
+    const filtered = q
+      ? recent.filter((b) => String(b.billNumber ?? b.billNo ?? "").toLowerCase().includes(q))
+      : recent;
+    const visible = newestBillsFirst(dedupeBillsForDisplay(filtered) as unknown as Bill[]);
     const limit = Number(params?.limit ?? filtered.length);
-    return dedupeBillsForDisplay(filtered.slice(0, Number.isFinite(limit) && limit > 0 ? limit : filtered.length).map(withBillAliases)) as unknown as Bill[];
+    return visible.slice(0, Number.isFinite(limit) && limit > 0 ? limit : visible.length);
   } catch {
     return [];
   }

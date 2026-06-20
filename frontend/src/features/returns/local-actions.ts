@@ -266,7 +266,9 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
       localBillId: billId,
       clientBillId: billId,
       idempotencyKey,
-      sourceDeviceId: scope.device_id,
+      // NOTE: do NOT put the device id in the payload — "device_…" matches a local-id
+      // prefix and collectUnmappedLocalIds would treat it as an unresolved dependency
+      // and block the push. The device id rides on the outbox event's device_id field.
       returnOfBillId: input.originalBillId ?? null,
       originalBillId: input.originalBillId ?? null,
       refundMode,
