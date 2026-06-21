@@ -7,7 +7,6 @@ const voiceActions = readFileSync("src/features/voice/voice-actions.ts", "utf8")
 const productsPage = readFileSync("src/features/products/pages/ProductsPage.tsx", "utf8");
 const billsPage = readFileSync("src/features/bills/pages/BillsPage.tsx", "utf8");
 const customersPage = readFileSync("src/features/customers/pages/CustomersPage.tsx", "utf8");
-const udharPage = readFileSync("src/features/ledger/pages/UdharPage.tsx", "utf8");
 
 describe("command palette and voice page bridge", () => {
   it("wires header search to an offline-first command palette", () => {
@@ -32,7 +31,8 @@ describe("command palette and voice page bridge", () => {
     expect(productsPage).toContain("window.addEventListener(\"kirana:voice-product-search\"");
     expect(billsPage).toContain("window.addEventListener(\"kirana:voice-bill-search\"");
     expect(customersPage).toContain("window.addEventListener(\"kirana:voice-customer-search\"");
-    expect(udharPage).toContain("window.addEventListener(\"kirana:voice-udhar-search\"");
-    expect(udharPage).toContain("window.addEventListener(\"kirana:voice-payment-draft\"");
+    // /udhar was retired; its voice handlers moved to the Customers/Udhar page.
+    expect(customersPage).toContain("window.addEventListener(\"kirana:voice-udhar-search\"");
+    expect(customersPage).toContain("window.addEventListener(\"kirana:voice-payment-draft\"");
   });
 });

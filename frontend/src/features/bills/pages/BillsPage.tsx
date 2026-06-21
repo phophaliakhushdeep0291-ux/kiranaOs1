@@ -21,6 +21,8 @@ import type { Bill } from "@/types/api";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { usePermission } from "@/features/staff/permissions";
 import { useOfflineStatus } from "@/features/sync";
+import { useAuth } from "@/features/auth/useAuth";
+import { billRecordToShareInput, resolveBillCustomerMobile, shareBillOnWhatsapp } from "@/features/bills/share";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { cn } from "@/lib/utils";
 
@@ -160,6 +162,7 @@ function useLocalBills() {
 
 export default function BillsPage() {
   const { toast } = useToast();
+  const { shop } = useAuth();
   const [, navigate] = useLocation();
   const cancelPermission = usePermission("cancel_bill");
   const { isOnline, isBrowserOnline, backendStatus, isSyncing } = useOfflineStatus();
@@ -282,8 +285,18 @@ export default function BillsPage() {
     if (!ok) toast({ title: "Print blocked", description: "Allow pop-ups to print or save PDF.", variant: "destructive" });
   }
 
-  function sharePdfArchitecture() {
-    toast({ title: "PDF/share architecture ready", description: "This bill snapshot can be rendered to PDF and shared by WhatsApp/email after adding a PDF blob service." });
+  async function shareOnWhatsapp(bill: BillRecord) {
+    const customerMobile = await resolveBillCustomerMobile(bill as Record<string, unknown>);
+    const shareInput = billRecordToShareInput(bill as Record<string, unknown>, {
+      shopName: shop?.name,
+      shopLocation: [shop?.city, shop?.address].filter(Boolean)[0] as string | undefined,
+      customerMobile,
+    });
+    const { targetedCustomer } = shareBillOnWhatsapp(shareInput);
+    toast({
+      title: "Opening WhatsApp…",
+      description: targetedCustomer ? "Ready to send to the customer's number." : "Pick a chat to send this bill.",
+    });
   }
 
   function refundReverse(bill: BillRecord) {
@@ -497,7 +510,7 @@ export default function BillsPage() {
                                   <DropdownMenuItem onClick={() => { setSelectedId(bill.id); setPanelClosed(false); }}><Eye size={14} className="mr-2" /> View details</DropdownMenuItem>
                                   <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => printBill(bill)}><Printer size={14} className="mr-2" /> Print bill</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={sharePdfArchitecture}><Share2 size={14} className="mr-2" /> Share PDF</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => void shareOnWhatsapp(bill)}><Share2 size={14} className="mr-2" /> Send on WhatsApp</DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   {deleted ? (
                                     <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> Restore bill</DropdownMenuItem>
@@ -583,7 +596,7 @@ export default function BillsPage() {
                   <div className="grid grid-cols-3 gap-1.5">
                     <PanelAction icon={<Eye size={14} />} label="View Bill" href={`/bills/${selectedBill.id}`} />
                     <PanelAction icon={<Printer size={14} />} label="Print Bill" onClick={() => printBill(selectedBill)} />
-                    <PanelAction icon={<Share2 size={14} />} label="Share PDF" onClick={sharePdfArchitecture} />
+                    <PanelAction icon={<Share2 size={14} />} label="WhatsApp" onClick={() => void shareOnWhatsapp(selectedBill)} />
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-1.5">
                     {isDeleted(selectedBill) ? (

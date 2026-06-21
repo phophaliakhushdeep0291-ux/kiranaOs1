@@ -15,6 +15,7 @@ import { BillingSummary } from "./components/BillingSummary";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
+import { shareBillOnWhatsapp, derivePaymentModeLabel, type BillShareInput } from "@/features/bills/share";
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
 import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config";
 import { computeGstBreakdown } from "@/lib/gst";
@@ -795,15 +796,31 @@ export default function Billing() {
     writeBillingReceiptWindow(popup, snapshot, { autoPrint: true });
   }
 
-  async function sharePdfArchitecture() {
+  function shareLastBillOnWhatsapp() {
     const snapshot = lastPrintableBill ?? makePrintableBill(billType, effectivePaidAmount, creditAmount);
-    const shareText = `${snapshot.billNo}\nTotal ₹${snapshot.total.toLocaleString("en-IN")}\nPaid ₹${snapshot.paid.toLocaleString("en-IN")}\nUdhar ₹${snapshot.credit.toLocaleString("en-IN")}`;
-    if (navigator.share) {
-      await navigator.share({ title: snapshot.billNo, text: shareText }).catch(() => undefined);
-      return;
-    }
-    await navigator.clipboard?.writeText(shareText).catch(() => undefined);
-    toast({ title: "PDF/share ready architecture", description: "Use Print → Save as PDF now. The same printable bill snapshot can be connected to a PDF blob/share service later." });
+    const shareInput: BillShareInput = {
+      shopName: snapshot.shop?.name ?? "My Shop",
+      shopLocation: [snapshot.shop?.city, snapshot.shop?.address].filter(Boolean)[0] as string | undefined,
+      billNo: snapshot.billNo,
+      dateIso: snapshot.createdAt,
+      items: snapshot.items.map((it) => ({
+        name: it.product?.name ?? "Item",
+        quantity: it.quantity,
+        rate: it.rate,
+        lineTotal: roundMoney(it.quantity * it.rate),
+      })),
+      total: snapshot.total,
+      paid: snapshot.paid,
+      credit: snapshot.credit,
+      paymentMode: derivePaymentModeLabel(snapshot.payments, snapshot.credit, snapshot.total),
+      customerName: snapshot.customerName,
+      customerMobile: snapshot.customerMobile,
+    };
+    const { targetedCustomer } = shareBillOnWhatsapp(shareInput);
+    toast({
+      title: "Opening WhatsApp…",
+      description: targetedCustomer ? "Ready to send to the customer's number." : "Pick a chat to send this bill.",
+    });
   }
 
   const startSummaryResize = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -982,7 +999,7 @@ export default function Billing() {
         onSaveEstimate={() => handleConfirm(BillInputBillType.estimate)}
         onHoldBill={holdCurrentBill}
         onPrintBill={() => printBillSnapshot()}
-        onSharePdf={() => void sharePdfArchitecture()}
+        onSharePdf={() => shareLastBillOnWhatsapp()}
         onClearCart={clearCartWithConfirmation}
         onUpdateQty={updateQty}
         onUpdateRate={updateRate}

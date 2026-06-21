@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, FileText, Pencil, Plus, Printer, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, MessageCircle, Pencil, Plus, Printer, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,8 @@ import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { usePermission } from "@/features/staff/permissions";
 import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry } from "@/features/ledger/accounting";
 import { dedupeBillItemsForDisplay, dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
+import { useAuth } from "@/features/auth/useAuth";
+import { billRecordToShareInput, resolveBillCustomerMobile, shareBillOnWhatsapp } from "@/features/bills/share";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 type AnyRow = Record<string, unknown>;
@@ -138,6 +140,7 @@ export default function BillDetailPage() {
   const { toast } = useToast();
   const cancelPermission = usePermission("cancel_bill");
   const { data, isLoading, refetch } = useBillDetail(id);
+  const { shop } = useAuth();
   const [pinAction, setPinAction] = useState<PinAction | null>(null);
   const [editMode, setEditMode] = useState<"edit" | "addon" | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
@@ -173,8 +176,24 @@ export default function BillDetailPage() {
     if (!ok) toast({ title: "Print blocked", description: "Allow pop-ups to print or save PDF.", variant: "destructive" });
   }
 
-  function sharePdfArchitecture() {
-    toast({ title: "PDF/share architecture ready", description: "Use the same bill snapshot to generate a PDF blob and share through WhatsApp/email after adding the PDF service." });
+  async function shareOnWhatsapp() {
+    if (!bill) return;
+    const customerMobile = await resolveBillCustomerMobile(bill as AnyRow);
+    const shareInput = billRecordToShareInput(bill as AnyRow, {
+      items: visibleItems,
+      payments: visiblePayments,
+      shopName: shop?.name,
+      shopLocation: [shop?.city, shop?.address].filter(Boolean)[0] as string | undefined,
+      total,
+      paid,
+      credit,
+      customerMobile,
+    });
+    const { targetedCustomer } = shareBillOnWhatsapp(shareInput);
+    toast({
+      title: "Opening WhatsApp…",
+      description: targetedCustomer ? "Ready to send to the customer's number." : "Pick a chat to send this bill.",
+    });
   }
 
   function requestPinAction(action: PinAction) {
@@ -236,7 +255,7 @@ export default function BillDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />Print duplicate</Button>
-          <Button variant="outline" onClick={sharePdfArchitecture}><FileText size={15} className="mr-1" />Share PDF</Button>
+          <Button variant="outline" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />Send on WhatsApp</Button>
           {isDeleted(bill) ? (
             <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />Restore</Button>
           ) : (

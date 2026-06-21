@@ -134,6 +134,8 @@ export interface LocalReportSnapshot {
 export interface DailyClosingReport {
   date: string;
   totalSales: number;
+  profitEstimate: number;
+  billCount: number;
   cashSales: number;
   upiSales: number;
   cashReceived: number;
@@ -568,6 +570,8 @@ export async function buildDailyClosingReport(date: string): Promise<DailyClosin
   return {
     date,
     totalSales: snapshot.selected.sales,
+    profitEstimate: snapshot.selected.profitEstimate,
+    billCount: snapshot.selected.bills,
     cashSales: snapshot.paymentBreakdown.cash,
     upiSales: snapshot.paymentBreakdown.upi,
     cashReceived: snapshot.paymentBreakdown.cashIn,
