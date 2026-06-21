@@ -347,11 +347,13 @@ try {
   assert.ok(udharReversal, 'cancel bill must create udhar reversal ledger');
   assert.equal(udharReversal.amount, 11.5, 'udhar reversal should match credit amount');
 
-  await expectAppError(
-    cancelBill(shopA.id, creditBill.id, { reason: 'Double cancel should fail' }),
-    400,
-    /already cancelled/
-  );
+  // Cancel is idempotent: a replay (or cancel-then-delete, which maps to the same server op)
+  // returns the already-cancelled bill instead of throwing, and must NOT reverse stock/udhar
+  // again. Previously this threw "already cancelled" and stuck offline sync in CONFLICT.
+  const recancelled = await cancelBill(shopA.id, creditBill.id, { reason: 'Double cancel is a no-op' });
+  assert.equal(recancelled.status, 'cancelled', 'double cancel returns the cancelled bill (idempotent, no throw)');
+  const reversalCount = await db.udharLedger.count({ where: { shopId: shopA.id, billId: creditBill.id, mode: 'reversal' } });
+  assert.equal(reversalCount, 1, 'double cancel must NOT create a second udhar reversal');
 
   await expectAppError(getBill(shopB.id, cashBill.id), 404, /Bill not found/);
   await expectAppError(getProduct(shopB.id, sugar.id), 404, /Product not found/);
