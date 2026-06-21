@@ -25,6 +25,50 @@ describe("local financial hardening", () => {
     expect(financialEchoSignature("payments", local)).toBe(financialEchoSignature("payments", server));
   });
 
+  it("does NOT collapse a sales-return refund into a same-magnitude sale tender (sign matters)", () => {
+    const sale = {
+      id: "payment_sale_1",
+      bill_id: "KOS-2026-000010",
+      customer_id: "walk-in",
+      mode: "cash",
+      amount: 200,
+      paid_at: "2026-06-21T12:00:00.000Z",
+      sync_status: "synced",
+    };
+    const refund = {
+      id: "payment_refund_1",
+      bill_id: "RET-2026-000001",
+      customer_id: "walk-in",
+      mode: "cash",
+      amount: -200, // refund pays cash OUT of the drawer
+      paid_at: "2026-06-21T12:00:00.000Z",
+      sync_status: "pending_sync",
+    };
+    expect(financialEchoSignature("payments", sale)).not.toBe(financialEchoSignature("payments", refund));
+  });
+
+  it("still matches a refund with its own server echo (same negative sign)", () => {
+    const localRefund = {
+      id: "payment_refund_local",
+      bill_id: "RET-LOCAL",
+      customer_id: "customer_9",
+      mode: "upi",
+      amount: -150,
+      paid_at: "2026-06-21T12:01:00.000Z",
+      sync_status: "pending_sync",
+    };
+    const serverRefund = {
+      id: "cmq-refund-server",
+      bill_id: "RET-2026-000009",
+      customer_id: "customer_9",
+      mode: "upi",
+      amount: -150,
+      paid_at: "2026-06-21T12:05:00.000Z",
+      sync_status: "synced",
+    };
+    expect(financialEchoSignature("payments", localRefund)).toBe(financialEchoSignature("payments", serverRefund));
+  });
+
   it("matches local and server ledger echoes even when pending bill number changes to KOS bill number", () => {
     const local = {
       id: "ledger_bill_local_credit",

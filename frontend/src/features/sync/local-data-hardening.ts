@@ -148,8 +148,13 @@ function explicitPaymentIdentity(row: MutableRow): string | undefined {
 function paymentEchoSignature(row: MutableRow): string | undefined {
   const mode = normalizedIdText(readStringFrom(row, ["mode", "paymentMode", "payment_mode"]));
   if (mode !== "cash" && mode !== "upi" && mode !== "card") return undefined;
-  const amount = amountKey(readNumberFrom(row, ["amount", "paidAmount", "paid_amount"]));
+  const rawAmount = readNumberFrom(row, ["amount", "paidAmount", "paid_amount"]);
+  const amount = amountKey(rawAmount);
   if (!amount) return undefined;
+  // Sign matters: a payment and its server echo share a sign, but a refund (negative,
+  // e.g. a sales return) must NOT collapse into a same-magnitude sale tender. amountKey
+  // is absolute, so carry the sign explicitly or refunds get swallowed and cash overstates.
+  const sign = (rawAmount ?? 0) < 0 ? "-" : "+";
   const billId = readStringFrom(row, [
     "bill_id",
     "billId",
@@ -163,7 +168,7 @@ function paymentEchoSignature(row: MutableRow): string | undefined {
     const identity = explicitPaymentIdentity(row);
     return identity ? `payment|${customer}|${mode}|identity:${identity}` : undefined;
   }
-  return `payment|${customer}|${mode}|${amount}|${timeBucket(row)}`;
+  return `payment|${customer}|${mode}|${sign}${amount}|${timeBucket(row)}`;
 }
 
 export function paymentDuplicateSignature(row: MutableRow): string | undefined {
