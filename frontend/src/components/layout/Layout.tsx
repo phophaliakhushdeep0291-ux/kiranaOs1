@@ -71,7 +71,8 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/inventory/adjustments": "Adjust inventory quantities and review corrections",
   "/inventory/stock-transfers": "Transfer stock between locations",
   "/purchase-bills": "Manage purchase bills, suppliers, and purchase dues",
-  "/returns/new": "Record a customer return — restock items and refund",
+  "/returns": "Manage returned items from customers or suppliers",
+  "/returns/new": "Manage returned items from customers or suppliers",
   "/customers": "Track credit, payments, and customer trust",
   "/reports": "Track performance, trends, and data-driven decisions",
   "/daily-closing": "Cash drawer and daily business summary",
@@ -93,7 +94,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/inventory/adjustments": "Adjustments",
   "/inventory/stock-transfers": "Stock Transfers",
   "/purchase-bills": "Purchases",
-  "/returns/new": "New Return",
+  "/returns": "Return Items",
+  "/returns/new": "Return Items",
   "/customers": "Customers / Udhar",
   "/udhar": "Udhar",
   "/reports": "Reports & Analytics",
@@ -168,7 +170,7 @@ const NAV: NavItem[] = [
     triggerPaths: ["/bills", "/returns"],
     children: [
       { href: "/bills", label: "Bills History" },
-      { href: "/returns/new", label: "New Return" },
+      { href: "/returns", label: "Returns" },
       { href: "/reports", label: "Sales Overview" },
     ],
   },
@@ -475,7 +477,7 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
 
-          {loc !== "/reports" && <button
+          {loc !== "/reports" && !loc.startsWith("/returns") && <button
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label="Search products, bills, and customers"
@@ -486,13 +488,13 @@ export function Layout({ children }: { children: ReactNode }) {
             <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
           </button>}
 
-          {loc !== "/reports" && <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
+          {loc !== "/reports" && !loc.startsWith("/returns") && <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
             <span className="truncate">{connectionLabel}</span>
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
           </div>}
 
-          {loc !== "/reports" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+          {loc !== "/reports" && !loc.startsWith("/returns") && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"

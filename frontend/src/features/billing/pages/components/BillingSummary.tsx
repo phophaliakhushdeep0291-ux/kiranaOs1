@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FeatureGate } from "@/features/subscription";
 import { BillInputBillType, type Customer } from "@/lib/api/client";
 import {
   CheckCircle,
@@ -490,12 +489,8 @@ export function BillingSummary({
           <SecBtn onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label="Estimate" />
           <SecBtn onClick={onHoldBill} disabled={cart.length === 0} icon={<PauseCircle size={13} />} label="Hold" shortcut="F9" />
           <SecBtn onClick={onPrintBill} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Printer size={13} />} label="Print" />
-          <FeatureGate
-            featureName="pdf_bill_share"
-            fallback={<SecBtn disabled icon={<Smartphone size={13} />} label="Share" />}
-          >
-            <SecBtn onClick={onSharePdf} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Smartphone size={13} />} label="Share" />
-          </FeatureGate>
+          {/* Free for all plans: opens WhatsApp with a text receipt (wa.me deep link, no paid API). */}
+          <SecBtn onClick={onSharePdf} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Smartphone size={13} />} label="WhatsApp" />
         </div>
 
         {cart.length > 0 && (

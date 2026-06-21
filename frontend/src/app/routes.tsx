@@ -117,6 +117,9 @@ export function AppRoutes() {
       <Route path="/returns/new">
         <ProtectedRoute component={NewReturnPage} />
       </Route>
+      <Route path="/returns">
+        <ProtectedRoute component={NewReturnPage} />
+      </Route>
       <Route path="/bills/:id">
         <ProtectedRoute component={BillDetailPage} />
       </Route>
