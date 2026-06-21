@@ -422,7 +422,10 @@ export async function cancelBill(shopId, billId, { reason }) {
   });
 
   if (!bill) throw new AppError("Bill not found", 404);
-  if (bill.status === "cancelled") throw new AppError("Bill is already cancelled", 400);
+  // Idempotent: a bill can be cancelled then "deleted" (both map to this op), or the same
+  // cancel can be replayed by sync. Already-cancelled => return as-is WITHOUT re-reversing
+  // stock/udhar (the reversal already happened), instead of throwing a permanent CONFLICT.
+  if (bill.status === "cancelled") return bill;
 
   return db.$transaction(async (tx) => {
     // Atomic claim: only one concurrent request can transition active -> cancelled, so two
@@ -434,6 +437,11 @@ export async function cancelBill(shopId, billId, { reason }) {
       data: { status: "cancelled", cancelledAt, cancelledReason: reason },
     });
     if (claimed.count !== 1) {
+      // Lost the race to a concurrent cancel (status changed active->cancelled between our
+      // read and this claim). The other request already reversed everything, so treat this
+      // as an idempotent no-op rather than a hard failure that would stick in sync CONFLICT.
+      const current = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
+      if (current && current.status === "cancelled") return current;
       const err = new AppError("Bill is already cancelled or not active", 409);
       err.code = "BILL_NOT_CANCELLABLE";
       throw err;
