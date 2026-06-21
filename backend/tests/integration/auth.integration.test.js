@@ -92,18 +92,42 @@ if (ctx.skip) {
 
     test("multi-shop same mobile requires explicit shop selection", async () => {
       const mobile = uniqueMobile();
-      await createTenant(ctx.db, { ownerMobile: mobile, shopName: "Shop A" });
-      const second = await createTenant(ctx.db, { ownerMobile: mobile, shopName: "Shop B" });
+      const first = await createTenant(ctx.db, { ownerMobile: mobile, shopName: "Shop A" });
+      const second = await createTenant(ctx.db, {
+        ownerMobile: mobile,
+        password: first.ownerPassword,
+        shopName: "Shop B",
+      });
 
       const ambiguous = await ctx.post("/api/auth/login", { mobile, password: second.ownerPassword });
       assert.equal(ambiguous.status, 409, JSON.stringify(ambiguous.body));
       assert.match(ambiguous.body?.error || "", /shop/i);
       assert.equal(ambiguous.body?.code, "SHOP_SELECTION_REQUIRED");
+      assert.deepEqual(
+        ambiguous.body?.shops?.map((shop) => shop.id),
+        [first.shop.id, second.shop.id]
+      );
 
       const selected = assertSuccess(
         await ctx.post("/api/auth/login", { mobile, password: second.ownerPassword, shopId: second.shop.id })
       );
       assert.equal(selected.shop.id, second.shop.id);
+    });
+
+    test("multi-shop login only offers shops matching the submitted password", async () => {
+      const mobile = uniqueMobile();
+      const first = await createTenant(ctx.db, { ownerMobile: mobile, password: "Password-A123", shopName: "Shop A" });
+      const second = await createTenant(ctx.db, { ownerMobile: mobile, password: "Password-B123", shopName: "Shop B" });
+
+      const selectedDirectly = assertSuccess(
+        await ctx.post("/api/auth/login", { mobile, password: second.ownerPassword })
+      );
+      assert.equal(selectedDirectly.shop.id, second.shop.id);
+
+      const wrongPassword = await ctx.post("/api/auth/login", { mobile, password: "Password-C123" });
+      assertFailure(wrongPassword, 401);
+      assert.equal(wrongPassword.body?.shops, undefined);
+      assert.notEqual(selectedDirectly.shop.id, first.shop.id);
     });
 
     test("revoked session behavior is enforced for refresh", async () => {

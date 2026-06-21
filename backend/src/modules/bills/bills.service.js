@@ -571,10 +571,14 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         const product = item.productId ? productMap[item.productId] : null;
         if (item.productId && !product) throw new AppError(`Product not found: ${item.productId}`, 404);
 
-        const baseUnit = product?.baseUnit ?? item.enteredUnit;
-        const rateUnit = product?.rateUnit ?? item.enteredUnit;
+        // A return item may arrive without enteredUnit (older clients / quick returns). Fall back
+        // to the product's units instead of letting toBaseQty throw "enteredUnit is required",
+        // which previously left sale-return sync stuck failing forever.
+        const enteredUnit = item.enteredUnit || product?.rateUnit || product?.baseUnit || "piece";
+        const baseUnit = product?.baseUnit ?? enteredUnit;
+        const rateUnit = product?.rateUnit ?? enteredUnit;
         const costPerRateUnit = product?.costPerRateUnit ?? 0;
-        const qtyInBase = product ? toBaseQty(item.quantity, item.enteredUnit, product.baseUnit) : item.quantity;
+        const qtyInBase = product ? toBaseQty(item.quantity, enteredUnit, product.baseUnit) : item.quantity;
         const qtyInRateUnit = product ? baseQtyToRateQty(qtyInBase, rateUnit, baseUnit) : item.quantity;
 
         const lineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
@@ -597,7 +601,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           productId: item.productId ?? null,
           name: product?.name ?? item.name ?? "Item",
           quantity: -Math.abs(item.quantity),
-          enteredUnit: item.enteredUnit,
+          enteredUnit,
           baseUnit,
           quantityInBaseUnit: -Math.abs(qtyInBase),
           rateUnit,

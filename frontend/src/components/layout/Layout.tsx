@@ -53,7 +53,7 @@ import {
 const SIDEBAR_WIDTH_KEY = "kirana:sidebar-width-v3";
 const SIDEBAR_COLLAPSED_KEY = "kirana:sidebar-collapsed-v2";
 const SIDEBAR_GROUPS_KEY = "kirana:sidebar-groups-v2";
-const DEFAULT_WIDTH = 256;
+const DEFAULT_WIDTH = 260;
 const MIN_WIDTH = 232;
 const MAX_WIDTH = 320;
 const COLLAPSED_WIDTH = 76;
@@ -299,6 +299,11 @@ export function Layout({ children }: { children: ReactNode }) {
     });
   }, [loc]);
 
+  useEffect(() => {
+    if (loc !== "/customers") return;
+    setExpandedGroups((current) => current.size > 0 ? new Set<string>() : current);
+  }, [loc]);
+
   useEffect(() => { liveW.current = sidebarWidth; writeLS(SIDEBAR_WIDTH_KEY, String(sidebarWidth)); }, [sidebarWidth]);
   useEffect(() => { writeLS(SIDEBAR_COLLAPSED_KEY, String(collapsed)); }, [collapsed]);
   useEffect(() => { writeLS(SIDEBAR_GROUPS_KEY, JSON.stringify([...expandedGroups])); }, [expandedGroups]);
@@ -372,7 +377,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </div>
             {!collapsed && (
               <div className="min-w-0">
-                <div className="font-display text-[25px] font-black leading-none tracking-tight text-white">
+                <div className="font-display text-[28px] font-black leading-none tracking-tight text-white">
                   Kirana<span className="text-[#2b7cff]">OS</span>
                 </div>
                 <div className="mt-1 truncate text-[11px] font-medium leading-none text-white/68">{btDef.navConfig.tagline}</div>
@@ -472,7 +477,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <Menu size={19} aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[20px] font-black tracking-tight text-[#0f2147] leading-none">{getPageTitle(loc)}</h1>
+            <h1 className="truncate font-display text-[22px] font-black tracking-tight text-[#0f2147] leading-none">{getPageTitle(loc)}</h1>
             {getPageSubtitle(loc) && (
               <p className="mt-1.5 truncate text-[12px] font-medium leading-none text-[#64748b]">{getPageSubtitle(loc)}</p>
             )}

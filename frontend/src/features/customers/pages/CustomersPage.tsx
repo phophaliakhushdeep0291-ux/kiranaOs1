@@ -17,6 +17,7 @@ import {
   Download,
   FileText,
   Filter,
+  Info,
   MapPin,
   MessageCircle,
   MessageSquare,
@@ -691,34 +692,34 @@ export default function CustomersPage() {
         <SyncBadge status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
         <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="outline" className="h-10 min-w-[205px] justify-between rounded-[8px] border-[#dfe7f2] bg-white px-3 text-[11px] font-bold text-[#24385f]"><span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[#1768f5]" />{formatShortDate(rangeFrom)} - {formatShortDate(rangeTo)}</span><ChevronRight size={13} className="rotate-90" /></Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 min-w-[215px] justify-between rounded-[10px] border-[#dfe7f2] bg-white px-3.5 text-[11px] font-bold text-[#24385f]"><span className="inline-flex items-center gap-2"><CalendarDays size={16} className="text-[#1768f5]" />{formatShortDate(rangeFrom)} - {formatShortDate(rangeTo)}</span><ChevronRight size={13} className="rotate-90" /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56"><DropdownMenuItem onClick={() => applyRange(0)}>Today</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(6)}>Last 7 days</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(29)}>Last 30 days</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="outline" className="h-10 gap-2 rounded-[8px] border-[#dfe7f2] px-3 text-[11px] font-bold"><Filter size={14} />Filters</Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold"><Filter size={16} />Filters</Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>All customers</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>With balance</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={exportCustomers} className="h-10 gap-2 rounded-[8px] border-[#dfe7f2] px-3 text-[11px] font-bold"><Download size={14} />Export</Button>
-          <Button onClick={() => openPayment()} className="h-10 gap-2 rounded-[8px] bg-[#075fff] px-4 text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Plus size={14} />Record Payment</Button>
+          <Button variant="outline" onClick={exportCustomers} className="h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold"><Download size={16} />Export</Button>
+          <Button onClick={() => openPayment()} className="h-11 gap-2 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] px-[18px] text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[#0758df] hover:to-[#004ed0]"><Plus size={16} />Record Payment</Button>
         </div>
       </section>
 
       <section className="grid grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-6">
-        <CustomerMetricCard label="Total Customers" value={String(totals.customers)} change={metricChanges.customers} color="#1768f5" icon={<Users size={16} />} iconClass="bg-[#edf4ff] text-[#1768f5]" spark={metricSparks.customers} />
-        <CustomerMetricCard label="Total Outstanding" value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={16} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
-        <CustomerMetricCard label="Overdue Amount" value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={16} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
+        <CustomerMetricCard label="Total Customers" value={String(totals.customers)} change={metricChanges.customers} color="#1768f5" icon={<Users size={18} />} iconClass="bg-[#edf4ff] text-[#1768f5]" spark={metricSparks.customers} />
+        <CustomerMetricCard label="Total Outstanding" value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
+        <CustomerMetricCard label="Overdue Amount" value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
         <CustomerMetricCard label="Received This Week" value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
-        <CustomerMetricCard label="Customers with Balance" value={String(totals.active)} change={metricChanges.active} color="#1768f5" icon={<UserCheck size={16} />} iconClass="bg-[#edf4ff] text-[#1768f5]" spark={metricSparks.active} />
-        <CustomerMetricCard label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={16} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
+        <CustomerMetricCard label="Customers with Balance" value={String(totals.active)} change={metricChanges.active} color="#1768f5" icon={<UserCheck size={18} />} iconClass="bg-[#edf4ff] text-[#1768f5]" spark={metricSparks.active} />
+        <CustomerMetricCard label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
       </section>
 
       <section className="grid min-w-0 gap-5 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(520px,1fr)_340px]">
         <CustomerListPanelV3 customers={filteredCustomers} selectedId={selectedCustomer?.id ?? null} loading={isLoading} search={search} filter={filter} total={totals.customers} onSearch={setSearch} onFilter={setFilter} onSelect={setSelectedId} />
-        <CustomerPaymentWorkspace customer={selectedCustomer} risk={selectedRisk} creditLimit={creditLimit} trustScore={trustScore} paymentRows={paymentRows} paymentForm={paymentForm} saving={saving} onEdit={openEdit} onPaymentChange={setPaymentForm} onCollect={() => void recordPayment()} onReminder={shareWhatsApp} />
-        <CustomerInsightsPanel customer={selectedCustomer} risk={selectedRisk} ageing={ageing} received={selectedReceivedInRange} pending={Math.max(0, selectedCustomer?.ledgerBalance ?? 0)} collectionChange={metricChanges.received} payments={paymentRows} onReminder={shareWhatsApp} />
+        <CustomerPaymentWorkspaceV3 customer={selectedCustomer} risk={selectedRisk} creditLimit={creditLimit} paymentRows={paymentRows} paymentForm={paymentForm} saving={saving} onEdit={openEdit} onPaymentChange={setPaymentForm} onCollect={() => void recordPayment()} onReminder={shareWhatsApp} />
+        <CustomerInsightsPanelV3 customer={selectedCustomer} risk={selectedRisk} ageing={ageing} received={selectedReceivedInRange} pending={Math.max(0, selectedCustomer?.ledgerBalance ?? 0)} collectionChange={metricChanges.received} payments={paymentRows} onReminder={shareWhatsApp} />
       </section>
 
-      <CustomerLedgerRegisterV2 customer={selectedCustomer} rows={ledgerRows} loading={selectedDetail.isLoading} onPrint={printStatement} />
+      <CustomerLedgerRegisterV3 customer={selectedCustomer} rows={ledgerRows} loading={selectedDetail.isLoading} onPrint={printStatement} />
 
       {false && selectedCustomer && selectedRisk && selectedTrust && <div className="hidden">
         <section className="min-h-0 overflow-hidden rounded-[16px] border border-[#e6ecf4] bg-white shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
@@ -1301,6 +1302,32 @@ function CustomerInsightsPanel({ customer, risk, ageing, received, pending, coll
   );
 }
 
+function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, collectionChange, payments, onReminder }: { customer: CustomerWithLedger | null; risk: ReturnType<typeof riskInfo> | null; ageing?: CustomerWithLedger["ledgerMetrics"]["ageing"]; received: number; pending: number; collectionChange: number; payments: Array<Record<string, unknown>>; onReminder: () => void }) {
+  const overdueDays = customer ? customerOverdueDays(customer) : 0;
+  const sevenToThirty = Math.max(0, money(ageing?.sevenToThirty));
+  const rawBuckets = [
+    { value: Math.max(0, money(ageing?.zeroToSeven)), color: "#22c55e", label: "0 - 7 Days" },
+    { value: overdueDays <= 15 ? sevenToThirty : 0, color: "#f59e0b", label: "8 - 15 Days" },
+    { value: overdueDays > 15 && overdueDays <= 30 ? sevenToThirty : 0, color: "#ef4444", label: "16 - 30 Days" },
+    { value: Math.max(0, money(ageing?.thirtyPlus)), color: "#8b5cf6", label: "30+ Days" },
+  ];
+  const rawTotal = rawBuckets.reduce((sum, row) => sum + row.value, 0);
+  const buckets = rawBuckets.map((row, index) => index === 0 && pending > rawTotal ? { ...row, value: row.value + pending - rawTotal } : row);
+  const total = buckets.reduce((sum, row) => sum + row.value, 0);
+  let acc = 0;
+  const stops = buckets.filter((row) => row.value > 0).map((row) => { const from = total ? acc / total * 100 : 0; acc += row.value; return `${row.color} ${from}% ${total ? acc / total * 100 : 0}%`; }).join(", ");
+  const collection = received + pending > 0 ? received / (received + pending) * 100 : 0;
+  const recentPayments = [...payments].sort((a, b) => paymentDate(b).localeCompare(paymentDate(a))).slice(0, 4);
+  return (
+    <aside className="space-y-5 xl:col-span-2 2xl:col-span-1">
+      <RightCardV3 title="Ageing Summary" info><div className="flex items-center gap-4"><div className="grid h-[130px] w-[130px] shrink-0 place-items-center rounded-full" style={{ background: total > 0 ? `conic-gradient(${stops})` : "#e7edf5" }}><div className="grid h-[94px] w-[94px] place-items-center rounded-full bg-white text-center"><div><p className="text-[16px] font-black text-[#071b3a]">{fmtMoney(total)}</p><p className="text-[10px] text-[#71809a]">Total Due</p></div></div></div><div className="min-w-0 flex-1 space-y-3">{buckets.map((row) => <div key={row.label} className="grid grid-cols-[9px_1fr_auto] items-center gap-2 text-[10px]"><span className="h-[9px] w-[9px] rounded-full" style={{ background: row.color }} /><span className="text-[#52627e]">{row.label}</span><span className="text-right font-black text-[#102347]">{fmtMoney(row.value)} <span className="block text-[8px] font-medium text-[#94a3b8]">{total > 0 ? `${Math.round(row.value / total * 1000) / 10}%` : "0%"}</span></span></div>)}</div></div></RightCardV3>
+      <RightCardV3 title="Collection Progress" action="This Week" info><div className="flex items-center gap-5"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(#0b63f6 0 ${collection}%, #e9eef6 ${collection}% 100%)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-center"><div><p className="text-[18px] font-black text-[#071b3a]">{Math.round(collection)}%</p><p className="text-[9px] font-semibold text-[#71809a]">Collected</p></div></div></div><div className="grid min-w-0 flex-1 grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold text-[#71809a]">Collected</p><p className="mt-1 text-[14px] font-black text-[#102347]">{fmtMoney(received)}</p><p className={cn("mt-2 text-[9px] font-semibold", collectionChange < 0 ? "text-rose-600" : "text-emerald-600")}>vs last week: {collectionChange >= 0 ? "↑" : "↓"} {Math.abs(collectionChange)}%</p></div><div><p className="text-[10px] font-semibold text-[#71809a]">Pending</p><p className="mt-1 text-[14px] font-black text-[#102347]">{fmtMoney(pending)}</p></div></div></div></RightCardV3>
+      <RightCardV3 title="Recent Payments Received" action="View all">{recentPayments.length === 0 ? <p className="py-4 text-center text-[11px] text-[#71809a]">No payments recorded yet.</p> : <div className="divide-y divide-[#edf1f6]">{recentPayments.map((payment, index) => { const mode = String(payment.mode ?? "cash").toLowerCase(); const modeLabel = mode === "upi" ? "UPI" : mode === "cash" ? "Cash" : mode.replace(/\b\w/g, (letter) => letter.toUpperCase()); return <div key={String(payment.id ?? index)} className="grid min-h-10 grid-cols-[7px_1fr_auto_auto] items-center gap-2.5 text-[10.5px]"><span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /><span className="text-[#52627e]">{formatShortDate(paymentDate(payment))}</span><span className="font-black text-[#102347]">{fmtMoney(paymentAmount(payment))}</span><span className="min-w-[54px] text-right text-[#52627e]">{modeLabel}</span></div>; })}</div>}</RightCardV3>
+      <RightCardV3 title="Credit Risk"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk?.label ?? "No customer"}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="h-9 shrink-0 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[#0b63f6]"><Bell size={13} className="mr-1" />Send Reminder</Button></div></RightCardV3>
+    </aside>
+  );
+}
+
 type CustomerLedgerRow = Record<string, unknown> & { id: string; signed_amount: number; running_balance: number; display_type: string; display_date: string };
 
 function CustomerLedgerRegisterV2({ customer, rows, loading, onPrint }: { customer: CustomerWithLedger | null; rows: CustomerLedgerRow[]; loading: boolean; onPrint: () => void }) {
@@ -1336,6 +1363,42 @@ function CustomerLedgerRegisterV2({ customer, rows, loading, onPrint }: { custom
   );
 }
 
+function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { customer: CustomerWithLedger | null; rows: CustomerLedgerRow[]; loading: boolean; onPrint: () => void }) {
+  const [entryFilter, setEntryFilter] = useState<"all" | "bill" | "payment">("all");
+  const visibleRows = rows.filter((row) => entryFilter === "all" || (entryFilter === "bill" ? row.display_type === "BILL" : row.display_type === "PAYMENT"));
+  const fromDate = rows.length > 0 ? formatShortDate(rows[rows.length - 1]?.display_date) : "All time";
+  const toDate = rows.length > 0 ? formatShortDate(rows[0]?.display_date) : formatShortDate(new Date().toISOString());
+  const badgeFor = (type: string) => type === "PAYMENT" ? "bg-[#dcfce7] text-[#16a34a]" : type.includes("OPEN") ? "bg-[#dbeafe] text-[#2563eb]" : type === "BILL" ? "bg-[#fee2e2] text-[#dc2626]" : "bg-[#f5f3ff] text-[#7c3aed]";
+  const labelFor = (type: string) => type === "PAYMENT" ? "Payment" : type === "BILL" ? "Bill" : type.includes("OPEN") ? "Opening Balance" : type.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return (
+    <section className="overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf4] px-[18px] py-4">
+        <div><div className="flex items-center gap-1.5"><h2 className="text-[16px] font-extrabold text-[#071b3a]">Udhar Ledger</h2><Info size={13} className="text-[#94a3b8]" /></div><p className="mt-1 text-[12px] text-[#71809a]">View every bill, payment, and balance movement</p></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="h-9 min-w-[110px] justify-between rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold">{entryFilter === "all" ? "All Entries" : entryFilter === "bill" ? "Bills" : "Payments"}<ChevronRight size={12} className="rotate-90" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-36"><DropdownMenuItem onClick={() => setEntryFilter("all")}>All Entries</DropdownMenuItem><DropdownMenuItem onClick={() => setEntryFilter("bill")}>Bills</DropdownMenuItem><DropdownMenuItem onClick={() => setEntryFilter("payment")}>Payments</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+          <Button variant="outline" className="h-9 gap-1.5 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold"><CalendarDays size={13} className="text-[#0b63f6]" />{fromDate} - {toDate}<ChevronRight size={12} className="rotate-90" /></Button>
+          <Button variant="outline" onClick={onPrint} disabled={!customer} className="h-9 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold text-[#0b63f6]"><Download size={14} className="mr-1.5" />Download Statement</Button>
+        </div>
+      </header>
+      <div className="grid min-w-0 2xl:grid-cols-[minmax(0,1fr)_270px]">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1020px] text-[12.5px]">
+            <thead><tr className="h-10 bg-[#f7f9fc] text-[10px] text-[#52617c]">{['Date','Entry Type','Reference','Description','Debit (₹)','Credit (₹)','Running Balance (₹)','Mode','Status','Action'].map((label) => <th key={label} className="px-3 text-left font-bold">{label}</th>)}</tr></thead>
+            <tbody className="divide-y divide-[#e8edf4]">
+              {loading ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">Loading ledger...</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">No ledger entries found.</td></tr> : visibleRows.slice(0, 8).map((row) => {
+                const signed = Number(row.signed_amount ?? 0);
+                const displayType = String(row.display_type ?? "ENTRY").toUpperCase();
+                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", badgeFor(displayType))}>{labelFor(displayType)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[#0b63f6]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || labelFor(displayType))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[#071b3a]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><button title="Ledger actions" className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[#eef5ff] hover:text-[#0b63f6]"><MoreVertical size={15} /></button></td></tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <aside className="hidden border-l border-[#e8edf4] bg-[#f8faff] p-4 2xl:block"><h3 className="text-[13px] font-black text-[#0b63f6]">How udhar works:</h3><div className="mt-4 space-y-4 text-[10.5px] leading-4 text-[#52627e]"><HelpLineV3 tone="bg-[#fff7ed] text-[#f97316]" icon={<FileText size={14} />} text="Bills on credit increase customer balance." /><HelpLineV3 tone="bg-[#ecfdf5] text-[#16a34a]" icon={<Wallet size={14} />} text="Payments reduce the outstanding balance." /><HelpLineV3 tone="bg-[#eef5ff] text-[#0b63f6]" icon={<CheckCircle2 size={14} />} text="Every movement is recorded in the udhar ledger." /><HelpLineV3 tone="bg-[#f5f3ff] text-[#7c3aed]" icon={<Download size={14} />} text="Statements can be shared as PDF or WhatsApp." /></div></aside>
+      </div>
+    </section>
+  );
+}
+
 function CustomerLedgerRegister({ customer, rows, loading, onPrint }: { customer: CustomerWithLedger | null; rows: CustomerLedgerRow[]; loading: boolean; onPrint: () => void }) {
   return (
     <section className="overflow-hidden rounded-[8px] border border-[#e2e9f3] bg-white shadow-[0_5px_18px_rgba(31,60,110,0.045)]"><header className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e8edf4] px-4 py-3"><div><h2 className="text-[13px] font-extrabold text-[#13254a]">Udhar Ledger</h2><p className="mt-0.5 text-[9.5px] text-[#71809a]">View every bill, payment, and balance movement for {customer?.name ?? "the selected customer"}</p></div><div className="flex gap-2"><Button variant="outline" onClick={onPrint} disabled={!customer} className="h-8 rounded-[6px] text-[9px] font-bold"><Download size={12} className="mr-1" />Statement</Button>{customer && <Link href={`/customers/${customer.id}`} className="inline-flex h-8 items-center rounded-[6px] border border-[#dfe7f2] px-3 text-[9px] font-bold text-[#075fff]">Full ledger</Link>}</div></header><div className="grid min-w-0 2xl:grid-cols-[1fr_210px]"><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-[9.5px]"><thead><tr className="bg-[#f7f9fc] text-[#52617c]">{['Date','Entry Type','Reference','Description','Debit (₹)','Credit (₹)','Running Balance','Mode','Status'].map(label=><th key={label} className="px-3 py-2 text-left font-bold">{label}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{loading?<tr><td colSpan={9} className="py-10 text-center text-[#71809a]">Loading ledger...</td></tr>:rows.length===0?<tr><td colSpan={9} className="py-10 text-center text-[#71809a]">No ledger entries yet.</td></tr>:rows.slice(0,8).map(row=>{const signed=Number(row.signed_amount??0);return <tr key={row.id} className="text-[#24385f]"><td className="px-3 py-2.5">{formatShortDate(row.display_date)}</td><td className="px-3 py-2.5"><span className={cn("rounded-[5px] px-1.5 py-0.5 font-bold",row.display_type==='PAYMENT'?CHIP_TONES.green:CHIP_TONES.red)}>{row.display_type}</span></td><td className="px-3 py-2.5 font-semibold text-[#075fff]">{String(row.source_id??'—')}</td><td className="max-w-[230px] truncate px-3 py-2.5">{String(row.note||row.display_type)}</td><td className="px-3 py-2.5 font-bold text-rose-600">{signed>0?fmtMoney(signed):'—'}</td><td className="px-3 py-2.5 font-bold text-emerald-600">{signed<0?fmtMoney(Math.abs(signed)):'—'}</td><td className="px-3 py-2.5 font-black">{fmtMoney(row.running_balance)}</td><td className="px-3 py-2.5">{String(row.mode??'System')}</td><td className="px-3 py-2.5"><span className="rounded-[5px] bg-emerald-50 px-1.5 py-0.5 font-bold text-emerald-700">Posted</span></td></tr>})}</tbody></table></div><aside className="hidden border-l border-[#e8edf4] bg-[#f8faff] p-4 2xl:block"><h3 className="text-[10px] font-black text-[#075fff]">How udhar works</h3><div className="mt-3 space-y-3 text-[9px] leading-4 text-[#52627e]"><HelpLine icon={<FileText size={12} />} text="Bills on credit increase customer balance." /><HelpLine icon={<Wallet size={12} />} text="Payments reduce the outstanding balance." /><HelpLine icon={<CheckCircle2 size={12} />} text="Every movement is recorded in the ledger." /><HelpLine icon={<Download size={12} />} text="Statements can be printed or shared." /></div></aside></div></section>
@@ -1346,8 +1409,16 @@ function CompactSummary({ label, value, danger = false }: { label: string; value
   return <div className="border-b border-r border-[#e8edf4] px-3 py-3 last:border-r-0"><p className="text-[8px] font-bold uppercase text-[#75839d]">{label}</p><p className={cn("mt-1 text-[11px] font-black text-[#102347]", danger && "text-rose-600")}>{value}</p></div>;
 }
 
+function CompactSummaryV3({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  return <div className="border-b border-r border-[#e8edf4] px-3 py-3.5 last:border-r-0"><p className="text-[9px] font-bold uppercase text-[#75839d]">{label}</p><p className={cn("mt-1.5 text-[12px] font-black text-[#102347]", danger && "text-rose-600")}>{value}</p></div>;
+}
+
 function HelpLine({ icon, text }: { icon: React.ReactNode; text: string }) {
   return <div className="flex gap-2"><span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white text-[#075fff]">{icon}</span><span>{text}</span></div>;
+}
+
+function HelpLineV3({ icon, text, tone }: { icon: React.ReactNode; text: string; tone: string }) {
+  return <div className="flex items-start gap-3"><span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full", tone)}>{icon}</span><span className="pt-0.5">{text}</span></div>;
 }
 
 function InfoMini({ label, value }: { label: string; value: string }) {
@@ -1384,6 +1455,18 @@ function RightCard({ title, action, onAction, children }: { title: string; actio
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-[12px] font-extrabold text-[#102347]">{title}</h3>
         {action ? <button onClick={onAction} className={cn("text-[9.5px] font-black text-[#075cf7] hover:underline", action.startsWith("This Week") && "rounded-[5px] border border-[#dfe7f2] bg-[#fbfcfe] px-2 py-1 text-[#405273] no-underline")}>{action}</button> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function RightCardV3({ title, action, onAction, info = false, children }: { title: string; action?: string; onAction?: () => void; info?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5"><h3 className="text-[14px] font-extrabold text-[#071b3a]">{title}</h3>{info && <Info size={13} className="text-[#94a3b8]" />}</div>
+        {action ? <button onClick={onAction} className={cn("text-[10px] font-black text-[#0b63f6] hover:underline", action === "This Week" && "rounded-[8px] border border-[#dfe7f2] bg-[#f8faff] px-2.5 py-1.5 text-[9px] text-[#405273] no-underline")}>{action}{action === "This Week" && <ChevronRight size={10} className="ml-1 inline rotate-90" />}</button> : null}
       </div>
       {children}
     </div>
