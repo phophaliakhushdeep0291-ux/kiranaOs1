@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { loadCustomersWithLedger, formatDateTime, formatMoney, formatShortDate, type CustomerWithLedger } from "@/features/customers/customer-ledger-data";
 import { buildLedgerStatement, dedupeLedgerEntries, ledgerEntryLabel, normaliseLedgerType, type CustomerLedgerEntry } from "@/features/ledger/accounting";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
+import { sendUdharReminderOnWhatsapp } from "@/features/ledger/udhar-reminder";
+import { useAuth } from "@/features/auth/useAuth";
 import { offlineDB } from "@/lib/offline/db";
 import { FeatureGate, UpgradePrompt } from "@/features/subscription";
 import { usePermission } from "@/features/staff/permissions";
@@ -50,6 +52,7 @@ function readNumber(value: unknown): number {
 
 export default function UdharPage() {
   const { toast } = useToast();
+  const { shop } = useAuth();
   const reversePaymentPermission = usePermission("reverse_payment");
   const { data, isLoading, refetch } = useUdharDashboard();
   const customers = data?.customers ?? [];
@@ -301,7 +304,28 @@ export default function UdharPage() {
                         </span>
                       )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900 dark:text-emerald-300"
+                        disabled={!customer.mobile}
+                        title={customer.mobile ? "Send a WhatsApp reminder" : "No phone number on file"}
+                        onClick={() => {
+                          const { targetedCustomer } = sendUdharReminderOnWhatsapp({
+                            customerName: customer.name,
+                            customerMobile: customer.mobile ?? undefined,
+                            amount: customer.ledgerBalance,
+                            shopName: shop?.name,
+                          });
+                          toast({
+                            title: "Opening WhatsApp…",
+                            description: targetedCustomer ? `Reminder ready for ${customer.name}.` : "Pick a chat to send the reminder.",
+                          });
+                        }}
+                      >
+                        <MessageCircle size={14} className="mr-1" />Remind
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => openPayment(customer)}>Collect</Button>
                       <Link href={`/customers/${customer.id}`}><Button size="sm">Ledger →</Button></Link>
                     </div>
