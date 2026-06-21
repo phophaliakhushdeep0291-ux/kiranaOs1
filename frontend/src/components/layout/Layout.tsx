@@ -74,7 +74,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/purchase-bills": "Manage purchase bills, suppliers, and purchase dues",
   "/returns": "Manage returned items from customers or suppliers",
   "/returns/new": "Manage returned items from customers or suppliers",
-  "/customers": "Track credit, payments, and customer trust",
+  "/customers": "Manage customer credit, record payments, and track full udhar ledger",
   "/reports": "Track performance, trends, and data-driven decisions",
   "/daily-closing": "Cash drawer and daily business summary",
   "/expenses": "Track shop expenses and outflows",
@@ -478,7 +478,7 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
 
-          {loc !== "/reports" && !loc.startsWith("/returns") && <button
+          {loc !== "/reports" && !loc.startsWith("/returns") && loc !== "/customers" && <button
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label="Search products, bills, and customers"
@@ -489,13 +489,13 @@ export function Layout({ children }: { children: ReactNode }) {
             <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
           </button>}
 
-          {loc !== "/reports" && !loc.startsWith("/returns") && <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
+          {loc !== "/reports" && !loc.startsWith("/returns") && loc !== "/customers" && <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
             <span className="truncate">{connectionLabel}</span>
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
           </div>}
 
-          {loc !== "/reports" && !loc.startsWith("/returns") && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+          {loc !== "/reports" && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"
