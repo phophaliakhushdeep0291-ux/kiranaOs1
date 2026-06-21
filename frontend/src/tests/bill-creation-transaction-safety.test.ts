@@ -130,8 +130,8 @@ describe("bill creation transaction safety", () => {
     expect(createBillOps).toHaveLength(1);
     expect(outboxRows.some((row) => row.operation_type === "UPDATE_CUSTOMER")).toBe(false);
     expect(createBillOps[0]?.payload).toEqual(expect.objectContaining({
-      payments: [{ mode: BillPaymentMode.cash, amount: 40 }],
-      paymentBreakdown: [{ mode: BillPaymentMode.cash, amount: 40 }],
+      payments: [expect.objectContaining({ mode: BillPaymentMode.cash, amount: 40, clientPaymentId: expect.any(String) })],
+      paymentBreakdown: [expect.objectContaining({ mode: BillPaymentMode.cash, amount: 40 })],
       paidAmount: 40,
       creditAmount: 60,
       dueAmount: 60,

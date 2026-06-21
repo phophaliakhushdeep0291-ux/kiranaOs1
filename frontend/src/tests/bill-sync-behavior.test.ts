@@ -508,8 +508,11 @@ describe("bill sync behavior", () => {
 
     const request = mockedSyncPush.mock.calls[0][0] as { operations: Array<{ payload: Record<string, unknown> }> };
     const payload = request.operations[0].payload;
-    expect(payload.payments).toEqual([{ mode: BillPaymentMode.cash, amount: 40 }]);
-    expect(payload.paymentBreakdown).toEqual([{ mode: BillPaymentMode.cash, amount: 40 }]);
+    // Payments now carry the durable clientPaymentId so the server can store + echo it,
+    // enabling identity-based echo reconciliation (no fuzzy same-amount collapse).
+    expect(payload.payments).toEqual([expect.objectContaining({ mode: BillPaymentMode.cash, amount: 40 })]);
+    expect((payload.payments as Array<Record<string, unknown>>)[0].clientPaymentId).toEqual(expect.any(String));
+    expect(payload.paymentBreakdown).toEqual([expect.objectContaining({ mode: BillPaymentMode.cash, amount: 40 })]);
     expect(payload.paidAmount).toBe(40);
     expect(payload.buyerPaidAmount).toBe(40);
     expect(payload.creditAmount).toBe(60);
@@ -871,6 +874,45 @@ describe("bill sync behavior", () => {
     expect(activeRows("customer_ledger")).toEqual([
       expect.objectContaining({ id: "server_ledger_old", amount: 200 }),
     ]);
+  });
+
+  it("does not merge two distinct payments that share amount/mode/time but differ by clientPaymentId", async () => {
+    // Two separate ₹50 cash sales seconds apart. They look identical to the fuzzy echo key,
+    // but each carries its own durable clientPaymentId, so the merge guard must keep BOTH.
+    dbState.putInto("payments", {
+      id: "server_pay_A",
+      server_id: "server_pay_A",
+      bill_id: "server_bill_A",
+      customer_id: null,
+      mode: "cash",
+      amount: 50,
+      clientPaymentId: "payment_A",
+      paid_at: "2026-06-21T10:00:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+      deleted_at: null,
+    });
+    dbState.putInto("payments", {
+      id: "payment_B",
+      local_payment_id: "payment_B",
+      bill_id: "PENDING-BBB",
+      customer_id: null,
+      mode: "cash",
+      amount: 50,
+      clientPaymentId: "payment_B",
+      paid_at: "2026-06-21T10:02:00.000Z",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "pending_sync",
+      deleted_at: null,
+    });
+
+    await hardenLocalFinancialData();
+
+    const active = activeRows("payments");
+    expect(active).toHaveLength(2);
+    expect(active.map((row) => row.clientPaymentId).sort()).toEqual(["payment_A", "payment_B"]);
   });
 
   it("product created offline merges with its synced server echo instead of conflicting", async () => {

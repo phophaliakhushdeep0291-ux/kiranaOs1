@@ -145,6 +145,20 @@ function explicitPaymentIdentity(row: MutableRow): string | undefined {
   ]);
 }
 
+// Identity fields that round-trip IDENTICALLY between a local row and its own server echo.
+// Deliberately excludes idempotencyKey (the server regenerates its own). Two rows carrying
+// different durable client ids are distinct records and must never be merged as echoes.
+function durableEchoIdentity(row: MutableRow): string | undefined {
+  return readStringFrom(row, [
+    "clientPaymentId",
+    "client_payment_id",
+    "clientLedgerId",
+    "client_ledger_id",
+    "localLedgerEntryId",
+    "local_ledger_entry_id",
+  ]);
+}
+
 function paymentEchoSignature(row: MutableRow): string | undefined {
   const mode = normalizedIdText(readStringFrom(row, ["mode", "paymentMode", "payment_mode"]));
   if (mode !== "cash" && mode !== "upi" && mode !== "card") return undefined;
@@ -384,9 +398,13 @@ async function repairDuplicateFinancialEchoTable(tableName: FinancialTableName):
     if (!shouldMergeEchoRows(group)) continue;
     const [winner, ...losers] = [...group].sort((a, b) => rowPriority(b) - rowPriority(a));
     const winnerId = readStringFrom(winner, ["id"]);
+    const winnerIdentity = durableEchoIdentity(winner);
     for (const loser of losers) {
       const loserId = readStringFrom(loser, ["id"]);
       if (!loserId || loserId === winnerId) continue;
+      // Distinct records that merely look alike (same amount/mode/time bucket) must not merge.
+      const loserIdentity = durableEchoIdentity(loser);
+      if (winnerIdentity && loserIdentity && winnerIdentity !== loserIdentity) continue;
       await table.put(tombstoneEchoRow(loser, winner));
       merged += 1;
     }
