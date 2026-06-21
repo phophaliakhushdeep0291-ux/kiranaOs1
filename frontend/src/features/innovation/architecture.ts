@@ -37,7 +37,7 @@ export const INNOVATION_FEATURES: InnovationFeature[] = [
     featureName: "whatsapp_reminders",
     status: "backend_required",
     planNote: "Pro only. UI is gated; actual sending needs backend/WhatsApp provider.",
-    entryHref: "/udhar",
+    entryHref: "/customers?filter=udhar",
     summary: "One-click udhar reminder with customer statement, reminder logs and editable templates.",
     currentFrontend: ["Customer and udhar pages already show Pro-gated reminder entry points.", "Customer statement and ledger data are available locally."],
     backendRequirements: ["WhatsApp Business API provider integration.", "Template approval and language templates.", "Reminder log endpoint and delivery status webhook."],

@@ -98,7 +98,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/returns": "Return Items",
   "/returns/new": "Return Items",
   "/customers": "Customers / Udhar",
-  "/udhar": "Udhar",
   "/reports": "Reports & Analytics",
   "/daily-closing": "Daily Closing",
   "/expenses": "Expenses",

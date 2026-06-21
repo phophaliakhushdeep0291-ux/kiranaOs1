@@ -144,7 +144,12 @@ export default function CustomersPage() {
   const { toast } = useToast();
   const { data: customers = [], isLoading, refetch } = useCustomersLedgerList();
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "udhar" | "bad" | "due" | "promise">("all");
+  // Honor a ?filter= deep link (e.g. dashboard "Khata" cards link to /customers?filter=udhar).
+  const [filter, setFilter] = useState<"all" | "udhar" | "bad" | "due" | "promise">(() => {
+    if (typeof window === "undefined") return "all";
+    const f = new URLSearchParams(window.location.search).get("filter");
+    return f === "udhar" || f === "bad" || f === "due" || f === "promise" ? f : "all";
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerWithLedger | null>(null);
@@ -268,6 +273,50 @@ export default function CustomersPage() {
     window.addEventListener("kirana:voice-customer-search", handler);
     return () => window.removeEventListener("kirana:voice-customer-search", handler);
   }, []);
+
+  // Voice "show udhar" → focus this page on outstanding customers (migrated from the retired /udhar page).
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const query = String((event as CustomEvent<{ query?: unknown }>).detail?.query ?? "").trim();
+      setFilter("udhar");
+      if (query) setSearch(query);
+    };
+    window.addEventListener("kirana:voice-udhar-search", handler);
+    return () => window.removeEventListener("kirana:voice-udhar-search", handler);
+  }, []);
+
+  // Voice "record payment ..." → prefill + open the payment dialog (migrated from the retired /udhar page).
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const draft = (event as CustomEvent<{
+        draft?: { customerName?: unknown; mobile?: unknown; amount?: unknown; mode?: unknown; note?: unknown };
+      }>).detail?.draft;
+      if (!draft) return;
+      const name = String(draft.customerName ?? "").trim().toLowerCase();
+      const mobile = String(draft.mobile ?? "").replace(/\D/g, "").slice(-10);
+      const customer = dedupedCustomers.find((row) => {
+        const rowMobile = String(row.mobile ?? "").replace(/\D/g, "").slice(-10);
+        return Boolean(
+          (mobile && rowMobile === mobile) ||
+          (name && row.name.toLowerCase().includes(name)) ||
+          (name && name.includes(row.name.toLowerCase())),
+        );
+      });
+      if (name) setSearch(name);
+      setPaymentForm({
+        customerId: customer?.id ?? "",
+        amount: draft.amount !== undefined && Number.isFinite(Number(draft.amount)) ? String(draft.amount) : "",
+        mode: String(draft.mode ?? "cash").toLowerCase() === "upi" ? "upi" : "cash",
+        note: typeof draft.note === "string" ? draft.note : "",
+      });
+      setPaymentOpen(true);
+      if (!customer) {
+        toast({ title: "Choose customer", description: "Voice filled the payment details. Select the matching customer before saving." });
+      }
+    };
+    window.addEventListener("kirana:voice-payment-draft", handler);
+    return () => window.removeEventListener("kirana:voice-payment-draft", handler);
+  }, [dedupedCustomers, toast]);
 
   function openCreate() {
     setEditing(null);
