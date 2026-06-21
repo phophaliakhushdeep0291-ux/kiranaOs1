@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
 import { logoutDevice, type ActiveDeviceDto } from "@/features/devices/api";
 import { getOfflineScope } from "@/lib/offline/context";
-import { Laptop, Loader2, LockKeyhole, LogOut, Store } from "lucide-react";
+import { ChevronLeft, ChevronRight, Laptop, Loader2, LockKeyhole, LogOut, Store } from "lucide-react";
 
 const schema = z.object({
   mobile: z.string().min(10, "Enter a valid mobile number"),
@@ -26,10 +26,29 @@ interface DeviceLimitState {
   plan?: { code?: string; maxDevices?: number; allowedMaxDevices?: number };
 }
 
+interface ShopChoice {
+  id: string;
+  name: string;
+  city?: string | null;
+}
+
+function getShopChoices(error: ApiClientError): ShopChoice[] {
+  const shops = error.data.shops;
+  if (!Array.isArray(shops)) return [];
+
+  return shops.filter((shop): shop is ShopChoice => {
+    if (!shop || typeof shop !== "object") return false;
+    const candidate = shop as Record<string, unknown>;
+    return typeof candidate.id === "string" && typeof candidate.name === "string";
+  });
+}
+
 export default function Login() {
   const [, setLocation] = useLocation();
   const auth = useAuth();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [shopChoices, setShopChoices] = useState<ShopChoice[] | null>(null);
+  const [loginShopId, setLoginShopId] = useState<string | null>(null);
   const [deviceLimit, setDeviceLimit] = useState<DeviceLimitState | null>(null);
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
 
@@ -45,9 +64,20 @@ export default function Login() {
         setLocation("/dashboard");
       },
       onError: (err: unknown) => {
+        if (err instanceof ApiClientError && err.data?.code === "SHOP_SELECTION_REQUIRED") {
+          const shops = getShopChoices(err);
+          if (shops.length > 0) {
+            setShopChoices(shops);
+            setLoginShopId(null);
+            setDeviceLimit(null);
+            setServerError(null);
+            return;
+          }
+        }
         if (err instanceof ApiClientError && err.data?.code === "DEVICE_LIMIT_EXCEEDED") {
           const activeDevices = Array.isArray(err.data.activeDevices) ? err.data.activeDevices as ActiveDeviceDto[] : [];
           const token = typeof err.data.deviceLimitToken === "string" ? err.data.deviceLimitToken : "";
+          setShopChoices(null);
           setDeviceLimit({
             message: err.message,
             activeDevices,
@@ -65,13 +95,35 @@ export default function Login() {
 
   const onSubmit = (values: FormData) => {
     setServerError(null);
+    setShopChoices(null);
+    setLoginShopId(null);
     setDeviceLimit(null);
     loginMutation.mutate({ data: { mobile: values.mobile, password: values.password } });
   };
 
   const retryLogin = () => {
     const values = form.getValues();
-    loginMutation.mutate({ data: { mobile: values.mobile, password: values.password } });
+    loginMutation.mutate({
+      data: {
+        mobile: values.mobile,
+        password: values.password,
+        ...(loginShopId ? { shopId: loginShopId } : {}),
+      },
+    });
+  };
+
+  const selectShop = (shopId: string) => {
+    const values = form.getValues();
+    setLoginShopId(shopId);
+    setServerError(null);
+    loginMutation.mutate({ data: { mobile: values.mobile, password: values.password, shopId } });
+  };
+
+  const backToSignIn = () => {
+    setShopChoices(null);
+    setLoginShopId(null);
+    setDeviceLimit(null);
+    setServerError(null);
   };
 
   const logoutSelectedDevice = async (deviceId: string) => {
@@ -136,7 +188,51 @@ export default function Login() {
         </div>
 
         <div className="rounded-lg border bg-background/70 p-5 shadow-sm">
-          {deviceLimit ? (
+          {shopChoices ? (
+            <div className="space-y-4" data-testid="shop-selection-panel">
+              <div>
+                <h2 className="text-lg font-bold text-card-foreground">Choose your shop</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Select the shop you want to manage.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {shopChoices.map((shop) => (
+                  <button
+                    key={shop.id}
+                    type="button"
+                    className="flex min-h-16 w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => selectShop(shop.id)}
+                    disabled={loginMutation.isPending}
+                    data-testid={`shop-choice-${shop.id}`}
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Store size={19} aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-card-foreground">{shop.name}</span>
+                      {shop.city && <span className="block truncate text-xs text-muted-foreground">{shop.city}</span>}
+                    </span>
+                    {loginMutation.isPending && loginShopId === shop.id
+                      ? <Loader2 size={18} className="shrink-0 animate-spin text-primary" aria-label="Opening shop" />
+                      : <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden="true" />}
+                  </button>
+                ))}
+              </div>
+
+              {serverError && (
+                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" data-testid="status-error">
+                  {serverError}
+                </div>
+              )}
+
+              <Button type="button" variant="outline" className="w-full" onClick={backToSignIn} disabled={loginMutation.isPending}>
+                <ChevronLeft size={16} className="mr-2" aria-hidden="true" />
+                Back to sign in
+              </Button>
+            </div>
+          ) : deviceLimit ? (
             <div className="space-y-4" data-testid="device-limit-panel">
               <div>
                 <h2 className="text-lg font-bold text-card-foreground">Device limit reached</h2>
@@ -184,7 +280,7 @@ export default function Login() {
               )}
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <Button type="button" variant="outline" onClick={() => setDeviceLimit(null)}>
+                <Button type="button" variant="outline" onClick={backToSignIn}>
                   Back to sign in
                 </Button>
                 <Button type="button" onClick={retryLogin} disabled={loginMutation.isPending || revokingDeviceId !== null}>

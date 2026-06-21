@@ -43,18 +43,23 @@ export async function login({ mobile, password, shopId }, reqMeta = {}) {
 
   if (users.length === 0) throw new AppError("Invalid credentials", 401);
 
-  if (!shopId && users.length > 1) {
+  const passwordMatches = await Promise.all(
+    users.map((user) => bcrypt.compare(password, user.passwordHash))
+  );
+  const matchingUsers = users.filter((_, index) => passwordMatches[index]);
+
+  if (matchingUsers.length === 0) throw new AppError("Invalid credentials", 401);
+
+  if (!shopId && matchingUsers.length > 1) {
     const err = new AppError("Multiple shops found for this mobile. Please select a shop to continue.", 409);
     err.code = "SHOP_SELECTION_REQUIRED";
-    err.meta = {
-      shops: users.map((u) => ({ id: u.shop.id, name: u.shop.name, city: u.shop.city })),
+    err.publicData = {
+      shops: matchingUsers.map((u) => ({ id: u.shop.id, name: u.shop.name, city: u.shop.city })),
     };
     throw err;
   }
 
-  const user = users[0];
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) throw new AppError("Invalid credentials", 401);
+  const user = matchingUsers[0];
 
   return issueAuthResponse(user, user.shop, reqMeta);
 }

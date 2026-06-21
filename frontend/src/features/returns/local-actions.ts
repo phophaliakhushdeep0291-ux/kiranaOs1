@@ -71,7 +71,16 @@ function findCachedProduct(productId: string | undefined): Product | undefined {
  * money/stock on sync. Owner PIN is required (re-verified server-side).
  */
 export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promise<Bill> {
-  const items = (input.items ?? []).filter((item) => readNumber(item.quantity, 0) > 0);
+  const items = (input.items ?? [])
+    .filter((item) => readNumber(item.quantity, 0) > 0)
+    // enteredUnit is mandatory server-side (toBaseQty). A quick/standalone return may omit it,
+    // so always resolve a real unit from the product before it reaches the sync payload.
+    .map((item) => {
+      const product = findCachedProduct(item.productId);
+      const enteredUnit = (typeof item.enteredUnit === "string" && item.enteredUnit.trim())
+        || product?.rateUnit || product?.displayUnit || "piece";
+      return { ...item, enteredUnit };
+    });
   if (items.length === 0) throw new Error("Add at least one item to return");
 
   const refundMode: RefundMode = ["cash", "upi", "udhar"].includes(input.refundMode) ? input.refundMode : "cash";

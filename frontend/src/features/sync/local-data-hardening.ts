@@ -145,11 +145,30 @@ function explicitPaymentIdentity(row: MutableRow): string | undefined {
   ]);
 }
 
+// Identity fields that round-trip IDENTICALLY between a local row and its own server echo.
+// Deliberately excludes idempotencyKey (the server regenerates its own). Two rows carrying
+// different durable client ids are distinct records and must never be merged as echoes.
+function durableEchoIdentity(row: MutableRow): string | undefined {
+  return readStringFrom(row, [
+    "clientPaymentId",
+    "client_payment_id",
+    "clientLedgerId",
+    "client_ledger_id",
+    "localLedgerEntryId",
+    "local_ledger_entry_id",
+  ]);
+}
+
 function paymentEchoSignature(row: MutableRow): string | undefined {
   const mode = normalizedIdText(readStringFrom(row, ["mode", "paymentMode", "payment_mode"]));
   if (mode !== "cash" && mode !== "upi" && mode !== "card") return undefined;
-  const amount = amountKey(readNumberFrom(row, ["amount", "paidAmount", "paid_amount"]));
+  const rawAmount = readNumberFrom(row, ["amount", "paidAmount", "paid_amount"]);
+  const amount = amountKey(rawAmount);
   if (!amount) return undefined;
+  // Sign matters: a payment and its server echo share a sign, but a refund (negative,
+  // e.g. a sales return) must NOT collapse into a same-magnitude sale tender. amountKey
+  // is absolute, so carry the sign explicitly or refunds get swallowed and cash overstates.
+  const sign = (rawAmount ?? 0) < 0 ? "-" : "+";
   const billId = readStringFrom(row, [
     "bill_id",
     "billId",
@@ -163,7 +182,7 @@ function paymentEchoSignature(row: MutableRow): string | undefined {
     const identity = explicitPaymentIdentity(row);
     return identity ? `payment|${customer}|${mode}|identity:${identity}` : undefined;
   }
-  return `payment|${customer}|${mode}|${amount}|${timeBucket(row)}`;
+  return `payment|${customer}|${mode}|${sign}${amount}|${timeBucket(row)}`;
 }
 
 export function paymentDuplicateSignature(row: MutableRow): string | undefined {
@@ -379,9 +398,13 @@ async function repairDuplicateFinancialEchoTable(tableName: FinancialTableName):
     if (!shouldMergeEchoRows(group)) continue;
     const [winner, ...losers] = [...group].sort((a, b) => rowPriority(b) - rowPriority(a));
     const winnerId = readStringFrom(winner, ["id"]);
+    const winnerIdentity = durableEchoIdentity(winner);
     for (const loser of losers) {
       const loserId = readStringFrom(loser, ["id"]);
       if (!loserId || loserId === winnerId) continue;
+      // Distinct records that merely look alike (same amount/mode/time bucket) must not merge.
+      const loserIdentity = durableEchoIdentity(loser);
+      if (winnerIdentity && loserIdentity && winnerIdentity !== loserIdentity) continue;
       await table.put(tombstoneEchoRow(loser, winner));
       merged += 1;
     }
