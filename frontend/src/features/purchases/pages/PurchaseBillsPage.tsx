@@ -83,6 +83,7 @@ interface PurchaseFormState {
   amount: string;
   paid: string;
   paymentMode: string;
+  quantity: string;
 }
 
 function purchaseFormFromRow(row: SupplierDueRow): PurchaseFormState {
@@ -92,6 +93,7 @@ function purchaseFormFromRow(row: SupplierDueRow): PurchaseFormState {
     amount: String(row.amount || ""),
     paid: String(row.paid || ""),
     paymentMode: row.paymentMode === "upi" ? "upi" : "cash",
+    quantity: "",
   };
 }
 
@@ -119,6 +121,7 @@ export default function PurchaseBillsPage() {
   const [movements, setMovements] = useState<MovementRow[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<SupplierDueRow | null>(null);
+  const [editLine, setEditLine] = useState<{ unit: string; qty: number } | null>(null);
   const [payingRow, setPayingRow] = useState<SupplierDueRow | null>(null);
   const [deletingRow, setDeletingRow] = useState<SupplierDueRow | null>(null);
   const [purchaseForm, setPurchaseForm] = useState<PurchaseFormState>({
@@ -127,6 +130,7 @@ export default function PurchaseBillsPage() {
     amount: "",
     paid: "",
     paymentMode: "cash",
+    quantity: "",
   });
   const [payMode, setPayMode] = useState("cash");
   const purchaseHydrationAttemptedRef = useRef(false);
@@ -253,26 +257,34 @@ export default function PurchaseBillsPage() {
   const purchaseKey = (invoice: unknown, supplier: unknown) =>
     `${String(invoice ?? "").trim().toLowerCase()}|${String(supplier ?? "").trim().toLowerCase()}`;
 
-  // A single purchase often exists as several movement rows (a pending local row + the synced /
-  // hydrated copy). Collapse them by business signature so totals aren't double-counted.
+  // A single purchase line often exists as several movement rows (a pending local row + the synced
+  // / hydrated copy, and they can diverge after an edit). Collapse to one row per
+  // invoice+supplier+product, preferring a non-zero quantity and then the most recently updated —
+  // so totals aren't double-counted and an edited quantity wins over its stale copy.
   const purchaseMovements = useMemo(() => {
-    const seen = new Set<string>();
-    const out: MovementRow[] = [];
+    const baseOf = (m: MovementRow) => Math.abs(Number(m.quantityDelta ?? m.quantity_delta ?? 0));
+    const tsOf = (m: MovementRow) => {
+      const r = m as Record<string, unknown>;
+      return new Date(String(r.updatedAt ?? r.updated_at ?? r.createdAt ?? r.created_at ?? 0)).getTime() || 0;
+    };
+    const byLine = new Map<string, MovementRow>();
     for (const m of movements) {
       if (String(m.action ?? m.type ?? "").toLowerCase() !== "purchase") continue;
       const row = m as Record<string, unknown>;
-      const baseQty = Math.abs(Number(m.quantityDelta ?? m.quantity_delta ?? 0));
-      const sig = [
+      const key = [
         String(row.invoiceNumber ?? row.invoice_number ?? "").trim().toLowerCase(),
         String(row.supplierName ?? row.supplier_name ?? row.supplierId ?? "").trim().toLowerCase(),
         String(row.productId ?? row.product_id ?? row.productName ?? "").trim().toLowerCase(),
-        baseQty,
       ].join("|");
-      if (seen.has(sig)) continue;
-      seen.add(sig);
-      out.push(m);
+      const existing = byLine.get(key);
+      if (!existing) { byLine.set(key, m); continue; }
+      // prefer non-zero qty, then the most recently updated row
+      const pick = (baseOf(m) > 0) !== (baseOf(existing) > 0)
+        ? (baseOf(m) > 0 ? m : existing)
+        : (tsOf(m) >= tsOf(existing) ? m : existing);
+      byLine.set(key, pick);
     }
-    return out;
+    return [...byLine.values()];
   }, [movements]);
 
   // Map a purchase quantity by every identity key AND by an invoice+supplier business key. The
@@ -298,6 +310,26 @@ export default function PurchaseBillsPage() {
     const byKey = itemsByKey.byKey.get(purchaseKey(row.invoiceNumber === "-" ? "" : row.invoiceNumber, row.supplierName));
     return byKey ?? null;
   }, [itemsByKey]);
+
+  // The single purchased line for a row, when the bill has exactly one product — only then can we
+  // unambiguously edit "the quantity". Returns null for multi-product bills (qty edit hidden).
+  const rowPurchaseLine = useCallback((row: SupplierDueRow): { unit: string; qty: number } | null => {
+    const mine = purchaseMovements.filter((m) => {
+      const r = m as Record<string, unknown>;
+      if ([r.id, r.server_id, r.local_id].map((x) => String(x ?? "")).includes(row.id)) return true;
+      return purchaseKey(r.invoiceNumber ?? r.invoice_number, r.supplierName ?? r.supplier_name)
+        === purchaseKey(row.invoiceNumber === "-" ? "" : row.invoiceNumber, row.supplierName);
+    });
+    const productIds = new Set(mine.map((m) => {
+      const r = m as Record<string, unknown>;
+      return String(r.productId ?? r.product_id ?? r.productName ?? "");
+    }));
+    if (mine.length === 0 || productIds.size !== 1) return null;
+    const m = mine[0] as Record<string, unknown>;
+    const product = productById.get(String(m.productId ?? m.product_id ?? ""));
+    const unit = product ? productDisplayUnit(product) : String(m.unit ?? "piece");
+    return { unit, qty: movementDisplayQty(mine[0]) };
+  }, [purchaseMovements, productById, movementDisplayQty]);
 
   const mostPurchased = useMemo(() => {
     const agg = new Map<string, { name: string; qty: number }>();
@@ -341,7 +373,9 @@ export default function PurchaseBillsPage() {
 
   function openEdit(row: SupplierDueRow) {
     setEditingRow(row);
-    setPurchaseForm(purchaseFormFromRow(row));
+    const line = rowPurchaseLine(row);
+    setEditLine(line);
+    setPurchaseForm({ ...purchaseFormFromRow(row), quantity: line ? String(line.qty) : "" });
   }
 
   function openPay(row: SupplierDueRow) {
@@ -363,6 +397,7 @@ export default function PurchaseBillsPage() {
     }
     setSaving(true);
     try {
+      const newQty = editLine ? money(purchaseForm.quantity) : 0;
       await updatePurchaseLocal(editingRow, {
         supplierName: purchaseForm.supplierName.trim() || "Supplier",
         invoiceNumber: purchaseForm.invoiceNumber.trim(),
@@ -371,6 +406,8 @@ export default function PurchaseBillsPage() {
         due: Math.max(0, amount - paid),
         paymentMode: purchaseForm.paymentMode,
         status: amount - paid <= 0 ? "paid" : paid > 0 ? "partial" : "due",
+        quantity: editLine && newQty > 0 && newQty !== editLine.qty ? newQty : undefined,
+        enteredUnit: editLine?.unit,
       });
       await reloadSnapshot();
       setEditingRow(null);
@@ -688,7 +725,7 @@ export default function PurchaseBillsPage() {
         onSaved={async () => { setPanelOpen(false); await reloadSnapshot(); await reloadLocal(); }}
       />
 
-      <Dialog open={Boolean(editingRow)} onOpenChange={(open) => !open && setEditingRow(null)}>
+      <Dialog open={Boolean(editingRow)} onOpenChange={(open) => { if (!open) { setEditingRow(null); setEditLine(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Edit purchase</DialogTitle>
@@ -713,6 +750,13 @@ export default function PurchaseBillsPage() {
                 <Input type="number" min="0" step="0.01" className="mt-1" value={purchaseForm.paid} onChange={(event) => setPurchaseForm((current) => ({ ...current, paid: event.target.value }))} />
               </div>
             </div>
+            {editLine && (
+              <div>
+                <Label>Quantity ({editLine.unit})</Label>
+                <Input type="number" min="0" step="any" className="mt-1" value={purchaseForm.quantity} onChange={(event) => setPurchaseForm((current) => ({ ...current, quantity: event.target.value }))} />
+                <p className="mt-1 text-[11px] text-[#94a3b8]">Changing this adjusts the product's stock by the difference.</p>
+              </div>
+            )}
             <div>
               <Label>Payment mode</Label>
               <Select value={purchaseForm.paymentMode} onValueChange={(value) => setPurchaseForm((current) => ({ ...current, paymentMode: value }))}>
@@ -725,7 +769,7 @@ export default function PurchaseBillsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingRow(null)} disabled={saving}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditingRow(null); setEditLine(null); }} disabled={saving}>Cancel</Button>
             <Button onClick={() => void saveEdit()} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
           </DialogFooter>
         </DialogContent>
