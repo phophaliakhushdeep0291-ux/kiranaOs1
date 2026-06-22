@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useOfflineStatus } from "@/features/sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,6 +27,7 @@ import {
   Search,
   SlidersHorizontal,
   Trash2,
+  Upload,
   XCircle,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -58,6 +60,7 @@ import {
   type ProductFormData,
 } from "./product-form-state";
 import { ProductFormPanel } from "./components/ProductFormPanel";
+import { ImportProductsDialog } from "./components/ImportProductsDialog";
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
@@ -87,6 +90,7 @@ export default function ProductsPage() {
   const manageProducts = usePermission("manage_products");
   const belowMinPermission = usePermission("sell_below_minimum_price");
   const queryClient = useQueryClient();
+  const { isOnline } = useOfflineStatus();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -96,6 +100,7 @@ export default function ProductsPage() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [pendingValues, setPendingValues] = useState<ProductFormData | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -157,7 +162,9 @@ export default function ProductsPage() {
         setPendingValues(null);
         form.reset(productToForm());
         setOpen(stayOpenRef.current);
-        toast({ title: "Product saved locally", description: "Stock tracking is enabled and it will sync to cloud when internet is available." });
+        toast(isOnline
+          ? { title: "Product added" }
+          : { title: "Product saved offline", description: "It will sync to the cloud automatically when you're back online." });
       },
       onError: (err: unknown) => toast({ title: "Could not save product", description: err instanceof Error ? err.message : "Check required fields.", variant: "destructive" }),
     },
@@ -172,7 +179,9 @@ export default function ProductsPage() {
         setPendingValues(null);
         setEditing(null);
         form.reset(productToForm());
-        toast({ title: "Product updated locally" });
+        toast(isOnline
+          ? { title: "Product updated" }
+          : { title: "Product updated offline", description: "Changes will sync when you're back online." });
       },
       onError: (err: unknown) => toast({ title: "Could not update product", description: err instanceof Error ? err.message : "Check required fields.", variant: "destructive" }),
     },
@@ -317,6 +326,14 @@ export default function ProductsPage() {
           typeFilter={typeFilter}
           setTypeFilter={setTypeFilter}
         />
+        <Button
+          variant="outline"
+          onClick={() => setImportOpen(true)}
+          disabled={!manageProducts.allowed}
+          className="h-11 shrink-0 gap-1.5 rounded-[10px] px-4 text-[13px] font-bold"
+        >
+          <Upload size={16} /> Import
+        </Button>
         <Button
           data-testid="button-add-product"
           onClick={openAdd}
@@ -475,6 +492,12 @@ export default function ProductsPage() {
         onStayOpenChange={(v) => { setStayOpen(v); stayOpenRef.current = v; }}
         onOpenChange={setOpen}
         onSubmit={onSubmit}
+      />
+
+      <ImportProductsDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={() => queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() })}
       />
 
       <OwnerPinModal

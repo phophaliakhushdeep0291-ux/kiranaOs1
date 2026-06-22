@@ -35,6 +35,28 @@ function uniqueById<T extends AnyRecord>(rows: T[]): T[] {
   return [...map.values()];
 }
 
+const PRODUCT_ID_KEYS = ["id", "server_id", "serverId", "clientProductId", "client_product_id", "local_id", "localId"];
+
+// Bulk hydration overwrites local rows wholesale. Preserve UNSYNCED local edits/creates
+// (sync_status === "pending_sync") so a re-import doesn't clobber a change that hasn't pushed
+// yet — e.g. a just-edited stock/price/barcode. Pending local rows win until they sync (the
+// incremental pull already conflict-protects edits; this guards the bulk path).
+async function preserveLocalPending(table: string, serverRows: AnyRecord[], idKeys: string[]): Promise<AnyRecord[]> {
+  const local = await offlineDB.getAll<AnyRecord>(table).catch(() => []);
+  const pending = local.filter((row) => String(row.sync_status) === "pending_sync");
+  if (pending.length === 0) return serverRows;
+  const pendingKeys = new Set<string>();
+  for (const row of pending) for (const key of idKeys) {
+    const value = row[key];
+    if (typeof value === "string" && value) pendingKeys.add(value);
+  }
+  const serverSafe = serverRows.filter((row) => !idKeys.some((key) => {
+    const value = row[key];
+    return typeof value === "string" && pendingKeys.has(value);
+  }));
+  return [...serverSafe, ...pending];
+}
+
 function normalizeServerRow<T extends AnyRecord>(row: T): T {
   const id = typeof row.id === "string" && row.id.length > 0
     ? row.id
@@ -62,8 +84,9 @@ async function importProducts() {
   const rows = await apiRequest<Product[]>(`/products?limit=${DIRECT_IMPORT_LIMIT}`, { method: "GET", cache: "no-store", background: true });
   const products = Array.isArray(rows) ? rows : [];
   if (products.length > 0) {
-    await offlineDB.putMany("products", products as unknown as AnyRecord[]);
-    writeInstantCache("products", products);
+    const merged = await preserveLocalPending("products", products as unknown as AnyRecord[], PRODUCT_ID_KEYS);
+    await offlineDB.putMany("products", merged);
+    writeInstantCache("products", merged);
   }
   return products.length;
 }
@@ -128,7 +151,10 @@ async function importInventory() {
         return typeof id === "string" ? { ...row, id } : row;
       }).filter((row) => typeof row.id === "string")
     : [];
-  if (products.length > 0) await offlineDB.putMany("products", products);
+  if (products.length > 0) {
+    const merged = await preserveLocalPending("products", products, PRODUCT_ID_KEYS);
+    await offlineDB.putMany("products", merged);
+  }
   return products.length;
 }
 

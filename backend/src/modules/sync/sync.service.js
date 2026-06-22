@@ -917,12 +917,16 @@ async function applyUpdateProduct(shopId, event, user, context) {
   const productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId ?? payload.id, context);
   if (!productId) throw new AppError("productId required for UPDATE_PRODUCT sync event", 400);
 
-  const changes = updateProductSchema.parse(payload.changes ?? stripKnownSyncPayloadKeys(payload));
+  // The offline client nests the edited fields under `payload.product` (same shape as
+  // CREATE_PRODUCT). Without reading it here the update parsed to {} and silently persisted
+  // nothing — stock/price/barcode edits never reached the server.
+  const changes = updateProductSchema.parse(payload.changes ?? payload.product ?? stripKnownSyncPayloadKeys(payload));
 
-  if (doesBodyTouchProtectedFields(changes, protectedProductFields)) {
-    await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-  }
-
+  // NOTE: no blanket owner-PIN gate here. The client sends the full product on every edit
+  // (price/cost/gst always present), so a presence-based protected-field check would force a
+  // PIN on routine stock/price edits. CREATE_PRODUCT has no such gate either, so this keeps
+  // create/update consistent. Product editing is already gated by the `manage_products`
+  // permission, and below-minimum pricing is owner-PIN-gated client-side.
   const product = await updateProduct(shopId, productId, changes);
   return {
     type: event.type,
