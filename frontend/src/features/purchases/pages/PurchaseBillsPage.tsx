@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import { cn } from "@/lib/utils";
+import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/product-pricing";
 import type { Product, Supplier } from "@/types/api";
 
 function money(value: unknown) {
@@ -238,25 +239,78 @@ export default function PurchaseBillsPage() {
     };
   }, [rows]);
 
-  const qtyById = useMemo(() => {
-    const map = new Map<string, number>();
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+
+  // Quantity for a purchase line, converted from base units (g/ml) to the product's display unit
+  // so we show "5 litre" not "5000". Movements store quantity in base units.
+  const movementDisplayQty = useCallback((m: MovementRow) => {
+    const baseQty = Math.abs(Number(m.quantityDelta ?? m.quantity_delta ?? 0));
+    if (baseQty <= 0) return 0;
+    const product = productById.get(String((m as Record<string, unknown>).productId ?? (m as Record<string, unknown>).product_id ?? ""));
+    return product ? fromBaseQty(baseQty, productDisplayUnit(product)) : baseQty;
+  }, [productById]);
+
+  const purchaseKey = (invoice: unknown, supplier: unknown) =>
+    `${String(invoice ?? "").trim().toLowerCase()}|${String(supplier ?? "").trim().toLowerCase()}`;
+
+  // A single purchase often exists as several movement rows (a pending local row + the synced /
+  // hydrated copy). Collapse them by business signature so totals aren't double-counted.
+  const purchaseMovements = useMemo(() => {
+    const seen = new Set<string>();
+    const out: MovementRow[] = [];
     for (const m of movements) {
-      const qty = Math.abs(Number(m.quantityDelta ?? m.quantity_delta ?? 0));
-      if (qty > 0) map.set(m.id, qty);
+      if (String(m.action ?? m.type ?? "").toLowerCase() !== "purchase") continue;
+      const row = m as Record<string, unknown>;
+      const baseQty = Math.abs(Number(m.quantityDelta ?? m.quantity_delta ?? 0));
+      const sig = [
+        String(row.invoiceNumber ?? row.invoice_number ?? "").trim().toLowerCase(),
+        String(row.supplierName ?? row.supplier_name ?? row.supplierId ?? "").trim().toLowerCase(),
+        String(row.productId ?? row.product_id ?? row.productName ?? "").trim().toLowerCase(),
+        baseQty,
+      ].join("|");
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      out.push(m);
     }
-    return map;
+    return out;
   }, [movements]);
 
-  const mostPurchased = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const m of movements) {
-      if ((m.action ?? m.type) !== "purchase" || !m.productName) continue;
-      const qty = Math.abs(Number(m.quantityDelta ?? m.quantity_delta ?? 0));
-      map.set(m.productName, (map.get(m.productName) ?? 0) + qty);
+  // Map a purchase quantity by every identity key AND by an invoice+supplier business key. The
+  // displayed rows are SupplierDueRows whose id is the purchase_bill id once synced (≠ movement
+  // id), so an id-only lookup left the Items column blank after the first sync.
+  const itemsByKey = useMemo(() => {
+    const byId = new Map<string, number>();
+    const byKey = new Map<string, number>();
+    for (const m of purchaseMovements) {
+      const qty = movementDisplayQty(m);
+      if (qty <= 0) continue;
+      const row = m as Record<string, unknown>;
+      for (const id of [row.id, row.server_id, row.local_id]) { const k = String(id ?? ""); if (k) byId.set(k, qty); }
+      const bizKey = purchaseKey(row.invoiceNumber ?? row.invoice_number, row.supplierName ?? row.supplier_name);
+      if (bizKey !== "|") byKey.set(bizKey, (byKey.get(bizKey) ?? 0) + qty);
     }
-    const top = [...map.entries()].sort((a, b) => b[1] - a[1])[0];
-    return top ? { name: top[0], qty: top[1] } : null;
-  }, [movements]);
+    return { byId, byKey };
+  }, [purchaseMovements, movementDisplayQty]);
+
+  const rowItems = useCallback((row: SupplierDueRow): number | null => {
+    const direct = itemsByKey.byId.get(row.id);
+    if (direct != null) return direct;
+    const byKey = itemsByKey.byKey.get(purchaseKey(row.invoiceNumber === "-" ? "" : row.invoiceNumber, row.supplierName));
+    return byKey ?? null;
+  }, [itemsByKey]);
+
+  const mostPurchased = useMemo(() => {
+    const agg = new Map<string, { name: string; qty: number }>();
+    for (const m of purchaseMovements) {
+      if (!m.productName) continue;
+      const key = String((m as Record<string, unknown>).productId ?? m.productName);
+      const cur = agg.get(key) ?? { name: m.productName, qty: 0 };
+      cur.qty += movementDisplayQty(m);
+      agg.set(key, cur);
+    }
+    const top = [...agg.values()].sort((a, b) => b.qty - a.qty)[0];
+    return top && top.qty > 0 ? top : null;
+  }, [purchaseMovements, movementDisplayQty]);
 
   const topSuppliers = useMemo(() => {
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
@@ -362,7 +416,7 @@ export default function PurchaseBillsPage() {
     const header = ["Purchase No", "Supplier", "Date", "Items", "Total", "Paid", "Due", "Mode", "Status"];
     const lines = filtered.map((row) => [
       row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber, row.supplierName, safeDate(row.date),
-      qtyById.get(row.id) ?? "", row.amount, row.paid, row.due, row.paymentMode, STATUS_LABEL[effectiveStatus(row)] ?? row.status,
+      rowItems(row) ?? "", row.amount, row.paid, row.due, row.paymentMode, STATUS_LABEL[effectiveStatus(row)] ?? row.status,
     ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
     const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -497,7 +551,7 @@ export default function PurchaseBillsPage() {
                           </td>
                           <td className="px-4 py-3 font-semibold text-[#344668]">{row.supplierName}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-[#52627e]">{safeDate(row.date)}</td>
-                          {cols.items && <td className="px-4 py-3 text-right text-[#52627e]">{qtyById.get(row.id) ?? "—"}</td>}
+                          {cols.items && <td className="px-4 py-3 text-right text-[#52627e]">{(() => { const n = rowItems(row); return n != null ? n.toLocaleString("en-IN") : "—"; })()}</td>}
                           <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[#102347]">{fmt(row.amount)}</td>
                           {cols.paid && <td className="whitespace-nowrap px-4 py-3 text-right text-[#344668]">{fmt(row.paid)}</td>}
                           <td className={cn("whitespace-nowrap px-4 py-3 text-right font-bold", row.due > 0 ? "text-[#ef4444]" : "text-[#344668]")}>{fmt(row.due)}</td>

@@ -9,6 +9,7 @@ import {
   type FinancialAggregationSnapshot,
 } from "@/features/finance/services/FinancialAggregationService";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
+import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/product-pricing";
 
 export interface DateRange {
   from: string;
@@ -424,20 +425,25 @@ function calculateLowStock(products: Product[]): ReportLowStockItem[] {
   return products
     .filter((product) => !isDeleted(product as unknown as RecordLike) && (product.stockTrackingEnabled ?? product.trackStock ?? true))
     .map((product) => {
-      const stock = readNumber(product.stockBaseQty ?? product.stockQuantity, 0);
+      // stockBaseQty is in base units (g/ml); the threshold (lowStockAlert) is in display units.
+      // Convert stock to the display unit so the comparison — and the number shown — are correct.
+      const unit = product.stockUnit ?? productDisplayUnit(product);
+      const stock = product.stockBaseQty != null
+        ? fromBaseQty(product.stockBaseQty, unit)
+        : readNumber(product.stockQuantity, 0);
       const threshold = readNumber(product.lowStockThreshold ?? product.lowStockAlert, 0);
-      return { product, stock, threshold };
+      return { product, stock, threshold, unit };
     })
     .filter(({ stock, threshold }) => threshold > 0 && stock <= threshold)
     .sort((a, b) => a.stock - b.stock)
     .slice(0, 20)
-    .map(({ product, stock, threshold }) => ({
+    .map(({ product, stock, threshold, unit }) => ({
       productId: product.id,
       name: product.name,
       category: product.category,
       stock,
       threshold,
-      unit: product.stockUnit ?? product.unit ?? product.displayUnit,
+      unit,
     }));
 }
 
