@@ -24,6 +24,7 @@ import { useFeature } from "@/features/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
 import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
+import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/product-pricing";
 import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -1479,8 +1480,12 @@ function productPrice(product: Product): number {
 }
 
 function productUnitLabel(product: Product): string {
-  const unit = product.displayUnit ?? product.unit ?? product.rateUnit ?? "piece";
-  const stock = Number(product.stockQuantity ?? product.stockBaseQty);
+  const unit = productDisplayUnit(product);
+  // stockBaseQty is in base units (g/ml); convert to the display unit. Falling back to the raw
+  // base value (the old behaviour) showed e.g. 20000 litre instead of 20 litre.
+  const stock = product.stockBaseQty != null
+    ? fromBaseQty(product.stockBaseQty, unit)
+    : Number(product.stockQuantity ?? 0);
   if (Number.isFinite(stock) && stock >= 0) return `${stock.toLocaleString("en-IN")} ${unit}`;
   return unit;
 }

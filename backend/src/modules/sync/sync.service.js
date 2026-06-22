@@ -1586,6 +1586,12 @@ async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = fa
   }
 
   const fields = normalizePurchaseLifecycleFields(payload, { deleted });
+  // Optional quantity correction (editing a purchase's quantity). We SET the ledger to the new
+  // base qty and move product stock by the difference from the ledger's CURRENT value, so a
+  // replay of this same event is idempotent (the second time, oldBase === newBase => delta 0).
+  const newQuantity = !deleted && payload.quantity != null && Number.isFinite(Number(payload.quantity))
+    ? Number(payload.quantity)
+    : null;
   return db.$transaction(async (tx) => {
     const updatedPurchaseHistory = purchaseHistory
       ? await tx.purchaseHistory.update({
@@ -1593,10 +1599,27 @@ async function applyPurchaseBillLifecycle(shopId, event, context, { deleted = fa
           data: purchaseHistoryUpdateData(fields),
         })
       : null;
+
+    let stockLedgerData = stockLedgerPurchaseUpdateData(fields);
+    if (newQuantity != null && stockLedger?.productId) {
+      const product = await tx.product.findFirst({ where: { id: stockLedger.productId, shopId, deletedAt: null } });
+      if (product) {
+        const enteredUnit = pickString(payload.enteredUnit, payload.unit) ?? product.baseUnit;
+        const newBase = round2(toBaseQty(newQuantity, enteredUnit, product.baseUnit));
+        const oldBase = round2(Number(stockLedger.changeBaseQty ?? 0));
+        const delta = round2(newBase - oldBase);
+        if (delta !== 0) {
+          const newProductStock = round2(Number(product.stockBaseQty ?? 0) + delta);
+          await tx.product.update({ where: { id: product.id }, data: { stockBaseQty: newProductStock } });
+          stockLedgerData = { ...stockLedgerData, changeBaseQty: newBase, newStockBaseQty: newProductStock };
+        }
+      }
+    }
+
     const updatedStockLedger = stockLedger
       ? await tx.stockLedger.update({
           where: { id: stockLedger.id },
-          data: stockLedgerPurchaseUpdateData(fields),
+          data: stockLedgerData,
         })
       : null;
 

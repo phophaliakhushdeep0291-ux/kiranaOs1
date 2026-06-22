@@ -3,6 +3,7 @@ import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import type { SupplierDueRow } from "@/features/finance/services/FinancialAggregationService";
 import { withLocalPurchaseOverride } from "@/features/purchases/sync-guards";
 import { buildOutboxOperation } from "@/features/sync/outbox";
+import { toInventoryBaseQty } from "@/features/inventory/calculations";
 
 type MutableRow = Record<string, unknown>;
 type PurchaseTableName = "purchase_bills" | "inventory_movements";
@@ -15,6 +16,9 @@ export interface PurchaseEditInput {
   due: number;
   paymentMode: string;
   status: string;
+  // Optional quantity correction (single-product purchases). In the unit the user entered.
+  quantity?: number;
+  enteredUnit?: string;
 }
 
 function isRecord(value: unknown): value is MutableRow {
@@ -195,6 +199,11 @@ function buildPurchaseSyncPayload(
     purchaseDueAmount: Math.max(0, input.amount - input.paid),
     purchasePaymentStatus: input.status,
     purchasePaymentMode: input.paid > 0 ? input.paymentMode : null,
+    // Quantity correction: backend reconciles stock idempotently (SET ledger qty, move product
+    // stock by the difference from the ledger's current value).
+    ...(input.quantity != null && Number.isFinite(input.quantity)
+      ? { quantity: input.quantity, enteredUnit: input.enteredUnit ?? (readString(purchaseBill ?? inventoryMovement, ["unit"]) || undefined) }
+      : {}),
     match: {
       source: displayRow.source,
       displayId: displayRow.id,
@@ -254,16 +263,56 @@ function withPurchasePatch(row: MutableRow, input: PurchaseEditInput): MutableRo
 export async function updatePurchaseLocal(displayRow: SupplierDueRow, input: PurchaseEditInput) {
   const matches = await findMatchingPurchaseRows(displayRow);
   if (matches.length === 0) throw new Error("Purchase row not found in local records");
+
+  // Optional quantity correction. Mirror locally what the backend reconciles idempotently:
+  // restate the matched movement's quantity and move the product's stock by the delta. The server
+  // is authoritative (reconciled via the UPDATE_PURCHASE_BILL payload), so the product row keeps
+  // its sync_status and a later pull simply confirms the same value.
+  let productPatch: MutableRow | null = null;
+  let newBaseSigned: number | null = null;
+  if (input.quantity != null && Number.isFinite(input.quantity)) {
+    const movementMatch = matches.find((match) => match.tableName === "inventory_movements");
+    const productId = readString(movementMatch?.row, ["productId", "product_id"]);
+    if (movementMatch && productId) {
+      const products = await offlineDB.getAll<MutableRow>("products").catch(() => []);
+      const product = products.find((p) =>
+        readString(p, ["id"]) === productId || readString(p, ["server_id", "serverId"]) === productId);
+      if (product) {
+        const baseUnit = readString(product, ["baseUnit", "base_unit"]) || undefined;
+        const enteredUnit = input.enteredUnit || readString(movementMatch.row, ["unit"]) || baseUnit || "piece";
+        const newBase = toInventoryBaseQty(input.quantity, enteredUnit, baseUnit);
+        const signedRaw = readNumber(movementMatch.row, ["quantityDelta", "quantity_delta"]);
+        const oldBase = Math.abs(signedRaw);
+        const delta = roundMoney(newBase - oldBase);
+        newBaseSigned = signedRaw < 0 ? -newBase : newBase;
+        if (delta !== 0) {
+          const now = new Date().toISOString();
+          productPatch = {
+            ...product,
+            stockBaseQty: roundMoney(readNumber(product, ["stockBaseQty"]) + delta),
+            updatedAt: now,
+            updated_at: now,
+          };
+        }
+      }
+    }
+  }
+
   const outbox = buildOutboxOperation({
     entity_type: "purchase_history",
     entity_id: displayRow.id,
     operation_type: "UPDATE_PURCHASE_BILL",
     payload: buildPurchaseSyncPayload(displayRow, input, matches),
   });
-  await offlineDB.transaction(["purchase_bills", "inventory_movements", "sync_outbox"], async (tx) => {
+  await offlineDB.transaction(["purchase_bills", "inventory_movements", "sync_outbox", "products"], async (tx) => {
     for (const match of matches) {
-      await tx.put(match.tableName, withPurchasePatch(match.row, input));
+      let patched = withPurchasePatch(match.row, input);
+      if (newBaseSigned != null && match.tableName === "inventory_movements") {
+        patched = { ...patched, quantityDelta: newBaseSigned, quantity_delta: newBaseSigned };
+      }
+      await tx.put(match.tableName, patched);
     }
+    if (productPatch) await tx.put("products", productPatch);
     await tx.enqueueOutboxOperation(outbox);
   });
   emitLocalDataChanged({ type: "purchase", id: displayRow.id, action: "updated", count: matches.length });
