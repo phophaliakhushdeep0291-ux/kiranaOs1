@@ -145,16 +145,27 @@ async function importBills() {
 
 async function importInventory() {
   const rows = await apiRequest<AnyRecord[]>(`/inventory`, { method: "GET", cache: "no-store", background: true });
-  const products = Array.isArray(rows)
+  const invRows = Array.isArray(rows)
     ? rows.map((row) => {
         const id = row.id ?? row.productId ?? row.product_id;
         return typeof id === "string" ? { ...row, id } : row;
-      }).filter((row) => typeof row.id === "string")
+      }).filter((row): row is AnyRecord => typeof row.id === "string")
     : [];
-  if (products.length > 0) {
-    const merged = await preserveLocalPending("products", products, PRODUCT_ID_KEYS);
-    await offlineDB.putMany("products", merged);
+  if (invRows.length === 0) return 0;
+  // The /inventory view is stock-focused and omits product-only fields (barcode, sku, …). Merge its
+  // stock data ONTO the existing local product instead of replacing the row — otherwise hydration
+  // wipes those fields (a synced product would lose its barcode on the next refresh).
+  const existing = await offlineDB.getAll<AnyRecord>("products").catch(() => []);
+  const byId = new Map<string, AnyRecord>();
+  for (const product of existing) {
+    for (const key of PRODUCT_ID_KEYS) {
+      const value = product[key];
+      if (typeof value === "string" && value) byId.set(value, product);
+    }
   }
+  const products = invRows.map((row) => ({ ...(byId.get(String(row.id)) ?? {}), ...row }));
+  const merged = await preserveLocalPending("products", products, PRODUCT_ID_KEYS);
+  await offlineDB.putMany("products", merged);
   return products.length;
 }
 
@@ -242,15 +253,17 @@ export interface CloudHydrationResult {
 export async function hydrateFromBackendSnapshot(): Promise<CloudHydrationResult> {
   await offlineDB.init();
 
-  const [subscription, products, customers, bills, inventory, udharLedger, purchaseHistory] = await Promise.all([
+  const [subscription, products, customers, bills, udharLedger, purchaseHistory] = await Promise.all([
     safeFetch("subscription", importSubscription),
     safeFetch("products", importProducts),
     safeFetch("customers", importCustomers),
     safeFetch("bills", importBills),
-    safeFetch("inventory", importInventory),
     safeFetch("udharLedger", importUdharLedger),
     safeFetch("purchaseHistory", hydratePurchaseHistoryFromSyncPull),
   ]);
+  // Inventory merges stock onto products, so run it AFTER products to avoid a race where it reads
+  // a not-yet-written product and drops product-only fields (barcode/sku).
+  const inventory = await safeFetch("inventory", importInventory);
 
   const billCounts = isRecord(bills.data) ? bills.data as unknown as { bills?: number; billItems?: number; payments?: number } : {};
   const result: CloudHydrationResult = {
