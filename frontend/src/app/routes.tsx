@@ -4,6 +4,7 @@ import { Layout } from "@/components/layout";
 import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary, PageLoading } from "@/components/shared";
 import { useAuth } from "@/features/auth/useAuth";
+import { getLandingRoute } from "@/features/settings/landing-page";
 
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/auth/pages/RegisterPage"));
@@ -82,7 +83,7 @@ function ProtectedRoute({ component: Component }: { component: ComponentType }) 
 function PublicRoute({ component: Component }: { component: ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <LoadingScreen />;
-  if (isAuthenticated) return <Redirect to="/dashboard" />;
+  if (isAuthenticated) return <Redirect to={getLandingRoute()} />;
 
   return (
     <ErrorBoundary>
@@ -105,7 +106,7 @@ export function AppRoutes() {
         <PublicRoute component={Register} />
       </Route>
       <Route path="/">
-        {isAuthenticated ? <Redirect to="/dashboard" /> : <Redirect to="/login" />}
+        {isAuthenticated ? <Redirect to={getLandingRoute()} /> : <Redirect to="/login" />}
       </Route>
       <Route path="/dashboard">
         <ProtectedRoute component={Dashboard} />

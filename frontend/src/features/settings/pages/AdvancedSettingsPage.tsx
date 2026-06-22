@@ -13,6 +13,7 @@ import { Card, CardHead, Fld, RowToggle, Badge } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/settings/theme";
 import { useAppLanguage, type AppLanguage } from "@/features/settings/i18n";
+import { setLandingPagePref } from "@/features/settings/landing-page";
 import { offlineDB } from "@/lib/offline/db";
 
 interface AdvConfig {
@@ -71,7 +72,9 @@ export default function AdvancedSettingsPage() {
   useEffect(() => {
     if (seeded.current || !hydrated) return;
     seeded.current = true;
-    setAdv({ ...DEFAULT_ADV, ...((prefs.advanced ?? {}) as Partial<AdvConfig>) });
+    const savedAdv = { ...DEFAULT_ADV, ...((prefs.advanced ?? {}) as Partial<AdvConfig>) };
+    setAdv(savedAdv);
+    setLandingPagePref(savedAdv.landingPage); // mirror the synced value into the sync-readable store
   }, [hydrated, prefs.advanced]);
 
   const update = (partial: Partial<AdvConfig>) => { const next = { ...adv, ...partial }; setAdv(next); patch({ advanced: next }); };
@@ -140,7 +143,7 @@ export default function AdvancedSettingsPage() {
               </Select>
             </Fld>
             <Fld label="Default landing page">
-              <Select value={adv.landingPage} onValueChange={(v) => update({ landingPage: v })}>
+              <Select value={adv.landingPage} onValueChange={(v) => { update({ landingPage: v }); setLandingPagePref(v); }}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>{["Dashboard", "Billing", "Inventory", "Reports"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
