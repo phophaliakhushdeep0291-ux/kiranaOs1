@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-const emptyStringToUndefined = (value: unknown) => (value === "" ? undefined : value);
+// Treat empty string AND null as "no value" → undefined. Hydrated rows from the server carry
+// null for unset optional fields; without this, re-validating one (e.g. editing a synced customer
+// whose reminderOverrideUntil is null) threw "Expected string, received null".
+const emptyStringToUndefined = (value: unknown) => (value === "" || value === null ? undefined : value);
 const nullableText = z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional()).nullable().optional();
 const optionalText = z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional());
 const money = z.coerce.number().finite().nonnegative();
