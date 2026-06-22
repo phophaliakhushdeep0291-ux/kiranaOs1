@@ -1077,7 +1077,9 @@ async function applyUpdateCustomer(shopId, event, context) {
   const customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId ?? payload.id, context);
   if (!customerId) throw new AppError("customerId required for UPDATE_CUSTOMER sync event", 400);
 
-  const changes = updateCustomerSchema.parse(payload.changes ?? stripKnownSyncPayloadKeys(payload));
+  // Client nests edited fields under `payload.customer` (see CREATE_CUSTOMER). Reading only
+  // `payload.changes`/stripped top-level meant edits parsed to {} and never persisted.
+  const changes = updateCustomerSchema.parse(payload.changes ?? payload.customer ?? stripKnownSyncPayloadKeys(payload));
   // Udhar balance is ledger-derived. Offline customer updates must not overwrite it.
   delete changes.udharAmount;
   delete changes.udharAmountPaise;
@@ -1745,7 +1747,9 @@ async function applyUpdateSupplier(shopId, event, context) {
   const payload = updateSupplierPayloadSchema.parse(getEventPayload(event));
   const supplierId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.SUPPLIER, payload.serverSupplierId ?? payload.supplierId ?? payload.localSupplierId ?? payload.id, context);
   if (!supplierId) throw new AppError("supplierId required for UPDATE_SUPPLIER sync event", 400);
-  const changes = updateSupplierSchema.parse(payload.changes ?? stripKnownSyncPayloadKeys(payload));
+  // Client nests edited fields under `payload.supplier` (see CREATE_SUPPLIER). Reading only
+  // `payload.changes`/stripped top-level meant edits parsed to {} and never persisted.
+  const changes = updateSupplierSchema.parse(payload.changes ?? payload.supplier ?? stripKnownSyncPayloadKeys(payload));
   const supplier = await updateSupplier(shopId, supplierId, changes);
   return {
     type: event.type,
