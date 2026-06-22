@@ -153,6 +153,8 @@ model Product {
   defaultPricePerRateUnitPaise BigInt?          // Phase 27 shadow integer paise column
   gstRate               Float     @default(0)   // e.g. 5, 12, 18
   hsn                   String?
+  barcode               String?                 // scanned/typed product barcode
+  sku                   String?                 // stock-keeping unit code
   brand                 String?                 // optional brand/maker
   mrp                   Float     @default(0)   // printed maximum retail price (display only, not reconciled)
   reorderLevel          Float     @default(0)   // suggested reorder quantity

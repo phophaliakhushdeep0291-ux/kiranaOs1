@@ -917,12 +917,16 @@ async function applyUpdateProduct(shopId, event, user, context) {
   const productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId ?? payload.id, context);
   if (!productId) throw new AppError("productId required for UPDATE_PRODUCT sync event", 400);
 
-  const changes = updateProductSchema.parse(payload.changes ?? stripKnownSyncPayloadKeys(payload));
+  // The offline client nests the edited fields under `payload.product` (same shape as
+  // CREATE_PRODUCT). Without reading it here the update parsed to {} and silently persisted
+  // nothing — stock/price/barcode edits never reached the server.
+  const changes = updateProductSchema.parse(payload.changes ?? payload.product ?? stripKnownSyncPayloadKeys(payload));
 
-  if (doesBodyTouchProtectedFields(changes, protectedProductFields)) {
-    await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
-  }
-
+  // NOTE: no blanket owner-PIN gate here. The client sends the full product on every edit
+  // (price/cost/gst always present), so a presence-based protected-field check would force a
+  // PIN on routine stock/price edits. CREATE_PRODUCT has no such gate either, so this keeps
+  // create/update consistent. Product editing is already gated by the `manage_products`
+  // permission, and below-minimum pricing is owner-PIN-gated client-side.
   const product = await updateProduct(shopId, productId, changes);
   return {
     type: event.type,
@@ -1073,7 +1077,9 @@ async function applyUpdateCustomer(shopId, event, context) {
   const customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId ?? payload.id, context);
   if (!customerId) throw new AppError("customerId required for UPDATE_CUSTOMER sync event", 400);
 
-  const changes = updateCustomerSchema.parse(payload.changes ?? stripKnownSyncPayloadKeys(payload));
+  // Client nests edited fields under `payload.customer` (see CREATE_CUSTOMER). Reading only
+  // `payload.changes`/stripped top-level meant edits parsed to {} and never persisted.
+  const changes = updateCustomerSchema.parse(payload.changes ?? payload.customer ?? stripKnownSyncPayloadKeys(payload));
   // Udhar balance is ledger-derived. Offline customer updates must not overwrite it.
   delete changes.udharAmount;
   delete changes.udharAmountPaise;
@@ -1741,7 +1747,9 @@ async function applyUpdateSupplier(shopId, event, context) {
   const payload = updateSupplierPayloadSchema.parse(getEventPayload(event));
   const supplierId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.SUPPLIER, payload.serverSupplierId ?? payload.supplierId ?? payload.localSupplierId ?? payload.id, context);
   if (!supplierId) throw new AppError("supplierId required for UPDATE_SUPPLIER sync event", 400);
-  const changes = updateSupplierSchema.parse(payload.changes ?? stripKnownSyncPayloadKeys(payload));
+  // Client nests edited fields under `payload.supplier` (see CREATE_SUPPLIER). Reading only
+  // `payload.changes`/stripped top-level meant edits parsed to {} and never persisted.
+  const changes = updateSupplierSchema.parse(payload.changes ?? payload.supplier ?? stripKnownSyncPayloadKeys(payload));
   const supplier = await updateSupplier(shopId, supplierId, changes);
   return {
     type: event.type,

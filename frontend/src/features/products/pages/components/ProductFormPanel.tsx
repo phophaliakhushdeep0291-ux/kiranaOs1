@@ -117,7 +117,8 @@ export function ProductFormPanel({
   /* avg cost + margin */
   const cost = Number(form.watch("costPrice") || 0);
   const selling = Number(form.watch("sellingPrice") || 0);
-  const margin = selling > 0 ? Math.round(((selling - cost) / selling) * 1000) / 10 : 0;
+  // Margin as markup over cost: (sell - cost) / cost. Needs a positive cost to be meaningful.
+  const margin = cost > 0 ? Math.round(((selling - cost) / cost) * 1000) / 10 : 0;
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -149,9 +150,9 @@ export function ProductFormPanel({
       <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
-          {def.primaryUnits.map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
+          {def.primaryUnits.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
           <div className="my-1 h-px bg-border" />
-          {UNITS.filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u} className="capitalize">{u}</SelectItem>)}
+          {UNITS.filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
         </SelectContent>
       </Select>
     </Field>
@@ -212,7 +213,7 @@ export function ProductFormPanel({
               UnitField
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="SKU / Barcode" required>
+                <Field label="SKU / Barcode" required error={err.barcode?.message}>
                   <div className="relative">
                     <Input className="h-10 pr-9" placeholder="Scan or type" {...form.register("barcode")} />
                     <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
