@@ -1,0 +1,54 @@
+import { Plus, ReceiptText } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export interface OpenBillChip {
+  id: string;
+  name: string;
+  itemCount: number;
+  active: boolean;
+}
+
+/**
+ * Always-visible strip of the bills currently open at the counter. The active bill is
+ * highlighted; tapping another switches to it (the current one is saved automatically).
+ * "New bill" parks the current bill and starts a fresh one — so several customers can be
+ * served at once without losing anyone's cart.
+ */
+export function OpenBillsBar({ bills, onSwitch, onNew }: {
+  bills: OpenBillChip[];
+  onSwitch: (id: string) => void;
+  onNew: () => void;
+}) {
+  return (
+    <div className="app-scrollbar mb-2 flex shrink-0 items-center gap-2 overflow-x-auto rounded-[10px] border border-[#e6ecf4] bg-[#f7f9fd] px-2 py-1.5">
+      <span className="shrink-0 pl-1 pr-0.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">Open bills</span>
+      {bills.map((bill) => (
+        <button
+          key={bill.id}
+          type="button"
+          onClick={() => { if (!bill.active) onSwitch(bill.id); }}
+          aria-current={bill.active}
+          title={bill.active ? "Current bill" : `Switch to ${bill.name}`}
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] font-bold transition-colors",
+            bill.active
+              ? "border-[#0057ff] bg-white text-[#0057ff] shadow-[0_2px_8px_rgba(0,87,255,0.15)]"
+              : "border-[#dbe3ef] bg-white text-[#475569] hover:border-[#0057ff] hover:text-[#0057ff]",
+          )}
+        >
+          <ReceiptText size={13} />
+          <span className="max-w-[120px] truncate">{bill.name}</span>
+          <span className="rounded-full bg-[#eef2f8] px-1.5 text-[10px] font-bold text-[#64748b]">{bill.itemCount}</span>
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={onNew}
+        title="Start a new bill"
+        className="ml-auto flex shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[#0057ff] px-2.5 py-1 text-[12px] font-bold text-[#0057ff] hover:bg-[#eef5ff]"
+      >
+        <Plus size={14} /> New bill
+      </button>
+    </div>
+  );
+}

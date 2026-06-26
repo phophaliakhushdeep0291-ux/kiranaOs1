@@ -15,6 +15,8 @@ export type BillTypeSelection = typeof BillInputBillType[keyof typeof BillInputB
 export type BillingSensitiveAction = "large_discount" | "selling_below_minimum_price";
 
 export interface BillingDraft {
+  /** Stable id of the bill currently in the workspace (for the open-bills switcher). */
+  activeBillId?: string;
   cart?: CartItem[];
   discount?: number;
   paymentMode?: PaymentSelection;
