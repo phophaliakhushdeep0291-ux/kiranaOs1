@@ -1,9 +1,23 @@
 import { offlineDB } from "@/lib/offline/db";
+import { getOfflineScope } from "@/lib/offline/context";
 
 const CACHE_PREFIX = "kirana-os:instant-cache:";
 export const RECENT_CACHE_DAYS = 30;
 
 const memoryCache = new Map<string, unknown>();
+
+// Instant-cache keys are scoped to the active shop so one shop's cached products/bills/customers
+// can never be read by another shop on the same device. The DB layer is already scope-filtered;
+// this in-memory layer must match (it otherwise survives logout→login and leaks the prior shop's
+// data). store_id comes from the auth session, falling back to a per-device default when logged out.
+function memKey(key: string): string {
+  return `${getOfflineScope().store_id}::${key}`;
+}
+
+/** Wipe the in-memory instant cache — called on logout so the next user can't read it. */
+export function clearInstantMemoryCache(): void {
+  memoryCache.clear();
+}
 
 export const LOCAL_DATA_CHANGE_CHANNEL = "kirana:local-data-events";
 
@@ -35,7 +49,7 @@ function canUseLegacyLocalStorage() {
 function readLegacyLocalStorage<T>(key: string): T | null {
   if (!canUseLegacyLocalStorage()) return null;
   try {
-    const raw = localStorage.getItem(`${CACHE_PREFIX}${key}`);
+    const raw = localStorage.getItem(`${CACHE_PREFIX}${memKey(key)}`);
     return raw ? JSON.parse(raw) as T : null;
   } catch {
     return null;
@@ -57,7 +71,8 @@ export function pruneRecentRows<T>(rows: T[], days = RECENT_CACHE_DAYS): T[] {
 }
 
 export function readInstantCache<T>(key: string, fallback: T): T {
-  return memoryCache.has(key) ? memoryCache.get(key) as T : fallback;
+  const scoped = memKey(key);
+  return memoryCache.has(scoped) ? memoryCache.get(scoped) as T : fallback;
 }
 
 export function normaliseInstantCacheValue<T>(value: T, days = RECENT_CACHE_DAYS): T {
@@ -65,12 +80,12 @@ export function normaliseInstantCacheValue<T>(value: T, days = RECENT_CACHE_DAYS
 }
 
 export function writeInstantMemoryCache<T>(key: string, value: T, days = RECENT_CACHE_DAYS): void {
-  memoryCache.set(key, normaliseInstantCacheValue(value, days));
+  memoryCache.set(memKey(key), normaliseInstantCacheValue(value, days));
 }
 
 export function writeInstantCache<T>(key: string, value: T, days = RECENT_CACHE_DAYS): void {
   const valueForCache = normaliseInstantCacheValue(value, days);
-  memoryCache.set(key, valueForCache);
+  memoryCache.set(memKey(key), valueForCache);
   void offlineDB.putRecentCache(key, valueForCache, days).catch(() => {
     // IndexedDB can be unavailable in private mode; in-memory cache still prevents UI crashes.
   });
@@ -79,7 +94,7 @@ export function writeInstantCache<T>(key: string, value: T, days = RECENT_CACHE_
 export async function readIndexedRecentCache<T>(key: string, fallback: T): Promise<T> {
   try {
     const value = await offlineDB.getRecentCache<T>(key, fallback);
-    memoryCache.set(key, value);
+    memoryCache.set(memKey(key), value);
     return value;
   } catch {
     return readInstantCache<T>(key, fallback);
@@ -89,7 +104,7 @@ export async function readIndexedRecentCache<T>(key: string, fallback: T): Promi
 export async function hydrateInstantCacheFromIndexedDB(keys: string[]): Promise<void> {
   await Promise.all(keys.map(async (key) => {
     const value = await offlineDB.getRecentCache<unknown>(key, undefined).catch(() => undefined);
-    if (value !== undefined) memoryCache.set(key, value);
+    if (value !== undefined) memoryCache.set(memKey(key), value);
   }));
 }
 
@@ -97,13 +112,13 @@ export async function migrateLegacyInstantCache(keys: string[], days = RECENT_CA
   await Promise.all(keys.map(async (key) => {
     const existing = await offlineDB.getRecentCache<unknown>(key, undefined).catch(() => undefined);
     if (existing !== undefined) {
-      memoryCache.set(key, existing);
+      memoryCache.set(memKey(key), existing);
       return;
     }
     const legacy = readLegacyLocalStorage<unknown>(key);
     if (legacy === null) return;
     const valueForCache = Array.isArray(legacy) ? pruneRecentRows(legacy, days) : legacy;
-    memoryCache.set(key, valueForCache);
+    memoryCache.set(memKey(key), valueForCache);
     await offlineDB.putRecentCache(key, valueForCache, days).catch(() => undefined);
   }));
 }
