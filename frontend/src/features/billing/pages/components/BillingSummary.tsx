@@ -17,17 +17,14 @@ import {
 } from "lucide-react";
 import { clampAmount } from "../billing-calculations";
 import { applyOffer } from "@/features/offers/api";
-import type { BillTypeSelection, CartItem, HeldBill, PaymentSelection } from "../billing-types";
+import type { BillTypeSelection, CartItem, PaymentSelection } from "../billing-types";
 import { BillingCart } from "./BillingCart";
-import { BillingDraftRestore } from "./BillingDraftRestore";
 import { BillingPaymentPanel } from "./BillingPaymentPanel";
 
 interface BillingSummaryProps {
   summaryWidth: number;
   onStartSummaryResize: (event: ReactMouseEvent<HTMLDivElement>) => void;
   isOnline: boolean;
-  heldBills: HeldBill[];
-  onResumeHeldBill: (id: string) => void;
   billType: BillTypeSelection;
   setBillType: Dispatch<SetStateAction<BillTypeSelection>>;
   customers: Customer[];
@@ -89,8 +86,6 @@ function fmtRs(value: number) {
 export function BillingSummary({
   summaryWidth,
   onStartSummaryResize,
-  heldBills,
-  onResumeHeldBill,
   billType,
   setBillType,
   customers,
@@ -237,11 +232,6 @@ export function BillingSummary({
               Change
             </button>
           </div>
-
-          {/* Held bills restore */}
-          {heldBills.length > 0 && (
-            <BillingDraftRestore heldBills={heldBills} onResumeHeldBill={onResumeHeldBill} />
-          )}
 
           {/* Bill type + customer inputs — collapsible */}
           {(showCustomerOptions || needsOptionsVisible) && (
