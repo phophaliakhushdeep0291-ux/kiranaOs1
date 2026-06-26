@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
-import { CheckCircle2, Clock, Cloud, CloudOff, Database, Download, RefreshCcw, ShieldCheck, Upload } from "lucide-react";
+import { CheckCircle2, Clock, Cloud, CloudOff, Database, RefreshCcw, ShieldCheck, Upload } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, Kpi, RowToggle } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
@@ -22,12 +22,6 @@ interface BackupConfig {
 const DEFAULT_BACKUP: BackupConfig = {
   auto: true, frequency: "Daily", time: "02:00", location: "Secure Cloud Storage", keepFor: "30 days", encrypt: true,
 };
-const BACKUP_HISTORY = [
-  { date: "Today 02:00 AM", size: "24 MB", type: "Auto", status: "success" as const },
-  { date: "Yesterday 02:00 AM", size: "23 MB", type: "Auto", status: "success" as const },
-  { date: "2 days ago", size: "22 MB", type: "Manual", status: "success" as const },
-];
-
 function timeAgo(d: Date | null) {
   if (!d) return "—";
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -151,18 +145,12 @@ export default function SyncSettingsPage() {
 
         {/* Backup History */}
         <Card>
-          <CardHead icon={<Cloud size={15} />} title="Backup History" sub="Recent backups" />
+          <CardHead icon={<Cloud size={15} />} title="Backup History" sub="Cloud backup" />
           <div className="px-5 pb-4">
-            {BACKUP_HISTORY.map((b, i) => (
-              <div key={i} className={`flex items-center gap-3 py-2.5 ${i < BACKUP_HISTORY.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-emerald-50 text-emerald-600"><CheckCircle2 size={15} /></span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-bold text-[#102347]">{b.date}</p>
-                  <p className="text-[11px] text-[#64748b]">{b.size} · {b.type}</p>
-                </div>
-                <button onClick={() => toast({ title: "Restore backup", description: "Restoring needs the owner PIN and will replace local data." })} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Restore</button>
-              </div>
-            ))}
+            <div className="flex items-start gap-3 rounded-[10px] bg-[#eef5ff] px-3.5 py-3 text-[12px] font-medium text-[#34507f]">
+              <ShieldCheck size={15} className="mt-0.5 shrink-0" />
+              <span>Your data is continuously backed up to the cloud every time it syncs. Downloadable backup snapshots &amp; restore are coming soon.</span>
+            </div>
           </div>
         </Card>
       </div>

@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   BadgeCheck, Building2, CheckCircle2, FileText, Landmark, Loader2, MapPin,
-  Navigation, QrCode, Receipt, Store, Upload, Clock,
+  Navigation, Receipt, Store, Upload, Clock,
 } from "lucide-react";
+import { Link } from "wouter";
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
@@ -28,8 +29,6 @@ const DOCS = [
   { key: "address", label: "Address Proof" },
 ] as const;
 
-const DEFAULT_BRANDING = { title: "", showGstin: true, showPhone: true, showAddress: true, showQr: true, footer: "Thank you for shopping with us!" };
-
 export default function StoreProfilePage() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -38,7 +37,6 @@ export default function StoreProfilePage() {
   const { prefs, patch, shop, hydrated } = useSettingsPrefs();
 
   const sp = (prefs.storeProfile ?? {}) as Record<string, string>;
-  const branding = { ...DEFAULT_BRANDING, ...((prefs.branding ?? {}) as Partial<typeof DEFAULT_BRANDING>) };
   const hours = (prefs.hours ?? {}) as Record<string, DayHours>;
   const bank = (prefs.bank ?? {}) as Record<string, string>;
   const docs = (prefs.docs ?? {}) as Record<string, string>;
@@ -73,7 +71,6 @@ export default function StoreProfilePage() {
     patch({ storeProfile: { ...sp, altPhone: biz.altPhone, email: biz.email, pan: biz.pan, businessType: biz.businessType, currency: biz.currency, state: addr.state, pincode: addr.pincode, country: addr.country, deliveryRadius: addr.deliveryRadius } });
   }
 
-  const setBrand = (key: keyof typeof DEFAULT_BRANDING, val: string | boolean) => patch({ branding: { ...branding, [key]: val } });
   const setDay = (day: string, next: DayHours) => patch({ hours: { ...hours, [day]: next } });
   const setBank = (key: string, val: string) => patch({ bank: { ...bank, [key]: val } });
 
@@ -165,37 +162,16 @@ export default function StoreProfilePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Bill Branding */}
+        {/* Bill Branding — configured on the Printer & Receipt tab (single source of truth) */}
         <Card>
           <CardHead icon={<Receipt size={15} />} title="Bill Branding" sub="How your receipt looks" />
-          <div className="grid gap-4 px-5 pb-5 sm:grid-cols-[1fr_180px]">
-            <div className="space-y-3">
-              <Fld label="Bill Title"><Input className="h-10" value={branding.title} placeholder={biz.name || "Store name"} onChange={(e) => setBrand("title", e.target.value)} /></Fld>
-              <div className="space-y-1">
-                {([["showGstin", "Show GSTIN"], ["showPhone", "Show phone"], ["showAddress", "Show address"], ["showQr", "Show payment QR"]] as const).map(([key, label]) => (
-                  <label key={key} className="flex items-center justify-between rounded-[8px] border border-[#eef2f8] px-3 py-2">
-                    <span className="text-[12px] font-semibold text-[#344668]">{label}</span>
-                    <Switch checked={Boolean(branding[key])} onCheckedChange={(v) => setBrand(key, v)} />
-                  </label>
-                ))}
-              </div>
-              <Fld label="Footer Message"><Input className="h-10" value={branding.footer} onChange={(e) => setBrand("footer", e.target.value)} /></Fld>
-            </div>
-            {/* mini receipt preview */}
-            <div className="rounded-[10px] border border-dashed border-[#cdd9ec] bg-[#fbfdff] p-3">
-              <div className="mx-auto w-full rounded-[6px] bg-white p-2.5 text-center shadow-sm" style={{ fontFamily: "monospace" }}>
-                <p className="truncate text-[12px] font-black uppercase text-[#0f1e3d]">{branding.title || biz.name || "MY STORE"}</p>
-                {branding.showAddress && <p className="truncate text-[8px] text-[#64748b]">{addr.city || "City"}</p>}
-                {branding.showPhone && biz.phone && <p className="text-[8px] text-[#64748b]">Ph: {biz.phone}</p>}
-                {branding.showGstin && biz.gstNumber && <p className="truncate text-[8px] text-[#64748b]">GST: {biz.gstNumber}</p>}
-                <div className="my-1.5 border-t border-dashed border-[#cbd5e1]" />
-                <div className="flex justify-between text-[8px] text-[#334155]"><span>Item x1</span><span>Rs 40</span></div>
-                <div className="flex justify-between text-[8px] font-bold text-[#0f1e3d]"><span>Total</span><span>Rs 40</span></div>
-                {branding.showQr && <div className="mx-auto mt-1.5 grid h-9 w-9 place-items-center rounded bg-[#f1f5f9] text-[#94a3b8]"><QrCode size={20} /></div>}
-                <div className="my-1.5 border-t border-dashed border-[#cbd5e1]" />
-                <p className="truncate text-[8px] text-[#64748b]">{branding.footer}</p>
-              </div>
-            </div>
+          <div className="space-y-3 px-5 pb-5">
+            <p className="text-[12.5px] leading-relaxed text-[#52627e]">
+              Receipt branding — footer message, GSTIN/HSN visibility, GST breakup, paper size and number of copies — lives on the <strong>Printer &amp; Receipt</strong> tab, so there's one place that controls how every bill prints and is shared.
+            </p>
+            <Link href="/settings/printer">
+              <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold"><Receipt size={15} /> Open Printer &amp; Receipt settings</Button>
+            </Link>
           </div>
         </Card>
 

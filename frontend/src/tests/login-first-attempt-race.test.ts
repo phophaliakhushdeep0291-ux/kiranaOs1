@@ -15,7 +15,9 @@ describe("login first-attempt reliability", () => {
     const source = readFileSync("src/app/routes.tsx", "utf8");
 
     expect(source).toContain("function PublicRoute");
-    expect(source).toContain("if (isAuthenticated) return <Redirect to=\"/dashboard\" />");
+    // Authenticated users are redirected away from /login to their configured landing page
+    // (getLandingRoute() defaults to /dashboard).
+    expect(source).toContain("if (isAuthenticated) return <Redirect to={getLandingRoute()} />");
   });
 
   it("keeps the auth provider separate from the useAuth hook for stable dev refresh", () => {

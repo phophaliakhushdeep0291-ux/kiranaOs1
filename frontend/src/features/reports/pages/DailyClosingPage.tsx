@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { buildDailyClosingReport, toDateInputValue, type DailyClosingReport } from "@/features/reports/local-reporting";
 import { shareDailyClosingOnWhatsapp } from "@/features/reports/daily-summary-share";
 import { useAuth } from "@/features/auth/useAuth";
+import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { cn } from "@/lib/utils";
 
 function fmt(value: number | undefined) {
@@ -45,6 +46,15 @@ function printClosing(report: DailyClosingReport) {
 
 export default function DailyClosingPage() {
   const { shop } = useAuth();
+  const { prefs } = useSettingsPrefs();
+  // Settings → Notifications → Daily Summary controls which sections the shared summary includes.
+  const notif = (prefs.notifications ?? {}) as { dailySales?: boolean; dailyProfit?: boolean; dailyCashUpi?: boolean; dailyUdhar?: boolean };
+  const summaryInclude = {
+    sales: notif.dailySales !== false,
+    profit: notif.dailyProfit !== false,
+    cashUpi: notif.dailyCashUpi !== false,
+    udhar: notif.dailyUdhar !== false,
+  };
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [report, setReport] = useState<DailyClosingReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +105,7 @@ export default function DailyClosingPage() {
         <div className="flex flex-wrap gap-2">
           <Link href="/reports"><Button variant="outline" className="rounded-xl"><CalendarDays size={15} className="mr-1.5" />Reports</Button></Link>
           <Button variant="outline" className="rounded-xl" onClick={() => report && printClosing(report)} disabled={!report}><Printer size={15} className="mr-1.5" />Print</Button>
-          <Button variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => report && shareDailyClosingOnWhatsapp({ report, shopName: shop?.name })} disabled={!report}><MessageCircle size={15} className="mr-1.5" />Share</Button>
+          <Button variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => report && shareDailyClosingOnWhatsapp({ report, shopName: shop?.name, include: summaryInclude })} disabled={!report}><MessageCircle size={15} className="mr-1.5" />Share</Button>
           <Button onClick={load} disabled={loading} className="rounded-xl"><RefreshCw size={15} className="mr-1.5" />Refresh</Button>
         </div>
       </div>

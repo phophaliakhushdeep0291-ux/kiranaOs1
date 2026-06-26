@@ -12,6 +12,7 @@ import { offlineDB } from "@/lib/offline/db";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
+import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -76,6 +77,23 @@ function saveSettingList<T>(key: string, rows: T[]) {
   void offlineDB.setSetting(key, rows).catch(() => undefined);
 }
 
+const MAX_OPEN_BILLS = 10;
+
+function newBillId(): string {
+  return `bill-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Insert or replace an open bill by id (in place to keep the bar order stable). */
+function upsertOpenBill(list: HeldBill[], bill: HeldBill): HeldBill[] {
+  const index = list.findIndex((entry) => entry.id === bill.id);
+  if (index >= 0) {
+    const next = [...list];
+    next[index] = bill;
+    return next;
+  }
+  return [bill, ...list].slice(0, MAX_OPEN_BILLS);
+}
+
 export default function Billing() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -106,6 +124,7 @@ export default function Billing() {
   const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
   const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
+  const [activeBillId, setActiveBillId] = useState<string>(() => readBillingDraft().activeBillId ?? newBillId());
   const [lastBillNo, setLastBillNo] = useState<string | null>(null);
   const [lastPrintableBill, setLastPrintableBill] = useState<PrintableBill | null>(null);
   const [summaryWidth, setSummaryWidth] = useState(() => readBillSummaryWidth());
@@ -215,6 +234,7 @@ export default function Billing() {
       .then(([draft, held]) => {
         if (!active) return;
         if (Object.keys(draft).length > 0) {
+          if (draft.activeBillId) setActiveBillId(draft.activeBillId);
           setCart(draft.cart ?? []);
           setDiscount(draft.discount ?? 0);
           setPaymentMode(draft.paymentMode ?? BillPaymentMode.cash);
@@ -238,8 +258,8 @@ export default function Billing() {
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeBillingDraft({ cart, discount: safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
-  }, [draftHydrated, cart, safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
+    writeBillingDraft({ activeBillId, cart, discount: safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
+  }, [draftHydrated, activeBillId, cart, safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
 
   useEffect(() => {
     if (discount !== safeDiscount) setDiscount(safeDiscount);
@@ -294,6 +314,7 @@ export default function Billing() {
         }
         setSensitiveApproval(null);
         resetCurrentBill();
+        setActiveBillId(newBillId());
         clearBillingDraft();
         queryClient.invalidateQueries({ queryKey: getListBillsQueryKey() });
         queryClient.invalidateQueries({ queryKey: ["customers"] });
@@ -726,13 +747,10 @@ export default function Billing() {
     });
   }
 
-  function holdCurrentBill() {
-    if (cart.length === 0) {
-      toast({ title: "Nothing to hold", description: "Add items before holding a bill." });
-      return;
-    }
-    const held: HeldBill = {
-      id: `held-${Date.now()}`,
+  // Snapshot the bill currently in the workspace as an open-bills entry (keyed by activeBillId).
+  function serializeActiveBill(): HeldBill {
+    return {
+      id: activeBillId,
       label: `${resolvedCustomerName || "Walk-in"} • ₹${grandTotal.toLocaleString("en-IN")} • ${cart.length} item${cart.length === 1 ? "" : "s"}`,
       createdAt: new Date().toISOString(),
       cart,
@@ -747,32 +765,58 @@ export default function Billing() {
       splitUpiAmount,
       allowAdvancePayment,
     };
-    const nextHeld = [held, ...heldBills].slice(0, 10);
+  }
+
+  function loadBillIntoActive(bill: HeldBill) {
+    setActiveBillId(bill.id);
+    setCart(bill.cart ?? []);
+    setDiscount(bill.discount ?? 0);
+    setPaymentMode(bill.paymentMode ?? BillPaymentMode.cash);
+    setBillType(bill.billType ?? BillInputBillType.normal_sale);
+    setSelectedCustomerId(bill.selectedCustomerId ?? "walk_in");
+    setCustomerName(bill.customerName ?? "");
+    setCustomerMobile(bill.customerMobile ?? "");
+    setPaidAmount(bill.paidAmount ?? "");
+    setSplitCashAmount(bill.splitCashAmount ?? "");
+    setSplitUpiAmount(bill.splitUpiAmount ?? "");
+    setAllowAdvancePayment(bill.allowAdvancePayment ?? false);
+    setDraftRestored(Boolean(bill.cart?.length));
+  }
+
+  // Save the workspace bill back into the open-bills set — but only if it has items, so empty
+  // bills aren't littered around.
+  function stashActiveBill(list: HeldBill[]): HeldBill[] {
+    return cart.length > 0 ? upsertOpenBill(list, serializeActiveBill()) : list;
+  }
+
+  // Start a brand-new empty bill while keeping the current one in the Open Bills set.
+  function newBill() {
+    const nextHeld = stashActiveBill(heldBills);
     setHeldBills(nextHeld);
     saveSettingList(HELD_BILLS_KEY, nextHeld);
     resetCurrentBill();
+    setActiveBillId(newBillId());
     clearBillingDraft();
-    toast({ title: "Bill held", description: "You can resume it from held bills." });
   }
 
+  // Explicit "Hold" button: save the current bill and clear the workspace.
+  function holdCurrentBill() {
+    if (cart.length === 0) {
+      toast({ title: "Nothing to hold", description: "Add items before holding a bill." });
+      return;
+    }
+    newBill();
+    toast({ title: "Bill held", description: "Switch back to it any time from Open Bills." });
+  }
+
+  // Switch to another open bill WITHOUT losing the current one (it's stashed first).
   function resumeHeldBill(id: string) {
-    const held = heldBills.find((entry) => entry.id === id);
-    if (!held) return;
-    setCart(held.cart ?? []);
-    setDiscount(held.discount ?? 0);
-    setPaymentMode(held.paymentMode ?? BillPaymentMode.cash);
-    setBillType(held.billType ?? BillInputBillType.normal_sale);
-    setSelectedCustomerId(held.selectedCustomerId ?? "walk_in");
-    setCustomerName(held.customerName ?? "");
-    setCustomerMobile(held.customerMobile ?? "");
-    setPaidAmount(held.paidAmount ?? "");
-    setSplitCashAmount(held.splitCashAmount ?? "");
-    setSplitUpiAmount(held.splitUpiAmount ?? "");
-    setAllowAdvancePayment(held.allowAdvancePayment ?? false);
-    const nextHeld = heldBills.filter((entry) => entry.id !== id);
+    const target = heldBills.find((entry) => entry.id === id);
+    if (!target) return;
+    const nextHeld = stashActiveBill(heldBills).filter((entry) => entry.id !== id);
     setHeldBills(nextHeld);
     saveSettingList(HELD_BILLS_KEY, nextHeld);
-    toast({ title: "Held bill resumed", description: held.label });
+    loadBillIntoActive(target);
   }
 
   function clearCartWithConfirmation() {
@@ -903,6 +947,16 @@ export default function Billing() {
       <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 pb-24 sm:px-3 sm:py-3 sm:pb-24 lg:h-full lg:flex-row lg:gap-4 lg:px-4 lg:pb-3">
       {/* ── LEFT PANEL: product search + grid ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-visible lg:min-h-0 lg:overflow-hidden">
+        {(heldBills.length > 0 || cart.length > 0) && (
+          <OpenBillsBar
+            bills={[
+              { id: activeBillId, name: resolvedCustomerName || "Walk-in", itemCount: cart.length, active: true },
+              ...heldBills.map((entry): OpenBillChip => ({ id: entry.id, name: entry.customerName?.trim() || "Walk-in", itemCount: entry.cart?.length ?? 0, active: false })),
+            ]}
+            onSwitch={resumeHeldBill}
+            onNew={newBill}
+          />
+        )}
         <BillingSearch
           isOnline={isOnline}
           draftRestored={draftRestored}

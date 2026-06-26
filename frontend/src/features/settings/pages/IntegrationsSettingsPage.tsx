@@ -9,26 +9,21 @@ import { Card, CardHead, Fld, Badge, Kpi, RowToggle } from "@/features/settings/
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 
 type IntStatus = "connected" | "disconnected" | "error" | "soon";
+// None of these are wired to a real backend yet, so they default to "Coming Soon" rather than
+// claiming to be connected. (Previously several defaulted to "connected", which was misleading.)
 const APPS: { key: string; name: string; desc: string; def: IntStatus }[] = [
-  { key: "whatsapp", name: "WhatsApp Business", desc: "Send bills & reminders", def: "connected" },
-  { key: "tally", name: "TallyPrime", desc: "Accounting export", def: "connected" },
-  { key: "razorpay", name: "Razorpay", desc: "Online payments", def: "connected" },
-  { key: "bharatpe", name: "BharatPe", desc: "UPI & QR collections", def: "disconnected" },
-  { key: "gdrive", name: "Google Drive Backup", desc: "Off-site backups", def: "connected" },
-  { key: "printerApi", name: "Thermal Printer API", desc: "Network print bridge", def: "disconnected" },
-  { key: "sms", name: "SMS Gateway", desc: "Transactional SMS", def: "error" },
-  { key: "accounting", name: "Accounting Export", desc: "CSV / Excel ledgers", def: "connected" },
+  { key: "whatsapp", name: "WhatsApp Business", desc: "Send bills & reminders", def: "soon" },
+  { key: "tally", name: "TallyPrime", desc: "Accounting export", def: "soon" },
+  { key: "razorpay", name: "Razorpay", desc: "Online payments", def: "soon" },
+  { key: "bharatpe", name: "BharatPe", desc: "UPI & QR collections", def: "soon" },
+  { key: "gdrive", name: "Google Drive Backup", desc: "Off-site backups", def: "soon" },
+  { key: "printerApi", name: "Thermal Printer API", desc: "Network print bridge", def: "soon" },
+  { key: "sms", name: "SMS Gateway", desc: "Transactional SMS", def: "soon" },
+  { key: "accounting", name: "Accounting Export", desc: "CSV / Excel ledgers", def: "soon" },
   { key: "cloud", name: "Cloud Storage", desc: "Document storage", def: "soon" },
 ];
 const STATUS_TONE: Record<IntStatus, "green" | "amber" | "red" | "gray"> = { connected: "green", disconnected: "amber", error: "red", soon: "gray" };
 const STATUS_LABEL: Record<IntStatus, string> = { connected: "Connected", disconnected: "Not Connected", error: "Error", soon: "Coming Soon" };
-const ACTIVITY = [
-  "WhatsApp bill sent to customer",
-  "Razorpay payment verified",
-  "Tally export completed",
-  "Google Drive backup uploaded",
-  "BharatPe connection failed",
-];
 const EVENTS = ["bill.created", "payment.recorded", "customer.updated", "stock.low", "sync.failed"];
 
 export default function IntegrationsSettingsPage() {
@@ -69,7 +64,7 @@ export default function IntegrationsSettingsPage() {
         <Kpi label="Connected" value={connected} tone="green" icon={<Plug size={15} />} />
         <Kpi label="Not Connected" value={notConnected} tone="amber" icon={<Plug size={15} />} />
         <Kpi label="Needs Attention" value={needsAttention} tone="red" icon={<Plug size={15} />} />
-        <Kpi label="Last Sync" value="11:42" sub="AM · today" tone="blue" icon={<RefreshCcw size={15} />} />
+        <Kpi label="Last Sync" value="—" sub="No integrations yet" tone="blue" icon={<RefreshCcw size={15} />} />
       </div>
 
       {/* Integration grid */}
@@ -124,12 +119,11 @@ export default function IntegrationsSettingsPage() {
         <Card>
           <CardHead icon={<Activity size={15} />} title="Integration Activity" sub="Recent events" />
           <div className="px-5 pb-4">
-            {ACTIVITY.map((a, i) => (
-              <div key={i} className={`flex items-center gap-3 py-2.5 ${i < ACTIVITY.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${a.includes("failed") ? "bg-rose-500" : "bg-emerald-500"}`} />
-                <p className={`flex-1 text-[12px] font-medium ${a.includes("failed") ? "text-rose-700" : "text-[#344668]"}`}>{a}</p>
-              </div>
-            ))}
+            <div className="flex flex-col items-center gap-1.5 py-8 text-center">
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-[#f1f5fb] text-[#94a3b8]"><Activity size={18} /></span>
+              <p className="text-[12px] font-bold text-[#344668]">No integration activity yet</p>
+              <p className="text-[11px] text-[#94a3b8]">Activity will appear here once integrations go live.</p>
+            </div>
           </div>
         </Card>
       </div>
