@@ -62,6 +62,25 @@ describe("buildDailyClosingShareText", () => {
     expect(text).not.toContain("Top sellers");
   });
 
+  it("omits sections disabled in the daily-summary settings", () => {
+    const text = buildDailyClosingShareText({
+      report: makeReport(),
+      include: { profit: false, cashUpi: false, udhar: false },
+    });
+    expect(text).toContain("💰 Sales:"); // sales left on
+    expect(text).not.toContain("📈 Profit:");
+    expect(text).not.toContain("🪙 Cash in:");
+    expect(text).not.toContain("📲 UPI in:");
+    expect(text).not.toContain("📒 Udhar given:");
+    expect(text).toContain("👜 Cash in drawer:"); // drawer always shown
+  });
+
+  it("includes every section when no include config is given (default on)", () => {
+    const text = buildDailyClosingShareText({ report: makeReport() });
+    expect(text).toContain("📈 Profit:");
+    expect(text).toContain("🪙 Cash in:");
+  });
+
   it("flags an estimate when bills are still syncing", () => {
     const text = buildDailyClosingShareText({ report: makeReport({ isLocalEstimate: true }) });
     expect(text).toContain("still backing up");
