@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
+import { newBillId, upsertOpenBill } from "./open-bills";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -75,23 +76,6 @@ async function loadSettingList<T>(key: string, fallback: T[]): Promise<T[]> {
 
 function saveSettingList<T>(key: string, rows: T[]) {
   void offlineDB.setSetting(key, rows).catch(() => undefined);
-}
-
-const MAX_OPEN_BILLS = 10;
-
-function newBillId(): string {
-  return `bill-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-/** Insert or replace an open bill by id (in place to keep the bar order stable). */
-function upsertOpenBill(list: HeldBill[], bill: HeldBill): HeldBill[] {
-  const index = list.findIndex((entry) => entry.id === bill.id);
-  if (index >= 0) {
-    const next = [...list];
-    next[index] = bill;
-    return next;
-  }
-  return [bill, ...list].slice(0, MAX_OPEN_BILLS);
 }
 
 export default function Billing() {
@@ -1005,8 +989,6 @@ export default function Billing() {
         summaryWidth={summaryWidth}
         onStartSummaryResize={startSummaryResize}
         isOnline={isOnline}
-        heldBills={heldBills}
-        onResumeHeldBill={resumeHeldBill}
         billType={billType}
         setBillType={setBillType}
         customers={customers.data ?? []}
