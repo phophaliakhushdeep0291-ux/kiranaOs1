@@ -172,7 +172,9 @@ export default function BillDetailPage() {
 
   function printBill() {
     if (!bill) return;
-    const ok = openPrintableBill(buildPrintableBillSnapshot(bill, visibleItems, visiblePayments));
+    const ok = openPrintableBill(buildPrintableBillSnapshot(bill, visibleItems, visiblePayments, {
+      name: shop?.name, address: shop?.address, city: shop?.city, phone: shop?.phone, gstNumber: shop?.gstNumber,
+    }));
     if (!ok) toast({ title: "Print blocked", description: "Allow pop-ups to print or save PDF.", variant: "destructive" });
   }
 

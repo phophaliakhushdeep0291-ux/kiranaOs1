@@ -1,6 +1,7 @@
 import type { Bill } from "@/types/api";
-import { buildReceiptHtml, openReceiptWindow, type ReceiptPaymentLine, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
+import { buildReceiptHtml, openReceiptWindow, type ReceiptPaymentLine, type ReceiptShopInfo, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
 import { dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
+import { getPrinterConfigSync } from "@/features/settings/printer-config";
 
 export interface PrintableBillRow {
   name: string;
@@ -24,6 +25,7 @@ export interface PrintableBillSnapshot {
   payments?: ReceiptPaymentLine[];
   status?: string;
   billType?: string | null;
+  shop?: ReceiptShopInfo | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -49,6 +51,10 @@ function paymentMode(value: unknown) {
 }
 
 function toReceiptSnapshot(snapshot: PrintableBillSnapshot): ReceiptSnapshot {
+  // Mirror the live-billing receipt: show the shop header and honour the Printer/Receipt
+  // settings (show-GSTIN toggle + configured footer) so a reprint matches the original.
+  const printer = getPrinterConfigSync();
+  const shop = snapshot.shop && !printer.showGst ? { ...snapshot.shop, gstNumber: null } : snapshot.shop;
   return {
     billNo: snapshot.billNo,
     createdAt: snapshot.createdAt,
@@ -64,11 +70,14 @@ function toReceiptSnapshot(snapshot: PrintableBillSnapshot): ReceiptSnapshot {
     credit: snapshot.credit,
     payments: snapshot.payments,
     status: snapshot.status,
-    footerNote: snapshot.credit > 0 ? "Please keep this receipt for udhar records." : "Thank you for shopping with us.",
+    shop,
+    footerNote: snapshot.credit > 0
+      ? "Please keep this receipt for udhar records."
+      : (printer.footerText || "Thank you for shopping with us."),
   };
 }
 
-export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [], paymentRows: unknown[] = []): PrintableBillSnapshot {
+export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [], paymentRows: unknown[] = [], shop?: ReceiptShopInfo | null): PrintableBillSnapshot {
   const embeddedItems = Array.isArray(bill.items) ? bill.items : [];
   const sourceItems = itemRows.length > 0 ? itemRows : embeddedItems;
   const rows = sourceItems.map((raw) => {
@@ -122,6 +131,7 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
     payments: paymentLines,
     status: bill.status,
     billType: bill.billType,
+    shop: shop ?? null,
   };
 }
 

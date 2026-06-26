@@ -281,7 +281,9 @@ export default function BillsPage() {
   const BackupStatusIcon = backupStatus.icon;
 
   function printBill(bill: BillRecord) {
-    const ok = openPrintableBill(buildPrintableBillSnapshot(bill));
+    const ok = openPrintableBill(buildPrintableBillSnapshot(bill, [], [], {
+      name: shop?.name, address: shop?.address, city: shop?.city, phone: shop?.phone, gstNumber: shop?.gstNumber,
+    }));
     if (!ok) toast({ title: "Print blocked", description: "Allow pop-ups to print or save PDF.", variant: "destructive" });
   }
 
