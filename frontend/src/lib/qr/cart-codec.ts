@@ -117,16 +117,21 @@ export function parseOrderFromHash(hash: string): CartPayload | null {
 }
 
 /* ---- Multi-QR for large carts ----
- * A single QR stays scannable up to ~2-3 KB. A very large cart is split across several QRs the
- * owner scans in turn; each carries a slice of the same base64url payload, tagged with a shared
- * group id + part index/total. The owner side accumulates parts until complete, then reassembles
- * and decodes. The encoded payload is base64url (no "." or "&"), so "." is a safe field delimiter.
+ * A very large cart is split across several QRs the owner scans in turn; each carries a slice of
+ * the same base64url payload, tagged with a shared group id + part index/total. The owner side
+ * accumulates parts until complete, then reassembles and decodes. The encoded payload is base64url
+ * (no "." or "&"), so "." is a safe field delimiter.
+ *
+ * Sizing for phone-to-phone scanning: a byte-mode QR's *capacity* is ~3 KB, but at that size it's
+ * version 40 (177x177 modules) and unreadable on a phone screen. So we cap well below capacity to
+ * keep the symbol around version ~22-25 (~100-117 modules) — comfortably scannable at the displayed
+ * size — and split into more parts rather than packing one dense QR.
  */
 
-/** Default ceiling for a single QR's deep-link length before we split into multiple QRs. */
-export const SINGLE_QR_MAX_LEN = 2900;
-/** Per-part payload slice length when splitting (keeps each QR a reasonable, scannable density). */
-export const QR_CHUNK_LEN = 1900;
+/** Ceiling for a single QR's deep-link length before we split into multiple QRs (kept scannable). */
+export const SINGLE_QR_MAX_LEN = 1200;
+/** Per-part payload slice length when splitting, so each part QR also stays a scannable density. */
+export const QR_CHUNK_LEN = 1000;
 
 export type ParsedOrderHash =
   | { kind: "single"; payload: CartPayload }
