@@ -5,6 +5,7 @@ import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary, PageLoading } from "@/components/shared";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLandingRoute } from "@/features/settings/landing-page";
+import { stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
 
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/auth/pages/RegisterPage"));
@@ -71,7 +72,13 @@ function ProtectedRoute({ component: Component }: { component: ComponentType }) 
 
   if (isLoading) return <LoadingScreen />;
 
-  if (!isAuthenticated) return <Redirect to="/login" />;
+  if (!isAuthenticated) {
+    // Remember where they were headed (incl. any #order hash) so login can send them back.
+    if (typeof window !== "undefined") {
+      stashPostLoginRedirect(window.location.pathname + window.location.search + window.location.hash);
+    }
+    return <Redirect to="/login" />;
+  }
 
   return (
     <Layout>

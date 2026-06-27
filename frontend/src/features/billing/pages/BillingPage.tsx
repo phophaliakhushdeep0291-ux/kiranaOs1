@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
+import { BillingOrderQrButton } from "@/features/customer-order/BillingOrderQrButton";
 import { HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./open-bills";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
@@ -966,6 +967,7 @@ export default function Billing() {
             onNew={newBill}
           />
         )}
+        <BillingOrderQrButton />
         <BillingSearch
           isOnline={isOnline}
           draftRestored={draftRestored}
