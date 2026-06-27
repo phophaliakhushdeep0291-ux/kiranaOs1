@@ -8,6 +8,8 @@ import { getLandingRoute } from "@/features/settings/landing-page";
 
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/auth/pages/RegisterPage"));
+const CustomerOrder = lazy(() => import("@/features/customer-order/CustomerOrderPage"));
+const ImportOrder = lazy(() => import("@/features/customer-order/ImportOrderPage"));
 const Dashboard = lazy(() => import("@/features/dashboard/pages/DashboardPage"));
 const Billing = lazy(() => import("@/features/billing/pages/BillingPage"));
 const BillsPage = lazy(() => import("@/features/bills/pages/BillsPage"));
@@ -105,6 +107,13 @@ export function AppRoutes() {
       <Route path="/register">
         <PublicRoute component={Register} />
       </Route>
+      {/* Customer QR self-order page: fully public (no auth gate, no redirect-if-logged-in) so a
+          customer on their own phone — or an owner previewing — can always open it. */}
+      <Route path="/order/:shopCode">
+        <ErrorBoundary>
+          <LazyPage component={CustomerOrder} />
+        </ErrorBoundary>
+      </Route>
       <Route path="/">
         {isAuthenticated ? <Redirect to={getLandingRoute()} /> : <Redirect to="/login" />}
       </Route>
@@ -113,6 +122,10 @@ export function AppRoutes() {
       </Route>
       <Route path="/billing">
         <ProtectedRoute component={Billing} />
+      </Route>
+      {/* Owner lands here after scanning a customer's order QR with the native camera. */}
+      <Route path="/import-order">
+        <ProtectedRoute component={ImportOrder} />
       </Route>
       <Route path="/returns/new">
         <ProtectedRoute component={NewReturnPage} />

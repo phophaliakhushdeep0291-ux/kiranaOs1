@@ -59,6 +59,7 @@ import {
 import { recordDataExportLocalFirst } from "@/features/reports/local-actions";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import type { Expense, ExpenseSummary } from "@/types/api";
 
 const PANEL = "overflow-hidden rounded-[8px] border border-[#e2e9f3] bg-white shadow-[0_4px_18px_rgba(31,60,110,0.045)]";
 const GRID_STROKE = "#e7edf5";
@@ -142,6 +143,28 @@ function shortText(value: string, max = 18) {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value;
 }
 
+type ExpenseDateParams = { from?: string; to?: string };
+
+function emptyExpenseSummary(): ExpenseSummary {
+  return { total: 0, count: 0, byCategory: {}, byMode: {}, pendingTotal: 0, pendingCount: 0 };
+}
+
+async function getExpenseSummaryOrEmpty(params: ExpenseDateParams): Promise<ExpenseSummary> {
+  try {
+    return await getExpenseSummary(params);
+  } catch {
+    return emptyExpenseSummary();
+  }
+}
+
+async function listExpensesOrEmpty(params: ExpenseDateParams): Promise<Expense[]> {
+  try {
+    return await listExpenses(params);
+  } catch {
+    return [];
+  }
+}
+
 export default function ReportsPage() {
   const { toast } = useToast();
   const [from, setFrom] = useState(daysAgoInput(6));
@@ -162,18 +185,18 @@ export default function ReportsPage() {
 
   const expenseSummary = useQuery({
     queryKey: ["reports-expense-summary", range],
-    queryFn: () => getExpenseSummary(expenseParams),
-    retry: 1,
+    queryFn: () => getExpenseSummaryOrEmpty(expenseParams),
+    retry: false,
   });
   const previousExpenseSummary = useQuery({
     queryKey: ["reports-expense-summary", priorRange],
-    queryFn: () => getExpenseSummary({ from: `${priorRange.from}T00:00:00.000Z`, to: `${priorRange.to}T23:59:59.999Z` }),
-    retry: 1,
+    queryFn: () => getExpenseSummaryOrEmpty({ from: `${priorRange.from}T00:00:00.000Z`, to: `${priorRange.to}T23:59:59.999Z` }),
+    retry: false,
   });
   const expenses = useQuery({
     queryKey: ["reports-expenses", range],
-    queryFn: () => listExpenses(expenseParams),
-    retry: 1,
+    queryFn: () => listExpensesOrEmpty(expenseParams),
+    retry: false,
   });
 
   const applyPeriod = (nextPeriod: Exclude<ReportPeriod, "custom">) => {

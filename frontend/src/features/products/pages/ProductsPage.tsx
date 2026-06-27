@@ -61,6 +61,7 @@ import {
 } from "./product-form-state";
 import { ProductFormPanel } from "./components/ProductFormPanel";
 import { ImportProductsDialog } from "./components/ImportProductsDialog";
+import { offlineDB } from "@/lib/offline/db";
 
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
@@ -108,15 +109,33 @@ export default function ProductsPage() {
   const stayOpenRef = useRef(true);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:product-panel-width");
   const debouncedSearch = useDebounce(search.trim(), 150);
+  const [localProductRows, setLocalProductRows] = useState<Product[]>([]);
 
   const products = useListProducts({ limit: 1000 }, {
     query: { placeholderData: (previousData: Product[] | undefined) => previousData ?? [], staleTime: 2 * 60_000 },
   });
+  const productRows = (products.data?.length ?? 0) > 0 ? products.data ?? [] : localProductRows;
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
     defaultValues: productToForm(),
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadLocalProducts = async () => {
+      const rows = await offlineDB.getAll<Product>("products").catch(() => []);
+      if (!cancelled) setLocalProductRows(rows);
+    };
+    void loadLocalProducts();
+    window.addEventListener("kirana:local-data-changed", loadLocalProducts);
+    window.addEventListener("kirana:sync-queue-updated", loadLocalProducts);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("kirana:local-data-changed", loadLocalProducts);
+      window.removeEventListener("kirana:sync-queue-updated", loadLocalProducts);
+    };
+  }, []);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -127,7 +146,7 @@ export default function ProductsPage() {
         toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" });
         return;
       }
-      const existingProduct = findDraftProduct(draft, products.data ?? []);
+      const existingProduct = findDraftProduct(draft, productRows);
       const shouldMerge = Boolean(detail.merge || open);
       const base = shouldMerge ? form.getValues() : productToForm(existingProduct);
       const nextEditing = existingProduct ?? (shouldMerge ? editing : null);
@@ -141,7 +160,7 @@ export default function ProductsPage() {
     };
     window.addEventListener("kirana:voice-product-draft", handler);
     return () => window.removeEventListener("kirana:voice-product-draft", handler);
-  }, [editing, form, manageProducts.allowed, manageProducts.reason, open, products.data, toast]);
+  }, [editing, form, manageProducts.allowed, manageProducts.reason, open, productRows, toast]);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -199,7 +218,7 @@ export default function ProductsPage() {
 
   const rows = useMemo(() => {
     const q = debouncedSearch.toLowerCase();
-    return (products.data ?? [])
+    return productRows
       .filter((product) => !isDeletedProduct(product))
       .filter((product) => category === "all" || (product.category ?? "general") === category)
       .filter((product) => statusFilter === "all" || (statusFilter === "active" ? !isInactiveProduct(product) : isInactiveProduct(product)))
@@ -213,10 +232,10 @@ export default function ProductsPage() {
       })
       .filter((product) => typeFilter === "all" || (typeFilter === "loose" ? !!product.isLooseItem : !product.isLooseItem))
       .filter((product) => productMatchesSearch(product, q));
-  }, [products.data, category, statusFilter, stockFilter, typeFilter, debouncedSearch]);
+  }, [productRows, category, statusFilter, stockFilter, typeFilter, debouncedSearch]);
 
   const stats = useMemo(() => {
-    const all = (products.data ?? []).filter((product) => !isDeletedProduct(product));
+    const all = productRows.filter((product) => !isDeletedProduct(product));
     const categories = new Set<string>();
     all.forEach((product) => categories.add((product.category ?? "general").trim() || "general"));
     return {
@@ -225,7 +244,7 @@ export default function ProductsPage() {
       outOfStock: all.filter((p) => Number(p.stockBaseQty ?? 0) <= 0).length,
       categories: categories.size,
     };
-  }, [products.data]);
+  }, [productRows]);
 
   /* pagination */
   const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));

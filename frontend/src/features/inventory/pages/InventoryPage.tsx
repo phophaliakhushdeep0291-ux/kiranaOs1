@@ -69,6 +69,7 @@ import {
   roundInventoryValue,
 } from "@/features/inventory/calculations";
 import { PageShell, StatCard, StatsGrid } from "@/components/shared";
+import { offlineDB } from "@/lib/offline/db";
 
 const UNITS = [
   "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
@@ -249,6 +250,7 @@ export default function InventoryPage() {
   const [form, setForm] = useState<MovementForm>(initialForm);
   const [savingManualSale, setSavingManualSale] = useState(false);
   const [ownerPinOpen, setOwnerPinOpen] = useState(false);
+  const [localProductRows, setLocalProductRows] = useState<InventoryItem[]>([]);
 
   const inventory = useGetInventory();
   const lowStock = useGetLowStock();
@@ -278,11 +280,29 @@ export default function InventoryPage() {
     toast({ title, description: "Inventory is updated locally and will sync when internet is available." });
   }
 
-  const allInventoryRows = useMemo(
-    () => (inventory.data ?? [])
-      .filter((item) => !(item as { deletedAt?: unknown; deleted_at?: unknown }).deletedAt && !(item as { deleted_at?: unknown }).deleted_at),
-    [inventory.data],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    const loadLocalProducts = async () => {
+      const rows = await offlineDB.getAll<Product>("products").catch(() => []);
+      if (!cancelled) setLocalProductRows(rows as unknown as InventoryItem[]);
+    };
+    void loadLocalProducts();
+    window.addEventListener("kirana:local-data-changed", loadLocalProducts);
+    window.addEventListener("kirana:sync-queue-updated", loadLocalProducts);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("kirana:local-data-changed", loadLocalProducts);
+      window.removeEventListener("kirana:sync-queue-updated", loadLocalProducts);
+    };
+  }, []);
+
+  const allInventoryRows = useMemo(() => {
+    const inventoryRows = inventory.data ?? [];
+    const productRows = (products.data ?? []) as unknown as InventoryItem[];
+    const sourceRows = inventoryRows.length > 0 ? inventoryRows : productRows.length > 0 ? productRows : localProductRows;
+    return sourceRows
+      .filter((item) => !(item as { deletedAt?: unknown; deleted_at?: unknown }).deletedAt && !(item as { deleted_at?: unknown }).deleted_at);
+  }, [inventory.data, localProductRows, products.data]);
 
   const filterOptions = useMemo(() => ({
     categories: [...new Set(allInventoryRows.map((item) => item.category?.trim()).filter(Boolean) as string[])].sort(),
@@ -317,9 +337,11 @@ export default function InventoryPage() {
     const soldLast30Days = movementRows
       .filter((row) => (row.action ?? row.type) === "sale" && safeDate(row.createdAt ?? row.created_at).getTime() >= Date.now() - 30 * 86_400_000)
       .reduce((sum, row) => sum + Math.abs(Number(row.quantityDelta ?? row.quantity_delta ?? 0)), 0);
+    const localLowStock = rows.filter(isLowStock);
+    const remoteLowStock = lowStock.data ?? [];
     return {
       products: rows.length,
-      lowStock: (lowStock.data ?? rows.filter(isLowStock)).length,
+      lowStock: (remoteLowStock.length > 0 ? remoteLowStock : localLowStock).length,
       outOfStock: tracked.filter((item) => Number(item.stockBaseQty ?? 0) <= 0).length,
       totalQuantity: round2(totalQuantity),
       stockValue: round2(stockValue),
@@ -576,7 +598,7 @@ export default function InventoryPage() {
 
   const isSaving = recordPurchase.isPending || recordDamage.isPending || stockCorrection.isPending || savingManualSale;
 
-  const lowStockRows = (lowStock.data ?? allInventoryRows.filter(isLowStock))
+  const lowStockRows = ((lowStock.data?.length ?? 0) > 0 ? lowStock.data ?? [] : allInventoryRows.filter(isLowStock))
     .filter((item) => Number(item.stockBaseQty ?? 0) > 0)
     .sort((a, b) => Number(a.stockBaseQty ?? 0) - Number(b.stockBaseQty ?? 0));
   const recentMovements = [...movementRows]
