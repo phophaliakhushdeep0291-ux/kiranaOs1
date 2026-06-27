@@ -115,3 +115,88 @@ export function parseOrderFromHash(hash: string): CartPayload | null {
     return null;
   }
 }
+
+/* ---- Multi-QR for large carts ----
+ * A single QR stays scannable up to ~2-3 KB. A very large cart is split across several QRs the
+ * owner scans in turn; each carries a slice of the same base64url payload, tagged with a shared
+ * group id + part index/total. The owner side accumulates parts until complete, then reassembles
+ * and decodes. The encoded payload is base64url (no "." or "&"), so "." is a safe field delimiter.
+ */
+
+/** Default ceiling for a single QR's deep-link length before we split into multiple QRs. */
+export const SINGLE_QR_MAX_LEN = 2900;
+/** Per-part payload slice length when splitting (keeps each QR a reasonable, scannable density). */
+export const QR_CHUNK_LEN = 1900;
+
+export type ParsedOrderHash =
+  | { kind: "single"; payload: CartPayload }
+  | { kind: "part"; group: string; index: number; total: number; chunk: string };
+
+function randomGroupId(): string {
+  const raw = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}${Math.random()}`;
+  return raw.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8) || "g";
+}
+
+/**
+ * Build the QR deep link(s) for an order. Returns a single `#o=` URL when it fits in one QR, or an
+ * ordered list of `#m=<group>.<i>.<n>.<chunk>` URLs to show as a multi-QR sequence.
+ */
+export function buildOrderQrPayloads(
+  origin: string,
+  payload: CartPayload,
+  opts: { singleMax?: number; chunkLen?: number } = {},
+): string[] {
+  const singleMax = opts.singleMax ?? SINGLE_QR_MAX_LEN;
+  const chunkLen = opts.chunkLen ?? QR_CHUNK_LEN;
+  const base = `${origin.replace(/\/$/, "")}${IMPORT_ORDER_PATH}`;
+  const encoded = encodeCart(payload);
+
+  const singleUrl = `${base}#o=${encoded}`;
+  if (singleUrl.length <= singleMax) return [singleUrl];
+
+  const group = randomGroupId();
+  const chunks: string[] = [];
+  for (let i = 0; i < encoded.length; i += chunkLen) chunks.push(encoded.slice(i, i + chunkLen));
+  const total = chunks.length;
+  return chunks.map((chunk, i) => `${base}#m=${group}.${i + 1}.${total}.${chunk}`);
+}
+
+/** Parse a URL hash into either a complete single order or one part of a multi-QR order. */
+export function parseOrderHash(hash: string): ParsedOrderHash | null {
+  const single = /[#&]o=([^&]+)/.exec(hash);
+  if (single) {
+    try {
+      return { kind: "single", payload: decodeCart(decodeURIComponent(single[1])) };
+    } catch {
+      return null;
+    }
+  }
+  const multi = /[#&]m=([^&]+)/.exec(hash);
+  if (multi) {
+    const parts = decodeURIComponent(multi[1]).split(".");
+    if (parts.length < 4) return null;
+    const [group, indexStr, totalStr] = parts;
+    const chunk = parts.slice(3).join("."); // defensive (chunk is base64url, so really no dots)
+    const index = Number(indexStr);
+    const total = Number(totalStr);
+    if (!group || !chunk || !Number.isInteger(index) || !Number.isInteger(total)) return null;
+    if (index < 1 || total < 1 || index > total) return null;
+    return { kind: "part", group, index, total, chunk };
+  }
+  return null;
+}
+
+/** Reassemble collected chunks (1-based index → chunk) into a cart once all `total` are present. */
+export function reassembleOrderChunks(parts: Record<number, string>, total: number): CartPayload | null {
+  let encoded = "";
+  for (let i = 1; i <= total; i++) {
+    const chunk = parts[i];
+    if (chunk == null) return null; // still missing a part
+    encoded += chunk;
+  }
+  try {
+    return decodeCart(encoded);
+  } catch {
+    return null;
+  }
+}

@@ -1,14 +1,81 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle, ArrowRight, ScanLine, ShoppingBag } from "lucide-react";
+import { AlertTriangle, ArrowRight, Layers, ScanLine, ShoppingBag } from "lucide-react";
 import { useListProducts } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { offlineDB } from "@/lib/offline/db";
-import { parseOrderFromHash } from "@/lib/qr/cart-codec";
+import { parseOrderHash, reassembleOrderChunks, type CartPayload } from "@/lib/qr/cart-codec";
 import { HELD_BILLS_KEY, billFromImportedCart, upsertOpenBill } from "@/features/billing/pages/open-bills";
 import type { HeldBill } from "@/features/billing/pages/billing-types";
 
 const formatRs = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+
+// Multi-QR accumulation: a big order arrives as several QRs the owner scans in turn. Each scan
+// is a fresh page load (and a native camera may open a new tab), so partial chunks are kept in
+// localStorage keyed by the order's group id until all parts are in, then reassembled.
+const PART_PREFIX = "kirana:qr-order-parts:v1:";
+const PART_TTL_MS = 15 * 60_000;
+
+interface PartStore {
+  total: number;
+  parts: Record<number, string>;
+  ts: number;
+}
+
+function readPartStore(group: string): PartStore {
+  try {
+    const raw = localStorage.getItem(`${PART_PREFIX}${group}`);
+    if (raw) {
+      const parsed = JSON.parse(raw) as PartStore;
+      if (Date.now() - (parsed.ts ?? 0) < PART_TTL_MS) return parsed;
+    }
+  } catch {
+    /* ignore */
+  }
+  return { total: 0, parts: {}, ts: Date.now() };
+}
+
+function writePartStore(group: string, store: PartStore): void {
+  try {
+    localStorage.setItem(`${PART_PREFIX}${group}`, JSON.stringify(store));
+  } catch {
+    /* ignore — accumulation just won't persist across reloads */
+  }
+}
+
+function clearPartStore(group: string): void {
+  try {
+    localStorage.removeItem(`${PART_PREFIX}${group}`);
+  } catch {
+    /* ignore */
+  }
+}
+
+type ParseState =
+  | { kind: "invalid" }
+  | { kind: "collecting"; have: number; total: number; justGot: number }
+  | { kind: "ready"; payload: CartPayload };
+
+function parseHashToState(): ParseState {
+  const parsed = parseOrderHash(window.location.hash);
+  if (!parsed) return { kind: "invalid" };
+  if (parsed.kind === "single") return { kind: "ready", payload: parsed.payload };
+
+  // Multi-QR part: merge into the group's store and reassemble once complete.
+  const store = readPartStore(parsed.group);
+  store.total = parsed.total;
+  store.parts[parsed.index] = parsed.chunk;
+  store.ts = Date.now();
+  writePartStore(parsed.group, store);
+
+  const have = Object.keys(store.parts).length;
+  if (have >= parsed.total) {
+    const cart = reassembleOrderChunks(store.parts, parsed.total);
+    clearPartStore(parsed.group);
+    return cart ? { kind: "ready", payload: cart } : { kind: "invalid" };
+  }
+  return { kind: "collecting", have, total: parsed.total, justGot: parsed.index };
+}
 
 /**
  * /import-order — the owner lands here after scanning a customer's order QR with the native
@@ -19,7 +86,8 @@ const formatRs = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractio
 export default function ImportOrderPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [payload] = useState(() => parseOrderFromHash(window.location.hash));
+  const [parseState] = useState<ParseState>(parseHashToState);
+  const payload = parseState.kind === "ready" ? parseState.payload : null;
   const [adding, setAdding] = useState(false);
 
   const productsQuery = useListProducts({ limit: 350 }, { query: { staleTime: 60_000 } });
@@ -47,6 +115,32 @@ export default function ImportOrderPage() {
     } finally {
       setAdding(false);
     }
+  }
+
+  if (parseState.kind === "collecting") {
+    const { have, total } = parseState;
+    return (
+      <Centered>
+        <Icon tone="blue"><Layers size={26} /></Icon>
+        <h1 className="mt-4 font-display text-lg font-black text-[#102347]">Big order — {have} of {total} QRs scanned</h1>
+        <p className="mt-1 max-w-sm text-center text-sm text-[#5b6b85]">
+          Open your camera again and scan the next QR on the customer’s phone. They’ll show all {total} in order.
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-1.5">
+          {Array.from({ length: total }, (_, i) => i + 1).map((n) => (
+            <span
+              key={n}
+              className={`grid h-7 w-7 place-items-center rounded-full text-[11px] font-black ${
+                n <= have ? "bg-[#075fff] text-white" : "border border-[#d6e0ee] text-[#94a3b8]"
+              }`}
+            >
+              {n}
+            </span>
+          ))}
+        </div>
+        <BackToBilling onClick={() => setLocation("/billing")} />
+      </Centered>
+    );
   }
 
   if (!payload) {
