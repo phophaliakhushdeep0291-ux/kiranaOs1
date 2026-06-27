@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "wouter";
-import { ArrowLeft, Minus, Plus, QrCode, Search, ShoppingBag, Store, WifiOff } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus, QrCode, Search, ShoppingBag, Store, WifiOff } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
-import { buildOrderDeepLink } from "@/lib/qr/cart-codec";
+import { buildOrderQrPayloads } from "@/lib/qr/cart-codec";
 import {
   loadCustomerCatalog,
   readCachedCatalog,
@@ -12,11 +12,6 @@ import {
 } from "./catalog";
 
 const formatRs = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
-
-// A single QR comfortably holds this many bytes in byte-mode at ECC level L while staying
-// scannable on a phone screen. Beyond it we ask the customer to trim the cart (multi-QR is a
-// planned follow-up).
-const MAX_ORDER_LINK_BYTES = 2900;
 
 type LoadState =
   | { kind: "loading" }
@@ -94,14 +89,12 @@ export default function CustomerOrderPage() {
     return { count, amount };
   }, [items, products]);
 
-  const orderLink = useMemo(() => {
-    if (items.length === 0) return "";
+  const orderQrUrls = useMemo(() => {
+    if (items.length === 0) return [];
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     const origin = `${window.location.origin}${base}`;
-    return buildOrderDeepLink(origin, { shopCode, items });
+    return buildOrderQrPayloads(origin, { shopCode, items });
   }, [items, shopCode]);
-
-  const orderTooBig = orderLink.length > MAX_ORDER_LINK_BYTES;
 
   function setItemQty(id: string, next: number) {
     setQty((prev) => {
@@ -208,8 +201,7 @@ export default function CustomerOrderPage() {
 
       {showQr && (
         <OrderQrOverlay
-          link={orderLink}
-          tooBig={orderTooBig}
+          urls={orderQrUrls}
           count={totals.count}
           amount={totals.amount}
           onClose={() => setShowQr(false)}
@@ -280,18 +272,22 @@ function ProductRow({
 }
 
 function OrderQrOverlay({
-  link,
-  tooBig,
+  urls,
   count,
   amount,
   onClose,
 }: {
-  link: string;
-  tooBig: boolean;
+  urls: string[];
   count: number;
   amount: number;
   onClose: () => void;
 }) {
+  const [part, setPart] = useState(0);
+  const total = urls.length;
+  const multi = total > 1;
+  const safePart = Math.min(part, Math.max(0, total - 1));
+  const current = urls[safePart] ?? "";
+
   return (
     <div className="fixed inset-0 z-30 flex flex-col bg-[#0b1424]/70 backdrop-blur-sm">
       <button type="button" onClick={onClose} className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-lg bg-white/15 px-3 py-2 text-sm font-bold text-white">
@@ -301,15 +297,39 @@ function OrderQrOverlay({
         <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-bold text-[#075fff]">
           <ShoppingBag size={14} /> {count} item{count === 1 ? "" : "s"} · {formatRs(amount)}
         </div>
-        {tooBig ? (
-          <p className="py-10 text-sm font-semibold text-[#e11d48]">
-            Your list is too long to fit in one QR. Please remove a few items and show it in two batches.
-          </p>
+        <div className="mx-auto grid place-items-center rounded-2xl border border-[#eef2f8] p-3">
+          <QrCodeView value={current} level="L" size={272} title={multi ? `Order QR part ${safePart + 1} of ${total}` : "Your order QR"} />
+        </div>
+        {multi ? (
+          <>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <button
+                type="button"
+                disabled={safePart === 0}
+                onClick={() => setPart((p) => Math.max(0, p - 1))}
+                className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[#075fff] disabled:opacity-40"
+                aria-label="Previous QR"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <span className="min-w-[92px] text-[13px] font-black text-[#102347]">Part {safePart + 1} of {total}</span>
+              <button
+                type="button"
+                disabled={safePart === total - 1}
+                onClick={() => setPart((p) => Math.min(total - 1, p + 1))}
+                className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[#075fff] disabled:opacity-40"
+                aria-label="Next QR"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            <h2 className="mt-3 font-display text-base font-black text-[#102347]">Big order — show all {total} QRs</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#5b6b85]">
+              The shopkeeper scans each part in order (1 → {total}). Final price is set by the shop.
+            </p>
+          </>
         ) : (
           <>
-            <div className="mx-auto grid place-items-center rounded-2xl border border-[#eef2f8] p-3">
-              <QrCodeView value={link} level="L" size={272} title="Your order QR" />
-            </div>
             <h2 className="mt-4 font-display text-base font-black text-[#102347]">Show this at the counter</h2>
             <p className="mt-1 text-[12px] leading-relaxed text-[#5b6b85]">
               The shopkeeper scans it with their phone camera to load your order. Final price is set by the shop.

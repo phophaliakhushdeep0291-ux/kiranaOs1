@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ApiClientError, useLogin, type AuthResponse } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLandingRoute } from "@/features/settings/landing-page";
+import { consumePostLoginRedirect } from "@/features/auth/post-login-redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,7 +63,15 @@ export default function Login() {
     mutation: {
       onSuccess: (data: AuthResponse) => {
         auth.login(data.accessToken || data.token, data.refreshToken, data.user, data.shop);
-        setLocation(getLandingRoute());
+        const next = consumePostLoginRedirect();
+        if (next) {
+          // A deep link with a #hash (e.g. the QR order import) needs a full navigation to
+          // restore the fragment; plain paths can stay in-SPA.
+          if (next.includes("#")) window.location.replace(next);
+          else setLocation(next);
+        } else {
+          setLocation(getLandingRoute());
+        }
       },
       onError: (err: unknown) => {
         if (err instanceof ApiClientError && err.data?.code === "SHOP_SELECTION_REQUIRED") {

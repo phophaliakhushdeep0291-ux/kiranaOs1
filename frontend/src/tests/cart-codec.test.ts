@@ -4,6 +4,9 @@ import {
   decodeCart,
   buildOrderDeepLink,
   parseOrderFromHash,
+  buildOrderQrPayloads,
+  parseOrderHash,
+  reassembleOrderChunks,
   CartDecodeError,
   type CartPayload,
 } from "@/lib/qr/cart-codec";
@@ -80,5 +83,58 @@ describe("cart codec", () => {
   it("returns null from parseOrderFromHash when there is no order param", () => {
     expect(parseOrderFromHash("")).toBeNull();
     expect(parseOrderFromHash("#something=else")).toBeNull();
+  });
+});
+
+describe("multi-QR for large carts", () => {
+  const bigCart: CartPayload = {
+    shopCode: "ramesh-kirana",
+    items: Array.from({ length: 12 }, (_, i) => ({ productId: `ckp${i}aaaaaaaaaaaaaaaaaaaa`, qty: i + 1 })),
+  };
+
+  it("returns a single #o= URL when the order fits in one QR", () => {
+    const urls = buildOrderQrPayloads("https://app.example.com", { shopCode: "s1", items: [{ productId: "p1", qty: 1 }] });
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain("/import-order#o=");
+    const hash = urls[0].slice(urls[0].indexOf("#"));
+    const parsed = parseOrderHash(hash);
+    expect(parsed?.kind).toBe("single");
+    if (parsed?.kind === "single") expect(parsed.payload).toEqual({ shopCode: "s1", items: [{ productId: "p1", qty: 1 }] });
+  });
+
+  it("splits into ordered #m= parts and round-trips when reassembled in order", () => {
+    // Force splitting with a tiny single-QR ceiling + small chunk length.
+    const urls = buildOrderQrPayloads("https://app.example.com", bigCart, { singleMax: 120, chunkLen: 40 });
+    expect(urls.length).toBeGreaterThan(1);
+
+    const collected: Record<number, string> = {};
+    let total = 0;
+    let group = "";
+    urls.forEach((url) => {
+      const parsed = parseOrderHash(url.slice(url.indexOf("#")));
+      expect(parsed?.kind).toBe("part");
+      if (parsed?.kind === "part") {
+        collected[parsed.index] = parsed.chunk;
+        total = parsed.total;
+        group = group || parsed.group;
+        expect(parsed.group).toBe(group); // all parts share one group id
+        expect(parsed.total).toBe(urls.length);
+      }
+    });
+
+    expect(reassembleOrderChunks(collected, total)).toEqual(bigCart);
+  });
+
+  it("does not reassemble until every part is present", () => {
+    const urls = buildOrderQrPayloads("https://app.example.com", bigCart, { singleMax: 120, chunkLen: 40 });
+    const partial: Record<number, string> = {};
+    const parsedFirst = parseOrderHash(urls[0].slice(urls[0].indexOf("#")));
+    if (parsedFirst?.kind === "part") partial[parsedFirst.index] = parsedFirst.chunk;
+    expect(reassembleOrderChunks(partial, urls.length)).toBeNull(); // missing parts
+  });
+
+  it("parseOrderHash returns null for a malformed multipart fragment", () => {
+    expect(parseOrderHash("#m=onlytwo.fields")).toBeNull();
+    expect(parseOrderHash("#nope")).toBeNull();
   });
 });

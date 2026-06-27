@@ -14,7 +14,9 @@
                     "typecheck":  "tsc -p tsconfig.json --noEmit",
                     "test":  "vitest run",
                     "bundle:check":  "node scripts/check-bundle-size.mjs",
-                    "security:check":  "npm run bundle:check"
+                    "app:check":  "node scripts/check-production-app.mjs",
+                    "security:check":  "npm run bundle:check && npm run app:check",
+                    "prod:check":  "npm run typecheck && npm run test && npm run build && npm run security:check"
                 },
     "dependencies":  {
                          "@hookform/resolvers":  "^3.10.0",
