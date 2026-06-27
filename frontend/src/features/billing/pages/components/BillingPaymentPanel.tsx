@@ -51,8 +51,8 @@ export function BillingPaymentPanel({
   advanceAmount,
 }: BillingPaymentPanelProps) {
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
-  const showPaymentMode =
-    billType !== BillInputBillType.udhar_entry && billType !== BillInputBillType.estimate;
+  if (billType === BillInputBillType.estimate) return null;
+  const showPaymentMode = billType !== BillInputBillType.udhar_entry;
 
   return (
     <div className="space-y-3">

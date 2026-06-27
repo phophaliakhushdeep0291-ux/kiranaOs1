@@ -266,8 +266,8 @@ export function BillingSummary({
                 <FileText size={16} />
               </span>
               <span className="min-w-0">
-                <span className="block text-[12px] font-black">Estimate</span>
-                <span className="block text-[10px] font-semibold opacity-75">Not a sale yet</span>
+                <span className="block text-[12px] font-black">Estimate Bill</span>
+                <span className="block text-[10px] font-semibold opacity-75">Quote only</span>
               </span>
             </button>
           </div>
@@ -284,7 +284,7 @@ export function BillingSummary({
                     <SelectItem value={BillInputBillType.normal_sale}>Pakka Bill</SelectItem>
                     <SelectItem value={BillInputBillType.udhar_entry}>Udhar</SelectItem>
                     <SelectItem value={BillInputBillType.gst_invoice}>GST Invoice</SelectItem>
-                    <SelectItem value={BillInputBillType.estimate}>Estimate</SelectItem>
+                    <SelectItem value={BillInputBillType.estimate}>Estimate Bill</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -504,7 +504,7 @@ export function BillingSummary({
             </>
           ) : (
             <>
-              {isEstimateBill ? "Save Estimate" : "Save Pakka Bill"}
+              {isEstimateBill ? "Save Estimate Bill" : "Save Pakka Bill"}
               <span className="absolute right-2.5 top-1/2 inline-flex h-6 min-w-[34px] -translate-y-1/2 items-center justify-center rounded-[7px] bg-[rgba(0,35,140,0.35)] px-1.5 text-[11px] font-black text-white">
                 F12
               </span>
@@ -514,7 +514,7 @@ export function BillingSummary({
 
         {/* Secondary actions */}
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <SecBtn onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label="Estimate" />
+          <SecBtn onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label="Estimate Bill" />
           <SecBtn onClick={onHoldBill} disabled={cart.length === 0} icon={<PauseCircle size={13} />} label="Hold" shortcut="F9" />
           <SecBtn onClick={onPrintBill} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Printer size={13} />} label="Print" />
           {/* Free for all plans: opens WhatsApp with a text receipt (wa.me deep link, no paid API). */}
