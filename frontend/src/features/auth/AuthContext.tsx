@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { AUTH_SESSION_EXPIRED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type Shop, type User } from "@/lib/api/client";
 import { clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
 import { writeAuditLog } from "@/features/audit-logs/local-actions";
 import { activateDevice } from "@/features/devices/api";
 import { ensureCurrentDeviceRegistered, writeOfflineLicenseToken } from "@/features/devices/license";
 import { getOfflineScope } from "@/lib/offline/context";
+import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { AuthContext } from "./auth-context";
 
 function persistAuth(data: AuthResponse) {
@@ -52,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const authGenerationRef = useRef(0);
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +170,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: userData,
       shop: shopData ?? null,
     });
+    // New session (login or shop switch): drop any cached query/in-memory data from a previous
+    // user so this user only ever sees their own shop's data (React Query keys aren't shop-scoped).
+    clearInstantMemoryCache();
+    queryClient.clear();
     setAccessToken(token);
     setUser(userData);
     setShop(shopData ?? null);
@@ -192,6 +199,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     authGenerationRef.current += 1;
     clearAuthStorage();
+    clearInstantMemoryCache(); // drop the prior shop's in-memory cache so the next user starts clean
+    queryClient.clear(); // drop cached React Query data (keys aren't shop-scoped)
     setAccessToken(null);
     setUser(null);
     setShop(null);

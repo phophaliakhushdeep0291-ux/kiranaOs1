@@ -595,7 +595,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       : period === "week"
         ? ownerReport?.selected.sales ?? 0
         : 0;
-  const periodSalesDelta = pctChange(periodSales, activePeriodReport?.previousSelected.sales ?? previousPeriodSales) ?? 0;
+  const periodSalesDelta = pctChange(periodSales, activePeriodReport?.previousSelected.sales ?? previousPeriodSales);
 
   // Build chart points from the selected period. The query may initially paint
   // from the offline cache, so bills are filtered locally as well as by the API.
@@ -640,12 +640,13 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
     [recentBillsQuery.data?.bills, localRecentBills],
   );
   const yesterdaySales = dashboard.previousRevenue || salesChartData[5]?.sales || 0;
-  const salesDelta = pctChange(dashboard.revenue, yesterdaySales) ?? 0;
-  const cashDelta = pctChange(dashboard.cashCollected, dashboard.previousCashCollected) ?? 0;
-  const upiDelta = pctChange(dashboard.upiCollected, dashboard.previousUpiCollected) ?? 0;
-  const outstandingDelta = pctChange(dashboard.totalOutstanding, dashboard.previousOutstanding) ?? 0;
-  const profitDelta = pctChange(dashboard.grossProfit, dashboard.previousGrossProfit) ?? 0;
-  const expenseDelta = pctChange(dashboard.expensesToday, dashboard.previousExpenses) ?? 0;
+  // null = no prior-day baseline to compare against → shown as "—" rather than a misleading 0%.
+  const salesDelta = pctChange(dashboard.revenue, yesterdaySales);
+  const cashDelta = pctChange(dashboard.cashCollected, dashboard.previousCashCollected);
+  const upiDelta = pctChange(dashboard.upiCollected, dashboard.previousUpiCollected);
+  const outstandingDelta = pctChange(dashboard.totalOutstanding, dashboard.previousOutstanding);
+  const profitDelta = pctChange(dashboard.grossProfit, dashboard.previousGrossProfit);
+  const expenseDelta = pctChange(dashboard.expensesToday, dashboard.previousExpenses);
   const avgBillValue = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
   const syncStatusValue = failedCount > 0 ? "Review needed" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date";
   const syncHealthGood = failedCount === 0 && pendingCount === 0;
@@ -973,16 +974,16 @@ interface MobileGeneralDashboardProps {
   isSyncing: boolean;
   pendingCount: number;
   failedCount: number;
-  salesDelta: number;
-  cashDelta: number;
-  upiDelta: number;
-  outstandingDelta: number;
-  profitDelta: number;
-  expenseDelta: number;
+  salesDelta: number | null;
+  cashDelta: number | null;
+  upiDelta: number | null;
+  outstandingDelta: number | null;
+  profitDelta: number | null;
+  expenseDelta: number | null;
   period: DashboardPeriod;
   onPeriodChange: (period: DashboardPeriod) => void;
   periodSales: number;
-  periodSalesDelta: number;
+  periodSalesDelta: number | null;
 }
 
 function MobileGeneralDashboard({
@@ -1080,7 +1081,7 @@ function MobileGeneralDashboard({
       <section>
         <h2 className="mb-2.5 font-display text-[14px] font-black text-[#102347]">Quick Insights</h2>
         <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white shadow-[0_7px_22px_rgba(26,57,112,0.05)]">
-          <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={`Sales ${salesDelta >= 0 ? "increased" : "changed"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
+          <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? "No sales yesterday to compare against yet." : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
           <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? "Your top product"} is leading sales.`} subtitle="Keep the best sellers available in stock." />
           <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle="Follow up to improve cash flow." />
           <Link href="/reports" className="flex items-center justify-center gap-2 border-t border-[#e7edf5] py-2.5 text-[11px] font-black text-[#075fff]">View Detailed Insights <ArrowUpRight size={12} /></Link>
@@ -1141,7 +1142,7 @@ function MobileMetricCard({ label, value, previous, delta, color, icon, iconClas
   label: string;
   value: number;
   previous: number;
-  delta: number;
+  delta: number | null;
   color: string;
   icon: ReactNode;
   iconClass: string;
@@ -1149,8 +1150,8 @@ function MobileMetricCard({ label, value, previous, delta, color, icon, iconClas
 }) {
   const spark = mobileSparkline(previous, value);
   const gradientId = `dashboard-mobile-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-  const bad = positiveIsBad ? delta > 0 : delta < 0;
-  const deltaColor = delta === 0 ? "text-[#718096]" : bad ? "text-[#ef3340]" : "text-[#16a34a]";
+  const bad = delta != null && (positiveIsBad ? delta > 0 : delta < 0);
+  const deltaColor = delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : bad ? "text-[#ef3340]" : "text-[#16a34a]";
   return (
     <div className="flex min-w-0 flex-col rounded-[11px] border border-[#e2eaf4] bg-white p-2.5 shadow-[0_7px_20px_rgba(26,57,112,0.055)]">
       <div className="flex min-h-[28px] items-center gap-1.5">
@@ -1159,8 +1160,12 @@ function MobileMetricCard({ label, value, previous, delta, color, icon, iconClas
       </div>
       <p className="mt-2 truncate font-display text-[16px] font-black tracking-tight text-[#102347]">{fmtCompactRs(value)}</p>
       <div className={cn("mt-1 flex items-center gap-0.5 text-[8px] font-black", deltaColor)}>
-        {delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}
-        {Math.abs(delta)}% <span className="font-semibold text-[#7b8799]">vs yesterday</span>
+        {delta == null ? (
+          <span>—</span>
+        ) : (
+          <>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}%</>
+        )}
+        <span className="font-semibold text-[#7b8799]">vs yesterday</span>
       </div>
       <div className="mt-auto h-7 pt-1">
         <ResponsiveContainer width="100%" height="100%">
@@ -1174,11 +1179,11 @@ function MobileMetricCard({ label, value, previous, delta, color, icon, iconClas
   );
 }
 
-function MobileDelta({ delta }: { delta: number }) {
-  const color = delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
+function MobileDelta({ delta }: { delta: number | null }) {
+  const color = delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
   return (
     <span className="inline-flex items-center gap-1 text-[9px] font-semibold">
-      <span className={cn("inline-flex items-center gap-0.5 font-bold", color)}>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}%</span>
+      <span className={cn("inline-flex items-center gap-0.5 font-bold", color)}>{delta == null ? <span>—</span> : <>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}%</>}</span>
       <span className="text-[#7b8799]">vs yesterday</span>
     </span>
   );
@@ -1265,15 +1270,17 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
         ) : (
           <p className="mt-1.5 break-words font-sans text-[20px] font-bold leading-none text-[#102347] dark:text-card-foreground 2xl:mt-2 2xl:text-[22px]">{value}</p>
         )}
-        {delta !== null && delta !== undefined && (
-          <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-medium 2xl:mt-3 2xl:text-[11px]">
+        <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-medium 2xl:mt-3 2xl:text-[11px]">
+          {delta === null || delta === undefined ? (
+            <span className="font-bold text-[#94a3b8]">—</span>
+          ) : (
             <span className={cn("inline-flex items-center gap-0.5 font-bold", delta === 0 ? "text-[#62708a]" : isBad ? "text-[#ff304f]" : "text-[#16a34a]")}>
               <DeltaIcon size={11} aria-hidden="true" />
               {Math.abs(delta)}%
             </span>
-            <span className="text-[#7a879b]">{deltaLabel}</span>
-          </div>
-        )}
+          )}
+          <span className="text-[#7a879b]">{deltaLabel}</span>
+        </div>
         {footer && <div className="mt-3 leading-none">{footer}</div>}
       </div>
     </div>
