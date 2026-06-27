@@ -68,7 +68,10 @@ interface BillRecord extends Bill, Record<string, unknown> {}
 type BillFilter = "all" | "pakka" | "estimate" | "paid" | "udhar" | "partial" | "rough" | "cancelled" | "pending_sync" | "deleted";
 type ModeFilter = "all" | "cash" | "upi" | "udhar" | "card" | "bank" | "split";
 type BillPeriod = "today" | "week" | "month" | "all";
-type PinAction = "cancel" | "delete" | "restore";
+type PinAction = "cancel" | "delete" | "restore" | "clear_estimates";
+type PinActionState =
+  | { action: Exclude<PinAction, "clear_estimates">; bill: BillRecord }
+  | { action: "clear_estimates"; bills: BillRecord[] };
 
 const CARD = "rounded-[12px] border border-[#e2e9f3] bg-white shadow-[0_5px_18px_rgba(31,60,110,0.045)]";
 const TABLE_HEAD = "border-y border-[#e6ecf4] bg-[#f7f9fc] text-[#52617c]";
@@ -272,6 +275,10 @@ function realSaleRows(rows: BillRecord[]) {
   return rows.filter((bill) => bill.status !== "cancelled" && !isEstimateBill(bill) && !isDeleted(bill));
 }
 
+function activeEstimateRows(rows: BillRecord[]) {
+  return rows.filter((bill) => isEstimateBill(bill) && !isDeleted(bill));
+}
+
 function pctDelta(current: number, previous: number) {
   if (Math.abs(previous) < 0.005) return current > 0 ? 100 : 0;
   return Math.round(((current - previous) / Math.abs(previous)) * 1_000) / 10;
@@ -367,7 +374,7 @@ export default function BillsPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [pinAction, setPinAction] = useState<{ action: PinAction; bill: BillRecord } | null>(null);
+  const [pinAction, setPinAction] = useState<PinActionState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const staffFallback = shop?.name || "Mukesh Store";
@@ -439,17 +446,17 @@ export default function BillsPage() {
     const previousSales = sum(previousReal, billTotal);
     const currentAvg = currentReal.length ? currentSales / currentReal.length : 0;
     const previousAvg = previousReal.length ? previousSales / previousReal.length : 0;
-    const currentPaid = periodBills.filter((bill) => paymentStatusOf(bill) === "Paid").length;
-    const previousPaid = previousRows.filter((bill) => paymentStatusOf(bill) === "Paid").length;
-    const currentUdhar = periodBills.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length;
-    const previousUdhar = previousRows.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length;
+    const currentPaid = currentReal.filter((bill) => paymentStatusOf(bill) === "Paid").length;
+    const previousPaid = previousReal.filter((bill) => paymentStatusOf(bill) === "Paid").length;
+    const currentUdhar = currentReal.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length;
+    const previousUdhar = previousReal.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length;
     const currentCancelled = periodBills.filter((bill) => bill.status === "cancelled").length;
     const previousCancelled = previousRows.filter((bill) => bill.status === "cancelled").length;
     const sparkEnd = toDate || toDateInputValue(new Date());
 
     return {
-      totalBills: periodBills.length,
-      totalBillsDelta: period === "all" ? 0 : pctDelta(periodBills.length, previousRows.length),
+      totalBills: currentReal.length,
+      totalBillsDelta: period === "all" ? 0 : pctDelta(currentReal.length, previousReal.length),
       totalSales: currentSales,
       totalSalesDelta: period === "all" ? 0 : pctDelta(currentSales, previousSales),
       paidBills: currentPaid,
@@ -461,10 +468,10 @@ export default function BillsPage() {
       cancelledBills: currentCancelled,
       cancelledBillsDelta: period === "all" ? 0 : pctDelta(currentCancelled, previousCancelled),
       sparks: {
-        totalBills: sparkFromRows(periodBills, sparkEnd, (rows) => rows.length),
+        totalBills: sparkFromRows(periodBills, sparkEnd, (rows) => realSaleRows(rows).length),
         totalSales: sparkFromRows(periodBills, sparkEnd, (rows) => sum(realSaleRows(rows), billTotal)),
-        paidBills: sparkFromRows(periodBills, sparkEnd, (rows) => rows.filter((bill) => paymentStatusOf(bill) === "Paid").length),
-        udharBills: sparkFromRows(periodBills, sparkEnd, (rows) => rows.filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length),
+        paidBills: sparkFromRows(periodBills, sparkEnd, (rows) => realSaleRows(rows).filter((bill) => paymentStatusOf(bill) === "Paid").length),
+        udharBills: sparkFromRows(periodBills, sparkEnd, (rows) => realSaleRows(rows).filter((bill) => ["Udhar", "Partial"].includes(paymentStatusOf(bill))).length),
         avgBill: sparkFromRows(periodBills, sparkEnd, (rows) => {
           const real = realSaleRows(rows);
           const sales = sum(real, billTotal);
@@ -478,7 +485,10 @@ export default function BillsPage() {
   const counts = useMemo(() => ({
     pending: bills.filter((bill) => ["pending_sync", "syncing", "failed", "conflict"].includes(syncStatusOf(bill)) && !isDeleted(bill)).length,
     deleted: bills.filter(isDeleted).length,
+    estimates: activeEstimateRows(bills).length,
   }), [bills]);
+
+  const estimatesInView = useMemo(() => activeEstimateRows(filtered), [filtered]);
 
   const paymentBreakdown = useMemo(() => {
     const totals = new Map<string, number>();
@@ -496,7 +506,9 @@ export default function BillsPage() {
     const status = paymentStatusOf(bill);
     const mode = paymentModeOf(bill);
     const customer = String(bill.customerName || "Walk-in customer");
-    const title = bill.status === "cancelled"
+    const title = isEstimateBill(bill)
+      ? `Estimate saved for ${customer}`
+      : bill.status === "cancelled"
       ? `Bill cancelled for ${customer}`
       : status === "Udhar"
         ? `Udhar bill created for ${customer}`
@@ -508,7 +520,7 @@ export default function BillsPage() {
       title,
       sub: `${billNo(bill)} - ${money(billTotal(bill))}`,
       time: formatBillDateParts(billDate(bill)).time || formatBillDateParts(billDate(bill)).date,
-      tone: bill.status === "cancelled" ? "rose" : mode === "udhar" ? "orange" : "emerald",
+      tone: isEstimateBill(bill) ? "violet" : bill.status === "cancelled" ? "rose" : mode === "udhar" ? "orange" : "emerald",
       bill,
     };
   }), [filtered]);
@@ -597,6 +609,7 @@ export default function BillsPage() {
   }
 
   function requestPinAction(action: PinAction, bill: BillRecord) {
+    if (action === "clear_estimates") return;
     if (action === "cancel" && !cancelPermission.allowed) {
       toast({ title: "Permission denied", description: cancelPermission.reason, variant: "destructive" });
       return;
@@ -604,14 +617,39 @@ export default function BillsPage() {
     setPinAction({ action, bill });
   }
 
+  function requestEstimateCleanup() {
+    const rows = filter === "estimate" ? estimatesInView : activeEstimateRows(bills);
+    if (rows.length === 0) {
+      toast({ title: "No estimates to clear", description: "Estimate bills are already clean." });
+      return;
+    }
+    setPinAction({ action: "clear_estimates", bills: rows });
+  }
+
   async function runPinAction(ownerPin: string, reason: string) {
     if (!pinAction) return;
     setIsSaving(true);
     try {
-      if (pinAction.action === "cancel") await cancelBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
-      if (pinAction.action === "delete") await softDeleteBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
-      if (pinAction.action === "restore") await restoreBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
-      toast({ title: "Saved locally", description: "Data is safe locally. Cloud backup will run automatically." });
+      if (pinAction.action === "clear_estimates") {
+        const rows = activeEstimateRows(pinAction.bills);
+        for (const bill of rows) {
+          await softDeleteBillWithOwnerPinLocalFirst(bill.id, ownerPin, reason || "Estimate cleanup");
+        }
+        setChecked((prev) => {
+          const next = new Set(prev);
+          for (const bill of rows) next.delete(bill.id);
+          return next;
+        });
+        toast({
+          title: "Estimates moved to recycle bin",
+          description: `${rows.length} estimate bill${rows.length === 1 ? "" : "s"} cleared from active bill history.`,
+        });
+      } else {
+        if (pinAction.action === "cancel") await cancelBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
+        if (pinAction.action === "delete") await softDeleteBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
+        if (pinAction.action === "restore") await restoreBillWithOwnerPinLocalFirst(pinAction.bill.id, ownerPin, reason);
+        toast({ title: "Saved locally", description: "Data is safe locally. Cloud backup will run automatically." });
+      }
       setPinAction(null);
       await refetch();
     } catch (error) {
@@ -652,8 +690,11 @@ export default function BillsPage() {
           <Button onClick={exportCsv} disabled={filtered.length === 0} variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#075fff]">
             <Download size={15} /> Export
           </Button>
+          <Button onClick={requestEstimateCleanup} disabled={counts.estimates === 0 || isSaving} variant="outline" className="h-10 rounded-[8px] border-rose-100 bg-white px-4 text-[12px] font-bold text-rose-600 hover:border-rose-200 hover:bg-rose-50">
+            <Trash2 size={15} /> Clear Estimates
+          </Button>
           <Button asChild variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#075fff]">
-            <Link href="/billing?billType=estimate"><FileText size={15} />Estimate</Link>
+            <Link href="/billing?billType=estimate"><FileText size={15} />Estimate Bill</Link>
           </Button>
           <Button asChild className="h-10 rounded-[8px] bg-[#075fff] px-5 text-[12px] font-bold text-white shadow-[0_9px_20px_rgba(7,95,255,0.22)] hover:bg-[#0054e8]">
             <Link href="/billing?billType=normal_sale"><Plus size={15} />Pakka Bill</Link>
@@ -719,8 +760,9 @@ export default function BillsPage() {
               </Button>
             </div>
           </div>
-          {(counts.deleted > 0 || counts.pending > 0) && (
+          {(counts.deleted > 0 || counts.pending > 0 || counts.estimates > 0) && (
             <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+              {counts.estimates > 0 && <span className="rounded-full bg-[#f5f0ff] px-2.5 py-1 text-[#6d3df0]">{counts.estimates} estimate bills separated</span>}
               {counts.deleted > 0 && <span className="rounded-full bg-[#eef2f8] px-2.5 py-1 text-[#64748b]">{counts.deleted} in recycle bin</span>}
               {counts.pending > 0 && <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">{counts.pending} waiting for backup</span>}
             </div>
@@ -758,6 +800,7 @@ export default function BillsPage() {
                     const mode = paymentModeOf(bill);
                     const sync = syncStatusOf(bill);
                     const deleted = isDeleted(bill);
+                    const estimate = isEstimateBill(bill);
                     return (
                       <tr key={bill.id} className={cn("text-[#24385f] transition-colors hover:bg-[#fbfcfe]", deleted && "bg-[#f8fafc] opacity-70")}>
                         <td className="px-4 py-2.5">
@@ -773,7 +816,7 @@ export default function BillsPage() {
                           <p className="mt-0.5 text-[#6f7f9b]">{date.time}</p>
                         </td>
                         <td className="px-4 py-2.5 text-right font-bold">{itemsCount(bill) || "-"}</td>
-                        <td className="px-4 py-2.5"><ModeBadge mode={mode} /></td>
+                        <td className="px-4 py-2.5">{estimate ? <span className="rounded-[5px] bg-[#f5f0ff] px-2 py-1 text-[10px] font-black text-[#6d3df0]">No payment</span> : <ModeBadge mode={mode} />}</td>
                         <td className="px-4 py-2.5"><span className="rounded-[5px] bg-[#edf4ff] px-2 py-1 text-[10px] font-black text-[#075fff]">{billTypeOf(bill)}</span></td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-black text-[#102347]">{money(billTotal(bill))}</td>
                         <td className="px-4 py-2.5"><StatusBadge status={status} /></td>
@@ -790,14 +833,14 @@ export default function BillsPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> Return / refund</DropdownMenuItem>
+                                {!estimate && <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> Return / refund</DropdownMenuItem>}
                                 <DropdownMenuSeparator />
                                 {deleted ? (
                                   <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> Restore bill</DropdownMenuItem>
                                 ) : (
                                   <>
-                                    {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> Cancel bill</DropdownMenuItem>}
-                                    <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> Move to recycle bin</DropdownMenuItem>
+                                    {!estimate && bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> Cancel bill</DropdownMenuItem>}
+                                    <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? "Move estimate to recycle bin" : "Move to recycle bin"}</DropdownMenuItem>
                                   </>
                                 )}
                               </DropdownMenuContent>
@@ -846,10 +889,10 @@ export default function BillsPage() {
       <OwnerPinModal
         open={!!pinAction}
         onCancel={() => setPinAction(null)}
-        title={pinAction?.action === "restore" ? "Restore bill" : pinAction?.action === "cancel" ? "Cancel bill" : "Move bill to recycle bin"}
-        description="Owner PIN is required. Financial records are never hard deleted and this action is saved locally first."
-        confirmLabel={pinAction?.action === "restore" ? "Restore" : pinAction?.action === "cancel" ? "Cancel bill" : "Move to recycle bin"}
-        reasonRequired={pinAction?.action === "cancel" || pinAction?.action === "delete"}
+        title={pinAction?.action === "clear_estimates" ? "Clear estimate bills" : pinAction?.action === "restore" ? "Restore bill" : pinAction?.action === "cancel" ? "Cancel bill" : "Move bill to recycle bin"}
+        description={pinAction?.action === "clear_estimates" ? `Owner PIN is required. ${pinAction.bills.length} estimate bill${pinAction.bills.length === 1 ? "" : "s"} will move to recycle bin and stay separate from sales data.` : "Owner PIN is required. Financial records are never hard deleted and this action is saved locally first."}
+        confirmLabel={pinAction?.action === "clear_estimates" ? "Clear estimates" : pinAction?.action === "restore" ? "Restore" : pinAction?.action === "cancel" ? "Cancel bill" : "Move to recycle bin"}
+        reasonRequired={pinAction?.action === "cancel" || pinAction?.action === "delete" || pinAction?.action === "clear_estimates"}
         loading={isSaving}
         onConfirm={({ ownerPin, reason }) => runPinAction(ownerPin, reason)}
       />
