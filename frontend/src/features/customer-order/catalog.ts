@@ -65,6 +65,11 @@ const localStorageCatalogStore: CatalogStorage = {
   },
 };
 
+/** Read the cached catalog snapshot (if any) for an instant first paint before revalidating. */
+export function readCachedCatalog(shopCode: string): CustomerCatalog | null {
+  return localStorageCatalogStore.read(shopCode);
+}
+
 /** Fetch the live customer-safe catalog from the public endpoint. */
 export async function fetchCustomerCatalog(shopCode: string): Promise<CustomerCatalog> {
   const url = `${getApiBaseUrl()}/public/shops/${encodeURIComponent(shopCode)}/catalog`;

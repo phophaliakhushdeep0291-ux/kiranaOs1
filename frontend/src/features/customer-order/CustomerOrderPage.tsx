@@ -5,6 +5,7 @@ import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildOrderDeepLink } from "@/lib/qr/cart-codec";
 import {
   loadCustomerCatalog,
+  readCachedCatalog,
   CatalogUnavailableError,
   type CustomerCatalog,
   type CustomerCatalogProduct,
@@ -33,20 +34,29 @@ export default function CustomerOrderPage() {
 
   useEffect(() => {
     let active = true;
-    setState({ kind: "loading" });
+    // Paint the cached catalog instantly (returning customer), then revalidate in the background
+    // so the page feels immediate even on a slow connection.
+    const cached = readCachedCatalog(shopCode);
+    setState(cached ? { kind: "ready", catalog: cached, source: "cache" } : { kind: "loading" });
     loadCustomerCatalog(shopCode)
       .then((res) => {
         if (active) setState({ kind: "ready", catalog: res.catalog, source: res.source });
       })
       .catch((err: unknown) => {
         if (!active) return;
-        const unavailable = err instanceof CatalogUnavailableError;
-        setState({
-          kind: "error",
-          unavailable,
-          message:
-            err instanceof Error ? err.message : "Something went wrong loading this shop.",
-        });
+        // A definitive 404 (shop unknown / ordering off) always wins, even over a stale cache.
+        if (err instanceof CatalogUnavailableError) {
+          setState({ kind: "error", unavailable: true, message: err.message });
+          return;
+        }
+        // Network failure with a cache already on screen: keep showing it (offline). Otherwise error.
+        if (!cached) {
+          setState({
+            kind: "error",
+            unavailable: false,
+            message: err instanceof Error ? err.message : "Something went wrong loading this shop.",
+          });
+        }
       });
     return () => {
       active = false;
