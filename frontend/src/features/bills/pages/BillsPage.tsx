@@ -342,8 +342,8 @@ export default function BillsPage() {
   const cancelPermission = usePermission("cancel_bill");
   const { isOnline, isBrowserOnline, backendStatus, isSyncing } = useOfflineStatus();
   const { data: bills = [], isLoading, refetch } = useLocalBills();
-  const [period, setPeriod] = useState<BillPeriod>("week");
-  const initialRange = useMemo(() => periodRange("week"), []);
+  const [period, setPeriod] = useState<BillPeriod>("all");
+  const initialRange = useMemo(() => periodRange("all"), []);
   const [fromDate, setFromDate] = useState(initialRange.from);
   const [toDate, setToDate] = useState(initialRange.to);
   const [search, setSearch] = useState("");
@@ -433,17 +433,17 @@ export default function BillsPage() {
 
     return {
       totalBills: periodBills.length,
-      totalBillsDelta: pctDelta(periodBills.length, previousRows.length),
+      totalBillsDelta: period === "all" ? 0 : pctDelta(periodBills.length, previousRows.length),
       totalSales: currentSales,
-      totalSalesDelta: pctDelta(currentSales, previousSales),
+      totalSalesDelta: period === "all" ? 0 : pctDelta(currentSales, previousSales),
       paidBills: currentPaid,
-      paidBillsDelta: pctDelta(currentPaid, previousPaid),
+      paidBillsDelta: period === "all" ? 0 : pctDelta(currentPaid, previousPaid),
       udharBills: currentUdhar,
-      udharBillsDelta: pctDelta(currentUdhar, previousUdhar),
+      udharBillsDelta: period === "all" ? 0 : pctDelta(currentUdhar, previousUdhar),
       avgBill: currentAvg,
-      avgBillDelta: pctDelta(currentAvg, previousAvg),
+      avgBillDelta: period === "all" ? 0 : pctDelta(currentAvg, previousAvg),
       cancelledBills: currentCancelled,
-      cancelledBillsDelta: pctDelta(currentCancelled, previousCancelled),
+      cancelledBillsDelta: period === "all" ? 0 : pctDelta(currentCancelled, previousCancelled),
       sparks: {
         totalBills: sparkFromRows(periodBills, sparkEnd, (rows) => rows.length),
         totalSales: sparkFromRows(periodBills, sparkEnd, (rows) => sum(realSaleRows(rows), billTotal)),
@@ -457,7 +457,7 @@ export default function BillsPage() {
         cancelledBills: sparkFromRows(periodBills, sparkEnd, (rows) => rows.filter((bill) => bill.status === "cancelled").length),
       },
     };
-  }, [bills, fromDate, periodBills, toDate]);
+  }, [bills, fromDate, period, periodBills, toDate]);
 
   const counts = useMemo(() => ({
     pending: bills.filter((bill) => ["pending_sync", "syncing", "failed", "conflict"].includes(syncStatusOf(bill)) && !isDeleted(bill)).length,
@@ -642,13 +642,13 @@ export default function BillsPage() {
         </div>
       </div>
 
-      <div className="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <BillKpiCard label="Total Bills" value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[#edf4ff] text-[#075fff] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} />
-        <BillKpiCard label="Total Sales" value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} />
-        <BillKpiCard label="Paid Bills" value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} />
-        <BillKpiCard label="Udhar Bills" value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} deltaPositiveIsBad />
-        <BillKpiCard label="Average Bill Value" value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[#edf4ff] text-[#075fff] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} />
-        <BillKpiCard label="Cancelled Bills" value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} deltaPositiveIsBad />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(168px,1fr))] items-stretch gap-3">
+        <BillKpiCard label="Total Bills" value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[#edf4ff] text-[#075fff] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label="Total Sales" value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label="Paid Bills" value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label="Udhar Bills" value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
+        <BillKpiCard label="Average Bill Value" value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[#edf4ff] text-[#075fff] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label="Cancelled Bills" value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
       </div>
 
       <section id="billing-history-table" className={cn(CARD, "overflow-hidden")}>
@@ -695,7 +695,7 @@ export default function BillsPage() {
                   {staffOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" className="h-10 w-10 rounded-[8px] border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => { setSearch(""); setModeFilter("all"); setStaffFilter("all"); setFilter("all"); void refetch(); }} aria-label="Clear filters">
+              <Button variant="outline" size="icon" className="h-10 w-10 rounded-[8px] border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => { setSearch(""); setModeFilter("all"); setStaffFilter("all"); setFilter("all"); applyPeriod("all"); void refetch(); }} aria-label="Clear filters">
                 <SlidersHorizontal size={15} />
               </Button>
             </div>
@@ -838,7 +838,7 @@ export default function BillsPage() {
   );
 }
 
-function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loading, deltaPositiveIsBad }: {
+function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loading, comparisonLabel, deltaPositiveIsBad }: {
   label: string;
   value: string;
   delta: number;
@@ -847,6 +847,7 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
   icon: ReactNode;
   iconClass: string;
   loading?: boolean;
+  comparisonLabel?: string;
   deltaPositiveIsBad?: boolean;
 }) {
   const positive = delta > 0;
@@ -854,17 +855,17 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
   const DeltaIcon = delta === 0 ? null : positive ? ArrowUpRight : ArrowDownRight;
   const gradientId = `bill-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <article className={cn(CARD, "flex min-h-[150px] flex-col overflow-hidden p-4")}>
-      <div className="flex items-start gap-3">
+    <article className={cn(CARD, "flex h-[150px] min-w-0 flex-col overflow-hidden p-4")}>
+      <div className="flex h-10 items-start gap-3">
         <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border", iconClass)}>{icon}</span>
-        <p className="pt-1 text-[12px] font-semibold leading-tight text-[#34486e]">{label}</p>
+        <p className="min-w-0 pt-1 text-[12px] font-semibold leading-tight text-[#34486e]">{label}</p>
       </div>
       <p className="mt-3 truncate font-display text-[22px] font-black leading-none text-[#101f40]">{loading ? "..." : value}</p>
       <div className="mt-2 flex items-center gap-1 text-[10px]">
         <span className={cn("inline-flex items-center gap-0.5 font-black", delta === 0 ? "text-[#70809a]" : bad ? "text-[#ff334d]" : "text-[#10a948]")}>
           {DeltaIcon ? <DeltaIcon size={11} /> : null}{Math.abs(delta)}%
         </span>
-        <span className="font-semibold text-[#7a879f]">vs last week</span>
+        <span className="font-semibold text-[#7a879f]">{comparisonLabel ?? "vs last week"}</span>
       </div>
       <div className="mt-auto h-9 pt-2">
         <ResponsiveContainer width="100%" height="100%">
