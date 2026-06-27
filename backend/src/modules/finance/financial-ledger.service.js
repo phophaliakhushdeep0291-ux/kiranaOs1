@@ -197,3 +197,36 @@ export async function postUdharPaymentLedger(tx, {
     await tx.financialLedger.create({ data: row });
   }
 }
+
+const PAISE_PER_RUPEE = 100;
+const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "udhar_debit", "udhar_credit"];
+
+/**
+ * Summarize FinancialLedger rows into KPIs. Because a reversal is the SAME entryType with a
+ * negated amount, every KPI is a plain sum over its entryType and cancellations net out — so this
+ * is just a grouped sum of amountPaise. Pure (no DB), so it can back both a server read and tests.
+ * Input rows carry `entryType` + `amountPaise` (BigInt | number | numeric string); output is rupees.
+ *
+ * This is the read foundation for sourcing dashboard/report KPIs from the ledger. It is NOT yet
+ * wired into any report — that switch changes displayed numbers and needs a backfill of pre-ledger
+ * bills, which is a deliberate, separate step.
+ */
+export function summarizeFinancialLedger(rows = []) {
+  const totals = Object.fromEntries(SUMMARY_ENTRY_TYPES.map((type) => [type, 0n]));
+  for (const row of rows) {
+    const type = row?.entryType;
+    if (!Object.prototype.hasOwnProperty.call(totals, type)) continue;
+    totals[type] += BigInt(row.amountPaise ?? 0);
+  }
+  const rupees = (paise) => Number(paise) / PAISE_PER_RUPEE;
+  const udharCreated = rupees(totals.udhar_debit);
+  const udharRecovered = rupees(totals.udhar_credit);
+  return {
+    sales: rupees(totals.sale),
+    cashCollected: rupees(totals.cash_in),
+    upiCollected: rupees(totals.upi_in),
+    udharCreated,
+    udharRecovered,
+    outstanding: Math.round((udharCreated - udharRecovered) * PAISE_PER_RUPEE) / PAISE_PER_RUPEE,
+  };
+}
