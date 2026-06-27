@@ -5,6 +5,7 @@
       "name": "kirana-frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "autoPort": true,
       "port": 5173
     }
   ]
