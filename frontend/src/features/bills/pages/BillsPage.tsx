@@ -16,6 +16,8 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   CloudOff,
   CreditCard,
@@ -196,7 +198,7 @@ function itemsCount(bill: BillRecord) {
 }
 
 function money(value: number, fractionDigits = 0) {
-  return `₹${value.toLocaleString("en-IN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}`;
+  return `\u20b9${value.toLocaleString("en-IN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })}`;
 }
 
 function statusLabel(status: string) {
@@ -313,7 +315,7 @@ function formatBillDateParts(raw: string) {
 
 function compactBillNo(value: string) {
   const match = value.match(/(\d{1,6})$/);
-  return match ? `BILL-${match[1]}` : value;
+  return match ? String(Number(match[1])) : value;
 }
 
 async function loadBills(): Promise<BillRecord[]> {
@@ -659,7 +661,7 @@ export default function BillsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(168px,1fr))] items-stretch gap-3">
+      <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <BillKpiCard label="Total Bills" value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[#edf4ff] text-[#075fff] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Total Sales" value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Paid Bills" value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
@@ -812,7 +814,7 @@ export default function BillsPage() {
               <span className="text-[11px] font-medium text-[#60708e]">Showing {(safePage - 1) * perPage + 1} to {Math.min(safePage * perPage, filtered.length)} of {filtered.length} entries</span>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1">
-                  <PageBtn disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‹</PageBtn>
+                  <PageBtn disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={14} /></PageBtn>
                   {Array.from({ length: pageCount }, (_, idx) => idx + 1)
                     .filter((p) => p === 1 || p === pageCount || Math.abs(p - safePage) <= 1)
                     .reduce<(number | "...")[]>((acc, p, idx, arr) => {
@@ -823,7 +825,7 @@ export default function BillsPage() {
                     .map((p, idx) => p === "..."
                       ? <span key={`gap-${idx}`} className="px-1 text-[12px] text-[#94a3b8]">...</span>
                       : <PageBtn key={p} active={p === safePage} onClick={() => setPage(p as number)}>{p}</PageBtn>)}
-                  <PageBtn disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>›</PageBtn>
+                  <PageBtn disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}><ChevronRight size={14} /></PageBtn>
                 </div>
                 <Select value={String(perPage)} onValueChange={(value) => setPerPage(Number(value))}>
                   <SelectTrigger className="h-8 w-[70px] rounded-[7px] border-[#dfe7f2] text-[11px] font-bold"><SelectValue /></SelectTrigger>
@@ -873,12 +875,12 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
   const gradientId = `bill-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
     <article className={cn(CARD, "flex h-[150px] min-w-0 flex-col overflow-hidden p-4")}>
-      <div className="flex h-10 items-start gap-3">
+      <div className="grid h-10 grid-cols-[36px_minmax(0,1fr)] items-start gap-3">
         <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border", iconClass)}>{icon}</span>
-        <p className="min-w-0 pt-1 text-[12px] font-semibold leading-tight text-[#34486e]">{label}</p>
+        <p className="min-h-[30px] min-w-0 overflow-hidden pt-0.5 text-[12px] font-semibold leading-[15px] text-[#34486e]">{label}</p>
       </div>
-      <p className="mt-3 truncate font-display text-[22px] font-black leading-none text-[#101f40]">{loading ? "..." : value}</p>
-      <div className="mt-2 flex items-center gap-1 text-[10px]">
+      <p className="mt-2 min-h-[24px] truncate font-display text-[22px] font-black leading-none text-[#101f40]">{loading ? "..." : value}</p>
+      <div className="mt-2 flex h-4 items-center gap-1 text-[10px]">
         <span className={cn("inline-flex items-center gap-0.5 font-black", delta === 0 ? "text-[#70809a]" : bad ? "text-[#ff334d]" : "text-[#10a948]")}>
           {DeltaIcon ? <DeltaIcon size={11} /> : null}{Math.abs(delta)}%
         </span>

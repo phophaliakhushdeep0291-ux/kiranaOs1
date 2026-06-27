@@ -118,7 +118,7 @@ describe("frontend security hardening", () => {
   it("fetches app code through the service worker with network-first freshness", () => {
     const source = readFileSync("public/sw.js", "utf8");
 
-    expect(source).toContain('const CACHE_VERSION = "kiranaos-shell-v4"');
+    expect(source).toMatch(/const CACHE_VERSION = "kiranaos-shell-v\d+"/);
     expect(source).toContain("async function networkFirstStatic");
     expect(source).toContain('["style", "script", "worker"].includes(request.destination)');
     expect(source).toContain('["font", "image"].includes(request.destination)');

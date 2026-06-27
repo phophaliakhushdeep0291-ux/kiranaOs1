@@ -1,20 +1,76 @@
 {
+  "id": "/dashboard",
   "name": "KiranaOS POS",
   "short_name": "KiranaOS",
-  "description": "Offline-first kirana POS billing, udhar and inventory app.",
-  "start_url": "/dashboard",
+  "description": "Offline-first kirana POS for billing, udhar, inventory, reports and cloud backup.",
+  "start_url": "/dashboard?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#0f766e",
+  "display_override": ["window-controls-overlay", "standalone", "browser"],
+  "background_color": "#ffffff",
+  "theme_color": "#075fff",
   "orientation": "any",
-  "categories": ["business", "productivity"],
+  "categories": ["business", "productivity", "finance"],
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/kiranaos-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Bill",
+      "short_name": "Billing",
+      "description": "Open fast billing",
+      "url": "/billing",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Bills History",
+      "short_name": "Bills",
+      "description": "Review and print bills",
+      "url": "/bills",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Customers / Udhar",
+      "short_name": "Udhar",
+      "description": "Collect payments and check balances",
+      "url": "/customers",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Inventory",
+      "short_name": "Inventory",
+      "description": "Check product stock",
+      "url": "/inventory",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }
