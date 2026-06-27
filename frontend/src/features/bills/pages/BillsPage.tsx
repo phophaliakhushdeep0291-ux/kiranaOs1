@@ -63,7 +63,7 @@ import { cn } from "@/lib/utils";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 
-type BillFilter = "all" | "paid" | "udhar" | "partial" | "rough" | "cancelled" | "pending_sync" | "deleted";
+type BillFilter = "all" | "pakka" | "estimate" | "paid" | "udhar" | "partial" | "rough" | "cancelled" | "pending_sync" | "deleted";
 type ModeFilter = "all" | "cash" | "upi" | "udhar" | "card" | "bank" | "split";
 type BillPeriod = "today" | "week" | "month" | "all";
 type PinAction = "cancel" | "delete" | "restore";
@@ -85,11 +85,12 @@ const PERIOD_LABELS: Record<BillPeriod, string> = {
 
 const BILL_TABS: Array<{ value: BillFilter; label: string }> = [
   { value: "all", label: "All Bills" },
+  { value: "pakka", label: "Pakka Bills" },
+  { value: "estimate", label: "Estimates" },
   { value: "paid", label: "Paid" },
   { value: "partial", label: "Partial" },
   { value: "udhar", label: "Udhar" },
   { value: "cancelled", label: "Cancelled" },
-  { value: "rough", label: "Drafts" },
 ];
 
 const MODE_META: Record<string, { label: string; chip: string; color: string }> = {
@@ -107,7 +108,7 @@ const STATUS_CLS: Record<string, string> = {
   Udhar: CHIP_TONES.amber,
   Pending: CHIP_TONES.gray,
   Cancelled: CHIP_TONES.red,
-  "Rough/Estimate": CHIP_TONES.violet,
+  Estimate: CHIP_TONES.violet,
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -148,6 +149,16 @@ function isDeleted(bill: BillRecord) {
   return typeof bill.deleted_at === "string" || typeof bill.deletedAt === "string";
 }
 
+function isEstimateBill(bill: BillRecord) {
+  const type = String(bill.billType ?? bill.bill_type ?? "").toLowerCase();
+  const status = String(bill.status ?? "").toLowerCase();
+  return type === "estimate"
+    || type.includes("rough")
+    || status.includes("rough")
+    || status === "draft"
+    || Boolean(bill.is_rough_estimate ?? bill.isRoughEstimate);
+}
+
 function syncStatusOf(bill: BillRecord) {
   const explicit = bill.sync_status ?? bill.syncStatus ?? bill.cloudSyncStatus;
   if (explicit) return String(explicit);
@@ -158,7 +169,7 @@ function syncStatusOf(bill: BillRecord) {
 
 function paymentStatusOf(bill: BillRecord) {
   if (bill.status === "cancelled") return "Cancelled";
-  if (bill.billType === "estimate") return "Rough/Estimate";
+  if (isEstimateBill(bill)) return "Estimate";
   const paid = billPaid(bill);
   const credit = billCredit(bill);
   const total = billTotal(bill);
@@ -189,7 +200,7 @@ function money(value: number, fractionDigits = 0) {
 }
 
 function statusLabel(status: string) {
-  return status === "Rough/Estimate" ? "Draft" : status;
+  return status;
 }
 
 function modeLabel(mode: string) {
@@ -197,10 +208,11 @@ function modeLabel(mode: string) {
 }
 
 function billTypeOf(bill: BillRecord) {
+  if (isEstimateBill(bill)) return "Estimate";
   const raw = String(bill.saleType ?? bill.billType ?? "retail").toLowerCase();
-  if (raw === "estimate") return "Draft";
   if (raw === "wholesale") return "Wholesale";
-  return "Retail";
+  if (raw === "gst_invoice") return "Pakka GST";
+  return "Pakka";
 }
 
 function staffNameOf(bill: BillRecord, fallback: string) {
@@ -255,7 +267,7 @@ function dateMatches(bill: BillRecord, from: string, to: string) {
 }
 
 function realSaleRows(rows: BillRecord[]) {
-  return rows.filter((bill) => bill.status !== "cancelled" && bill.billType !== "estimate" && !isDeleted(bill));
+  return rows.filter((bill) => bill.status !== "cancelled" && !isEstimateBill(bill) && !isDeleted(bill));
 }
 
 function pctDelta(current: number, previous: number) {
@@ -386,10 +398,12 @@ export default function BillsPage() {
       const matchesStaff = staffFilter === "all" || staff === staffFilter;
       const matchesFilter =
         filter === "all" ? !deleted :
+        filter === "pakka" ? !isEstimateBill(bill) && !deleted :
+        filter === "estimate" ? isEstimateBill(bill) && !deleted :
         filter === "paid" ? status === "paid" && !deleted :
         filter === "udhar" ? status === "udhar" && !deleted :
         filter === "partial" ? status === "partial" && !deleted :
-        filter === "rough" ? bill.billType === "estimate" && !deleted :
+        filter === "rough" ? isEstimateBill(bill) && !deleted :
         filter === "cancelled" ? bill.status === "cancelled" && !deleted :
         filter === "pending_sync" ? ["pending_sync", "syncing", "failed", "conflict"].includes(sync) && !deleted :
         filter === "deleted" ? deleted : true;
@@ -636,8 +650,11 @@ export default function BillsPage() {
           <Button onClick={exportCsv} disabled={filtered.length === 0} variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#075fff]">
             <Download size={15} /> Export
           </Button>
+          <Button asChild variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#075fff]">
+            <Link href="/billing?billType=estimate"><FileText size={15} />Estimate</Link>
+          </Button>
           <Button asChild className="h-10 rounded-[8px] bg-[#075fff] px-5 text-[12px] font-bold text-white shadow-[0_9px_20px_rgba(7,95,255,0.22)] hover:bg-[#0054e8]">
-            <Link href="/billing"><Plus size={15} />New Bill</Link>
+            <Link href="/billing?billType=normal_sale"><Plus size={15} />Pakka Bill</Link>
           </Button>
         </div>
       </div>
