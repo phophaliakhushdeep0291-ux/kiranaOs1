@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, useListProducts, type Bill, type Customer, type Product } from "@/lib/api/client";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useAuth } from "@/features/auth/useAuth";
@@ -82,6 +83,7 @@ export default function Billing() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { shop, user } = useAuth();
+  const [location] = useLocation();
   const { isOnline } = useOfflineStatus();
   const newBillingFeature = useFeature("new_billing");
   const createBillPermission = usePermission("create_bill");
@@ -124,6 +126,18 @@ export default function Billing() {
   const [voiceMicMessage, setVoiceMicMessage] = useState("Click mic and speak slowly. You can also type the same command.");
   const [voiceVisible, setVoiceVisible] = useState(false);
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  const requestedBillType = useMemo<BillTypeSelection | null>(() => {
+    const query = location.includes("?")
+      ? location.slice(location.indexOf("?") + 1)
+      : typeof window !== "undefined"
+        ? window.location.search.replace(/^\?/, "")
+        : "";
+    const raw = (new URLSearchParams(query).get("billType") ?? new URLSearchParams(query).get("type") ?? "").toLowerCase();
+    if (["estimate", "rough"].includes(raw)) return BillInputBillType.estimate;
+    if (["normal_sale", "normal", "pakka", "paka"].includes(raw)) return BillInputBillType.normal_sale;
+    return null;
+  }, [location]);
 
   const debouncedSearch = useDebounce(search.trim(), 90);
   const deferredSearch = useDeferredValue(debouncedSearch);
@@ -249,6 +263,18 @@ export default function Billing() {
     if (discount !== safeDiscount) setDiscount(safeDiscount);
   }, [discount, safeDiscount]);
 
+  useEffect(() => {
+    if (!draftHydrated || !requestedBillType) return;
+    setBillType(requestedBillType);
+    if (requestedBillType === BillInputBillType.estimate) {
+      setPaymentMode(BillPaymentMode.cash);
+      setPaidAmount("");
+      setSplitCashAmount("");
+      setSplitUpiAmount("");
+      setAllowAdvancePayment(false);
+    }
+  }, [draftHydrated, requestedBillType]);
+
   // Hydrate the printer + tax config caches so receipts honour the saved paper
   // size/copies/footer and totals honour the saved GST mode from Settings.
   useEffect(() => {
@@ -332,7 +358,7 @@ export default function Billing() {
     setCustomerName("");
     setCustomerMobile("");
     setSelectedCustomerId("walk_in");
-    setBillType(BillInputBillType.normal_sale);
+    setBillType(requestedBillType ?? BillInputBillType.normal_sale);
     setPaymentMode(BillPaymentMode.cash);
     setAllowAdvancePayment(false);
     setDraftRestored(false);

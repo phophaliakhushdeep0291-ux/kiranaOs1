@@ -175,6 +175,7 @@ export function BillingSummary({
 
   const needsOptionsVisible =
     billType !== BillInputBillType.normal_sale || selectedCustomerId !== "walk_in";
+  const isEstimateBill = billType === BillInputBillType.estimate;
 
   useEffect(() => {
     const onAction = (event: Event) => {
@@ -234,6 +235,43 @@ export function BillingSummary({
           </div>
 
           {/* Bill type + customer inputs — collapsible */}
+          <div className="grid grid-cols-2 gap-2 rounded-[11px] border border-[#e5ebf4] bg-[#f8fbff] p-1.5" aria-label="Choose bill type">
+            <button
+              type="button"
+              onClick={() => setBillType(BillInputBillType.normal_sale)}
+              className={`flex min-h-[58px] items-center gap-2 rounded-[9px] border px-3 text-left transition-all ${
+                !isEstimateBill
+                  ? "border-[#b9f0cb] bg-white text-[#0f9f49] shadow-[0_8px_18px_rgba(25,184,90,0.12)]"
+                  : "border-transparent bg-transparent text-[#536383] hover:bg-white"
+              }`}
+            >
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]">
+                <CheckCircle size={16} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[12px] font-black">Pakka Bill</span>
+                <span className="block text-[10px] font-semibold opacity-75">Final sale</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBillType(BillInputBillType.estimate)}
+              className={`flex min-h-[58px] items-center gap-2 rounded-[9px] border px-3 text-left transition-all ${
+                isEstimateBill
+                  ? "border-[#d8c7ff] bg-white text-[#6d3df0] shadow-[0_8px_18px_rgba(124,63,242,0.12)]"
+                  : "border-transparent bg-transparent text-[#536383] hover:bg-white"
+              }`}
+            >
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#f1edff] text-[#7c3ff2]">
+                <FileText size={16} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[12px] font-black">Estimate</span>
+                <span className="block text-[10px] font-semibold opacity-75">Not a sale yet</span>
+              </span>
+            </button>
+          </div>
+
           {(showCustomerOptions || needsOptionsVisible) && (
             <div className="space-y-2 rounded-[10px] border border-[#e3eaf3] bg-[#f7f9fd] p-3">
               <div className="flex items-center gap-3">
@@ -243,7 +281,7 @@ export function BillingSummary({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={BillInputBillType.normal_sale}>Normal Sale</SelectItem>
+                    <SelectItem value={BillInputBillType.normal_sale}>Pakka Bill</SelectItem>
                     <SelectItem value={BillInputBillType.udhar_entry}>Udhar</SelectItem>
                     <SelectItem value={BillInputBillType.gst_invoice}>GST Invoice</SelectItem>
                     <SelectItem value={BillInputBillType.estimate}>Estimate</SelectItem>
@@ -466,7 +504,7 @@ export function BillingSummary({
             </>
           ) : (
             <>
-              Save Bill
+              {isEstimateBill ? "Save Estimate" : "Save Pakka Bill"}
               <span className="absolute right-2.5 top-1/2 inline-flex h-6 min-w-[34px] -translate-y-1/2 items-center justify-center rounded-[7px] bg-[rgba(0,35,140,0.35)] px-1.5 text-[11px] font-black text-white">
                 F12
               </span>
