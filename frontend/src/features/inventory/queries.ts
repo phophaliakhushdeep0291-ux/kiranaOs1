@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline } from "@/lib/api/http";
 import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as inventoryApi from "@/features/inventory/api";
 import { recordDamageLocalFirst, recordPurchaseLocalFirst, stockCorrectionLocalFirst } from "@/features/inventory/local-actions";
@@ -39,6 +40,20 @@ function readCachedInventory(): InventoryItem[] {
   return readInstantCache<InventoryItem[]>(INVENTORY_CACHE_KEY, readInstantCache<Product[]>(PRODUCTS_CACHE_KEY, []) as InventoryItem[]);
 }
 
+function productRowsToInventory(rows: Product[]): InventoryItem[] {
+  return rows
+    .filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null)
+    .map((product) => product as unknown as InventoryItem);
+}
+
+async function readInventoryFromIndexedDB(): Promise<InventoryItem[]> {
+  try {
+    return productRowsToInventory(await offlineDB.getAll<Product>("products"));
+  } catch {
+    return [];
+  }
+}
+
 export function useGetInventory(options?: QueryHookOptions<InventoryResponse, InventoryQueryKey>) {
   const extra = getQueryOptions<InventoryResponse, InventoryQueryKey>(options);
   const cached = readCachedInventory();
@@ -48,13 +63,33 @@ export function useGetInventory(options?: QueryHookOptions<InventoryResponse, In
     initialData: extra.initialData ?? cached,
     queryFn: async () => {
       const liveCached = readCachedInventory();
-      if (!isBrowserOnline()) return liveCached;
+      if (liveCached.length === 0) {
+        const fromDB = await readInventoryFromIndexedDB();
+        if (fromDB.length > 0) {
+          writeInstantCache(INVENTORY_CACHE_KEY, fromDB);
+          return fromDB;
+        }
+      }
+      if (!isBrowserOnline()) {
+        if (liveCached.length > 0) return liveCached;
+        const fromDB = await readInventoryFromIndexedDB();
+        if (fromDB.length > 0) writeInstantCache(INVENTORY_CACHE_KEY, fromDB);
+        return fromDB;
+      }
       try {
         const fresh = await inventoryApi.getInventory();
         writeInstantCache(INVENTORY_CACHE_KEY, fresh);
         return fresh;
       } catch (error) {
-        if (liveCached.length > 0 || isNetworkLikeError(error)) return liveCached;
+        if (liveCached.length > 0) return liveCached;
+        if (isNetworkLikeError(error)) {
+          const fromDB = await readInventoryFromIndexedDB();
+          if (fromDB.length > 0) {
+            writeInstantCache(INVENTORY_CACHE_KEY, fromDB);
+            return fromDB;
+          }
+          return liveCached;
+        }
         throw error;
       }
     },
@@ -63,6 +98,11 @@ export function useGetInventory(options?: QueryHookOptions<InventoryResponse, In
 
 function readCachedLowStock(): InventoryItem[] {
   return readCachedInventory()
+    .filter((item) => Number(item.stockBaseQty ?? 0) <= Number(item.lowStockThreshold ?? 0));
+}
+
+async function readLowStockFromIndexedDB(): Promise<InventoryItem[]> {
+  return (await readInventoryFromIndexedDB())
     .filter((item) => Number(item.stockBaseQty ?? 0) <= Number(item.lowStockThreshold ?? 0));
 }
 
@@ -75,11 +115,19 @@ export function useGetLowStock(options?: QueryHookOptions<InventoryResponse, Low
     initialData: extra.initialData ?? cached,
     queryFn: async () => {
       const liveCached = readCachedLowStock();
-      if (!isBrowserOnline()) return liveCached;
+      if (liveCached.length === 0) {
+        const fromDB = await readLowStockFromIndexedDB();
+        if (fromDB.length > 0) return fromDB;
+      }
+      if (!isBrowserOnline()) {
+        if (liveCached.length > 0) return liveCached;
+        return readLowStockFromIndexedDB();
+      }
       try {
         return await inventoryApi.getLowStock();
       } catch (error) {
-        if (liveCached.length > 0 || isNetworkLikeError(error)) return liveCached;
+        if (liveCached.length > 0) return liveCached;
+        if (isNetworkLikeError(error)) return readLowStockFromIndexedDB();
         throw error;
       }
     },

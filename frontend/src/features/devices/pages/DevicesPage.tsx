@@ -186,8 +186,8 @@ export default function DevicesPage() {
         </Alert>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <Card>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Activated devices</CardTitle>
             <CardDescription>Last active time and sync status are read from local device/license cache, so this page works offline.</CardDescription>
@@ -229,28 +229,28 @@ export default function DevicesPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
+        <div className="min-w-0 space-y-4">
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle>Add device</CardTitle>
               <CardDescription>Creates a pending activation request. Real activation must be approved by backend.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Input placeholder="Counter 2 laptop / Owner phone" value={newDeviceName} onChange={(event) => setNewDeviceName(event.target.value)} />
-              <Button className="w-full" onClick={() => void handleAddDevice()} disabled={adding || newDeviceName.trim().length < 2 || limitReached}>
+              <Button className="w-full max-w-full whitespace-normal" onClick={() => void handleAddDevice()} disabled={adding || newDeviceName.trim().length < 2 || limitReached}>
                 <Plus className="mr-1.5 h-4 w-4" />{adding ? "Saving..." : "Add device request"}
               </Button>
-              {limitReached && <Button variant="outline" className="w-full" onClick={() => setUpgradePlan(snapshot?.planCode === "starter" ? "standard" : snapshot?.planCode === "standard" ? "growth" : "pro")}>Upgrade for more devices</Button>}
+              {limitReached && <Button variant="outline" className="w-full max-w-full whitespace-normal" onClick={() => setUpgradePlan(snapshot?.planCode === "starter" ? "standard" : snapshot?.planCode === "standard" ? "growth" : "pro")}>Upgrade for more devices</Button>}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle>License cache</CardTitle>
               <CardDescription>Offline token shape used by frontend.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                 <div className="rounded-lg border p-2"><p className="text-muted-foreground">Tenant</p><p className="break-all font-medium">{license?.tenant_id ?? scope.tenant_id}</p></div>
                 <div className="rounded-lg border p-2"><p className="text-muted-foreground">Store</p><p className="break-all font-medium">{license?.store_id ?? scope.store_id}</p></div>
                 <div className="rounded-lg border p-2"><p className="text-muted-foreground">Plan</p><p className="font-medium capitalize">{evaluation.plan}</p></div>
@@ -258,8 +258,8 @@ export default function DevicesPage() {
               </div>
               <p className="text-xs text-muted-foreground">Token includes plan, features, max_devices, valid_until, offline_grace_until and signature. Signature is not backend security; backend must verify requests.</p>
               <div className="flex flex-col gap-2">
-                <Button variant="outline" onClick={() => void refreshLicense()} disabled={refreshing}><RefreshCcw className="mr-1.5 h-4 w-4" />{refreshing ? "Queuing..." : "Refresh license"}</Button>
-                {!license && <Button variant="secondary" onClick={() => void seedStarterLicenseForThisDevice()}>Cache Starter fallback</Button>}
+                <Button variant="outline" className="w-full max-w-full whitespace-normal" onClick={() => void refreshLicense()} disabled={refreshing}><RefreshCcw className="mr-1.5 h-4 w-4" />{refreshing ? "Queuing..." : "Refresh license"}</Button>
+                {!license && <Button variant="secondary" className="w-full max-w-full whitespace-normal" onClick={() => void seedStarterLicenseForThisDevice()}>Cache Starter fallback</Button>}
               </div>
             </CardContent>
           </Card>

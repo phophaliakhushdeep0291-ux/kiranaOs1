@@ -76,6 +76,13 @@ export function useListProducts(
     initialData: extra.initialData ?? cached,
     queryFn: async () => {
       const liveCached = readCachedProducts(params);
+      if (liveCached.length === 0) {
+        const fromDB = await readProductsFromIndexedDB(params);
+        if (fromDB.length > 0) {
+          void cacheProducts(fromDB);
+          return fromDB;
+        }
+      }
       if (!isBrowserOnline()) return liveCached;
       try {
         const fresh = (await productsApi.listProducts(params)).map(withProductId);
