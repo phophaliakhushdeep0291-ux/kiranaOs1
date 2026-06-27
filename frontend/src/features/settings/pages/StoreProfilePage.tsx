@@ -16,6 +16,7 @@ import { Link } from "wouter";
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
+import { OwnerOrderingCard } from "@/features/customer-order/OwnerOrderingCard";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 type DayHours = { open: boolean; from: string; to: string };
@@ -233,6 +234,13 @@ export default function StoreProfilePage() {
           </div>
         </Card>
       </div>
+
+      {/* Customer QR self-order (owner opt-in) */}
+      <OwnerOrderingCard
+        enabled={Boolean((prefs.customerOrdering as { enabled?: boolean } | undefined)?.enabled)}
+        onToggle={(v) => patch({ customerOrdering: { enabled: v } })}
+        shopId={shop?.id ?? null}
+      />
 
       <div className="flex justify-end pb-2">
         <Button onClick={saveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-11 gap-2 rounded-[10px] px-6 font-black text-white hover:opacity-95">

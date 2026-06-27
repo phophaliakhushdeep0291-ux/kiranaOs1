@@ -9,6 +9,7 @@ import { getLandingRoute } from "@/features/settings/landing-page";
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/auth/pages/RegisterPage"));
 const CustomerOrder = lazy(() => import("@/features/customer-order/CustomerOrderPage"));
+const ImportOrder = lazy(() => import("@/features/customer-order/ImportOrderPage"));
 const Dashboard = lazy(() => import("@/features/dashboard/pages/DashboardPage"));
 const Billing = lazy(() => import("@/features/billing/pages/BillingPage"));
 const BillsPage = lazy(() => import("@/features/bills/pages/BillsPage"));
@@ -121,6 +122,10 @@ export function AppRoutes() {
       </Route>
       <Route path="/billing">
         <ProtectedRoute component={Billing} />
+      </Route>
+      {/* Owner lands here after scanning a customer's order QR with the native camera. */}
+      <Route path="/import-order">
+        <ProtectedRoute component={ImportOrder} />
       </Route>
       <Route path="/returns/new">
         <ProtectedRoute component={NewReturnPage} />
