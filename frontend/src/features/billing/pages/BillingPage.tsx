@@ -14,7 +14,7 @@ import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
-import { newBillId, upsertOpenBill } from "./open-bills";
+import { HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./open-bills";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -27,7 +27,6 @@ import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 
 const BILLING_DRAFT_KEY = "kirana-os:billing-draft:v1";
-const HELD_BILLS_KEY = "kirana-os:held-bills:v1";
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const FAVORITE_PRODUCTS_KEY = "kirana-os:billing-favorite-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
