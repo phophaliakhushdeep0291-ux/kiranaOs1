@@ -12,7 +12,10 @@ import { getProductEmoji } from "@/features/billing/pages/components/BillingSear
 import { fromBaseQty, isDeletedProduct, productDisplayUnit } from "@/features/products/pages/product-pricing";
 import { useRecordDamage, useRecordPurchase } from "@/features/inventory/queries";
 
-const OUT_REASONS = ["Damage", "Expiry", "Sale Return", "Theft / Missing", "Other"];
+// Stock-OUT reasons only — these all reduce stock. A customer "sale return" puts stock BACK,
+// so it intentionally lives in the dedicated Returns flow (/returns), not here, to avoid the
+// owner accidentally decrementing stock for a return.
+const OUT_REASONS = ["Damage", "Expiry", "Theft / Missing", "Other"];
 
 export function StockMovementDialog({ mode, open, onOpenChange, initialProductId, width, onResizeStart }: { mode: "in" | "out"; open: boolean; onOpenChange: (o: boolean) => void; initialProductId?: string; width: number; onResizeStart: (e: ReactMouseEvent) => void }) {
   const { toast } = useToast();
