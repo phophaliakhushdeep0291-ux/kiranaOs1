@@ -63,7 +63,7 @@ const COLLAPSED_WIDTH = 76;
 const PAGE_SUBTITLES: Record<string, string> = {
   "/billing": "Create fast bills and collect payments",
   "/dashboard": "Live sales, cash, stock, and sync health",
-  "/bills": "View, manage, and track all your sales bills",
+  "/bills": "View, search, filter, and manage all bills and invoices",
   "/products": "Manage your product catalog, pricing and stock",
   "/categories": "Organise products into categories",
   "/inventory": "Manage stock, movements, and purchase flow",

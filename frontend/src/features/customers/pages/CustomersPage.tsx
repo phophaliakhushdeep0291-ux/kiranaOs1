@@ -1159,11 +1159,32 @@ function CustomerMetricCard({ label, value, change, color, icon, iconClass, spar
   const data = spark.map((item, index) => ({ index, value: item }));
   const gradientId = `customer-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <article className="h-[140px] overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-      <div className="flex items-center gap-3"><span className={cn("grid h-[42px] w-[42px] shrink-0 place-items-center rounded-[13px]", iconClass)}>{icon}</span><p className="text-[12px] font-bold text-[#34486e]">{label}</p></div>
-      <div className="mt-3 flex items-end justify-between gap-2">
-        <div className="min-w-0"><p className="truncate text-[21px] font-black leading-none text-[#071b3a]">{value}</p><div className="mt-2 flex items-center gap-1 text-[10px]"><span className={cn("inline-flex items-center gap-0.5 font-bold", change === 0 ? "text-[#71809a]" : change < 0 ? "text-rose-600" : "text-emerald-600")}>{change === 0 ? null : change < 0 ? <ArrowDownRight size={11} /> : <ArrowUpRight size={11} />}{Math.abs(change)}%</span><span className="whitespace-nowrap text-[#7a879f]">vs last week</span></div></div>
-        <div className="h-9 min-w-0 flex-1"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data}><defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.24} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs><Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#${gradientId})`} dot={{ r: 1.8, fill: "white", stroke: color, strokeWidth: 1.3 }} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>
+    <article className="flex h-[150px] flex-col overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+      <div className="flex shrink-0 items-center gap-3">
+        <span className={cn("grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[12px]", iconClass)}>{icon}</span>
+        <p className="min-w-0 text-[12px] font-bold leading-snug text-[#34486e]">{label}</p>
+      </div>
+      <p className="mt-2.5 shrink-0 truncate text-[21px] font-black leading-[1.18] text-[#071b3a]">{value}</p>
+      <div className="mt-1.5 flex shrink-0 items-center gap-1 text-[10px]">
+        <span className={cn("inline-flex items-center gap-0.5 font-bold", change === 0 ? "text-[#71809a]" : change < 0 ? "text-rose-600" : "text-emerald-600")}>
+          {change === 0 ? null : change < 0 ? <ArrowDownRight size={11} /> : <ArrowUpRight size={11} />}
+          {Math.abs(change)}%
+        </span>
+        <span className="whitespace-nowrap text-[#7a879f]">vs last week</span>
+      </div>
+      <div className="mt-auto h-7 w-full shrink-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 3, right: 2, left: 2, bottom: 0 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity={0.26} />
+                <stop offset="65%" stopColor={color} stopOpacity={0.08} />
+                <stop offset="100%" stopColor={color} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.9} fill={`url(#${gradientId})`} dot={{ r: 1.7, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} />
+          </AreaChart>
+        </ResponsiveContainer>
       </div>
     </article>
   );
