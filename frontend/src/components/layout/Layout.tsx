@@ -712,7 +712,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
                   <div aria-current={active ? "page" : undefined}
                     className={cn("flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
                       active ? "bg-sidebar-primary text-white" : "text-sidebar-foreground/55 hover:bg-white/8 hover:text-white")}>
-                    <span className={cn("text-[8px]", active ? "text-white" : "text-sidebar-foreground/30")}>â—</span>
+                    <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-white" : "bg-sidebar-foreground/30")} />
                     {label}
                   </div>
                 </Link>
@@ -745,7 +745,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
                 <div aria-current={active ? "page" : undefined}
                   className={cn("flex min-h-8 items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
                     active ? "bg-sidebar-primary text-white" : "text-sidebar-foreground/55 hover:bg-white/8 hover:text-white")}>
-                  <span className={cn("text-[8px]", active ? "text-white" : "text-sidebar-foreground/30")}>●</span>
+                  <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", active ? "bg-white" : "bg-sidebar-foreground/30")} />
                   {label}
                 </div>
               </Link>
