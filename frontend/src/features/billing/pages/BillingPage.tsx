@@ -632,8 +632,9 @@ export default function Billing() {
   }
 
   function makePrintableBill(nextBillType: BillTypeSelection, paid: number, credit: number, payments?: PrintableBill["payments"]): PrintableBill {
+    const year = new Date().getFullYear();
     return {
-      billNo: nextBillType === BillInputBillType.estimate ? `ESTIMATE-${Date.now()}` : `LOCAL-${Date.now()}`,
+      billNo: nextBillType === BillInputBillType.estimate ? `EST-${year}-LOCAL-${Date.now()}` : `LOCAL-${Date.now()}`,
       createdAt: new Date().toISOString(),
       customerName: resolvedCustomerName || "Walk-in",
       customerMobile: resolvedCustomerMobile || undefined,
@@ -721,7 +722,7 @@ export default function Billing() {
     setLastPrintableBill(printable);
     pendingAutoPrintRef.current = null;
 
-    if (!isEstimate && overrideBillType === undefined && getPrinterConfigSync().autoPrint) {
+    if (getPrinterConfigSync().autoPrint) {
       const popup = window.open("", "_blank", "width=460,height=760");
       if (popup) {
         pendingAutoPrintRef.current = { popup, printable };

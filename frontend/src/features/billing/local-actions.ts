@@ -361,6 +361,12 @@ const BILL_CREATION_TRANSACTION_TABLES = [
 const BILL_CREATION_CACHE_DAYS = 30;
 const BILL_CREATION_CACHE_EXPIRES_MS = BILL_CREATION_CACHE_DAYS * 24 * 60 * 60 * 1000;
 
+function localBillNoForType(billType: BillInput["billType"], billId: string) {
+  const year = new Date().getFullYear();
+  const suffix = billId.slice(-6).toUpperCase();
+  return billType === "estimate" ? `EST-${year}-LOCAL-${suffix}` : `PENDING-${suffix}`;
+}
+
 export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const inputForCreation: BillInput = input.billType === "estimate"
     ? {
@@ -417,10 +423,11 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const creditPayments = billData.payments.filter((payment) => payment.mode === BillPaymentMode.credit);
   const isEstimateBill = billData.billType === "estimate";
   const dueAmount = isEstimateBill ? 0 : roundMoney(Math.max(0, total - paid));
+  const localBillNo = localBillNoForType(billData.billType, billId);
   const bill = makeLocalEntity(withBillAliases({
     id: billId,
-    billNo: `PENDING-${billId.slice(-6).toUpperCase()}`,
-    billNumber: `PENDING-${billId.slice(-6).toUpperCase()}`,
+    billNo: localBillNo,
+    billNumber: localBillNo,
     billType: billData.billType,
     status: "pending_sync",
     isSynced: false,

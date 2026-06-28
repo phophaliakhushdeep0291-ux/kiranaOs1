@@ -178,6 +178,7 @@ try {
   assert.equal(cashBill.items[0].lineCost, 20, 'lineCost should use converted rate quantity');
   assert.equal(cashBill.items[0].lineProfit, 3, 'lineProfit should be lineTotal - lineCost');
   assert.equal(cashBill.grossProfit, 3, 'cash bill grossProfit should equal item profit without discount/waived');
+  assert.match(cashBill.billNo, /^KOS-\d{4}-000001$/, 'first real sale should use the KOS bill sequence');
 
   const sugarAfterCashBill = await db.product.findUnique({ where: { id: sugar.id } });
   assert.equal(sugarAfterCashBill.stockBaseQty, 1500, 'normal sale must deduct stock');
@@ -209,6 +210,7 @@ try {
   assert.equal(estimateBill.grossProfit, 0, 'estimate must not affect P&L profit');
   assert.equal(estimateBill.paidAmount, 0, 'estimate must not create paid amount');
   assert.equal(estimateBill.creditAmount, 0, 'estimate must not create udhar amount');
+  assert.match(estimateBill.billNo, /^EST-\d{4}-000001$/, 'estimate should use its own EST sequence');
 
   const sugarAfterEstimate = await db.product.findUnique({ where: { id: sugar.id } });
   assert.equal(sugarAfterEstimate.stockBaseQty, 1500, 'estimate must not deduct stock');
@@ -256,6 +258,7 @@ try {
   assert.equal(waivedBill.grandTotal, 95, 'discount should reduce bill total');
   assert.equal(waivedBill.grossProfit, 30, 'discount and waived amount must reduce grossProfit');
   assert.equal(waivedBill.waivedAmount, 5, 'waived amount should be stored on bill');
+  assert.match(waivedBill.billNo, /^KOS-\d{4}-000002$/, 'estimate numbering must not consume the real sale sequence');
 
   await expectAppError(
     confirmBill(shopA.id, {

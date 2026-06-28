@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const billsPage = readFileSync("src/features/bills/pages/BillsPage.tsx", "utf8");
+const billingPage = readFileSync("src/features/billing/pages/BillingPage.tsx", "utf8");
 const billingSummary = readFileSync("src/features/billing/pages/components/BillingSummary.tsx", "utf8");
 const paymentPanel = readFileSync("src/features/billing/pages/components/BillingPaymentPanel.tsx", "utf8");
 
@@ -28,5 +29,7 @@ describe("estimate bill workflow separation", () => {
     expect(billingSummary).toContain('data-testid="button-bill-type-estimate"');
     expect(paymentPanel).toContain('data-testid="estimate-payment-panel"');
     expect(paymentPanel).toContain('No payment saved');
+    expect(billingPage).toContain('EST-${year}-LOCAL-');
+    expect(billingPage).toContain('if (getPrinterConfigSync().autoPrint)');
   });
 });

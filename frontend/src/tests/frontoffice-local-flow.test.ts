@@ -195,6 +195,8 @@ describe("front office local-first cashier flow", () => {
     expect(rows("bills")).toHaveLength(1);
     expect(rows("bills")[0]).toEqual(expect.objectContaining({
       id: estimate.id,
+      billNo: expect.stringMatching(/^EST-\d{4}-LOCAL-/),
+      billNumber: expect.stringMatching(/^EST-\d{4}-LOCAL-/),
       billType: BillInputBillType.estimate,
       paidAmount: 0,
       buyerPaidAmount: 0,

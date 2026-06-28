@@ -1,24 +1,31 @@
 /**
  * Generate the next bill number for a shop using BillCounter.
- * Format: KOS-YYYY-NNNNNN  (e.g. KOS-2026-000001)
+ * Final sale format: KOS-YYYY-NNNNNN  (e.g. KOS-2026-000001)
+ * Estimate format:   EST-YYYY-NNNNNN  (e.g. EST-2026-000001)
  *
  * This avoids the old race-prone pattern of querying the last bill and incrementing it.
  * It must be called inside the same transaction that creates the bill.
  */
-export async function generateBillNo(shopId, tx) {
+export async function generateBillNo(shopId, tx, { billType } = {}) {
   if (!tx?.billCounter) {
     throw new Error("generateBillNo requires a Prisma transaction client with billCounter");
   }
 
   const year = new Date().getFullYear();
-  const prefix = `KOS-${year}-`;
+  const isEstimate = billType === "estimate";
+  const prefix = `${isEstimate ? "EST" : "KOS"}-${year}-`;
 
   const counter = await tx.billCounter.upsert({
     where: { shopId },
-    create: { shopId, lastNumber: 1 },
-    update: { lastNumber: { increment: 1 } },
-    select: { lastNumber: true },
+    create: isEstimate
+      ? { shopId, lastNumber: 0, estimateLastNumber: 1 }
+      : { shopId, lastNumber: 1, estimateLastNumber: 0 },
+    update: isEstimate
+      ? { estimateLastNumber: { increment: 1 } }
+      : { lastNumber: { increment: 1 } },
+    select: isEstimate ? { estimateLastNumber: true } : { lastNumber: true },
   });
 
-  return `${prefix}${String(counter.lastNumber).padStart(6, "0")}`;
+  const nextNumber = isEstimate ? counter.estimateLastNumber : counter.lastNumber;
+  return `${prefix}${String(nextNumber).padStart(6, "0")}`;
 }

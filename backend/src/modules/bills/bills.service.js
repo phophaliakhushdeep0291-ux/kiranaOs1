@@ -278,7 +278,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       }));
 
     // ── 3. Generate bill number ───────────────────────────────
-    const billNo = await generateBillNo(shopId, tx);
+    const billNo = await generateBillNo(shopId, tx, { billType });
 
     // ── 4. Create bill ────────────────────────────────────────
     const bill = await tx.bill.create({
