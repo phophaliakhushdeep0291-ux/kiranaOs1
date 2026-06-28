@@ -196,17 +196,20 @@ async function main() {
     await waitForPage(client, "document.body.innerText.includes('Billing') && document.body.innerText.includes('Save Pakka Bill')");
     await sleep(1_200);
     const billingAudit = await client.evaluate(`(() => {
-      const byText = (selector, text) => [...document.querySelectorAll(selector)].filter((node) => node.offsetParent !== null && node.textContent?.includes(text));
       const panel = document.querySelector('[data-testid="bill-summary-panel"]');
-      const typeButtons = byText('button', 'Pakka Bill').concat(byText('button', 'Estimate'));
+      const primarySaveText = document.querySelector('[data-testid="button-confirm-bill"]')?.textContent ?? '';
+      const typeButtons = [
+        document.querySelector('[data-testid="button-bill-type-pakka"]'),
+        document.querySelector('[data-testid="button-bill-type-estimate"]'),
+      ].filter(Boolean);
       const rects = typeButtons.slice(0, 2).map((node) => {
         const rect = node.getBoundingClientRect();
         return { width: Math.round(rect.width), height: Math.round(rect.height), top: Math.round(rect.top), left: Math.round(rect.left) };
       });
       const panelRect = panel?.getBoundingClientRect();
       return {
-        hasPakkaSave: document.body.innerText.includes('Save Pakka Bill'),
-        hasEstimateSave: document.body.innerText.includes('Save Estimate'),
+        hasPakkaSave: primarySaveText.includes('Save Pakka Bill'),
+        hasEstimateSave: primarySaveText.includes('Save Estimate'),
         rects,
         panelWidth: panelRect ? Math.round(panelRect.width) : 0,
         summaryOverflow: panel ? panel.scrollWidth - panel.clientWidth : 0,
@@ -223,11 +226,14 @@ async function main() {
     await waitForPage(client, "document.body.innerText.includes('Save Estimate')");
     await sleep(900);
     const estimateAudit = await client.evaluate(`(() => ({
-      hasEstimateSave: document.body.innerText.includes('Save Estimate'),
-      hasPakkaSave: document.body.innerText.includes('Save Pakka Bill'),
+      primarySaveText: document.querySelector('[data-testid="button-confirm-bill"]')?.textContent ?? '',
+      hasEstimateSave: (document.querySelector('[data-testid="button-confirm-bill"]')?.textContent ?? '').includes('Save Estimate'),
+      hasPakkaSave: (document.querySelector('[data-testid="button-confirm-bill"]')?.textContent ?? '').includes('Save Pakka Bill'),
       paymentVisible: document.body.innerText.includes('Payment Method'),
+      noPaymentSaved: document.body.innerText.includes('No payment saved'),
     }))()`);
     assert(estimateAudit.hasEstimateSave, `Estimate billing did not switch copy: ${JSON.stringify(estimateAudit)}`);
+    assert(estimateAudit.paymentVisible && estimateAudit.noPaymentSaved, `Estimate payment panel was not rendered safely: ${JSON.stringify(estimateAudit)}`);
     const estimateDesktop = await capture(client, "billing-estimate-desktop.png", 1440, 900);
 
     await navigate(client, `${FRONTEND_URL}/bills`);

@@ -24,6 +24,9 @@ describe("estimate bill workflow separation", () => {
   it("labels estimate billing as a first-class bill type without payment collection", () => {
     expect(billingSummary).toContain('Estimate Bill');
     expect(billingSummary).toContain('Save Estimate Bill');
-    expect(paymentPanel).toContain('if (billType === BillInputBillType.estimate) return null;');
+    expect(billingSummary).toContain('data-testid="button-bill-type-pakka"');
+    expect(billingSummary).toContain('data-testid="button-bill-type-estimate"');
+    expect(paymentPanel).toContain('data-testid="estimate-payment-panel"');
+    expect(paymentPanel).toContain('No payment saved');
   });
 });

@@ -362,9 +362,18 @@ const BILL_CREATION_CACHE_DAYS = 30;
 const BILL_CREATION_CACHE_EXPIRES_MS = BILL_CREATION_CACHE_DAYS * 24 * 60 * 60 * 1000;
 
 export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
-  const sensitiveActions = readSensitiveBillActions(input);
-  validateSensitiveBillApproval(input, sensitiveActions);
-  const validated = parseOrThrow(billCreationSchema, input) as BillInput;
+  const inputForCreation: BillInput = input.billType === "estimate"
+    ? {
+        ...input,
+        payments: [],
+        buyerPaidAmount: 0,
+        advanceAmount: 0,
+        allowAdvancePayment: false,
+      }
+    : input;
+  const sensitiveActions = readSensitiveBillActions(inputForCreation);
+  validateSensitiveBillApproval(inputForCreation, sensitiveActions);
+  const validated = parseOrThrow(billCreationSchema, inputForCreation) as BillInput;
   validateBillCreationBusinessRules(validated);
 
   // Hard guard: a bill that references a demo product/customer would 404 on the server
@@ -406,7 +415,8 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     idempotency_key: payment.idempotency_key,
   }));
   const creditPayments = billData.payments.filter((payment) => payment.mode === BillPaymentMode.credit);
-  const dueAmount = roundMoney(Math.max(0, total - paid));
+  const isEstimateBill = billData.billType === "estimate";
+  const dueAmount = isEstimateBill ? 0 : roundMoney(Math.max(0, total - paid));
   const bill = makeLocalEntity(withBillAliases({
     id: billId,
     billNo: `PENDING-${billId.slice(-6).toUpperCase()}`,
@@ -450,10 +460,10 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     entityLabel: bill.billNumber ?? bill.billNo,
     newValue: bill,
     ownerPinProvided: sensitiveActions.length > 0,
-    reason: sensitiveActions.length > 0 ? input.reason : undefined,
+    reason: sensitiveActions.length > 0 ? inputForCreation.reason : undefined,
     summary: `Bill ${bill.billNumber ?? bill.billNo} created for ₹${total.toLocaleString("en-IN")}`,
   });
-  const auditLogs = [billCreatedAuditLog, ...buildSensitiveBillAuditLogs(bill, input, sensitiveActions)];
+  const auditLogs = [billCreatedAuditLog, ...buildSensitiveBillAuditLogs(bill, inputForCreation, sensitiveActions)];
 
   const creditLedgerPayload = ledgerEntry
     ? {
@@ -492,8 +502,8 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     idempotency_key: idempotencyKey,
     payload: {
       ...billData,
-      ownerPin: sensitiveActions.length > 0 ? input.ownerPin : undefined,
-      reason: sensitiveActions.length > 0 ? input.reason : undefined,
+      ownerPin: sensitiveActions.length > 0 ? inputForCreation.ownerPin : undefined,
+      reason: sensitiveActions.length > 0 ? inputForCreation.reason : undefined,
       sensitiveActions,
       ownerPinProvided: sensitiveActions.length > 0,
       // Send only real tender payments as backend payment rows. Credit/udhar is
@@ -526,8 +536,8 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
       credit_amount: creditAmount,
       dueAmount,
       due_amount: dueAmount,
-      paymentStatus: creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
-      payment_status: creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
+      paymentStatus: isEstimateBill ? "estimate" : creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
+      payment_status: isEstimateBill ? "estimate" : creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
       udharAmount: creditAmount,
       udhar_amount: creditAmount,
       outstandingAmount: dueAmount,

@@ -266,14 +266,16 @@ export default function Billing() {
   useEffect(() => {
     if (!draftHydrated || !requestedBillType) return;
     setBillType(requestedBillType);
-    if (requestedBillType === BillInputBillType.estimate) {
-      setPaymentMode(BillPaymentMode.cash);
-      setPaidAmount("");
-      setSplitCashAmount("");
-      setSplitUpiAmount("");
-      setAllowAdvancePayment(false);
-    }
   }, [draftHydrated, requestedBillType]);
+
+  useEffect(() => {
+    if (!draftHydrated || billType !== BillInputBillType.estimate) return;
+    setPaymentMode(BillPaymentMode.cash);
+    setPaidAmount("");
+    setSplitCashAmount("");
+    setSplitUpiAmount("");
+    setAllowAdvancePayment(false);
+  }, [billType, draftHydrated]);
 
   // Hydrate the printer + tax config caches so receipts honour the saved paper
   // size/copies/footer and totals honour the saved GST mode from Settings.
@@ -593,6 +595,7 @@ export default function Billing() {
   }
 
   function validateBeforeConfirm(nextBillType: BillTypeSelection) {
+    const isEstimate = nextBillType === BillInputBillType.estimate;
     if (cart.length === 0) {
       toast({ title: "Cart is empty", description: "Add products or loose items before billing.", variant: "destructive" });
       return false;
@@ -605,7 +608,7 @@ export default function Billing() {
       toast({ title: "Discount too high", description: "Discount cannot exceed bill subtotal.", variant: "destructive" });
       return false;
     }
-    const needsCustomer = billNeedsCustomer({
+    const needsCustomer = !isEstimate && billNeedsCustomer({
       isUdharEntry: nextBillType === BillInputBillType.udhar_entry,
       creditAmount,
       isCreditMode: paymentMode === BillPaymentMode.credit,
@@ -617,11 +620,11 @@ export default function Billing() {
       customerNameInputRef.current?.focus();
       return false;
     }
-    if (!allowAdvancePayment && paymentMode !== SPLIT_PAYMENT && typeof paidAmount === "number" && paidAmount > grandTotal) {
+    if (!isEstimate && !allowAdvancePayment && paymentMode !== SPLIT_PAYMENT && typeof paidAmount === "number" && paidAmount > grandTotal) {
       toast({ title: "Paid amount is more than bill", description: "Tick 'extra is advance' only if you really want to accept advance.", variant: "destructive" });
       return false;
     }
-    if (paymentMode === SPLIT_PAYMENT && splitCash + splitUpi > grandTotal) {
+    if (!isEstimate && paymentMode === SPLIT_PAYMENT && splitCash + splitUpi > grandTotal) {
       toast({ title: "Split payment too high", description: "Cash + UPI cannot exceed bill total.", variant: "destructive" });
       return false;
     }

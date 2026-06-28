@@ -183,6 +183,46 @@ describe("front office local-first cashier flow", () => {
     seedFrontOffice();
   });
 
+  it("stores estimate bills as quote-only even if stale payment data is present", async () => {
+    const estimate = await createBillLocalFirst(billInput({
+      billType: BillInputBillType.estimate,
+      buyerPaidAmount: 200,
+      allowAdvancePayment: true,
+      advanceAmount: 200,
+      payments: [{ mode: BillPaymentMode.credit, amount: 200 }],
+    }));
+
+    expect(rows("bills")).toHaveLength(1);
+    expect(rows("bills")[0]).toEqual(expect.objectContaining({
+      id: estimate.id,
+      billType: BillInputBillType.estimate,
+      paidAmount: 0,
+      buyerPaidAmount: 0,
+      creditAmount: 0,
+    }));
+    expect(rows("bill_items")).toHaveLength(1);
+    expect(rows("payments")).toHaveLength(0);
+    expect(rows("customer_ledger")).toHaveLength(0);
+    expect(rows("inventory_movements")).toHaveLength(0);
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "CREATE_CUSTOMER")).toHaveLength(0);
+    expect(rows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL")).toEqual(expect.objectContaining({
+      entity_id: estimate.id,
+      payload: expect.objectContaining({
+        billType: BillInputBillType.estimate,
+        paidAmount: 0,
+        buyerPaidAmount: 0,
+        creditAmount: 0,
+        dueAmount: 0,
+        paymentStatus: "estimate",
+        payments: [],
+        tenderPayments: [],
+        creditPayments: [],
+        ledgerEntries: [],
+      }),
+    }));
+  });
+
   it("keeps bill credit, same-amount udhar payments, reversal, purchase, and outbox output consistent", async () => {
     const bill = await createBillLocalFirst(billInput());
 
