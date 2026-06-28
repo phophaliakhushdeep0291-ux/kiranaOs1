@@ -659,6 +659,8 @@ export default function BillsPage() {
     }
   }
 
+  const deletingEstimate = pinAction?.action === "delete" && isEstimateBill(pinAction.bill);
+
   return (
     <div className="app-docked-page space-y-4 bg-white p-4 font-sans sm:p-5 2xl:p-6">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -827,6 +829,16 @@ export default function BillsPage() {
                             <ActionIcon title="View bill" onClick={() => navigate(`/bills/${bill.id}`)}><Eye size={13} /></ActionIcon>
                             <ActionIcon title="Print bill" onClick={() => printBill(bill)}><Printer size={13} /></ActionIcon>
                             <ActionIcon title="Share bill" onClick={() => void shareOnWhatsapp(bill)}><Share2 size={13} /></ActionIcon>
+                            {estimate && !deleted && (
+                              <button
+                                type="button"
+                                title="Delete estimate"
+                                onClick={() => requestPinAction("delete", bill)}
+                                className="grid h-8 w-8 place-items-center rounded-[7px] border border-rose-200 bg-white text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-50"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[#405273] transition-colors hover:border-[#c7d8ef] hover:bg-[#f7faff]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={14} /></button>
@@ -889,10 +901,10 @@ export default function BillsPage() {
       <OwnerPinModal
         open={!!pinAction}
         onCancel={() => setPinAction(null)}
-        title={pinAction?.action === "clear_estimates" ? "Clear estimate bills" : pinAction?.action === "restore" ? "Restore bill" : pinAction?.action === "cancel" ? "Cancel bill" : "Move bill to recycle bin"}
-        description={pinAction?.action === "clear_estimates" ? `Owner PIN is required. ${pinAction.bills.length} estimate bill${pinAction.bills.length === 1 ? "" : "s"} will move to recycle bin and stay separate from sales data.` : "Owner PIN is required. Financial records are never hard deleted and this action is saved locally first."}
-        confirmLabel={pinAction?.action === "clear_estimates" ? "Clear estimates" : pinAction?.action === "restore" ? "Restore" : pinAction?.action === "cancel" ? "Cancel bill" : "Move to recycle bin"}
-        reasonRequired={pinAction?.action === "cancel" || pinAction?.action === "delete" || pinAction?.action === "clear_estimates"}
+        title={pinAction?.action === "clear_estimates" ? "Clear estimate bills" : pinAction?.action === "restore" ? "Restore bill" : pinAction?.action === "cancel" ? "Cancel bill" : deletingEstimate ? "Delete estimate" : "Move bill to recycle bin"}
+        description={pinAction?.action === "clear_estimates" ? `Owner PIN is required. ${pinAction.bills.length} estimate bill${pinAction.bills.length === 1 ? "" : "s"} will move to recycle bin and stay separate from sales data.` : deletingEstimate ? "Enter your owner PIN to delete this estimate. It moves to the recycle bin — no sales data is affected." : "Owner PIN is required. Financial records are never hard deleted and this action is saved locally first."}
+        confirmLabel={pinAction?.action === "clear_estimates" ? "Clear estimates" : pinAction?.action === "restore" ? "Restore" : pinAction?.action === "cancel" ? "Cancel bill" : deletingEstimate ? "Delete estimate" : "Move to recycle bin"}
+        reasonRequired={pinAction?.action === "cancel" || (pinAction?.action === "delete" && !deletingEstimate) || pinAction?.action === "clear_estimates"}
         loading={isSaving}
         onConfirm={({ ownerPin, reason }) => runPinAction(ownerPin, reason)}
       />
