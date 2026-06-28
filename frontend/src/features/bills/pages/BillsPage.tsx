@@ -834,9 +834,9 @@ export default function BillsPage() {
                                 type="button"
                                 title="Delete estimate"
                                 onClick={() => requestPinAction("delete", bill)}
-                                className="grid h-8 w-8 place-items-center rounded-[7px] border border-rose-200 bg-white text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-50"
+                                className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-[7px] border border-rose-200 bg-rose-50 px-2.5 text-[11px] font-bold text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-100"
                               >
-                                <Trash2 size={13} />
+                                <Trash2 size={13} /> Delete
                               </button>
                             )}
                             <DropdownMenu>
