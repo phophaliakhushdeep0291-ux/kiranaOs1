@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const billsPage = readFileSync("src/features/bills/pages/BillsPage.tsx", "utf8");
+const billingPage = readFileSync("src/features/billing/pages/BillingPage.tsx", "utf8");
 const billingSummary = readFileSync("src/features/billing/pages/components/BillingSummary.tsx", "utf8");
 const paymentPanel = readFileSync("src/features/billing/pages/components/BillingPaymentPanel.tsx", "utf8");
 
@@ -24,6 +25,11 @@ describe("estimate bill workflow separation", () => {
   it("labels estimate billing as a first-class bill type without payment collection", () => {
     expect(billingSummary).toContain('Estimate Bill');
     expect(billingSummary).toContain('Save Estimate Bill');
-    expect(paymentPanel).toContain('if (billType === BillInputBillType.estimate) return null;');
+    expect(billingSummary).toContain('data-testid="button-bill-type-pakka"');
+    expect(billingSummary).toContain('data-testid="button-bill-type-estimate"');
+    expect(paymentPanel).toContain('data-testid="estimate-payment-panel"');
+    expect(paymentPanel).toContain('No payment saved');
+    expect(billingPage).toContain('EST-${year}-LOCAL-');
+    expect(billingPage).toContain('if (getPrinterConfigSync().autoPrint)');
   });
 });

@@ -86,7 +86,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/billing": "Billing",
-  "/bills": "Bills History",
+  "/bills": "Billing History",
   "/products": "Products",
   "/categories": "Categories",
   "/inventory": "Inventory",
@@ -169,7 +169,7 @@ const NAV: NavItem[] = [
     kind: "group", id: "sales", label: "Sales", Icon: TrendingUp,
     triggerPaths: ["/bills"],
     children: [
-      { href: "/bills", label: "Bills History" },
+      { href: "/bills", label: "Billing History" },
       { href: "/reports", label: "Sales Overview" },
     ],
   },
@@ -194,7 +194,7 @@ const MOBILE_MENU: { href: string; label: string; Icon: React.ElementType }[] = 
   { href: "/inventory", label: "Inventory", Icon: Package },
   { href: "/customers", label: "Customers / Udhar", Icon: Users },
   { href: "/purchase-bills", label: "Purchases", Icon: Truck },
-  { href: "/bills", label: "Bills History", Icon: TrendingUp },
+  { href: "/bills", label: "Billing History", Icon: TrendingUp },
   { href: "/returns", label: "Returns", Icon: Undo2 },
   { href: "/reports", label: "Reports", Icon: BarChart3 },
   { href: "/expenses", label: "Expenses", Icon: Wallet },

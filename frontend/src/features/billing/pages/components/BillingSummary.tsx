@@ -238,6 +238,8 @@ export function BillingSummary({
           <div className="grid grid-cols-2 gap-2 rounded-[11px] border border-[#e5ebf4] bg-[#f8fbff] p-1.5" aria-label="Choose bill type">
             <button
               type="button"
+              data-testid="button-bill-type-pakka"
+              aria-pressed={!isEstimateBill}
               onClick={() => setBillType(BillInputBillType.normal_sale)}
               className={`flex min-h-[58px] items-center gap-2 rounded-[9px] border px-3 text-left transition-all ${
                 !isEstimateBill
@@ -255,6 +257,8 @@ export function BillingSummary({
             </button>
             <button
               type="button"
+              data-testid="button-bill-type-estimate"
+              aria-pressed={isEstimateBill}
               onClick={() => setBillType(BillInputBillType.estimate)}
               className={`flex min-h-[58px] items-center gap-2 rounded-[9px] border px-3 text-left transition-all ${
                 isEstimateBill
@@ -514,7 +518,7 @@ export function BillingSummary({
 
         {/* Secondary actions */}
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <SecBtn onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label="Estimate Bill" />
+          <SecBtn testId="button-save-as-estimate" onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label="Save Estimate" />
           <SecBtn onClick={onHoldBill} disabled={cart.length === 0} icon={<PauseCircle size={13} />} label="Hold" shortcut="F9" />
           <SecBtn onClick={onPrintBill} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Printer size={13} />} label="Print" />
           {/* Free for all plans: opens WhatsApp with a text receipt (wa.me deep link, no paid API). */}
@@ -554,12 +558,14 @@ export function BillingSummary({
 }
 
 function SecBtn({
+  testId,
   onClick,
   disabled,
   icon,
   label,
   shortcut,
 }: {
+  testId?: string;
   onClick?: () => void;
   disabled?: boolean;
   icon: React.ReactNode;
@@ -568,6 +574,7 @@ function SecBtn({
 }) {
   return (
     <button
+      data-testid={testId}
       onClick={onClick}
       disabled={disabled}
       className="flex flex-col items-center gap-1 rounded-[9px] border border-[#e2eaf5] bg-white py-2 text-xs font-bold text-[#13274d] transition-colors hover:bg-[#f7f9fd] disabled:pointer-events-none disabled:opacity-40"

@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
-import { ArrowLeftRight, Banknote, QrCode, UserRound } from "lucide-react";
+import { ArrowLeftRight, Banknote, FileText, QrCode, UserRound } from "lucide-react";
 
 interface BillingPaymentPanelProps {
   billType: BillTypeSelection;
@@ -51,7 +51,25 @@ export function BillingPaymentPanel({
   advanceAmount,
 }: BillingPaymentPanelProps) {
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
-  if (billType === BillInputBillType.estimate) return null;
+  if (billType === BillInputBillType.estimate) {
+    return (
+      <div className="space-y-3" data-testid="estimate-payment-panel">
+        <p className="text-[12px] font-extrabold text-[#13274d]">Payment Method</p>
+        <div className="flex h-[62px] items-center gap-3 rounded-[10px] border border-[#d8c7ff] bg-[#fbf8ff] px-3 text-[#6d3df0]">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#f1edff]">
+            <FileText size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12px] font-black">Estimate Bill</span>
+            <span className="block truncate text-[10px] font-semibold text-[#6b7895]">No payment saved</span>
+          </span>
+          <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-[#6d3df0] shadow-sm">
+            Quote
+          </span>
+        </div>
+      </div>
+    );
+  }
   const showPaymentMode = billType !== BillInputBillType.udhar_entry;
 
   return (
