@@ -5,11 +5,14 @@
  * hash and must survive the login round-trip. Kept in sessionStorage (per-tab, auto-clears).
  */
 const KEY = "kirana:post-login-redirect:v1";
+// A stash is meant only for the login that immediately follows the auth bounce. Expire it so a
+// stale target (bounced, didn't log in, came back much later) can't hijack a later normal login.
+const TTL_MS = 5 * 60_000;
 
 export function stashPostLoginRedirect(target: string): void {
   try {
     if (!target || target.startsWith("/login") || target.startsWith("/register")) return;
-    sessionStorage.setItem(KEY, target);
+    sessionStorage.setItem(KEY, JSON.stringify({ target, ts: Date.now() }));
   } catch {
     // sessionStorage can be unavailable (private mode); the deep link just won't be restored.
   }
@@ -17,9 +20,14 @@ export function stashPostLoginRedirect(target: string): void {
 
 export function consumePostLoginRedirect(): string | null {
   try {
-    const value = sessionStorage.getItem(KEY);
-    if (value) sessionStorage.removeItem(KEY);
-    return value;
+    const raw = sessionStorage.getItem(KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(KEY);
+    const parsed = JSON.parse(raw) as { target?: unknown; ts?: unknown };
+    const target = typeof parsed?.target === "string" ? parsed.target : null;
+    const ts = typeof parsed?.ts === "number" ? parsed.ts : 0;
+    if (!target || Date.now() - ts > TTL_MS) return null;
+    return target;
   } catch {
     return null;
   }
