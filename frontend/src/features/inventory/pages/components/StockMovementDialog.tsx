@@ -10,11 +10,8 @@ import { getListProductsQueryKey, useListProducts, type Product } from "@/lib/ap
 import { useToast } from "@/hooks/use-toast";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
 import { fromBaseQty, isDeletedProduct, productDisplayUnit } from "@/features/products/pages/product-pricing";
-import { useRecordDamage, useRecordPurchase, useRecordSale } from "@/features/inventory/queries";
+import { useRecordPurchase, useRecordSale } from "@/features/inventory/queries";
 
-// Stock-OUT reasons only — these all reduce stock. A customer "sale return" puts stock BACK,
-// so it intentionally lives in the dedicated Returns flow (/returns), not here, to avoid the
-// owner accidentally decrementing stock for a return.
 const OUT_REASONS = ["Counter stock out", "Expiry", "Damage", "Theft / Missing", "Other"];
 
 export function StockMovementDialog({ mode, open, onOpenChange, initialProductId, width, onResizeStart }: { mode: "in" | "out"; open: boolean; onOpenChange: (o: boolean) => void; initialProductId?: string; width: number; onResizeStart: (e: ReactMouseEvent) => void }) {
@@ -47,8 +44,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
 
   const recordPurchase = useRecordPurchase();
   const recordSale = useRecordSale();
-  const recordDamage = useRecordDamage();
-  const pending = recordPurchase.isPending || recordSale.isPending || recordDamage.isPending;
+  const pending = recordPurchase.isPending || recordSale.isPending;
 
   function reset() {
     setProductId(""); setSearch(""); setQty(""); setCost(""); setSupplier(""); setReason(OUT_REASONS[0]); setNote("");
@@ -64,6 +60,10 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
     if (!productId || !selected) { toast({ title: "Pick a product first", variant: "destructive" }); return; }
     const quantity = Number(qty);
     if (!quantity || quantity <= 0) { toast({ title: "Enter a valid quantity", variant: "destructive" }); return; }
+    if (mode === "in" && cost === "") {
+      toast({ title: "Enter purchase cost", description: "Stock in needs a cost so inventory value and cloud sync stay correct.", variant: "destructive" });
+      return;
+    }
     const enteredUnit = productDisplayUnit(selected);
     const onDone = (label: string) => {
       queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
@@ -77,10 +77,12 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
         { onSuccess: () => onDone(`Added ${quantity} ${enteredUnit} to ${selected.name}`), onError: (e) => toast({ title: "Could not add stock", description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
       );
     } else {
-      // "Counter stock out" is a sale (stock sold without a formal bill); the rest (Damage,
-      // Expiry, Theft) are losses, so they post as damage and record a loss value in reports.
-      const mutation = reason === "Counter stock out" ? recordSale : recordDamage;
-      mutation.mutate(
+      const available = Number(fromBaseQty(selected.stockBaseQty, enteredUnit));
+      if (quantity > available) {
+        toast({ title: "Stock out is more than available stock", description: `Available: ${currentStock(selected)}`, variant: "destructive" });
+        return;
+      }
+      recordSale.mutate(
         { data: { productId, quantity, enteredUnit, reason, note: note.trim() || undefined } },
         { onSuccess: () => onDone(`Removed ${quantity} ${enteredUnit} from ${selected.name}`), onError: (e) => toast({ title: "Could not remove stock", description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
       );

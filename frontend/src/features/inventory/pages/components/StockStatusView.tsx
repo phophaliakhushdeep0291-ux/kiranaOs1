@@ -45,10 +45,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   });
 
   const all = useMemo(() => (products.data ?? []).filter((p) => !isDeletedProduct(p)), [products.data]);
-  const scoped = useMemo(
-    () => all.filter((p) => (mode === "in" ? Number(p.stockBaseQty ?? 0) > 0 : Number(p.stockBaseQty ?? 0) <= 0)),
-    [all, mode],
-  );
+  const scoped = all;
 
   const suppliers = useMemo(() => [...new Set(scoped.map((p) => (p.brand ?? "").trim()).filter(Boolean))].sort(), [scoped]);
 
@@ -59,8 +56,9 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
         if (statusF === "all") return true;
         const low = isLowStock(p) && Number(p.stockBaseQty ?? 0) > 0;
         if (statusF === "low") return low;
-        if (statusF === "in") return !low;
-        return true; // "out" handled by scope
+        if (statusF === "in") return Number(p.stockBaseQty ?? 0) > 0 && !low;
+        if (statusF === "out") return Number(p.stockBaseQty ?? 0) <= 0;
+        return true;
       })
       .filter((p) => {
         if (extraF === "all") return true;
@@ -71,12 +69,14 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   }, [scoped, statusF, extraF, mode, debouncedSearch]);
 
   const stats = useMemo(() => {
-    const totalQty = scoped.reduce((s, p) => s + fromBaseQty(p.stockBaseQty, productDisplayUnit(p)), 0);
-    const totalValue = scoped.reduce((s, p) => s + fromBaseQty(p.stockBaseQty, productDisplayUnit(p)) * averageCost(p), 0);
-    const cats = new Set(scoped.map((p) => (p.category ?? "general").trim() || "general"));
+    const inStock = all.filter((p) => Number(p.stockBaseQty ?? 0) > 0);
+    const outOfStock = all.filter((p) => Number(p.stockBaseQty ?? 0) <= 0);
+    const totalQty = inStock.reduce((s, p) => s + fromBaseQty(p.stockBaseQty, productDisplayUnit(p)), 0);
+    const totalValue = inStock.reduce((s, p) => s + fromBaseQty(p.stockBaseQty, productDisplayUnit(p)) * averageCost(p), 0);
+    const cats = new Set(outOfStock.map((p) => (p.category ?? "general").trim() || "general"));
     const lowCount = all.filter((p) => isLowStock(p) && Number(p.stockBaseQty ?? 0) > 0).length;
-    return { count: scoped.length, totalQty: Math.round(totalQty), totalValue, cats: cats.size, lowCount };
-  }, [scoped, all]);
+    return { inStockCount: inStock.length, outOfStockCount: outOfStock.length, totalQty: Math.round(totalQty), totalValue, cats: cats.size, lowCount };
+  }, [all]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
   useEffect(() => { setPage(1); }, [debouncedSearch, statusF, extraF]);
@@ -93,13 +93,13 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
 
   const cards = mode === "in"
     ? [
-        { icon: <Boxes size={18} />, cls: "bg-blue-50 text-blue-600", label: "Items In Stock", value: stats.count.toLocaleString("en-IN"), sub: "Available to sell" },
+        { icon: <Boxes size={18} />, cls: "bg-blue-50 text-blue-600", label: "Items In Stock", value: stats.inStockCount.toLocaleString("en-IN"), sub: "Available to sell" },
         { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: "Total Quantity", value: stats.totalQty.toLocaleString("en-IN"), sub: "Units on hand" },
         { icon: <IndianRupee size={18} />, cls: "bg-emerald-50 text-emerald-600", label: "Stock Value", value: rs(stats.totalValue), sub: "At cost price" },
         { icon: <AlertTriangle size={18} />, cls: "bg-amber-50 text-amber-600", label: "Low Stock", value: stats.lowCount.toLocaleString("en-IN"), sub: "Needs attention" },
       ]
     : [
-        { icon: <PackageX size={18} />, cls: "bg-rose-50 text-rose-600", label: "Out of Stock", value: stats.count.toLocaleString("en-IN"), sub: "Unavailable" },
+        { icon: <PackageX size={18} />, cls: "bg-rose-50 text-rose-600", label: "Out of Stock", value: stats.outOfStockCount.toLocaleString("en-IN"), sub: "Unavailable" },
         { icon: <Layers size={18} />, cls: "bg-violet-50 text-violet-600", label: "Categories Affected", value: stats.cats.toLocaleString("en-IN"), sub: "Across catalogue" },
         { icon: <AlertTriangle size={18} />, cls: "bg-amber-50 text-amber-600", label: "Low Stock", value: stats.lowCount.toLocaleString("en-IN"), sub: "Running low" },
         { icon: <Boxes size={18} />, cls: "bg-blue-50 text-blue-600", label: "Total Products", value: all.length.toLocaleString("en-IN"), sub: "In catalogue" },

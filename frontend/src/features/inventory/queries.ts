@@ -4,7 +4,7 @@ import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache
 import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as inventoryApi from "@/features/inventory/api";
-import { recordDamageLocalFirst, recordPurchaseLocalFirst, stockCorrectionLocalFirst } from "@/features/inventory/local-actions";
+import { recordDamageLocalFirst, recordPurchaseLocalFirst, recordSaleLocalFirst, stockCorrectionLocalFirst } from "@/features/inventory/local-actions";
 import type { InventoryItem, LedgerResult, Product, QueryParams, StockMovementInput } from "@/types/api";
 
 const INVENTORY_CACHE_KEY = "inventory";
@@ -173,6 +173,13 @@ export function useRecordDamage(options?: MutationHookOptions<unknown, StockMove
   return useMutation<unknown, ApiClientError, StockMovementVariables>({
     ...getMutationOptions<unknown, StockMovementVariables>(options),
     mutationFn: ({ data }) => recordDamageLocalFirst(data),
+  });
+}
+
+export function useRecordSale(options?: MutationHookOptions<unknown, StockMovementVariables>) {
+  return useMutation<unknown, ApiClientError, StockMovementVariables>({
+    ...getMutationOptions<unknown, StockMovementVariables>(options),
+    mutationFn: ({ data }) => recordSaleLocalFirst(data),
   });
 }
 
