@@ -85,9 +85,7 @@ export function SyncAlertBanner() {
         <RefreshCw size={13} className={retrying ? "animate-spin" : ""} aria-hidden="true" />
         {retrying ? "Retrying…" : "Retry now"}
       </button>
-      <Link href="/sync-status">
-        <a className="inline-flex h-9 shrink-0 items-center rounded-lg px-2 text-[12px] font-bold underline-offset-2 hover:underline">View</a>
-      </Link>
+      <Link href="/sync-status" className="inline-flex h-9 shrink-0 items-center rounded-lg px-2 text-[12px] font-bold underline-offset-2 hover:underline">View</Link>
     </div>
   );
 }

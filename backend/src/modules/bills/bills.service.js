@@ -415,7 +415,7 @@ export async function confirmBill(shopId, body, actor = {}) {
 // ─────────────────────────────────────────────────────────────
 // CANCEL BILL — reverses everything
 // ─────────────────────────────────────────────────────────────
-export async function cancelBill(shopId, billId, { reason }) {
+export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = false }) {
   const bill = await db.bill.findFirst({
     where: { id: billId, shopId },
     include: { items: true, payments: true },
@@ -438,10 +438,10 @@ export async function cancelBill(shopId, billId, { reason }) {
     });
     if (claimed.count !== 1) {
       // Lost the race to a concurrent cancel (status changed active->cancelled between our
-      // read and this claim). The other request already reversed everything, so treat this
-      // as an idempotent no-op rather than a hard failure that would stick in sync CONFLICT.
+      // read and this claim). Direct API callers should see a 409; sync replay can opt into
+      // idempotent convergence so a lost ack does not stick as a permanent conflict.
       const current = await tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
-      if (current && current.status === "cancelled") return current;
+      if (idempotentRaceOk && current && current.status === "cancelled") return current;
       const err = new AppError("Bill is already cancelled or not active", 409);
       err.code = "BILL_NOT_CANCELLABLE";
       throw err;

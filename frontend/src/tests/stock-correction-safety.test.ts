@@ -71,7 +71,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { offlineDB } from "@/lib/offline/db";
 import { upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { recordDamageLocalFirst, recordPurchaseLocalFirst, stockCorrectionLocalFirst } from "@/features/inventory/local-actions";
+import { recordDamageLocalFirst, recordPurchaseLocalFirst, recordSaleLocalFirst, stockCorrectionLocalFirst } from "@/features/inventory/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedUpsertCachedListItem = vi.mocked(upsertCachedListItem);
@@ -119,6 +119,8 @@ describe("stock adjustment transaction safety", () => {
         quantity_delta: 5,
         stock_before: 10,
         stock_after: 15,
+        billAmount: 250,
+        bill_amount: 250,
         invoiceNumber: "PUR-100",
         invoice_number: "PUR-100",
         purchaseBillNo: "PUR-100",
@@ -128,8 +130,21 @@ describe("stock adjustment transaction safety", () => {
       }),
     ]));
     expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ operation_type: "STOCK_PURCHASE", entity_type: "inventory_movement", entity_id: "stock_purchase_1" }),
+      expect.objectContaining({
+        operation_type: "STOCK_PURCHASE",
+        entity_type: "inventory_movement",
+        entity_id: "stock_purchase_1",
+        payload: expect.objectContaining({ billAmount: 250 }),
+      }),
     ]));
+  });
+
+  it("rejects stock purchase without cost or bill amount before local stock changes", async () => {
+    await expect(recordPurchaseLocalFirst({ productId: "product_1", quantity: 5, unit: "kg" })).rejects.toThrow(/purchase cost or bill amount/i);
+
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 10 }));
+    expect(tableRows("inventory_movements")).toHaveLength(0);
+    expect(tableRows("sync_outbox")).toHaveLength(0);
   });
 
   it("purchase updates weighted average cost", async () => {
@@ -156,6 +171,24 @@ describe("stock adjustment transaction safety", () => {
     ]));
     expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
       expect.objectContaining({ operation_type: "STOCK_DAMAGE", entity_type: "inventory_movement" }),
+    ]));
+  });
+
+  it("manual stock out records a STOCK_SALE event without using the owner-gated damage path", async () => {
+    const result = await recordSaleLocalFirst({ productId: "product_1", quantity: 3, unit: "kg", reason: "Counter stock out" });
+
+    expect(result.success).toBe(true);
+    expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 7 }));
+    expect(tableRows("inventory_movements")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "stock_sale_1", type: "sale", action: "sale", quantity_delta: -3, stock_before: 10, stock_after: 7 }),
+    ]));
+    expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        operation_type: "STOCK_SALE",
+        entity_type: "inventory_movement",
+        entity_id: "stock_sale_1",
+        payload: expect.objectContaining({ movementType: "sale", quantityDelta: -3 }),
+      }),
     ]));
   });
 

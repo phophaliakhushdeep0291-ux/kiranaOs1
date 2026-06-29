@@ -106,6 +106,26 @@ function buildUpdatedProduct(
   } as InventoryItem;
 }
 
+function derivePurchaseBillAmount(input: {
+  data: StockMovementInput;
+  product?: Product;
+  baseDelta: number;
+  enteredUnit: string;
+}) {
+  const explicitBillAmount = readNumber(input.data.billAmount, 0);
+  if (explicitBillAmount > 0) return explicitBillAmount;
+
+  const unitCost = readNumber(input.data.costPerRateUnit, 0);
+  if (unitCost <= 0) return 0;
+
+  const rateUnit = input.product?.rateUnit ?? input.product?.displayUnit ?? input.product?.unit ?? input.enteredUnit;
+  const qtyInRateUnit = Math.max(
+    fromInventoryBaseQty(Math.abs(input.baseDelta), input.product?.baseUnit ?? input.enteredUnit, rateUnit),
+    0,
+  );
+  return roundMoney(unitCost * qtyInRateUnit);
+}
+
 async function stockMovementLocalFirst(data: StockMovementInput, movementType: StockMovementType) {
   const productId = typeof data.productId === "string" ? data.productId : "";
   const quantity = readNumber(data.quantity ?? data.quantityDelta, 0);
@@ -133,11 +153,17 @@ async function stockMovementLocalFirst(data: StockMovementInput, movementType: S
   const validatedReason = typeof validated.reason === "string" ? validated.reason : undefined;
   const validatedOwnerPin = typeof validated.ownerPin === "string" ? validated.ownerPin : undefined;
   const previousStock = readNumber(product?.stockBaseQty, 0);
+  const purchaseBillAmount = movementType === "purchase"
+    ? derivePurchaseBillAmount({ data, product, baseDelta: validated.quantityDelta, enteredUnit })
+    : readNumber(data.billAmount, 0) || undefined;
   const productUnit = product?.unit ?? product?.displayUnit ?? product?.rateUnit ?? product?.baseUnit;
   const unitMismatchWarning = buildUnitMismatchWarning(enteredUnit, productUnit);
   const nextStock = roundMoney(previousStock + validated.quantityDelta);
   assertStockMovementRules({ movementType, reason: validatedReason, ownerPin: validatedOwnerPin, product, productId, nextStock, data });
   if (!product) throw new Error("Product not found in local records");
+  if (movementType === "purchase" && (!purchaseBillAmount || purchaseBillAmount <= 0)) {
+    throw new Error("Enter purchase cost or bill amount before adding stock.");
+  }
 
   const movementId = createLocalId(`stock_${movementType}`);
   const now = new Date().toISOString();
@@ -168,8 +194,8 @@ async function stockMovementLocalFirst(data: StockMovementInput, movementType: S
     unit: enteredUnit,
     invoiceNumber: purchaseInvoiceNumber,
     invoice_number: purchaseInvoiceNumber,
-    billAmount: data.billAmount,
-    bill_amount: data.billAmount,
+    billAmount: purchaseBillAmount,
+    bill_amount: purchaseBillAmount,
     purchaseBillNo: purchaseInvoiceNumber,
     purchase_bill_no: purchaseInvoiceNumber,
     supplierBillNo: purchaseInvoiceNumber,
@@ -226,6 +252,7 @@ async function stockMovementLocalFirst(data: StockMovementInput, movementType: S
       nextStock,
       ...data,
       quantityDelta: validated.quantityDelta,
+      billAmount: purchaseBillAmount,
       ownerPin: validatedOwnerPin,
       reason: data.reason ?? data.note,
       ownerPinProvided: Boolean(validatedOwnerPin),

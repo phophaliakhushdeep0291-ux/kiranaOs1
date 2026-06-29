@@ -200,6 +200,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
   const cashierName = safeText(snapshot.shop?.cashierName);
   const footerNote = safeText(snapshot.footerNote, "Thank you for shopping with us.");
   const cancelled = safeText(snapshot.status).toLowerCase() === "cancelled";
+  const isEstimate = safeText(snapshot.billTypeLabel).trim().toLowerCase() === "estimate";
 
   const innerHtml = `<header class="shop">
           <div class="shop-name">${escapeHtml(shopName)}</div>
@@ -210,6 +211,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
           <span class="badge">${escapeHtml(copyLabel)}</span>
         </div>
         ${cancelled ? `<div class="cancelled">Cancelled bill</div>` : ""}
+        ${isEstimate ? `<div class="estimate-banner">Estimate &mdash; not a final bill</div>` : ""}
         <section class="meta-grid">
           <div><span>Bill no</span><strong>${escapeHtml(safeText(snapshot.billNo, "Pending"))}</strong></div>
           <div><span>Date</span><strong>${escapeHtml(dateTime || "-")}</strong></div>
@@ -313,6 +315,16 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
       border: 1px solid #991b1b;
       background: #fef2f2;
       color: #991b1b;
+      padding: 7px;
+      text-align: center;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .estimate-banner {
+      margin-top: 10px;
+      border: 1px solid #6d3df0;
+      background: #f5f0ff;
+      color: #5b21b6;
       padding: 7px;
       text-align: center;
       font-weight: 900;
