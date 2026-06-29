@@ -791,7 +791,7 @@ async function applyCancelBill(shopId, event, context) {
   const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
   if (!billId) throw new AppError("billId required for CANCEL_BILL sync event", 400);
 
-  const bill = await cancelBill(shopId, billId, { reason: payload.reason });
+  const bill = await cancelBill(shopId, billId, { reason: payload.reason, idempotentRaceOk: true });
   return {
     type: event.type,
     billId: bill.id,
