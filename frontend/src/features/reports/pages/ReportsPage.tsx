@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -61,7 +61,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseSummary } from "@/types/api";
 
-const PANEL = "overflow-hidden rounded-[8px] border border-[#e2e9f3] bg-white shadow-[0_4px_18px_rgba(31,60,110,0.045)]";
+const PANEL = "min-w-0 overflow-hidden rounded-[8px] border border-[#e2e9f3] bg-white shadow-[0_4px_18px_rgba(31,60,110,0.045)]";
 const GRID_STROKE = "#e7edf5";
 const AXIS_COLOR = "#6f7f9b";
 
@@ -172,6 +172,9 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState<ReportPeriod>("week");
   const [snapshot, setSnapshot] = useState<LocalReportSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
+  const snapshotRef = useRef<LocalReportSnapshot | null>(null);
+  const loadRequestId = useRef(0);
+  const refreshTimer = useRef<number | null>(null);
   const [exportPinOpen, setExportPinOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -206,25 +209,50 @@ export default function ReportsPage() {
     setTo(nextRange.to);
   };
 
-  const loadReports = async () => {
-    setLoading(true);
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
+
+  const loadReports = useCallback(async (options?: { showLoader?: boolean }) => {
+    const requestId = ++loadRequestId.current;
+    const showLoader = options?.showLoader ?? !snapshotRef.current;
+    if (showLoader) setLoading(true);
     try {
-      setSnapshot(await buildLocalReportSnapshot(range));
+      const nextSnapshot = await buildLocalReportSnapshot({ from: range.from, to: range.to });
+      if (requestId === loadRequestId.current) {
+        setSnapshot(nextSnapshot);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current && showLoader) {
+        setLoading(false);
+      }
     }
-  };
+  }, [range.from, range.to]);
 
   useEffect(() => {
-    void loadReports();
-    const refresh = () => void loadReports();
+    void loadReports({ showLoader: true });
+  }, [loadReports]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (refreshTimer.current) {
+        window.clearTimeout(refreshTimer.current);
+      }
+      refreshTimer.current = window.setTimeout(() => {
+        void loadReports({ showLoader: false });
+      }, 150);
+    };
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
     return () => {
+      if (refreshTimer.current) {
+        window.clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+      }
       window.removeEventListener("kirana:local-data-changed", refresh);
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
-  }, [range.from, range.to]);
+  }, [loadReports]);
 
   const selected = snapshot?.selected;
   const previous = snapshot?.previousSelected;
@@ -382,8 +410,8 @@ export default function ReportsPage() {
   ];
 
   return (
-    <PageShell className="min-h-full space-y-3 !bg-[#ffffff] pb-8 text-[#10224a] sm:space-y-3.5 2xl:pt-0">
-      <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between 2xl:fixed 2xl:right-[276px] 2xl:top-[18px] 2xl:z-[60] 2xl:flex-row 2xl:gap-3">
+    <PageShell className="mx-auto min-h-full w-full max-w-[1800px] space-y-3 !bg-[#ffffff] pb-8 text-[#10224a] sm:space-y-3.5">
+      <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2 text-[11px] text-[#6c7c98]">
           {snapshot?.hasUnsyncedOperations ? (
             <SyncBadge status="estimate" label={`${snapshot.pendingSyncCount + snapshot.failedSyncCount} changes awaiting sync`} />
@@ -416,17 +444,17 @@ export default function ReportsPage() {
             </PopoverContent>
           </Popover>
           <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-9 rounded-[7px] bg-[#075fff] px-4 text-[12px] font-bold shadow-[0_7px_16px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Download size={14} className="mr-2" />Export</Button>
-          <Button variant="ghost" size="icon" title="Refresh reports" onClick={loadReports} disabled={loading} className="h-9 w-9 rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
+          <Button variant="ghost" size="icon" title="Refresh reports" onClick={() => void loadReports({ showLoader: true })} disabled={loading} className="h-9 w-9 rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7">
+      <section className="grid grid-cols-[repeat(auto-fit,minmax(158px,1fr))] gap-2">
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} loading={loading || (kpi.label.includes("Expense") && expenseSummary.isLoading)} />
         ))}
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-[1.04fr_1.12fr_1.18fr]">
+      <section className="grid items-stretch gap-3 xl:grid-cols-3 2xl:grid-cols-[1.05fr_1.05fr_1.12fr]">
         <Panel title="Sales Trend" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="flex items-baseline gap-4 px-3.5 pt-1 text-[11px]">
             <span className="text-[#60708e]">Total Sales</span>
@@ -464,7 +492,7 @@ export default function ReportsPage() {
 
         <Panel title="Payment Mode Breakdown" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           {loading ? <Skeleton className="m-4 h-[178px]" /> : paymentModes.length === 0 ? <EmptyChart /> : (
-            <div className="grid min-h-[208px] grid-cols-[minmax(150px,0.85fr)_1.15fr] items-center gap-3 px-3 pb-2">
+            <div className="grid min-h-[208px] items-center gap-3 px-3 pb-2 sm:grid-cols-[minmax(150px,0.85fr)_minmax(0,1.15fr)]">
               <div className="relative mx-auto h-[162px] w-[162px]">
                 <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={paymentModes} dataKey="value" nameKey="name" innerRadius={51} outerRadius={76} paddingAngle={1} stroke="#fff" strokeWidth={2}>{paymentModes.map((mode) => <Cell key={mode.name} fill={mode.color} />)}</Pie><Tooltip content={<MoneyTooltip />} /></PieChart></ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 grid place-items-center text-center"><div><strong className="block text-[15px] text-[#13244a]">{fmt(paymentTotal)}</strong><span className="text-[10px] text-[#7886a0]">Total Collection</span></div></div>
@@ -477,7 +505,7 @@ export default function ReportsPage() {
         </Panel>
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-3">
+      <section className="grid items-start gap-3 xl:grid-cols-3">
         <DenseTable title="Top Products" action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
           {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{row.category}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
           {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>{snapshot.topProducts.reduce((sum, row) => sum + row.quantitySold, 0)}</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
@@ -493,7 +521,7 @@ export default function ReportsPage() {
         </DenseTable>
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-[0.86fr_1.1fr_1.04fr]">
+      <section className="grid items-start gap-3 xl:grid-cols-3 2xl:grid-cols-[0.9fr_1.1fr_1fr]">
         <Panel title="Stock Movement Snapshot" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="grid grid-cols-2 divide-x divide-y divide-[#e8edf5] px-3 pb-3">
             <StockStat icon={<PackagePlus size={15} />} label="Total Stock In" value={fmt(snapshot?.stockMovement.totalIn)} deltaValue="Value received" tone="blue" />
@@ -528,11 +556,11 @@ function KpiCard({ label, value, previous, icon, iconClass, color, spark, positi
   const favorable = positiveIsBad ? change <= 0 : change >= 0;
   const points = spark.length > 1 ? spark.map((item, index) => ({ index, value: item })) : [{ index: 0, value: 0 }, { index: 1, value: value ?? 0 }];
   const gradientId = `report-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-  return <article className={cn(PANEL, "min-h-[126px] p-3")}>
+  return <article className={cn(PANEL, "h-full min-h-[126px] p-3")}>
     {loading ? <Skeleton className="h-full min-h-[98px]" /> : <>
-      <div className="flex items-center gap-2"><span className={cn("grid h-8 w-8 place-items-center rounded-[7px]", iconClass)}>{icon}</span><p className="min-w-0 text-[10.5px] font-semibold leading-tight text-[#34486e]">{label}</p></div>
+      <div className="flex min-w-0 items-center gap-2"><span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[7px]", iconClass)}>{icon}</span><p className="min-w-0 truncate text-[10.5px] font-semibold leading-tight text-[#34486e]">{label}</p></div>
       <p className="mt-2 whitespace-nowrap text-[20px] font-black leading-none text-[#101f40]">{fmt(value)}</p>
-      <div className="mt-2 flex items-center gap-1 text-[9.5px]"><span className={cn("inline-flex items-center gap-0.5 font-bold", favorable ? "text-[#10a948]" : "text-[#ff334d]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span><span className="text-[#7a879f]">vs last period</span></div>
+      <div className="mt-2 flex min-w-0 items-center gap-1 text-[9.5px]"><span className={cn("inline-flex shrink-0 items-center gap-0.5 font-bold", favorable ? "text-[#10a948]" : "text-[#ff334d]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span><span className="truncate text-[#7a879f]">vs last period</span></div>
       <div className="mt-1 h-[24px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={points} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}><defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.28} /><stop offset="70%" stopColor={color} stopOpacity={0.08} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs><Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.7} fill={`url(#${gradientId})`} dot={{ r: 1.5, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>
     </>}
   </article>;
@@ -540,7 +568,7 @@ function KpiCard({ label, value, previous, icon, iconClass, color, spark, positi
 
 function Panel({ title, subtitle, info, action, children }: { title: string; subtitle?: string; info?: boolean; action?: ReactNode; children: ReactNode }) {
   return <article className={PANEL}>
-    <header className="flex h-10 items-center justify-between gap-2 px-3.5"><div className="flex items-center gap-1.5"><h2 className="text-[12px] font-extrabold text-[#13254a]">{title}</h2>{subtitle ? <span className="text-[9px] text-[#72809a]">{subtitle}</span> : null}{info ? <Info size={11} className="text-[#7e8ca4]" /> : null}</div>{action}</header>
+    <header className="flex h-10 min-w-0 items-center justify-between gap-2 px-3.5"><div className="flex min-w-0 items-center gap-1.5"><h2 className="truncate text-[12px] font-extrabold text-[#13254a]">{title}</h2>{subtitle ? <span className="shrink-0 text-[9px] text-[#72809a]">{subtitle}</span> : null}{info ? <Info size={11} className="shrink-0 text-[#7e8ca4]" /> : null}</div><div className="shrink-0">{action}</div></header>
     {children}
   </article>;
 }
@@ -565,7 +593,7 @@ function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (perio
 }
 
 function ChartFrame({ loading, empty, children }: { loading: boolean; empty: boolean; children: ReactNode }) {
-  return <div className="h-[166px] px-2 pb-2">{loading ? <Skeleton className="h-full" /> : empty ? <EmptyChart /> : children}</div>;
+  return <div className="h-[166px] px-2 pb-2 2xl:h-[186px]">{loading ? <Skeleton className="h-full" /> : empty ? <EmptyChart /> : children}</div>;
 }
 
 function EmptyChart() {
@@ -583,7 +611,7 @@ function TrendLabel({ current, previous }: { current: number; previous: number }
 }
 
 function DenseTable({ title, action, actionHref, headers, loading, empty, children }: { title: string; action: string; actionHref: string; headers: string[]; loading: boolean; empty: boolean; children: ReactNode }) {
-  return <article className={PANEL}><header className="flex h-9 items-center justify-between px-3.5"><h2 className="text-[12px] font-extrabold text-[#13254a]">{title}</h2><Link href={actionHref} className="text-[10px] font-bold text-[#075fff] hover:underline">{action}</Link></header>{loading ? <Skeleton className="m-3 h-32" /> : empty ? <div className="grid h-32 place-items-center text-[11px] text-[#8290a8]">No records in this period</div> : <div className="overflow-x-auto px-2 pb-1.5"><table className="w-full min-w-[430px] border-collapse text-[9px]"><thead><tr className="bg-[#f5f7fb]">{headers.map((header, index) => <th key={header} className={cn("border-y border-[#e5ebf3] px-2 py-1 font-bold text-[#52617c]", index ? "text-right" : "text-left")}>{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{children}</tbody></table></div>}</article>;
+  return <article className={cn(PANEL, "h-full")}><header className="flex h-9 min-w-0 items-center justify-between gap-2 px-3.5"><h2 className="truncate text-[12px] font-extrabold text-[#13254a]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[#075fff] hover:underline">{action}</Link></header>{loading ? <Skeleton className="m-3 h-32" /> : empty ? <div className="grid h-32 place-items-center text-[11px] text-[#8290a8]">No records in this period</div> : <div className="overflow-x-auto px-2 pb-1.5"><table className="w-full min-w-[430px] border-collapse text-[9px]"><thead><tr className="bg-[#f5f7fb]">{headers.map((header, index) => <th key={header} className={cn("border-y border-[#e5ebf3] px-2 py-1 font-bold text-[#52617c]", index ? "text-right" : "text-left")}>{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{children}</tbody></table></div>}</article>;
 }
 
 function Td({ children, right, strong }: { children?: ReactNode; right?: boolean; strong?: boolean }) {

@@ -1291,6 +1291,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
   const realTotal = rows.reduce((sum, row) => sum + row.value, 0);
   const displayTotal = total > 0 ? total : realTotal;
   const chartRows = rows.length > 0 ? rows : [{ label: "No sales", value: 1, color: "#e5e7eb", dot: "bg-muted" }];
+  const chartAnimationKey = chartRows.map((row) => `${row.label}:${row.value}`).join("|");
 
   return (
     <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col p-4 xl:min-h-0 2xl:p-5")}>
@@ -1302,6 +1303,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
+              key={chartAnimationKey}
               data={chartRows}
               dataKey="value"
               nameKey="label"
@@ -1310,6 +1312,10 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
               paddingAngle={3}
               stroke="hsl(var(--card))"
               strokeWidth={3}
+              isAnimationActive
+              animationBegin={80}
+              animationDuration={850}
+              animationEasing="ease-out"
             >
               {chartRows.map((entry) => (
                 <Cell key={entry.label} fill={entry.color} />
