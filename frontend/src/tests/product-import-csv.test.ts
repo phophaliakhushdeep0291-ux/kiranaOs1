@@ -35,12 +35,13 @@ describe("parseProductsCsv", () => {
     expect(row.input?.unit).toBe("kg");
   });
 
-  it("flags a row missing SKU/Barcode (required)", () => {
+  it("accepts a row missing SKU/Barcode", () => {
     const csv = `${HEADER}\nNoCode Item,Grocery,piece,,10,8,10,0,5,,,,,,\n`;
     const res = parseProductsCsv(csv);
-    expect(res.validCount).toBe(0);
-    expect(res.rows[0].valid).toBe(false);
-    expect(res.rows[0].errors.join(" ")).toMatch(/SKU|Barcode/i);
+    expect(res.validCount).toBe(1);
+    expect(res.errorCount).toBe(0);
+    expect(res.rows[0].valid).toBe(true);
+    expect(res.rows[0].input?.barcode).toBeUndefined();
   });
 
   it("flags a non-numeric price", () => {

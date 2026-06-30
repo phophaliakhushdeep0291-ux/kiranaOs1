@@ -27,11 +27,6 @@ export const productFormSchema = z.object({
   imageUrl: z.string().optional(),
   isLooseItem: z.boolean().default(false),
   isActive: z.boolean().default(true),
-}).superRefine((val, ctx) => {
-  // SKU/Barcode is required for packaged products (it's hidden for loose items).
-  if (!val.isLooseItem && !val.barcode?.trim()) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["barcode"], message: "SKU / Barcode is required" });
-  }
 });
 
 export type ProductFormData = z.infer<typeof productFormSchema>;

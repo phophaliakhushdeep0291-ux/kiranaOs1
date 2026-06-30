@@ -187,20 +187,46 @@ const MOBILE_NAV: { href: string; label: string; Icon: React.ElementType }[] = [
   { href: "/billing", label: "Billing", Icon: ShoppingCart },
   { href: "/inventory", label: "Inventory", Icon: Package },
   { href: "/customers", label: "Customers", Icon: Users },
-  { href: "/settings", label: "More", Icon: Settings },
 ];
 
-const MOBILE_MENU: { href: string; label: string; Icon: React.ElementType }[] = [
+interface MobileMenuItem {
+  href: string;
+  label: string;
+  Icon: React.ElementType;
+  children?: SubItem[];
+}
+
+const MOBILE_MENU: MobileMenuItem[] = [
   { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
   { href: "/billing", label: "Billing", Icon: ShoppingCart },
-  { href: "/inventory", label: "Inventory", Icon: Package },
+  {
+    href: "/inventory",
+    label: "Inventory",
+    Icon: Package,
+    children: [
+      { href: "/products", label: "Products" },
+      { href: "/categories", label: "Categories" },
+      { href: "/inventory/stock-in", label: "Stock In" },
+      { href: "/inventory/stock-out", label: "Stock Out" },
+      { href: "/inventory/adjustments", label: "Adjustments" },
+      { href: "/inventory/stock-transfers", label: "Stock Transfers" },
+    ],
+  },
   { href: "/customers", label: "Customers / Udhar", Icon: Users },
   { href: "/purchase-bills", label: "Purchases", Icon: Truck },
-  { href: "/bills", label: "Billing History", Icon: TrendingUp },
-  { href: "/sales-overview", label: "Sales Overview", Icon: TrendingUp },
+  {
+    href: "/bills",
+    label: "Sales",
+    Icon: TrendingUp,
+    children: [
+      { href: "/bills", label: "Billing History" },
+      { href: "/sales-overview", label: "Sales Overview" },
+    ],
+  },
   { href: "/returns", label: "Returns", Icon: Undo2 },
   { href: "/reports", label: "Reports", Icon: BarChart3 },
   { href: "/expenses", label: "Expenses", Icon: Wallet },
+  { href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
   { href: "/settings", label: "Settings", Icon: Settings },
 ];
 
@@ -552,14 +578,8 @@ export function Layout({ children }: { children: ReactNode }) {
                     <Menu size={22} aria-hidden="true" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-60 p-2">
-                  {MOBILE_MENU.map(({ href, label, Icon }) => (
-                    <DropdownMenuItem key={href} asChild>
-                      <Link href={href} className="flex cursor-pointer items-center gap-3 rounded-[8px] px-3 py-2.5 font-semibold">
-                        <Icon size={16} aria-hidden="true" /> {label}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
+                <DropdownMenuContent align="start" className="max-h-[calc(100vh-96px)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto p-2">
+                  <MobileMenuList loc={loc} />
                 </DropdownMenuContent>
               </DropdownMenu>
               <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -622,6 +642,19 @@ export function Layout({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button type="button" aria-label="Open more navigation" className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors", "text-muted-foreground")}>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl transition-colors">
+                    <Settings size={20} aria-hidden="true" />
+                  </div>
+                  More
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="end" className="mb-2 max-h-[calc(100vh-120px)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto p-2">
+                <MobileMenuList loc={loc} />
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </nav>
       </div>
@@ -633,6 +666,54 @@ export function Layout({ children }: { children: ReactNode }) {
 }
 
 // ── Sidebar nav components ────────────────────────────────────────────────────
+
+function MobileMenuList({ loc }: { loc: string }) {
+  return (
+    <>
+      {MOBILE_MENU.map(({ href, label, Icon, children }) => {
+        const childActive = children?.some((child) => isActive(loc, child.href)) ?? false;
+        const active = isActive(loc, href) || childActive;
+        return (
+          <div key={href} className="py-0.5">
+            <DropdownMenuItem asChild>
+              <Link
+                href={href}
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-black text-[#102347]",
+                  active && "bg-[#eef4ff] text-[#075fff]",
+                )}
+              >
+                <Icon size={16} aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+              </Link>
+            </DropdownMenuItem>
+            {children?.length ? (
+              <div className="mb-1 ml-7 mt-1 grid gap-1 border-l border-[#dbe6f5] pl-2">
+                {children.map((child) => {
+                  const subActive = isActive(loc, child.href);
+                  return (
+                    <DropdownMenuItem key={child.href} asChild>
+                      <Link
+                        href={child.href}
+                        className={cn(
+                          "flex cursor-pointer items-center rounded-[7px] px-2.5 py-2 text-[12px] font-bold text-[#53627d]",
+                          subActive && "bg-[#f5f8ff] text-[#075fff]",
+                        )}
+                      >
+                        {child.label}
+                      </Link>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </div>
+            ) : null}
+            {children?.length ? <DropdownMenuSeparator className="my-1" /> : null}
+          </div>
+        );
+      })}
+    </>
+  );
+}
 
 function SidebarLink({ item, loc, collapsed, labelOverride }: {
   item: LinkItem; loc: string; collapsed: boolean; labelOverride?: string;

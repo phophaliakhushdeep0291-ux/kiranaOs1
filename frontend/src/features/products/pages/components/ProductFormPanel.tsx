@@ -213,9 +213,9 @@ export function ProductFormPanel({
               UnitField
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="SKU / Barcode" required error={err.barcode?.message}>
+                <Field label="SKU / Barcode (Optional)" error={err.barcode?.message}>
                   <div className="relative">
-                    <Input className="h-10 pr-9" placeholder="Scan or type" {...form.register("barcode")} />
+                    <Input className="h-10 pr-9" placeholder="Scan or type if available" {...form.register("barcode")} />
                     <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
                   </div>
                 </Field>

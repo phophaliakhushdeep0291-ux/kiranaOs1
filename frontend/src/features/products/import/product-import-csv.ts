@@ -17,7 +17,7 @@ export const PRODUCT_IMPORT_COLUMNS: ImportColumn[] = [
   { header: "Name", field: "name", example: "Tata Salt 1kg", required: true },
   { header: "Category", field: "category", example: "Grocery" },
   { header: "Unit", field: "unit", example: "piece" },
-  { header: "SKU/Barcode", field: "skuBarcode", example: "8901234567890", required: true },
+  { header: "SKU/Barcode", field: "skuBarcode", example: "8901234567890" },
   { header: "MRP", field: "mrp", example: "28" },
   { header: "Cost Price", field: "costPrice", example: "22", required: true },
   { header: "Selling Price", field: "sellingPrice", example: "26", required: true },
@@ -132,8 +132,8 @@ export function parseProductsCsv(text: string): ParseProductsResult {
     const idx = headerCells.indexOf(col.header.toLowerCase());
     if (idx >= 0) colIndex[col.field as string] = idx;
   }
-  if (colIndex.name === undefined || colIndex.skuBarcode === undefined) {
-    return { rows: [], validCount: 0, errorCount: 0, headerError: "Missing required columns. Use the downloaded template (Name and SKU/Barcode are required)." };
+  if (colIndex.name === undefined) {
+    return { rows: [], validCount: 0, errorCount: 0, headerError: "Missing required columns. Use the downloaded template (Name is required)." };
   }
 
   const rows: ParsedProductRow[] = [];
