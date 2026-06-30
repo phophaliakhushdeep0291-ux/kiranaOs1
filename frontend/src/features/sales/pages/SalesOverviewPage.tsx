@@ -267,6 +267,8 @@ export default function SalesOverviewPage() {
   const [to, setTo] = useState(toDateInputValue(new Date()));
   const [data, setData] = useState<SalesData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
 
   useEffect(() => {
@@ -296,6 +298,8 @@ export default function SalesOverviewPage() {
     setPeriod(nextPeriod);
     setFrom(nextRange.from);
     setTo(nextRange.to);
+    setDateOpen(false);
+    setFiltersOpen(false);
   };
 
   const snapshot = data?.snapshot ?? null;
@@ -418,7 +422,7 @@ export default function SalesOverviewPage() {
           <span className="text-[#7b879b]">Just now</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Popover>
+          <Popover open={dateOpen} onOpenChange={setDateOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="h-9 min-w-[230px] justify-between rounded-[7px] border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f]">
                 <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[#075fff]" />{rangeLabel(range)}</span>
@@ -432,7 +436,7 @@ export default function SalesOverviewPage() {
               </div>
             </PopoverContent>
           </Popover>
-          <Popover>
+          <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-bold"><Filter size={14} className="mr-2" />Filters</Button>
             </PopoverTrigger>
@@ -564,7 +568,7 @@ function MetricCard({ label, value, current, previous, icon, iconClass, color, s
     <article className={cn(PANEL, "h-full min-h-[142px] p-4")}>
       {loading ? <Skeleton className="h-full min-h-[112px]" /> : (
         <>
-          <div className="flex min-w-0 items-center gap-3"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[9px]", iconClass)}>{icon}</span><p className="truncate text-[11px] font-bold text-[#34486e]">{label}</p></div>
+          <div className="flex min-w-0 items-center gap-3"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[9px]", iconClass)}>{icon}</span><p className="min-w-0 text-[11px] font-bold leading-snug text-[#34486e]">{label}</p></div>
           <p className="mt-3 text-[22px] font-black leading-none text-[#101f40]">{value}</p>
           <div className="mt-2 flex items-center gap-1 text-[10px]">
             <span className={cn("inline-flex items-center gap-0.5 font-black", change === 0 ? "text-[#64748b]" : bad ? "text-[#ff314f]" : "text-[#10a948]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span>
