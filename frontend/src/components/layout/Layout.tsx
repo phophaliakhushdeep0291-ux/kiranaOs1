@@ -72,6 +72,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/inventory/adjustments": "Adjust inventory quantities and review corrections",
   "/inventory/stock-transfers": "Transfer stock between locations",
   "/purchase-bills": "Manage purchase bills, suppliers, and purchase dues",
+  "/sales-overview": "Track your sales performance and business growth",
   "/returns": "Manage returned items from customers or suppliers",
   "/returns/new": "Manage returned items from customers or suppliers",
   "/customers": "Manage customer credit, record payments, and track full udhar ledger",
@@ -95,6 +96,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/inventory/adjustments": "Adjustments",
   "/inventory/stock-transfers": "Stock Transfers",
   "/purchase-bills": "Purchases",
+  "/sales-overview": "Sales Overview",
   "/returns": "Return Items",
   "/returns/new": "Return Items",
   "/customers": "Customers / Udhar",
@@ -167,10 +169,10 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/purchase-bills", label: "Purchases", Icon: Truck },
   {
     kind: "group", id: "sales", label: "Sales", Icon: TrendingUp,
-    triggerPaths: ["/bills"],
+    triggerPaths: ["/bills", "/sales-overview"],
     children: [
       { href: "/bills", label: "Billing History" },
-      { href: "/reports", label: "Sales Overview" },
+      { href: "/sales-overview", label: "Sales Overview" },
     ],
   },
   { kind: "link", href: "/returns", label: "Returns", Icon: Undo2 },
@@ -195,6 +197,7 @@ const MOBILE_MENU: { href: string; label: string; Icon: React.ElementType }[] = 
   { href: "/customers", label: "Customers / Udhar", Icon: Users },
   { href: "/purchase-bills", label: "Purchases", Icon: Truck },
   { href: "/bills", label: "Billing History", Icon: TrendingUp },
+  { href: "/sales-overview", label: "Sales Overview", Icon: TrendingUp },
   { href: "/returns", label: "Returns", Icon: Undo2 },
   { href: "/reports", label: "Reports", Icon: BarChart3 },
   { href: "/expenses", label: "Expenses", Icon: Wallet },
@@ -262,6 +265,7 @@ export function Layout({ children }: { children: ReactNode }) {
     : backendStatus.browserOnline
       ? "bg-sky-500"
       : "bg-amber-500";
+  const pageHasOwnTopbarActions = loc === "/reports" || loc === "/sales-overview";
 
   const [sidebarWidth, setSidebarWidth] = useState(() => clampW(Number(readLS(SIDEBAR_WIDTH_KEY, String(DEFAULT_WIDTH)))));
   const [collapsed, setCollapsed] = useState(() => readLS(SIDEBAR_COLLAPSED_KEY, "false") === "true");
@@ -483,7 +487,7 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </div>
 
-          {loc !== "/reports" && !loc.startsWith("/returns") && loc !== "/customers" && <button
+          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <button
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label="Search products, bills, and customers"
@@ -494,13 +498,13 @@ export function Layout({ children }: { children: ReactNode }) {
             <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
           </button>}
 
-          {loc !== "/reports" && !loc.startsWith("/returns") && loc !== "/customers" && <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
+          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
             <span className="truncate">{connectionLabel}</span>
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
           </div>}
 
-          {loc !== "/reports" && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
+          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && snapshot && <PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"
@@ -594,7 +598,7 @@ export function Layout({ children }: { children: ReactNode }) {
           id="main-content"
           className={cn(
             "app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto scroll-smooth overscroll-contain pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0",
-            loc === "/reports" ? "bg-[#ffffff]" : "bg-white",
+            pageHasOwnTopbarActions ? "bg-[#ffffff]" : "bg-white",
           )}
         >
           <SyncAlertBanner />
