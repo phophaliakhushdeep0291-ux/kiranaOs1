@@ -22,13 +22,15 @@ describe("estimate bill workflow separation", () => {
     expect(billsPage).toContain('{!estimate && bill.status !== "cancelled"');
   });
 
-  it("labels estimate billing as a first-class bill type without payment collection", () => {
+  it("labels estimate billing as a first-class bill type with the same payment options", () => {
     expect(billingSummary).toContain('Estimate Bill');
     expect(billingSummary).toContain('Save Estimate Bill');
     expect(billingSummary).toContain('data-testid="button-bill-type-pakka"');
     expect(billingSummary).toContain('data-testid="button-bill-type-estimate"');
-    expect(paymentPanel).toContain('data-testid="estimate-payment-panel"');
-    expect(paymentPanel).toContain('No payment saved');
+    // Estimates now share the Pakka payment selector (cash/UPI/split/udhar); the old quote-only
+    // "no payment" panel is gone.
+    expect(paymentPanel).not.toContain('estimate-payment-panel');
+    expect(paymentPanel).not.toContain('No payment saved');
     expect(billingPage).toContain('EST-${year}-LOCAL-');
     expect(billingPage).toContain('if (getPrinterConfigSync().autoPrint)');
   });

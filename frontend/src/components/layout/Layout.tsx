@@ -204,6 +204,7 @@ const MOBILE_MENU: MobileMenuItem[] = [
     label: "Inventory",
     Icon: Package,
     children: [
+      { href: "/products?add=1", label: "Add Product" },
       { href: "/products", label: "Products" },
       { href: "/categories", label: "Categories" },
       { href: "/inventory/stock-in", label: "Stock In" },
@@ -241,8 +242,13 @@ function writeLS(key: string, val: string) {
 function clampW(w: number) {
   return Number.isFinite(w) ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(w))) : DEFAULT_WIDTH;
 }
+function cleanPath(path: string) {
+  return path.split(/[?#]/)[0] || "/";
+}
 function isActive(loc: string, href: string) {
-  return loc === href || (href !== "/dashboard" && loc.startsWith(href + "/"));
+  const current = cleanPath(loc);
+  const target = cleanPath(href);
+  return current === target || (target !== "/dashboard" && current.startsWith(target + "/"));
 }
 function isMobileNavActive(loc: string, href: string) {
   if (href === "/inventory") {

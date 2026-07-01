@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import {
   getListProductsQueryKey,
   useCreateProduct,
@@ -88,6 +89,7 @@ function categoryBadge(name: string) {
 
 export default function ProductsPage() {
   const { toast } = useToast();
+  const [location, setLocation] = useLocation();
   const manageProducts = usePermission("manage_products");
   const belowMinPermission = usePermission("sell_below_minimum_price");
   const queryClient = useQueryClient();
@@ -256,7 +258,7 @@ export default function ProductsPage() {
 
   const isPending = createProduct.isPending || updateProduct.isPending;
 
-  const openAdd = () => {
+  const openAdd = useCallback(() => {
     if (!manageProducts.allowed) {
       toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" });
       return;
@@ -264,7 +266,15 @@ export default function ProductsPage() {
     setEditing(null);
     form.reset(productToForm());
     setOpen(true);
-  };
+  }, [form, manageProducts.allowed, manageProducts.reason, toast]);
+
+  useEffect(() => {
+    const [path, query = ""] = location.split("?");
+    if (path !== "/products") return;
+    if (new URLSearchParams(query).get("add") !== "1") return;
+    openAdd();
+    setLocation("/products");
+  }, [location, openAdd, setLocation]);
 
   const openEdit = (product: Product) => {
     if (!manageProducts.allowed) {
@@ -499,6 +509,20 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      {!open && (
+        <button
+          type="button"
+          data-testid="button-add-product-mobile"
+          onClick={openAdd}
+          disabled={!manageProducts.allowed}
+          className="fixed bottom-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom)+16px)] right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-[#075fff] px-5 text-[13px] font-black text-white shadow-[0_14px_30px_rgba(0,91,255,0.34)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9aa6bb] lg:hidden"
+          aria-label="Add product"
+        >
+          <Plus size={17} aria-hidden="true" />
+          Add Product
+        </button>
+      )}
 
       <ProductFormPanel
         open={open}

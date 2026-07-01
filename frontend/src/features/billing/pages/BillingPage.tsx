@@ -178,11 +178,11 @@ export default function Billing() {
     : grandTotal;
   const effectivePaidAmount = paymentMode === SPLIT_PAYMENT
     ? splitPaidAmount
-    : paymentMode === BillPaymentMode.credit || billType === BillInputBillType.udhar_entry || billType === BillInputBillType.estimate
+    : paymentMode === BillPaymentMode.credit || billType === BillInputBillType.udhar_entry
       ? 0
       : plainPaidAmount;
   const advanceAmount = allowAdvancePayment && paymentMode !== SPLIT_PAYMENT ? roundMoney(Math.max(0, effectivePaidAmount - grandTotal)) : 0;
-  const creditAmount = billType === BillInputBillType.estimate ? 0 : billType === BillInputBillType.udhar_entry ? grandTotal : roundMoney(Math.max(0, grandTotal - Math.min(effectivePaidAmount, grandTotal)));
+  const creditAmount = billType === BillInputBillType.udhar_entry ? grandTotal : roundMoney(Math.max(0, grandTotal - Math.min(effectivePaidAmount, grandTotal)));
 
   // Demo "sample" products (id starts with "demo_") are example data for the dashboard tour
   // only — they don't exist on the server, so a real bill that referenced them would land in
@@ -595,7 +595,6 @@ export default function Billing() {
   }
 
   function validateBeforeConfirm(nextBillType: BillTypeSelection) {
-    const isEstimate = nextBillType === BillInputBillType.estimate;
     if (cart.length === 0) {
       toast({ title: "Cart is empty", description: "Add products or loose items before billing.", variant: "destructive" });
       return false;
@@ -608,7 +607,7 @@ export default function Billing() {
       toast({ title: "Discount too high", description: "Discount cannot exceed bill subtotal.", variant: "destructive" });
       return false;
     }
-    const needsCustomer = !isEstimate && billNeedsCustomer({
+    const needsCustomer = billNeedsCustomer({
       isUdharEntry: nextBillType === BillInputBillType.udhar_entry,
       creditAmount,
       isCreditMode: paymentMode === BillPaymentMode.credit,
@@ -620,11 +619,11 @@ export default function Billing() {
       customerNameInputRef.current?.focus();
       return false;
     }
-    if (!isEstimate && !allowAdvancePayment && paymentMode !== SPLIT_PAYMENT && typeof paidAmount === "number" && paidAmount > grandTotal) {
+    if (!allowAdvancePayment && paymentMode !== SPLIT_PAYMENT && typeof paidAmount === "number" && paidAmount > grandTotal) {
       toast({ title: "Paid amount is more than bill", description: "Tick 'extra is advance' only if you really want to accept advance.", variant: "destructive" });
       return false;
     }
-    if (!isEstimate && paymentMode === SPLIT_PAYMENT && splitCash + splitUpi > grandTotal) {
+    if (paymentMode === SPLIT_PAYMENT && splitCash + splitUpi > grandTotal) {
       toast({ title: "Split payment too high", description: "Cash + UPI cannot exceed bill total.", variant: "destructive" });
       return false;
     }
@@ -687,7 +686,6 @@ export default function Billing() {
       return;
     }
     const nextBillType = overrideBillType ?? billType;
-    const isEstimate = nextBillType === BillInputBillType.estimate;
     const isUdharEntry = nextBillType === BillInputBillType.udhar_entry;
 
     if (!validateBeforeConfirm(nextBillType)) return;
@@ -699,24 +697,22 @@ export default function Billing() {
       return;
     }
 
-    const paid = isEstimate || isUdharEntry ? 0 : effectivePaidAmount;
+    const paid = isUdharEntry ? 0 : effectivePaidAmount;
     const cappedPaidForCredit = Math.min(paid, grandTotal);
-    const remainingCredit = isEstimate ? 0 : isUdharEntry ? grandTotal : roundMoney(Math.max(0, grandTotal - cappedPaidForCredit));
+    const remainingCredit = isUdharEntry ? grandTotal : roundMoney(Math.max(0, grandTotal - cappedPaidForCredit));
 
-    const payments = isEstimate
-      ? []
-      : paymentMode === SPLIT_PAYMENT
-        ? [
-            ...(splitCash > 0 ? [{ mode: BillPaymentMode.cash, amount: splitCash }] : []),
-            ...(splitUpi > 0 ? [{ mode: BillPaymentMode.upi, amount: splitUpi }] : []),
+    const payments = paymentMode === SPLIT_PAYMENT
+      ? [
+          ...(splitCash > 0 ? [{ mode: BillPaymentMode.cash, amount: splitCash }] : []),
+          ...(splitUpi > 0 ? [{ mode: BillPaymentMode.upi, amount: splitUpi }] : []),
+          ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
+        ]
+      : paymentMode === BillPaymentMode.credit || isUdharEntry
+        ? [{ mode: BillPaymentMode.credit, amount: grandTotal }]
+        : [
+            ...(paid > 0 ? [{ mode: paymentMode, amount: paid }] : []),
             ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
-          ]
-        : paymentMode === BillPaymentMode.credit || isUdharEntry
-          ? [{ mode: BillPaymentMode.credit, amount: grandTotal }]
-          : [
-              ...(paid > 0 ? [{ mode: paymentMode, amount: paid }] : []),
-              ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
-            ];
+          ];
 
     const printable = makePrintableBill(nextBillType, paid, remainingCredit, payments);
     setLastPrintableBill(printable);
