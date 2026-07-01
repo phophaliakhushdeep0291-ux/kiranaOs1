@@ -270,8 +270,9 @@ export default function ProductsPage() {
 
   useEffect(() => {
     const [path, query = ""] = location.split("?");
+    const browserQuery = typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, "");
     if (path !== "/products") return;
-    if (new URLSearchParams(query).get("add") !== "1") return;
+    if (new URLSearchParams(query || browserQuery).get("add") !== "1") return;
     openAdd();
     setLocation("/products");
   }, [location, openAdd, setLocation]);

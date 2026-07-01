@@ -369,13 +369,21 @@ function localBillNoForType(billType: BillInput["billType"], billId: string) {
 
 export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const inputForCreation: BillInput = input.billType === "estimate"
-    ? {
-        ...input,
-        payments: [],
-        buyerPaidAmount: 0,
-        advanceAmount: 0,
-        allowAdvancePayment: false,
-      }
+    ? (() => {
+        // Estimates record the real tender collected (cash/UPI) so the bill + receipt show what
+        // was paid, but they never carry credit/udhar (no customer debt) and never move stock or
+        // P&L. Every sales/cash report already excludes billType "estimate", so this recorded
+        // tender stays out of all totals — matching "record payment, keep separate".
+        const tenderPayments = (input.payments ?? []).filter((p) => p.mode !== BillPaymentMode.credit);
+        const paidTender = roundMoney(tenderPayments.reduce((sum, p) => sum + readNumber(p.amount, 0), 0));
+        return {
+          ...input,
+          payments: tenderPayments,
+          buyerPaidAmount: paidTender,
+          advanceAmount: 0,
+          allowAdvancePayment: false,
+        };
+      })()
     : input;
   const sensitiveActions = readSensitiveBillActions(inputForCreation);
   validateSensitiveBillApproval(inputForCreation, sensitiveActions);

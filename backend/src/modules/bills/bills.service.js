@@ -75,7 +75,11 @@ export async function confirmBill(shopId, body, actor = {}) {
   // already physically happened, so they must never be dropped for being stock-short.
   // The online counter path leaves this false and still rejects overselling live.
   const allowStockShortfall = actor?.allowStockShortfall === true;
-  const billPayments = isEstimate ? [] : payments;
+  // Estimates record the real tender collected (cash/UPI) so the bill + receipt show what was
+  // paid, but they never carry credit/udhar — an estimate must not create customer debt. Stock,
+  // P&L and the financial ledger stay off for estimates (see below), and every sales/cash report
+  // already excludes billType "estimate", so recorded estimate tender stays out of all totals.
+  const billPayments = isEstimate ? payments.filter((p) => p.mode !== "credit") : payments;
   const legacyCreditAmount = sumMoney(billPayments.filter((p) => p.mode === "credit").map((p) => p.amount));
   const requestedCreditAmount = inputCreditAmount !== undefined
     ? round2(inputCreditAmount)
@@ -227,14 +231,14 @@ export async function confirmBill(shopId, body, actor = {}) {
     }
 
     const grossProfit = isEstimate ? 0 : subtractMoney(itemProfit, billDiscount, waivedAmount);
-    const paidAmount = isEstimate
-      ? 0
-      : sumMoney(billPayments.filter((p) => p.mode !== "credit").map((p) => p.amount));
+    // Estimates keep their real tender in paidAmount (billPayments is already credit-free for
+    // estimates) but never accrue credit/udhar.
+    const paidAmount = sumMoney(billPayments.filter((p) => p.mode !== "credit").map((p) => p.amount));
     const creditAmount = isEstimate
       ? 0
       : requestedCreditAmount;
     const actualAmount = round2(inputActualAmount ?? grandTotal);
-    const buyerPaidAmount = isEstimate ? 0 : round2(inputBuyerPaidAmount ?? paidAmount);
+    const buyerPaidAmount = round2(inputBuyerPaidAmount ?? paidAmount);
 
     if (!isEstimate && buyerPaidAmount > grandTotal) {
       throw new AppError(

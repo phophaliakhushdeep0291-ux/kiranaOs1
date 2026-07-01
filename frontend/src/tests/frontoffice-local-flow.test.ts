@@ -225,6 +225,41 @@ describe("front office local-first cashier flow", () => {
     }));
   });
 
+  it("records real tender on an estimate but never moves stock, credit, or the ledger", async () => {
+    const estimate = await createBillLocalFirst(billInput({
+      billType: BillInputBillType.estimate,
+      payments: [
+        { mode: BillPaymentMode.cash, amount: 120 },
+        { mode: BillPaymentMode.upi, amount: 80 },
+      ],
+      buyerPaidAmount: 200,
+    }));
+
+    const stored = rows("bills")[0];
+    expect(stored).toEqual(expect.objectContaining({
+      id: estimate.id,
+      billType: BillInputBillType.estimate,
+      billNo: expect.stringMatching(/^EST-\d{4}-LOCAL-/),
+      paidAmount: 200,
+      buyerPaidAmount: 200,
+      creditAmount: 0,
+    }));
+    // Tender is recorded for the receipt…
+    expect(rows("payments")).toHaveLength(2);
+    // …but the estimate stays a quote: no stock movement, no customer debt, no ledger.
+    expect(rows("inventory_movements")).toHaveLength(0);
+    expect(rows("customer_ledger")).toHaveLength(0);
+    expect(rows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL")).toEqual(expect.objectContaining({
+      payload: expect.objectContaining({
+        billType: BillInputBillType.estimate,
+        paidAmount: 200,
+        creditAmount: 0,
+        dueAmount: 0,
+        ledgerEntries: [],
+      }),
+    }));
+  });
+
   it("keeps bill credit, same-amount udhar payments, reversal, purchase, and outbox output consistent", async () => {
     const bill = await createBillLocalFirst(billInput());
 
