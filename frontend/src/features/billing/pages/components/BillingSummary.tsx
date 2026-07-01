@@ -271,7 +271,7 @@ export function BillingSummary({
               </span>
               <span className="min-w-0">
                 <span className="block text-[12px] font-black">Estimate Bill</span>
-                <span className="block text-[10px] font-semibold opacity-75">Quote only</span>
+                <span className="block text-[10px] font-semibold opacity-75">Not a final bill</span>
               </span>
             </button>
           </div>

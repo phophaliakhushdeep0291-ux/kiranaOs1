@@ -66,10 +66,11 @@ model Shop {
 // BILL COUNTER — transaction-safe per-shop bill number counter
 // ─────────────────────────────────────────────
 model BillCounter {
-  id         String   @id @default(cuid())
-  shopId     String   @unique
-  lastNumber Int      @default(0)
-  updatedAt  DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  shopId             String   @unique
+  lastNumber         Int      @default(0)
+  estimateLastNumber Int      @default(0)
+  updatedAt          DateTime @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id])
 }
