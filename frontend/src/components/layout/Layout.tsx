@@ -633,28 +633,37 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
 
         {/* Mobile bottom nav */}
-        <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(15,35,80,0.08)] backdrop-blur lg:hidden">
-          <div className="grid grid-cols-5">
+        <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-50 border-t border-[#dbe7f6] bg-white/96 pb-[env(safe-area-inset-bottom)] shadow-[0_-16px_36px_rgba(15,35,80,0.12)] backdrop-blur-xl lg:hidden">
+          <div className="grid grid-cols-5 px-1.5">
             {MOBILE_NAV.map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);
               return (
                 <Link key={href} href={href}>
-                  <div className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors", active ? "text-primary" : "text-muted-foreground")}>
-                    <div className={cn("flex h-8 w-8 items-center justify-center rounded-xl transition-colors", active && "bg-primary/10")}>
+                  <div
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[10px] font-bold transition-all duration-200",
+                      active ? "text-[#075fff]" : "text-[#64748b] active:text-[#102347]",
+                    )}
+                  >
+                    <div className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-2xl transition-all duration-200",
+                      active ? "bg-[#075fff] text-white shadow-[0_8px_18px_rgba(7,95,255,0.24)]" : "bg-transparent",
+                    )}>
                       <Icon size={20} aria-hidden="true" />
                     </div>
-                    {label}
+                    <span className="leading-none">{label}</span>
                   </div>
                 </Link>
               );
             })}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" aria-label="Open more navigation" className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors", "text-muted-foreground")}>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl transition-colors">
+                <button type="button" aria-label="Open more navigation" className="flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[10px] font-bold text-[#64748b] transition-all duration-200 active:text-[#102347]">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl transition-colors">
                     <Settings size={20} aria-hidden="true" />
                   </div>
-                  More
+                  <span className="leading-none">More</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="end" className="mb-2 max-h-[calc(100vh-120px)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto p-2">
