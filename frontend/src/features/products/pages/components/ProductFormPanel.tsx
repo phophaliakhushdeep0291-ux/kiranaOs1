@@ -348,20 +348,20 @@ export function ProductFormPanel({
         </div>
 
         {/* Footer */}
-        <div className="shrink-0 border-t border-[#eef1f6] px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5">
+        <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5">
           {!editing && (
             <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
               <input type="checkbox" checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[#0057ff]" />
               Keep panel open to add another product
             </label>
           )}
-          <div className="flex flex-col gap-2.5 sm:flex-row">
-            <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <div className="grid grid-cols-2 gap-2.5">
+            <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button
               type="submit"
               disabled={isPending}
               style={{ background: "linear-gradient(180deg, #005dff 0%, #0047e8 100%)" }}
-              className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white shadow-[0_10px_22px_rgba(0,77,255,0.28)] hover:opacity-95"
+              className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white shadow-[0_10px_22px_rgba(0,77,255,0.28)] hover:opacity-95"
             >
               {isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : editing ? "Update Product" : "Save Product"}
             </Button>
