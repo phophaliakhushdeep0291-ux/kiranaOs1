@@ -575,6 +575,11 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         ? await tx.bill.findFirst({ where: { id: returnOfBillId, shopId } })
         : null;
 
+      // A return against an estimate must not post GST: the original kacha bill never entered
+      // the GST report, so its reversal can't either — otherwise the report would show negative
+      // tax with no positive side. Sales/stock/refund effects still apply in full.
+      const effectiveGstMode = original?.billType === "estimate" ? "none" : gstMode;
+
       const productIds = items.filter((i) => i.productId).map((i) => i.productId);
       const dbProducts = await tx.product.findMany({ where: { id: { in: productIds }, shopId } });
       const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
@@ -601,9 +606,9 @@ export async function createSaleReturn(shopId, body, actor = {}) {
 
         const lineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
         const rate = Number(item.gstRate ?? product?.gstRate ?? 0);
-        const gstAmount = gstMode === "exclusive"
+        const gstAmount = effectiveGstMode === "exclusive"
           ? multiplyMoney(lineTotal, rate / 100)
-          : gstMode === "none" || rate <= 0
+          : effectiveGstMode === "none" || rate <= 0
             ? 0
             : subtractMoney(lineTotal, round2(lineTotal / (1 + rate / 100)));
         const lineCost = multiplyMoney(costPerRateUnit, qtyInRateUnit);
@@ -635,7 +640,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         if (product) restockPlan.push({ product, qtyInBase: round2(qtyInBase), lineCost, damaged });
       }
 
-      const grandTotalMagnitude = gstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;
+      const grandTotalMagnitude = effectiveGstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;
       const refundAmount = round2(grandTotalMagnitude);
       const resolvedCustomerId = customerId ?? original?.customerId ?? null;
 
@@ -672,7 +677,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           status: "active",
           customerId: resolvedCustomerId,
           customerName: customerName ?? original?.customerName ?? "Walk-in",
-          gstMode,
+          gstMode: effectiveGstMode,
           ...negativeMoney,
           ...moneyShadows(negativeMoney),
           createdByUserId: actor?.userId ?? null,
