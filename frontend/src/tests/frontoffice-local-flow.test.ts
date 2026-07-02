@@ -183,12 +183,9 @@ describe("front office local-first cashier flow", () => {
     seedFrontOffice();
   });
 
-  it("stores estimate bills as quote-only even if stale payment data is present", async () => {
+  it("treats an udhar estimate exactly like an udhar pakka bill, just under the EST- series", async () => {
     const estimate = await createBillLocalFirst(billInput({
       billType: BillInputBillType.estimate,
-      buyerPaidAmount: 200,
-      allowAdvancePayment: true,
-      advanceAmount: 200,
       payments: [{ mode: BillPaymentMode.credit, amount: 200 }],
     }));
 
@@ -199,33 +196,28 @@ describe("front office local-first cashier flow", () => {
       billNumber: expect.stringMatching(/^EST-\d{4}-LOCAL-/),
       billType: BillInputBillType.estimate,
       paidAmount: 0,
-      buyerPaidAmount: 0,
-      creditAmount: 0,
+      creditAmount: 200,
     }));
     expect(rows("bill_items")).toHaveLength(1);
-    expect(rows("payments")).toHaveLength(0);
-    expect(rows("customer_ledger")).toHaveLength(0);
-    expect(rows("inventory_movements")).toHaveLength(0);
-    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
-    expect(rows("sync_outbox").filter((row) => row.operation_type === "CREATE_CUSTOMER")).toHaveLength(0);
+    // Full sale side effects: stock moves and the customer owes the udhar.
+    expect(rows("inventory_movements")).toEqual([
+      expect.objectContaining({ action: "sale", product_id: "product_sugar", quantity_delta: -4 }),
+    ]);
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200, totalUdhar: 200 }));
+    expect(calculateLedgerBalance(ledgerFor("customer_ramesh"))).toBe(200);
     expect(rows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL")).toEqual(expect.objectContaining({
       entity_id: estimate.id,
       payload: expect.objectContaining({
         billType: BillInputBillType.estimate,
         paidAmount: 0,
-        buyerPaidAmount: 0,
-        creditAmount: 0,
-        dueAmount: 0,
-        paymentStatus: "estimate",
-        payments: [],
-        tenderPayments: [],
-        creditPayments: [],
-        ledgerEntries: [],
+        creditAmount: 200,
+        dueAmount: 200,
+        paymentStatus: "credit",
       }),
     }));
   });
 
-  it("records real tender on an estimate but never moves stock, credit, or the ledger", async () => {
+  it("records tender + stock on a paid estimate like any real bill", async () => {
     const estimate = await createBillLocalFirst(billInput({
       billType: BillInputBillType.estimate,
       payments: [
@@ -244,10 +236,11 @@ describe("front office local-first cashier flow", () => {
       buyerPaidAmount: 200,
       creditAmount: 0,
     }));
-    // Tender is recorded for the receipt…
     expect(rows("payments")).toHaveLength(2);
-    // …but the estimate stays a quote: no stock movement, no customer debt, no ledger.
-    expect(rows("inventory_movements")).toHaveLength(0);
+    // Same sale side effects as a pakka bill: stock deducts; no credit means no udhar.
+    expect(rows("inventory_movements")).toEqual([
+      expect.objectContaining({ action: "sale", product_id: "product_sugar", quantity_delta: -4 }),
+    ]);
     expect(rows("customer_ledger")).toHaveLength(0);
     expect(rows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL")).toEqual(expect.objectContaining({
       payload: expect.objectContaining({
@@ -255,7 +248,7 @@ describe("front office local-first cashier flow", () => {
         paidAmount: 200,
         creditAmount: 0,
         dueAmount: 0,
-        ledgerEntries: [],
+        paymentStatus: "paid",
       }),
     }));
   });

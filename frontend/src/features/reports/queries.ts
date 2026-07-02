@@ -104,7 +104,7 @@ export function getLocalDashboardSnapshot(date = new Date()): LocalDashboardSnap
   const bills = dedupeBillsForDisplay(pruneRecentRows(readInstantCache<Bill[]>(CACHE_KEYS.bills, []), RECENT_CACHE_DAYS).map(withBillAliases)) as unknown as Bill[];
   const customers = readInstantCache<Customer[]>(CACHE_KEYS.customers, []).map(normaliseCustomerForCache);
   const ledger = dedupeLedgerEntries(readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []));
-  const todayBills = bills.filter((bill) => bill.status !== "cancelled" && bill.billType !== "estimate" && sameLocalDate(bill.createdAt, yyyyMmDd));
+  const todayBills = bills.filter((bill) => bill.status !== "cancelled" && sameLocalDate(bill.createdAt, yyyyMmDd));
 
   let cash = 0;
   let upi = 0;

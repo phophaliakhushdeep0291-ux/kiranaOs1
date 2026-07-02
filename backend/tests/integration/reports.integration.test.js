@@ -67,15 +67,16 @@ if (ctx.skip) {
     });
 
 
-    test("daily closing returns shopkeeper totals and excludes estimates", async () => {
+    test("daily closing counts estimates like real sales and tracks them separately", async () => {
       const tenant = await createTenant(ctx.db);
       const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50, lowStockThreshold: 20 });
       await createPaidBillViaApi(ctx, auth.accessToken, product, { quantity: 1, ratePerRateUnit: 50, payments: [{ mode: "cash", amount: 50 }] });
-      await createPaidBillViaApi(ctx, auth.accessToken, product, { billType: "estimate", quantity: 1, ratePerRateUnit: 50, buyerPaidAmount: 0, payments: [] });
+      await createPaidBillViaApi(ctx, auth.accessToken, product, { billType: "estimate", quantity: 1, ratePerRateUnit: 50, payments: [{ mode: "cash", amount: 50 }] });
       const data = assertSuccess(await ctx.get("/api/reports/daily-closing", { token: auth.accessToken }));
-      assert.equal(data.totalSalesPaise, 5000);
-      assert.equal(data.cashReceivedPaise, 5000);
+      // Estimates work the same as real bills — sales and cash include them.
+      assert.equal(data.totalSalesPaise, 10000);
+      assert.equal(data.cashReceivedPaise, 10000);
       assert.equal(data.roughBills, 1);
       assert.equal(Array.isArray(data.lowStock), true);
     });

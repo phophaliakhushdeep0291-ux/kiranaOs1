@@ -120,15 +120,30 @@ if (ctx.skip) {
       assertFailure(response, 400);
     });
 
-    test("estimate/rough bill does not deduct stock", async () => {
+    test("estimate bill deducts stock and records tender like a real sale", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
+      const payload = billPayload(product, { billType: "estimate", quantity: 2, ratePerRateUnit: 50, payments: [{ mode: "cash", amount: 100 }] });
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", payload, { token: ownerAuth.accessToken }), 201);
+      assert.equal(bill.billType, "estimate");
+      assert.match(bill.billNo, /^EST-/);
+      assert.equal(bill.paidAmount, 100);
+      const refreshedProduct = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(refreshedProduct.stockBaseQty, 8);
+    });
+
+    test("legacy quote-shaped estimate (no payment data) is still accepted as unpaid", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 50 });
       const payload = billPayload(product, { billType: "estimate", quantity: 2, ratePerRateUnit: 50, payments: [] });
       delete payload.buyerPaidAmount;
       const bill = assertSuccess(await ctx.post("/api/bills/confirm", payload, { token: ownerAuth.accessToken }), 201);
       assert.equal(bill.billType, "estimate");
+      assert.equal(bill.paidAmount, 0);
+      assert.equal(bill.creditAmount, 0);
+      // Goods still leave the shop on a kacha bill — stock deducts either way.
       const refreshedProduct = await ctx.db.product.findUnique({ where: { id: product.id } });
-      assert.equal(refreshedProduct.stockBaseQty, 10);
+      assert.equal(refreshedProduct.stockBaseQty, 8);
     });
 
     test("bill number is generated", async () => {

@@ -368,23 +368,9 @@ function localBillNoForType(billType: BillInput["billType"], billId: string) {
 }
 
 export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
-  const inputForCreation: BillInput = input.billType === "estimate"
-    ? (() => {
-        // Estimates record the real tender collected (cash/UPI) so the bill + receipt show what
-        // was paid, but they never carry credit/udhar (no customer debt) and never move stock or
-        // P&L. Every sales/cash report already excludes billType "estimate", so this recorded
-        // tender stays out of all totals — matching "record payment, keep separate".
-        const tenderPayments = (input.payments ?? []).filter((p) => p.mode !== BillPaymentMode.credit);
-        const paidTender = roundMoney(tenderPayments.reduce((sum, p) => sum + readNumber(p.amount, 0), 0));
-        return {
-          ...input,
-          payments: tenderPayments,
-          buyerPaidAmount: paidTender,
-          advanceAmount: 0,
-          allowAdvancePayment: false,
-        };
-      })()
-    : input;
+  // Estimates (kacha bills) are full sales in everything but their EST- number series: they
+  // move stock, record tender, and can carry udhar exactly like a pakka bill.
+  const inputForCreation: BillInput = input;
   const sensitiveActions = readSensitiveBillActions(inputForCreation);
   validateSensitiveBillApproval(inputForCreation, sensitiveActions);
   const validated = parseOrThrow(billCreationSchema, inputForCreation) as BillInput;
@@ -416,7 +402,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0)));
   const billItems = buildBillItems(billId, billData.items, calculatedAmounts.gstMode);
   const billPayments = buildPayments(billId, billData.customerId, billData.payments);
-  const saleMovements = billData.billType === "estimate" ? [] : buildSaleMovements(billId, billData.items);
+  const saleMovements = buildSaleMovements(billId, billData.items);
   // Carry the durable clientPaymentId into the sync payload so the server stores + echoes it.
   // That lets sync reconciliation match a payment to its own server echo by identity instead of
   // a fuzzy amount/time guess (which could collapse two distinct same-amount tenders).
@@ -429,8 +415,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     idempotency_key: payment.idempotency_key,
   }));
   const creditPayments = billData.payments.filter((payment) => payment.mode === BillPaymentMode.credit);
-  const isEstimateBill = billData.billType === "estimate";
-  const dueAmount = isEstimateBill ? 0 : roundMoney(Math.max(0, total - paid));
+  const dueAmount = roundMoney(Math.max(0, total - paid));
   const localBillNo = localBillNoForType(billData.billType, billId);
   const bill = makeLocalEntity(withBillAliases({
     id: billId,
@@ -551,8 +536,8 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
       credit_amount: creditAmount,
       dueAmount,
       due_amount: dueAmount,
-      paymentStatus: isEstimateBill ? "estimate" : creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
-      payment_status: isEstimateBill ? "estimate" : creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
+      paymentStatus: creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
+      payment_status: creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
       udharAmount: creditAmount,
       udhar_amount: creditAmount,
       outstandingAmount: dueAmount,

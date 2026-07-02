@@ -239,9 +239,10 @@ function isDeleted(row: RecordLike): boolean {
 }
 
 function isSaleBill(row: LocalBill): boolean {
+  // Estimates (kacha bills) count as sales — same money and stock effects as a pakka bill,
+  // only the EST- number series differs.
   const status = String(row.status ?? "").toLowerCase();
-  const type = String(row.billType ?? row.bill_type ?? "").toLowerCase();
-  return !isDeleted(row) && !status.includes("cancel") && !type.includes("estimate") && !type.includes("rough") && !status.includes("rough");
+  return !isDeleted(row) && !status.includes("cancel");
 }
 
 function billTotal(row: LocalBill): number {

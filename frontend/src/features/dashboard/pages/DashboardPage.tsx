@@ -192,9 +192,9 @@ function dashboardBillAmount(bill: Bill): number {
 }
 
 function isDashboardSaleBill(bill: Bill): boolean {
+  // Estimates (kacha bills) count as sales — same money/stock effects, only the EST- series differs.
   const status = String(bill.status ?? "").toLowerCase();
-  const billType = String(bill.billType ?? "").toLowerCase();
-  return !status.includes("cancel") && !status.includes("rough") && !billType.includes("estimate") && !billType.includes("rough");
+  return !status.includes("cancel");
 }
 
 function billsInsideRange(bills: Bill[], range: { from: string; to: string }): Bill[] {

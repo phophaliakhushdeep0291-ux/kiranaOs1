@@ -160,7 +160,7 @@ export default function BillDetailPage() {
   const credit = Math.max(0, readNumber(bill?.creditAmount, total - paid));
 
   const billTypeStr = String(bill?.billType ?? "normal_sale");
-  const canReturn = Boolean(bill) && bill?.status !== "cancelled" && billTypeStr !== "estimate" && billTypeStr !== "sales_return";
+  const canReturn = Boolean(bill) && bill?.status !== "cancelled" && billTypeStr !== "sales_return";
   const returnLines: ReturnLineInput[] = useMemo(() => visibleItems.map((item) => ({
     productId: (item.productId ?? item.product_id) as string | undefined,
     name: String(item.name ?? item.productName ?? "Item"),
@@ -262,7 +262,7 @@ export default function BillDetailPage() {
             <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />Restore</Button>
           ) : (
             <>
-              {bill.status !== "cancelled" && String(bill.billType ?? "normal_sale") !== "estimate" && (
+              {bill.status !== "cancelled" && (
                 <>
                   <Button variant="outline" onClick={startEdit}><Pencil size={15} className="mr-1" />Edit bill</Button>
                   <Button variant="outline" onClick={() => setEditMode("addon")}><Plus size={15} className="mr-1" />Add items</Button>

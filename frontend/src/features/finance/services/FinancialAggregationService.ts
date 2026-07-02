@@ -292,14 +292,10 @@ function isCancelledBill(bill: RecordLike): boolean {
   return String(bill.status ?? "").toLowerCase().includes("cancel");
 }
 
-function isEstimateBill(bill: RecordLike): boolean {
-  const type = String(bill.billType ?? bill.bill_type ?? "").toLowerCase();
-  const status = String(bill.status ?? "").toLowerCase();
-  return type.includes("estimate") || type.includes("rough") || status.includes("rough");
-}
-
 function isSaleBill(bill: RecordLike): boolean {
-  return !isDeleted(bill) && !isCancelledBill(bill) && !isEstimateBill(bill);
+  // Estimates (kacha bills) count as sales — they move stock, tender, and udhar just like a
+  // pakka bill and only differ by their EST- number series.
+  return !isDeleted(bill) && !isCancelledBill(bill);
 }
 
 function billTotal(bill: RecordLike): number {

@@ -547,7 +547,7 @@ describe("local reports and daily closing", () => {
     expect(closing.cashReceived).toBe(100);
   });
 
-  it("excludes rough and estimate bills and their payments", async () => {
+  it("counts estimate (kacha) bills and their payments like real sales", async () => {
     setRows({
       bills: [
         bill("bill_valid", "2026-06-06T10:00:00.000Z", { grandTotal: 100 }),
@@ -581,9 +581,10 @@ describe("local reports and daily closing", () => {
 
     const closing = await buildDailyClosingReport("2026-06-06");
 
-    expect(closing.totalSales).toBe(100);
-    expect(closing.cashReceived).toBe(100);
-    expect(closing.upiReceived).toBe(0);
+    // Estimates work the same as real bills — money counts in the day's totals.
+    expect(closing.totalSales).toBe(800);
+    expect(closing.cashReceived).toBe(400);
+    expect(closing.upiReceived).toBe(400);
   });
 
   it("marks reports as local estimates when pending sync exists", async () => {

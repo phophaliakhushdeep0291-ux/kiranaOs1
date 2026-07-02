@@ -5,7 +5,11 @@ import { AppError } from "../../middleware/error.js";
 import { env } from "../../config/env.js";
 import { getReportRangeLimit } from "../feature-gates/featureGate.service.js";
 
-const REAL_SALE_BILL_FILTER = { status: "active", billType: { not: "estimate" } };
+// Estimates (kacha bills) are full sales — stock, tender, udhar — so they count in every
+// sales/cash/P&L report. The one exception is GST: an estimate is not a tax document, so the
+// GST report keeps its own estimate-excluding filter below.
+const REAL_SALE_BILL_FILTER = { status: "active" };
+const GST_BILL_FILTER = { status: "active", billType: { not: "estimate" } };
 const DEFAULT_TOP_LIMIT = 20;
 const MAX_TOP_LIMIT = 100;
 
@@ -153,7 +157,7 @@ export async function getDailyClosing(shopId, { date } = {}) {
       include: { payments: true },
     }),
     db.bill.findMany({
-      where: { shopId, status: "cancelled", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
+      where: { shopId, status: "cancelled", createdAt: { gte: start, lte: end } },
       select: { id: true, grandTotal: true },
     }),
     db.bill.count({ where: { shopId, billType: "estimate", createdAt: { gte: start, lte: end } } }),
@@ -221,7 +225,7 @@ export async function getSalesSummary(shopId, { range, from, to, includeProfit =
       orderBy: { createdAt: "asc" },
     }),
     db.bill.findMany({
-      where: { shopId, status: "cancelled", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
+      where: { shopId, status: "cancelled", createdAt: { gte: start, lte: end } },
       select: { grandTotal: true, createdAt: true },
     }),
   ]);
@@ -395,7 +399,6 @@ export async function getPnL(shopId, { range, from, to }) {
       where: {
         shopId,
         status: "active",
-        billType: { not: "estimate" },
         createdAt: { gte: start, lte: end },
       },
       include: { payments: true },
@@ -404,7 +407,6 @@ export async function getPnL(shopId, { range, from, to }) {
       where: {
         shopId,
         status: "cancelled",
-        billType: { not: "estimate" },
         createdAt: { gte: start, lte: end },
       },
       select: { grandTotal: true, creditAmount: true },
@@ -489,7 +491,7 @@ export async function getGstReport(shopId, { range, from, to } = {}) {
   const { start, end } = getDateRange(range, from, to, env.DAILY_CLOSING_TIMEZONE);
 
   const bills = await db.bill.findMany({
-    where: { shopId, ...REAL_SALE_BILL_FILTER, createdAt: { gte: start, lte: end } },
+    where: { shopId, ...GST_BILL_FILTER, createdAt: { gte: start, lte: end } },
     select: { subtotal: true, gst: true, gstMode: true },
   });
 
@@ -530,7 +532,7 @@ export async function getMonthlyBreakdown(shopId, { year, untilMonth }) {
   const end = dateRangeForDateOnly(`${year}-${String(untilMonth).padStart(2, "0")}-${String(daysInUntilMonth).padStart(2, "0")}`, tz).end;
   const [bills, damageRows] = await Promise.all([
     db.bill.findMany({
-      where: { shopId, status: "active", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
+      where: { shopId, status: "active", createdAt: { gte: start, lte: end } },
       select: { grandTotal: true, grossProfit: true, createdAt: true },
     }),
     db.stockLedger.findMany({
@@ -611,7 +613,7 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
   const [products, soldItems] = await Promise.all([
     db.product.findMany({ where: { shopId }, orderBy: { name: "asc" } }),
     db.billItem.findMany({
-      where: { bill: { shopId, status: "active", billType: { not: "estimate" }, createdAt: { gte: since } } },
+      where: { bill: { shopId, status: "active", createdAt: { gte: since } } },
       select: { productId: true, name: true, quantityInBaseUnit: true, lineTotal: true },
     }),
   ]);
@@ -670,7 +672,7 @@ export async function getStaffSales(shopId, { from, to } = {}) {
   await enforceReportRangeLimit(shopId, { start, end }, "custom");
 
   const bills = await db.bill.findMany({
-    where: { shopId, billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
+    where: { shopId, createdAt: { gte: start, lte: end } },
     include: { payments: true },
   });
 
@@ -747,7 +749,7 @@ export async function getPaymentSummary(shopId, { from, to }) {
   const [payments, bills, oldUdharRecovered, purchases] = await Promise.all([
     db.payment.findMany({
       where: {
-        bill: { shopId, status: "active", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
+        bill: { shopId, status: "active", createdAt: { gte: start, lte: end } },
       },
       select: { mode: true, amount: true },
     }),

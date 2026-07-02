@@ -179,19 +179,14 @@ function isDeleted(bill: LocalBill) {
   return Boolean(bill.deleted_at ?? bill.deletedAt ?? bill.merged_into_id ?? bill.mergedIntoId);
 }
 
-function isEstimateBill(bill: LocalBill) {
-  const type = String(bill.billType ?? bill.bill_type ?? "").toLowerCase();
-  const status = String(bill.status ?? "").toLowerCase();
-  return type === "estimate" || type.includes("rough") || status.includes("rough") || Boolean(bill.isRoughEstimate ?? bill.is_rough_estimate);
-}
-
 function isReturnBill(bill: LocalBill) {
   return String(bill.billType ?? bill.bill_type ?? "").toLowerCase().includes("return");
 }
 
 function isSaleBill(bill: LocalBill) {
+  // Estimates (kacha bills) count as sales — same money/stock effects, only the EST- series differs.
   const status = String(bill.status ?? "").toLowerCase();
-  return !isDeleted(bill) && !isEstimateBill(bill) && !isReturnBill(bill) && !status.includes("cancel");
+  return !isDeleted(bill) && !isReturnBill(bill) && !status.includes("cancel");
 }
 
 function isWithinRange(bill: LocalBill, range: DateRange) {
