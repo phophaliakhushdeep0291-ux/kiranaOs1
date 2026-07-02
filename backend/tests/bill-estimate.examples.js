@@ -4,17 +4,24 @@ function requiresPayment(billType) {
   return billType !== "estimate";
 }
 
-function normalizeEstimateBill({ billType, payments = [], itemProfit = 0, paidAmount = 0, creditAmount = 0, waivedAmount = 0 }) {
+// Mirrors bills.service.js createBill: estimates record the real tender collected (cash/UPI)
+// so the bill + receipt show what was paid, but they never carry credit/udhar, never move
+// stock, and never post P&L or the financial ledger. Reports keep them out via billType filter.
+function normalizeEstimateBill({ billType, payments = [], itemProfit = 0, creditAmount = 0, waivedAmount = 0 }) {
   const isEstimate = billType === "estimate";
+  const billPayments = isEstimate ? payments.filter((p) => p.mode !== "credit") : payments;
+  const tenderPaid = billPayments
+    .filter((p) => p.mode !== "credit")
+    .reduce((sum, p) => sum + p.amount, 0);
 
   return {
-    paymentsToCreate: isEstimate ? [] : payments,
+    paymentsToCreate: billPayments,
     shouldDeductStock: !isEstimate,
     shouldCreateStockLedger: !isEstimate,
-    shouldCreatePaymentEntry: !isEstimate,
     shouldCreateUdharEntry: !isEstimate && creditAmount > 0,
+    shouldPostFinancialLedger: !isEstimate,
     grossProfit: isEstimate ? 0 : itemProfit - waivedAmount,
-    paidAmount: isEstimate ? 0 : paidAmount,
+    paidAmount: tenderPaid,
     creditAmount: isEstimate ? 0 : creditAmount,
     waivedAmount: isEstimate ? 0 : waivedAmount,
   };
@@ -36,24 +43,42 @@ assert.equal(requiresPayment("udhar_entry"), true, "udhar entry should still req
 assert.deepEqual(
   normalizeEstimateBill({
     billType: "estimate",
-    payments: [{ mode: "cash", amount: 23 }],
+    payments: [{ mode: "cash", amount: 23 }, { mode: "credit", amount: 10 }],
     itemProfit: 3,
-    paidAmount: 23,
     creditAmount: 10,
     waivedAmount: 2,
+  }),
+  {
+    paymentsToCreate: [{ mode: "cash", amount: 23 }],
+    shouldDeductStock: false,
+    shouldCreateStockLedger: false,
+    shouldCreateUdharEntry: false,
+    shouldPostFinancialLedger: false,
+    grossProfit: 0,
+    paidAmount: 23,
+    creditAmount: 0,
+    waivedAmount: 0,
+  },
+  "estimate should record real tender but create no stock/udhar/P&L side effects"
+);
+
+assert.deepEqual(
+  normalizeEstimateBill({
+    billType: "estimate",
+    payments: [],
   }),
   {
     paymentsToCreate: [],
     shouldDeductStock: false,
     shouldCreateStockLedger: false,
-    shouldCreatePaymentEntry: false,
     shouldCreateUdharEntry: false,
+    shouldPostFinancialLedger: false,
     grossProfit: 0,
     paidAmount: 0,
     creditAmount: 0,
     waivedAmount: 0,
   },
-  "estimate should not create sale side effects or P&L profit"
+  "estimate without tender stays a pure quote"
 );
 
 assert.deepEqual(
@@ -61,7 +86,6 @@ assert.deepEqual(
     billType: "normal_sale",
     payments: [{ mode: "cash", amount: 23 }],
     itemProfit: 3,
-    paidAmount: 23,
     creditAmount: 0,
     waivedAmount: 0,
   }),
@@ -69,8 +93,8 @@ assert.deepEqual(
     paymentsToCreate: [{ mode: "cash", amount: 23 }],
     shouldDeductStock: true,
     shouldCreateStockLedger: true,
-    shouldCreatePaymentEntry: true,
     shouldCreateUdharEntry: false,
+    shouldPostFinancialLedger: true,
     grossProfit: 3,
     paidAmount: 23,
     creditAmount: 0,
