@@ -878,7 +878,10 @@ export default function InventoryPage() {
             ) : null}
             {form.movementType === "correction" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> Stock correction requires owner PIN and creates a pending sync correction.</div> : null}
             <div><Label>Reason / note</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="e.g. physical count, damaged packet" />{form.movementType === "correction" ? <p className="mt-1 text-xs text-orange-700">Owner password/PIN will be asked after you click Save locally.</p> : null}</div>
-            <div className="flex gap-3 pt-2"><Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button><Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : "Save locally"}</Button></div>
+            <div className="sticky bottom-0 z-10 -mx-4 flex gap-3 border-t bg-background/95 px-4 py-3 pt-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+              <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : "Save locally"}</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
