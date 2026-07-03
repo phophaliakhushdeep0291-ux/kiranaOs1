@@ -73,9 +73,13 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   writeInstantMemoryCache: vi.fn((key: string, value: unknown[]) => {
     dbState.instant[key] = clone(value);
   }),
+  writeInstantCache: vi.fn((key: string, value: unknown[]) => {
+    dbState.instant[key] = clone(value);
+  }),
 }));
 
 import { createBillLocalFirst } from "@/features/billing/local-actions";
+import { restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
 import { markPurchasePaidLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
@@ -251,6 +255,20 @@ describe("front office local-first cashier flow", () => {
         paymentStatus: "paid",
       }),
     }));
+  });
+
+  it("recycle-bin move reverses udhar locally and restore re-applies it (mirrors server CANCEL/RESTORE)", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200 }));
+
+    await softDeleteBillWithOwnerPinLocalFirst(bill.id, "1234", "wrong bill");
+    // Server-side this op becomes CANCEL_BILL (udhar reversed there) — local must match now.
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
+    expect(rows("customer_ledger").some((entry) => entry.type === "bill_cancel_correction" && entry.amount === -200)).toBe(true);
+
+    await restoreBillWithOwnerPinLocalFirst(bill.id, "1234", "restore it");
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200, totalUdhar: 200 }));
+    expect(rows("customer_ledger").some((entry) => entry.type === "bill_restore_correction" && entry.amount === 200)).toBe(true);
   });
 
   it("keeps bill credit, same-amount udhar payments, reversal, purchase, and outbox output consistent", async () => {
