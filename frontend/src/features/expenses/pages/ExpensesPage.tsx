@@ -137,7 +137,7 @@ export default function ExpensesPage() {
     >
       <div className="space-y-4">
         {/* KPI row */}
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
           <Kpi icon={<Wallet size={16} />} iconBg="bg-[#eef5ff] text-[#0057ff]" label="Today's Expenses" value={inr(ov?.today)}
             sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
           <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="This Month's Expenses" value={inr(ov?.month)}
@@ -177,7 +177,7 @@ export default function ExpensesPage() {
         </div>
 
         {/* Charts row */}
-        <div className="grid gap-4 xl:grid-cols-[380px_1fr]">
+        <div className="grid grid-cols-1 gap-4 min-[430px]:grid-cols-2 xl:grid-cols-[380px_1fr]">
           {/* Category donut */}
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white p-5 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Expenses by Category</h3>

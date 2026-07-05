@@ -1012,32 +1012,32 @@ function MobileGeneralDashboard({
   const productsById = new Map(recentProducts.map((product) => [product.id, product]));
 
   return (
-    <div className="mx-auto w-full max-w-[520px] space-y-4 bg-[#f8fbff] px-3 pb-24 pt-3 lg:hidden">
-      <section className="flex items-center justify-between rounded-[12px] border border-[#d7eadf] bg-white px-3 py-2.5 shadow-[0_6px_18px_rgba(26,57,112,0.05)]">
+    <div className="mx-auto w-full max-w-[520px] space-y-5 bg-white px-4 pb-28 pt-2 lg:hidden">
+      <section className="flex items-center justify-between rounded-[18px] border border-[#d7eadf] bg-white px-4 py-3.5 shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
         <div className="flex items-center gap-2.5">
-          <span className={cn("grid h-8 w-8 place-items-center rounded-full text-white shadow-[0_6px_16px_rgba(17,168,75,0.22)]", syncHealthy && isOnline ? "bg-[#18b957]" : "bg-[#f59e0b]") }>
-            {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={17} />}
+          <span className={cn("grid h-11 w-11 place-items-center rounded-full text-white shadow-[0_8px_18px_rgba(17,168,75,0.22)] ring-8 ring-[#e9f8ee]", syncHealthy && isOnline ? "bg-[#18b957]" : "bg-[#f59e0b]") }>
+            {isSyncing ? <RefreshCw size={20} className="animate-spin" /> : <CheckCircle2 size={21} />}
           </span>
           <div>
-            <p className={cn("text-[12px] font-black", syncHealthy && isOnline ? "text-[#159447]" : "text-[#b96d00]")}>
+            <p className={cn("text-[17px] font-black", syncHealthy && isOnline ? "text-[#159447]" : "text-[#b96d00]")}>
               {isSyncing ? "Syncing" : !isOnline ? "Offline safe" : syncHealthy ? "Synced" : failedCount > 0 ? "Review needed" : `${pendingCount} pending`}
             </p>
-            <p className="text-[10px] font-semibold text-[#6a7890]">{isOnline ? "Just now" : "Offline safe"}</p>
+            <p className="text-[13px] font-medium text-[#33456b]">{isOnline ? "Just now" : "Offline safe"}</p>
           </div>
         </div>
-        <Link href="/sync-status" className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#cfe0ff] bg-white px-3 py-2 text-[11px] font-black text-[#075fff]">
-          <RefreshCw size={13} /> Sync Now
+        <Link href="/sync-status" className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-[#d9e3f2] bg-white px-4 text-[15px] font-black text-[#075fff]">
+          <RefreshCw size={18} /> Sync Now
         </Link>
       </section>
 
       <section>
-        <div className="mb-2.5 flex items-center justify-between gap-3">
-          <h2 className="font-display text-[14px] font-black text-[#102347]">Business Overview</h2>
-          <span className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#d7e0ec] bg-white px-2 py-1.5 text-[9px] font-bold text-[#344865]">
-            <CalendarCheck size={11} /> Today
+        <div className="mb-3.5 flex items-center justify-between gap-3">
+          <h2 className="font-display text-[20px] font-black text-[#071333]">Business Overview</h2>
+          <span className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-[#d7e0ec] bg-white px-3 text-[14px] font-bold text-[#102347]">
+            <CalendarCheck size={16} /> Today
           </span>
         </div>
-        <div className="grid auto-rows-fr grid-cols-3 gap-2">
+        <div className="grid auto-rows-fr grid-cols-2 gap-3 min-[460px]:grid-cols-3">
           <MobileMetricCard label="Total Sales" value={dashboard.revenue} previous={dashboard.previousRevenue} delta={salesDelta} color="#075fff" icon={<ShoppingCart size={13} />} iconClass="border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]" />
           <MobileMetricCard label="Cash Collection" value={dashboard.cashCollected} previous={dashboard.previousCashCollected} delta={cashDelta} color="#18ad50" icon={<Wallet size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
           <MobileMetricCard label="UPI Collection" value={dashboard.upiCollected} previous={dashboard.previousUpiCollected} delta={upiDelta} color="#7447eb" icon={<Smartphone size={13} />} iconClass="border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]" />
@@ -1047,13 +1047,13 @@ function MobileGeneralDashboard({
         </div>
       </section>
 
-      <section className="border-y border-[#e7edf5] bg-white px-1 py-4">
+      <section className="rounded-[18px] border border-[#e4ebf4] bg-white p-4 shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-[14px] font-black text-[#102347]">Sales Trend</h2>
+            <h2 className="font-display text-[20px] font-black text-[#071333]">Sales Trend</h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-semibold text-[#64748b]">Total Sales</span>
-              <span className="text-[12px] font-black text-[#102347]">{fmtCompactRs(periodSales)}</span>
+              <span className="text-[13px] font-medium text-[#33456b]">Total Sales</span>
+              <span className="text-[15px] font-black text-[#071333]">{fmtCompactRs(periodSales)}</span>
               <MobileDelta delta={periodSalesDelta} />
             </div>
           </div>
@@ -1079,8 +1079,8 @@ function MobileGeneralDashboard({
       </section>
 
       <section>
-        <h2 className="mb-2.5 font-display text-[14px] font-black text-[#102347]">Quick Insights</h2>
-        <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white shadow-[0_7px_22px_rgba(26,57,112,0.05)]">
+        <h2 className="mb-3 font-display text-[20px] font-black text-[#071333]">Quick Insights</h2>
+        <div className="overflow-hidden rounded-[18px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? "No sales yesterday to compare against yet." : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
           <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? "Your top product"} is leading sales.`} subtitle="Keep the best sellers available in stock." />
           <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle="Follow up to improve cash flow." />
@@ -1131,9 +1131,6 @@ function MobileGeneralDashboard({
         </div>
       </section>
 
-      <Link href="/billing" aria-label="Create new bill" className="fixed left-1/2 z-50 grid h-12 w-12 -translate-x-1/2 place-items-center rounded-full bg-[#075fff] text-white shadow-[0_12px_28px_rgba(7,95,255,0.34)] lg:hidden" style={{ bottom: "calc(var(--app-mobile-nav-height) + env(safe-area-inset-bottom) + 10px)" }}>
-        <PackagePlus size={22} />
-      </Link>
     </div>
   );
 }
@@ -1153,21 +1150,21 @@ function MobileMetricCard({ label, value, previous, delta, color, icon, iconClas
   const bad = delta != null && (positiveIsBad ? delta > 0 : delta < 0);
   const deltaColor = delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : bad ? "text-[#ef3340]" : "text-[#16a34a]";
   return (
-    <div className="flex min-w-0 flex-col rounded-[11px] border border-[#e2eaf4] bg-white p-2.5 shadow-[0_7px_20px_rgba(26,57,112,0.055)]">
-      <div className="flex min-h-[28px] items-center gap-1.5">
-        <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-[8px] border", iconClass)}>{icon}</span>
-        <span className="min-w-0 text-[9px] font-bold leading-tight text-[#3f506b]">{label}</span>
+    <div className="flex min-h-[142px] min-w-0 flex-col rounded-[16px] border border-[#e2eaf4] bg-white p-3.5 shadow-[0_10px_26px_rgba(26,57,112,0.055)]">
+      <div className="flex min-h-[34px] items-center gap-2">
+        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border", iconClass)}>{icon}</span>
+        <span className="min-w-0 text-[12px] font-bold leading-tight text-[#102347]">{label}</span>
       </div>
-      <p className="mt-2 truncate font-display text-[16px] font-black tracking-tight text-[#102347]">{fmtCompactRs(value)}</p>
-      <div className={cn("mt-1 flex items-center gap-0.5 text-[8px] font-black", deltaColor)}>
+      <p className="mt-4 truncate font-display text-[24px] font-black tracking-tight text-[#071333]">{fmtCompactRs(value)}</p>
+      <div className={cn("mt-2 flex items-center gap-1 text-[12px] font-black", deltaColor)}>
         {delta == null ? (
           <span>—</span>
         ) : (
-          <>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}%</>
+          <>{delta === 0 ? <Minus size={12} /> : delta > 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(delta)}%</>
         )}
         <span className="font-semibold text-[#7b8799]">vs yesterday</span>
       </div>
-      <div className="mt-auto h-7 pt-1">
+      <div className="mt-auto h-10 pt-2">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={spark} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
             <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.28} /><stop offset="70%" stopColor={color} stopOpacity={0.08} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs>

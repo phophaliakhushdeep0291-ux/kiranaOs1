@@ -469,7 +469,7 @@ export default function PurchaseBillsPage() {
     >
       <div className="space-y-4">
         {/* KPI row — label left, icon top-right per reference */}
-        <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
           <Kpi label="Total Purchase Value" value={fmt(totals.amount)} icon={<ShoppingBag size={16} />} iconBg="bg-[#e8f0fe] text-[#2563eb]"
             delta={monthStats.totalDelta} deltaSuffix="vs last month" fallbackSub={`${rows.length} purchase bills`} loading={loading} />
           <Kpi label="Unpaid Purchase Dues" value={fmt(totals.due)} icon={<AlertTriangle size={16} />} iconBg="bg-[#fdebeb] text-[#ef4444]"
@@ -481,7 +481,7 @@ export default function PurchaseBillsPage() {
         </div>
 
         {/* Insight strip — one card, four cells */}
-        <div className="grid grid-cols-1 divide-y divide-[#eef2f8] rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)] min-[560px]:grid-cols-2 xl:grid-cols-4 xl:divide-y-0 xl:divide-x">
+        <div className="grid grid-cols-2 divide-y divide-[#eef2f8] rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)] xl:grid-cols-4 xl:divide-y-0 xl:divide-x">
           <Insight icon={<Crown size={15} />} iconBg="bg-[#e8f0fe] text-[#2563eb]" label="Top Supplier"
             value={topSuppliers[0]?.name ?? "—"} sub={topSuppliers[0] ? `${fmt(topSuppliers[0].amount)} (${topSuppliers[0].share}%)` : "No purchases yet"} />
           <Insight icon={<Package size={15} />} iconBg="bg-[#fdf3e1] text-[#d97706]" label="Most Purchased Item"
