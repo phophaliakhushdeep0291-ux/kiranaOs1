@@ -426,13 +426,15 @@ function calculateLowStock(products: Product[]): ReportLowStockItem[] {
   return products
     .filter((product) => !isDeleted(product as unknown as RecordLike) && (product.stockTrackingEnabled ?? product.trackStock ?? true))
     .map((product) => {
-      // stockBaseQty is in base units (g/ml); the threshold (lowStockAlert) is in display units.
-      // Convert stock to the display unit so the comparison — and the number shown — are correct.
+      // stockBaseQty AND lowStockThreshold are both stored in base units (g/ml) — the product
+      // form converts the entered alert via toBaseQty. Convert BOTH to the display unit so the
+      // comparison is unit-consistent and the numbers shown read naturally (2 kg, not 2000).
+      // Comparing display stock against a base-unit threshold flagged every weighed item as low.
       const unit = product.stockUnit ?? productDisplayUnit(product);
       const stock = product.stockBaseQty != null
         ? fromBaseQty(product.stockBaseQty, unit)
         : readNumber(product.stockQuantity, 0);
-      const threshold = readNumber(product.lowStockThreshold ?? product.lowStockAlert, 0);
+      const threshold = fromBaseQty(readNumber(product.lowStockThreshold ?? product.lowStockAlert, 0), unit);
       return { product, stock, threshold, unit };
     })
     .filter(({ stock, threshold }) => threshold > 0 && stock <= threshold)
