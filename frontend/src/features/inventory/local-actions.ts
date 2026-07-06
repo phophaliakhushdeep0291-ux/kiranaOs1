@@ -64,6 +64,8 @@ function assertStockMovementRules(input: {
     throw new Error("Reason is required for damaged stock adjustment");
   }
 
+  if (input.movementType === "sale" && input.nextStock < 0) return;
+
   if (input.nextStock < 0 && !allowsNegativeStock(input.product, input.data)) {
     throw new Error("Negative stock is not allowed for this product. Enable negative stock override only after owner approval.");
   }

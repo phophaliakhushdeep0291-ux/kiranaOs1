@@ -129,6 +129,9 @@ const stockSalePayloadSchema = z.object({
   quantity: quantityAmount({ positive: true }),
   enteredUnit: z.string().min(1),
   note: z.string().optional(),
+  allowNegativeStock: z.boolean().optional(),
+  allowStockShortfall: z.boolean().optional(),
+  negativeStockAllowed: z.boolean().optional(),
 }).passthrough();
 
 const purchaseBillLifecyclePayloadSchema = z.object({
@@ -1706,17 +1709,18 @@ async function applyStockSale(shopId, event, context) {
       if (!product) throw new AppError("Product not found", 404);
       const qtyInBase = toBaseQty(payload.quantity, payload.enteredUnit, product.baseUnit);
       const updated = await tx.product.updateMany({
-        where: { id: product.id, shopId, deletedAt: null, stockBaseQty: { gte: qtyInBase } },
+        where: { id: product.id, shopId, deletedAt: null },
         data: { stockBaseQty: { decrement: qtyInBase } },
       });
       if (updated.count !== 1) {
-        const err = new AppError("Sale quantity exceeds current stock", 409);
+        const err = new AppError("Product stock could not be updated", 409);
         err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
         throw err;
       }
       const freshProduct = await tx.product.findFirst({ where: { id: product.id, shopId } });
       const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
       const oldStock = round2(newStock + qtyInBase);
+      const shortfallBaseQty = round2(Math.max(0, -newStock));
       const ledger = await tx.stockLedger.create({
         data: {
           shopId,
@@ -1726,12 +1730,14 @@ async function applyStockSale(shopId, event, context) {
           changeBaseQty: -qtyInBase,
           oldStockBaseQty: oldStock,
           newStockBaseQty: newStock,
-          note: payload.note ?? "Offline manual stock sale",
           idempotencyKey,
           clientMovementId,
           sourceDeviceId,
           sourceType: idempotencyKey ? "sale" : null,
           sourceId: idempotencyKey ? product.id : null,
+          note: shortfallBaseQty > 0
+            ? `${payload.note ?? "Offline manual stock sale"} | Stock negative by ${shortfallBaseQty} ${product.baseUnit}; reconcile inventory`
+            : payload.note ?? "Offline manual stock sale",
         },
       });
       return {

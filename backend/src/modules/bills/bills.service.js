@@ -326,8 +326,8 @@ export async function confirmBill(shopId, body, actor = {}) {
         allowShortfall: allowStockShortfall,
       });
 
-      // Record the actual stock removed (= qtyInBase normally; less on a floored shortfall),
-      // so the ledger entry stays internally consistent (old + change == new).
+      // Record the actual stock removed so the ledger stays internally consistent
+      // (old + change == new), including negative after-stock.
       const removedBaseQty = round2(stockResult.oldStock - stockResult.newStock);
       await tx.stockLedger.create({
         data: {
@@ -1005,16 +1005,15 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
       err.code = code;
       throw err;
     }
-    // Offline-origin sale already happened: remove what stock is available and floor at
-    // zero (never negative) so the sale is recorded, not dropped. The caller flags the
-    // shortfall on the stock-ledger entry for the shopkeeper to reconcile.
+    // Offline/current-counter sale already happened: record the real negative
+    // balance so the shopkeeper can reconcile it with the next stock-in.
     const fresh = await tx.product.findFirst({
       where: { id: product.id, shopId },
       select: { stockBaseQty: true },
     });
-    const available = round2(Math.max(0, fresh?.stockBaseQty ?? 0));
-    const newStock = round2(Math.max(0, available - qtyInBase));
-    const shortfallBaseQty = round2(Math.max(0, qtyInBase - available));
+    const available = round2(fresh?.stockBaseQty ?? product.stockBaseQty ?? 0);
+    const newStock = round2(available - qtyInBase);
+    const shortfallBaseQty = round2(Math.max(0, -newStock));
     await tx.product.updateMany({ where: { id: product.id, shopId }, data: { stockBaseQty: newStock } });
     return { oldStock: available, newStock, shortfallBaseQty };
   }
