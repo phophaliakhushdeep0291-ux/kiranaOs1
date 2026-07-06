@@ -96,6 +96,7 @@ function buildUpdatedProduct(
     id: product.id,
     productId,
     stockBaseQty: nextStock,
+    stockQuantity: nextStock,
     stockTrackingEnabled: true,
     trackStock: true,
     averageCostPrice: nextAverageCost,

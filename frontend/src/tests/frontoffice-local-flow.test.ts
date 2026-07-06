@@ -383,7 +383,7 @@ describe("front office local-first cashier flow", () => {
     // so the edit/mark-paid flow resolves the same row the purchase just created.
     const purchaseRowId = (purchase.movement as { id: string }).id;
 
-    expect(rows("products")[0]).toEqual(expect.objectContaining({ id: "product_sugar", stockBaseQty: 20, costPerRateUnit: 45 }));
+    expect(rows("products")[0]).toEqual(expect.objectContaining({ id: "product_sugar", stockBaseQty: 16, stockQuantity: 16, costPerRateUnit: 46.25 }));
     expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
       product_id: "product_sugar",
       invoice_number: "INV-100",
