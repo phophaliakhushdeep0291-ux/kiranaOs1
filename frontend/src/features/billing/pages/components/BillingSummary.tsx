@@ -77,6 +77,14 @@ interface BillingSummaryProps {
   onUpdateRate: (productId: string, rate: number) => void;
   onUpdateUnit: (productId: string, unit: string) => void;
   onRemoveItem: (productId: string) => void;
+  negativeStockWarnings?: Array<{
+    productId: string;
+    productName: string;
+    available: number;
+    requested: number;
+    after: number;
+    unit: string;
+  }>;
 }
 
 function fmtRs(value: number) {
@@ -138,6 +146,7 @@ export function BillingSummary({
   onUpdateRate,
   onUpdateUnit,
   onRemoveItem,
+  negativeStockWarnings = [],
 }: BillingSummaryProps) {
   const [showCustomerOptions, setShowCustomerOptions] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
@@ -373,6 +382,19 @@ export function BillingSummary({
                 <span className="ml-auto text-[12px] font-bold text-[#536383]">
                   {cart.length} Item{cart.length !== 1 ? "s" : ""}
                 </span>
+              </div>
+            )}
+            {negativeStockWarnings.length > 0 && (
+              <div className="border-t border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[11px] leading-snug text-amber-800">
+                <p className="font-black text-amber-900">Stock will go negative</p>
+                <p className="mt-0.5 font-semibold">
+                  {negativeStockWarnings[0].productName} will become{" "}
+                  <span className="font-black">{negativeStockWarnings[0].after} {negativeStockWarnings[0].unit}</span>.
+                  {" "}Bill can continue; update stock later.
+                </p>
+                {negativeStockWarnings.length > 1 && (
+                  <p className="mt-1 font-bold">+{negativeStockWarnings.length - 1} more item{negativeStockWarnings.length === 2 ? "" : "s"} need stock update.</p>
+                )}
               </div>
             )}
           </div>

@@ -263,7 +263,36 @@ export default function ExpensesPage() {
             </div>
           ) : (
             <>
-              <div className="app-table-scroll overflow-x-auto">
+              <div className="space-y-2.5 p-3 md:hidden">
+                {pageRows.map((e) => {
+                  const Icon = CATEGORY_ICON[e.category] ?? MoreHorizontal;
+                  const color = donutData.find((d) => d.name === e.category)?.color ?? "#64748b";
+                  return (
+                    <article key={e.id} className="rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                      <div className="flex items-start gap-3">
+                        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px]" style={{ background: `${color}1a`, color }}><Icon size={18} /></span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14px] font-extrabold text-[#07133f]">{e.title}</p>
+                          <p className="mt-1 truncate text-xs font-medium text-[#53617d]">{e.category}{e.vendor ? ` • ${e.vendor}` : ""}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", MODE_BADGE[e.paymentMode] ?? MODE_BADGE.other)}>{MODES.find((m) => m.value === e.paymentMode)?.label ?? e.paymentMode}</span>
+                            <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", e.status === "pending" ? CHIP_TONES.amber : CHIP_TONES.green)}>{e.status === "pending" ? "Pending" : "Paid"}</span>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[15px] font-black text-[#07133f]">{inr(e.amount)}</p>
+                          <p className="mt-1 text-[11px] font-medium text-[#71809b]">{fmtDate(e.spentAt)}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <Button variant="outline" className="h-9 rounded-[10px] text-[11px] font-bold" onClick={() => openEdit(e)}><Pencil size={13} className="mr-1.5" /> Edit</Button>
+                        <Button variant="outline" className="h-9 rounded-[10px] border-rose-200 text-[11px] font-bold text-rose-600 hover:bg-rose-50" onClick={() => setDeleting(e)}><Trash2 size={13} className="mr-1.5" /> Delete</Button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="app-table-scroll hidden overflow-x-auto md:block">
                 <table className="w-full text-[12.5px]">
                   <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                     <tr>
