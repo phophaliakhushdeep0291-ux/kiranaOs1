@@ -578,7 +578,47 @@ export default function PurchaseBillsPage() {
             </div>
           ) : (
             <>
-              <div className="app-table-scroll overflow-x-auto">
+              <div className="space-y-2.5 p-3 md:hidden">
+                {pageRows.map((row) => {
+                  const status = effectiveStatus(row);
+                  return (
+                    <article key={`${row.source}:${row.id}`} className="rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[14px] font-extrabold text-[#07133f]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber}</p>
+                          <p className="mt-1 truncate text-xs font-bold text-[#344668]">{row.supplierName}</p>
+                          <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{safeDate(row.date)} • {rowItems(row) ?? 0} items</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[15px] font-black text-[#07133f]">{fmt(row.amount)}</p>
+                          <span className={cn("mt-1 inline-flex rounded-[7px] px-2 py-[3px] text-[11px] font-bold", STATUS_CLS[status] ?? STATUS_CLS.due)}>{STATUS_LABEL[status] ?? status}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2 rounded-[12px] bg-[#f8fafc] p-2 text-center">
+                        <div><p className="text-[10px] font-bold uppercase text-[#8290a8]">Paid</p><p className="mt-1 text-xs font-black text-[#119447]">{fmt(row.paid)}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase text-[#8290a8]">Due</p><p className={cn("mt-1 text-xs font-black", row.due > 0 ? "text-[#ef4444]" : "text-[#344668]")}>{fmt(row.due)}</p></div>
+                        <div><p className="text-[10px] font-bold uppercase text-[#8290a8]">Mode</p><p className="mt-1 text-xs font-black text-[#344668]">{modeLabel(row.paymentMode)}</p></div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <Button variant="outline" className="h-9 rounded-[10px] text-[11px] font-bold" disabled={row.due <= 0 || saving} onClick={() => openPay(row)}>Pay</Button>
+                        <Button variant="outline" className="h-9 rounded-[10px] text-[11px] font-bold" disabled={saving} onClick={() => openEdit(row)}>Edit</Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273]" aria-label={`Actions for ${row.invoiceNumber}`}><MoreVertical size={15} className="mx-auto" /></button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem disabled={row.due <= 0 || saving} onClick={() => openPay(row)}><CheckCircle2 size={14} className="mr-2" /> Pay due</DropdownMenuItem>
+                            <DropdownMenuItem disabled={saving} onClick={() => openEdit(row)}><Pencil size={14} className="mr-2" /> Edit purchase</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-rose-600 focus:text-rose-700" disabled={saving} onClick={() => setDeletingRow(row)}><Trash2 size={14} className="mr-2" /> Delete purchase</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+              <div className="app-table-scroll hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[860px] text-[12.5px]">
                   <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                     <tr>
