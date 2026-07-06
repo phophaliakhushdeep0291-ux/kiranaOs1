@@ -257,6 +257,59 @@ describe("front office local-first cashier flow", () => {
     }));
   });
 
+  it("allows sale beyond available stock and carries the negative balance until stock is added", async () => {
+    const bill = await createBillLocalFirst(billInput({
+      items: [{
+        productId: "product_sugar",
+        name: "Sugar",
+        quantity: 20,
+        enteredUnit: "kg",
+        ratePerRateUnit: 50,
+        gstRate: 0,
+      }],
+      actualAmount: 1000,
+      buyerPaidAmount: 1000,
+      payments: [{ mode: BillPaymentMode.cash, amount: 1000 }],
+    }));
+
+    expect(rows("products")[0]).toEqual(expect.objectContaining({
+      id: "product_sugar",
+      stockBaseQty: -10,
+      stockQuantity: -10,
+      stockNeedsReview: true,
+    }));
+    expect(rows("inventory_movements").find((row) => row.billId === bill.id)).toEqual(expect.objectContaining({
+      action: "sale",
+      product_id: "product_sugar",
+      quantity_delta: -20,
+      stock_before: 10,
+      stock_after: -10,
+      negative_stock_warning: expect.stringContaining("Stock negative after bill"),
+    }));
+
+    await recordPurchaseLocalFirst({
+      productId: "product_sugar",
+      quantity: 15,
+      enteredUnit: "kg",
+      supplierName: "Govind Traders",
+      invoiceNumber: "INV-NEG-RESTOCK",
+      billAmount: 750,
+      purchasePaymentStatus: "paid",
+      purchasePaymentMode: "cash",
+      purchasePaidAmount: 750,
+      purchaseDueAmount: 0,
+      costPerRateUnit: 50,
+      note: "Restock after negative sale",
+    });
+
+    expect(rows("products")[0]).toEqual(expect.objectContaining({
+      id: "product_sugar",
+      stockBaseQty: 5,
+      stockQuantity: 5,
+      stockNeedsReview: false,
+    }));
+  });
+
   it("pays a purchase due in small partial payments until settled, rejecting overpay", async () => {
     await recordPurchaseLocalFirst({
       productId: "product_sugar",

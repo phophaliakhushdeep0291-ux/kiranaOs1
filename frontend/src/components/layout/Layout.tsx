@@ -576,13 +576,13 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Mobile topbar */}
-        <header className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] bg-white px-5 pb-3 pt-[max(1.25rem,env(safe-area-inset-top))] lg:hidden">
+        <header className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b border-[#edf2f8] bg-white/98 px-5 pb-3 pt-[max(1.1rem,env(safe-area-inset-top))] shadow-[0_8px_22px_rgba(15,35,80,0.035)] backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-4">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Open navigation" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-[#075fff] transition-colors hover:bg-[#eef4ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#075fff]/30">
-                    <Menu size={30} strokeWidth={1.9} aria-hidden="true" />
+                  <button type="button" aria-label="Open navigation" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-[#075fff] transition-colors active:bg-[#eef4ff] hover:bg-[#eef4ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#075fff]/30">
+                    <Menu size={29} strokeWidth={2} aria-hidden="true" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="max-h-[calc(100vh-96px)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto p-2">
@@ -590,18 +590,18 @@ export function Layout({ children }: { children: ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
               <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="block truncate font-display text-[30px] font-black tracking-tight text-[#071333]">Kirana<span className="text-[#075fff]">OS</span></span>
-                <span className="mt-0.5 block truncate text-[12px] font-medium text-[#33456b]">Smart POS for Modern Stores</span>
+                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Kirana<span className="text-[#075fff]">OS</span></span>
+                <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">Smart POS for Modern Stores</span>
               </Link>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <Link href="/sync-status" aria-label="Notifications" className="relative grid h-11 w-11 place-items-center rounded-full text-[#071333] transition-colors hover:bg-[#f3f7fc]">
+              <Link href="/sync-status" aria-label="Notifications" className="relative grid h-11 w-11 place-items-center rounded-full text-[#071333] transition-colors active:bg-[#f3f7fc] hover:bg-[#f3f7fc]">
                 <Bell size={25} strokeWidth={1.9} aria-hidden="true" />
                 {attentionCount > 0 && <span className="absolute right-0 top-0 grid h-5 min-w-5 place-items-center rounded-full bg-[#ef233c] px-1 text-[10px] font-black text-white ring-2 ring-white">{attentionCount}</span>}
               </Link>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Open profile menu" className="grid h-11 w-11 place-items-center rounded-full bg-[#075fff] text-[12px] font-black text-white ring-4 ring-[#eef4ff]">
+                  <button type="button" aria-label="Open profile menu" className="grid h-11 w-11 place-items-center rounded-full bg-[#075fff] text-[12px] font-black text-white shadow-[0_10px_22px_rgba(7,95,255,0.18)] ring-4 ring-[#eef4ff]">
                     {initials(storeName)}
                   </button>
                 </DropdownMenuTrigger>
@@ -634,11 +634,11 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
 
         {/* Mobile bottom nav */}
-        <nav aria-label="Mobile navigation" className="fixed inset-x-4 bottom-3 z-50 rounded-[20px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_30px_rgba(15,35,80,0.13)] backdrop-blur-xl lg:hidden">
-          <Link href="/billing" aria-label="Create new bill" className="absolute left-1/2 top-0 grid h-16 w-16 -translate-x-1/2 -translate-y-6 place-items-center rounded-full bg-[#075fff] text-white shadow-[0_14px_30px_rgba(7,95,255,0.34)] ring-8 ring-white">
-            <Plus size={32} strokeWidth={1.9} aria-hidden="true" />
+        <nav aria-label="Mobile navigation" className="fixed inset-x-3 bottom-3 z-50 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_34px_rgba(15,35,80,0.14)] backdrop-blur-xl lg:hidden">
+          <Link href="/billing" aria-label="Create new bill" className="absolute left-1/2 top-0 grid h-[62px] w-[62px] -translate-x-1/2 -translate-y-6 place-items-center rounded-full bg-[#075fff] text-white shadow-[0_15px_34px_rgba(7,95,255,0.36)] ring-8 ring-white transition-transform active:scale-95">
+            <Plus size={31} strokeWidth={2} aria-hidden="true" />
           </Link>
-          <div className="grid grid-cols-5 items-center px-2">
+          <div className="grid grid-cols-5 items-center px-2.5">
             {MOBILE_NAV.slice(0, 2).map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);
               return (
@@ -646,13 +646,13 @@ export function Layout({ children }: { children: ReactNode }) {
                   <div
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold transition-all duration-200",
+                      "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200",
                       active ? "text-[#075fff]" : "text-[#64748b] active:text-[#102347]",
                     )}
                   >
                     <div className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-2xl transition-all duration-200",
-                      active ? "bg-[#edf4ff] text-[#075fff]" : "bg-transparent",
+                      "flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200",
+                      active ? "bg-[#edf4ff] text-[#075fff] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent",
                     )}>
                       <Icon size={20} aria-hidden="true" />
                     </div>
@@ -668,11 +668,11 @@ export function Layout({ children }: { children: ReactNode }) {
                   <div
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold transition-all duration-200",
+                      "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200",
                       active ? "text-[#075fff]" : "text-[#64748b] active:text-[#102347]",
                     )}
                   >
-                    <div className={cn("flex h-8 w-8 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[#edf4ff] text-[#075fff]" : "bg-transparent")}>
+                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[#edf4ff] text-[#075fff] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
                       <Icon size={20} aria-hidden="true" />
                     </div>
                     <span className="leading-none">{label}</span>
@@ -682,8 +682,8 @@ export function Layout({ children }: { children: ReactNode }) {
             })}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" aria-label="Open more navigation" className="flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold text-[#64748b] transition-all duration-200 active:text-[#102347]">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl transition-colors">
+                <button type="button" aria-label="Open more navigation" className="flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold text-[#64748b] transition-all duration-200 active:text-[#102347]">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl transition-colors">
                     <Settings size={20} aria-hidden="true" />
                   </div>
                   <span className="leading-none">More</span>

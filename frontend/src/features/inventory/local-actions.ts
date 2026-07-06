@@ -105,6 +105,8 @@ function buildUpdatedProduct(
     updatedAt: now,
     updated_at: now,
     sync_status: "pending_sync",
+    stockNeedsReview: nextStock < 0,
+    negativeStockWarning: nextStock < 0 ? "Stock is negative. Add stock when inventory is updated." : undefined,
     isLowStock: nextStock <= readNumber(product.lowStockThreshold, 0),
   } as InventoryItem;
 }
