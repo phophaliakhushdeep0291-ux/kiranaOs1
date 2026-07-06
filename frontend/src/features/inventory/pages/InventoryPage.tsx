@@ -178,7 +178,9 @@ function toBaseQty(quantity: number, unit: string) {
 
 function isLowStock(product: InventoryItem) {
   if ((product.stockTrackingEnabled ?? product.trackStock ?? true) === false) return false;
-  return Number(product.stockBaseQty ?? 0) <= Number(product.lowStockThreshold ?? 0);
+  // Both sides are base units; no threshold (0) means never "low" — matches the backend filter.
+  const threshold = Number(product.lowStockThreshold ?? 0);
+  return threshold > 0 && Number(product.stockBaseQty ?? 0) <= threshold;
 }
 
 function movementLabel(type: string) {

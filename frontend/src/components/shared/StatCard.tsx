@@ -35,7 +35,7 @@ export function StatCard({ label, value, description, icon, loading = false, ton
   return (
     <div
       className={cn(
-        "group min-h-[112px] overflow-hidden rounded-xl border border-t-2 bg-card p-3.5 text-card-foreground shadow-sm sm:min-h-[118px] sm:p-5",
+        "group min-h-[132px] overflow-hidden rounded-[18px] border border-t-2 bg-card p-3.5 text-card-foreground shadow-[0_10px_30px_rgba(15,23,42,0.06)] sm:min-h-[118px] sm:rounded-xl sm:p-5 sm:shadow-sm",
         "transition-[border-color,box-shadow,transform] duration-200",
         toneBorderTop[tone],
         className,
@@ -43,11 +43,11 @@ export function StatCard({ label, value, description, icon, loading = false, ton
       {...props}
     >
       <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
-        <span className="min-w-0 break-words text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+        <span className="min-w-0 break-words text-[11px] font-semibold leading-snug tracking-normal text-[#182553] sm:font-bold sm:uppercase sm:tracking-widest sm:text-muted-foreground">
           {label}
         </span>
         {icon ? (
-          <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl ring-1 sm:h-10 sm:w-10", toneIconClasses[tone])}>
+          <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[14px] ring-1 shadow-[0_8px_18px_rgba(37,99,235,0.08)] sm:h-10 sm:w-10 sm:rounded-xl sm:shadow-none", toneIconClasses[tone])}>
             {icon}
           </span>
         ) : null}
@@ -59,11 +59,11 @@ export function StatCard({ label, value, description, icon, loading = false, ton
         </div>
       ) : (
         <div className="min-w-0">
-          <p className="break-words font-display text-[1.45rem] font-black leading-tight tracking-tight text-foreground tabular-nums sm:text-3xl">
+          <p className="break-words font-display text-[1.35rem] font-extrabold leading-tight tracking-tight text-[#06123a] tabular-nums sm:text-3xl sm:font-black sm:text-foreground">
             {value}
           </p>
           {description ? (
-            <p className="mt-1 break-words text-xs font-medium text-muted-foreground">{description}</p>
+            <p className="mt-2 break-words text-[11px] font-medium leading-snug text-[#53617d] sm:mt-1 sm:text-xs sm:text-muted-foreground">{description}</p>
           ) : null}
         </div>
       )}

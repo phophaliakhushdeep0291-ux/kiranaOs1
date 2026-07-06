@@ -784,7 +784,60 @@ export default function BillsPage() {
           </div>
         ) : (
           <>
-            <div className="app-table-scroll overflow-x-auto">
+            <div className="space-y-2.5 p-3 md:hidden">
+              {pageRows.map((bill) => {
+                const date = formatBillDateParts(billDate(bill));
+                const status = paymentStatusOf(bill);
+                const mode = paymentModeOf(bill);
+                const sync = syncStatusOf(bill);
+                const deleted = isDeleted(bill);
+                const estimate = isEstimateBill(bill);
+                return (
+                  <article key={bill.id} className={cn("rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]", deleted && "opacity-70")}>
+                    <div className="flex items-start justify-between gap-3">
+                      <Link href={`/bills/${bill.id}`} className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-extrabold text-[#075fff]">Bill #{compactBillNo(billNo(bill))}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-[#102347]">{bill.customerName || "Walk-in Customer"}</p>
+                        <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{date.date} {date.time ? `• ${date.time}` : ""} • {itemsCount(bill) || 0} items</p>
+                      </Link>
+                      <div className="text-right">
+                        <p className="text-[15px] font-black text-[#07133f]">{money(billTotal(bill))}</p>
+                        <div className="mt-1 flex justify-end"><StatusBadge status={status} /></div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <ModeBadge mode={mode} />
+                      <span className="rounded-[6px] bg-[#edf4ff] px-2 py-1 text-[10px] font-black text-[#075fff]">{billTypeOf(bill)}</span>
+                      <SyncBadgeMini sync={sync} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-4 gap-2">
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => navigate(`/bills/${bill.id}`)} aria-label="View bill"><Eye size={15} className="mx-auto" /></button>
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => printBill(bill)} aria-label="Print bill"><Printer size={15} className="mx-auto" /></button>
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => void shareOnWhatsapp(bill)} aria-label="Share bill"><Share2 size={15} className="mx-auto" /></button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={15} className="mx-auto" /></button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> Return / refund</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {deleted ? (
+                            <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> Restore bill</DropdownMenuItem>
+                          ) : (
+                            <>
+                              {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> Cancel bill</DropdownMenuItem>}
+                              <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? "Move estimate to recycle bin" : "Move to recycle bin"}</DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="app-table-scroll hidden overflow-x-auto md:block">
               <table className="w-full min-w-[1240px] border-collapse text-[11px]">
                 <thead>
                   <tr className={TABLE_HEAD}>

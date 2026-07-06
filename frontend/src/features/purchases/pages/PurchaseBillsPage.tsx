@@ -18,7 +18,7 @@ import {
 } from "@/features/finance/services/FinancialAggregationService";
 import { hydratePurchaseHistoryFromSyncPull } from "@/features/sync/cloud-hydration";
 import { useAuth } from "@/features/auth/useAuth";
-import { deletePurchaseLocal, markPurchasePaidLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
+import { deletePurchaseLocal, recordPurchasePaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
 import { createSupplierLocalFirst } from "@/features/suppliers/local-actions";
 import { offlineDB } from "@/lib/offline/db";
@@ -133,6 +133,7 @@ export default function PurchaseBillsPage() {
     quantity: "",
   });
   const [payMode, setPayMode] = useState("cash");
+  const [payAmount, setPayAmount] = useState("");
   const purchaseHydrationAttemptedRef = useRef(false);
   const { accessToken, isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -381,6 +382,7 @@ export default function PurchaseBillsPage() {
   function openPay(row: SupplierDueRow) {
     setPayingRow(row);
     setPayMode(row.paymentMode === "upi" ? "upi" : "cash");
+    setPayAmount(String(row.due > 0 ? row.due : ""));
   }
 
   async function saveEdit() {
@@ -421,14 +423,29 @@ export default function PurchaseBillsPage() {
 
   async function savePaid() {
     if (!payingRow || saving) return;
+    const amount = money(payAmount);
+    if (amount <= 0) {
+      toast({ title: "Enter a payment amount", description: "Pay the full due or any smaller amount.", variant: "destructive" });
+      return;
+    }
+    if (amount > payingRow.due + 0.009) {
+      toast({ title: "Amount is more than the due", description: `Only ${fmt(payingRow.due)} is due on this purchase.`, variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
-      await markPurchasePaidLocal(payingRow, payMode);
+      await recordPurchasePaymentLocal(payingRow, { amount, mode: payMode });
+      const remaining = Math.max(0, Math.round((payingRow.due - amount) * 100) / 100);
       await reloadSnapshot();
       setPayingRow(null);
-      toast({ title: "Purchase marked paid", description: "Supplier due is now cleared for this bill." });
+      toast({
+        title: remaining <= 0 ? "Purchase fully paid" : `Payment of ${fmt(amount)} recorded`,
+        description: remaining <= 0
+          ? "Supplier due is now cleared for this bill."
+          : `${fmt(remaining)} still due to ${payingRow.supplierName}. Pay the rest anytime.`,
+      });
     } catch (error) {
-      toast({ title: "Could not mark paid", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+      toast({ title: "Could not record payment", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -600,7 +617,7 @@ export default function PurchaseBillsPage() {
                                 <button className="grid h-7 w-7 place-items-center rounded-[7px] text-[#536583] hover:bg-[#eef2f8]" aria-label={`Actions for ${row.invoiceNumber}`}><MoreVertical size={15} /></button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44">
-                                <DropdownMenuItem disabled={row.due <= 0 || saving} onClick={() => openPay(row)}><CheckCircle2 size={14} className="mr-2" /> Mark paid</DropdownMenuItem>
+                                <DropdownMenuItem disabled={row.due <= 0 || saving} onClick={() => openPay(row)}><CheckCircle2 size={14} className="mr-2" /> Pay due…</DropdownMenuItem>
                                 <DropdownMenuItem disabled={saving} onClick={() => openEdit(row)}><Pencil size={14} className="mr-2" /> Edit purchase</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem className="text-rose-600 focus:text-rose-700" disabled={saving} onClick={() => setDeletingRow(row)}><Trash2 size={14} className="mr-2" /> Delete purchase</DropdownMenuItem>
@@ -721,6 +738,7 @@ export default function PurchaseBillsPage() {
         onResizeStart={onResizeStart}
         products={products}
         suppliers={suppliers}
+        existingRows={rows}
         onClose={() => setPanelOpen(false)}
         onSaved={async () => { setPanelOpen(false); await reloadSnapshot(); await reloadLocal(); }}
       />
@@ -778,22 +796,53 @@ export default function PurchaseBillsPage() {
       <Dialog open={Boolean(payingRow)} onOpenChange={(open) => !open && setPayingRow(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Mark purchase paid</DialogTitle>
-            <DialogDescription>Clear the remaining supplier due for this purchase.</DialogDescription>
+            <DialogTitle>Pay supplier</DialogTitle>
+            <DialogDescription>
+              {payingRow ? <>Due on this purchase: <span className="font-bold text-[#c2410c]">{fmt(payingRow.due)}</span>. Pay the full amount or a smaller part — the rest stays due.</> : null}
+            </DialogDescription>
           </DialogHeader>
-          <div>
-            <Label>Payment mode</Label>
-            <Select value={payMode} onValueChange={setPayMode}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="cash">Cash</SelectItem>
-                <SelectItem value="upi">UPI / bank</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="space-y-3">
+            <div>
+              <Label>Amount to pay now</Label>
+              <Input
+                data-testid="input-purchase-pay-amount"
+                className="mt-1"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={payAmount}
+                onChange={(event) => setPayAmount(event.target.value)}
+              />
+              <div className="mt-1.5 flex gap-1.5">
+                {payingRow && payingRow.due > 0 && (
+                  <>
+                    <button type="button" className="rounded-md border border-[#dbe4f0] px-2 py-1 text-[11px] font-bold text-[#405273] hover:bg-[#f4f7fc]" onClick={() => setPayAmount(String(payingRow.due))}>
+                      Full due {fmt(payingRow.due)}
+                    </button>
+                    {payingRow.due >= 2 && (
+                      <button type="button" className="rounded-md border border-[#dbe4f0] px-2 py-1 text-[11px] font-bold text-[#405273] hover:bg-[#f4f7fc]" onClick={() => setPayAmount(String(Math.round((payingRow.due / 2) * 100) / 100))}>
+                        Half {fmt(Math.round((payingRow.due / 2) * 100) / 100)}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+            <div>
+              <Label>Payment mode</Label>
+              <Select value={payMode} onValueChange={setPayMode}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="upi">UPI / bank</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1.5 text-[11px] text-[#8290a8]">Paying part cash, part UPI? Record two payments — one in each mode.</p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayingRow(null)} disabled={saving}>Cancel</Button>
-            <Button onClick={() => void savePaid()} disabled={saving}>{saving ? "Saving..." : "Mark paid"}</Button>
+            <Button data-testid="button-record-purchase-payment" onClick={() => void savePaid()} disabled={saving}>{saving ? "Saving..." : "Record payment"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -815,9 +864,9 @@ export default function PurchaseBillsPage() {
 }
 
 /* ── Add Purchase docked panel ── */
-function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onClose, onSaved }: {
+function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, existingRows, onClose, onSaved }: {
   open: boolean; width: number; onResizeStart: (e: React.MouseEvent) => void;
-  products: Product[]; suppliers: Supplier[];
+  products: Product[]; suppliers: Supplier[]; existingRows: SupplierDueRow[];
   onClose: () => void; onSaved: () => Promise<void> | void;
 }) {
   const { toast } = useToast();
@@ -876,6 +925,41 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, onC
     if (payStatus === "partial" && (paidAmount <= 0 || paidAmount >= totalAmount)) {
       toast({ title: "Enter partial paid amount", description: "Partial purchases need a paid amount greater than zero and less than the bill total.", variant: "destructive" });
       return;
+    }
+
+    // Duplicate-bill guard: the same supplier + the same invoice number is almost always the
+    // same physical bill entered twice — block it so stock and supplier dues can't double.
+    const norm = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+    const typedInvoice = purchaseNo.trim();
+    if (typedInvoice) {
+      const duplicate = existingRows.find((row) =>
+        norm(row.invoiceNumber === "-" ? "" : row.invoiceNumber) === norm(typedInvoice) &&
+        norm(row.supplierName) === norm(supplierName));
+      if (duplicate) {
+        toast({
+          title: `Bill ${typedInvoice} already exists`,
+          description: `${supplierName} already has this invoice (${fmt(duplicate.amount)}, ${duplicate.due > 0 ? `${fmt(duplicate.due)} due` : "paid"}). Open it from the list to edit or pay it instead of adding it again.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    } else {
+      // No invoice typed: catch the accidental double-tap / re-entry — same supplier and same
+      // total within the last 10 minutes.
+      const now = Date.now();
+      const nearDuplicate = existingRows.find((row) =>
+        norm(row.supplierName) === norm(supplierName) &&
+        Math.abs(row.amount - totalAmount) < 0.01 &&
+        Number.isFinite(new Date(row.date).getTime()) &&
+        now - new Date(row.date).getTime() < 10 * 60 * 1000);
+      if (nearDuplicate) {
+        toast({
+          title: "Possible duplicate purchase",
+          description: `A ${fmt(totalAmount)} purchase from ${supplierName} was saved a few minutes ago. Add an invoice number if this is genuinely a second bill.`,
+          variant: "destructive",
+        });
+        return;
+      }
     }
     setSaving(true);
     try {

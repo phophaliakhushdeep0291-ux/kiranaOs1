@@ -82,7 +82,7 @@ import { createBillLocalFirst } from "@/features/billing/local-actions";
 import { restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
-import { markPurchasePaidLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
+import { markPurchasePaidLocal, recordPurchasePaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { calculateLedgerBalance } from "@/features/ledger/accounting";
 
 function seedFrontOffice() {
@@ -255,6 +255,47 @@ describe("front office local-first cashier flow", () => {
         paymentStatus: "paid",
       }),
     }));
+  });
+
+  it("pays a purchase due in small partial payments until settled, rejecting overpay", async () => {
+    await recordPurchaseLocalFirst({
+      productId: "product_sugar",
+      quantity: 10,
+      enteredUnit: "kg",
+      supplierName: "Govind Traders",
+      invoiceNumber: "INV-100",
+      billAmount: 500,
+      purchasePaymentStatus: "partial",
+      purchasePaymentMode: "cash",
+      purchasePaidAmount: 100,
+      purchaseDueAmount: 400,
+    });
+    const movement = rows("inventory_movements").find((row) => row.action === "purchase");
+    const purchaseRowId = String(movement?.id);
+
+    // First small payment: ₹150 cash → paid 250, due 250, still partial.
+    await recordPurchasePaymentLocal(purchaseDisplayRow({ id: purchaseRowId }), { amount: 150, mode: "cash" });
+    expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
+      purchase_paid_amount: 250,
+      purchase_due_amount: 250,
+      purchase_payment_status: "partial",
+    }));
+
+    // Overpaying the remaining due is rejected before any write.
+    await expect(
+      recordPurchasePaymentLocal(purchaseDisplayRow({ id: purchaseRowId, paid: 250, due: 250 }), { amount: 300, mode: "cash" }),
+    ).rejects.toThrow(/exceed the due/i);
+
+    // Second payment clears the rest via UPI → fully paid.
+    await recordPurchasePaymentLocal(purchaseDisplayRow({ id: purchaseRowId, paid: 250, due: 250 }), { amount: 250, mode: "upi" });
+    expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
+      purchase_paid_amount: 500,
+      purchase_due_amount: 0,
+      purchase_payment_status: "paid",
+      purchase_payment_mode: "upi",
+    }));
+    // Every payment goes to the server through the idempotent purchase-update op.
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "UPDATE_PURCHASE_BILL")).toHaveLength(2);
   });
 
   it("recycle-bin move reverses udhar locally and restore re-applies it (mirrors server CANCEL/RESTORE)", async () => {
