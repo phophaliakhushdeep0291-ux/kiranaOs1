@@ -88,6 +88,47 @@ export async function fetchCustomerCatalog(shopCode: string): Promise<CustomerCa
   return { ...json.data, cachedAt: new Date().toISOString() };
 }
 
+export interface CustomerOrderDetails {
+  customerName: string;
+  customerMobile: string;
+  customerAddress?: string;
+  note?: string;
+}
+
+export interface SubmitOrderResult {
+  orderId: string;
+  itemCount: number;
+  estimatedTotal: number;
+  shopName: string;
+}
+
+/**
+ * Submit the customer's order to the shop online (public, no auth). The backend re-prices every
+ * line from the shop's own catalog, so we only send productId + qty. Lands in the owner's inbox.
+ */
+export async function submitCustomerOrder(
+  shopCode: string,
+  details: CustomerOrderDetails,
+  items: Array<{ productId: string; qty: number }>,
+): Promise<SubmitOrderResult> {
+  const url = `${getApiBaseUrl()}/public/shops/${encodeURIComponent(shopCode)}/orders`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ ...details, items }),
+    });
+  } catch (err) {
+    throw new Error("Could not reach the shop. Check your internet and try again.", { cause: err });
+  }
+  const json = (await res.json().catch(() => ({}))) as { data?: SubmitOrderResult; error?: string };
+  if (!res.ok || !json.data) {
+    throw new Error(json.error || `Could not place the order (${res.status}).`);
+  }
+  return json.data;
+}
+
 export interface LoadCatalogResult {
   catalog: CustomerCatalog;
   source: "network" | "cache";

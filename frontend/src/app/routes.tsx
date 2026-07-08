@@ -15,6 +15,7 @@ const Dashboard = lazy(() => import("@/features/dashboard/pages/DashboardPage"))
 const Billing = lazy(() => import("@/features/billing/pages/BillingPage"));
 const BillsPage = lazy(() => import("@/features/bills/pages/BillsPage"));
 const BillDetailPage = lazy(() => import("@/features/bills/pages/BillDetailPage"));
+const OrdersReceivedPage = lazy(() => import("@/features/orders/pages/OrdersReceivedPage"));
 const SalesOverviewPage = lazy(() => import("@/features/sales/pages/SalesOverviewPage"));
 const NewReturnPage = lazy(() => import("@/features/returns/pages/NewReturnPage"));
 const Products = lazy(() => import("@/features/products/pages/ProductsPage"));
@@ -146,6 +147,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/bills">
         <ProtectedRoute component={BillsPage} />
+      </Route>
+      <Route path="/orders-received">
+        <ProtectedRoute component={OrdersReceivedPage} />
       </Route>
       <Route path="/sales-overview">
         <ProtectedRoute component={SalesOverviewPage} />
