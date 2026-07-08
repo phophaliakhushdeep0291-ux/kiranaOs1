@@ -1,13 +1,15 @@
 import type { Product } from "@/lib/api/client";
 import type { EncodedCartItem } from "@/lib/qr/cart-codec";
 import { productSellingPrice } from "./billing-calculations";
-import type { CartItem, HeldBill } from "./billing-types";
+import type { BillingDraft, CartItem, HeldBill } from "./billing-types";
 
 // Pure helpers for the "multiple open bills" switcher — kept out of the page component so they
 // can be unit-tested. An "open bill" is a parked cart (HeldBill); the one in the workspace is
 // tracked by its id and saved back into the set when switching / starting a new bill.
 
 export const MAX_OPEN_BILLS = 10;
+
+export const BILLING_DRAFT_KEY = "kirana-os:billing-draft:v1";
 
 /** offlineDB settings key holding the open-bills set. Shared by BillingPage and the QR importer. */
 export const HELD_BILLS_KEY = "kirana-os:held-bills:v1";
@@ -18,13 +20,29 @@ export function newBillId(): string {
 
 /** Insert or replace an open bill by id — in place (to keep the bar's order stable), else prepend. */
 export function upsertOpenBill(list: HeldBill[], bill: HeldBill): HeldBill[] {
-  const index = list.findIndex((entry) => entry.id === bill.id);
+  const index = list.findIndex((entry) => entry.id === bill.id || (bill.sourceOrderId != null && entry.sourceOrderId === bill.sourceOrderId));
   if (index >= 0) {
     const next = [...list];
-    next[index] = bill;
+    next[index] = { ...bill, id: next[index].id };
     return next;
   }
   return [bill, ...list].slice(0, MAX_OPEN_BILLS);
+}
+
+export function billingDraftFromHeldBill(bill: HeldBill): BillingDraft {
+  const { id, label: _label, createdAt: _createdAt, ...draft } = bill;
+  return { ...draft, activeBillId: id };
+}
+
+export function heldBillFromBillingDraft(draft: BillingDraft | null | undefined): HeldBill | null {
+  if (!draft?.activeBillId || !draft.cart?.length) return null;
+  const customer = draft.customerName?.trim() || "Walk-in";
+  return {
+    ...draft,
+    id: draft.activeBillId,
+    label: `${customer} • ${draft.cart.length} item${draft.cart.length === 1 ? "" : "s"}`,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 export interface ImportedCartResult {

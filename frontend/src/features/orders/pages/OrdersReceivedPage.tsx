@@ -6,8 +6,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/features/auth/useAuth";
 import { useListProducts } from "@/lib/api/client";
 import { offlineDB } from "@/lib/offline/db";
-import { HELD_BILLS_KEY, upsertOpenBill, billFromImportedCart } from "@/features/billing/pages/open-bills";
-import type { HeldBill } from "@/features/billing/pages/billing-types";
+import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, billingDraftFromHeldBill, heldBillFromBillingDraft, upsertOpenBill, billFromImportedCart } from "@/features/billing/pages/open-bills";
+import type { BillingDraft, HeldBill } from "@/features/billing/pages/billing-types";
 import { alertCustomerOnWhatsapp } from "../notify";
 import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "../api";
 
@@ -65,7 +65,13 @@ export default function OrdersReceivedPage() {
   // Primary action: open the order in Billing so the owner can adjust items, rates,
   // discounts, and payment mode before making the final bill. WhatsApp is separate.
   function acceptAndBill(order: CustomerOrder) {
-    void loadIntoBilling(order);
+    void loadIntoBilling(order).catch((error: unknown) => {
+      toast({
+        title: "Could not open order",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    });
   }
 
   /** Standalone "let the customer know it's ready" — no state change, just opens WhatsApp. */
@@ -77,6 +83,36 @@ export default function OrdersReceivedPage() {
   }
 
   async function loadIntoBilling(order: CustomerOrder) {
+    const [currentHeldBills, activeDraft] = await Promise.all([
+      offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
+      offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null),
+    ]);
+    const heldBills = currentHeldBills ?? [];
+    const existingHeldOrder = heldBills.find((entry) => entry.sourceOrderId === order.id);
+    const activeOrderAlreadyOpen = activeDraft?.sourceOrderId === order.id && (activeDraft.cart?.length ?? 0) > 0;
+
+    if (activeOrderAlreadyOpen) {
+      if (order.status === "new") statusMutation.mutate({ id: order.id, next: "accepted" });
+      toast({ title: "Order already open", description: "Taking you back to Billing." });
+      navigate("/billing");
+      return;
+    }
+
+    const activeAsHeld = heldBillFromBillingDraft(activeDraft);
+    let nextHeldBills = heldBills.filter((entry) => entry.sourceOrderId !== order.id && entry.id !== activeAsHeld?.id);
+    if (activeAsHeld) nextHeldBills = upsertOpenBill(nextHeldBills, activeAsHeld);
+
+    if (existingHeldOrder) {
+      await Promise.all([
+        offlineDB.setSetting(HELD_BILLS_KEY, nextHeldBills),
+        offlineDB.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(existingHeldOrder)),
+      ]);
+      if (order.status === "new") statusMutation.mutate({ id: order.id, next: "accepted" });
+      toast({ title: "Order already in Billing", description: "Opened the existing bill instead of adding another copy." });
+      navigate("/billing");
+      return;
+    }
+
     const { bill, matched, skipped } = billFromImportedCart(
       products,
       order.items.map((i) => ({ productId: i.productId, qty: i.qty })),
@@ -87,8 +123,10 @@ export default function OrdersReceivedPage() {
       return;
     }
     const withCustomer: HeldBill = { ...bill, customerName: order.customerName, customerMobile: order.customerMobile };
-    const current = (await offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null)) ?? [];
-    await offlineDB.setSetting(HELD_BILLS_KEY, upsertOpenBill(current, withCustomer)).catch(() => undefined);
+    await Promise.all([
+      offlineDB.setSetting(HELD_BILLS_KEY, nextHeldBills),
+      offlineDB.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(withCustomer)),
+    ]);
     statusMutation.mutate({ id: order.id, next: "accepted" });
     toast({
       title: "Order sent to Billing",
