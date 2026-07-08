@@ -1,5 +1,28 @@
 import assert from "assert";
+import fs from "fs";
 import { isCustomerOrderingEnabled, toCustomerSafeProduct } from "../src/modules/public/public.service.js";
+
+// ── Regression: enabling customer QR ordering must persist WITHOUT an owner PIN ──
+// The shop settings save is a debounced background autosave that can't prompt for a PIN, so
+// gating settingsJson behind the blanket requireOwnerPin made it silently 403 in production
+// (OWNER_PIN_REQUIRED=true) — the customerOrdering flag never reached the server and the public
+// catalog returned "shop not available". settingsJson must NOT be a PIN-protected field; the
+// shop's legal identity fields still must be.
+const shopsRoutes = fs.readFileSync(new URL("../src/modules/shops/shops.routes.js", import.meta.url), "utf8");
+// Inspect the PATCH route line itself (not comments, which legitimately mention the old guard).
+const patchLine = shopsRoutes.split("\n").find((line) => line.includes("router.patch"));
+assert.ok(patchLine, "shops.routes must define a PATCH route");
+assert.ok(
+  patchLine.includes("requireOwnerPinForFields(PIN_PROTECTED_SHOP_FIELDS)"),
+  "shop PATCH must PIN-gate only sensitive fields, not the whole request",
+);
+assert.ok(!/\brequireOwnerPin\b(?!ForFields)/.test(patchLine), "shop PATCH must not use the blanket requireOwnerPin middleware");
+const protectedList = shopsRoutes.match(/PIN_PROTECTED_SHOP_FIELDS\s*=\s*\[([^\]]*)\]/);
+assert.ok(protectedList, "PIN_PROTECTED_SHOP_FIELDS must be defined");
+assert.ok(!/settingsJson/.test(protectedList[1]), "settingsJson must NOT be PIN-protected (background autosave)");
+for (const identity of ["name", "gstNumber", "address"]) {
+  assert.ok(protectedList[1].includes(`"${identity}"`), `${identity} must stay PIN-protected`);
+}
 
 // The public customer catalog is owner-opt-in and must NEVER expose cost/margin/stock/min-price
 // or any internal field. These two pure helpers are the privacy boundary; this guards them.
