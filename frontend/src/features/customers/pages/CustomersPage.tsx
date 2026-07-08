@@ -178,6 +178,21 @@ function customerOverdueDays(customer: CustomerWithLedger): number {
   return 0;
 }
 
+function formatCustomerActivityDateTime(value: unknown): string {
+  if (!value) return "No udhar activity";
+  const date = new Date(String(value));
+  if (!Number.isFinite(date.getTime())) return "No udhar activity";
+  return `${formatShortDate(date.toISOString())}, ${date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+function latestCustomerUdharActivity(customer: CustomerWithLedger): string | null {
+  const times = [customer.ledgerMetrics.lastBillAt, customer.ledgerMetrics.lastPaymentAt]
+    .map((value) => ({ value, time: value ? new Date(value).getTime() : NaN }))
+    .filter((row): row is { value: string; time: number } => typeof row.value === "string" && Number.isFinite(row.time));
+  if (times.length === 0) return null;
+  return times.sort((a, b) => b.time - a.time)[0].value;
+}
+
 async function loadCustomerOverviewActivity(): Promise<CustomerOverviewActivity> {
   const [payments, ledger] = await Promise.all([
     offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []),
@@ -301,17 +316,13 @@ export default function CustomersPage() {
   }, [dedupedCustomers, filter, search]);
 
   useEffect(() => {
-    if (filteredCustomers.length === 0) {
+    if (selectedId && !filteredCustomers.some((customer) => customer.id === selectedId)) {
       setSelectedId(null);
-      return;
-    }
-    if (!selectedId || !filteredCustomers.some((customer) => customer.id === selectedId)) {
-      setSelectedId(filteredCustomers[0].id);
     }
   }, [filteredCustomers, selectedId]);
 
   const selectedCustomer = useMemo(
-    () => filteredCustomers.find((customer) => customer.id === selectedId) ?? filteredCustomers[0] ?? null,
+    () => selectedId ? filteredCustomers.find((customer) => customer.id === selectedId) ?? null : null,
     [filteredCustomers, selectedId],
   );
 
@@ -686,9 +697,11 @@ export default function CustomersPage() {
     URL.revokeObjectURL(url);
   }
 
+  const showLegacyCustomerPanel: boolean = false;
+
   return (
-    <div className="app-docked-page space-y-5 bg-[#f8faff]">
-      <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between 2xl:fixed 2xl:right-[276px] 2xl:top-[18px] 2xl:z-[60] 2xl:w-auto 2xl:gap-2">
+    <div className="app-docked-page space-y-5 bg-white">
+      <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
         <SyncBadge status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
         <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu>
@@ -700,7 +713,7 @@ export default function CustomersPage() {
             <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>All customers</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>With balance</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" onClick={exportCustomers} className="h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold"><Download size={16} />Export</Button>
-          <Button onClick={() => openPayment()} className="h-11 gap-2 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] px-[18px] text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[#0758df] hover:to-[#004ed0]"><Plus size={16} />Record Payment</Button>
+          <Button onClick={() => openPayment()} className="inline-flex h-11 items-center justify-center gap-2.5 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] px-[18px] text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[#0758df] hover:to-[#004ed0]"><Plus size={16} className="shrink-0" /><span>Record Payment</span></Button>
         </div>
       </section>
 
@@ -713,15 +726,15 @@ export default function CustomersPage() {
         <CustomerMetricCard label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
       </section>
 
-      <section className="grid min-w-0 gap-5 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(520px,1fr)_340px]">
-        <CustomerListPanelV3 customers={filteredCustomers} selectedId={selectedCustomer?.id ?? null} loading={isLoading} search={search} filter={filter} total={totals.customers} onSearch={setSearch} onFilter={setFilter} onSelect={setSelectedId} />
+      <section className="grid min-w-0 items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(560px,1fr)_360px]">
+        <CustomerListPanelV3 customers={filteredCustomers} selectedId={selectedId} loading={isLoading} search={search} filter={filter} total={totals.customers} onSearch={setSearch} onFilter={setFilter} onSelect={setSelectedId} />
         <CustomerPaymentWorkspaceV3 customer={selectedCustomer} risk={selectedRisk} creditLimit={creditLimit} paymentRows={paymentRows} paymentForm={paymentForm} saving={saving} onEdit={openEdit} onPaymentChange={setPaymentForm} onCollect={() => void recordPayment()} onReminder={shareWhatsApp} />
         <CustomerInsightsPanelV3 customer={selectedCustomer} risk={selectedRisk} ageing={ageing} received={selectedReceivedInRange} pending={Math.max(0, selectedCustomer?.ledgerBalance ?? 0)} collectionChange={metricChanges.received} payments={paymentRows} onReminder={shareWhatsApp} />
       </section>
 
       <CustomerLedgerRegisterV3 customer={selectedCustomer} rows={ledgerRows} loading={selectedDetail.isLoading} onPrint={printStatement} />
 
-      {false && selectedCustomer && selectedRisk && selectedTrust && <div className="hidden">
+      {showLegacyCustomerPanel && selectedCustomer && selectedRisk && selectedTrust && <div className="hidden">
         <section className="min-h-0 overflow-hidden rounded-[16px] border border-[#e6ecf4] bg-white shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
           <div className="border-b border-[#edf2f8] p-4">
             <div className="relative">
@@ -1216,7 +1229,7 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
       <header className="flex h-[54px] items-center px-[18px]"><h2 className="text-[15px] font-extrabold text-[#071b3a]">Customers</h2></header>
       <div className="border-y border-[#e8edf4] p-3.5">
         <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search by name or mobile" className="h-10 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
-        <div className="mt-3 grid grid-cols-4 gap-1.5">{([['all','All Customers'],['udhar','With Balance'],['due','Overdue'],['cleared','Cleared']] as const).map(([key,label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-9 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[#0b63f6] bg-[#eef5ff] text-[#0b63f6]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
+        <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", "All Customers"], ["udhar", "With Balance"], ["due", "Overdue"], ["cleared", "Cleared"]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-9 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[#0b63f6] bg-[#eef5ff] text-[#0b63f6]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
       </div>
       <div className="max-h-[590px] overflow-y-auto p-3">
         {loading ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">Loading customers...</p> : customers.length === 0 ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">No customers found</p> : customers.map((customer, index) => {
@@ -1225,10 +1238,47 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
           const ageing = customer.ledgerMetrics.ageing;
           const ageLabel = customer.ledgerBalance <= 0 ? "0 Days" : ageing.thirtyPlus > 0 ? "30+ Days" : ageing.sevenToThirty > 0 ? "8-30 Days" : "0-7 Days";
           const badgeLabel = risk.label === "High Risk" ? "High" : risk.label === "Medium Risk" ? "Medium" : risk.label === "Low Risk" ? "Low" : "Cleared";
-          return <button key={customer.id} onClick={() => onSelect(customer.id)} className={cn("relative mb-2 flex min-h-[74px] w-full items-center gap-3 rounded-[12px] border px-3 py-2.5 text-left transition-all last:mb-0", active ? "border-[#0b63f6] bg-[#eef5ff] shadow-[0_8px_18px_rgba(11,99,246,0.10)]" : "border-transparent hover:border-[#dce7f6] hover:bg-[#f8fbff]")}><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full text-[11px] font-black", avatarTones[index % avatarTones.length])}>{initials(customer.name)}</span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-black text-[#102347]">{customer.name}</span><span className="mt-1 block truncate text-[10px] text-[#60708e]">{customer.address || "No address"}</span><span className="mt-1 block text-[9.5px] text-[#7c899f]">{customer.mobile || "No mobile"}</span></span><span className="pr-1 text-right"><span className="block text-[12px] font-black text-[#102347]">{fmtMoney(customer.ledgerBalance)}</span><span className={cn("mt-1 block text-[9px] font-bold", customer.ledgerBalance <= 0 ? "text-emerald-600" : ageing.thirtyPlus > 0 ? "text-rose-600" : "text-amber-600")}>{ageLabel}</span><span className={cn("mt-1 inline-flex rounded-[8px] px-2 py-1 text-[9px] font-bold", risk.cls)}>{badgeLabel}</span></span>{active && <CheckCircle2 size={14} className="absolute right-2 top-2 text-[#0b63f6]" />}</button>;
+          const lastActivity = latestCustomerUdharActivity(customer);
+          return (
+            <button
+              key={customer.id}
+              onClick={() => onSelect(customer.id)}
+              className={cn(
+                "relative mb-2 grid min-h-[78px] w-full grid-cols-[40px_minmax(0,1fr)_92px] items-center gap-3 rounded-[12px] border px-3 py-2.5 text-left transition-all last:mb-0",
+                active
+                  ? "border-[#0b63f6] bg-[#eef5ff] shadow-[0_8px_18px_rgba(11,99,246,0.10)]"
+                  : "border-transparent hover:border-[#dce7f6] hover:bg-[#f8fbff]",
+              )}
+            >
+              <span className="relative h-10 w-10 shrink-0">
+                <span className={cn("grid h-10 w-10 place-items-center rounded-full text-[11px] font-black", avatarTones[index % avatarTones.length])}>{initials(customer.name)}</span>
+                {active && <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full border-2 border-white bg-[#0b63f6] text-white"><CheckCircle2 size={11} /></span>}
+              </span>
+              <span className="min-w-0 pr-1">
+                <span className="block truncate text-[12px] font-black leading-4 text-[#102347]">{customer.name}</span>
+                <span className="mt-1 block truncate text-[10px] leading-3 text-[#60708e]">{customer.address || "No address"}</span>
+                <span className="mt-1 block truncate text-[9.5px] leading-3 text-[#7c899f]">{customer.mobile || "No mobile"} - {formatCustomerActivityDateTime(lastActivity)}</span>
+              </span>
+              <span className="flex min-w-[92px] flex-col items-end pr-1 text-right">
+                <span className="block text-[12px] font-black leading-4 text-[#102347]">{fmtMoney(customer.ledgerBalance)}</span>
+                <span className={cn("mt-1 block text-[9px] font-bold leading-3", customer.ledgerBalance <= 0 ? "text-emerald-600" : ageing.thirtyPlus > 0 ? "text-rose-600" : "text-amber-600")}>{ageLabel}</span>
+                <span className={cn("mt-1 inline-flex rounded-[8px] px-2 py-1 text-[9px] font-bold leading-none", risk.cls)}>{badgeLabel}</span>
+              </span>
+            </button>
+          );
         })}
       </div>
-      <footer className="flex min-h-12 items-center justify-between gap-2 border-t border-[#e8edf4] px-3 text-[9px] text-[#60708e]"><span>Showing 1 to {Math.min(7, customers.length)} of {total} customers</span><span className="flex items-center gap-1"><button aria-label="Previous page" className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2] text-[#94a3b8]">‹</button><button className="grid h-6 w-6 place-items-center rounded-[6px] bg-[#0b63f6] font-bold text-white">1</button><button className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">2</button><button className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">3</button><span>…</span><button aria-label="Next page" className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">›</button></span></footer>
+      <footer className="flex min-h-12 items-center justify-between gap-2 border-t border-[#e8edf4] px-3 text-[9px] text-[#60708e]">
+        <span>Showing 1 to {Math.min(7, customers.length)} of {total} customers</span>
+        <span className="flex items-center gap-1">
+          <button aria-label="Previous page" className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2] text-[#94a3b8]">{"<"}</button>
+          <button className="grid h-6 w-6 place-items-center rounded-[6px] bg-[#0b63f6] font-bold text-white">1</button>
+          <button className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">2</button>
+          <button className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">3</button>
+          <span>...</span>
+          <button aria-label="Next page" className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">{">"}</button>
+        </span>
+      </footer>
     </section>
   );
 }
@@ -1264,7 +1314,17 @@ function CustomerPaymentWorkspace({ customer, risk, creditLimit, trustScore, pay
 }
 
 function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, paymentForm, saving, onEdit, onPaymentChange, onCollect, onReminder }: { customer: CustomerWithLedger | null; risk: ReturnType<typeof riskInfo> | null; creditLimit: number; paymentRows: Array<Record<string, unknown>>; paymentForm: PaymentFormState; saving: boolean; onEdit: (customer: CustomerWithLedger) => void; onPaymentChange: React.Dispatch<React.SetStateAction<PaymentFormState>>; onCollect: () => void; onReminder: () => void }) {
-  if (!customer || !risk) return <div className="grid min-h-[360px] place-items-center rounded-[16px] border border-dashed border-[#d8e2f1] bg-white text-center"><div><Users size={30} className="mx-auto text-[#94a3b8]" /><p className="mt-2 text-[14px] font-bold text-[#102347]">Select a customer</p></div></div>;
+  if (!customer || !risk) {
+    return (
+      <div className="grid min-h-[430px] place-items-center rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-6 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+        <div className="max-w-[260px]">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#eef5ff] text-[#0b63f6]"><Users size={24} /></span>
+          <p className="mt-3 text-[16px] font-extrabold text-[#071b3a]">Select a customer</p>
+          <p className="mt-1 text-[12px] leading-5 text-[#60708e]">Choose a customer from the list to view balance, collect payment, and inspect ledger history.</p>
+        </div>
+      </div>
+    );
+  }
   const outstanding = Math.max(0, customer.ledgerBalance);
   const paid = paymentRows.reduce((sum, row) => sum + paymentAmount(row), 0);
   const paymentTotal = paymentForm.mode === "split" ? money(paymentForm.cashAmount) + money(paymentForm.upiAmount) : money(paymentForm.amount);
@@ -1301,7 +1361,7 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
         {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" min="0" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(money(event.target.value) + money(form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" min="0" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(money(form.cashAmount) + money(event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[#071b3a]">{fmtMoney(paymentTotal)}</span></p></div>}
         {paymentTotal > outstanding + 0.01 && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
         <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">Payment Note <span className="font-medium text-[#94a3b8]">(Optional)</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder="Payment note / reference" /></div>
-        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="h-11 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] text-[12px] font-bold shadow-[0_8px_18px_rgba(11,99,246,0.20)]"><CheckCircle2 size={16} className="mr-2" />{saving ? "Saving..." : "Collect Payment"}</Button><Button variant="outline" onClick={onReminder} className="h-11 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[#0b63f6]"><Bell size={16} className="mr-2" />Send Reminder</Button></div>
+        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] text-[12px] font-bold shadow-[0_8px_18px_rgba(11,99,246,0.20)]"><CheckCircle2 size={16} />{saving ? "Saving..." : "Collect Payment"}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[#0b63f6]"><Bell size={16} />Send Reminder</Button></div>
         <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[#0b63f6]" />After payment, customer balance and ledger update automatically.</p>
       </article>
     </section>
@@ -1324,6 +1384,19 @@ function CustomerInsightsPanel({ customer, risk, ageing, received, pending, coll
 }
 
 function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, collectionChange, payments, onReminder }: { customer: CustomerWithLedger | null; risk: ReturnType<typeof riskInfo> | null; ageing?: CustomerWithLedger["ledgerMetrics"]["ageing"]; received: number; pending: number; collectionChange: number; payments: Array<Record<string, unknown>>; onReminder: () => void }) {
+  if (!customer || !risk) {
+    return (
+      <aside className="space-y-5 xl:col-span-2 2xl:col-span-1">
+        <div className="grid min-h-[430px] place-items-center rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-6 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+          <div className="max-w-[230px]">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#fff7ed] text-[#f97316]"><Wallet size={22} /></span>
+            <p className="mt-3 text-[15px] font-extrabold text-[#071b3a]">Customer insights</p>
+            <p className="mt-1 text-[12px] leading-5 text-[#60708e]">Ageing, recent payments, and credit risk will appear after selecting a customer.</p>
+          </div>
+        </div>
+      </aside>
+    );
+  }
   const overdueDays = customer ? customerOverdueDays(customer) : 0;
   const sevenToThirty = Math.max(0, money(ageing?.sevenToThirty));
   const rawBuckets = [
@@ -1344,7 +1417,7 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
       <RightCardV3 title="Ageing Summary" info><div className="flex items-center gap-4"><div className="grid h-[130px] w-[130px] shrink-0 place-items-center rounded-full" style={{ background: total > 0 ? `conic-gradient(${stops})` : "#e7edf5" }}><div className="grid h-[94px] w-[94px] place-items-center rounded-full bg-white text-center"><div><p className="text-[16px] font-black text-[#071b3a]">{fmtMoney(total)}</p><p className="text-[10px] text-[#71809a]">Total Due</p></div></div></div><div className="min-w-0 flex-1 space-y-3">{buckets.map((row) => <div key={row.label} className="grid grid-cols-[9px_1fr_auto] items-center gap-2 text-[10px]"><span className="h-[9px] w-[9px] rounded-full" style={{ background: row.color }} /><span className="text-[#52627e]">{row.label}</span><span className="text-right font-black text-[#102347]">{fmtMoney(row.value)} <span className="block text-[8px] font-medium text-[#94a3b8]">{total > 0 ? `${Math.round(row.value / total * 1000) / 10}%` : "0%"}</span></span></div>)}</div></div></RightCardV3>
       <RightCardV3 title="Collection Progress" action="This Week" info><div className="flex items-center gap-5"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(#0b63f6 0 ${collection}%, #e9eef6 ${collection}% 100%)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-center"><div><p className="text-[18px] font-black text-[#071b3a]">{Math.round(collection)}%</p><p className="text-[9px] font-semibold text-[#71809a]">Collected</p></div></div></div><div className="grid min-w-0 flex-1 grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold text-[#71809a]">Collected</p><p className="mt-1 text-[14px] font-black text-[#102347]">{fmtMoney(received)}</p><p className={cn("mt-2 text-[9px] font-semibold", collectionChange < 0 ? "text-rose-600" : "text-emerald-600")}>vs last week: {collectionChange >= 0 ? "↑" : "↓"} {Math.abs(collectionChange)}%</p></div><div><p className="text-[10px] font-semibold text-[#71809a]">Pending</p><p className="mt-1 text-[14px] font-black text-[#102347]">{fmtMoney(pending)}</p></div></div></div></RightCardV3>
       <RightCardV3 title="Recent Payments Received" action="View all">{recentPayments.length === 0 ? <p className="py-4 text-center text-[11px] text-[#71809a]">No payments recorded yet.</p> : <div className="divide-y divide-[#edf1f6]">{recentPayments.map((payment, index) => { const mode = String(payment.mode ?? "cash").toLowerCase(); const modeLabel = mode === "upi" ? "UPI" : mode === "cash" ? "Cash" : mode.replace(/\b\w/g, (letter) => letter.toUpperCase()); return <div key={String(payment.id ?? index)} className="grid min-h-10 grid-cols-[7px_1fr_auto_auto] items-center gap-2.5 text-[10.5px]"><span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /><span className="text-[#52627e]">{formatShortDate(paymentDate(payment))}</span><span className="font-black text-[#102347]">{fmtMoney(paymentAmount(payment))}</span><span className="min-w-[54px] text-right text-[#52627e]">{modeLabel}</span></div>; })}</div>}</RightCardV3>
-      <RightCardV3 title="Credit Risk"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk?.label ?? "No customer"}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="h-9 shrink-0 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[#0b63f6]"><Bell size={13} className="mr-1" />Send Reminder</Button></div></RightCardV3>
+      <RightCardV3 title="Credit Risk"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk?.label ?? "No customer"}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[#0b63f6]"><Bell size={13} />Send Reminder</Button></div></RightCardV3>
     </aside>
   );
 }
@@ -1373,7 +1446,7 @@ function CustomerLedgerRegisterV2({ customer, rows, loading, onPrint }: { custom
             <tbody className="divide-y divide-[#e8edf4]">
               {loading ? <tr><td colSpan={10} className="py-10 text-center text-[#71809a]">Loading ledger...</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-10 text-center text-[#71809a]">No ledger entries found.</td></tr> : visibleRows.slice(0, 8).map((row) => {
                 const signed = Number(row.signed_amount ?? 0);
-                return <tr key={row.id} className="text-[#24385f] hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3 py-2.5">{formatShortDate(row.display_date)}</td><td className="px-3 py-2.5"><span className={cn("rounded-[5px] px-1.5 py-0.5 font-bold", row.display_type === "PAYMENT" ? CHIP_TONES.green : CHIP_TONES.red)}>{row.display_type === "BILL" ? "Bill" : row.display_type === "PAYMENT" ? "Payment" : row.display_type}</span></td><td className="whitespace-nowrap px-3 py-2.5 font-semibold text-[#075fff]">{String(row.source_id ?? "—")}</td><td className="max-w-[210px] truncate px-3 py-2.5">{String(row.note || row.display_type)}</td><td className="px-3 py-2.5 font-bold text-rose-600">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 py-2.5 font-bold text-emerald-600">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 py-2.5 font-black">{fmtMoney(row.running_balance)}</td><td className="px-3 py-2.5">{String(row.mode ?? "System")}</td><td className="px-3 py-2.5"><span className="rounded-[5px] bg-emerald-50 px-1.5 py-0.5 font-bold text-emerald-700">Posted</span></td><td className="px-3 py-2.5"><button title="Ledger actions" className="grid h-6 w-6 place-items-center rounded-[5px] border border-[#dfe7f2] text-[#60708e] hover:bg-[#edf4ff]"><MoreHorizontal size={12} /></button></td></tr>;
+                return <tr key={row.id} className="text-[#24385f] hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3 py-2.5">{formatShortDate(row.display_date)}</td><td className="px-3 py-2.5"><span className={cn("rounded-[5px] px-1.5 py-0.5 font-bold", row.display_type === "PAYMENT" ? CHIP_TONES.green : CHIP_TONES.red)}>{row.display_type === "BILL" ? "Bill" : row.display_type === "PAYMENT" ? "Payment" : row.display_type}</span></td><td className="whitespace-nowrap px-3 py-2.5 font-semibold text-[#075fff]">{String(row.source_id ?? "—")}</td><td className="max-w-[210px] truncate px-3 py-2.5">{String(row.note || row.display_type)}</td><td className="px-3 py-2.5 font-bold text-rose-600">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 py-2.5 font-bold text-emerald-600">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 py-2.5 font-black">{fmtMoney(row.running_balance)}</td><td className="px-3 py-2.5">{String(row.mode ?? "System")}</td><td className="px-3 py-2.5"><span className="rounded-[5px] bg-emerald-50 px-1.5 py-0.5 font-bold text-emerald-700">Posted</span></td><td className="px-3 py-2.5"><DropdownMenu><DropdownMenuTrigger asChild><button title="Ledger actions" className="grid h-6 w-6 place-items-center rounded-[5px] border border-[#dfe7f2] text-[#60708e] hover:bg-[#edf4ff]"><MoreHorizontal size={12} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
               })}
             </tbody>
           </table>
@@ -1440,7 +1513,7 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
               {loading ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">Loading ledger...</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">No ledger entries found.</td></tr> : visibleRows.slice(0, 8).map((row) => {
                 const signed = Number(row.signed_amount ?? 0);
                 const displayType = String(row.display_type ?? "ENTRY").toUpperCase();
-                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", badgeFor(displayType))}>{labelFor(displayType)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[#0b63f6]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || labelFor(displayType))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[#071b3a]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><button title="Ledger actions" className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[#eef5ff] hover:text-[#0b63f6]"><MoreVertical size={15} /></button></td></tr>;
+                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", badgeFor(displayType))}>{labelFor(displayType)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[#0b63f6]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || labelFor(displayType))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[#071b3a]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title="Ledger actions" className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[#eef5ff] hover:text-[#0b63f6]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
               })}
             </tbody>
           </table>
