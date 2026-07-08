@@ -5,6 +5,7 @@ import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { encodeQrSvg } from "@/lib/qr/qr-encoder";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * Billing-screen shortcut to the shop's "Order here" QR. Always visible so owners can FIND the
@@ -14,7 +15,9 @@ import { Button } from "@/components/ui/button";
 export function BillingOrderQrButton() {
   const { shop } = useAuth();
   const { prefs, patch, hydrated } = useSettingsPrefs();
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [enabling, setEnabling] = useState(false);
   const shopId = shop?.id ?? null;
 
   const enabled = useMemo(() => {
@@ -103,10 +106,24 @@ export function BillingOrderQrButton() {
                 <Button
                   data-testid="button-enable-qr-ordering"
                   className="mt-4 h-10 w-full rounded-[10px] text-[13px] font-bold"
-                  disabled={!hydrated}
-                  onClick={() => patch({ customerOrdering: { enabled: true } })}
+                  disabled={!hydrated || enabling}
+                  onClick={async () => {
+                    setEnabling(true);
+                    const updated = await patch({ customerOrdering: { enabled: true } }, { immediate: true });
+                    if (!updated) {
+                      await patch({ customerOrdering: { enabled: false } });
+                      toast({
+                        title: "Could not turn on QR ordering",
+                        description: "Check internet/backend connection and try again. The QR stays off until the server confirms it.",
+                        variant: "destructive",
+                      });
+                    } else {
+                      toast({ title: "QR ordering turned on", description: "The customer order page is now available." });
+                    }
+                    setEnabling(false);
+                  }}
                 >
-                  Turn on QR ordering
+                  {enabling ? "Turning on..." : "Turn on QR ordering"}
                 </Button>
                 <p className="mt-2 text-[11px] text-[#8290a8]">You can turn it off anytime in Settings → Store Profile.</p>
               </>

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { useGetShop, useUpdateShop } from "@/lib/api/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { useGetShop } from "@/lib/api/client";
 import { offlineDB } from "@/lib/offline/db";
+import { getGetShopQueryKey } from "@/features/settings/queries";
+import { updateShop as updateShopOnServer } from "@/features/settings/api";
 import { DEFAULT_PRINTER_CONFIG, setPrinterConfigCache, type PrinterConfig } from "@/features/settings/printer-config";
+import type { Shop } from "@/types/api";
 
 export const PREFS_KEY = "kirana:settings-prefs:v1";
 
@@ -45,18 +49,33 @@ export interface SettingsPrefs {
  */
 export function useSettingsPrefs() {
   const shop = useGetShop();
-  const save = useUpdateShop({ mutation: { onError: () => undefined } });
+  const queryClient = useQueryClient();
   const [prefs, setPrefs] = useState<SettingsPrefs>({});
   const [hydrated, setHydrated] = useState(false);
   const serverLoadedRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<SettingsPrefs | null>(null);
+  const prefsRef = useRef<SettingsPrefs>({});
+
+  async function persistPrefsToServer(next: SettingsPrefs): Promise<Shop | null> {
+    try {
+      const updated = await updateShopOnServer({ settingsJson: JSON.stringify(next) });
+      queryClient.setQueryData(getGetShopQueryKey(), updated);
+      await offlineDB.setSetting("shop", updated).catch(() => undefined);
+      if (pendingRef.current === next) pendingRef.current = null;
+      return updated;
+    } catch {
+      pendingRef.current = next;
+      return null;
+    }
+  }
 
   useEffect(() => {
     let active = true;
     void offlineDB.getSetting<SettingsPrefs>(PREFS_KEY).then((saved) => {
       if (!active) return;
       if (saved) {
+        prefsRef.current = saved;
         setPrefs(saved);
         if (saved.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...saved.printer });
       }
@@ -73,9 +92,13 @@ export function useSettingsPrefs() {
     try {
       const parsed = JSON.parse(raw || "{}");
       if (parsed && typeof parsed === "object") {
-        setPrefs((p) => ({ ...p, ...parsed }));
+        setPrefs((p) => {
+          const merged = { ...p, ...parsed };
+          prefsRef.current = merged;
+          void offlineDB.setSetting(PREFS_KEY, merged);
+          return merged;
+        });
         if (parsed.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...parsed.printer });
-        void offlineDB.setSetting(PREFS_KEY, parsed);
       }
     } catch { /* ignore malformed */ }
   }, [shop.data?.settingsJson]);
@@ -85,21 +108,22 @@ export function useSettingsPrefs() {
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
     if (pendingRef.current) {
-      save.mutate({ data: { settingsJson: JSON.stringify(pendingRef.current) } });
+      void persistPrefsToServer(pendingRef.current);
       pendingRef.current = null;
     }
   }, []);
 
-  function patch(partial: Partial<SettingsPrefs>) {
-    setPrefs((prev) => {
-      const next = { ...prev, ...partial };
-      pendingRef.current = next;
-      void offlineDB.setSetting(PREFS_KEY, next); // durable + instant; cheap IndexedDB put
-      if ("printer" in partial && next.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...next.printer });
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => { save.mutate({ data: { settingsJson: JSON.stringify(next) } }); pendingRef.current = null; }, 700);
-      return next;
-    });
+  function patch(partial: Partial<SettingsPrefs>, options: { immediate?: boolean } = {}): Promise<Shop | null> {
+    const next = { ...prefsRef.current, ...partial };
+    prefsRef.current = next;
+    pendingRef.current = next;
+    setPrefs(next);
+    void offlineDB.setSetting(PREFS_KEY, next); // durable + instant; cheap IndexedDB put
+    if ("printer" in partial && next.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...next.printer });
+    if (timer.current) clearTimeout(timer.current);
+    if (options.immediate) return persistPrefsToServer(next);
+    timer.current = setTimeout(() => { void persistPrefsToServer(next); }, 700);
+    return Promise.resolve(null);
   }
 
   return { prefs, patch, hydrated, shop: shop.data, shopLoading: shop.isLoading };

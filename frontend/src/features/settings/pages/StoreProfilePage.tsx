@@ -238,7 +238,19 @@ export default function StoreProfilePage() {
       {/* Customer QR self-order (owner opt-in) */}
       <OwnerOrderingCard
         enabled={Boolean((prefs.customerOrdering as { enabled?: boolean } | undefined)?.enabled)}
-        onToggle={(v) => patch({ customerOrdering: { enabled: v } })}
+        onToggle={async (v) => {
+          const updated = await patch({ customerOrdering: { enabled: v } }, { immediate: true });
+          if (!updated) {
+            await patch({ customerOrdering: { enabled: !v } });
+            toast({
+              title: "Could not save QR ordering",
+              description: "Check internet/backend connection and try again.",
+              variant: "destructive",
+            });
+            return;
+          }
+          toast({ title: v ? "QR ordering turned on" : "QR ordering turned off" });
+        }}
         shopId={shop?.id ?? null}
       />
 
