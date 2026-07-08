@@ -6,7 +6,10 @@ export interface ServiceWorkerRegistrationResult {
 
 const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const LOCAL_SW_CLEANUP_RELOAD_KEY = "kirana-os:local-sw-cleanup-reloaded:v1";
+const PROD_SW_CONTROLLER_RELOAD_KEY = "kirana-os:sw-controller-reloaded:v1";
 const KIRANA_CACHE_PREFIXES = ["kiranaos-shell"];
+
+declare const __KIRANA_BUILD_ID__: string;
 
 function isLocalAppHost(): boolean {
   if (typeof window === "undefined") return false;
@@ -64,9 +67,25 @@ export function registerServiceWorker(): void {
     return;
   }
 
+  const hadControllerAtStart = Boolean(navigator.serviceWorker.controller);
+  let controllerReloadQueued = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadControllerAtStart || controllerReloadQueued) return;
+    controllerReloadQueued = true;
+    try {
+      const reloadKey = `${PROD_SW_CONTROLLER_RELOAD_KEY}:${__KIRANA_BUILD_ID__}`;
+      if (window.sessionStorage.getItem(reloadKey) === "1") return;
+      window.sessionStorage.setItem(reloadKey, "1");
+    } catch {
+      // Storage can be blocked; a single controllerchange-triggered reload still refreshes stale app code.
+    }
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
+    const swUrl = `/sw.js?build=${encodeURIComponent(__KIRANA_BUILD_ID__)}`;
     void navigator.serviceWorker
-      .register("/sw.js", { scope: "/" })
+      .register(swUrl, { scope: "/" })
       .then((registration) => {
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;

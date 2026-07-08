@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,10 +16,31 @@ if (!Number.isInteger(port) || port <= 0 || port > 65535) {
 
 const rawBasePath = process.env.BASE_PATH ?? "/";
 const basePath = rawBasePath.startsWith("/") ? rawBasePath : `/${rawBasePath}`;
+const buildId =
+  process.env.KIRANA_BUILD_ID ||
+  process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ||
+  process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 12) ||
+  process.env.GITHUB_SHA?.slice(0, 12) ||
+  new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+
+function stampServiceWorkerBuild() {
+  return {
+    name: "kiranaos-service-worker-build-stamp",
+    closeBundle() {
+      const swPath = path.resolve(projectRoot, "dist/public/sw.js");
+      if (!fs.existsSync(swPath)) return;
+      const source = fs.readFileSync(swPath, "utf8");
+      fs.writeFileSync(swPath, source.replaceAll("__KIRANA_BUILD_ID__", buildId));
+    },
+  };
+}
 
 export default defineConfig({
   base: basePath,
-  plugins: [react(), tailwindcss()],
+  define: {
+    __KIRANA_BUILD_ID__: JSON.stringify(buildId),
+  },
+  plugins: [react(), tailwindcss(), stampServiceWorkerBuild()],
   resolve: {
     alias: {
       "@": path.resolve(projectRoot, "src"),

@@ -1,5 +1,6 @@
 /* KiranaOS service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
-const CACHE_VERSION = "kiranaos-shell-v5";
+const BUILD_ID = "__KIRANA_BUILD_ID__";
+const CACHE_VERSION = `kiranaos-shell-v6-${BUILD_ID}`;
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -30,11 +31,32 @@ self.addEventListener("install", (event) => {
   );
 });
 
+async function deleteOldShellCaches() {
+  const keys = await caches.keys();
+  const oldKeys = keys.filter((key) => key.startsWith("kiranaos-shell") && key !== CACHE_VERSION);
+  await Promise.all(oldKeys.map((key) => caches.delete(key)));
+  return oldKeys.length;
+}
+
+async function refreshOpenClientsAfterUpgrade() {
+  const windowClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  await Promise.all(
+    windowClients.map((client) => {
+      const url = new URL(client.url);
+      if (url.origin !== self.location.origin || typeof client.navigate !== "function") return undefined;
+      return client.navigate(client.url).catch(() => undefined);
+    })
+  );
+}
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_VERSION).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
+    deleteOldShellCaches()
+      .then((deletedCacheCount) => self.clients.claim().then(() => deletedCacheCount))
+      .then((deletedCacheCount) => {
+        if (deletedCacheCount > 0) return refreshOpenClientsAfterUpgrade();
+        return undefined;
+      })
   );
 });
 

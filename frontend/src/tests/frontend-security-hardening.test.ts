@@ -115,13 +115,27 @@ describe("frontend security hardening", () => {
     expect(source).toContain("window.location.reload()");
   });
 
+  it("reloads production clients once when a fresh service worker takes control", () => {
+    const source = readFileSync("src/lib/pwa/registerServiceWorker.ts", "utf8");
+    const viteConfig = readFileSync("vite.config.ts", "utf8");
+
+    expect(viteConfig).toContain("__KIRANA_BUILD_ID__");
+    expect(viteConfig).toContain("stampServiceWorkerBuild");
+    expect(source).toContain("controllerchange");
+    expect(source).toContain("PROD_SW_CONTROLLER_RELOAD_KEY");
+    expect(source).toContain("/sw.js?build=");
+  });
+
   it("fetches app code through the service worker with network-first freshness", () => {
     const source = readFileSync("public/sw.js", "utf8");
 
-    expect(source).toMatch(/const CACHE_VERSION = "kiranaos-shell-v\d+"/);
+    expect(source).toContain('const BUILD_ID = "__KIRANA_BUILD_ID__"');
+    expect(source).toMatch(/const CACHE_VERSION = `kiranaos-shell-v\d+-\$\{BUILD_ID\}`/);
     expect(source).toContain("async function networkFirstStatic");
     expect(source).toContain('["style", "script", "worker"].includes(request.destination)');
     expect(source).toContain('["font", "image"].includes(request.destination)');
+    expect(source).toContain("refreshOpenClientsAfterUpgrade");
+    expect(source).toContain("client.navigate(client.url)");
   });
 
   it("permission denied UI is accessible and explicit", () => {
