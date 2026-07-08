@@ -7,5 +7,7 @@ import * as ctrl from "./public.controller.js";
 const router = Router();
 
 router.get("/shops/:shopId/catalog", ctrl.catalog);
+// Customer submits an order from their phone; it lands in the owner's Orders Received inbox.
+router.post("/shops/:shopId/orders", ctrl.submitOrder);
 
 export default router;

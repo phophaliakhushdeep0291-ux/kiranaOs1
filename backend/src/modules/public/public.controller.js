@@ -8,3 +8,12 @@ export async function catalog(req, res, next) {
     next(err);
   }
 }
+
+export async function submitOrder(req, res, next) {
+  try {
+    const data = await svc.createPublicOrder(req.params.shopId, req.body);
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}

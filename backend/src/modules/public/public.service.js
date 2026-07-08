@@ -53,3 +53,65 @@ export async function getPublicCatalog(shopId) {
     products: safe,
   };
 }
+
+const MAX_ORDER_LINES = 100;
+const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+/**
+ * A customer submits an order from the public QR page. We re-price every line from the shop's own
+ * catalog (never trust client-sent prices) and store it in the owner's "Orders Received" inbox.
+ * Only open when the owner has enabled customer ordering — same 404 gate as the catalog.
+ */
+export async function createPublicOrder(shopId, body = {}) {
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
+  if (!shop || !isCustomerOrderingEnabled(shop.settingsJson)) {
+    throw new AppError("This shop is not accepting online orders.", 404);
+  }
+
+  const customerName = String(body.customerName ?? "").trim();
+  const customerMobile = String(body.customerMobile ?? "").trim();
+  const customerAddress = String(body.customerAddress ?? "").trim();
+  const note = String(body.note ?? "").trim();
+  if (customerName.length < 2) throw new AppError("Please enter your name.", 400);
+  if (!/^[6-9]\d{9}$/.test(customerMobile.replace(/[\s-]/g, ""))) {
+    throw new AppError("Please enter a valid 10-digit mobile number.", 400);
+  }
+
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  if (rawItems.length === 0) throw new AppError("Add at least one item to your order.", 400);
+  if (rawItems.length > MAX_ORDER_LINES) throw new AppError("Too many items in one order.", 400);
+
+  // Authoritative catalog re-price: the customer only sends productId + qty.
+  const products = await listProducts(shopId);
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const lines = [];
+  for (const raw of rawItems) {
+    const product = byId.get(String(raw.productId ?? ""));
+    const qty = round2(raw.qty ?? raw.quantity ?? 0);
+    if (!product || qty <= 0) continue;
+    if (product.status === "inactive" || product.isActive === false) continue;
+    const safe = toCustomerSafeProduct(product);
+    lines.push({ productId: safe.id, name: safe.name, unit: safe.unit, price: safe.price, qty });
+  }
+  if (lines.length === 0) throw new AppError("None of the selected items are available.", 400);
+
+  const itemCount = lines.length;
+  const estimatedTotal = round2(lines.reduce((sum, l) => sum + l.qty * l.price, 0));
+
+  const order = await db.customerOrder.create({
+    data: {
+      shopId,
+      customerName: customerName.slice(0, 120),
+      customerMobile: customerMobile.replace(/[\s-]/g, "").slice(0, 15),
+      customerAddress: customerAddress ? customerAddress.slice(0, 400) : null,
+      note: note ? note.slice(0, 400) : null,
+      itemsJson: JSON.stringify(lines),
+      itemCount,
+      estimatedTotal,
+      status: "new",
+    },
+    select: { id: true, itemCount: true, estimatedTotal: true, createdAt: true },
+  });
+
+  return { orderId: order.id, itemCount: order.itemCount, estimatedTotal: order.estimatedTotal, shopName: shop.name };
+}

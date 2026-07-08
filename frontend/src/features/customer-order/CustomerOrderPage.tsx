@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams } from "wouter";
-import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus, QrCode, Search, ShoppingBag, Store, WifiOff } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Minus, Plus, QrCode, Search, Send, ShoppingBag, Store, WifiOff, X } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildOrderQrPayloads } from "@/lib/qr/cart-codec";
 import {
   loadCustomerCatalog,
   readCachedCatalog,
+  submitCustomerOrder,
   CatalogUnavailableError,
   type CustomerCatalog,
   type CustomerCatalogProduct,
+  type SubmitOrderResult,
 } from "./catalog";
 
 const formatRs = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -25,7 +27,11 @@ export default function CustomerOrderPage() {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [qty, setQty] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
-  const [showQr, setShowQr] = useState(false);
+  const [sheet, setSheet] = useState<"none" | "checkout" | "qr">("none");
+  const [form, setForm] = useState({ name: "", mobile: "", address: "", note: "" });
+  const [placing, setPlacing] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [placed, setPlaced] = useState<SubmitOrderResult | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -106,6 +112,34 @@ export default function CustomerOrderPage() {
     });
   }
 
+  const mobileOk = /^[6-9]\d{9}$/.test(form.mobile.replace(/[\s-]/g, ""));
+  const canPlace = form.name.trim().length >= 2 && mobileOk && items.length > 0;
+
+  async function placeOrder() {
+    if (!canPlace || placing) return;
+    setPlacing(true);
+    setSubmitError(null);
+    try {
+      const result = await submitCustomerOrder(
+        shopCode,
+        {
+          customerName: form.name.trim(),
+          customerMobile: form.mobile.replace(/[\s-]/g, ""),
+          customerAddress: form.address.trim() || undefined,
+          note: form.note.trim() || undefined,
+        },
+        items,
+      );
+      setPlaced(result);
+      setSheet("none");
+      setQty({});
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Could not place the order.");
+    } finally {
+      setPlacing(false);
+    }
+  }
+
   if (state.kind === "loading") {
     return (
       <CenterScreen>
@@ -125,6 +159,28 @@ export default function CustomerOrderPage() {
           {state.unavailable ? "Shop not available" : "Couldn’t load shop"}
         </h1>
         <p className="mt-1 max-w-xs text-center text-sm text-[#5b6b85]">{state.message}</p>
+      </CenterScreen>
+    );
+  }
+
+  if (placed) {
+    return (
+      <CenterScreen>
+        <div className="grid h-16 w-16 place-items-center rounded-2xl bg-[#e9fbf0] text-[#16a34a]">
+          <CheckCircle2 size={34} />
+        </div>
+        <h1 className="mt-4 font-display text-xl font-black text-[#102347]">Order sent!</h1>
+        <p className="mt-1 max-w-xs text-center text-sm text-[#5b6b85]">
+          {placed.shopName} has received your order of {placed.itemCount} item{placed.itemCount === 1 ? "" : "s"}
+          {placed.estimatedTotal > 0 ? <> (about {formatRs(placed.estimatedTotal)})</> : null}. They’ll get it ready — final price is set by the shop.
+        </p>
+        <button
+          type="button"
+          onClick={() => setPlaced(null)}
+          className="mt-6 inline-flex items-center gap-2 rounded-xl border border-[#cfe0ff] bg-[#eaf2ff] px-5 py-3 text-sm font-bold text-[#075fff]"
+        >
+          Place another order
+        </button>
       </CenterScreen>
     );
   }
@@ -191,23 +247,79 @@ export default function CustomerOrderPage() {
           <button
             type="button"
             disabled={items.length === 0}
-            onClick={() => setShowQr(true)}
+            onClick={() => { setSubmitError(null); setSheet("checkout"); }}
             className="inline-flex items-center gap-2 rounded-xl bg-[#075fff] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#075fff]/25 transition disabled:cursor-not-allowed disabled:bg-[#b8c6dc] disabled:shadow-none"
           >
-            <QrCode size={18} /> Show my order
+            <Send size={17} /> Place order
           </button>
         </div>
       </div>
 
-      {showQr && (
+      {sheet === "checkout" && (
+        <div className="fixed inset-0 z-30 flex items-end justify-center bg-[#0b1424]/60 backdrop-blur-sm sm:items-center" onClick={() => !placing && setSheet("none")}>
+          <div className="w-full max-w-md rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-lg font-black text-[#102347]">Your details</h2>
+              <button type="button" aria-label="Close" onClick={() => setSheet("none")} className="grid h-8 w-8 place-items-center rounded-lg text-[#64748b] hover:bg-[#f1f5fb]"><X size={18} /></button>
+            </div>
+            <p className="mt-0.5 text-[12px] text-[#6b7a93]">{totals.count} item{totals.count === 1 ? "" : "s"} · about {formatRs(totals.amount)} — final price is set by the shop.</p>
+
+            <div className="mt-4 space-y-3">
+              <Field label="Name*">
+                <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Your name" className="w-full rounded-xl border border-[#dce5f1] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#075fff]" />
+              </Field>
+              <Field label="Mobile number*" hint={form.mobile && !mobileOk ? "Enter a valid 10-digit number" : undefined}>
+                <input value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" className="w-full rounded-xl border border-[#dce5f1] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#075fff]" />
+              </Field>
+              <Field label="Address (optional)">
+                <textarea value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={2} placeholder="Delivery address / landmark" className="w-full resize-none rounded-xl border border-[#dce5f1] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#075fff]" />
+              </Field>
+              <Field label="Note (optional)">
+                <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="e.g. deliver after 6pm" className="w-full rounded-xl border border-[#dce5f1] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#075fff]" />
+              </Field>
+            </div>
+
+            {submitError && (
+              <div className="mt-3 rounded-xl bg-[#fff1f2] px-3 py-2 text-[12px] font-semibold text-[#e11d48]">
+                {submitError}
+                <button type="button" onClick={() => setSheet("qr")} className="ml-1 underline">Show QR instead</button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={!canPlace || placing}
+              onClick={() => void placeOrder()}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#075fff] py-3.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-[#b8c6dc]"
+            >
+              {placing ? <><Loader2 size={17} className="animate-spin" /> Sending…</> : <><Send size={17} /> Send order to shop</>}
+            </button>
+            <button type="button" onClick={() => setSheet("qr")} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#dce5f1] py-2.5 text-[12px] font-bold text-[#5b6b85]">
+              <QrCode size={14} /> No internet? Show QR at the counter
+            </button>
+          </div>
+        </div>
+      )}
+
+      {sheet === "qr" && (
         <OrderQrOverlay
           urls={orderQrUrls}
           count={totals.count}
           amount={totals.amount}
-          onClose={() => setShowQr(false)}
+          onClose={() => setSheet("none")}
         />
       )}
     </div>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[12px] font-bold text-[#3f4d68]">{label}</span>
+      {children}
+      {hint ? <span className="mt-1 block text-[11px] font-semibold text-[#e11d48]">{hint}</span> : null}
+    </label>
   );
 }
 
@@ -341,6 +453,6 @@ function OrderQrOverlay({
   );
 }
 
-function CenterScreen({ children }: { children: React.ReactNode }) {
+function CenterScreen({ children }: { children: ReactNode }) {
   return <div className="flex min-h-screen flex-col items-center justify-center bg-[#f5f8fd] px-6">{children}</div>;
 }

@@ -57,6 +57,32 @@ model Shop {
   dailyClosingSnapshots DailyClosingSnapshot[]
   expenses          Expense[]
   offers            Offer[]
+  customerOrders    CustomerOrder[]
+}
+
+// ─────────────────────────────────────────────
+// CUSTOMER ORDER — an order a customer submits from the public QR order page.
+// Lands in the owner's "Orders Received" inbox; the owner turns it into a bill.
+// itemsJson is a storefront snapshot: [{ productId, name, unit, price, qty }].
+// ─────────────────────────────────────────────
+model CustomerOrder {
+  id              String   @id @default(cuid())
+  shopId          String
+  customerName    String
+  customerMobile  String
+  customerAddress String?
+  itemsJson       String   @default("[]")
+  itemCount       Int      @default(0)
+  estimatedTotal  Float    @default(0)
+  note            String?
+  status          String   @default("new") // new | accepted | fulfilled | rejected
+  billId          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, status, createdAt])
 }
 
 // ─────────────────────────────────────────────

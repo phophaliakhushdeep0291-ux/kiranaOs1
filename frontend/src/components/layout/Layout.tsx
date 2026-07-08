@@ -65,6 +65,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/billing": "Create fast bills and collect payments",
   "/dashboard": "Live sales, cash, stock, and sync health",
   "/bills": "View, search, filter, and manage all bills and invoices",
+  "/orders-received": "Review customer QR orders and load them into billing",
   "/products": "Manage your product catalog, pricing and stock",
   "/categories": "Organise products into categories",
   "/inventory": "Manage stock, movements, and purchase flow",
@@ -89,6 +90,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/billing": "Billing",
   "/bills": "Billing History",
+  "/orders-received": "Orders Received",
   "/products": "Products",
   "/categories": "Categories",
   "/inventory": "Inventory",
@@ -170,9 +172,10 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/purchase-bills", label: "Purchases", Icon: Truck },
   {
     kind: "group", id: "sales", label: "Sales", Icon: TrendingUp,
-    triggerPaths: ["/bills", "/sales-overview"],
+    triggerPaths: ["/bills", "/orders-received", "/sales-overview"],
     children: [
       { href: "/bills", label: "Billing History" },
+      { href: "/orders-received", label: "Orders Received" },
       { href: "/sales-overview", label: "Sales Overview" },
     ],
   },
@@ -222,6 +225,7 @@ const MOBILE_MENU: MobileMenuItem[] = [
     Icon: TrendingUp,
     children: [
       { href: "/bills", label: "Billing History" },
+      { href: "/orders-received", label: "Orders Received" },
       { href: "/sales-overview", label: "Sales Overview" },
     ],
   },

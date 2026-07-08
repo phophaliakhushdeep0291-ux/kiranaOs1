@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { ShoppingCart, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Pencil, ShoppingCart, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productMinSellingPrice, roundMoney } from "../billing-calculations";
 import type { CartItem } from "../billing-types";
@@ -56,6 +55,8 @@ function CartRow({
   onRemoveItem: (id: string) => void;
 }) {
   const [editingRate, setEditingRate] = useState(false);
+  const [rateDraft, setRateDraft] = useState<string>(String(item.rate));
+  const rateInputRef = useRef<HTMLInputElement | null>(null);
   const lineTotal = roundMoney(item.quantity * item.rate);
   const isBelowMin =
     !item.isCustom &&
@@ -63,6 +64,36 @@ function CartRow({
     item.rate < productMinSellingPrice(item.product);
   const color = productPlaceholderColor(item.product.name);
   const emoji = getProductEmoji(item.product.name, item.product.category);
+
+  function startEditRate() {
+    setRateDraft(String(item.rate));
+    setEditingRate(true);
+  }
+
+  function onRateDraftChange(next: string) {
+    // Keep the raw text so "12." / "" feel natural, but push the parsed rate live so the line
+    // total updates as you type.
+    setRateDraft(next);
+    const parsed = Number(next);
+    if (next.trim() !== "" && Number.isFinite(parsed) && parsed >= 0) {
+      onUpdateRate(item.product.id, parsed);
+    }
+  }
+
+  function commitRate() {
+    const parsed = Number(rateDraft);
+    const safe = rateDraft.trim() !== "" && Number.isFinite(parsed) && parsed >= 0 ? parsed : item.rate;
+    onUpdateRate(item.product.id, safe);
+    setRateDraft(String(safe));
+    setEditingRate(false);
+  }
+
+  useEffect(() => {
+    if (editingRate) {
+      rateInputRef.current?.focus();
+      rateInputRef.current?.select();
+    }
+  }, [editingRate]);
 
   return (
     <div
@@ -74,34 +105,49 @@ function CartRow({
         {item.product.imageUrl ? <img src={item.product.imageUrl} alt="" className="h-full w-full object-contain" /> : emoji}
       </div>
 
-      {/* Name + rate */}
+      {/* Name + editable rate */}
       <div className="min-w-0">
         <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#13274d]">
           {item.product.name}
         </p>
-        <button
-          onClick={() => setEditingRate((v) => !v)}
-          className={cn(
-            "mt-[5px] text-[11px] font-bold leading-none",
-            editingRate
-              ? "text-[#0057ff]"
-              : isBelowMin
-                ? "text-red-600"
-                : "text-[#2d4268] hover:text-[#0057ff]",
-          )}
-        >
-          {editingRate ? "✓ done" : `₹${item.rate}/${item.unit}${isBelowMin ? " · below min" : ""}`}
-        </button>
-        {editingRate && (
-          <Input
-            type="number"
-            inputMode="decimal"
-            value={item.rate}
-            onChange={(e) => onUpdateRate(item.product.id, Number(e.target.value) || 0)}
-            className="mt-1 h-7 w-20 px-2 text-xs font-semibold"
-            placeholder="Rate ₹"
-            autoFocus
-          />
+        {editingRate ? (
+          <div
+            className={cn(
+              "mt-1 inline-flex h-[26px] items-center gap-0.5 rounded-[7px] border bg-white px-1.5 shadow-sm ring-2 ring-offset-0",
+              isBelowMin ? "border-red-300 ring-red-100" : "border-[#0057ff] ring-[#0057ff]/15",
+            )}
+          >
+            <span className="text-[11px] font-bold text-[#8290a8]">₹</span>
+            <input
+              ref={rateInputRef}
+              data-testid={`rate-input-${item.product.id}`}
+              type="number"
+              inputMode="decimal"
+              value={rateDraft}
+              onChange={(e) => onRateDraftChange(e.target.value)}
+              onBlur={commitRate}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commitRate(); }
+                if (e.key === "Escape") { setRateDraft(String(item.rate)); setEditingRate(false); }
+              }}
+              className="w-12 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <span className="whitespace-nowrap text-[11px] font-semibold text-[#8290a8]">/{item.unit}</span>
+          </div>
+        ) : (
+          <button
+            data-testid={`rate-edit-${item.product.id}`}
+            onClick={startEditRate}
+            className={cn(
+              "group mt-[5px] inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[11px] font-bold leading-none -ml-1 transition-colors hover:bg-[#eef4ff]",
+              isBelowMin ? "text-red-600" : "text-[#2d4268]",
+            )}
+            title="Tap to change rate per unit"
+          >
+            <span className="tabular-nums">₹{item.rate.toLocaleString("en-IN")}/{item.unit}</span>
+            {isBelowMin ? <span className="font-semibold">· below min</span> : null}
+            <Pencil size={10} className="text-[#9aa7bd] group-hover:text-[#0057ff]" aria-hidden="true" />
+          </button>
         )}
       </div>
 
