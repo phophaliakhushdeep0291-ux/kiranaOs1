@@ -85,6 +85,39 @@ export function registerServiceWorker(): void {
   });
 }
 
+/**
+ * Recover from a stale deploy (a lazy chunk failed to load because this tab's cached index.html
+ * points at asset files the new build renamed). A plain reload is not enough on a PWA: the
+ * service worker can serve the same stale index again, so the chunk error just repeats. This
+ * clears the app-shell cache and unregisters the SW so the reload fetches the fresh index/chunks.
+ *
+ * Safety: only busts caches when ONLINE. Doing it offline would strip an offline-first POS of the
+ * very cache it needs to run, so when offline we just reload (the SW keeps serving the shell).
+ */
+export async function recoverFromStaleDeploy(): Promise<void> {
+  if (typeof window === "undefined") return;
+
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    window.location.reload();
+    return;
+  }
+
+  try {
+    await clearKiranaShellCaches();
+  } catch {
+    // Cache API may be unavailable; unregister and reload is still the escape.
+  }
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+  } catch {
+    // Ignore; a fresh reload re-registers the SW on next load.
+  }
+  window.location.reload();
+}
+
 export function activateWaitingServiceWorker(): void {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
   void navigator.serviceWorker.getRegistration().then((registration) => {

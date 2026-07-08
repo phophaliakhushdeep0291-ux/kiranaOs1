@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline } from "@/lib/api/http";
-import { RECENT_CACHE_DAYS, emitLocalDataChanged, pruneRecentRows, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
+import { RECENT_CACHE_DAYS, emitLocalDataChanged, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import { getQueryOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as billingApi from "@/features/billing/api";
 import * as inventoryApi from "@/features/inventory/api";
@@ -101,7 +101,7 @@ function billTenderFromCacheBill(bill: Bill): { cash: number; upi: number } {
 
 export function getLocalDashboardSnapshot(date = new Date()): LocalDashboardSnapshot {
   const yyyyMmDd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  const bills = dedupeBillsForDisplay(pruneRecentRows(readInstantCache<Bill[]>(CACHE_KEYS.bills, []), RECENT_CACHE_DAYS).map(withBillAliases)) as unknown as Bill[];
+  const bills = dedupeBillsForDisplay(readInstantCache<Bill[]>(CACHE_KEYS.bills, []).map(withBillAliases)) as unknown as Bill[];
   const customers = readInstantCache<Customer[]>(CACHE_KEYS.customers, []).map(normaliseCustomerForCache);
   const ledger = dedupeLedgerEntries(readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []));
   const todayBills = bills.filter((bill) => bill.status !== "cancelled" && sameLocalDate(bill.createdAt, yyyyMmDd));

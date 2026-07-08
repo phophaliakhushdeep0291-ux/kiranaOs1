@@ -21,10 +21,9 @@ describe("dashboard payment dedupe", () => {
           { id: "server_payment_upi", bill_id: "server_bill_split", mode: "upi", amount: 150, paid_at: "2026-06-07T11:20:03.000Z", sync_status: "synced" },
         ],
       },
-    ]);
+    ], 10_000);
 
     const snapshot = getLocalDashboardSnapshot(new Date("2026-06-07T12:00:00.000Z"));
-
     expect(snapshot.cash).toBe(650);
     expect(snapshot.upi).toBe(150);
     expect(snapshot.credit).toBe(380);
