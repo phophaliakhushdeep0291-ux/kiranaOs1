@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -11,9 +11,11 @@ import {
   Search,
   Ticket,
   Users,
+  X,
   Zap,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useListBills } from "@/features/bills/queries";
 import type { Bill, Product } from "@/lib/api/client";
@@ -76,6 +78,17 @@ export function getProductEmoji(name: string, category?: string | null): string 
 
 const CATEGORY_LIMIT = 8;
 
+type NativeBarcodeDetector = {
+  detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue?: string }>>;
+};
+
+function barcodeDetectorConstructor(): (new (options?: { formats?: string[] }) => NativeBarcodeDetector) | null {
+  const detector = (globalThis as typeof globalThis & {
+    BarcodeDetector?: new (options?: { formats?: string[] }) => NativeBarcodeDetector;
+  }).BarcodeDetector;
+  return typeof detector === "function" ? detector : null;
+}
+
 /* ─── props ─── */
 interface BillingSearchProps {
   isOnline: boolean;
@@ -135,9 +148,116 @@ export function BillingSearch({
 }: BillingSearchProps) {
   const [showAll, setShowAll] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerMessage, setScannerMessage] = useState("Point the camera at a barcode.");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scanFrameRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const displayedProducts = showAll ? filteredProducts : filteredProducts.slice(0, 10);
   const visibleCategories = showAllCategories ? categories : categories.slice(0, CATEGORY_LIMIT);
   const hasMoreCategories = categories.length > CATEGORY_LIMIT;
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+
+    let cancelled = false;
+    const Detector = barcodeDetectorConstructor();
+
+    if (!Detector) {
+      setScannerOpen(false);
+      searchInputRef.current?.focus();
+      toast({
+        title: "Camera scanner not supported",
+        description: "Use a USB barcode scanner or type the barcode in search.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const BarcodeDetectorImpl = Detector;
+
+    async function startScanner() {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Camera access is not available in this browser.");
+        }
+
+        setScannerMessage("Starting camera...");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (!video) return;
+
+        video.srcObject = stream;
+        await video.play();
+
+        const detector = new BarcodeDetectorImpl({
+          formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code"],
+        });
+
+        setScannerMessage("Scanning...");
+
+        const scan = async () => {
+          if (cancelled || !videoRef.current) return;
+
+          try {
+            if (videoRef.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+              const codes = await detector.detect(videoRef.current);
+              const value = codes.find((code) => typeof code.rawValue === "string" && code.rawValue.trim())?.rawValue?.trim();
+
+              if (value) {
+                onSearchChange(value);
+                setScannerOpen(false);
+                window.setTimeout(() => searchInputRef.current?.focus(), 0);
+                toast({ title: "Barcode scanned", description: value });
+                return;
+              }
+            }
+          } catch {
+            setScannerMessage("Still scanning. Hold the barcode steady.");
+          }
+
+          scanFrameRef.current = window.requestAnimationFrame(scan);
+        };
+
+        scanFrameRef.current = window.requestAnimationFrame(scan);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Camera permission was blocked.";
+        setScannerOpen(false);
+        searchInputRef.current?.focus();
+        toast({
+          title: "Scanner could not start",
+          description: `${message} You can still type or USB-scan into search.`,
+          variant: "destructive",
+        });
+      }
+    }
+
+    void startScanner();
+
+    return () => {
+      cancelled = true;
+      if (scanFrameRef.current !== null) {
+        window.cancelAnimationFrame(scanFrameRef.current);
+        scanFrameRef.current = null;
+      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+  }, [scannerOpen, onSearchChange, searchInputRef]);
+
+  const openBarcodeScanner = () => {
+    setScannerMessage("Point the camera at a barcode.");
+    setScannerOpen(true);
+  };
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-hidden">
@@ -187,7 +307,7 @@ export function BillingSearch({
                 <button
                   type="button"
                   title="Scan barcode"
-                  onClick={() => searchInputRef.current?.focus()}
+                  onClick={openBarcodeScanner}
                   className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff]"
                 >
                   <ScanLine size={16} aria-hidden="true" />
@@ -263,6 +383,47 @@ export function BillingSearch({
         </div>
 
         {/* Product grid — scrollable */}
+        {scannerOpen && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-[#06142c]/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-[460px] overflow-hidden rounded-[14px] border border-white/20 bg-white shadow-[0_24px_70px_rgba(3,12,30,0.32)]">
+              <div className="flex items-center justify-between border-b border-[#e6ecf4] px-4 py-3">
+                <div>
+                  <p className="text-[14px] font-black text-[#13274d]">Scan barcode</p>
+                  <p className="text-[12px] font-semibold text-[#6d7c98]">{scannerMessage}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(false)}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd]"
+                  aria-label="Close scanner"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="relative bg-black">
+                <video ref={videoRef} className="aspect-[4/3] w-full object-cover" muted playsInline />
+                <div className="pointer-events-none absolute inset-x-[14%] top-1/2 h-[2px] -translate-y-1/2 rounded-full bg-[#0057ff] shadow-[0_0_18px_rgba(0,87,255,0.9)]" />
+                <div className="pointer-events-none absolute inset-[12%] rounded-[14px] border-2 border-white/80 shadow-[0_0_0_999px_rgba(0,0,0,0.22)]" />
+              </div>
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <p className="text-[11px] font-semibold text-[#6d7c98]">
+                  Tip: a USB scanner works by typing the barcode into search.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScannerOpen(false);
+                    searchInputRef.current?.focus();
+                  }}
+                  className="h-9 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[#0057ff] hover:bg-[#f5f9ff]"
+                >
+                  Type instead
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1">
           {productsLoading && filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#536383]">
