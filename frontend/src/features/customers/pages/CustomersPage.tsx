@@ -1402,7 +1402,38 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
         </div>
       </header>
       <div className="grid min-w-0 2xl:grid-cols-[minmax(0,1fr)_270px]">
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-[#e8edf4] md:hidden">
+          {loading ? (
+            <div className="py-12 text-center text-[#71809a]">Loading ledger...</div>
+          ) : visibleRows.length === 0 ? (
+            <div className="py-12 text-center text-[#71809a]">No ledger entries found.</div>
+          ) : visibleRows.slice(0, 8).map((row) => {
+            const signed = Number(row.signed_amount ?? 0);
+            const displayType = String(row.display_type ?? "ENTRY").toUpperCase();
+            const isCredit = signed < 0;
+            return (
+              <div key={row.id} className="grid grid-cols-[34px_1fr_auto] gap-3 px-4 py-4">
+                <span className={cn("grid h-8 w-8 place-items-center rounded-full", isCredit ? "bg-[#ecfdf5] text-[#16a34a]" : "bg-[#fee2e2] text-[#dc2626]")}>
+                  {isCredit ? <Wallet size={15} /> : <FileText size={15} />}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", badgeFor(displayType))}>{labelFor(displayType)}</span>
+                    <span className="text-[11px] font-semibold text-[#71809a]">{formatShortDate(row.display_date)}</span>
+                  </div>
+                  <p className="mt-1 truncate text-[12px] font-bold text-[#102347]">{String(row.note || labelFor(displayType))}</p>
+                  <p className="mt-1 truncate text-[11px] text-[#60708e]">{String(row.source_id ?? "—")} • {String(row.mode ?? "System")}</p>
+                </div>
+                <div className="text-right">
+                  <p className={cn("text-[14px] font-black", isCredit ? "text-[#16a34a]" : "text-[#ef4444]")}>{isCredit ? "-" : "+"}{fmtMoney(Math.abs(signed))}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-[#71809a]">Bal {fmtMoney(row.running_balance)}</p>
+                  <span className="mt-2 inline-flex rounded-[7px] bg-[#dcfce7] px-2 py-1 text-[10px] font-bold text-[#15803d]">Posted</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[1020px] text-[12.5px]">
             <thead><tr className="h-10 bg-[#f7f9fc] text-[10px] text-[#52617c]">{['Date','Entry Type','Reference','Description','Debit (₹)','Credit (₹)','Running Balance (₹)','Mode','Status','Action'].map((label) => <th key={label} className="px-3 text-left font-bold">{label}</th>)}</tr></thead>
             <tbody className="divide-y divide-[#e8edf4]">

@@ -5,12 +5,15 @@ import { createLocalId, emitLocalDataChanged, normaliseInstantCacheValue, readIn
 import { buildOutboxOperation, enqueueOutboxOperation } from "@/features/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { normaliseLocalCustomer } from "@/features/customers/local-actions";
-import type { Bill, BillInput, BillInputItem, BillPayment, Customer } from "@/types/api";
+import type { Bill, BillInput, BillInputItem, BillPayment, Customer, Product } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/audit-logs/local-actions";
 import { BillPaymentMode } from "@/types/api";
+import { toInventoryBaseQty } from "@/features/inventory/calculations";
 
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
+const PRODUCT_CACHE_KEY = "products";
+const INVENTORY_CACHE_KEY = "inventory";
 
 type SensitiveBillAction = "large_discount" | "selling_below_minimum_price" | string;
 type GstMode = NonNullable<BillInput["gstMode"]>;
@@ -233,25 +236,103 @@ function buildPayments(billId: string, customerId: string | undefined, payments:
     });
 }
 
-function buildSaleMovements(billId: string, items: BillInputItem[]) {
+function productStockQty(product: Product) {
+  return readNumber(product.stockBaseQty ?? product.stockQuantity, 0);
+}
+
+function productBaseUnit(product: Product | undefined, fallbackUnit: string) {
+  return product?.baseUnit ?? product?.stockUnit ?? product?.unit ?? product?.displayUnit ?? fallbackUnit;
+}
+
+function billItemBaseQuantity(item: BillInputItem, product?: Product) {
+  return Math.abs(toInventoryBaseQty(item.quantity, item.enteredUnit, productBaseUnit(product, item.enteredUnit)));
+}
+
+async function loadBillProducts(items: BillInputItem[]) {
+  const ids = Array.from(new Set(items.map((item) => item.productId).filter((id): id is string => Boolean(id))));
+  if (ids.length === 0) return new Map<string, Product>();
+
+  const cached = readInstantCache<Product[]>(PRODUCT_CACHE_KEY, []);
+  const dbRows = await offlineDB.getAll<Product>("products").catch(() => []);
+  const byId = new Map<string, Product>();
+  for (const product of [...cached, ...dbRows]) {
+    if (ids.includes(product.id) && !byId.has(product.id)) byId.set(product.id, product);
+  }
+  return byId;
+}
+
+function buildStockProjection(items: BillInputItem[], productsById: Map<string, Product>) {
+  const runningStock = new Map<string, number>();
+  const touchedProducts = new Map<string, Product>();
+
+  for (const item of items) {
+    if (!item.productId) continue;
+    const product = productsById.get(item.productId);
+    if (!product) continue;
+    const previous = runningStock.has(product.id) ? runningStock.get(product.id)! : productStockQty(product);
+    const next = roundMoney(previous - billItemBaseQuantity(item, product));
+    runningStock.set(product.id, next);
+    touchedProducts.set(product.id, product);
+  }
+
   const now = new Date().toISOString();
+  return Array.from(touchedProducts.values()).map((product) => {
+    const nextStock = runningStock.get(product.id) ?? productStockQty(product);
+    return {
+      ...product,
+      stockBaseQty: nextStock,
+      stockQuantity: nextStock,
+      stockTrackingEnabled: true,
+      trackStock: true,
+      updatedAt: now,
+      updated_at: now,
+      negativeStockWarning: nextStock < 0 ? "Stock went negative from billing. Add stock when inventory is updated." : undefined,
+      stockNeedsReview: nextStock < 0,
+    } as Product & Record<string, unknown>;
+  });
+}
+
+function buildSaleMovements(billId: string, items: BillInputItem[], productsById: Map<string, Product>) {
+  const now = new Date().toISOString();
+  const runningStock = new Map<string, number>();
   return items
     .filter((item) => item.productId)
-    .map((item) => makeLocalEntity({
-      id: createLocalId("stock_sale"),
-      productId: item.productId,
-      product_id: item.productId,
-      type: "sale",
-      action: "sale",
-      quantityDelta: -Math.abs(item.quantity),
-      quantity_delta: -Math.abs(item.quantity),
-      unit: item.enteredUnit,
-      reference_type: "bill",
-      reference_id: billId,
-      billId,
-      note: `Bill ${billId}`,
-      createdAt: now,
-    }, "inventory_movement", "pending_sync"));
+    .map((item) => {
+      const product = item.productId ? productsById.get(item.productId) : undefined;
+      const delta = -billItemBaseQuantity(item, product);
+      const previous = item.productId && runningStock.has(item.productId)
+        ? runningStock.get(item.productId)!
+        : product ? productStockQty(product) : 0;
+      const next = roundMoney(previous + delta);
+      if (item.productId) runningStock.set(item.productId, next);
+      const unit = productBaseUnit(product, item.enteredUnit);
+      const warning = next < 0 ? `Stock negative after bill: ${next} ${unit}. Add stock when inventory is updated.` : undefined;
+      return makeLocalEntity({
+        id: createLocalId("stock_sale"),
+        productId: item.productId,
+        product_id: item.productId,
+        productName: product?.name ?? item.name,
+        product_name: product?.name ?? item.name,
+        type: "sale",
+        action: "sale",
+        quantityDelta: delta,
+        quantity_delta: delta,
+        stockBefore: previous,
+        stock_before: previous,
+        stockAfter: next,
+        stock_after: next,
+        negativeStockWarning: warning,
+        negative_stock_warning: warning,
+        unit,
+        enteredUnit: item.enteredUnit,
+        entered_unit: item.enteredUnit,
+        reference_type: "bill",
+        reference_id: billId,
+        billId,
+        note: warning ? `Bill ${billId}. ${warning}` : `Bill ${billId}`,
+        createdAt: now,
+      }, "inventory_movement", "pending_sync");
+    });
 }
 
 function calculateBillAmounts(data: BillInput) {
@@ -352,6 +433,7 @@ const BILL_CREATION_TRANSACTION_TABLES = [
   "payments",
   "customer_ledger",
   "inventory_movements",
+  "products",
   "local_audit_logs",
   "sync_outbox",
   "settings",
@@ -368,23 +450,9 @@ function localBillNoForType(billType: BillInput["billType"], billId: string) {
 }
 
 export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
-  const inputForCreation: BillInput = input.billType === "estimate"
-    ? (() => {
-        // Estimates record the real tender collected (cash/UPI) so the bill + receipt show what
-        // was paid, but they never carry credit/udhar (no customer debt) and never move stock or
-        // P&L. Every sales/cash report already excludes billType "estimate", so this recorded
-        // tender stays out of all totals — matching "record payment, keep separate".
-        const tenderPayments = (input.payments ?? []).filter((p) => p.mode !== BillPaymentMode.credit);
-        const paidTender = roundMoney(tenderPayments.reduce((sum, p) => sum + readNumber(p.amount, 0), 0));
-        return {
-          ...input,
-          payments: tenderPayments,
-          buyerPaidAmount: paidTender,
-          advanceAmount: 0,
-          allowAdvancePayment: false,
-        };
-      })()
-    : input;
+  // Estimates (kacha bills) are full sales in everything but their EST- number series: they
+  // move stock, record tender, and can carry udhar exactly like a pakka bill.
+  const inputForCreation: BillInput = input;
   const sensitiveActions = readSensitiveBillActions(inputForCreation);
   validateSensitiveBillApproval(inputForCreation, sensitiveActions);
   const validated = parseOrThrow(billCreationSchema, inputForCreation) as BillInput;
@@ -414,9 +482,11 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   const paid = roundMoney(readNumber(billData.buyerPaidAmount, billData.payments
     .filter((payment) => payment.mode !== BillPaymentMode.credit)
     .reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0)));
+  const productsById = await loadBillProducts(billData.items);
   const billItems = buildBillItems(billId, billData.items, calculatedAmounts.gstMode);
   const billPayments = buildPayments(billId, billData.customerId, billData.payments);
-  const saleMovements = billData.billType === "estimate" ? [] : buildSaleMovements(billId, billData.items);
+  const saleMovements = buildSaleMovements(billId, billData.items, productsById);
+  const updatedProducts = buildStockProjection(billData.items, productsById);
   // Carry the durable clientPaymentId into the sync payload so the server stores + echoes it.
   // That lets sync reconciliation match a payment to its own server echo by identity instead of
   // a fuzzy amount/time guess (which could collapse two distinct same-amount tenders).
@@ -429,8 +499,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     idempotency_key: payment.idempotency_key,
   }));
   const creditPayments = billData.payments.filter((payment) => payment.mode === BillPaymentMode.credit);
-  const isEstimateBill = billData.billType === "estimate";
-  const dueAmount = isEstimateBill ? 0 : roundMoney(Math.max(0, total - paid));
+  const dueAmount = roundMoney(Math.max(0, total - paid));
   const localBillNo = localBillNoForType(billData.billType, billId);
   const bill = makeLocalEntity(withBillAliases({
     id: billId,
@@ -521,6 +590,8 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
       reason: sensitiveActions.length > 0 ? inputForCreation.reason : undefined,
       sensitiveActions,
       ownerPinProvided: sensitiveActions.length > 0,
+      allowNegativeStock: true,
+      allowStockShortfall: true,
       // Send only real tender payments as backend payment rows. Credit/udhar is
       // represented separately as debt; otherwise some backends treat udhar as
       // collected cash and mark the bill fully paid after sync.
@@ -551,8 +622,8 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
       credit_amount: creditAmount,
       dueAmount,
       due_amount: dueAmount,
-      paymentStatus: isEstimateBill ? "estimate" : creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
-      payment_status: isEstimateBill ? "estimate" : creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
+      paymentStatus: creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
+      payment_status: creditAmount > 0 ? (paid > 0 ? "partial" : "credit") : "paid",
       udharAmount: creditAmount,
       udhar_amount: creditAmount,
       outstandingAmount: dueAmount,
@@ -616,6 +687,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     await tx.putMany("bill_items", billItems);
     await tx.putMany("payments", billPayments);
     await tx.putMany("inventory_movements", saleMovements);
+    await tx.putMany("products", updatedProducts);
     if (ledgerEntry) {
       await tx.put("customer_ledger", ledgerEntry);
     }
@@ -635,7 +707,12 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   writeInstantMemoryCache(BILL_CACHE_KEY, nextBillsCache, BILL_CREATION_CACHE_DAYS);
   if (nextCustomersCache) writeInstantMemoryCache(CUSTOMER_CACHE_KEY, nextCustomersCache, BILL_CREATION_CACHE_DAYS);
   if (nextLedgerCache) writeInstantMemoryCache("customer_ledger", nextLedgerCache, BILL_CREATION_CACHE_DAYS);
+  updatedProducts.forEach((product) => {
+    upsertCachedListItem<Product>(PRODUCT_CACHE_KEY, product, 1000);
+    upsertCachedListItem<Product & Record<string, unknown>>(INVENTORY_CACHE_KEY, product, 1000);
+  });
   emitLocalDataChanged({ type: "bill", id: billId, action: "created" });
+  updatedProducts.forEach((product) => emitLocalDataChanged({ type: "product", id: product.id, action: "stock-updated" }));
   if (ledgerEntry) emitLocalDataChanged({ type: "ledger", id: ledgerEntry.id, customerId: billData.customerId, action: "appended" });
   return bill;
 }

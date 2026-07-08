@@ -24,6 +24,7 @@ import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/pri
 import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config";
 import { computeGstBreakdown } from "@/lib/gst";
 import { redeemOffer } from "@/features/offers/api";
+import { toInventoryBaseQty } from "@/features/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 
@@ -47,6 +48,22 @@ function readBillSummaryWidth() {
 function clampBillSummaryWidth(value: number) {
   const max = typeof window === "undefined" ? MAX_SUMMARY_WIDTH : Math.min(MAX_SUMMARY_WIDTH, Math.max(MIN_SUMMARY_WIDTH, Math.floor(window.innerWidth * 0.58)));
   return Math.min(Math.max(value, MIN_SUMMARY_WIDTH), max);
+}
+
+function productStockQty(product: Product) {
+  return roundMoney(Number(product.stockBaseQty ?? product.stockQuantity ?? 0));
+}
+
+function productStockUnit(product: Product) {
+  return product.baseUnit ?? product.stockUnit ?? product.unit ?? product.displayUnit ?? "unit";
+}
+
+function isStockTracked(product: Product) {
+  return (product.stockTrackingEnabled ?? product.trackStock ?? true) !== false;
+}
+
+function cartItemBaseQuantity(item: CartItem) {
+  return toInventoryBaseQty(item.quantity, item.unit, item.product.baseUnit ?? item.product.unit ?? item.unit);
 }
 
 let billingDraftCache: BillingDraft = {};
@@ -199,6 +216,25 @@ export default function Billing() {
   }, [allProducts]);
 
   const productById = useMemo(() => new Map(allProducts.map((product) => [product.id, product])), [allProducts]);
+
+  const negativeStockWarnings = useMemo(() => cart
+    .filter((item) => !item.isCustom && isStockTracked(item.product))
+    .map((item) => {
+      const available = productStockQty(item.product);
+      const requested = cartItemBaseQuantity(item);
+      const after = roundMoney(available - requested);
+      if (after >= 0) return null;
+      const unit = productStockUnit(item.product);
+      return {
+        productId: item.product.id,
+        productName: item.product.name,
+        available,
+        requested,
+        after,
+        unit,
+      };
+    })
+    .filter((warning): warning is NonNullable<typeof warning> => warning != null), [cart]);
 
   const productSearchIndex = useMemo(() => allProducts.map((product) => ({
     product,
@@ -690,6 +726,14 @@ export default function Billing() {
 
     if (!validateBeforeConfirm(nextBillType)) return;
 
+    if (negativeStockWarnings.length > 0) {
+      const first = negativeStockWarnings[0];
+      toast({
+        title: "Stock will go negative",
+        description: `${first.productName}: ${first.available} ${first.unit} available, ${first.requested} ${first.unit} selling. Stock will become ${first.after} ${first.unit}.`,
+      });
+    }
+
     const sensitiveActions = requiredBillingSensitiveActions();
     if (sensitiveActions.length > 0 && !billingSensitiveApprovalCovers(sensitiveActions)) {
       setPendingSensitiveBillType(nextBillType);
@@ -1068,6 +1112,7 @@ export default function Billing() {
         onUpdateRate={updateRate}
         onUpdateUnit={updateUnit}
         onRemoveItem={removeItem}
+        negativeStockWarnings={negativeStockWarnings}
       />
       </div>
 

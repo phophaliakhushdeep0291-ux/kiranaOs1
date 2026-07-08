@@ -336,9 +336,11 @@ if (ctx.skip) {
       assert.equal(refreshedProduct.stockBaseQty, 8);
     });
 
-    test("offline CREATE_BILL with insufficient stock is recorded (not dropped), stock floored", async () => {
+    test("offline CREATE_BILL with insufficient stock is recorded (not dropped), stock goes negative for reconcile", async () => {
       // The sale already happened at the counter offline; the server must record it rather
-      // than reject + drop it. Stock floors at 0 and the shortfall is flagged for reconcile.
+      // than reject + drop it. Stock is allowed to go negative so the shopkeeper sees the exact
+      // deficit (per "allow stock shortfall" + "negative stock handling"), and the shortfall is
+      // flagged on the sale ledger for reconciliation with the next stock-in.
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 2, defaultPricePerRateUnit: 10 });
       const localBillId = "local-bill-shortfall-1";
@@ -369,7 +371,7 @@ if (ctx.skip) {
       assert.ok(await ctx.db.bill.findUnique({ where: { id: billId } }), "bill is recorded");
 
       const refreshed = await ctx.db.product.findUnique({ where: { id: product.id } });
-      assert.equal(refreshed.stockBaseQty, 0, "stock floored at zero, never negative");
+      assert.equal(refreshed.stockBaseQty, -3, "stock reflects the real deficit (2 in stock, 5 sold) for reconciliation");
 
       const saleLedger = await ctx.db.stockLedger.findFirst({
         where: { shopId: tenant.shop.id, productId: product.id, action: "sale" },

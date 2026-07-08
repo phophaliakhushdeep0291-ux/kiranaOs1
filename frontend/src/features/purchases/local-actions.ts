@@ -331,6 +331,34 @@ export async function markPurchasePaidLocal(displayRow: SupplierDueRow, paymentM
   });
 }
 
+/**
+ * Record a partial payment against an unpaid/partially-paid purchase. The shopkeeper can clear a
+ * supplier due in small amounts over time — each payment bumps the cumulative paid and the same
+ * idempotent UPDATE_PURCHASE_BILL sync path reconciles it on the server.
+ */
+export async function recordPurchasePaymentLocal(
+  displayRow: SupplierDueRow,
+  payment: { amount: number; mode: string },
+) {
+  const amount = roundMoney(Math.max(0, payment.amount));
+  if (amount <= 0) throw new Error("Enter a payment amount greater than zero");
+  const due = roundMoney(Math.max(0, displayRow.due));
+  if (due <= 0) throw new Error("This purchase has no due left");
+  if (amount > due + 0.009) throw new Error(`Payment can't exceed the due amount (₹${due.toLocaleString("en-IN")})`);
+
+  const paid = roundMoney(Math.min(displayRow.amount, roundMoney(displayRow.paid + amount)));
+  const remaining = roundMoney(Math.max(0, displayRow.amount - paid));
+  return updatePurchaseLocal(displayRow, {
+    supplierName: displayRow.supplierName,
+    invoiceNumber: displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber,
+    amount: displayRow.amount,
+    paid,
+    due: remaining,
+    paymentMode: payment.mode,
+    status: remaining <= 0 ? "paid" : "partial",
+  });
+}
+
 export async function deletePurchaseLocal(displayRow: SupplierDueRow) {
   const matches = await findMatchingPurchaseRows(displayRow);
   if (matches.length === 0) throw new Error("Purchase row not found in local records");

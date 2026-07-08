@@ -73,12 +73,16 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   writeInstantMemoryCache: vi.fn((key: string, value: unknown[]) => {
     dbState.instant[key] = clone(value);
   }),
+  writeInstantCache: vi.fn((key: string, value: unknown[]) => {
+    dbState.instant[key] = clone(value);
+  }),
 }));
 
 import { createBillLocalFirst } from "@/features/billing/local-actions";
+import { restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
-import { markPurchasePaidLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
+import { markPurchasePaidLocal, recordPurchasePaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { calculateLedgerBalance } from "@/features/ledger/accounting";
 
 function seedFrontOffice() {
@@ -183,12 +187,9 @@ describe("front office local-first cashier flow", () => {
     seedFrontOffice();
   });
 
-  it("stores estimate bills as quote-only even if stale payment data is present", async () => {
+  it("treats an udhar estimate exactly like an udhar pakka bill, just under the EST- series", async () => {
     const estimate = await createBillLocalFirst(billInput({
       billType: BillInputBillType.estimate,
-      buyerPaidAmount: 200,
-      allowAdvancePayment: true,
-      advanceAmount: 200,
       payments: [{ mode: BillPaymentMode.credit, amount: 200 }],
     }));
 
@@ -199,33 +200,28 @@ describe("front office local-first cashier flow", () => {
       billNumber: expect.stringMatching(/^EST-\d{4}-LOCAL-/),
       billType: BillInputBillType.estimate,
       paidAmount: 0,
-      buyerPaidAmount: 0,
-      creditAmount: 0,
+      creditAmount: 200,
     }));
     expect(rows("bill_items")).toHaveLength(1);
-    expect(rows("payments")).toHaveLength(0);
-    expect(rows("customer_ledger")).toHaveLength(0);
-    expect(rows("inventory_movements")).toHaveLength(0);
-    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
-    expect(rows("sync_outbox").filter((row) => row.operation_type === "CREATE_CUSTOMER")).toHaveLength(0);
+    // Full sale side effects: stock moves and the customer owes the udhar.
+    expect(rows("inventory_movements")).toEqual([
+      expect.objectContaining({ action: "sale", product_id: "product_sugar", quantity_delta: -4 }),
+    ]);
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200, totalUdhar: 200 }));
+    expect(calculateLedgerBalance(ledgerFor("customer_ramesh"))).toBe(200);
     expect(rows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL")).toEqual(expect.objectContaining({
       entity_id: estimate.id,
       payload: expect.objectContaining({
         billType: BillInputBillType.estimate,
         paidAmount: 0,
-        buyerPaidAmount: 0,
-        creditAmount: 0,
-        dueAmount: 0,
-        paymentStatus: "estimate",
-        payments: [],
-        tenderPayments: [],
-        creditPayments: [],
-        ledgerEntries: [],
+        creditAmount: 200,
+        dueAmount: 200,
+        paymentStatus: "credit",
       }),
     }));
   });
 
-  it("records real tender on an estimate but never moves stock, credit, or the ledger", async () => {
+  it("records tender + stock on a paid estimate like any real bill", async () => {
     const estimate = await createBillLocalFirst(billInput({
       billType: BillInputBillType.estimate,
       payments: [
@@ -244,10 +240,11 @@ describe("front office local-first cashier flow", () => {
       buyerPaidAmount: 200,
       creditAmount: 0,
     }));
-    // Tender is recorded for the receipt…
     expect(rows("payments")).toHaveLength(2);
-    // …but the estimate stays a quote: no stock movement, no customer debt, no ledger.
-    expect(rows("inventory_movements")).toHaveLength(0);
+    // Same sale side effects as a pakka bill: stock deducts; no credit means no udhar.
+    expect(rows("inventory_movements")).toEqual([
+      expect.objectContaining({ action: "sale", product_id: "product_sugar", quantity_delta: -4 }),
+    ]);
     expect(rows("customer_ledger")).toHaveLength(0);
     expect(rows("sync_outbox").find((row) => row.operation_type === "CREATE_BILL")).toEqual(expect.objectContaining({
       payload: expect.objectContaining({
@@ -255,9 +252,117 @@ describe("front office local-first cashier flow", () => {
         paidAmount: 200,
         creditAmount: 0,
         dueAmount: 0,
-        ledgerEntries: [],
+        paymentStatus: "paid",
       }),
     }));
+  });
+
+  it("allows sale beyond available stock and carries the negative balance until stock is added", async () => {
+    const bill = await createBillLocalFirst(billInput({
+      items: [{
+        productId: "product_sugar",
+        name: "Sugar",
+        quantity: 20,
+        enteredUnit: "kg",
+        ratePerRateUnit: 50,
+        gstRate: 0,
+      }],
+      actualAmount: 1000,
+      buyerPaidAmount: 1000,
+      payments: [{ mode: BillPaymentMode.cash, amount: 1000 }],
+    }));
+
+    expect(rows("products")[0]).toEqual(expect.objectContaining({
+      id: "product_sugar",
+      stockBaseQty: -10,
+      stockQuantity: -10,
+      stockNeedsReview: true,
+    }));
+    expect(rows("inventory_movements").find((row) => row.billId === bill.id)).toEqual(expect.objectContaining({
+      action: "sale",
+      product_id: "product_sugar",
+      quantity_delta: -20,
+      stock_before: 10,
+      stock_after: -10,
+      negative_stock_warning: expect.stringContaining("Stock negative after bill"),
+    }));
+
+    await recordPurchaseLocalFirst({
+      productId: "product_sugar",
+      quantity: 15,
+      enteredUnit: "kg",
+      supplierName: "Govind Traders",
+      invoiceNumber: "INV-NEG-RESTOCK",
+      billAmount: 750,
+      purchasePaymentStatus: "paid",
+      purchasePaymentMode: "cash",
+      purchasePaidAmount: 750,
+      purchaseDueAmount: 0,
+      costPerRateUnit: 50,
+      note: "Restock after negative sale",
+    });
+
+    expect(rows("products")[0]).toEqual(expect.objectContaining({
+      id: "product_sugar",
+      stockBaseQty: 5,
+      stockQuantity: 5,
+      stockNeedsReview: false,
+    }));
+  });
+
+  it("pays a purchase due in small partial payments until settled, rejecting overpay", async () => {
+    await recordPurchaseLocalFirst({
+      productId: "product_sugar",
+      quantity: 10,
+      enteredUnit: "kg",
+      supplierName: "Govind Traders",
+      invoiceNumber: "INV-100",
+      billAmount: 500,
+      purchasePaymentStatus: "partial",
+      purchasePaymentMode: "cash",
+      purchasePaidAmount: 100,
+      purchaseDueAmount: 400,
+    });
+    const movement = rows("inventory_movements").find((row) => row.action === "purchase");
+    const purchaseRowId = String(movement?.id);
+
+    // First small payment: ₹150 cash → paid 250, due 250, still partial.
+    await recordPurchasePaymentLocal(purchaseDisplayRow({ id: purchaseRowId }), { amount: 150, mode: "cash" });
+    expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
+      purchase_paid_amount: 250,
+      purchase_due_amount: 250,
+      purchase_payment_status: "partial",
+    }));
+
+    // Overpaying the remaining due is rejected before any write.
+    await expect(
+      recordPurchasePaymentLocal(purchaseDisplayRow({ id: purchaseRowId, paid: 250, due: 250 }), { amount: 300, mode: "cash" }),
+    ).rejects.toThrow(/exceed the due/i);
+
+    // Second payment clears the rest via UPI → fully paid.
+    await recordPurchasePaymentLocal(purchaseDisplayRow({ id: purchaseRowId, paid: 250, due: 250 }), { amount: 250, mode: "upi" });
+    expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
+      purchase_paid_amount: 500,
+      purchase_due_amount: 0,
+      purchase_payment_status: "paid",
+      purchase_payment_mode: "upi",
+    }));
+    // Every payment goes to the server through the idempotent purchase-update op.
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "UPDATE_PURCHASE_BILL")).toHaveLength(2);
+  });
+
+  it("recycle-bin move reverses udhar locally and restore re-applies it (mirrors server CANCEL/RESTORE)", async () => {
+    const bill = await createBillLocalFirst(billInput());
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200 }));
+
+    await softDeleteBillWithOwnerPinLocalFirst(bill.id, "1234", "wrong bill");
+    // Server-side this op becomes CANCEL_BILL (udhar reversed there) — local must match now.
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
+    expect(rows("customer_ledger").some((entry) => entry.type === "bill_cancel_correction" && entry.amount === -200)).toBe(true);
+
+    await restoreBillWithOwnerPinLocalFirst(bill.id, "1234", "restore it");
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200, totalUdhar: 200 }));
+    expect(rows("customer_ledger").some((entry) => entry.type === "bill_restore_correction" && entry.amount === 200)).toBe(true);
   });
 
   it("keeps bill credit, same-amount udhar payments, reversal, purchase, and outbox output consistent", async () => {
@@ -331,7 +436,7 @@ describe("front office local-first cashier flow", () => {
     // so the edit/mark-paid flow resolves the same row the purchase just created.
     const purchaseRowId = (purchase.movement as { id: string }).id;
 
-    expect(rows("products")[0]).toEqual(expect.objectContaining({ id: "product_sugar", stockBaseQty: 20, costPerRateUnit: 45 }));
+    expect(rows("products")[0]).toEqual(expect.objectContaining({ id: "product_sugar", stockBaseQty: 16, stockQuantity: 16, costPerRateUnit: 46.25 }));
     expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
       product_id: "product_sugar",
       invoice_number: "INV-100",

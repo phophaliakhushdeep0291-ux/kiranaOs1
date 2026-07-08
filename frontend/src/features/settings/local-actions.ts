@@ -11,6 +11,8 @@ export async function updateSettingsLocalFirst(data: Partial<Shop> & { ownerPin?
   const existing = await offlineDB.getSetting<Shop>(SHOP_CACHE_KEY).catch(() => null);
   const now = new Date().toISOString();
   const shop: Shop = {
+    ...existing,
+    ...data,
     id: existing?.id ?? "local_shop",
     name: data.name ?? existing?.name ?? "My Shop",
     ownerName: data.ownerName ?? existing?.ownerName ?? "Owner",
@@ -18,6 +20,7 @@ export async function updateSettingsLocalFirst(data: Partial<Shop> & { ownerPin?
     address: data.address ?? existing?.address ?? "",
     gstNumber: data.gstNumber ?? existing?.gstNumber ?? null,
     phone: data.phone ?? existing?.phone ?? null,
+    settingsJson: data.settingsJson ?? existing?.settingsJson ?? null,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };

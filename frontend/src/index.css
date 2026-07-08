@@ -77,7 +77,7 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  --background: 214 100% 99%;
+  --background: 0 0% 100%;
   --foreground: 222 47% 10%;
   --border: 216 34% 90%;
 
@@ -128,8 +128,8 @@
   --app-font-mono: Menlo, monospace;
   --radius: .625rem;
   --app-desktop-topbar-height: 76px;
-  --app-mobile-topbar-height: 62px;
-  --app-mobile-nav-height: 70px;
+  --app-mobile-topbar-height: 110px;
+  --app-mobile-nav-height: 84px;
   --app-page-max: 1600px;
   --app-page-gutter: clamp(0.875rem, 0.65rem + 0.7vw, 1.5rem);
 
@@ -300,8 +300,8 @@
 @layer components {
   .app-shell {
     background:
-      radial-gradient(circle at 82% 0%, hsl(var(--primary) / 0.055), transparent 30rem),
-      linear-gradient(180deg, #ffffff 0%, #f7fbff 58%, #f3f8ff 100%);
+      radial-gradient(circle at 82% 0%, hsl(var(--primary) / 0.035), transparent 28rem),
+      linear-gradient(180deg, #ffffff 0%, #ffffff 48%, #fbfdff 100%);
   }
 
   .app-main-scroll {
@@ -347,6 +347,22 @@
     max-width: var(--app-page-max);
     margin-inline: auto;
     padding: var(--app-page-gutter);
+  }
+
+  .mobile-card-premium {
+    border: 1px solid #e2eaf5;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.94)),
+      radial-gradient(circle at 18% 0%, rgba(7,95,255,0.035), transparent 12rem);
+    box-shadow: 0 12px 32px rgba(15, 35, 80, 0.055);
+  }
+
+  .mobile-action-surface {
+    min-height: 48px;
+    border-radius: 16px;
+    border: 1px solid #dfe7f3;
+    background: #ffffff;
+    box-shadow: 0 8px 22px rgba(15, 35, 80, 0.045);
   }
 
   .app-card {
@@ -529,14 +545,64 @@
 }
 
 @media (max-width: 640px) {
+  .app-shell {
+    background: #ffffff;
+  }
+
+  @media (max-width: 767px) {
+    :root {
+      --app-page-gutter: 0.875rem;
+    }
+
+    html,
+    body,
+    #root {
+      background: #ffffff;
+    }
+
+    .app-shell {
+      background: #ffffff;
+    }
+
+    .app-main-scroll {
+      background: #ffffff;
+      scroll-padding-block: calc(var(--app-mobile-topbar-height) + 0.75rem) calc(var(--app-mobile-nav-height) + 1.5rem);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .app-page-shell {
+      max-width: 520px;
+      padding: 0.875rem 0.875rem calc(var(--app-mobile-nav-height) + 1.25rem);
+    }
+
+    .premium-panel,
+    .premium-panel-muted,
+    .app-card,
+    .app-card-soft,
+    .table-card {
+      border-radius: 18px;
+      border-color: #e2eaf5;
+      box-shadow: 0 10px 28px rgba(15, 35, 80, 0.052);
+    }
+
+    .app-table-scroll {
+      border-radius: 16px;
+    }
+
+    .responsive-action-row {
+      gap: 0.625rem;
+    }
+  }
+
   .app-main-scroll {
     scroll-padding-block: calc(var(--app-mobile-topbar-height) + 0.75rem) calc(var(--app-mobile-nav-height) + 1rem);
   }
 
   .app-page-shell,
   .app-docked-page {
-    padding: 0.75rem;
-    padding-bottom: calc(var(--app-mobile-nav-height) + 1rem + env(safe-area-inset-bottom));
+    background: #ffffff;
+    padding: 1rem;
+    padding-bottom: calc(var(--app-mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom));
   }
 
   .premium-panel,
@@ -545,7 +611,9 @@
   .table-card,
   .app-card,
   .app-card-soft {
-    border-radius: 12px;
+    border-color: #e4ebf4;
+    border-radius: 18px;
+    box-shadow: 0 10px 28px rgba(15, 35, 80, 0.055);
   }
 
   .app-table-scroll {

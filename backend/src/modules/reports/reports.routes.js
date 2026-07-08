@@ -24,8 +24,8 @@ import * as ctrl from "./reports.controller.js";
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
 
-// Shopkeeper operational dashboard reports. They are shop-scoped and exclude
-// cancelled/estimate bills from real sales totals.
+// Shopkeeper operational dashboard reports. They are shop-scoped and exclude cancelled
+// bills; estimates (kacha bills) count as sales everywhere except the GST report.
 router.get("/daily-closing", validateQuery(dailyClosingSchema), ctrl.dailyClosing);
 router.post("/daily-closing/snapshot", requireRole("owner", "admin"), validate(dailyClosingSnapshotSchema), ctrl.createDailyClosingSnapshot);
 router.post("/daily-closing/:date/lock", requireRole("owner", "admin"), ctrl.lockDailyClosingSnapshot);

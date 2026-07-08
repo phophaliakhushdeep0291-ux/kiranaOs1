@@ -20,6 +20,7 @@ export async function confirm(req, res, next) {
     const data = await svc.confirmBill(req.shopId, req.body, {
       userId: req.user?.userId ?? null,
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+      allowStockShortfall: true,
     });
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }

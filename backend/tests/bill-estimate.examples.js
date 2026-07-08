@@ -1,26 +1,37 @@
 import assert from "node:assert/strict";
 
-function requiresPayment(billType) {
-  return billType !== "estimate";
+// Estimates (kacha bills) work the same as real bills — they move stock, record payments,
+// carry udhar, and count in sales/cash/P&L reports. The ONLY differences: their own EST-
+// number series, and the GST report (an estimate is not a tax document). Legacy quote-era
+// estimate ops (no payment data at all) are still accepted as unpaid so old offline queues
+// can't get stuck in conflict.
+
+function requiresPayment({ billType, payments = [], creditAmount = 0 }) {
+  const legacyQuoteEstimate = billType === "estimate" && payments.length === 0 && creditAmount <= 0;
+  return !legacyQuoteEstimate;
 }
 
-function normalizeEstimateBill({ billType, payments = [], itemProfit = 0, paidAmount = 0, creditAmount = 0, waivedAmount = 0 }) {
-  const isEstimate = billType === "estimate";
+// Mirrors bills.service.js createBill — no estimate special-casing in the sale effects.
+function normalizeBill({ billType, payments = [], itemProfit = 0, creditAmount = 0, waivedAmount = 0 }) {
+  const tenderPaid = payments
+    .filter((p) => p.mode !== "credit")
+    .reduce((sum, p) => sum + p.amount, 0);
 
   return {
-    paymentsToCreate: isEstimate ? [] : payments,
-    shouldDeductStock: !isEstimate,
-    shouldCreateStockLedger: !isEstimate,
-    shouldCreatePaymentEntry: !isEstimate,
-    shouldCreateUdharEntry: !isEstimate && creditAmount > 0,
-    grossProfit: isEstimate ? 0 : itemProfit - waivedAmount,
-    paidAmount: isEstimate ? 0 : paidAmount,
-    creditAmount: isEstimate ? 0 : creditAmount,
-    waivedAmount: isEstimate ? 0 : waivedAmount,
+    paymentsToCreate: payments.filter((p) => p.mode !== "credit"),
+    shouldDeductStock: true,
+    shouldCreateStockLedger: true,
+    shouldCreateUdharEntry: creditAmount > 0,
+    shouldPostFinancialLedger: true,
+    grossProfit: itemProfit - waivedAmount,
+    paidAmount: tenderPaid,
+    creditAmount,
+    waivedAmount,
+    usesEstimateSeries: billType === "estimate",
   };
 }
 
-function reportBillFilter({ shopId, status = "active" }) {
+function gstReportFilter({ shopId, status = "active" }) {
   return {
     shopId,
     status,
@@ -28,40 +39,46 @@ function reportBillFilter({ shopId, status = "active" }) {
   };
 }
 
-assert.equal(requiresPayment("estimate"), false, "estimate bill should be allowed without payments");
-assert.equal(requiresPayment("normal_sale"), true, "normal sale should still require payment");
-assert.equal(requiresPayment("gst_invoice"), true, "GST invoice should still require payment");
-assert.equal(requiresPayment("udhar_entry"), true, "udhar entry should still require payment/credit entry");
+assert.equal(
+  requiresPayment({ billType: "estimate", payments: [], creditAmount: 0 }),
+  false,
+  "legacy quote-shaped estimate (no payment data) is still accepted as unpaid"
+);
+assert.equal(
+  requiresPayment({ billType: "estimate", payments: [{ mode: "cash", amount: 10 }] }),
+  true,
+  "estimate with payment data validates like a real bill"
+);
+assert.equal(requiresPayment({ billType: "normal_sale" }), true, "normal sale still requires payment");
 
 assert.deepEqual(
-  normalizeEstimateBill({
+  normalizeBill({
     billType: "estimate",
-    payments: [{ mode: "cash", amount: 23 }],
+    payments: [{ mode: "cash", amount: 13.5 }, { mode: "credit", amount: 10 }],
     itemProfit: 3,
-    paidAmount: 23,
     creditAmount: 10,
-    waivedAmount: 2,
+    waivedAmount: 0,
   }),
   {
-    paymentsToCreate: [],
-    shouldDeductStock: false,
-    shouldCreateStockLedger: false,
-    shouldCreatePaymentEntry: false,
-    shouldCreateUdharEntry: false,
-    grossProfit: 0,
-    paidAmount: 0,
-    creditAmount: 0,
+    paymentsToCreate: [{ mode: "cash", amount: 13.5 }],
+    shouldDeductStock: true,
+    shouldCreateStockLedger: true,
+    shouldCreateUdharEntry: true,
+    shouldPostFinancialLedger: true,
+    grossProfit: 3,
+    paidAmount: 13.5,
+    creditAmount: 10,
     waivedAmount: 0,
+    usesEstimateSeries: true,
   },
-  "estimate should not create sale side effects or P&L profit"
+  "estimate behaves exactly like a real sale — stock, tender, udhar, ledger — under the EST- series"
 );
 
 assert.deepEqual(
-  normalizeEstimateBill({
+  normalizeBill({
     billType: "normal_sale",
     payments: [{ mode: "cash", amount: 23 }],
     itemProfit: 3,
-    paidAmount: 23,
     creditAmount: 0,
     waivedAmount: 0,
   }),
@@ -69,20 +86,21 @@ assert.deepEqual(
     paymentsToCreate: [{ mode: "cash", amount: 23 }],
     shouldDeductStock: true,
     shouldCreateStockLedger: true,
-    shouldCreatePaymentEntry: true,
     shouldCreateUdharEntry: false,
+    shouldPostFinancialLedger: true,
     grossProfit: 3,
     paidAmount: 23,
     creditAmount: 0,
     waivedAmount: 0,
+    usesEstimateSeries: false,
   },
-  "normal sale should still behave like a sale"
+  "normal sale is unchanged"
 );
 
 assert.deepEqual(
-  reportBillFilter({ shopId: "shop_1" }),
+  gstReportFilter({ shopId: "shop_1" }),
   { shopId: "shop_1", status: "active", billType: { not: "estimate" } },
-  "reports should filter estimates out of sale/P&L calculations"
+  "only the GST report filters estimates out — every other report counts them as sales"
 );
 
 console.log("Bill estimate examples passed");

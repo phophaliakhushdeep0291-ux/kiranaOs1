@@ -17,7 +17,7 @@ export function OwnerOrderingCard({
   shopId,
 }: {
   enabled: boolean;
-  onToggle: (next: boolean) => void;
+  onToggle: (next: boolean) => void | Promise<unknown>;
   shopId: string | null;
 }) {
   const orderUrl = useMemo(() => {

@@ -64,7 +64,8 @@ for (const field of [
 }
 
 assert(service.includes('status: "active"'), "reports must filter active bills for real sales");
-assert(service.includes('billType: { not: "estimate" }'), "reports must exclude estimate/rough bills from real sales");
+// Estimates count as sales everywhere except the GST report, which keeps its own filter.
+assert(service.includes('const GST_BILL_FILTER = { status: "active", billType: { not: "estimate" } }'), "GST report must keep excluding estimates (kacha bills are not tax documents)");
 assert(service.includes('status: "cancelled"'), "daily/report logic must count cancelled bills separately");
 assert(service.includes("offlineSyncEvent.count"), "daily closing must include pending sync count");
 

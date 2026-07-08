@@ -62,6 +62,7 @@ import { patchProductLocalFirst } from "@/features/products/local-actions";
 import { recordSaleLocalFirst } from "@/features/inventory/local-actions";
 import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { cn } from "@/lib/utils";
 import {
   INVENTORY_UNIT_CONVERSION as CONVERSION,
   buildUnitMismatchWarning,
@@ -177,7 +178,9 @@ function toBaseQty(quantity: number, unit: string) {
 
 function isLowStock(product: InventoryItem) {
   if ((product.stockTrackingEnabled ?? product.trackStock ?? true) === false) return false;
-  return Number(product.stockBaseQty ?? 0) <= Number(product.lowStockThreshold ?? 0);
+  // Both sides are base units; no threshold (0) means never "low" — matches the backend filter.
+  const threshold = Number(product.lowStockThreshold ?? 0);
+  return threshold > 0 && Number(product.stockBaseQty ?? 0) <= threshold;
 }
 
 function movementLabel(type: string) {
@@ -607,7 +610,7 @@ export default function InventoryPage() {
 
   return (
     <PageShell className="space-y-4 bg-white pb-8">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
         <InventoryMetricCard label="Total Stock Value" value={fmtMoney(stockStats.stockValue)} detail="At current cost" tone="blue" icon={<IndianRupee size={19} />} />
         <InventoryMetricCard label="Total SKUs" value={stockStats.products.toLocaleString("en-IN")} detail={`${stockStats.totalQuantity.toLocaleString("en-IN")} units tracked`} tone="violet" icon={<Tags size={19} />} />
         <InventoryMetricCard label="Low Stock Items" value={stockStats.lowStock.toLocaleString("en-IN")} detail="Require attention" tone="amber" icon={<AlertTriangle size={19} />} />
@@ -615,7 +618,7 @@ export default function InventoryPage() {
         <InventoryMetricCard label="Stock Turnover (30D)" value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? "Based on sold quantity" : "No sales movement yet"} tone="green" icon={<TrendingUp size={19} />} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <InventoryActionCard label="Add Stock" detail="Increase inventory" tone="blue" icon={<PackagePlus size={20} />} onClick={() => openMovement("purchase")} />
         <InventoryActionCard label="Stock Correction" detail="Adjust stock levels" tone="green" icon={<Wrench size={20} />} onClick={() => openMovement("correction")} />
         <InventoryActionCard label="Damage Entry" detail="Record damaged items" tone="orange" icon={<ShieldAlert size={20} />} onClick={() => openMovement("damage")} />
@@ -672,7 +675,37 @@ export default function InventoryPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
+              <div className="divide-y divide-[#edf2f7] md:hidden">
+                {inventory.isLoading ? Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="p-4"><Skeleton className="h-20 w-full rounded-[14px]" /></div>
+                )) : pagedInventoryRows.length === 0 ? (
+                  <div className="px-4 py-12 text-center"><Package className="mx-auto text-[#a2aec0]" size={28} /><p className="mt-2 text-sm font-semibold text-[#243653]">No stock matches these filters</p><p className="mt-1 text-xs text-[#718096]">Clear a filter or add stock to continue.</p></div>
+                ) : pagedInventoryRows.map((item) => {
+                  const unit = item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece";
+                  const qty = displayQtyFromBase(item.stockBaseQty, unit);
+                  const cost = round2(item.averageCostPrice ?? item.costPerRateUnit ?? item.costPrice ?? 0);
+                  const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
+                  const out = tracked && Number(item.stockBaseQty ?? 0) <= 0;
+                  const low = tracked && !out && isLowStock(item);
+                  return (
+                    <button key={item.id} type="button" onClick={() => openMovement("purchase", item)} className="grid w-full grid-cols-[58px_1fr_auto] items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-[#f8fbff]">
+                      <InventoryProductAvatar item={item} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[14px] font-extrabold text-[#071b3a]">{item.name}</span>
+                        <span className="mt-1 block truncate text-[12px] font-medium text-[#52627d]">SKU: {item.sku ?? item.barcode ?? "-"}</span>
+                        <span className="mt-1 block truncate text-[12px] text-[#718096]">Category: {item.category ?? "General"}</span>
+                      </span>
+                      <span className="min-w-[88px] text-right">
+                        <span className={cn("block text-[16px] font-black", out ? "text-[#ff304f]" : low ? "text-[#f08a00]" : "text-[#10a948]")}>{tracked ? `${qty.toLocaleString("en-IN")} ${unit}` : "Not tracked"}</span>
+                        <span className="mt-1 block text-[12px] text-[#718096]">Value: {fmtMoney(qty * cost)}</span>
+                        <span className="mt-2 inline-block"><InventoryStatusBadge status={out ? "out" : low ? "low" : "in"} /></span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[860px] text-left text-[12px]">
                   <thead><tr className="border-b border-[#e4eaf2] bg-[#f8fafc] text-[10px] font-semibold uppercase tracking-[0.02em] text-[#718096]">
                     <th className="px-4 py-3">Product</th><th className="px-3 py-3">SKU / Barcode</th><th className="px-3 py-3">Category</th><th className="px-3 py-3">Unit</th><th className="px-3 py-3 text-right">Stock</th><th className="px-3 py-3 text-right">Cost</th><th className="px-3 py-3 text-right">Total Value</th><th className="px-4 py-3 text-center">Status</th>
@@ -878,7 +911,10 @@ export default function InventoryPage() {
             ) : null}
             {form.movementType === "correction" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> Stock correction requires owner PIN and creates a pending sync correction.</div> : null}
             <div><Label>Reason / note</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="e.g. physical count, damaged packet" />{form.movementType === "correction" ? <p className="mt-1 text-xs text-orange-700">Owner password/PIN will be asked after you click Save locally.</p> : null}</div>
-            <div className="flex gap-3 pt-2"><Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button><Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : "Save locally"}</Button></div>
+            <div className="sticky bottom-0 z-10 -mx-4 flex gap-3 border-t bg-background/95 px-4 py-3 pt-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+              <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : "Save locally"}</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -64,6 +64,8 @@ function assertStockMovementRules(input: {
     throw new Error("Reason is required for damaged stock adjustment");
   }
 
+  if (input.movementType === "sale" && input.nextStock < 0) return;
+
   if (input.nextStock < 0 && !allowsNegativeStock(input.product, input.data)) {
     throw new Error("Negative stock is not allowed for this product. Enable negative stock override only after owner approval.");
   }
@@ -94,6 +96,7 @@ function buildUpdatedProduct(
     id: product.id,
     productId,
     stockBaseQty: nextStock,
+    stockQuantity: nextStock,
     stockTrackingEnabled: true,
     trackStock: true,
     averageCostPrice: nextAverageCost,
@@ -102,6 +105,8 @@ function buildUpdatedProduct(
     updatedAt: now,
     updated_at: now,
     sync_status: "pending_sync",
+    stockNeedsReview: nextStock < 0,
+    negativeStockWarning: nextStock < 0 ? "Stock is negative. Add stock when inventory is updated." : undefined,
     isLowStock: nextStock <= readNumber(product.lowStockThreshold, 0),
   } as InventoryItem;
 }

@@ -19,6 +19,16 @@ export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
 export { OwnerPinModal, type OwnerPinConfirmPayload, type OwnerPinModalProps } from "./OwnerPinModal";
 
 export { MetricCard, type MetricCardProps, type MetricCardTone } from "./MetricCard";
+export {
+  MobileActionGrid,
+  MobileActionTile,
+  MobileListCard,
+  MobileSection,
+  type MobileActionGridProps,
+  type MobileActionTileProps,
+  type MobileListCardProps,
+  type MobileSectionProps,
+} from "./MobilePrimitives";
 export { PaymentBadge, type PaymentBadgeProps, type PaymentMode } from "./PaymentBadge";
 export { RiskBadge, type RiskBadgeProps, type RiskLevel, riskLevel } from "./RiskBadge";
 export { ActivityTimeline, type ActivityTimelineProps, type TimelineEntry } from "./ActivityTimeline";

@@ -174,7 +174,6 @@ function syncStatusOf(bill: BillRecord) {
 
 function paymentStatusOf(bill: BillRecord) {
   if (bill.status === "cancelled") return "Cancelled";
-  if (isEstimateBill(bill)) return "Estimate";
   const paid = billPaid(bill);
   const credit = billCredit(bill);
   const total = billTotal(bill);
@@ -272,7 +271,9 @@ function dateMatches(bill: BillRecord, from: string, to: string) {
 }
 
 function realSaleRows(rows: BillRecord[]) {
-  return rows.filter((bill) => bill.status !== "cancelled" && !isEstimateBill(bill) && !isDeleted(bill));
+  // Estimates (kacha bills) count as sales — same money and stock effects as pakka bills,
+  // only the EST- number series differs — so the stat cards include them.
+  return rows.filter((bill) => bill.status !== "cancelled" && !isDeleted(bill));
 }
 
 function activeEstimateRows(rows: BillRecord[]) {
@@ -783,7 +784,60 @@ export default function BillsPage() {
           </div>
         ) : (
           <>
-            <div className="app-table-scroll overflow-x-auto">
+            <div className="space-y-2.5 p-3 md:hidden">
+              {pageRows.map((bill) => {
+                const date = formatBillDateParts(billDate(bill));
+                const status = paymentStatusOf(bill);
+                const mode = paymentModeOf(bill);
+                const sync = syncStatusOf(bill);
+                const deleted = isDeleted(bill);
+                const estimate = isEstimateBill(bill);
+                return (
+                  <article key={bill.id} className={cn("rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]", deleted && "opacity-70")}>
+                    <div className="flex items-start justify-between gap-3">
+                      <Link href={`/bills/${bill.id}`} className="min-w-0 flex-1">
+                        <p className="truncate text-[14px] font-extrabold text-[#075fff]">Bill #{compactBillNo(billNo(bill))}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-[#102347]">{bill.customerName || "Walk-in Customer"}</p>
+                        <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{date.date} {date.time ? `• ${date.time}` : ""} • {itemsCount(bill) || 0} items</p>
+                      </Link>
+                      <div className="text-right">
+                        <p className="text-[15px] font-black text-[#07133f]">{money(billTotal(bill))}</p>
+                        <div className="mt-1 flex justify-end"><StatusBadge status={status} /></div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <ModeBadge mode={mode} />
+                      <span className="rounded-[6px] bg-[#edf4ff] px-2 py-1 text-[10px] font-black text-[#075fff]">{billTypeOf(bill)}</span>
+                      <SyncBadgeMini sync={sync} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-4 gap-2">
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => navigate(`/bills/${bill.id}`)} aria-label="View bill"><Eye size={15} className="mx-auto" /></button>
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => printBill(bill)} aria-label="Print bill"><Printer size={15} className="mx-auto" /></button>
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => void shareOnWhatsapp(bill)} aria-label="Share bill"><Share2 size={15} className="mx-auto" /></button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={15} className="mx-auto" /></button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> Return / refund</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {deleted ? (
+                            <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> Restore bill</DropdownMenuItem>
+                          ) : (
+                            <>
+                              {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> Cancel bill</DropdownMenuItem>}
+                              <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? "Move estimate to recycle bin" : "Move to recycle bin"}</DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="app-table-scroll hidden overflow-x-auto md:block">
               <table className="w-full min-w-[1240px] border-collapse text-[11px]">
                 <thead>
                   <tr className={TABLE_HEAD}>
@@ -818,7 +872,7 @@ export default function BillsPage() {
                           <p className="mt-0.5 text-[#6f7f9b]">{date.time}</p>
                         </td>
                         <td className="px-4 py-2.5 text-right font-bold">{itemsCount(bill) || "-"}</td>
-                        <td className="px-4 py-2.5">{estimate ? <span className="rounded-[5px] bg-[#f5f0ff] px-2 py-1 text-[10px] font-black text-[#6d3df0]">No payment</span> : <ModeBadge mode={mode} />}</td>
+                        <td className="px-4 py-2.5"><ModeBadge mode={mode} /></td>
                         <td className="px-4 py-2.5"><span className="rounded-[5px] bg-[#edf4ff] px-2 py-1 text-[10px] font-black text-[#075fff]">{billTypeOf(bill)}</span></td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-black text-[#102347]">{money(billTotal(bill))}</td>
                         <td className="px-4 py-2.5"><StatusBadge status={status} /></td>
@@ -845,13 +899,13 @@ export default function BillsPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
-                                {!estimate && <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> Return / refund</DropdownMenuItem>}
+                                <DropdownMenuItem onClick={() => refundReverse(bill)}><RotateCcw size={14} className="mr-2" /> Return / refund</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {deleted ? (
                                   <DropdownMenuItem onClick={() => requestPinAction("restore", bill)}><RotateCcw size={14} className="mr-2" /> Restore bill</DropdownMenuItem>
                                 ) : (
                                   <>
-                                    {!estimate && bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> Cancel bill</DropdownMenuItem>}
+                                    {bill.status !== "cancelled" && <DropdownMenuItem className="text-amber-600 focus:text-amber-700" onClick={() => requestPinAction("cancel", bill)}><ShieldCheck size={14} className="mr-2" /> Cancel bill</DropdownMenuItem>}
                                     <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestPinAction("delete", bill)}><Trash2 size={14} className="mr-2" /> {estimate ? "Move estimate to recycle bin" : "Move to recycle bin"}</DropdownMenuItem>
                                   </>
                                 )}
@@ -902,9 +956,9 @@ export default function BillsPage() {
         open={!!pinAction}
         onCancel={() => setPinAction(null)}
         title={pinAction?.action === "clear_estimates" ? "Clear estimate bills" : pinAction?.action === "restore" ? "Restore bill" : pinAction?.action === "cancel" ? "Cancel bill" : deletingEstimate ? "Delete estimate" : "Move bill to recycle bin"}
-        description={pinAction?.action === "clear_estimates" ? `Owner PIN is required. ${pinAction.bills.length} estimate bill${pinAction.bills.length === 1 ? "" : "s"} will move to recycle bin and stay separate from sales data.` : deletingEstimate ? "Enter your owner PIN to delete this estimate. It moves to the recycle bin — no sales data is affected." : "Owner PIN is required. Financial records are never hard deleted and this action is saved locally first."}
+        description={pinAction?.action === "clear_estimates" ? `Owner PIN is required. ${pinAction.bills.length} estimate bill${pinAction.bills.length === 1 ? "" : "s"} will move to recycle bin. Estimates count as sales — cancel a bill first if you need its stock and udhar reversed.` : deletingEstimate ? "Enter your owner PIN to delete this estimate. It moves to the recycle bin like any bill — cancel it instead if you need stock and udhar reversed." : "Owner PIN is required. Financial records are never hard deleted and this action is saved locally first."}
         confirmLabel={pinAction?.action === "clear_estimates" ? "Clear estimates" : pinAction?.action === "restore" ? "Restore" : pinAction?.action === "cancel" ? "Cancel bill" : deletingEstimate ? "Delete estimate" : "Move to recycle bin"}
-        reasonRequired={pinAction?.action === "cancel" || (pinAction?.action === "delete" && !deletingEstimate) || pinAction?.action === "clear_estimates"}
+        reasonRequired={pinAction?.action === "cancel" || pinAction?.action === "delete" || pinAction?.action === "clear_estimates"}
         loading={isSaving}
         onConfirm={({ ownerPin, reason }) => runPinAction(ownerPin, reason)}
       />

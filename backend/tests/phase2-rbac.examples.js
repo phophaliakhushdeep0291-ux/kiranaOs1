@@ -209,11 +209,12 @@ assert.match(
   "INVALID_WAIVED_AMOUNT error must include a clear human-readable message"
 );
 
-// Guard only applies to real bills — estimates always set waivedAmount = 0
-assert.match(
+// Estimates are full sales now, so the waivedAmount guard applies to every bill type —
+// the old estimate-only skip must be gone.
+assert.doesNotMatch(
   billsService,
   /!isEstimate.*waivedAmount\s*>\s*grandTotal/,
-  "waivedAmount guard must be skipped for estimate bills"
+  "waivedAmount guard must apply to estimates too (no estimate skip)"
 );
 
 // Existing payment coverage validation is still present

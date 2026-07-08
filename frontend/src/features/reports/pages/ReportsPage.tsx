@@ -505,7 +505,45 @@ export default function ReportsPage() {
         </Panel>
       </section>
 
-      <section className="grid items-start gap-3 xl:grid-cols-3">
+      <section className="space-y-3 md:hidden">
+        <MobileReportList title="Top Products" actionHref="/products">
+          {(snapshot?.topProducts ?? []).slice(0, 5).map((row) => (
+            <MobileReportRow
+              key={row.productId}
+              title={row.name}
+              subtitle={row.category}
+              value={fmt(row.revenue)}
+              meta={`${row.quantitySold.toLocaleString("en-IN")} qty • ${row.marginPct.toFixed(1)}% margin`}
+            />
+          ))}
+        </MobileReportList>
+
+        <MobileReportList title="Top Customers (Udhar)" actionHref="/customers">
+          {(snapshot?.topCustomers ?? []).slice(0, 5).map((row) => (
+            <MobileReportRow
+              key={row.customerId}
+              title={row.name}
+              subtitle={row.lastPurchase ? `Last purchase ${dateLabel(row.lastPurchase.slice(0, 10))}` : "No recent purchase"}
+              value={fmt(row.balance)}
+              meta={<RiskChip balance={row.balance} />}
+            />
+          ))}
+        </MobileReportList>
+
+        <MobileReportList title="Daily Closing Summary" actionHref="/daily-closing">
+          {dailyRows.slice(0, 5).map((row) => (
+            <MobileReportRow
+              key={row.date}
+              title={new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+              subtitle={`Sales ${fmt(row.sales)} • Collection ${fmt(row.collection)}`}
+              value={fmt(row.net)}
+              meta={`Expense ${fmt(row.expense)}`}
+            />
+          ))}
+        </MobileReportList>
+      </section>
+
+      <section className="hidden items-start gap-3 md:grid xl:grid-cols-3">
         <DenseTable title="Top Products" action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
           {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{row.category}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
           {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>{snapshot.topProducts.reduce((sum, row) => sum + row.quantitySold, 0)}</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
@@ -548,6 +586,35 @@ export default function ReportsPage() {
 
       <OwnerPinModal open={exportPinOpen} onCancel={() => { if (!exporting) setExportPinOpen(false); }} title="Approve data export" description="Reports contain sensitive shop data. Owner PIN and reason are required before export." confirmLabel="Export data" reasonRequired loading={exporting} error={exportError} onConfirm={({ ownerPin, reason }) => confirmExport(ownerPin, reason)} />
     </PageShell>
+  );
+}
+
+function MobileReportList({ title, actionHref, children }: { title: string; actionHref: string; children: ReactNode }) {
+  return (
+    <article className="rounded-[18px] border border-[#e4ebf4] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <header className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
+        <h2 className="text-[16px] font-extrabold text-[#07133f]">{title}</h2>
+        <Link href={actionHref} className="text-xs font-extrabold text-[#075fff]">View all</Link>
+      </header>
+      <div className="divide-y divide-[#edf2f8] px-3">
+        {children ? children : <div className="py-8 text-center text-xs font-semibold text-[#8290a8]">No records in this period</div>}
+      </div>
+    </article>
+  );
+}
+
+function MobileReportRow({ title, subtitle, value, meta }: { title: ReactNode; subtitle?: ReactNode; value?: ReactNode; meta?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-3">
+      <div className="min-w-0">
+        <p className="truncate text-[13px] font-extrabold text-[#07133f]">{title}</p>
+        {subtitle ? <p className="mt-1 truncate text-[11px] font-medium text-[#53617d]">{subtitle}</p> : null}
+      </div>
+      <div className="shrink-0 text-right">
+        {value ? <p className="text-[13px] font-black text-[#07133f]">{value}</p> : null}
+        {meta ? <div className="mt-1 text-[11px] font-bold text-[#64708b]">{meta}</div> : null}
+      </div>
+    </div>
   );
 }
 

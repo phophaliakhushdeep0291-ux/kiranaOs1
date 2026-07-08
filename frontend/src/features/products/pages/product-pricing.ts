@@ -73,7 +73,10 @@ export function productWholesalePrice(product: Product): number {
 }
 
 export function isLowStock(product: Product): boolean {
-  return Number(product.stockBaseQty ?? 0) <= Number(product.lowStockThreshold ?? 0);
+  // Both sides are base units. A product with no alert threshold (0) is never "low" —
+  // matching the backend's low-stock filter — and zero stock is "out of stock", not "low".
+  const threshold = Number(product.lowStockThreshold ?? 0);
+  return threshold > 0 && Number(product.stockBaseQty ?? 0) <= threshold;
 }
 
 export function isDeletedProduct(product: Product): boolean {

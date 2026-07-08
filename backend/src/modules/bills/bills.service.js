@@ -75,23 +75,25 @@ export async function confirmBill(shopId, body, actor = {}) {
   // already physically happened, so they must never be dropped for being stock-short.
   // The online counter path leaves this false and still rejects overselling live.
   const allowStockShortfall = actor?.allowStockShortfall === true;
-  // Estimates record the real tender collected (cash/UPI) so the bill + receipt show what was
-  // paid, but they never carry credit/udhar — an estimate must not create customer debt. Stock,
-  // P&L and the financial ledger stay off for estimates (see below), and every sales/cash report
-  // already excludes billType "estimate", so recorded estimate tender stays out of all totals.
-  const billPayments = isEstimate ? payments.filter((p) => p.mode !== "credit") : payments;
+  // Estimates (kacha bills) are full sales in everything but their number series: they move
+  // stock, record tender, track udhar, and count in sales/cash reports — only the separate
+  // EST- numbering (and the GST report) keeps them apart from pakka bills. Older app versions
+  // sent estimates with no payment data at all; those legacy quote-shaped ops are still
+  // accepted (as unpaid, credit-free estimates) so pending offline queues can't get stuck.
+  const billPayments = payments;
   const legacyCreditAmount = sumMoney(billPayments.filter((p) => p.mode === "credit").map((p) => p.amount));
   const requestedCreditAmount = inputCreditAmount !== undefined
     ? round2(inputCreditAmount)
     : legacyCreditAmount;
+  const legacyQuoteEstimate = isEstimate && billPayments.length === 0 && requestedCreditAmount <= 0;
 
-  if (!isEstimate && billPayments.filter((p) => p.mode !== "credit").length === 0 && requestedCreditAmount <= 0) {
+  if (!legacyQuoteEstimate && billPayments.filter((p) => p.mode !== "credit").length === 0 && requestedCreditAmount <= 0) {
     throw new AppError("At least one real payment or credit amount required", 400);
   }
 
   // Credit/udhar can arrive either as legacy payment mode "credit" or as the
   // modern separate creditAmount field from offline sync.
-  const hasCredit = !isEstimate && requestedCreditAmount > 0;
+  const hasCredit = requestedCreditAmount > 0;
   if (hasCredit && !customerId) {
     throw new AppError("Customer is required for credit/udhar bills", 400);
   }
@@ -133,10 +135,12 @@ export async function confirmBill(shopId, body, actor = {}) {
         ? toBaseQty(item.quantity, item.enteredUnit, product.baseUnit)
         : item.quantity;
 
-      // Stock check only applies to real sale bills. Estimates are quotes, not stock movements.
-      // Offline-origin bills skip the rejection (the sale already happened) and instead
-      // reconcile the shortfall at decrement time.
-      if (product && !isEstimate && !allowStockShortfall) {
+      // Overselling is allowed (allowStockShortfall) for the live counter and offline sync alike:
+      // kirana stock counts drift, so a real sale must never be blocked for "0 stock" — the
+      // frontend warns, the sale goes through, and stock is driven negative to show the exact
+      // deficit for reconciliation (see decrementProductStockOrThrow). This hard rejection only
+      // fires for internal callers that opt out of shortfall (allowStockShortfall === false).
+      if (product && !allowStockShortfall) {
         if (product.stockBaseQty < qtyInBase) {
           throw new AppError(
             `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
@@ -183,7 +187,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineTotal, lineCost, lineProfit }),
       });
 
-      if (product && !isEstimate) {
+      if (product) {
         stockUpdates.push({
           product,
           qtyInBase,
@@ -215,13 +219,12 @@ export async function confirmBill(shopId, body, actor = {}) {
       ? addMoney(subtractMoney(subtotal, billDiscount), totalGst)
       : subtractMoney(subtotal, billDiscount);
 
-    // Estimates are saved as quotes only. They should not create payments, udhar, or P&L profit.
-    const waivedAmount = isEstimate ? 0 : round2(inputWaivedAmount);
+    const waivedAmount = round2(inputWaivedAmount);
 
     // Guard: waivedAmount (let-go / write-off) must never exceed the bill total.
     // Allowing waivedAmount > grandTotal would produce negative grossProfit and
     // corrupt P&L reports. Zod already enforces min(0); here we enforce max.
-    if (!isEstimate && waivedAmount > grandTotal) {
+    if (waivedAmount > grandTotal) {
       const err = new AppError(
         `Waived amount (₹${waivedAmount}) cannot exceed bill total (₹${grandTotal})`,
         400
@@ -230,17 +233,13 @@ export async function confirmBill(shopId, body, actor = {}) {
       throw err;
     }
 
-    const grossProfit = isEstimate ? 0 : subtractMoney(itemProfit, billDiscount, waivedAmount);
-    // Estimates keep their real tender in paidAmount (billPayments is already credit-free for
-    // estimates) but never accrue credit/udhar.
+    const grossProfit = subtractMoney(itemProfit, billDiscount, waivedAmount);
     const paidAmount = sumMoney(billPayments.filter((p) => p.mode !== "credit").map((p) => p.amount));
-    const creditAmount = isEstimate
-      ? 0
-      : requestedCreditAmount;
+    const creditAmount = requestedCreditAmount;
     const actualAmount = round2(inputActualAmount ?? grandTotal);
     const buyerPaidAmount = round2(inputBuyerPaidAmount ?? paidAmount);
 
-    if (!isEstimate && buyerPaidAmount > grandTotal) {
+    if (buyerPaidAmount > grandTotal) {
       throw new AppError(
         `Buyer paid amount (₹${buyerPaidAmount}) cannot exceed bill amount (₹${grandTotal})`,
         400
@@ -248,7 +247,9 @@ export async function confirmBill(shopId, body, actor = {}) {
     }
 
     const paymentCoverage = addMoney(paidAmount, creditAmount, waivedAmount);
-    if (!isEstimate && !moneyEquals(paymentCoverage, grandTotal)) {
+    // legacyQuoteEstimate: old quote-era estimate ops carry no payment data; store them as
+    // unpaid rather than rejecting the sync replay.
+    if (!legacyQuoteEstimate && !moneyEquals(paymentCoverage, grandTotal)) {
       throw new AppError(
         `Payment total plus waived amount (₹${paymentCoverage}) does not match grand total (₹${grandTotal})`,
         400
@@ -327,8 +328,8 @@ export async function confirmBill(shopId, body, actor = {}) {
         allowShortfall: allowStockShortfall,
       });
 
-      // Record the actual stock removed (= qtyInBase normally; less on a floored shortfall),
-      // so the ledger entry stays internally consistent (old + change == new).
+      // Record the actual stock removed so the ledger stays internally consistent
+      // (old + change == new), including negative after-stock.
       const removedBaseQty = round2(stockResult.oldStock - stockResult.newStock);
       await tx.stockLedger.create({
         data: {
@@ -387,16 +388,14 @@ export async function confirmBill(shopId, body, actor = {}) {
 
     // ── 7. FinancialLedger: append-only accounting source of truth ─
     // Posted inside the same transaction so the ledger can never disagree with the bill.
-    // Estimates are quotes, so they record no money movement.
-    if (!isEstimate) {
-      await postBillCreatedLedger(tx, {
-        shopId,
-        bill,
-        tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
-        creditAmount,
-        customerId: customerId ?? null,
-      });
-    }
+    // Estimates post too — they are full sales, just under their own number series.
+    await postBillCreatedLedger(tx, {
+      shopId,
+      bill,
+      tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
+      creditAmount,
+      customerId: customerId ?? null,
+    });
 
     return bill;
   });
@@ -452,7 +451,12 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     }
 
     // ── 1. Restore stock for every item ───────────────────────
-    for (const item of bill.items) {
+    // Only bills that actually deducted stock (they have "sale" stock-ledger rows) restore it.
+    // Guards legacy quote-era estimates, which never moved stock at creation.
+    const saleLedgerRows = await tx.stockLedger.count({
+      where: { shopId, billId: bill.id, action: "sale" },
+    });
+    for (const item of saleLedgerRows > 0 ? bill.items : []) {
       if (!item.productId) continue;
 
       const updated = await tx.product.updateMany({
@@ -510,8 +514,12 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
 
     // ── 3. FinancialLedger: reverse the bill's money effect ───
     // Same entryTypes, negated amounts, dated to the cancellation, so dashboard KPIs
-    // net out. Estimates posted nothing on creation, so they reverse nothing.
-    if (bill.billType !== "estimate") {
+    // net out. Bills that never posted at creation (legacy quote-era estimates) reverse
+    // nothing — reversing an unposted bill would push the ledger negative.
+    const creationLedgerRows = await tx.financialLedger.count({
+      where: { shopId, billId: bill.id },
+    });
+    if (creationLedgerRows > 0) {
       await postBillCancelledLedger(tx, {
         shopId,
         bill,
@@ -569,6 +577,11 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         ? await tx.bill.findFirst({ where: { id: returnOfBillId, shopId } })
         : null;
 
+      // A return against an estimate must not post GST: the original kacha bill never entered
+      // the GST report, so its reversal can't either — otherwise the report would show negative
+      // tax with no positive side. Sales/stock/refund effects still apply in full.
+      const effectiveGstMode = original?.billType === "estimate" ? "none" : gstMode;
+
       const productIds = items.filter((i) => i.productId).map((i) => i.productId);
       const dbProducts = await tx.product.findMany({ where: { id: { in: productIds }, shopId } });
       const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
@@ -595,9 +608,9 @@ export async function createSaleReturn(shopId, body, actor = {}) {
 
         const lineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
         const rate = Number(item.gstRate ?? product?.gstRate ?? 0);
-        const gstAmount = gstMode === "exclusive"
+        const gstAmount = effectiveGstMode === "exclusive"
           ? multiplyMoney(lineTotal, rate / 100)
-          : gstMode === "none" || rate <= 0
+          : effectiveGstMode === "none" || rate <= 0
             ? 0
             : subtractMoney(lineTotal, round2(lineTotal / (1 + rate / 100)));
         const lineCost = multiplyMoney(costPerRateUnit, qtyInRateUnit);
@@ -629,7 +642,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         if (product) restockPlan.push({ product, qtyInBase: round2(qtyInBase), lineCost, damaged });
       }
 
-      const grandTotalMagnitude = gstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;
+      const grandTotalMagnitude = effectiveGstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;
       const refundAmount = round2(grandTotalMagnitude);
       const resolvedCustomerId = customerId ?? original?.customerId ?? null;
 
@@ -666,7 +679,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           status: "active",
           customerId: resolvedCustomerId,
           customerName: customerName ?? original?.customerName ?? "Walk-in",
-          gstMode,
+          gstMode: effectiveGstMode,
           ...negativeMoney,
           ...moneyShadows(negativeMoney),
           createdByUserId: actor?.userId ?? null,
@@ -794,8 +807,6 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
   if (!bill) throw new AppError("Bill not found", 404);
   if (bill.status !== "cancelled") throw new AppError("Bill is already restored or not cancelled", 409);
 
-  const isEstimate = bill.billType === "estimate";
-
   return db.$transaction(async (tx) => {
     // Atomic claim: cancelled -> active, so only one concurrent restore wins (mirrors cancel).
     const restoredAt = new Date();
@@ -809,75 +820,81 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       throw err;
     }
 
-    if (!isEstimate) {
-      // Re-deduct stock that was restored during cancellation.
-      for (const item of bill.items) {
-        if (!item.productId) continue;
+    // Re-deduct only stock the cancellation actually restored ("cancel_reversal" rows exist);
+    // legacy quote-era estimates never moved stock in either direction.
+    const cancelReversalRows = await tx.stockLedger.count({
+      where: { shopId, billId: bill.id, action: "cancel_reversal" },
+    });
+    for (const item of cancelReversalRows > 0 ? bill.items : []) {
+      if (!item.productId) continue;
 
-        const product = await tx.product.findFirst({
-          where: { id: item.productId, shopId, deletedAt: null },
-        });
-        if (!product) {
-          throw new AppError(`Cannot restore bill because product is deleted or missing: ${item.name}`, 409);
-        }
+      const product = await tx.product.findFirst({
+        where: { id: item.productId, shopId, deletedAt: null },
+      });
+      if (!product) {
+        throw new AppError(`Cannot restore bill because product is deleted or missing: ${item.name}`, 409);
+      }
 
-        const stockResult = await decrementProductStockOrThrow(tx, {
+      const stockResult = await decrementProductStockOrThrow(tx, {
+        shopId,
+        product,
+        qtyInBase: item.quantityInBaseUnit,
+        statusCode: 409,
+        code: "RESTORE_INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION",
+        message: `Insufficient stock to restore bill for "${item.name}". Available stock may have changed.`,
+      });
+
+      await tx.stockLedger.create({
+        data: {
           shopId,
-          product,
-          qtyInBase: item.quantityInBaseUnit,
-          statusCode: 409,
-          code: "RESTORE_INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION",
-          message: `Insufficient stock to restore bill for "${item.name}". Available stock may have changed.`,
-        });
-
-        await tx.stockLedger.create({
-          data: {
-            shopId,
-            productId: product.id,
-            productName: item.name,
-            action: "restore_reversal",
-            changeBaseQty: -item.quantityInBaseUnit,
-            oldStockBaseQty: stockResult.oldStock,
-            newStockBaseQty: stockResult.newStock,
-            billId: bill.id,
-            note: `Restore cancelled bill: ${reason}`,
-          },
-        });
-      }
-
-      // Re-apply udhar if the cancelled bill had credit amount.
-      if (bill.creditAmount > 0 && bill.customerId) {
-        const customer = await tx.customer.findFirst({
-          where: { id: bill.customerId, shopId, deletedAt: null },
-        });
-        if (!customer) {
-          throw new AppError("Cannot restore credit bill because customer is deleted or missing", 409);
-        }
-
-        await tx.udharLedger.create({
-          data: {
-            shopId,
-            customerId: bill.customerId,
-            customerName: customer.name,
-            type: "debit",
-            amount: bill.creditAmount,
-            ...moneyShadows({ amount: bill.creditAmount }),
-            mode: "credit",
-            billId: bill.id,
-            billNo: bill.billNo,
-            note: `Bill restored: ${reason}`,
-          },
-        });
-
-        await syncCustomerUdharBalance(tx, shopId, bill.customerId, {
-          repairNegative: true,
-          repairNote: `System repair after restoring bill ${bill.billNo}: previous udhar balance was negative`,
-        });
-      }
+          productId: product.id,
+          productName: item.name,
+          action: "restore_reversal",
+          changeBaseQty: -item.quantityInBaseUnit,
+          oldStockBaseQty: stockResult.oldStock,
+          newStockBaseQty: stockResult.newStock,
+          billId: bill.id,
+          note: `Restore cancelled bill: ${reason}`,
+        },
+      });
     }
 
-    // FinancialLedger: re-apply the bill's money effect, dated to the restore.
-    if (!isEstimate) {
+    // Re-apply udhar if the cancelled bill had credit amount.
+    if (bill.creditAmount > 0 && bill.customerId) {
+      const customer = await tx.customer.findFirst({
+        where: { id: bill.customerId, shopId, deletedAt: null },
+      });
+      if (!customer) {
+        throw new AppError("Cannot restore credit bill because customer is deleted or missing", 409);
+      }
+
+      await tx.udharLedger.create({
+        data: {
+          shopId,
+          customerId: bill.customerId,
+          customerName: customer.name,
+          type: "debit",
+          amount: bill.creditAmount,
+          ...moneyShadows({ amount: bill.creditAmount }),
+          mode: "credit",
+          billId: bill.id,
+          billNo: bill.billNo,
+          note: `Bill restored: ${reason}`,
+        },
+      });
+
+      await syncCustomerUdharBalance(tx, shopId, bill.customerId, {
+        repairNegative: true,
+        repairNote: `System repair after restoring bill ${bill.billNo}: previous udhar balance was negative`,
+      });
+    }
+
+    // FinancialLedger: re-apply the bill's money effect, dated to the restore. Bills that
+    // never posted at creation (legacy quote-era estimates) have no rows to re-apply.
+    const ledgerRows = await tx.financialLedger.count({
+      where: { shopId, billId: bill.id },
+    });
+    if (ledgerRows > 0) {
       await postBillRestoredLedger(tx, {
         shopId,
         bill,
@@ -990,16 +1007,15 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
       err.code = code;
       throw err;
     }
-    // Offline-origin sale already happened: remove what stock is available and floor at
-    // zero (never negative) so the sale is recorded, not dropped. The caller flags the
-    // shortfall on the stock-ledger entry for the shopkeeper to reconcile.
+    // Offline/current-counter sale already happened: record the real negative
+    // balance so the shopkeeper can reconcile it with the next stock-in.
     const fresh = await tx.product.findFirst({
       where: { id: product.id, shopId },
       select: { stockBaseQty: true },
     });
-    const available = round2(Math.max(0, fresh?.stockBaseQty ?? 0));
-    const newStock = round2(Math.max(0, available - qtyInBase));
-    const shortfallBaseQty = round2(Math.max(0, qtyInBase - available));
+    const available = round2(fresh?.stockBaseQty ?? product.stockBaseQty ?? 0);
+    const newStock = round2(available - qtyInBase);
+    const shortfallBaseQty = round2(Math.max(0, -newStock));
     await tx.product.updateMany({ where: { id: product.id, shopId }, data: { stockBaseQty: newStock } });
     return { oldStock: available, newStock, shortfallBaseQty };
   }

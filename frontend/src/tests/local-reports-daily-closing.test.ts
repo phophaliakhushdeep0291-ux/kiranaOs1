@@ -547,7 +547,7 @@ describe("local reports and daily closing", () => {
     expect(closing.cashReceived).toBe(100);
   });
 
-  it("excludes rough and estimate bills and their payments", async () => {
+  it("counts estimate (kacha) bills and their payments like real sales", async () => {
     setRows({
       bills: [
         bill("bill_valid", "2026-06-06T10:00:00.000Z", { grandTotal: 100 }),
@@ -581,9 +581,37 @@ describe("local reports and daily closing", () => {
 
     const closing = await buildDailyClosingReport("2026-06-06");
 
-    expect(closing.totalSales).toBe(100);
-    expect(closing.cashReceived).toBe(100);
-    expect(closing.upiReceived).toBe(0);
+    // Estimates work the same as real bills — money counts in the day's totals.
+    expect(closing.totalSales).toBe(800);
+    expect(closing.cashReceived).toBe(400);
+    expect(closing.upiReceived).toBe(400);
+  });
+
+  it("flags low stock only when stock is truly at/under the alert (thresholds are base units)", async () => {
+    setRows({
+      products: [
+        // Weighed items: stockBaseQty and lowStockThreshold are BOTH base units (g).
+        product("product_atta", { name: "Atta", unit: "kg", displayUnit: "kg", stockBaseQty: 5000, lowStockThreshold: 2000 }), // 5 kg vs 2 kg → healthy
+        product("product_dal", { name: "Dal", unit: "kg", displayUnit: "kg", stockBaseQty: 1000, lowStockThreshold: 2000 }), // 1 kg vs 2 kg → low
+        product("product_biscuit", { name: "Biscuit", unit: "piece", displayUnit: "piece", stockBaseQty: 50, lowStockThreshold: 10 }),
+        product("product_match", { name: "Matchbox", unit: "piece", displayUnit: "piece", stockBaseQty: 3, lowStockThreshold: 10 }), // low
+        product("product_noalert", { name: "No Alert", unit: "piece", displayUnit: "piece", stockBaseQty: 0, lowStockThreshold: 0 }), // no threshold → never low
+      ],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({ from: "2026-06-06", to: "2026-06-06" });
+    const names = snapshot.lowStock.map((row) => row.name);
+
+    expect(names).toContain("Dal");
+    expect(names).toContain("Matchbox");
+    // The old display-vs-base comparison flagged EVERY weighed product as low (5 <= 2000).
+    expect(names).not.toContain("Atta");
+    expect(names).not.toContain("Biscuit");
+    expect(names).not.toContain("No Alert");
+    // Numbers surface in display units so the list reads "1 of 2 kg", not "1 of 2000".
+    expect(snapshot.lowStock.find((row) => row.name === "Dal")).toEqual(
+      expect.objectContaining({ stock: 1, threshold: 2, unit: "kg" }),
+    );
   });
 
   it("marks reports as local estimates when pending sync exists", async () => {

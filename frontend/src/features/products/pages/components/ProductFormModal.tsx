@@ -55,9 +55,10 @@ export function ProductFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{editing ? "Edit product" : "Add product"}</DialogTitle></DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 mt-2">
+      <DialogContent className="flex max-h-[92dvh] max-w-4xl flex-col overflow-hidden p-0 sm:p-6">
+        <DialogHeader className="shrink-0 border-b border-[#e6ecf4] px-4 py-4 sm:border-0 sm:p-0"><DialogTitle>{editing ? "Edit product" : "Add product"}</DialogTitle></DialogHeader>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-0 sm:py-0">
           <div className="rounded-xl border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-foreground/80">
             Voice fill is active while this form is open. Say: <span className="font-semibold">{def.voiceExample}</span>.
           </div>
@@ -132,9 +133,10 @@ export function ProductFormModal({
               <ProductStockForm form={form} />
             </TabsContent>
           </Tabs>
-          <div className="flex flex-col-reverse md:flex-row gap-3 pt-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" className="flex-1" disabled={isPending}>{isPending ? "Saving..." : editing ? "Update product" : "Create product"}</Button>
+          </div>
+          <div className="sticky bottom-0 z-10 grid shrink-0 grid-cols-2 gap-3 border-t border-[#e6ecf4] bg-white/98 px-4 py-3 shadow-[0_-10px_24px_rgba(15,35,80,0.08)] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:pb-0 sm:pt-4 sm:shadow-none">
+            <Button type="button" variant="outline" className="h-12 sm:h-10" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" className="h-12 sm:h-10" disabled={isPending}>{isPending ? "Saving..." : editing ? "Update product" : "Create product"}</Button>
           </div>
         </form>
       </DialogContent>

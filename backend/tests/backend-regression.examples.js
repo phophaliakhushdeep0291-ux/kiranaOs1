@@ -207,18 +207,18 @@ try {
   });
 
   assert.equal(estimateBill.grandTotal, 11.5, 'estimate still stores calculated bill total');
-  assert.equal(estimateBill.grossProfit, 0, 'estimate must not affect P&L profit');
-  assert.equal(estimateBill.paidAmount, 0, 'estimate must not create paid amount');
-  assert.equal(estimateBill.creditAmount, 0, 'estimate must not create udhar amount');
+  assert.equal(estimateBill.grossProfit, 1.5, 'estimate earns real profit like any sale');
+  assert.equal(estimateBill.paidAmount, 0, 'legacy quote-shaped estimate (no payments) stores as unpaid');
+  assert.equal(estimateBill.creditAmount, 0, 'estimate without a credit payment carries no udhar');
   assert.match(estimateBill.billNo, /^EST-\d{4}-000001$/, 'estimate should use its own EST sequence');
 
   const sugarAfterEstimate = await db.product.findUnique({ where: { id: sugar.id } });
-  assert.equal(sugarAfterEstimate.stockBaseQty, 1500, 'estimate must not deduct stock');
+  assert.equal(sugarAfterEstimate.stockBaseQty, 1250, 'estimate deducts stock like a real sale');
 
   const estimateLedgerCount = await db.stockLedger.count({
     where: { shopId: shopA.id, billId: estimateBill.id },
   });
-  assert.equal(estimateLedgerCount, 0, 'estimate must not create stock ledger entry');
+  assert.equal(estimateLedgerCount, 1, 'estimate creates a sale stock ledger entry like a real sale');
 
   const rice = await db.product.create({
     data: {
@@ -327,13 +327,13 @@ try {
   );
 
   const sugarAfterCredit = await db.product.findUnique({ where: { id: sugar.id } });
-  assert.equal(sugarAfterCredit.stockBaseQty, 1250, 'credit sale must deduct stock');
+  assert.equal(sugarAfterCredit.stockBaseQty, 1000, 'credit sale must deduct stock');
 
   const cancelledBill = await cancelBill(shopA.id, creditBill.id, { reason: 'Automated regression test cancel' });
   assert.equal(cancelledBill.status, 'cancelled', 'cancelled bill should be marked cancelled');
 
   const sugarAfterCancel = await db.product.findUnique({ where: { id: sugar.id } });
-  assert.equal(sugarAfterCancel.stockBaseQty, 1500, 'cancel bill must restore stock');
+  assert.equal(sugarAfterCancel.stockBaseQty, 1250, 'cancel bill must restore stock');
 
   const customerAfterCancel = await db.customer.findUnique({ where: { id: customer.id } });
   assert.equal(customerAfterCancel.udharAmount, 0, 'cancel bill must reverse udhar balance');
@@ -362,9 +362,9 @@ try {
   await expectAppError(getProduct(shopB.id, sugar.id), 404, /Product not found/);
 
   const report = await getPnL(shopA.id, { range: 'daily' });
-  assert.equal(report.grossSales, 118, 'P&L should include active sales only and exclude estimate/cancelled bills');
-  assert.equal(report.grossProfit, 33, 'P&L grossProfit should include profit after discount/waived only for active sale bills');
-  assert.equal(report.cashCollected, 113, 'P&L cash collection should exclude estimates and cancelled bills');
+  assert.equal(report.grossSales, 129.5, 'P&L includes estimates like real sales and excludes cancelled bills');
+  assert.equal(report.grossProfit, 34.5, 'P&L grossProfit includes estimate profit for active bills');
+  assert.equal(report.cashCollected, 113, 'P&L cash collection counts recorded tender only (unpaid estimate adds nothing)');
   assert.equal(report.cancelledBills, 1, 'P&L should count cancelled sale bills separately');
   assert.equal(report.cancelledBillsValue, 11.5, 'P&L cancelled value should track cancelled sale bills');
 

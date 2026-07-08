@@ -194,7 +194,7 @@ export async function sendStatementReminder(shopId, user, input, { req = null } 
 
   const where = { shopId, customerId, ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
   const [billCount, paymentAgg] = await Promise.all([
-    db.bill.count({ where: { shopId, customerId, status: "active", billType: { not: "estimate" }, ...(from || to ? { createdAt: where.createdAt } : {}) } }),
+    db.bill.count({ where: { shopId, customerId, status: "active", ...(from || to ? { createdAt: where.createdAt } : {}) } }),
     db.udharLedger.aggregate({ where: { ...where, type: "payment" }, _sum: { amount: true } }),
   ]);
   const variables = await buildVariables(shop, customer, {
