@@ -62,12 +62,9 @@ export default function OrdersReceivedPage() {
     onError: (err: unknown) => toast({ title: "Could not update order", description: err instanceof Error ? err.message : "Try again", variant: "destructive" }),
   });
 
-  // Primary action: WhatsApp the customer their order is confirmed, then push it into Billing so
-  // the owner can adjust weights/rates and make the final bill. The WhatsApp window.open must fire
-  // synchronously (before any await) or the browser blocks the pop-up — so it lives in the click
-  // handler, and the async billing load runs after.
+  // Primary action: open the order in Billing so the owner can adjust items, rates,
+  // discounts, and payment mode before making the final bill. WhatsApp is separate.
   function acceptAndBill(order: CustomerOrder) {
-    alertCustomerOnWhatsapp(order, shopName, "received");
     void loadIntoBilling(order);
   }
 
@@ -107,7 +104,7 @@ export default function OrdersReceivedPage() {
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-black text-[#0f1e3d]">Orders Received</h1>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">Orders customers sent from your QR page. Load one into Billing to bill it.</p>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">Orders customers sent from your QR page. Open one in Billing to edit items, rates, and payment before saving.</p>
         </div>
         <button
           type="button"
@@ -183,7 +180,7 @@ export default function OrdersReceivedPage() {
                     onClick={() => acceptAndBill(order)}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-[12px] font-bold text-white shadow-sm"
                   >
-                    <ShoppingCart size={14} /> Accept &amp; bill
+                    <ShoppingCart size={14} /> Open in Billing
                   </button>
                   <button
                     type="button"
