@@ -16,6 +16,7 @@ import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/customer-order/BillingOrderQrButton";
 import { HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./open-bills";
+import { updateCustomerOrder } from "@/features/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -128,6 +129,11 @@ export default function Billing() {
   const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [activeBillId, setActiveBillId] = useState<string>(() => readBillingDraft().activeBillId ?? newBillId());
+  // If the workspace bill came from a customer QR order, its id — so finalizing marks that order
+  // fulfilled + links the bill. Mirrored into a ref so the save-success callback reads it live.
+  const [sourceOrderId, setSourceOrderId] = useState<string | undefined>(() => readBillingDraft().sourceOrderId);
+  const sourceOrderIdRef = useRef<string | undefined>(sourceOrderId);
+  useEffect(() => { sourceOrderIdRef.current = sourceOrderId; }, [sourceOrderId]);
   const [lastBillNo, setLastBillNo] = useState<string | null>(null);
   const [lastPrintableBill, setLastPrintableBill] = useState<PrintableBill | null>(null);
   const [summaryWidth, setSummaryWidth] = useState(() => readBillSummaryWidth());
@@ -269,6 +275,7 @@ export default function Billing() {
         if (!active) return;
         if (Object.keys(draft).length > 0) {
           if (draft.activeBillId) setActiveBillId(draft.activeBillId);
+          setSourceOrderId(draft.sourceOrderId);
           setCart(draft.cart ?? []);
           setDiscount(draft.discount ?? 0);
           setPaymentMode(draft.paymentMode ?? BillPaymentMode.cash);
@@ -292,8 +299,8 @@ export default function Billing() {
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeBillingDraft({ activeBillId, cart, discount: safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
-  }, [draftHydrated, activeBillId, cart, safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
+    writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
+  }, [draftHydrated, activeBillId, sourceOrderId, cart, safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
 
   useEffect(() => {
     if (discount !== safeDiscount) setDiscount(safeDiscount);
@@ -360,6 +367,18 @@ export default function Billing() {
             pendingAutoPrintRef.current = null;
           }
         }
+        // If this bill was made from a customer QR order, close that order out and link the bill.
+        // Best-effort + online-only (the inbox needs the network anyway); on failure the owner can
+        // still "Mark done" by hand, so a caught error must not disturb the save.
+        const fulfilledOrderId = sourceOrderIdRef.current;
+        if (fulfilledOrderId) {
+          sourceOrderIdRef.current = undefined;
+          // Link the stable bill id (a local-first "PENDING-…" number would be a throwaway).
+          const linkedBillId = data.id ?? data.billNumber ?? data.billNo ?? billNo;
+          void updateCustomerOrder(fulfilledOrderId, { status: "fulfilled", billId: linkedBillId })
+            .then(() => queryClient.invalidateQueries({ queryKey: ["customer-orders"] }))
+            .catch(() => undefined);
+        }
         setSensitiveApproval(null);
         resetCurrentBill();
         setActiveBillId(newBillId());
@@ -388,6 +407,7 @@ export default function Billing() {
   });
 
   function resetCurrentBill() {
+    setSourceOrderId(undefined);
     setCart([]);
     setDiscount(0);
     setPaidAmount("");
@@ -805,6 +825,7 @@ export default function Billing() {
   function serializeActiveBill(): HeldBill {
     return {
       id: activeBillId,
+      sourceOrderId,
       label: `${resolvedCustomerName || "Walk-in"} • ₹${grandTotal.toLocaleString("en-IN")} • ${cart.length} item${cart.length === 1 ? "" : "s"}`,
       createdAt: new Date().toISOString(),
       cart,
@@ -823,6 +844,7 @@ export default function Billing() {
 
   function loadBillIntoActive(bill: HeldBill) {
     setActiveBillId(bill.id);
+    setSourceOrderId(bill.sourceOrderId);
     setCart(bill.cart ?? []);
     setDiscount(bill.discount ?? 0);
     setPaymentMode(bill.paymentMode ?? BillPaymentMode.cash);

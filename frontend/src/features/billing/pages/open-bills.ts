@@ -44,7 +44,7 @@ export interface ImportedCartResult {
 export function billFromImportedCart(
   products: Product[],
   items: EncodedCartItem[],
-  opts: { now?: () => number; label?: string } = {},
+  opts: { now?: () => number; label?: string; sourceOrderId?: string } = {},
 ): ImportedCartResult {
   const byId = new Map(products.map((p) => [p.id, p]));
   const cart: CartItem[] = [];
@@ -70,6 +70,7 @@ export function billFromImportedCart(
     createdAt: new Date(opts.now?.() ?? Date.now()).toISOString(),
     cart,
     selectedCustomerId: "walk_in",
+    sourceOrderId: opts.sourceOrderId,
   };
   return { bill, matched: cart.length, skipped };
 }

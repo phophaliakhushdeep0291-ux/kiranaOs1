@@ -17,6 +17,8 @@ export type BillingSensitiveAction = "large_discount" | "selling_below_minimum_p
 export interface BillingDraft {
   /** Stable id of the bill currently in the workspace (for the open-bills switcher). */
   activeBillId?: string;
+  /** When this bill was loaded from a customer QR order, its id — so finalizing marks it fulfilled. */
+  sourceOrderId?: string;
   cart?: CartItem[];
   discount?: number;
   paymentMode?: PaymentSelection;

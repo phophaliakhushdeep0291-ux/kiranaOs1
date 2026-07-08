@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Inbox, MapPin, Phone, RefreshCw, ShoppingCart, XCircle } from "lucide-react";
+import { CheckCircle2, Inbox, MapPin, MessageCircle, Phone, RefreshCw, ShoppingCart, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/features/auth/useAuth";
 import { useListProducts } from "@/lib/api/client";
 import { offlineDB } from "@/lib/offline/db";
 import { HELD_BILLS_KEY, upsertOpenBill, billFromImportedCart } from "@/features/billing/pages/open-bills";
 import type { HeldBill } from "@/features/billing/pages/billing-types";
+import { alertCustomerOnWhatsapp } from "../notify";
 import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "../api";
 
 const STATUS_TABS: Array<{ value: string; label: string }> = [
@@ -38,6 +40,8 @@ function timeAgo(iso: string): string {
 export default function OrdersReceivedPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { shop } = useAuth();
+  const shopName = shop?.name ?? "";
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("new");
 
@@ -58,11 +62,28 @@ export default function OrdersReceivedPage() {
     onError: (err: unknown) => toast({ title: "Could not update order", description: err instanceof Error ? err.message : "Try again", variant: "destructive" }),
   });
 
+  // Primary action: WhatsApp the customer their order is confirmed, then push it into Billing so
+  // the owner can adjust weights/rates and make the final bill. The WhatsApp window.open must fire
+  // synchronously (before any await) or the browser blocks the pop-up — so it lives in the click
+  // handler, and the async billing load runs after.
+  function acceptAndBill(order: CustomerOrder) {
+    alertCustomerOnWhatsapp(order, shopName, "received");
+    void loadIntoBilling(order);
+  }
+
+  /** Standalone "let the customer know it's ready" — no state change, just opens WhatsApp. */
+  function messageCustomer(order: CustomerOrder, kind: "received" | "ready") {
+    const { targetedCustomer } = alertCustomerOnWhatsapp(order, shopName, kind);
+    if (!targetedCustomer) {
+      toast({ title: "Opened WhatsApp", description: "Pick the customer's chat to send the message." });
+    }
+  }
+
   async function loadIntoBilling(order: CustomerOrder) {
     const { bill, matched, skipped } = billFromImportedCart(
       products,
       order.items.map((i) => ({ productId: i.productId, qty: i.qty })),
-      { label: `${order.customerName} (order)` },
+      { label: `${order.customerName} (order)`, sourceOrderId: order.id },
     );
     if (matched === 0) {
       toast({ title: "No matching products", description: "These items are not in your catalog anymore.", variant: "destructive" });
@@ -73,8 +94,8 @@ export default function OrdersReceivedPage() {
     await offlineDB.setSetting(HELD_BILLS_KEY, upsertOpenBill(current, withCustomer)).catch(() => undefined);
     statusMutation.mutate({ id: order.id, next: "accepted" });
     toast({
-      title: "Order loaded into Billing",
-      description: `${matched} item${matched === 1 ? "" : "s"} ready to bill${skipped.length ? ` - ${skipped.length} unavailable` : ""}.`,
+      title: "Order sent to Billing",
+      description: `${matched} item${matched === 1 ? "" : "s"} ready — adjust the amount and save the final bill${skipped.length ? ` · ${skipped.length} unavailable` : ""}.`,
     });
     navigate("/billing");
   }
@@ -159,16 +180,23 @@ export default function OrdersReceivedPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => void loadIntoBilling(order)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-[12px] font-bold text-white"
+                    onClick={() => acceptAndBill(order)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-[12px] font-bold text-white shadow-sm"
                   >
-                    <ShoppingCart size={14} /> Load into Billing
+                    <ShoppingCart size={14} /> Accept &amp; bill
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => messageCustomer(order, order.status === "accepted" ? "ready" : "received")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#bfe6cd] bg-[#f0fbf4] px-3 py-2 text-[12px] font-bold text-[#16a34a]"
+                  >
+                    <MessageCircle size={14} /> Message
                   </button>
                   <button
                     type="button"
                     disabled={statusMutation.isPending}
                     onClick={() => statusMutation.mutate({ id: order.id, next: "fulfilled" })}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#c8e6d3] bg-[#f0fbf4] px-3 py-2 text-[12px] font-bold text-[#16a34a]"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe3ee] bg-white px-3 py-2 text-[12px] font-bold text-[#405273]"
                   >
                     <CheckCircle2 size={14} /> Mark done
                   </button>
