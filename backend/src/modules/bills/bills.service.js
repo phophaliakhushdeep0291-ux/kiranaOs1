@@ -135,9 +135,11 @@ export async function confirmBill(shopId, body, actor = {}) {
         ? toBaseQty(item.quantity, item.enteredUnit, product.baseUnit)
         : item.quantity;
 
-      // Stock check applies to every bill type — estimates hand over goods just like pakka
-      // bills. Offline-origin bills skip the rejection (the sale already happened) and instead
-      // reconcile the shortfall at decrement time.
+      // Overselling is allowed (allowStockShortfall) for the live counter and offline sync alike:
+      // kirana stock counts drift, so a real sale must never be blocked for "0 stock" — the
+      // frontend warns, the sale goes through, and stock is driven negative to show the exact
+      // deficit for reconciliation (see decrementProductStockOrThrow). This hard rejection only
+      // fires for internal callers that opt out of shortfall (allowStockShortfall === false).
       if (product && !allowStockShortfall) {
         if (product.stockBaseQty < qtyInBase) {
           throw new AppError(

@@ -113,11 +113,17 @@ if (ctx.skip) {
       assert.match(JSON.stringify(body), /[Dd]iscount/, "error message should name the discount as the cause");
     });
 
-    test("insufficient stock is rejected", async () => {
+    test("selling more than stock is allowed and drives stock negative (shortfall for reconcile)", async () => {
+      // Kirana counts drift, so the counter must not block a real sale for "0 stock". The sale
+      // goes through and stock shows the exact deficit (per "allow stock shortfall" + "negative
+      // stock handling"); the frontend warns before confirming.
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 1, defaultPricePerRateUnit: 50 });
       const response = await ctx.post("/api/bills/confirm", billPayload(product, { quantity: 2, ratePerRateUnit: 50, payments: [{ mode: "cash", amount: 100 }] }), { token: ownerAuth.accessToken });
-      assertFailure(response, 400);
+      const bill = assertSuccess(response, 201);
+      assert.equal(bill.status, "active");
+      const refreshed = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(refreshed.stockBaseQty, -1, "1 in stock, 2 sold -> -1 deficit recorded");
     });
 
     test("estimate bill deducts stock and records tender like a real sale", async () => {
