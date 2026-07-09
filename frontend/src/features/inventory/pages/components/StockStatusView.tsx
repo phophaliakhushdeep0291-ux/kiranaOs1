@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useListProducts, type Product } from "@/lib/api/client";
+import { useGetInventory, useListProducts, type InventoryItem, type Product } from "@/lib/api/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -30,11 +30,13 @@ function categoryBadge(name: string) {
 }
 
 function stockBaseQty(product: Product): number {
-  if (product.stockBaseQty != null) {
-    const base = Number(product.stockBaseQty);
+  const record = product as unknown as Record<string, unknown>;
+  const baseQty = product.stockBaseQty ?? record.stock_base_qty ?? record.currentStockBaseQty ?? record.current_stock_base_qty;
+  if (baseQty != null) {
+    const base = Number(baseQty);
     if (Number.isFinite(base)) return base;
   }
-  const displayQty = Number(product.stockQuantity);
+  const displayQty = Number(product.stockQuantity ?? record.stock_quantity ?? record.quantity ?? record.qty);
   if (!Number.isFinite(displayQty)) return 0;
   return toBaseQty(displayQty, productDisplayUnit(product));
 }
@@ -59,8 +61,25 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   const products = useListProducts({ limit: 1000 }, {
     query: { placeholderData: (p: Product[] | undefined) => p ?? [], staleTime: 2 * 60_000 },
   });
+  const inventory = useGetInventory({
+    query: { placeholderData: (p: InventoryItem[] | undefined) => p ?? [], staleTime: 60_000 },
+  });
 
-  const all = useMemo(() => (products.data ?? []).filter((p) => !isDeletedProduct(p)), [products.data]);
+  const inventoryByProductId = useMemo(() => {
+    const map = new Map<string, InventoryItem>();
+    for (const item of inventory.data ?? []) {
+      const id = item.id || item.productId;
+      if (id) map.set(id, item);
+    }
+    return map;
+  }, [inventory.data]);
+
+  const all = useMemo(() => (products.data ?? [])
+    .filter((p) => !isDeletedProduct(p))
+    .map((product) => {
+      const stock = inventoryByProductId.get(product.id);
+      return stock ? { ...product, stockBaseQty: stock.stockBaseQty, lowStockThreshold: stock.lowStockThreshold, stockTrackingEnabled: stock.stockTrackingEnabled, trackStock: stock.trackStock } : product;
+    }), [products.data, inventoryByProductId]);
   const scoped = all;
 
   const suppliers = useMemo(() => [...new Set(scoped.map((p) => (p.brand ?? "").trim()).filter(Boolean))].sort(), [scoped]);
@@ -219,7 +238,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
               </tr>
             </thead>
             <tbody>
-              {products.isLoading && rows.length === 0 ? (
+              {(products.isLoading || inventory.isLoading) && rows.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-16 text-center text-sm text-[#536383]">Loading…</td></tr>
               ) : rows.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-16 text-center">
