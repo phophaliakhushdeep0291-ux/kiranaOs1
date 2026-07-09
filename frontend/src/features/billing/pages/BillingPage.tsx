@@ -781,13 +781,18 @@ export default function Billing() {
     setLastPrintableBill(printable);
     pendingAutoPrintRef.current = null;
 
+    const printerConfig = getPrinterConfigSync();
+    const printDeclined = printerConfig.askBeforePrint && !window.confirm("Print this bill now?");
+
     if (getPrinterConfigSync().autoPrint) {
-      const popup = window.open("", "_blank", "width=460,height=760");
-      if (popup) {
-        pendingAutoPrintRef.current = { popup, printable };
-        writeBillingReceiptPendingWindow(popup, printable);
-      } else {
-        toast({ title: "Print blocked", description: "Bill will save. Use Print after saving or allow pop-ups.", variant: "destructive" });
+      if (!printDeclined) {
+        const popup = window.open("", "_blank", "width=460,height=760");
+        if (popup) {
+          pendingAutoPrintRef.current = { popup, printable };
+          writeBillingReceiptPendingWindow(popup, printable);
+        } else {
+          toast({ title: "Print blocked", description: "Bill will save. Use Print after saving or allow pop-ups.", variant: "destructive" });
+        }
       }
     }
 

@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useGetShop } from "@/lib/api/client";
-import { CheckCircle2, Cable, Download, FileText, Printer, RefreshCcw, Wifi, XCircle } from "lucide-react";
+import { CheckCircle2, Cable, Download, FileText, Printer, RefreshCcw, Search, XCircle } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
@@ -39,6 +39,25 @@ function sampleSnapshot(shop: ReturnType<typeof useGetShop>["data"], cfg: Printe
   };
 }
 
+type PrintJobStatus = "printed" | "failed" | "saved";
+
+interface PrintJob {
+  id: string;
+  title: string;
+  status: PrintJobStatus;
+  time: string;
+}
+
+function nowTime() {
+  return new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function isValidNetworkAddress(value: string) {
+  const clean = value.trim();
+  if (!clean) return false;
+  return /^[a-z0-9.-]+:\d{2,5}$/i.test(clean);
+}
+
 export default function PrinterSettingsPage() {
   const { toast } = useToast();
   const shop = useGetShop();
@@ -50,12 +69,88 @@ export default function PrinterSettingsPage() {
 
   // Debounce the receipt rebuild so rapid typing/toggling doesn't reload the iframe each keystroke.
   const [previewCfg, setPreviewCfg] = useState(cfg);
+  const [scanResult, setScanResult] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [jobs, setJobs] = useState<PrintJob[]>([]);
   useEffect(() => { const t = setTimeout(() => setPreviewCfg(cfg), 300); return () => clearTimeout(t); }, [cfg]);
   const previewHtml = useMemo(() => buildReceiptHtml(sampleSnapshot(shop.data, previewCfg), { paperSize: previewCfg.paperSize, copies: 1 }), [shop.data, previewCfg]);
 
+  function addJob(title: string, status: PrintJobStatus) {
+    setJobs((current) => [{ id: `${Date.now()}-${Math.random()}`, title, status, time: nowTime() }, ...current].slice(0, 8));
+  }
+
   function testPrint() {
     const ok = openReceiptWindow(sampleSnapshot(shop.data, cfg), { paperSize: cfg.paperSize, copies: cfg.copies, autoPrint: true });
+    addJob("Sample receipt", ok ? "printed" : "failed");
     if (!ok) toast({ title: "Allow pop-ups", description: "Enable pop-ups to print the sample.", variant: "destructive" });
+  }
+
+  async function scanPrinters() {
+    if (cfg.connection === "browser") {
+      setScanResult("System print dialog is ready. Choose your printer from the dialog when printing.");
+      toast({ title: "Browser printing ready", description: "The browser will show installed printers when you print." });
+      return;
+    }
+    if (cfg.connection === "bluetooth") {
+      const bluetooth = (navigator as Navigator & { bluetooth?: { requestDevice: (options: unknown) => Promise<{ name?: string }> } }).bluetooth;
+      if (!bluetooth?.requestDevice) {
+        setScanResult("Bluetooth scan is not available in this browser. Pair the printer in device settings, then use Browser printing.");
+        toast({ title: "Bluetooth scan unavailable", description: "Use the system print dialog fallback.", variant: "destructive" });
+        return;
+      }
+      try {
+        const device = await bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ["battery_service"] });
+        const name = device.name || "Bluetooth printer";
+        void setP("deviceName", name);
+        setScanResult(`Found ${name}. Click Connect to save it.`);
+        toast({ title: "Printer found", description: name });
+      } catch {
+        setScanResult("Bluetooth scan was cancelled or no printer was selected.");
+      }
+      return;
+    }
+    if (cfg.connection === "usb") {
+      setScanResult("USB printers work through the operating system print dialog. Connect the printer, install the driver if needed, then print a sample.");
+      toast({ title: "USB printer note", description: "Use Browser printing after the printer is installed." });
+      return;
+    }
+    setScanResult("Network printers cannot be scanned directly from the browser. Enter IP:port, for example 192.168.1.50:9100.");
+    toast({ title: "Network printer", description: "Enter IP:port, then connect to validate the format." });
+  }
+
+  async function connectPrinter() {
+    setConnecting(true);
+    try {
+      if (cfg.connection === "network" && !isValidNetworkAddress(cfg.networkAddress)) {
+        toast({ title: "Network address needed", description: "Use format like 192.168.1.50:9100.", variant: "destructive" });
+        return;
+      }
+      await patch({ printer: cfg }, { immediate: true });
+      setScanResult(`${PRINTER_CONNECTION_LABELS[cfg.connection]} saved as ${cfg.deviceName || "default printer"}.`);
+      toast({ title: "Printer settings saved", description: "Bills will use this setup for print preview and printing." });
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function setAsDefault() {
+    await patch({ printer: { ...cfg, deviceName: cfg.deviceName.trim() || DEFAULT_PRINTER_CONFIG.deviceName } }, { immediate: true });
+    toast({ title: "Default printer saved", description: `${cfg.deviceName || DEFAULT_PRINTER_CONFIG.deviceName} is now the billing printer.` });
+  }
+
+  function downloadReceiptHtml() {
+    const html = buildReceiptHtml(sampleSnapshot(shop.data, cfg), { paperSize: cfg.paperSize, copies: cfg.copies });
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "kiranaos-sample-receipt.html";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    addJob("Sample receipt downloaded", "saved");
+    toast({ title: "Receipt downloaded", description: "Open it and choose Print / Save PDF." });
   }
   const connectionStatus = cfg.connection === "browser" ? "ready" : cfg.networkAddress || cfg.model ? "configured" : "not_set";
 
@@ -93,11 +188,12 @@ export default function PrinterSettingsPage() {
               </div>
               {cfg.connection === "network" && <Fld label="Network address (IP:port)"><Input className="h-10" placeholder="192.168.1.50:9100" value={cfg.networkAddress} onChange={(e) => setP("networkAddress", e.target.value)} /></Fld>}
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => toast({ title: "Scanning for printers…", description: cfg.connection === "browser" ? "Browser printing uses your system dialog." : "Pair the printer from your device first." })}><Wifi size={14} /> Scan</Button>
-                <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => toast({ title: "Connection saved", description: PRINTER_CONNECTION_LABELS[cfg.connection] })}><Cable size={14} /> Connect</Button>
+                <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
+                <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={testPrint}><Printer size={14} /> Test Print</Button>
-                <Button className="h-9 gap-1.5 rounded-[9px] text-[12px] font-black text-white" style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} onClick={() => toast({ title: "Set as default printer" })}><CheckCircle2 size={14} /> Set Default</Button>
+                <Button className="h-9 gap-1.5 rounded-[9px] text-[12px] font-black text-white" style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} onClick={() => void setAsDefault()}><CheckCircle2 size={14} /> Set Default</Button>
               </div>
+              {scanResult ? <div className="rounded-[10px] border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-semibold text-blue-800">{scanResult}</div> : null}
             </div>
           </Card>
 
@@ -142,31 +238,34 @@ export default function PrinterSettingsPage() {
             <RowToggle label="Show previous udhar" pill={<Switch checked={cfg.showPreviousUdhar} onCheckedChange={(v) => setP("showPreviousUdhar", v)} />} />
             <RowToggle label="Show total savings" pill={<Switch checked={cfg.showSavings} onCheckedChange={(v) => setP("showSavings", v)} />} />
             <RowToggle label="Show return policy" pill={<Switch checked={cfg.showReturnPolicy} onCheckedChange={(v) => setP("showReturnPolicy", v)} />} last />
-            <p className="pt-2 text-[11px] text-[#9aa6bb]">Paper size, copies, GSTIN, cashier & footer apply to the printed bill now; the remaining fields are saved and roll out to the receipt template.</p>
+            <Fld label="Footer note">
+              <Input className="h-10" value={cfg.footerText} onChange={(e) => setP("footerText", e.target.value)} />
+            </Fld>
+            <p className="pt-2 text-[11px] text-[#9aa6bb]">Browser security allows direct printer scanning only for supported Bluetooth devices. For most thermal printers, install or pair the printer in Windows/Android and KiranaOS will print through the system dialog.</p>
           </div>
         </Card>
 
         {/* Printer queue / test */}
         <Card>
-          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Recent print jobs" action={<button onClick={() => toast({ title: "Queue cleared" })} className="text-[12px] font-bold text-[#005dff] hover:underline">Clear queue</button>} />
+          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: "Queue cleared" }); }} className="text-[12px] font-bold text-[#005dff] hover:underline">Clear queue</button>} />
           <div className="px-5 pb-4">
-            {[
-              { bill: "#1023", status: "printed", time: "11:42 AM" },
-              { bill: "#1022", status: "failed", time: "11:36 AM" },
-              { bill: "#1021", status: "printed", time: "11:30 AM" },
-            ].map((j, i) => (
-              <div key={j.bill} className={`flex items-center gap-3 py-2.5 ${i < 2 ? "border-b border-[#eef2f8]" : ""}`}>
-                <span className={`grid h-8 w-8 place-items-center rounded-[8px] ${j.status === "printed" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>{j.status === "printed" ? <CheckCircle2 size={15} /> : <XCircle size={15} />}</span>
+            {jobs.length === 0 ? (
+              <div className="rounded-[12px] border border-dashed border-[#dbe4f0] p-6 text-center text-[12px] font-semibold text-[#64748b]">
+                No print jobs yet. Use Test Print or Download Receipt to check the setup.
+              </div>
+            ) : jobs.map((j, i) => (
+              <div key={j.id} className={`flex items-center gap-3 py-2.5 ${i < jobs.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
+                <span className={`grid h-8 w-8 place-items-center rounded-[8px] ${j.status === "printed" || j.status === "saved" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>{j.status === "printed" || j.status === "saved" ? <CheckCircle2 size={15} /> : <XCircle size={15} />}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-bold text-[#102347]">Bill {j.bill}</p>
+                  <p className="text-[13px] font-bold text-[#102347]">{j.title}</p>
                   <p className="text-[11px] text-[#64748b]">{j.time}</p>
                 </div>
-                {j.status === "printed" ? <Badge tone="green">Printed</Badge> : <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button>}
+                {j.status === "failed" ? <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button> : <Badge tone="green">{j.status === "saved" ? "Saved" : "Printed"}</Badge>}
               </div>
             ))}
             <div className="mt-3 grid grid-cols-2 gap-2">
               <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={testPrint}><Printer size={14} /> Print sample</Button>
-              <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={testPrint}><Download size={14} /> Download PDF</Button>
+              <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={downloadReceiptHtml}><Download size={14} /> Download receipt</Button>
             </div>
           </div>
         </Card>

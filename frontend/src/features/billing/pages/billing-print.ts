@@ -59,7 +59,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
       hsn: item.product.hsn ?? null,
     })),
     subtotal: bill.subtotal,
-    discount: bill.discount,
+    discount: printer.showDiscount ? bill.discount : 0,
     total: bill.total,
     paid: bill.paid,
     credit: bill.credit,
@@ -71,9 +71,10 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     showHsn: printer.showHsn,
     // Udhar bills keep their record-keeping note; everything else uses the
     // shop's configured receipt footer (falling back to the friendly default).
-    footerNote: bill.credit > 0
-      ? "Please keep this receipt for udhar records."
-      : (getPrinterConfigSync().footerText || "Thank you for shopping with us."),
+    footerNote: [
+      bill.credit > 0 ? "Please keep this receipt for udhar records." : (printer.footerText || "Thank you for shopping with us."),
+      printer.showReturnPolicy ? "Returns accepted as per shop policy with original bill." : "",
+    ].filter(Boolean).join(" "),
   };
 }
 
