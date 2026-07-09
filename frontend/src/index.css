@@ -305,6 +305,7 @@
   }
 
   .app-main-scroll {
+    overflow-x: auto;
     scroll-behavior: smooth;
     scroll-padding-block: calc(var(--app-desktop-topbar-height) + 1rem) 1.5rem;
   }
@@ -347,6 +348,13 @@
     max-width: var(--app-page-max);
     margin-inline: auto;
     padding: var(--app-page-gutter);
+  }
+
+  @media (max-width: 359px) {
+    .app-main-scroll > .app-page-shell,
+    .app-main-scroll > .app-docked-page {
+      min-width: 360px;
+    }
   }
 
   .mobile-card-premium {

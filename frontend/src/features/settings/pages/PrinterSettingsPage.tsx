@@ -168,11 +168,11 @@ export default function PrinterSettingsPage() {
                   <SelectContent>{(Object.entries(PRINTER_CONNECTION_LABELS) as [PrinterConnection, string][]).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
                 </Select>
               </Fld>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Fld label="Printer name / label"><Input className="h-10" value={cfg.deviceName} onChange={(e) => setP("deviceName", e.target.value)} /></Fld>
                 <Fld label="Printer model"><Input className="h-10" placeholder="e.g. TVS RP3160" value={cfg.model} onChange={(e) => setP("model", e.target.value)} /></Fld>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Fld label="Paper size">
                   <Select value={cfg.paperSize} onValueChange={(v) => setP("paperSize", v as ReceiptPaperSize)}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
@@ -187,7 +187,7 @@ export default function PrinterSettingsPage() {
                 </Fld>
               </div>
               {cfg.connection === "network" && <Fld label="Network address (IP:port)"><Input className="h-10" placeholder="192.168.1.50:9100" value={cfg.networkAddress} onChange={(e) => setP("networkAddress", e.target.value)} /></Fld>}
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={testPrint}><Printer size={14} /> Test Print</Button>
@@ -217,7 +217,7 @@ export default function PrinterSettingsPage() {
         <Card className="flex flex-col">
           <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="text-[12px] font-bold text-[#005dff] hover:underline">Test print</button>} />
           <div className="flex-1 px-5 pb-5">
-            <div className="overflow-hidden rounded-[12px] border border-[#e3e9f3] bg-[#eef1f6]">
+            <div className="app-table-scroll overflow-auto rounded-[12px] border border-[#e3e9f3] bg-[#eef1f6]">
               <iframe title="Receipt preview" srcDoc={previewHtml} className="h-[560px] w-full border-0" />
             </div>
           </div>
@@ -263,7 +263,7 @@ export default function PrinterSettingsPage() {
                 {j.status === "failed" ? <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button> : <Badge tone="green">{j.status === "saved" ? "Saved" : "Printed"}</Badge>}
               </div>
             ))}
-            <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={testPrint}><Printer size={14} /> Print sample</Button>
               <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={downloadReceiptHtml}><Download size={14} /> Download receipt</Button>
             </div>

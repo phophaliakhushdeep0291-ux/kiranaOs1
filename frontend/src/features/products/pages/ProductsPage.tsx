@@ -272,8 +272,10 @@ export default function ProductsPage() {
     const [path, query = ""] = location.split("?");
     const browserQuery = typeof window === "undefined" ? "" : window.location.search.replace(/^\?/, "");
     if (path !== "/products") return;
-    if (new URLSearchParams(query || browserQuery).get("add") !== "1") return;
-    openAdd();
+    const params = new URLSearchParams(query || browserQuery);
+    if (params.get("add") === "1") openAdd();
+    if (params.get("import") === "1") setImportOpen(true);
+    if (params.get("add") !== "1" && params.get("import") !== "1") return;
     setLocation("/products");
   }, [location, openAdd, setLocation]);
 

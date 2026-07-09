@@ -39,6 +39,17 @@ export default function SettingsPage() {
     });
   }, []);
 
+  useEffect(() => {
+    const raw = shop.data?.settingsJson;
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (parsed.storeProfile && typeof parsed.storeProfile === "object") setStoreProfile(parsed.storeProfile as Record<string, unknown>);
+    } catch {
+      // Keep the local summary if the server blob is malformed.
+    }
+  }, [shop.data?.settingsJson]);
+
   const planName = snapshot?.planCode ? snapshot.planCode.charAt(0).toUpperCase() + snapshot.planCode.slice(1) : "Free";
   const shopName = shop.data?.name || stringValue(storeProfile.name) || "My Store";
   const shopAddress = [
@@ -64,7 +75,7 @@ export default function SettingsPage() {
               <p className="truncate text-[12px] text-[#52627e]">{shopAddress}</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-y-4 px-5 py-4">
+          <div className="grid grid-cols-1 gap-y-4 px-5 py-4 sm:grid-cols-2">
             <Info label="Phone" value={shopPhone} />
             <Info label="Email" value={shopEmail} />
             <Info label="GSTIN" value={shop.data?.gstNumber || "Not set"} />
@@ -79,7 +90,7 @@ export default function SettingsPage() {
               <Badge tone="amber">{planName} Plan</Badge>
               <Badge tone="gray"><span className="capitalize">{snapshot?.status ?? "active"}</span></Badge>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <ul className="space-y-2">
                 {["Unlimited Invoices", "Multi-User Access", "Advanced Reports", "Priority Support"].map((f) => (
                   <li key={f} className="flex items-center gap-2 text-[12px] font-medium text-[#344668]">
@@ -102,7 +113,7 @@ export default function SettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHead icon={<UsersRound size={15} />} title="Staff & Permissions" action={<Manage href="/settings/staff" label="Manage Staff" />} />
-          <div className="grid grid-cols-2 gap-3 px-5 pb-5 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
             <OverviewStat label="Total Staff" value="—" sub="Active users" />
             <OverviewStat label="Cashiers" value="—" sub="Can create bills" />
             <OverviewStat label="Managers" value="—" sub="Full access" />
@@ -222,7 +233,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* Footer */}
-      <div className="flex flex-col items-center justify-between gap-2 rounded-[12px] border border-[#e7edf7] bg-white px-5 py-3.5 sm:flex-row">
+      <div className="flex flex-col items-stretch justify-between gap-3 rounded-[12px] border border-[#e7edf7] bg-white px-5 py-3.5 sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#eef5ff] text-[#005dff]"><Settings2 size={16} /></span>
           <div>
@@ -230,10 +241,10 @@ export default function SettingsPage() {
             <p className="text-[11px] text-[#64748b]">Version 2.1.3 · You're up to date</p>
           </div>
         </div>
-        <div className="flex items-center gap-5 text-[12px] font-bold text-[#005dff]">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] font-bold text-[#005dff]">
           <Link href="/settings/sync" className="hover:underline">What's New</Link>
-          <button className="hover:underline">Help Center</button>
-          <button className="hover:underline">Contact Support</button>
+          <Link href="/smart-tools" className="hover:underline">Help Center</Link>
+          <a href="mailto:support@kiranaos.local?subject=KiranaOS%20support" className="hover:underline">Contact Support</a>
         </div>
       </div>
     </SettingsShell>

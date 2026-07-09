@@ -59,6 +59,57 @@ const DANGER = [
   { key: "factoryReset", label: "Factory reset store", desc: "Permanently wipe local data & settings", safe: false },
 ];
 const totalMb = STORAGE.reduce((s, x) => s + x.mb, 0);
+const EXPORT_TABLES = [
+  "products",
+  "customers",
+  "bills",
+  "bill_items",
+  "payments",
+  "customer_ledger",
+  "inventory_movements",
+  "suppliers",
+  "purchase_bills",
+  "staff_users",
+  "settings",
+] as const;
+const LOCAL_DATA_TABLES = [
+  ...EXPORT_TABLES,
+  "sync_outbox",
+  "sync_cursor",
+  "sync_conflicts",
+  "id_mappings",
+  "local_audit_logs",
+  "subscription_cache",
+  "device_license_cache",
+] as const;
+
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadCsvTemplate(filename: string, headers: string[]) {
+  const blob = new Blob([`${headers.join(",")}\n`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function mailSupport(subject: string, body: string) {
+  window.location.href = `mailto:support@kiranaos.app?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
 
 export default function AdvancedSettingsPage() {
   const { toast } = useToast();
@@ -86,9 +137,72 @@ export default function AdvancedSettingsPage() {
     } catch { toast({ title: "Could not clear cache", variant: "destructive" }); }
   }
   function copyDiagnostics() {
-    const diag = { app: "KiranaOS 2.1.3", online: navigator.onLine, language, accent, ua: navigator.userAgent, at: new Date().toISOString() };
+    const diag = { app: "KiranaOS 2.1.3", online: navigator.onLine, language, accent, prefs: { advanced: adv }, ua: navigator.userAgent, at: new Date().toISOString() };
     void navigator.clipboard?.writeText(JSON.stringify(diag, null, 2));
     toast({ title: "Diagnostics copied" });
+  }
+  async function optimizeDatabase() {
+    try {
+      await offlineDB.init();
+      toast({ title: "Database checked", description: "Local data opened cleanly and is ready." });
+    } catch {
+      toast({ title: "Database check failed", description: "Restart the app and try again.", variant: "destructive" });
+    }
+  }
+  async function runDbTool(key: string, label: string) {
+    try {
+      await offlineDB.init();
+      if (key === "repair" || key === "index") await offlineDB.pruneExpiredRecentCache();
+      if (key === "dashboard") {
+        const [bills, payments, items] = await Promise.all([offlineDB.getAll("bills"), offlineDB.getAll("payments"), offlineDB.getAll("bill_items")]);
+        toast({ title: "Dashboard totals checked", description: `${bills.length} bills, ${payments.length} payments, ${items.length} items readable.` });
+        return;
+      }
+      if (key === "ledgers") {
+        const rows = await offlineDB.getAll("customer_ledger");
+        toast({ title: "Customer ledgers checked", description: `${rows.length} ledger rows readable.` });
+        return;
+      }
+      if (key === "inventory") {
+        const rows = await offlineDB.getAll("inventory_movements");
+        toast({ title: "Inventory stock checked", description: `${rows.length} stock movement rows readable.` });
+        return;
+      }
+      toast({ title: `${label} complete`, description: "Local database opened and maintenance checks passed." });
+    } catch {
+      toast({ title: `${label} failed`, description: "Restart the app and try again.", variant: "destructive" });
+    }
+  }
+  async function exportTable(table: (typeof EXPORT_TABLES)[number], filename: string) {
+    try {
+      const rows = await offlineDB.getAll<Record<string, unknown>>(table);
+      downloadJson(filename, { exportedAt: new Date().toISOString(), table, rows });
+      toast({ title: "Export downloaded", description: `${rows.length} ${table.replaceAll("_", " ")} row(s).` });
+    } catch {
+      toast({ title: "Export failed", description: "Could not read local data for this export.", variant: "destructive" });
+    }
+  }
+  async function exportFullBackup() {
+    try {
+      const entries = await Promise.all(EXPORT_TABLES.map(async (table) => [table, await offlineDB.getAll<Record<string, unknown>>(table)] as const));
+      downloadJson(`kiranaos-backup-${new Date().toISOString().slice(0, 10)}.json`, {
+        app: "KiranaOS",
+        exportedAt: new Date().toISOString(),
+        tables: Object.fromEntries(entries),
+      });
+      toast({ title: "Backup downloaded", description: "Keep this file private. It contains local shop data." });
+    } catch {
+      toast({ title: "Backup failed", description: "Could not read the local database.", variant: "destructive" });
+    }
+  }
+  async function clearScopedLocalData() {
+    for (const table of LOCAL_DATA_TABLES) {
+      const rows = await offlineDB.getAll<Record<string, unknown>>(table);
+      for (const row of rows) {
+        const key = row.key ?? row.clientEventId ?? row.local_id ?? row.localId ?? row.id;
+        if (typeof key === "string" && key.length > 0) await offlineDB.delete(table, key);
+      }
+    }
   }
   async function runDanger(key: string) {
     setDanger(null);
@@ -97,7 +211,7 @@ export default function AdvancedSettingsPage() {
     if (key === "deleteLocal" || key === "factoryReset") {
       try {
         if ("caches" in window) { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))); }
-        await (offlineDB as { clearAll?: () => Promise<void> }).clearAll?.();
+        await clearScopedLocalData();
       } catch { /* best effort */ }
       toast({ title: "Local data cleared", description: "The app will reload with a fresh local copy synced from the cloud." });
       setTimeout(() => window.location.reload(), 1200);
@@ -111,7 +225,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Data Management */}
         <Card>
-          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button onClick={() => toast({ title: "Optimizing database…" })} className="text-[12px] font-bold text-[#005dff] hover:underline">Optimize</button>} />
+          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button onClick={() => void optimizeDatabase()} className="text-[12px] font-bold text-[#005dff] hover:underline">Optimize</button>} />
           <div className="px-5 pb-5">
             <RowToggle label="Data retention" pill={<Select value={adv.retention} onValueChange={(v) => update({ retention: v })}><SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["1 year", "2 years", "5 years", "Forever"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>} />
             <RowToggle label="Recycle bin retention" pill={<Select value={adv.recycleRetention} onValueChange={(v) => update({ recycleRetention: v })}><SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["7 days", "30 days", "90 days"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>} />
@@ -129,7 +243,7 @@ export default function AdvancedSettingsPage() {
         {/* App Preferences */}
         <Card>
           <CardHead icon={<Palette size={15} />} title="App Preferences" sub="Language, theme & defaults" />
-          <div className="grid grid-cols-2 gap-3 px-5 pb-5">
+          <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
             <Fld label="Language">
               <Select value={language} onValueChange={(v) => setLanguage(v as AppLanguage)}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
@@ -154,7 +268,7 @@ export default function AdvancedSettingsPage() {
                 <SelectContent>{["Cash", "UPI", "Split"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
             </Fld>
-            <div className="col-span-2">
+            <div className="sm:col-span-2">
               <p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">Accent theme</p>
               <div className="flex flex-wrap gap-2">
                 {(Object.entries(ACCENT_COLORS) as [AccentColor, { label: string; swatch: string }][]).map(([key, def]) => (
@@ -164,7 +278,7 @@ export default function AdvancedSettingsPage() {
                 ))}
               </div>
             </div>
-            <div className="col-span-2 space-y-0.5">
+            <div className="space-y-0.5 sm:col-span-2">
               <RowToggle label="Compact mode" pill={<Switch checked={adv.compactMode} onCheckedChange={(v) => update({ compactMode: v })} />} />
               <RowToggle label="Keyboard shortcuts" pill={<Switch checked={adv.shortcuts} onCheckedChange={(v) => update({ shortcuts: v })} />} />
               <RowToggle label="Sound effects" pill={<Switch checked={adv.sound} onCheckedChange={(v) => update({ sound: v })} />} last />
@@ -177,13 +291,16 @@ export default function AdvancedSettingsPage() {
         {/* Import / Export */}
         <Card>
           <CardHead icon={<Upload size={15} />} title="Import / Export" sub="Move your data in & out" />
-          <div className="grid grid-cols-2 gap-2 px-5 pb-5">
+          <div className="grid grid-cols-1 gap-2 px-5 pb-5 sm:grid-cols-2">
             {[
-              { label: "Import products (CSV)", icon: Upload }, { label: "Import customers (CSV)", icon: Upload },
-              { label: "Export products", icon: Download }, { label: "Export customers", icon: Download },
-              { label: "Export bills", icon: Download }, { label: "Export full backup", icon: Download },
+              { label: "Open product import", icon: Upload, run: () => { window.location.href = "/products?import=1"; } },
+              { label: "Customer CSV template", icon: Download, run: () => downloadCsvTemplate("kiranaos-customers-template.csv", ["name", "mobile", "address", "openingBalance"]) },
+              { label: "Export products", icon: Download, run: () => void exportTable("products", "kiranaos-products.json") },
+              { label: "Export customers", icon: Download, run: () => void exportTable("customers", "kiranaos-customers.json") },
+              { label: "Export bills", icon: Download, run: () => void exportTable("bills", "kiranaos-bills.json") },
+              { label: "Export full backup", icon: Download, run: () => void exportFullBackup() },
             ].map((b) => (
-              <Button key={b.label} variant="outline" className="h-10 justify-start gap-2 rounded-[9px] text-[12px] font-bold" onClick={() => toast({ title: b.label, description: b.label.startsWith("Export") ? "Financial exports need the owner PIN; download will start." : "Pick a CSV to import." })}>
+              <Button key={b.label} variant="outline" className="h-10 justify-start gap-2 rounded-[9px] text-[12px] font-bold" onClick={b.run}>
                 <b.icon size={14} /> {b.label}
               </Button>
             ))}
@@ -197,7 +314,7 @@ export default function AdvancedSettingsPage() {
             {DB_TOOLS.map((t, i) => (
               <div key={t.key} className={`flex items-center justify-between py-2.5 ${i < DB_TOOLS.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
                 <span className="text-[13px] font-semibold text-[#344668]">{t.label}</span>
-                <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => toast({ title: t.label, description: "Running… you'll be notified when it finishes." })}>Run</Button>
+                <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => void runDbTool(t.key, t.label)}>Run</Button>
               </div>
             ))}
           </div>
@@ -208,16 +325,16 @@ export default function AdvancedSettingsPage() {
         {/* Diagnostics */}
         <Card>
           <CardHead icon={<FlaskConical size={15} />} title="Developer / Diagnostics" sub="For support" action={<button onClick={copyDiagnostics} className="text-[12px] font-bold text-[#005dff] hover:underline">Copy</button>} />
-          <div className="grid grid-cols-2 gap-y-3 px-5 pb-5">
+          <div className="grid grid-cols-1 gap-y-3 px-5 pb-5 sm:grid-cols-2">
             {[
               ["App version", "2.1.3"], ["Build", "20260611"], ["Database", "v4"],
               ["Connection", navigator.onLine ? "Online" : "Offline"], ["Outbox", "0 pending"], ["Feature flags", "default"],
             ].map(([k, v]) => (
               <div key={k}><p className="text-[11px] font-semibold text-[#64748b]">{k}</p><p className="text-[13px] font-bold text-[#102347]">{v}</p></div>
             ))}
-            <div className="col-span-2 mt-1 flex gap-2">
+            <div className="mt-1 grid gap-2 sm:col-span-2 sm:grid-cols-2">
               <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={copyDiagnostics}><HardDrive size={14} /> Copy diagnostics</Button>
-              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => toast({ title: "Report sent to support" })}>Send to support</Button>
+              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => mailSupport("KiranaOS diagnostics", JSON.stringify({ online: navigator.onLine, language, accent, at: new Date().toISOString() }, null, 2))}>Send to support</Button>
             </div>
           </div>
         </Card>

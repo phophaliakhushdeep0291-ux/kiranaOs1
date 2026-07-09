@@ -32,14 +32,18 @@ export default function IntegrationsSettingsPage() {
   const [states, setStates] = useState<Record<string, IntStatus>>({});
   const [apiOn, setApiOn] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
   const seeded = useRef(false);
 
   useEffect(() => {
     if (seeded.current || !hydrated) return;
     seeded.current = true;
-    const saved = (prefs.integrations ?? {}) as { states?: Record<string, IntStatus>; apiOn?: boolean };
+    const saved = (prefs.integrations ?? {}) as { states?: Record<string, IntStatus>; apiOn?: boolean; apiKey?: string; webhookUrl?: string };
     setStates({ ...Object.fromEntries(APPS.map((a) => [a.key, a.def])), ...(saved.states ?? {}) });
     setApiOn(Boolean(saved.apiOn));
+    setApiKey(saved.apiKey || `kos_live_${crypto.randomUUID().replaceAll("-", "").slice(0, 24)}`);
+    setWebhookUrl(saved.webhookUrl ?? "");
   }, [hydrated, prefs.integrations]);
 
   const toggleApp = (key: string) => {
@@ -48,10 +52,20 @@ export default function IntegrationsSettingsPage() {
     const next = cur === "connected" ? "disconnected" : "connected";
     const nextStates = { ...states, [key]: next as IntStatus };
     setStates(nextStates);
-    patch({ integrations: { states: nextStates, apiOn } });
+    patch({ integrations: { states: nextStates, apiOn, apiKey, webhookUrl } });
     toast({ title: next === "connected" ? "Connected" : "Disconnected" });
   };
-  const setApi = (v: boolean) => { setApiOn(v); patch({ integrations: { states, apiOn: v } }); };
+  const setApi = (v: boolean) => { setApiOn(v); patch({ integrations: { states, apiOn: v, apiKey, webhookUrl } }); };
+  const saveWebhook = (value: string) => {
+    setWebhookUrl(value);
+    patch({ integrations: { states, apiOn, apiKey, webhookUrl: value } });
+  };
+  const rotateApiKey = () => {
+    const nextKey = `kos_live_${crypto.randomUUID().replaceAll("-", "").slice(0, 24)}`;
+    setApiKey(nextKey);
+    patch({ integrations: { states, apiOn, apiKey: nextKey, webhookUrl } });
+    toast({ title: "API key regenerated" });
+  };
 
   const connected = Object.values(states).filter((s) => s === "connected").length;
   const notConnected = Object.values(states).filter((s) => s === "disconnected").length;
@@ -60,7 +74,7 @@ export default function IntegrationsSettingsPage() {
   return (
     <SettingsShell>
       {/* Overview */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Connected" value={connected} tone="green" icon={<Plug size={15} />} />
         <Kpi label="Not Connected" value={notConnected} tone="amber" icon={<Plug size={15} />} />
         <Kpi label="Needs Attention" value={needsAttention} tone="red" icon={<Plug size={15} />} />
@@ -69,7 +83,7 @@ export default function IntegrationsSettingsPage() {
 
       {/* Integration grid */}
       <Card>
-        <CardHead icon={<Plug size={15} />} title="Connected Apps" sub="Tap to connect or manage" action={<button onClick={() => toast({ title: "Refreshing connections…" })} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><RefreshCcw size={12} /> Refresh</button>} />
+        <CardHead icon={<Plug size={15} />} title="Connected Apps" sub="Tap to connect or manage" action={<button onClick={() => { setStates((current) => ({ ...Object.fromEntries(APPS.map((a) => [a.key, a.def])), ...current })); toast({ title: "Connection states refreshed" }); }} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><RefreshCcw size={12} /> Refresh</button>} />
         <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
           {APPS.map((a) => {
             const st = states[a.key] ?? a.def;
@@ -102,12 +116,13 @@ export default function IntegrationsSettingsPage() {
             <RowToggle label="Enable API access" desc="Allow external apps to call your store API" pill={<Switch checked={apiOn} onCheckedChange={setApi} />} />
             <Fld label="API Key">
               <div className="flex gap-2">
-                <Input className="h-10 font-mono text-[12px]" readOnly value={apiOn ? (showKey ? "kos_live_8f2a91c4e7b6d350" : "kos_live_••••••••••••") : "Enable API access first"} />
+                <Input className="h-10 font-mono text-[12px]" readOnly value={apiOn ? (showKey ? apiKey : "kos_live_••••••••••••") : "Enable API access first"} />
                 <Button variant="outline" className="h-10 rounded-[9px] px-3 text-[12px] font-bold" disabled={!apiOn} onClick={() => setShowKey((s) => !s)}>{showKey ? "Hide" : "Show"}</Button>
-                <Button variant="outline" className="h-10 rounded-[9px] px-3" disabled={!apiOn} onClick={() => { void navigator.clipboard?.writeText("kos_live_8f2a91c4e7b6d350"); toast({ title: "API key copied" }); }}><Copy size={14} /></Button>
+                <Button variant="outline" className="h-10 rounded-[9px] px-3" disabled={!apiOn} onClick={() => { void navigator.clipboard?.writeText(apiKey); toast({ title: "API key copied" }); }}><Copy size={14} /></Button>
               </div>
             </Fld>
-            <Fld label="Webhook URL"><Input className="h-10 text-[12px]" placeholder="https://your-server.com/kiranaos-webhook" disabled={!apiOn} /></Fld>
+            <Fld label="Webhook URL"><Input className="h-10 text-[12px]" placeholder="https://your-server.com/kiranaos-webhook" disabled={!apiOn} value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} onBlur={() => saveWebhook(webhookUrl.trim())} /></Fld>
+            <Button variant="outline" className="h-9 rounded-[9px] text-[12px] font-bold" disabled={!apiOn} onClick={rotateApiKey}>Regenerate API key</Button>
             <div>
               <p className="mb-1.5 text-[12px] font-semibold text-[#45577a]">Allowed events</p>
               <div className="flex flex-wrap gap-1.5">{EVENTS.map((e) => <Badge key={e} tone="blue">{e}</Badge>)}</div>

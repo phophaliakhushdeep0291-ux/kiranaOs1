@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Bell, Mail, MessageCircle, MessageSquare, Send, Smartphone } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
@@ -46,34 +48,66 @@ interface NotifConfig {
   dailyUdhar: boolean;
   dailyLowStock: boolean;
   dailyCashUpi: boolean;
+  templates: Record<string, string>;
 }
 const DEFAULT_NOTIF: NotifConfig = {
   channels: { inApp: true, whatsapp: true, sms: false, email: true, push: true },
   alerts: Object.fromEntries(ALERTS.map((a) => [a.key, a.key !== "negativeStock"])),
   dailyEnabled: true, dailyTime: "21:00", dailySales: true, dailyProfit: true, dailyUdhar: true, dailyLowStock: true, dailyCashUpi: true,
+  templates: Object.fromEntries(TEMPLATES.map((t) => [t.key, t.preview])),
 };
 
 export default function NotificationsSettingsPage() {
   const { toast } = useToast();
   const { prefs, patch, hydrated } = useSettingsPrefs();
   const [n, setN] = useState<NotifConfig>(DEFAULT_NOTIF);
+  const [editing, setEditing] = useState<(typeof TEMPLATES)[number] | null>(null);
+  const [draft, setDraft] = useState("");
   const seeded = useRef(false);
 
   useEffect(() => {
     if (seeded.current || !hydrated) return;
     seeded.current = true;
     const saved = (prefs.notifications ?? {}) as Partial<NotifConfig>;
-    setN({ ...DEFAULT_NOTIF, ...saved, channels: { ...DEFAULT_NOTIF.channels, ...(saved.channels ?? {}) }, alerts: { ...DEFAULT_NOTIF.alerts, ...(saved.alerts ?? {}) } });
+    setN({
+      ...DEFAULT_NOTIF,
+      ...saved,
+      channels: { ...DEFAULT_NOTIF.channels, ...(saved.channels ?? {}) },
+      alerts: { ...DEFAULT_NOTIF.alerts, ...(saved.alerts ?? {}) },
+      templates: { ...DEFAULT_NOTIF.templates, ...(saved.templates ?? {}) },
+    });
   }, [hydrated, prefs.notifications]);
 
   const update = (partial: Partial<NotifConfig>) => { const next = { ...n, ...partial }; setN(next); patch({ notifications: next }); };
+  const saveTemplate = () => {
+    if (!editing) return;
+    const value = draft.trim();
+    if (!value) {
+      toast({ title: "Template is empty", description: "Add message text before saving.", variant: "destructive" });
+      return;
+    }
+    update({ templates: { ...n.templates, [editing.key]: value } });
+    setEditing(null);
+    toast({ title: "Template saved" });
+  };
+  const sendTemplateTest = (template: (typeof TEMPLATES)[number]) => {
+    const message = (n.templates[template.key] ?? template.preview)
+      .replaceAll("{name}", "Ramesh")
+      .replaceAll("{amount}", "850")
+      .replaceAll("{store}", "KiranaOS")
+      .replaceAll("{billno}", "KOS-0001")
+      .replaceAll("{product}", "Sugar")
+      .replaceAll("{qty}", "2 kg");
+    void navigator.clipboard?.writeText(message);
+    toast({ title: "Sample copied", description: "Paste it in WhatsApp/SMS to test the final text." });
+  };
 
   return (
     <SettingsShell>
       {/* Channels */}
       <Card>
         <CardHead icon={<Bell size={15} />} title="Notification Channels" sub="How alerts reach you" />
-        <div className="grid grid-cols-2 gap-3 px-5 pb-5 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-5">
           {CHANNELS.map((c) => {
             const on = n.channels[c.key] ?? false;
             return (
@@ -111,11 +145,11 @@ export default function NotificationsSettingsPage() {
                 <div className="flex items-center justify-between">
                   <p className="text-[13px] font-bold text-[#102347]">{t.title}</p>
                   <div className="flex gap-2">
-                    <button onClick={() => toast({ title: "Edit template", description: "Template editor opens here." })} className="text-[12px] font-bold text-[#005dff] hover:underline">Edit</button>
-                    <button onClick={() => toast({ title: "Test sent", description: "A sample message was queued." })} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Send size={11} /> Test</button>
+                    <button onClick={() => { setEditing(t); setDraft(n.templates[t.key] ?? t.preview); }} className="text-[12px] font-bold text-[#005dff] hover:underline">Edit</button>
+                    <button onClick={() => sendTemplateTest(t)} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Send size={11} /> Test</button>
                   </div>
                 </div>
-                <p className="mt-1 truncate text-[11px] text-[#64748b]">{t.preview}</p>
+                <p className="mt-1 truncate text-[11px] text-[#64748b]">{n.templates[t.key] ?? t.preview}</p>
               </div>
             ))}
           </div>
@@ -153,6 +187,25 @@ export default function NotificationsSettingsPage() {
           </div>
         </Card>
       </div>
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <textarea
+              className="min-h-[120px] w-full resize-y rounded-[10px] border border-[#dbe6f7] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#005dff]"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <p className="text-[11px] text-[#64748b]">Available placeholders: {"{name}"}, {"{amount}"}, {"{store}"}, {"{billno}"}, {"{product}"}, {"{qty}"}</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" className="h-10 rounded-[10px] font-bold" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button className="h-10 rounded-[10px] bg-[#005dff] font-black text-white hover:bg-[#0047e8]" onClick={saveTemplate}>Save template</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </SettingsShell>
   );
 }
