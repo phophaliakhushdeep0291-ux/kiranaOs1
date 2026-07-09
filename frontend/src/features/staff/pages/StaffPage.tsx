@@ -72,7 +72,7 @@ function isActive(member: StaffMember) {
   return member.isActive !== false && !member.deletedAt && !member.deactivatedAt;
 }
 
-export default function StaffPage() {
+export default function StaffPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const manageStaff = usePermission("manage_staff");
@@ -184,9 +184,8 @@ export default function StaffPage() {
     }
   }
 
-  return (
-    <FeatureGate featureName="staff_login">
-      <PageShell className="space-y-5">
+  const content = (
+    <>
         <PageHeader
           title={<span className="flex items-center gap-2"><UsersRound size={24} />Staff & Permissions</span>}
           description="Manage shop roles safely. Backend must still enforce permissions during sync/API calls."
@@ -293,7 +292,14 @@ export default function StaffPage() {
           error={pinError}
           onConfirm={({ ownerPin, reason }) => confirmWithPin(ownerPin, reason)}
         />
-      </PageShell>
+    </>
+  );
+
+  if (embedded) return <div className="space-y-4">{content}</div>;
+
+  return (
+    <FeatureGate featureName="staff_login">
+      <PageShell className="space-y-5">{content}</PageShell>
     </FeatureGate>
   );
 }

@@ -71,6 +71,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
       .filter((p) => {
         const stock = stockBaseQty(p);
         const low = lowStock(p);
+        if (mode === "in" && statusF === "all") return stock > 0;
         if (mode === "out" && statusF === "all") return stock <= 0;
         if (statusF === "all") return true;
         if (statusF === "low") return low;

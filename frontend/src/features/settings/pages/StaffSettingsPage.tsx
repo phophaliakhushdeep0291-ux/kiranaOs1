@@ -5,7 +5,7 @@ import { FramedSettingsPage } from "@/features/settings/SettingsShell";
 export default function StaffSettingsPage() {
   return (
     <FramedSettingsPage>
-      <StaffPage />
+      <StaffPage embedded />
     </FramedSettingsPage>
   );
 }
