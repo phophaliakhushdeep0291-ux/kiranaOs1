@@ -42,6 +42,7 @@ export default function CustomerOrderPage() {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [qty, setQty] = useState<Record<string, number>>({});
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<string>("all");
   const [sheet, setSheet] = useState<"none" | "checkout" | "qr">("none");
   const [form, setForm] = useState({ name: "", mobile: "", address: "", note: "" });
   const [placing, setPlacing] = useState(false);
@@ -91,13 +92,25 @@ export default function CustomerOrderPage() {
 
   const products = state.kind === "ready" ? state.catalog.products : [];
 
+  // Category chips (like the billing screen) so big catalogs stay browsable. Only shown when the
+  // shop actually spreads products across more than one category.
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) {
+      const c = (p.category ?? "").trim();
+      if (c) set.add(c);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) => p.name.toLowerCase().includes(q) || (p.category ?? "").toLowerCase().includes(q),
-    );
-  }, [products, search]);
+    return products.filter((p) => {
+      if (category !== "all" && (p.category ?? "").trim().toLowerCase() !== category.toLowerCase()) return false;
+      if (!q) return true;
+      return p.name.toLowerCase().includes(q) || (p.category ?? "").toLowerCase().includes(q);
+    });
+  }, [products, search, category]);
 
   const items = useMemo(
     () =>
@@ -250,8 +263,32 @@ export default function CustomerOrderPage() {
               placeholder="Search items…"
               className="w-full bg-transparent py-2.5 text-sm outline-none placeholder:text-[#9aa7bd]"
             />
+            {search && (
+              <button type="button" aria-label="Clear search" onClick={() => setSearch("")} className="text-[#94a3b8] hover:text-[#5b6b85]">
+                <X size={15} />
+              </button>
+            )}
           </div>
         </div>
+        {categories.length > 1 && (
+          <div className="mx-auto max-w-xl overflow-x-auto px-4 pb-2.5">
+            <div className="flex gap-1.5">
+              {["all", ...categories].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategory(c)}
+                  className={
+                    "whitespace-nowrap rounded-full px-3 py-1.5 text-[12px] font-bold capitalize transition-colors " +
+                    (category === c ? "bg-[#075fff] text-white" : "border border-[#e2eaf4] bg-white text-[#5b6b85]")
+                  }
+                >
+                  {c === "all" ? "All" : c}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Returning customer: quick way back to their live order */}
