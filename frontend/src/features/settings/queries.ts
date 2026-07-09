@@ -3,8 +3,8 @@ import { ApiClientError } from "@/lib/api/http";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as authApi from "@/features/auth/api";
 import * as settingsApi from "@/features/settings/api";
-import { updateSettingsLocalFirst } from "@/features/settings/local-actions";
 import { createStaffLocalFirst, deactivateStaffLocalFirst, listStaffLocalFirst, type StaffMember } from "@/features/staff/local-actions";
+import { offlineDB } from "@/lib/offline/db";
 import type { Shop } from "@/types/api";
 
 export interface UpdateShopVariables { data: Partial<Shop> & { ownerPin?: string } }
@@ -24,6 +24,12 @@ function normaliseStaffRole(role?: string): "manager" | "cashier" | "viewer" | "
   return role === "manager" || role === "cashier" || role === "viewer" || role === "owner" ? role : "cashier";
 }
 
+async function updateShopOnlineFirst(data: Partial<Shop> & { ownerPin?: string }): Promise<Shop> {
+  const updated = await settingsApi.updateShop(data);
+  await offlineDB.setSetting("shop", updated).catch(() => undefined);
+  return updated;
+}
+
 export function useGetShop(options?: QueryHookOptions<Shop, ShopQueryKey>) {
   return useQuery<Shop, ApiClientError, Shop, ShopQueryKey>({
     queryKey: getGetShopQueryKey(),
@@ -35,7 +41,7 @@ export function useGetShop(options?: QueryHookOptions<Shop, ShopQueryKey>) {
 export function useUpdateShop(options?: MutationHookOptions<Shop, UpdateShopVariables>) {
   return useMutation<Shop, ApiClientError, UpdateShopVariables>({
     ...getMutationOptions<Shop, UpdateShopVariables>(options),
-    mutationFn: ({ data }) => updateSettingsLocalFirst(data),
+    mutationFn: ({ data }) => updateShopOnlineFirst(data),
   });
 }
 

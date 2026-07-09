@@ -31,6 +31,10 @@ const DOCS = [
   { key: "address", label: "Address Proof" },
 ] as const;
 
+function clean(value: string) {
+  return value.trim();
+}
+
 export default function StoreProfilePage() {
   const { toast } = useToast();
   const { user, updateShop: updateAuthShop } = useAuth();
@@ -83,19 +87,64 @@ export default function StoreProfilePage() {
   async function saveStoreDetails(ownerPin: string) {
     setPinError(null);
     try {
+      const profileData = {
+        name: clean(biz.name),
+        ownerName: clean(biz.ownerName),
+        phone: clean(biz.phone),
+        gstNumber: clean(biz.gstNumber),
+        address: clean(addr.address),
+        city: clean(addr.city),
+      };
       const updatedShop = await updateShop.mutateAsync({
         data: {
-          name: biz.name,
-          ownerName: biz.ownerName,
-          phone: biz.phone,
-          gstNumber: biz.gstNumber,
-          address: addr.address,
-          city: addr.city,
+          ...profileData,
           ownerPin,
         },
       });
-      await patch({ storeProfile: { ...sp, altPhone: biz.altPhone, email: biz.email, pan: biz.pan, businessType: biz.businessType, currency: biz.currency, state: addr.state, pincode: addr.pincode, country: addr.country, deliveryRadius: addr.deliveryRadius } }, { immediate: true });
-      updateAuthShop(updatedShop);
+      setBiz((current) => ({
+        ...current,
+        name: updatedShop.name ?? profileData.name,
+        ownerName: updatedShop.ownerName ?? profileData.ownerName,
+        phone: updatedShop.phone ?? profileData.phone,
+        gstNumber: updatedShop.gstNumber ?? profileData.gstNumber,
+        altPhone: clean(current.altPhone),
+        email: clean(current.email),
+        pan: clean(current.pan),
+      }));
+      setAddr((current) => ({
+        ...current,
+        address: updatedShop.address ?? profileData.address,
+        city: updatedShop.city ?? profileData.city,
+        state: clean(current.state),
+        pincode: clean(current.pincode),
+        country: clean(current.country || "India"),
+        deliveryRadius: clean(current.deliveryRadius),
+      }));
+      const profilePrefsShop = await patch({
+        storeProfile: {
+          ...sp,
+          altPhone: clean(biz.altPhone),
+          email: clean(biz.email),
+          pan: clean(biz.pan),
+          businessType: biz.businessType,
+          currency: biz.currency,
+          state: clean(addr.state),
+          pincode: clean(addr.pincode),
+          country: clean(addr.country || "India"),
+          deliveryRadius: clean(addr.deliveryRadius),
+        },
+      }, { immediate: true });
+      const finalShop = {
+        ...(profilePrefsShop ?? updatedShop),
+        name: updatedShop.name,
+        ownerName: updatedShop.ownerName,
+        phone: updatedShop.phone,
+        gstNumber: updatedShop.gstNumber,
+        address: updatedShop.address,
+        city: updatedShop.city,
+      };
+      queryClient.setQueryData(getGetShopQueryKey(), finalShop);
+      updateAuthShop(finalShop);
       setPinOpen(false);
     } catch (err) {
       const message = (err as { data?: { message?: string }; message?: string })?.data?.message ?? (err as { message?: string })?.message ?? "Could not save store profile. Try again.";

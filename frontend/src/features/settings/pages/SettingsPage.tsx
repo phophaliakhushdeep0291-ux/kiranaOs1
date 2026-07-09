@@ -23,11 +23,13 @@ export default function SettingsPage() {
   const [printer, setPrinter] = useState<PrinterConfig>(DEFAULT_PRINTER_CONFIG);
   const [gst, setGst] = useState({ mode: "Exclusive (Add to price)", rate: "18%" });
   const [notifCount, setNotifCount] = useState<number | null>(null);
+  const [storeProfile, setStoreProfile] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     void offlineDB.getSetting<Record<string, unknown>>(PREFS_KEY).then((p) => {
       if (!p) return;
       if (p.printer) setPrinter({ ...DEFAULT_PRINTER_CONFIG, ...(p.printer as Partial<PrinterConfig>) });
+      if (p.storeProfile && typeof p.storeProfile === "object") setStoreProfile(p.storeProfile as Record<string, unknown>);
       if (typeof p.gstMode === "string" || typeof p.gstRate === "string") {
         setGst({ mode: (p.gstMode as string) ?? "Exclusive (Add to price)", rate: (p.gstRate as string) ?? "18%" });
       }
@@ -38,9 +40,16 @@ export default function SettingsPage() {
   }, []);
 
   const planName = snapshot?.planCode ? snapshot.planCode.charAt(0).toUpperCase() + snapshot.planCode.slice(1) : "Free";
-  const shopName = shop.data?.name ?? "My Store";
-  const shopAddress = [shop.data?.address, shop.data?.city].filter(Boolean).join(", ") || "Add your store address";
-  const shopEmail = (shop.data as { email?: string } | undefined)?.email ?? user?.email ?? "—";
+  const shopName = shop.data?.name || stringValue(storeProfile.name) || "My Store";
+  const shopAddress = [
+    shop.data?.address,
+    shop.data?.city,
+    stringValue(storeProfile.state),
+    stringValue(storeProfile.pincode),
+  ].filter(Boolean).join(", ") || "Add your store address";
+  const shopEmail = stringValue(storeProfile.email) || (shop.data as { email?: string } | undefined)?.email || user?.email || "-";
+  const shopPhone = shop.data?.phone || stringValue(storeProfile.phone) || stringValue(storeProfile.altPhone) || "-";
+  const shopCurrency = stringValue(storeProfile.currency) || "Indian Rupee (INR)";
 
   return (
     <SettingsShell>
@@ -56,10 +65,10 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-y-4 px-5 py-4">
-            <Info label="Phone" value={shop.data?.phone ?? "—"} />
+            <Info label="Phone" value={shopPhone} />
             <Info label="Email" value={shopEmail} />
             <Info label="GSTIN" value={shop.data?.gstNumber || "Not set"} />
-            <Info label="Currency" value="₹ Indian Rupee" />
+            <Info label="Currency" value={shopCurrency} />
           </div>
         </Card>
 
@@ -243,4 +252,8 @@ function OverviewStat({ label, value, sub }: { label: string; value: string; sub
       <p className="text-[10px] text-[#9aa6bb]">{sub}</p>
     </div>
   );
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
