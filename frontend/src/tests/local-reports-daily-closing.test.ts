@@ -483,6 +483,46 @@ describe("local reports and daily closing", () => {
     expect(closing.purchaseDue).toBe(50);
   });
 
+  it("values stock-out movements in the product rate unit, not raw base grams", async () => {
+    setRows({
+      products: [
+        product("product_sugar", {
+          displayUnit: "kg",
+          rateUnit: "kg",
+          stockBaseQty: 10_000,
+          costPerRateUnit: 60,
+          costPrice: 60,
+        }),
+      ],
+      inventory_movements: [
+        {
+          id: "sale_stock_out_20kg",
+          productId: "product_sugar",
+          product_id: "product_sugar",
+          productName: "Sugar",
+          type: "sale",
+          action: "sale",
+          changeBaseQty: -20_000,
+          change_base_qty: -20_000,
+          quantityDelta: -20_000,
+          quantity_delta: -20_000,
+          createdAt: "2026-06-06T12:00:00.000Z",
+          created_at: "2026-06-06T12:00:00.000Z",
+          sync_status: "synced",
+          ...scope,
+        },
+      ],
+    });
+
+    const snapshot = await buildLocalReportSnapshot({
+      from: "2026-06-06",
+      to: "2026-06-06",
+    });
+
+    expect(snapshot.stockMovement.totalOut).toBe(1200);
+    expect(snapshot.dailyTrend.at(-1)?.stockOut).toBe(1200);
+  });
+
   it("profit estimate uses item cost before product cost", async () => {
     setRows({
       bills: [

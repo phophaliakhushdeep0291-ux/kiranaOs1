@@ -381,14 +381,20 @@ function movementValue(
     product?.costPerRateUnit ?? product?.costPrice ?? product?.averageCostPrice,
     0,
   );
-  const explicitValue = readNumber(
-    movement.totalCost ?? movement.total_cost ?? movement.purchaseBillAmount ?? movement.purchase_bill_amount ??
-      movement.damageLossValue ?? movement.damage_loss_value ?? movement.valueImpact ?? movement.value_impact,
-    0,
-  );
-  const value = roundMoney(Math.abs(explicitValue || change * unitCost));
   const outbound = change < 0 || /sale|out|damage|return_to_supplier|expired/.test(action);
   const inbound = change > 0 || /purchase|stock_in|add|receive|return_from_customer/.test(action);
+  const explicitInboundValue = readNumber(
+    movement.totalCost ?? movement.total_cost ?? movement.purchaseBillAmount ?? movement.purchase_bill_amount ?? movement.billAmount ?? movement.bill_amount,
+    0,
+  );
+  const explicitOutboundValue = readNumber(
+    movement.damageLossValue ?? movement.damage_loss_value ?? movement.valueImpact ?? movement.value_impact,
+    0,
+  );
+  const rateUnit = product ? (product.rateUnit ?? product.displayUnit ?? productDisplayUnit(product)) : undefined;
+  const quantityInRateUnit = product ? fromBaseQty(Math.abs(change), rateUnit) : Math.abs(change);
+  const derivedValue = roundMoney(quantityInRateUnit * unitCost);
+  const value = roundMoney(Math.abs((inbound && !outbound ? explicitInboundValue : explicitOutboundValue) || derivedValue));
   return {
     inbound: inbound && !outbound ? value : 0,
     outbound: outbound ? value : 0,
