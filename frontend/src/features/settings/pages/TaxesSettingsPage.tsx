@@ -88,7 +88,7 @@ export default function TaxesSettingsPage() {
                 </SelectContent>
               </Select>
             </Fld>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Fld label="Default GST Rate">
                 <Select value={tax.defaultRate} onValueChange={(v) => update({ defaultRate: v })}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
@@ -126,8 +126,8 @@ export default function TaxesSettingsPage() {
       <Card>
         <CardHead icon={<Boxes size={15} />} title="HSN / Product Mapping" sub="GST rate & HSN code by category" action={<button onClick={() => toast({ title: "Bulk assign", description: "Assign HSN/GST to many products at once — coming with the catalog tools." })} className="text-[12px] font-bold text-[#005dff] hover:underline">Bulk assign</button>} />
         <div className="px-5 pb-5">
-          <div className="overflow-hidden rounded-[10px] border border-[#eef2f8]">
-            <table className="w-full text-[12px]">
+          <div className="app-table-scroll overflow-x-auto rounded-[10px] border border-[#eef2f8]">
+            <table className="min-w-[680px] w-full text-[12px]">
               <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                 <tr>
                   <th className="px-3 py-2 text-left font-bold">Category</th>
@@ -157,7 +157,7 @@ export default function TaxesSettingsPage() {
         {/* GST Reports */}
         <Card>
           <CardHead icon={<BarChart3 size={15} />} title="GST Reports" sub="This month" action={<button onClick={() => toast({ title: "Export started", description: "GST report export will download shortly." })} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Export</button>} />
-          <div className="grid grid-cols-2 gap-3 px-5 pb-5">
+          <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
             <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
             <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />
             <Kpi label="CGST / SGST" value={gstQ.isLoading ? "…" : gstQ.data ? `${inr(gstQ.data.cgst)} each` : "—"} tone="amber" />

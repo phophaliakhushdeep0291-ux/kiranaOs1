@@ -73,7 +73,7 @@ export default function NotificationsSettingsPage() {
       {/* Channels */}
       <Card>
         <CardHead icon={<Bell size={15} />} title="Notification Channels" sub="How alerts reach you" />
-        <div className="grid grid-cols-2 gap-3 px-5 pb-5 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-5">
           {CHANNELS.map((c) => {
             const on = n.channels[c.key] ?? false;
             return (

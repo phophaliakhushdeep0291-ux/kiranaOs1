@@ -30,7 +30,7 @@ const KPI_TONES: Record<Tone, { ring: string; value: string }> = {
 
 export function Card({ id, className, children }: { id?: string; className?: string; children: ReactNode }) {
   return (
-    <div id={id} className={cn("scroll-mt-4 overflow-hidden rounded-[14px] border border-[#e7edf7] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]", className)}>
+    <div id={id} className={cn("min-w-0 scroll-mt-4 overflow-hidden rounded-[14px] border border-[#e7edf7] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]", className)}>
       {children}
     </div>
   );
@@ -38,15 +38,15 @@ export function Card({ id, className, children }: { id?: string; className?: str
 
 export function CardHead({ icon, title, sub, action }: { icon?: ReactNode; title: string; sub?: string; action?: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-3 px-5 pb-3 pt-4">
-      <div className="flex items-center gap-2.5">
+    <div className="flex min-w-0 flex-col gap-3 px-5 pb-3 pt-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 items-center gap-2.5">
         {icon && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-[#eef5ff] text-[#005dff]">{icon}</span>}
-        <div>
-          <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">{title}</h3>
-          {sub && <p className="text-[11px] text-[#64748b]">{sub}</p>}
+        <div className="min-w-0">
+          <h3 className="truncate font-display text-[14px] font-black tracking-tight text-[#102347]">{title}</h3>
+          {sub && <p className="line-clamp-2 text-[11px] text-[#64748b]">{sub}</p>}
         </div>
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">{action}</div>}
     </div>
   );
 }
@@ -58,12 +58,12 @@ export function Badge({ tone = "gray", children, className }: { tone?: Tone; chi
 export function Kpi({ label, value, sub, icon, tone = "blue" }: { label: string; value: ReactNode; sub?: string; icon?: ReactNode; tone?: Tone }) {
   const t = KPI_TONES[tone];
   return (
-    <div className="rounded-[12px] border border-[#e7edf7] bg-white px-4 py-3">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
+    <div className="min-w-0 rounded-[12px] border border-[#e7edf7] bg-white px-4 py-3">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-[11px] font-semibold text-[#64748b]">{label}</p>
         {icon && <span className={cn("grid h-7 w-7 place-items-center rounded-[8px]", t.ring)}>{icon}</span>}
       </div>
-      <p className={cn("mt-1 font-display text-[22px] font-black leading-none", t.value)}>{value}</p>
+      <p className={cn("mt-1 break-words font-display text-[22px] font-black leading-tight", t.value)}>{value}</p>
       {sub && <p className="mt-1 text-[11px] text-[#9aa6bb]">{sub}</p>}
     </div>
   );
@@ -71,7 +71,7 @@ export function Kpi({ label, value, sub, icon, tone = "blue" }: { label: string;
 
 export function Info({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
       <p className="truncate text-[13px] font-bold text-[#102347]">{value}</p>
     </div>
@@ -80,19 +80,19 @@ export function Info({ label, value }: { label: string; value: ReactNode }) {
 
 export function RowToggle({ label, desc, pill, last }: { label: string; desc?: string; pill: ReactNode; last?: boolean }) {
   return (
-    <div className={cn("flex items-center gap-3 py-2.5", !last && "border-b border-[#eef2f8]")}>
+    <div className={cn("flex min-w-0 flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:gap-3", !last && "border-b border-[#eef2f8]")}>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-bold text-[#102347]">{label}</p>
         {desc && <p className="truncate text-[11px] text-[#64748b]">{desc}</p>}
       </div>
-      <div className="shrink-0">{pill}</div>
+      <div className="flex min-w-0 shrink-0 justify-start sm:justify-end">{pill}</div>
     </div>
   );
 }
 
 export function Fld({ label, err, hint, children }: { label: string; err?: string; hint?: string; children: ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</label>
       {children}
       {hint && !err && <p className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}

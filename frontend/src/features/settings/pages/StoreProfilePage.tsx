@@ -178,8 +178,8 @@ export default function StoreProfilePage() {
     <SettingsShell>
       {/* Store Identity Hero */}
       <Card>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
             <span className="grid h-[76px] w-[76px] shrink-0 place-items-center rounded-[16px] bg-[#eef5ff] text-4xl">🏪</span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -191,7 +191,7 @@ export default function StoreProfilePage() {
               <p className="text-[12px] text-[#52627e]">{[addr.address, addr.city].filter(Boolean).join(", ") || "Add your store address"}</p>
             </div>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
             <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => toast({ title: "Logo upload coming soon", description: "Add your shop logo from a future update." })}><Upload size={15} /> Upload Logo</Button>
             <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-10 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {updateShop.isPending ? <Loader2 size={15} className="animate-spin" /> : <Store size={15} />} Save Profile
@@ -204,7 +204,7 @@ export default function StoreProfilePage() {
         {/* Business Details */}
         <Card>
           <CardHead icon={<Building2 size={15} />} title="Business Details" sub="Legal & contact information" />
-          <div className="grid grid-cols-2 gap-3 px-5 pb-5">
+          <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
             <Fld label="Business Name"><Input className="h-10" value={biz.name} onChange={(e) => setBiz({ ...biz, name: e.target.value })} /></Fld>
             <Fld label="Owner Name"><Input className="h-10" value={biz.ownerName} onChange={(e) => setBiz({ ...biz, ownerName: e.target.value })} /></Fld>
             <Fld label="Phone Number"><Input className="h-10" value={biz.phone} onChange={(e) => setBiz({ ...biz, phone: e.target.value })} /></Fld>
@@ -226,15 +226,15 @@ export default function StoreProfilePage() {
           <CardHead icon={<MapPin size={15} />} title="Address & Location" sub="Shop address & delivery area" action={<button onClick={openInMaps} className="text-[12px] font-bold text-[#005dff] hover:underline">Open in Maps</button>} />
           <div className="space-y-3 px-5 pb-5">
             <Fld label="Shop Address"><Input className="h-10" value={addr.address} onChange={(e) => setAddr({ ...addr, address: e.target.value })} /></Fld>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Fld label="City"><Input className="h-10" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} /></Fld>
               <Fld label="State"><Input className="h-10" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} /></Fld>
               <Fld label="Pincode"><Input className="h-10" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} /></Fld>
               <Fld label="Country"><Input className="h-10" value={addr.country} onChange={(e) => setAddr({ ...addr, country: e.target.value })} /></Fld>
             </div>
-            <div className="flex items-center gap-3 rounded-[10px] border border-[#dbe6f7] bg-[#f3f8ff] px-3 py-3">
+            <div className="flex flex-col gap-3 rounded-[10px] border border-[#dbe6f7] bg-[#f3f8ff] px-3 py-3 sm:flex-row sm:items-center">
               <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[#005dff] shadow-sm"><MapPin size={16} /></span>
-              <p className="flex-1 text-[11px] font-medium text-[#34507f]">{sp.geo ? `Pinned at ${sp.geo}` : "Pin your exact shop location for delivery & maps."}</p>
+              <p className="min-w-0 flex-1 text-[11px] font-medium text-[#34507f]">{sp.geo ? `Pinned at ${sp.geo}` : "Pin your exact shop location for delivery & maps."}</p>
               <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={useCurrentLocation}><Navigation size={13} /> Use current</Button>
             </div>
             <Fld label="Delivery Radius (km)" hint="Used for local delivery suggestions"><Input className="h-10" value={addr.deliveryRadius} onChange={(e) => setAddr({ ...addr, deliveryRadius: e.target.value })} placeholder="e.g. 3" /></Fld>
@@ -263,16 +263,16 @@ export default function StoreProfilePage() {
             {DAYS.map((day) => {
               const h = hours[day] ?? DEFAULT_DAY;
               return (
-                <div key={day} className="flex items-center gap-3 border-b border-[#eef2f8] py-2 last:border-0">
+                <div key={day} className="flex flex-col gap-2 border-b border-[#eef2f8] py-2 last:border-0 sm:flex-row sm:items-center sm:gap-3">
                   <span className="w-[84px] shrink-0 text-[12px] font-bold text-[#102347]">{day}</span>
                   <Switch checked={h.open} onCheckedChange={(v) => setDay(day, { ...h, open: v })} />
                   {h.open ? (
-                    <div className="flex flex-1 items-center justify-end gap-1.5">
+                    <div className="flex flex-1 items-center gap-1.5 sm:justify-end">
                       <Input className="h-8 w-[88px] text-[12px]" type="time" value={h.from} onChange={(e) => setDay(day, { ...h, from: e.target.value })} />
                       <span className="text-[11px] text-[#94a3b8]">to</span>
                       <Input className="h-8 w-[88px] text-[12px]" type="time" value={h.to} onChange={(e) => setDay(day, { ...h, to: e.target.value })} />
                     </div>
-                  ) : <span className="flex-1 text-right text-[12px] font-semibold text-[#94a3b8]">Closed</span>}
+                  ) : <span className="flex-1 text-[12px] font-semibold text-[#94a3b8] sm:text-right">Closed</span>}
                 </div>
               );
             })}
@@ -284,8 +284,8 @@ export default function StoreProfilePage() {
         {/* Bank / UPI */}
         <Card>
           <CardHead icon={<Landmark size={15} />} title="Bank / UPI Details" sub="For bill QR & payment reminders" />
-          <div className="grid grid-cols-2 gap-3 px-5 pb-5">
-            <div className="col-span-2"><Fld label="UPI ID"><Input className="h-10" value={bank.upi ?? ""} placeholder="store@upi" onChange={(e) => setBank("upi", e.target.value)} /></Fld></div>
+          <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
+            <div className="sm:col-span-2"><Fld label="UPI ID"><Input className="h-10" value={bank.upi ?? ""} placeholder="store@upi" onChange={(e) => setBank("upi", e.target.value)} /></Fld></div>
             <Fld label="Bank Name"><Input className="h-10" value={bank.bankName ?? ""} onChange={(e) => setBank("bankName", e.target.value)} /></Fld>
             <Fld label="Account Holder"><Input className="h-10" value={bank.holder ?? ""} onChange={(e) => setBank("holder", e.target.value)} /></Fld>
             <Fld label="Account Number"><Input className="h-10" value={bank.account ?? ""} onChange={(e) => setBank("account", e.target.value)} /></Fld>
@@ -300,7 +300,7 @@ export default function StoreProfilePage() {
             {DOCS.map((d) => {
               const status = docs[d.key] ?? "missing";
               return (
-                <div key={d.key} className="flex items-center gap-3 border-b border-[#eef2f8] py-2.5 last:border-0">
+                <div key={d.key} className="flex flex-wrap items-center gap-3 border-b border-[#eef2f8] py-2.5 last:border-0">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[#f4f7fb] text-[#536583]"><FileText size={14} /></span>
                   <span className="flex-1 truncate text-[13px] font-bold text-[#102347]">{d.label}</span>
                   {status === "uploaded"

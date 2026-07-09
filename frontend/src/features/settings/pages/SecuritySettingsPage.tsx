@@ -112,8 +112,8 @@ export default function SecuritySettingsPage() {
       <Card>
         <CardHead icon={<ShieldCheck size={15} />} title="Sensitive Action Protection" sub="Which actions require approval & who can approve" />
         <div className="px-5 pb-5">
-          <div className="overflow-hidden rounded-[10px] border border-[#eef2f8]">
-            <table className="w-full text-[12px]">
+          <div className="app-table-scroll overflow-x-auto rounded-[10px] border border-[#eef2f8]">
+            <table className="min-w-[720px] w-full text-[12px]">
               <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                 <tr>
                   <th className="px-3 py-2 text-left font-bold">Action</th>

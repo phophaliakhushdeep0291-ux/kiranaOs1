@@ -79,7 +79,7 @@ export default function SyncSettingsPage() {
               <Link href="/sync-status" className="inline-flex h-8 items-center rounded-[8px] border border-[#e2e8f0] px-3 text-[12px] font-bold text-[#344668] hover:bg-[#f1f4f8]">View logs</Link>
             </div>
           } />
-        <div className="grid grid-cols-2 gap-3 px-5 pb-5 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-5">
           <Kpi label="Sync Status" value={backupStatusLabel} tone={backupStatusTone} icon={allSynced ? <CheckCircle2 size={15} /> : <Clock size={15} />} />
           <Kpi label="Last Synced" value={timeAgo(lastSynced)} sub={lastSynced ? "today" : "this session"} tone="blue" />
           <Kpi label="Pending Uploads" value={pendingCount} tone={pendingCount ? "amber" : "green"} icon={<Upload size={15} />} />
@@ -132,7 +132,7 @@ export default function SyncSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Backup Settings */}
         <Card>
-          <CardHead icon={<Database size={15} />} title="Backup Settings" sub="Automatic cloud backups" action={<button onClick={() => toast({ title: "Backup started", description: "A manual backup is being created now." })} className="text-[12px] font-bold text-[#005dff] hover:underline">Backup now</button>} />
+          <CardHead icon={<Database size={15} />} title="Backup Settings" sub="Automatic cloud backups" action={<button onClick={handleSync} className="text-[12px] font-bold text-[#005dff] hover:underline">Backup now</button>} />
           <div className="px-5 pb-4">
             <RowToggle label="Auto backup" desc="Back up automatically on a schedule" pill={<Switch checked={backup.auto} onCheckedChange={(v) => update({ auto: v })} />} />
             <RowToggle label="Frequency" pill={<Select value={backup.frequency} onValueChange={(v) => update({ frequency: v })}><SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["Hourly", "Daily", "Weekly"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>} />

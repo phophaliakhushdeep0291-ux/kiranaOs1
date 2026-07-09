@@ -60,7 +60,7 @@ export default function IntegrationsSettingsPage() {
   return (
     <SettingsShell>
       {/* Overview */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi label="Connected" value={connected} tone="green" icon={<Plug size={15} />} />
         <Kpi label="Not Connected" value={notConnected} tone="amber" icon={<Plug size={15} />} />
         <Kpi label="Needs Attention" value={needsAttention} tone="red" icon={<Plug size={15} />} />

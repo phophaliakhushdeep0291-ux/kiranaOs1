@@ -39,8 +39,8 @@ export function SettingsShell({ children, className }: { children: ReactNode; cl
   const [location, navigate] = useLocation();
 
   return (
-    <div className="app-docked-page">
-      <div className="flex gap-4">
+    <div className="app-docked-page app-scrollbar overflow-x-auto">
+      <div className="flex min-w-0 gap-4 lg:min-w-[920px] xl:min-w-0">
         <aside className="hidden w-[200px] shrink-0 lg:block">
           <nav className="sticky top-4 space-y-0.5">
             {SETTINGS_MENU.map((m) => {
@@ -79,7 +79,7 @@ export function SettingsShell({ children, className }: { children: ReactNode; cl
 export function FramedSettingsPage({ children }: { children: ReactNode }) {
   return (
     <SettingsShell>
-      <div className="[&>*]:!max-w-none [&>*]:!p-0">{children}</div>
+      <div className="min-w-0 [&>*]:!max-w-none [&>*]:!p-0">{children}</div>
     </SettingsShell>
   );
 }
