@@ -178,16 +178,20 @@ export async function getDailyClosing(shopId, { date } = {}) {
   const activePayments = activeBills.flatMap((b) => b.payments);
   const billCash = sumPaymentsByMode(activePayments, "cash");
   const billUpi = sumPaymentsByMode(activePayments, "upi");
+  const billBank = sumPaymentsByMode(activePayments, "bank");
   const oldUdharCash = sumMoney(oldUdharRecovered.filter((u) => u.mode === "cash").map((u) => u.amount));
   const oldUdharUpi = sumMoney(oldUdharRecovered.filter((u) => u.mode === "upi").map((u) => u.amount));
+  const oldUdharBank = sumMoney(oldUdharRecovered.filter((u) => u.mode === "bank").map((u) => u.amount));
   const cashReceived = addMoney(billCash, oldUdharCash);
   const upiReceived = addMoney(billUpi, oldUdharUpi);
+  const bankReceived = addMoney(billBank, oldUdharBank);
 
   return {
     date: dateKey,
     totalSalesPaise: toPaise(sumMoney(activeBills.map((b) => b.grandTotal))),
     cashReceivedPaise: toPaise(cashReceived),
     upiReceivedPaise: toPaise(upiReceived),
+    bankReceivedPaise: toPaise(bankReceived),
     udharGivenPaise: toPaise(sumMoney(activeBills.map((b) => b.creditAmount))),
     oldUdharRecoveredPaise: toPaise(sumMoney(oldUdharRecovered.map((u) => u.amount))),
     expectedCashPaise: toPaise(cashReceived),
@@ -235,11 +239,12 @@ export async function getSalesSummary(shopId, { range, from, to, includeProfit =
   const daily = new Map();
   for (const b of bills) {
     const key = groupByDay(b.createdAt);
-    const row = daily.get(key) ?? { date: key, totalSalesPaise: 0, totalBills: 0, cashSalesPaise: 0, upiSalesPaise: 0, udharSalesPaise: 0 };
+    const row = daily.get(key) ?? { date: key, totalSalesPaise: 0, totalBills: 0, cashSalesPaise: 0, upiSalesPaise: 0, bankSalesPaise: 0, udharSalesPaise: 0 };
     row.totalSalesPaise += toPaise(b.grandTotal);
     row.totalBills += 1;
     row.cashSalesPaise += toPaise(sumPaymentsByMode(b.payments, "cash"));
     row.upiSalesPaise += toPaise(sumPaymentsByMode(b.payments, "upi"));
+    row.bankSalesPaise += toPaise(sumPaymentsByMode(b.payments, "bank"));
     row.udharSalesPaise += toPaise(b.creditAmount);
     daily.set(key, row);
   }
@@ -253,6 +258,7 @@ export async function getSalesSummary(shopId, { range, from, to, includeProfit =
     averageBillValuePaise: bills.length ? toPaise(totalSales / bills.length) : 0,
     cashSalesPaise: toPaise(sumPaymentsByMode(payments, "cash")),
     upiSalesPaise: toPaise(sumPaymentsByMode(payments, "upi")),
+    bankSalesPaise: toPaise(sumPaymentsByMode(payments, "bank")),
     udharSalesPaise: toPaise(sumMoney(bills.map((b) => b.creditAmount))),
     partialSalesPaise: toPaise(sumMoney(bills.filter((b) => b.paidAmount > 0 && b.creditAmount > 0).map((b) => b.grandTotal))),
     cancelledSalesPaise: toPaise(sumMoney(cancelledBills.map((b) => b.grandTotal))),
@@ -303,25 +309,31 @@ export async function getPaymentModeReport(shopId, { from, to } = {}) {
 
   const billCash = sumPaymentsByMode(payments, "cash");
   const billUpi = sumPaymentsByMode(payments, "upi");
+  const billBank = sumPaymentsByMode(payments, "bank");
   const oldUdharCash = sumMoney(oldUdharRecovered.filter((u) => u.mode === "cash").map((u) => u.amount));
   const oldUdharUpi = sumMoney(oldUdharRecovered.filter((u) => u.mode === "upi").map((u) => u.amount));
+  const oldUdharBank = sumMoney(oldUdharRecovered.filter((u) => u.mode === "bank").map((u) => u.amount));
   const totalCashInHand = addMoney(billCash, oldUdharCash);
   const totalUpiReceived = addMoney(billUpi, oldUdharUpi);
+  const totalBankReceived = addMoney(billBank, oldUdharBank);
 
   return {
     from: start.toISOString(),
     to: end.toISOString(),
     cashPaise: toPaise(billCash),
     upiPaise: toPaise(billUpi),
+    bankPaise: toPaise(billBank),
     cardPaise: toPaise(sumPaymentsByMode(payments, "card")),
     creditUdharPaise: toPaise(sumMoney(bills.map((b) => b.creditAmount))),
     mixedPayments,
     oldUdharRecoveredPaise: toPaise(sumMoney(oldUdharRecovered.map((u) => u.amount))),
     oldUdharRecoveredCashPaise: toPaise(oldUdharCash),
     oldUdharRecoveredUpiPaise: toPaise(oldUdharUpi),
+    oldUdharRecoveredBankPaise: toPaise(oldUdharBank),
     totalCashInHandPaise: toPaise(totalCashInHand),
     totalUpiReceivedPaise: toPaise(totalUpiReceived),
-    totalCollectedPaise: toPaise(addMoney(totalCashInHand, totalUpiReceived)),
+    totalBankReceivedPaise: toPaise(totalBankReceived),
+    totalCollectedPaise: toPaise(addMoney(totalCashInHand, totalUpiReceived, totalBankReceived)),
     refundPaise: 0,
     reversalPaise: 0,
     unsupported: { refunds: false, reversals: false },
@@ -457,6 +469,7 @@ export async function getPnL(shopId, { range, from, to }) {
 
   const cashCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "cash");
   const upiCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "upi");
+  const bankCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "bank");
   const udharGivenThisPeriod = sumMoney(udharCreated.map((u) => u.amount));
   const udharRecoveredThisPeriod = sumMoney(udharRecovered.map((u) => u.amount));
   const cancelledBillsValue = sumMoney(cancelledBills.map((b) => b.grandTotal));
@@ -475,9 +488,10 @@ export async function getPnL(shopId, { range, from, to }) {
     netProfit,
     cashCollected,
     upiCollected,
+    bankCollected,
     udharGivenThisPeriod,
     udharRecoveredThisPeriod,
-    totalCollected: addMoney(cashCollected, upiCollected, udharRecoveredThisPeriod),
+    totalCollected: addMoney(cashCollected, upiCollected, bankCollected, udharRecoveredThisPeriod),
   };
 }
 
@@ -758,7 +772,7 @@ export async function getPaymentSummary(shopId, { from, to }) {
       select: { creditAmount: true },
     }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { mode: true, amount: true },
     }),
     db.stockLedger.findMany({
