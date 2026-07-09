@@ -5,7 +5,7 @@ import { FramedSettingsPage } from "@/features/settings/SettingsShell";
 export default function DevicesSettingsPage() {
   return (
     <FramedSettingsPage>
-      <DevicesPage />
+      <DevicesPage embedded />
     </FramedSettingsPage>
   );
 }

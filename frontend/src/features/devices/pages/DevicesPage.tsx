@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, CheckCircle2, Clock, Laptop, Plus, RefreshCcw, ShieldCheck, Trash2, WifiOff } from "lucide-react";
+import { AlertTriangle, Clock, Laptop, MonitorSmartphone, Plus, RefreshCcw, ShieldCheck, Smartphone, Trash2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionSnapshot, PlanBadge, UpgradeModal } from "@/features/subscription";
 import { subscriptionRefreshLocalFirst } from "@/features/subscription/local-actions";
@@ -15,7 +14,7 @@ import { getOfflineScope } from "@/lib/offline/context";
 import { addDeviceLocalFirst, removeDeviceLocalFirst } from "@/features/devices/local-actions";
 import { createStarterOfflineLicense, ensureCurrentDeviceRegistered, evaluateOfflineLicenseToken, getLicenseEvaluation, listCachedDevices, readOfflineLicenseToken, writeOfflineLicenseToken, type DeviceRegistration, type LicenseEvaluation, type OfflineLicenseToken } from "@/features/devices/license";
 import type { PlanCode } from "@/features/subscription/plans";
-import { DataTableCard, EmptyState, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
+import { DataTableCard, PageHeader, PageShell, StatCard, StatsGrid } from "@/components/shared";
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "Not available";
@@ -31,13 +30,20 @@ function formatRelative(value: string | null | undefined) {
   return formatDistanceToNow(date, { addSuffix: true });
 }
 
-function statusBadge(status: string, syncStatus?: string) {
-  if (status === "active" && syncStatus === "synced") return <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Active</Badge>;
-  if (status === "remove_pending") return <Badge variant="destructive">Remove pending</Badge>;
-  if (status === "pending_activation") return <Badge variant="secondary">Activation pending</Badge>;
-  if (syncStatus === "pending_sync") return <Badge variant="outline">Cloud backup pending</Badge>;
-  if (syncStatus === "failed") return <Badge variant="destructive">Sync failed</Badge>;
-  return <Badge variant="outline" className="capitalize">{status.replace(/_/g, " ")}</Badge>;
+function deviceStatusLabel(status: string, syncStatus?: string) {
+  if (status === "active" && syncStatus === "synced") return { label: "Ready to use", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+  if (status === "remove_pending") return { label: "Removal waiting", tone: "bg-rose-50 text-rose-700 border-rose-200" };
+  if (status === "pending_activation") return { label: "Waiting for approval", tone: "bg-amber-50 text-amber-700 border-amber-200" };
+  if (syncStatus === "pending_sync") return { label: "Backup pending", tone: "bg-amber-50 text-amber-700 border-amber-200" };
+  if (syncStatus === "failed") return { label: "Needs sync retry", tone: "bg-rose-50 text-rose-700 border-rose-200" };
+  return { label: status.replace(/_/g, " "), tone: "bg-slate-50 text-slate-700 border-slate-200" };
+}
+
+function deviceIcon(device: DeviceRegistration) {
+  const name = device.device_name.toLowerCase();
+  if (name.includes("phone") || name.includes("mobile")) return <Smartphone className="h-5 w-5" />;
+  if (name.includes("counter") || name.includes("pos")) return <MonitorSmartphone className="h-5 w-5" />;
+  return <Laptop className="h-5 w-5" />;
 }
 
 function licenseTone(evaluation: LicenseEvaluation) {
@@ -46,7 +52,7 @@ function licenseTone(evaluation: LicenseEvaluation) {
   return "border-red-200 bg-red-50 text-red-900";
 }
 
-export default function DevicesPage() {
+export default function DevicesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const { snapshot, refresh: refreshSubscription } = useSubscriptionSnapshot();
   const [devices, setDevices] = useState<DeviceRegistration[]>([]);
@@ -147,98 +153,99 @@ export default function DevicesPage() {
     toast({ title: "Starter offline license cached", description: "This is only a local fallback for UX. Backend must still enforce real subscription security." });
   }
 
-  if (loading) return <PageShell><DataTableCard title="Devices" loading>Loading devices...</DataTableCard></PageShell>;
+  if (loading) {
+    const loadingCard = <DataTableCard title="Devices" loading>Loading devices...</DataTableCard>;
+    return embedded ? loadingCard : <PageShell>{loadingCard}</PageShell>;
+  }
 
-  return (
-    <PageShell className="space-y-6">
+  const content = (
+    <>
       <PageHeader
-        title="Devices"
-        description="Manage billing devices, offline license cache and device limits."
+        title="Device Management"
+        description="See which phones, laptops, and counters can use this shop account."
         actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} /> : null}
       />
 
       <Alert className={licenseTone(evaluation)}>
         {evaluation.state === "valid" ? <ShieldCheck className="h-4 w-4" /> : evaluation.state === "grace" ? <Clock className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-        <AlertTitle>{evaluation.state === "valid" ? "Offline license active" : evaluation.state === "grace" ? "Offline grace active" : "License attention needed"}</AlertTitle>
-        <AlertDescription>{evaluation.message} Backend security still has final control; frontend license is only for offline UX guidance.</AlertDescription>
+        <AlertTitle>{evaluation.state === "valid" ? "This shop can work offline" : evaluation.state === "grace" ? "Offline access is in grace period" : "Device access needs attention"}</AlertTitle>
+        <AlertDescription>{evaluation.message}</AlertDescription>
       </Alert>
 
       <StatsGrid>
-        <StatCard label="Current device" value={currentDevice?.device_name ?? "This device"} description={scope.device_id} tone="blue" />
-        <StatCard label="Plan device limit" value={`${activeDevices.length} / ${maxDevices}`} description={limitReached ? "Limit reached" : "Space available"} tone={limitReached ? "red" : "green"} />
-        <StatCard label="License valid until" value={formatDateTime(evaluation.validUntil)} description={formatRelative(evaluation.validUntil)} />
-        <StatCard label="Offline grace until" value={formatDateTime(evaluation.offlineGraceUntil)} description={formatRelative(evaluation.offlineGraceUntil)} tone="amber" />
+        <StatCard label="This device" value={currentDevice?.device_name ?? "Current device"} description="Signed in here" tone="blue" />
+        <StatCard label="Devices in use" value={`${activeDevices.length} / ${maxDevices}`} description={limitReached ? "Plan limit reached" : "Can add more"} tone={limitReached ? "red" : "green"} />
+        <StatCard label="Access valid until" value={formatDateTime(evaluation.validUntil)} description={formatRelative(evaluation.validUntil)} />
+        <StatCard label="Offline safety" value={evaluation.state === "valid" ? "Ready" : evaluation.state === "grace" ? "Grace" : "Check"} description={formatRelative(evaluation.offlineGraceUntil)} tone={evaluation.state === "expired" ? "red" : "amber"} />
       </StatsGrid>
 
       {limitReached && (
         <Alert className="border-amber-200 bg-amber-50 text-amber-900">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Device limit warning</AlertTitle>
-          <AlertDescription>Your plan allows {maxDevices} active device{maxDevices > 1 ? "s" : ""}. Add/remove device requests are visible here, but backend must finally enforce the device limit.</AlertDescription>
+          <AlertTitle>Device limit reached</AlertTitle>
+          <AlertDescription>Your plan allows {maxDevices} active device{maxDevices > 1 ? "s" : ""}. Remove an old device or upgrade before adding another one.</AlertDescription>
         </Alert>
       )}
 
       {evaluation.state === "expired" && (
         <Alert variant="destructive">
           <WifiOff className="h-4 w-4" />
-          <AlertTitle>Local-only after grace expiry</AlertTitle>
-          <AlertDescription>Old data is always viewable. New billing, cloud sync and premium actions are restricted until license/subscription refresh.</AlertDescription>
+          <AlertTitle>Refresh device access</AlertTitle>
+          <AlertDescription>You can still view old data. Connect to internet and refresh access to continue cloud sync and billing actions.</AlertDescription>
         </Alert>
       )}
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle>Activated devices</CardTitle>
-            <CardDescription>Last active time and sync status are read from local device/license cache, so this page works offline.</CardDescription>
+            <CardTitle>Shop devices</CardTitle>
+            <CardDescription>Use simple names like Counter laptop, Owner phone, or Staff tablet.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Device</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last active</TableHead>
-                    <TableHead>Sync</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {devices.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No device cache found yet.</TableCell></TableRow>}
-                  {devices.map((device) => (
-                    <TableRow key={device.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2 font-medium"><Laptop className="h-4 w-4" />{device.device_name}{device.is_current_device && <Badge variant="outline">Current</Badge>}</div>
-                        <p className="mt-1 break-all text-xs text-muted-foreground">{device.device_id}</p>
-                      </TableCell>
-                      <TableCell>{statusBadge(device.status, device.sync_status)}</TableCell>
-                      <TableCell>{formatRelative(device.last_active_at)}</TableCell>
-                      <TableCell><Badge variant={device.sync_status === "synced" ? "default" : "outline"}>{device.sync_status.replace(/_/g, " ")}</Badge></TableCell>
-                      <TableCell className="text-right">
-                        <Button size="sm" variant="outline" disabled={device.is_current_device || device.status === "remove_pending"} onClick={() => setRemoveTarget(device)}>
-                          <Trash2 className="mr-1.5 h-3.5 w-3.5" />Remove
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="space-y-3">
+              {devices.length === 0 ? (
+                <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">No devices found yet. This device will appear after the next refresh.</div>
+              ) : devices.map((device) => {
+                const status = deviceStatusLabel(device.status, device.sync_status);
+                return (
+                  <div key={device.id} className="flex flex-col gap-3 rounded-2xl border bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">{deviceIcon(device)}</div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-bold text-[#102347]">{device.device_name || "Shop device"}</p>
+                          {device.is_current_device && <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">This device</Badge>}
+                          <Badge variant="outline" className={status.tone}>{status.label}</Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-[#64748b]">Last used {formatRelative(device.last_active_at)}</p>
+                        <details className="mt-1 text-[11px] text-[#8a97ab]">
+                          <summary className="cursor-pointer select-none">Technical details</summary>
+                          <p className="mt-1 break-all">Device ID: {device.device_id}</p>
+                          <p>Backup: {device.sync_status.replace(/_/g, " ")}</p>
+                        </details>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" className="self-start sm:self-center" disabled={device.is_current_device || device.status === "remove_pending"} onClick={() => setRemoveTarget(device)}>
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />Remove
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
-            {!canRemove && devices.length > 1 && <p className="mt-2 text-xs text-muted-foreground">Current device cannot remove itself from offline UI. Use another owner device or backend admin panel.</p>}
+            {!canRemove && devices.length > 1 && <p className="mt-3 text-xs text-muted-foreground">The current device cannot remove itself. Open this page on another owner device to remove it.</p>}
           </CardContent>
         </Card>
 
         <div className="min-w-0 space-y-4">
           <Card className="min-w-0">
             <CardHeader>
-              <CardTitle>Add device</CardTitle>
-              <CardDescription>Creates a pending activation request. Real activation must be approved by backend.</CardDescription>
+              <CardTitle>Add a new device</CardTitle>
+              <CardDescription>Name the phone, laptop, or counter before using it for billing.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Input placeholder="Counter 2 laptop / Owner phone" value={newDeviceName} onChange={(event) => setNewDeviceName(event.target.value)} />
               <Button className="w-full max-w-full whitespace-normal" onClick={() => void handleAddDevice()} disabled={adding || newDeviceName.trim().length < 2 || limitReached}>
-                <Plus className="mr-1.5 h-4 w-4" />{adding ? "Saving..." : "Add device request"}
+                <Plus className="mr-1.5 h-4 w-4" />{adding ? "Saving..." : "Add device"}
               </Button>
               {limitReached && <Button variant="outline" className="w-full max-w-full whitespace-normal" onClick={() => setUpgradePlan(snapshot?.planCode === "starter" ? "standard" : snapshot?.planCode === "standard" ? "growth" : "pro")}>Upgrade for more devices</Button>}
             </CardContent>
@@ -246,21 +253,28 @@ export default function DevicesPage() {
 
           <Card className="min-w-0">
             <CardHeader>
-              <CardTitle>License cache</CardTitle>
-              <CardDescription>Offline token shape used by frontend.</CardDescription>
+              <CardTitle>Device access</CardTitle>
+              <CardDescription>Refresh when a plan changes or a device was added from another counter.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
               <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
-                <div className="rounded-lg border p-2"><p className="text-muted-foreground">Tenant</p><p className="break-all font-medium">{license?.tenant_id ?? scope.tenant_id}</p></div>
-                <div className="rounded-lg border p-2"><p className="text-muted-foreground">Store</p><p className="break-all font-medium">{license?.store_id ?? scope.store_id}</p></div>
-                <div className="rounded-lg border p-2"><p className="text-muted-foreground">Plan</p><p className="font-medium capitalize">{evaluation.plan}</p></div>
-                <div className="rounded-lg border p-2"><p className="text-muted-foreground">Max devices</p><p className="font-medium">{maxDevices}</p></div>
+                <div className="rounded-xl border bg-slate-50/70 p-3"><p className="text-muted-foreground">Current plan</p><p className="font-bold capitalize text-[#102347]">{evaluation.plan}</p></div>
+                <div className="rounded-xl border bg-slate-50/70 p-3"><p className="text-muted-foreground">Allowed devices</p><p className="font-bold text-[#102347]">{maxDevices}</p></div>
+                <div className="rounded-xl border bg-slate-50/70 p-3"><p className="text-muted-foreground">Valid until</p><p className="font-bold text-[#102347]">{formatDateTime(evaluation.validUntil)}</p></div>
+                <div className="rounded-xl border bg-slate-50/70 p-3"><p className="text-muted-foreground">Offline backup window</p><p className="font-bold text-[#102347]">{formatRelative(evaluation.offlineGraceUntil)}</p></div>
               </div>
-              <p className="text-xs text-muted-foreground">Token includes plan, features, max_devices, valid_until, offline_grace_until and signature. Signature is not backend security; backend must verify requests.</p>
               <div className="flex flex-col gap-2">
-                <Button variant="outline" className="w-full max-w-full whitespace-normal" onClick={() => void refreshLicense()} disabled={refreshing}><RefreshCcw className="mr-1.5 h-4 w-4" />{refreshing ? "Queuing..." : "Refresh license"}</Button>
-                {!license && <Button variant="secondary" className="w-full max-w-full whitespace-normal" onClick={() => void seedStarterLicenseForThisDevice()}>Cache Starter fallback</Button>}
+                <Button variant="outline" className="w-full max-w-full whitespace-normal" onClick={() => void refreshLicense()} disabled={refreshing}><RefreshCcw className="mr-1.5 h-4 w-4" />{refreshing ? "Refreshing..." : "Refresh device access"}</Button>
+                {!license && <Button variant="secondary" className="w-full max-w-full whitespace-normal" onClick={() => void seedStarterLicenseForThisDevice()}>Enable starter access on this device</Button>}
               </div>
+              <details className="rounded-xl border bg-white p-3 text-xs text-muted-foreground">
+                <summary className="cursor-pointer select-none font-semibold text-[#102347]">Technical details</summary>
+                <div className="mt-2 space-y-1">
+                  <p className="break-all">Tenant: {license?.tenant_id ?? scope.tenant_id}</p>
+                  <p className="break-all">Store: {license?.store_id ?? scope.store_id}</p>
+                  <p className="break-all">This device: {scope.device_id}</p>
+                </div>
+              </details>
             </CardContent>
           </Card>
         </div>
@@ -269,8 +283,8 @@ export default function DevicesPage() {
       <Dialog open={removeTarget !== null} onOpenChange={(open) => { if (!open) { setRemoveTarget(null); setOwnerPin(""); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove device?</DialogTitle>
-            <DialogDescription>Removing a device needs owner permission. This creates a pending removal request and does not delete old business data.</DialogDescription>
+            <DialogTitle>Remove this device?</DialogTitle>
+            <DialogDescription>This will stop the selected device from being used for this shop after sync. Business data is not deleted.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-lg border p-3 text-sm">
@@ -287,6 +301,10 @@ export default function DevicesPage() {
       </Dialog>
 
       <UpgradeModal open={upgradePlan !== null} onOpenChange={(open) => !open && setUpgradePlan(null)} targetPlanCode={upgradePlan ?? undefined} reason="Your current plan has reached its device limit." />
-    </PageShell>
+    </>
   );
+
+  if (embedded) return <div className="space-y-5">{content}</div>;
+
+  return <PageShell className="space-y-6">{content}</PageShell>;
 }
