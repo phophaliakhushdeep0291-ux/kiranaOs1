@@ -9,5 +9,7 @@ const router = Router();
 router.get("/shops/:shopId/catalog", ctrl.catalog);
 // Customer submits an order from their phone; it lands in the owner's Orders Received inbox.
 router.post("/shops/:shopId/orders", ctrl.submitOrder);
+// Customer tracks their own order by its unguessable id (received → preparing → ready / declined).
+router.get("/shops/:shopId/orders/:orderId", ctrl.orderStatus);
 
 export default router;

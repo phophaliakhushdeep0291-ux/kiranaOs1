@@ -133,6 +133,81 @@ export async function submitCustomerOrder(
   return json.data;
 }
 
+// ─── Order tracking (customer's own order, by its unguessable id) ────────────
+
+export type OrderStage = "received" | "preparing" | "ready" | "declined";
+
+export interface CustomerOrderStatus {
+  orderId: string;
+  status: "new" | "accepted" | "fulfilled" | "rejected";
+  stage: OrderStage;
+  itemCount: number;
+  estimatedTotal: number;
+  items: Array<{ name: string; qty: number; price: number; unit: string }>;
+  shopName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Thrown when the tracked order no longer exists (or the shop turned ordering off). */
+export class OrderNotFoundError extends Error {
+  constructor(message = "We couldn't find that order.") {
+    super(message);
+    this.name = "OrderNotFoundError";
+  }
+}
+
+/** Poll a single order's status for the customer's tracker. */
+export async function fetchOrderStatus(shopCode: string, orderId: string): Promise<CustomerOrderStatus> {
+  const url = `${getApiBaseUrl()}/public/shops/${encodeURIComponent(shopCode)}/orders/${encodeURIComponent(orderId)}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { Accept: "application/json" } });
+  } catch (err) {
+    throw new Error("Could not reach the shop. Check your internet and try again.", { cause: err });
+  }
+  if (res.status === 404) throw new OrderNotFoundError();
+  if (!res.ok) throw new Error(`Order status request failed (${res.status}).`);
+  const json = (await res.json()) as { data?: CustomerOrderStatus };
+  if (!json.data) throw new Error("Order status response was malformed.");
+  return json.data;
+}
+
+const MY_ORDER_PREFIX = "kirana:customer-order:my:";
+
+export interface MyOrderPointer {
+  orderId: string;
+  placedAt: string;
+}
+
+/** Remember the customer's most recent order for this shop so they can reopen and track it. */
+export function rememberMyOrder(shopCode: string, orderId: string): void {
+  try {
+    localStorage.setItem(`${MY_ORDER_PREFIX}${shopCode}`, JSON.stringify({ orderId, placedAt: new Date().toISOString() }));
+  } catch {
+    /* storage unavailable — tracking just won't persist across reloads */
+  }
+}
+
+export function readMyOrder(shopCode: string): MyOrderPointer | null {
+  try {
+    const raw = localStorage.getItem(`${MY_ORDER_PREFIX}${shopCode}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as MyOrderPointer;
+    return parsed?.orderId ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function forgetMyOrder(shopCode: string): void {
+  try {
+    localStorage.removeItem(`${MY_ORDER_PREFIX}${shopCode}`);
+  } catch {
+    /* ignore */
+  }
+}
+
 export interface LoadCatalogResult {
   catalog: CustomerCatalog;
   source: "network" | "cache";

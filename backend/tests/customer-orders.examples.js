@@ -68,6 +68,20 @@ assert.ok(
   "CustomerOrder.itemCount must count lines, not decimal quantities",
 );
 
+// Customer order tracking: a public status lookup by the order's own (unguessable) id.
+assert.ok(
+  publicRoutes.includes('router.get("/shops/:shopId/orders/:orderId"'),
+  "public QR page must expose a customer order-status endpoint for tracking",
+);
+assert.ok(
+  publicService.includes("getPublicOrderStatus") && publicService.includes("ORDER_STAGE"),
+  "order-status lookup must map internal status to a customer-facing stage",
+);
+assert.ok(
+  read("../src/modules/public/public.controller.js").includes("orderStatus"),
+  "public controller must expose an orderStatus handler",
+);
+
 const app = read("../src/app.js");
 assert.ok(app.includes('app.use("/api/orders", orderRoutes)'), "owner orders API must be mounted");
 
