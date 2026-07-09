@@ -9,10 +9,20 @@ import { Loader2, Search, X } from "lucide-react";
 import { getListProductsQueryKey, useListProducts, type Product } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
-import { fromBaseQty, isDeletedProduct, productDisplayUnit } from "@/features/products/pages/product-pricing";
+import { fromBaseQty, isDeletedProduct, productDisplayUnit, toBaseQty } from "@/features/products/pages/product-pricing";
 import { useRecordPurchase, useRecordSale } from "@/features/inventory/queries";
 
 const OUT_REASONS = ["Counter stock out", "Expiry", "Damage", "Theft / Missing", "Other"];
+
+function stockBaseQty(product: Product): number {
+  if (product.stockBaseQty != null) {
+    const base = Number(product.stockBaseQty);
+    if (Number.isFinite(base)) return base;
+  }
+  const displayQty = Number(product.stockQuantity);
+  if (!Number.isFinite(displayQty)) return 0;
+  return toBaseQty(displayQty, productDisplayUnit(product));
+}
 
 export function StockMovementDialog({ mode, open, onOpenChange, initialProductId, width, onResizeStart }: { mode: "in" | "out"; open: boolean; onOpenChange: (o: boolean) => void; initialProductId?: string; width: number; onResizeStart: (e: ReactMouseEvent) => void }) {
   const { toast } = useToast();
@@ -32,7 +42,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
 
   const list = useMemo(() => (products.data ?? []).filter((p) => !isDeletedProduct(p)), [products.data]);
   const selectableProducts = useMemo(
-    () => mode === "out" ? list.filter((p) => Number(p.stockBaseQty ?? 0) > 0) : list,
+    () => mode === "out" ? list.filter((p) => stockBaseQty(p) > 0) : list,
     [list, mode],
   );
   const selected = list.find((p) => p.id === productId);
@@ -53,7 +63,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
 
   function currentStock(p: Product) {
     const unit = productDisplayUnit(p);
-    return `${fromBaseQty(p.stockBaseQty, unit)} ${unit}`;
+    return `${fromBaseQty(stockBaseQty(p), unit)} ${unit}`;
   }
 
   function submit() {
@@ -77,7 +87,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
         { onSuccess: () => onDone(`Added ${quantity} ${enteredUnit} to ${selected.name}`), onError: (e) => toast({ title: "Could not add stock", description: e instanceof Error ? e.message : "Try again.", variant: "destructive" }) },
       );
     } else {
-      const available = Number(fromBaseQty(selected.stockBaseQty, enteredUnit));
+      const available = Number(fromBaseQty(stockBaseQty(selected), enteredUnit));
       if (quantity > available) {
         toast({ title: "Stock out is more than available stock", description: `Available: ${currentStock(selected)}`, variant: "destructive" });
         return;

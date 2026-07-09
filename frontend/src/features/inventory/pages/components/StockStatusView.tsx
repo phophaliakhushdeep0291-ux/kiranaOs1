@@ -8,7 +8,7 @@ import { AlertTriangle, Boxes, ChevronLeft, ChevronRight, IndianRupee, Layers, M
 import { useDebounce } from "@/hooks/use-debounce";
 import { usePanelResize } from "@/hooks/use-panel-resize";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
-import { averageCost, fromBaseQty, isDeletedProduct, isLowStock, productDisplayUnit } from "@/features/products/pages/product-pricing";
+import { averageCost, fromBaseQty, isDeletedProduct, productDisplayUnit, toBaseQty } from "@/features/products/pages/product-pricing";
 import { productMatchesSearch } from "@/features/products/product-reliability";
 import { StockMovementDialog } from "./StockMovementDialog";
 
@@ -29,9 +29,25 @@ function categoryBadge(name: string) {
   return CATEGORY_BADGE[h % CATEGORY_BADGE.length];
 }
 
+function stockBaseQty(product: Product): number {
+  if (product.stockBaseQty != null) {
+    const base = Number(product.stockBaseQty);
+    if (Number.isFinite(base)) return base;
+  }
+  const displayQty = Number(product.stockQuantity);
+  if (!Number.isFinite(displayQty)) return 0;
+  return toBaseQty(displayQty, productDisplayUnit(product));
+}
+
+function lowStock(product: Product): boolean {
+  const threshold = Number(product.lowStockThreshold ?? product.lowStockAlert ?? 0);
+  const stock = stockBaseQty(product);
+  return threshold > 0 && stock > 0 && stock <= threshold;
+}
+
 export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   const [search, setSearch] = useState("");
-  const [statusF, setStatusF] = useState("all");
+  const [statusF, setStatusF] = useState(() => mode === "out" ? "out" : "all");
   const [extraF, setExtraF] = useState("all"); // suppliers (in) / item types (out)
   const [page, setPage] = useState(1);
   const [moveOpen, setMoveOpen] = useState(false);
@@ -53,11 +69,13 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
     const q = debouncedSearch.toLowerCase();
     return scoped
       .filter((p) => {
+        const stock = stockBaseQty(p);
+        const low = lowStock(p);
+        if (mode === "out" && statusF === "all") return stock <= 0;
         if (statusF === "all") return true;
-        const low = isLowStock(p) && Number(p.stockBaseQty ?? 0) > 0;
         if (statusF === "low") return low;
-        if (statusF === "in") return Number(p.stockBaseQty ?? 0) > 0 && !low;
-        if (statusF === "out") return Number(p.stockBaseQty ?? 0) <= 0;
+        if (statusF === "in") return stock > 0 && !low;
+        if (statusF === "out") return stock <= 0;
         return true;
       })
       .filter((p) => {
@@ -69,12 +87,12 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
   }, [scoped, statusF, extraF, mode, debouncedSearch]);
 
   const stats = useMemo(() => {
-    const inStock = all.filter((p) => Number(p.stockBaseQty ?? 0) > 0);
-    const outOfStock = all.filter((p) => Number(p.stockBaseQty ?? 0) <= 0);
-    const totalQty = inStock.reduce((s, p) => s + fromBaseQty(p.stockBaseQty, productDisplayUnit(p)), 0);
-    const totalValue = inStock.reduce((s, p) => s + fromBaseQty(p.stockBaseQty, productDisplayUnit(p)) * averageCost(p), 0);
+    const inStock = all.filter((p) => stockBaseQty(p) > 0);
+    const outOfStock = all.filter((p) => stockBaseQty(p) <= 0);
+    const totalQty = inStock.reduce((s, p) => s + fromBaseQty(stockBaseQty(p), productDisplayUnit(p)), 0);
+    const totalValue = inStock.reduce((s, p) => s + fromBaseQty(stockBaseQty(p), productDisplayUnit(p)) * averageCost(p), 0);
     const cats = new Set(outOfStock.map((p) => (p.category ?? "general").trim() || "general"));
-    const lowCount = all.filter((p) => isLowStock(p) && Number(p.stockBaseQty ?? 0) > 0).length;
+    const lowCount = all.filter((p) => lowStock(p)).length;
     return { inStockCount: inStock.length, outOfStockCount: outOfStock.length, totalQty: Math.round(totalQty), totalValue, cats: cats.size, lowCount };
   }, [all]);
 
@@ -210,10 +228,11 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
               ) : (
                 pagedRows.map((p) => {
                   const unit = productDisplayUnit(p);
-                  const qty = fromBaseQty(p.stockBaseQty, unit);
+                  const baseQty = stockBaseQty(p);
+                  const qty = fromBaseQty(baseQty, unit);
                   const value = qty * averageCost(p);
                   const cat = (p.category ?? "general").trim() || "general";
-                  const low = isLowStock(p) && qty > 0;
+                  const low = lowStock(p);
                   const brand = p.brand ?? p.aliases?.[0] ?? "";
                   return (
                     <tr key={p.id} className="border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe]">
