@@ -100,6 +100,7 @@ export interface SubmitOrderResult {
   itemCount: number;
   estimatedTotal: number;
   shopName: string;
+  duplicate?: boolean;
 }
 
 /**
@@ -110,14 +111,17 @@ export async function submitCustomerOrder(
   shopCode: string,
   details: CustomerOrderDetails,
   items: Array<{ productId: string; qty: number }>,
+  idempotencyKey?: string,
 ): Promise<SubmitOrderResult> {
   const url = `${getApiBaseUrl()}/public/shops/${encodeURIComponent(shopCode)}/orders`;
   let res: Response;
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
     res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ ...details, items }),
+      headers,
+      body: JSON.stringify({ ...details, items, idempotencyKey }),
     });
   } catch (err) {
     throw new Error("Could not reach the shop. Check your internet and try again.", { cause: err });

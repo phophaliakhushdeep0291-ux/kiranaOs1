@@ -44,6 +44,7 @@ export default function OrdersReceivedPage() {
   const shopName = shop?.name ?? "";
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("new");
+  const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
 
   const ordersQuery = useQuery({
     queryKey: ["customer-orders", status],
@@ -65,13 +66,17 @@ export default function OrdersReceivedPage() {
   // Primary action: open the order in Billing so the owner can adjust items, rates,
   // discounts, and payment mode before making the final bill. WhatsApp is separate.
   function acceptAndBill(order: CustomerOrder) {
-    void loadIntoBilling(order).catch((error: unknown) => {
-      toast({
-        title: "Could not open order",
-        description: error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    });
+    if (openingOrderId) return;
+    setOpeningOrderId(order.id);
+    void loadIntoBilling(order)
+      .catch((error: unknown) => {
+        toast({
+          title: "Could not open order",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => setOpeningOrderId(null));
   }
 
   /** Standalone "let the customer know it's ready" — no state change, just opens WhatsApp. */
@@ -83,6 +88,15 @@ export default function OrdersReceivedPage() {
   }
 
   async function loadIntoBilling(order: CustomerOrder) {
+    let catalogProducts = products;
+    if (catalogProducts.length === 0 && productsQuery.isFetching) {
+      const refreshed = await productsQuery.refetch();
+      catalogProducts = (refreshed.data ?? []).filter((p) => p.deletedAt == null);
+    }
+    if (catalogProducts.length === 0) {
+      throw new Error("Product catalog is still loading. Please try again in a moment.");
+    }
+
     const [currentHeldBills, activeDraft] = await Promise.all([
       offlineDB.getSetting<HeldBill[]>(HELD_BILLS_KEY).catch(() => null),
       offlineDB.getSetting<BillingDraft>(BILLING_DRAFT_KEY).catch(() => null),
@@ -114,7 +128,7 @@ export default function OrdersReceivedPage() {
     }
 
     const { bill, matched, skipped } = billFromImportedCart(
-      products,
+      catalogProducts,
       order.items.map((i) => ({ productId: i.productId, qty: i.qty })),
       { label: `${order.customerName} (order)`, sourceOrderId: order.id },
     );
@@ -215,10 +229,11 @@ export default function OrdersReceivedPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
+                    disabled={openingOrderId != null}
                     onClick={() => acceptAndBill(order)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-[12px] font-bold text-white shadow-sm"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
                   >
-                    <ShoppingCart size={14} /> Open in Billing
+                    <ShoppingCart size={14} /> {openingOrderId === order.id ? "Opening..." : "Open in Billing"}
                   </button>
                   <button
                     type="button"

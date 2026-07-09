@@ -16,6 +16,8 @@ for (const [name, schema] of [["sqlite", sqliteSchema], ["postgres", postgresSch
   assert.ok(schema.includes("itemsJson"), `${name} CustomerOrder stores ordered items snapshot`);
   assert.ok(schema.includes("estimatedTotal"), `${name} CustomerOrder stores server-priced total`);
   assert.ok(schema.includes("status"), `${name} CustomerOrder stores owner workflow status`);
+  assert.ok(schema.includes("idempotencyKey"), `${name} CustomerOrder stores public submit idempotency`);
+  assert.ok(schema.includes("@@unique([shopId, idempotencyKey])"), `${name} CustomerOrder idempotency must be shop scoped`);
   assert.ok(schema.includes("customerOrders"), `${name} Shop relation must include customerOrders`);
 }
 
@@ -25,6 +27,13 @@ for (const [name, migration] of [["sqlite", sqliteMigration], ["postgres", postg
   assert.ok(/CREATE TABLE.*CustomerOrder/s.test(migration), `${name} migration must create CustomerOrder`);
   assert.ok(migration.includes("customerMobile"), `${name} migration must persist customer mobile`);
   assert.ok(migration.includes("itemsJson"), `${name} migration must persist item snapshot`);
+}
+
+const sqliteIdempotencyMigration = read("../prisma/migrations/20260709010000_customer_order_idempotency/migration.sql");
+const postgresIdempotencyMigration = read("../prisma-postgres/migrations/000029_customer_order_idempotency/migration.sql");
+for (const [name, migration] of [["sqlite", sqliteIdempotencyMigration], ["postgres", postgresIdempotencyMigration]]) {
+  assert.ok(migration.includes('ADD COLUMN "idempotencyKey"'), `${name} migration must add idempotencyKey without rebuilding order data`);
+  assert.ok(migration.includes('"CustomerOrder_shopId_idempotencyKey_key"'), `${name} migration must enforce shop-scoped idempotency`);
 }
 
 const publicRoutes = read("../src/modules/public/public.routes.js");
@@ -45,6 +54,14 @@ assert.ok(
 assert.ok(
   publicService.includes("db.customerOrder.create"),
   "order submission must write a CustomerOrder row",
+);
+assert.ok(
+  publicRoutes.includes('router.post("/shops/:shopId/orders"') && read("../src/modules/public/public.controller.js").includes("Idempotency-Key"),
+  "public order submission must accept an Idempotency-Key header",
+);
+assert.ok(
+  publicService.includes("cleanOrderIdempotencyKey") && publicService.includes("P2002") && publicService.includes("duplicate"),
+  "order submission must be retry-safe and return the existing order on duplicate idempotency",
 );
 assert.ok(
   publicService.includes("const itemCount = lines.length"),

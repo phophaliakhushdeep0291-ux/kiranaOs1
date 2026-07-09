@@ -11,7 +11,9 @@ export async function catalog(req, res, next) {
 
 export async function submitOrder(req, res, next) {
   try {
-    const data = await svc.createPublicOrder(req.params.shopId, req.body);
+    const data = await svc.createPublicOrder(req.params.shopId, req.body, {
+      idempotencyKey: req.get("Idempotency-Key") || req.get("X-Idempotency-Key"),
+    });
     res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);

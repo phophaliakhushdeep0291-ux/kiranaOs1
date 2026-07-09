@@ -15,6 +15,14 @@ import {
 
 const formatRs = (n: number) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
+function newOrderIdempotencyKey(shopCode: string): string {
+  const random =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `customer-order:${shopCode}:${random}`;
+}
+
 type LoadState =
   | { kind: "loading" }
   | { kind: "ready"; catalog: CustomerCatalog; source: "network" | "cache" }
@@ -32,6 +40,7 @@ export default function CustomerOrderPage() {
   const [placing, setPlacing] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [placed, setPlaced] = useState<SubmitOrderResult | null>(null);
+  const [submitAttempt, setSubmitAttempt] = useState<{ key: string; fingerprint: string } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -114,11 +123,25 @@ export default function CustomerOrderPage() {
 
   const mobileOk = /^[6-9]\d{9}$/.test(form.mobile.replace(/[\s-]/g, ""));
   const canPlace = form.name.trim().length >= 2 && mobileOk && items.length > 0;
+  const submitFingerprint = useMemo(
+    () =>
+      JSON.stringify({
+        name: form.name.trim(),
+        mobile: form.mobile.replace(/[\s-]/g, ""),
+        address: form.address.trim(),
+        note: form.note.trim(),
+        items,
+      }),
+    [form.address, form.mobile, form.name, form.note, items],
+  );
 
   async function placeOrder() {
     if (!canPlace || placing) return;
     setPlacing(true);
     setSubmitError(null);
+    const idempotencyKey =
+      submitAttempt?.fingerprint === submitFingerprint ? submitAttempt.key : newOrderIdempotencyKey(shopCode);
+    if (submitAttempt?.key !== idempotencyKey) setSubmitAttempt({ key: idempotencyKey, fingerprint: submitFingerprint });
     try {
       const result = await submitCustomerOrder(
         shopCode,
@@ -129,10 +152,12 @@ export default function CustomerOrderPage() {
           note: form.note.trim() || undefined,
         },
         items,
+        idempotencyKey,
       );
       setPlaced(result);
       setSheet("none");
       setQty({});
+      setSubmitAttempt(null);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Could not place the order.");
     } finally {

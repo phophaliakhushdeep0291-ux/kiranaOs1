@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   loadCustomerCatalog,
+  submitCustomerOrder,
   CatalogUnavailableError,
   type CustomerCatalog,
   type CatalogStorage,
@@ -60,5 +61,40 @@ describe("loadCustomerCatalog", () => {
 
     await expect(loadCustomerCatalog("shop1", { fetcher, storage })).rejects.toBeInstanceOf(CatalogUnavailableError);
     expect(storage.read("shop1")).toBeNull(); // stale storefront must not linger
+  });
+});
+
+describe("submitCustomerOrder", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sends an idempotency key in the header and body so customer retries do not duplicate orders", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: { orderId: "order_1", itemCount: 1, estimatedTotal: 42, shopName: "Test Kirana" },
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await submitCustomerOrder(
+      "shop1",
+      { customerName: "Ramesh", customerMobile: "9876543210", customerAddress: "Market road" },
+      [{ productId: "p1", qty: 2 }],
+      "customer-order:shop1:test-key",
+    );
+
+    expect(result.orderId).toBe("order_1");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((options.headers as Record<string, string>)["Idempotency-Key"]).toBe("customer-order:shop1:test-key");
+    expect(JSON.parse(String(options.body))).toMatchObject({
+      customerName: "Ramesh",
+      idempotencyKey: "customer-order:shop1:test-key",
+      items: [{ productId: "p1", qty: 2 }],
+    });
   });
 });

@@ -57,15 +57,40 @@ export async function getPublicCatalog(shopId) {
 const MAX_ORDER_LINES = 100;
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
+function cleanOrderIdempotencyKey(value) {
+  const key = String(value ?? "").trim();
+  if (!key) return null;
+  return key.replace(/[^a-zA-Z0-9:_-]/g, "").slice(0, 120) || null;
+}
+
+function shapeOrderSubmitResponse(order, shopName, duplicate = false) {
+  return {
+    orderId: order.id,
+    itemCount: order.itemCount,
+    estimatedTotal: order.estimatedTotal,
+    shopName,
+    duplicate,
+  };
+}
+
 /**
  * A customer submits an order from the public QR page. We re-price every line from the shop's own
  * catalog (never trust client-sent prices) and store it in the owner's "Orders Received" inbox.
  * Only open when the owner has enabled customer ordering — same 404 gate as the catalog.
  */
-export async function createPublicOrder(shopId, body = {}) {
+export async function createPublicOrder(shopId, body = {}, options = {}) {
   const shop = await db.shop.findUnique({ where: { id: shopId } });
   if (!shop || !isCustomerOrderingEnabled(shop.settingsJson)) {
     throw new AppError("This shop is not accepting online orders.", 404);
+  }
+
+  const idempotencyKey = cleanOrderIdempotencyKey(options.idempotencyKey ?? body.idempotencyKey);
+  if (idempotencyKey) {
+    const existing = await db.customerOrder.findFirst({
+      where: { shopId, idempotencyKey },
+      select: { id: true, itemCount: true, estimatedTotal: true, createdAt: true },
+    });
+    if (existing) return shapeOrderSubmitResponse(existing, shop.name, true);
   }
 
   const customerName = String(body.customerName ?? "").trim();
@@ -98,20 +123,32 @@ export async function createPublicOrder(shopId, body = {}) {
   const itemCount = lines.length;
   const estimatedTotal = round2(lines.reduce((sum, l) => sum + l.qty * l.price, 0));
 
-  const order = await db.customerOrder.create({
-    data: {
-      shopId,
-      customerName: customerName.slice(0, 120),
-      customerMobile: customerMobile.replace(/[\s-]/g, "").slice(0, 15),
-      customerAddress: customerAddress ? customerAddress.slice(0, 400) : null,
-      note: note ? note.slice(0, 400) : null,
-      itemsJson: JSON.stringify(lines),
-      itemCount,
-      estimatedTotal,
-      status: "new",
-    },
-    select: { id: true, itemCount: true, estimatedTotal: true, createdAt: true },
-  });
+  try {
+    const order = await db.customerOrder.create({
+      data: {
+        shopId,
+        customerName: customerName.slice(0, 120),
+        customerMobile: customerMobile.replace(/[\s-]/g, "").slice(0, 15),
+        customerAddress: customerAddress ? customerAddress.slice(0, 400) : null,
+        note: note ? note.slice(0, 400) : null,
+        itemsJson: JSON.stringify(lines),
+        itemCount,
+        estimatedTotal,
+        status: "new",
+        idempotencyKey,
+      },
+      select: { id: true, itemCount: true, estimatedTotal: true, createdAt: true },
+    });
 
-  return { orderId: order.id, itemCount: order.itemCount, estimatedTotal: order.estimatedTotal, shopName: shop.name };
+    return shapeOrderSubmitResponse(order, shop.name);
+  } catch (error) {
+    if (idempotencyKey && error?.code === "P2002") {
+      const existing = await db.customerOrder.findFirst({
+        where: { shopId, idempotencyKey },
+        select: { id: true, itemCount: true, estimatedTotal: true, createdAt: true },
+      });
+      if (existing) return shapeOrderSubmitResponse(existing, shop.name, true);
+    }
+    throw error;
+  }
 }
