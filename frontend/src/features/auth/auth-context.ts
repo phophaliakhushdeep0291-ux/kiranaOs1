@@ -7,6 +7,7 @@ export interface AuthContextType {
   accessToken: string | null;
   isLoading: boolean;
   login: (token: string | undefined | null, refresh: string | undefined | null, user: User, shop?: Shop | null) => void;
+  updateShop: (shop: Shop | null) => void;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
 }

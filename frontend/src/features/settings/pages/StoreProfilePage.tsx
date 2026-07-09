@@ -17,6 +17,7 @@ import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { OwnerOrderingCard } from "@/features/customer-order/OwnerOrderingCard";
+import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 type DayHours = { open: boolean; from: string; to: string };
@@ -32,7 +33,7 @@ const DOCS = [
 
 export default function StoreProfilePage() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, updateShop: updateAuthShop } = useAuth();
   const { snapshot } = useSubscriptionSnapshot();
   const queryClient = useQueryClient();
   const { prefs, patch, shop, hydrated } = useSettingsPrefs();
@@ -44,11 +45,18 @@ export default function StoreProfilePage() {
 
   const [biz, setBiz] = useState({ name: "", ownerName: "", phone: "", altPhone: "", email: "", gstNumber: "", pan: "", businessType: "Kirana / General Store", currency: "₹ Indian Rupee" });
   const [addr, setAddr] = useState({ address: "", city: "", state: "", pincode: "", country: "India", deliveryRadius: "" });
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
   const seeded = useRef(false);
 
   const updateShop = useUpdateShop({
     mutation: {
-      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getGetShopQueryKey() }); toast({ title: "Store details saved" }); },
+      onSuccess: (updatedShop) => {
+        queryClient.setQueryData(getGetShopQueryKey(), updatedShop);
+        void queryClient.invalidateQueries({ queryKey: getGetShopQueryKey() });
+        updateAuthShop(updatedShop);
+        toast({ title: "Store details saved" });
+      },
       onError: (err: unknown) => toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
     },
   });
@@ -67,9 +75,32 @@ export default function StoreProfilePage() {
     });
   }, [hydrated, shop, sp, user?.email]);
 
-  function saveStoreDetails() {
-    updateShop.mutate({ data: { name: biz.name, ownerName: biz.ownerName, phone: biz.phone, gstNumber: biz.gstNumber, address: addr.address, city: addr.city } });
-    patch({ storeProfile: { ...sp, altPhone: biz.altPhone, email: biz.email, pan: biz.pan, businessType: biz.businessType, currency: biz.currency, state: addr.state, pincode: addr.pincode, country: addr.country, deliveryRadius: addr.deliveryRadius } });
+  function requestSaveStoreDetails() {
+    setPinError(null);
+    setPinOpen(true);
+  }
+
+  async function saveStoreDetails(ownerPin: string) {
+    setPinError(null);
+    try {
+      const updatedShop = await updateShop.mutateAsync({
+        data: {
+          name: biz.name,
+          ownerName: biz.ownerName,
+          phone: biz.phone,
+          gstNumber: biz.gstNumber,
+          address: addr.address,
+          city: addr.city,
+          ownerPin,
+        },
+      });
+      await patch({ storeProfile: { ...sp, altPhone: biz.altPhone, email: biz.email, pan: biz.pan, businessType: biz.businessType, currency: biz.currency, state: addr.state, pincode: addr.pincode, country: addr.country, deliveryRadius: addr.deliveryRadius } }, { immediate: true });
+      updateAuthShop(updatedShop);
+      setPinOpen(false);
+    } catch (err) {
+      const message = (err as { data?: { message?: string }; message?: string })?.data?.message ?? (err as { message?: string })?.message ?? "Could not save store profile. Try again.";
+      setPinError(message);
+    }
   }
 
   const setDay = (day: string, next: DayHours) => patch({ hours: { ...hours, [day]: next } });
@@ -113,7 +144,7 @@ export default function StoreProfilePage() {
           </div>
           <div className="flex shrink-0 gap-2">
             <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => toast({ title: "Logo upload coming soon", description: "Add your shop logo from a future update." })}><Upload size={15} /> Upload Logo</Button>
-            <Button onClick={saveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-10 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+            <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-10 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {updateShop.isPending ? <Loader2 size={15} className="animate-spin" /> : <Store size={15} />} Save Profile
             </Button>
           </div>
@@ -255,10 +286,25 @@ export default function StoreProfilePage() {
       />
 
       <div className="flex justify-end pb-2">
-        <Button onClick={saveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-11 gap-2 rounded-[10px] px-6 font-black text-white hover:opacity-95">
+        <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-11 gap-2 rounded-[10px] px-6 font-black text-white hover:opacity-95">
           {updateShop.isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><CheckCircle2 size={16} /> Save All Changes</>}
         </Button>
       </div>
+      <OwnerPinModal
+        open={pinOpen}
+        title="Approve store profile update"
+        description="Store name, owner, GST, address and phone are protected fields. Enter the owner PIN to save this change."
+        confirmLabel="Save profile"
+        loading={updateShop.isPending}
+        error={pinError}
+        onCancel={() => {
+          if (!updateShop.isPending) {
+            setPinOpen(false);
+            setPinError(null);
+          }
+        }}
+        onConfirm={({ ownerPin }) => saveStoreDetails(ownerPin)}
+      />
     </SettingsShell>
   );
 }

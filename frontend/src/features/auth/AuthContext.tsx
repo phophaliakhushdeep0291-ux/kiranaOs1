@@ -191,6 +191,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }).catch(() => undefined);
   };
 
+  const updateShop = (shopData: Shop | null) => {
+    saveAuthSession({ shop: shopData });
+    setShop(shopData);
+  };
+
   const logout = async () => {
     try {
       await logoutSession();
@@ -215,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accessToken,
         isLoading,
         login,
+        updateShop,
         logout,
         isAuthenticated: !!accessToken,
       }}
