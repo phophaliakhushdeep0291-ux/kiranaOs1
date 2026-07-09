@@ -364,9 +364,10 @@ function validateBillCreationBusinessRules(data: BillInput) {
   const { total, discount, payableBase } = calculateBillAmounts(data);
   const cashPaid = data.payments.filter((payment) => payment.mode === BillPaymentMode.cash).reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
   const upiPaid = data.payments.filter((payment) => payment.mode === BillPaymentMode.upi).reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
-  const cashUpiPaid = roundMoney(cashPaid + upiPaid);
-  const buyerPaidAmount = roundMoney(readNumber(data.buyerPaidAmount, cashUpiPaid));
-  const hasSplitCashUpi = cashPaid > 0 && upiPaid > 0;
+  const bankPaid = data.payments.filter((payment) => payment.mode === BillPaymentMode.bank).reduce((sum, payment) => sum + readNumber(payment.amount, 0), 0);
+  const tenderPaid = roundMoney(cashPaid + upiPaid + bankPaid);
+  const buyerPaidAmount = roundMoney(readNumber(data.buyerPaidAmount, tenderPaid));
+  const hasSplitTender = [cashPaid, upiPaid, bankPaid].filter((amount) => amount > 0).length > 1;
   const creditAmount = getCreditAmount(data.payments);
 
   if (discount > payableBase) {
@@ -377,11 +378,11 @@ function validateBillCreationBusinessRules(data: BillInput) {
     throw new Error("Customer is required for udhar or credit bills");
   }
 
-  if (hasSplitCashUpi && cashUpiPaid > total) {
-    throw new Error("Split cash and UPI payments cannot exceed bill total");
+  if (hasSplitTender && tenderPaid > total) {
+    throw new Error("Split cash and UPI payments cannot exceed bill total; bank payments are included in this limit");
   }
 
-  if (Math.max(buyerPaidAmount, cashUpiPaid) > total && !data.allowAdvancePayment) {
+  if (Math.max(buyerPaidAmount, tenderPaid) > total && !data.allowAdvancePayment) {
     throw new Error("Total paid amount cannot exceed bill total unless advance payment is enabled");
   }
 }

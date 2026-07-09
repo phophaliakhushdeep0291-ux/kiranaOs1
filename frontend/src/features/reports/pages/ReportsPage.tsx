@@ -33,6 +33,7 @@ import {
   Filter,
   IndianRupee,
   Info,
+  Landmark,
   PackagePlus,
   ReceiptIndianRupee,
   RefreshCw,
@@ -230,7 +231,7 @@ export default function ReportsPage() {
   }, [range.from, range.to]);
 
   useEffect(() => {
-    void loadReports({ showLoader: true });
+    void loadReports({ showLoader: !snapshotRef.current });
   }, [loadReports]);
 
   useEffect(() => {
@@ -267,6 +268,7 @@ export default function ReportsPage() {
     return [
       { name: "Cash", value: payment.cashIn, color: "#20b75a" },
       { name: "UPI", value: payment.upiIn, color: "#1264f6" },
+      { name: "Bank", value: payment.bankIn, color: "#0ea5e9" },
       { name: "Udhar", value: payment.udhar, color: "#f5a30a" },
     ].filter((item) => item.value > 0);
   }, [snapshot]);
@@ -370,6 +372,15 @@ export default function ReportsPage() {
       spark: trend.map((point) => point.upi),
     },
     {
+      label: "Bank Collection",
+      value: snapshot?.paymentBreakdown.bankIn ?? 0,
+      previous: previous?.bankSales ?? 0,
+      icon: <Landmark size={16} />,
+      color: "#0ea5e9",
+      iconClass: "bg-[#e6f7ff] text-[#0ea5e9]",
+      spark: trend.map((point) => point.bank),
+    },
+    {
       label: "Profit (Est.)",
       value: selected?.profitEstimate ?? 0,
       previous: previous?.profitEstimate ?? 0,
@@ -444,7 +455,7 @@ export default function ReportsPage() {
             </PopoverContent>
           </Popover>
           <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-9 rounded-[7px] bg-[#075fff] px-4 text-[12px] font-bold shadow-[0_7px_16px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Download size={14} className="mr-2" />Export</Button>
-          <Button variant="ghost" size="icon" title="Refresh reports" onClick={() => void loadReports({ showLoader: true })} disabled={loading} className="h-9 w-9 rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
+          <Button variant="ghost" size="icon" title="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-9 w-9 rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
         </div>
       </section>
 

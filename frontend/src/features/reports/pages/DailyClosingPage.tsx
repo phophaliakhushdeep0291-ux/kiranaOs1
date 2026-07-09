@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, CreditCard, MessageCircle, Printer, RefreshCw, ShieldAlert, TrendingUp, Wallet, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,14 +24,17 @@ function printClosing(report: DailyClosingReport) {
       <div class="grid">
         <div class="box"><div class="label">Total sales</div><div class="value">${fmt(report.totalSales)}</div></div>
         <div class="box"><div class="label">Cash in (sales + old udhar)</div><div class="value">${fmt(report.cashReceived)}</div></div>
-        <div class="box"><div class="label">UPI/bank in (sales + old udhar)</div><div class="value">${fmt(report.upiReceived)}</div></div>
+        <div class="box"><div class="label">UPI in (sales + old udhar)</div><div class="value">${fmt(report.upiReceived)}</div></div>
+        <div class="box"><div class="label">Bank in (sales + old udhar)</div><div class="value">${fmt(report.bankReceived)}</div></div>
         <div class="box"><div class="label">Udhar given</div><div class="value">${fmt(report.udharGiven)}</div></div>
         <div class="box"><div class="label">Old udhar payment</div><div class="value">${fmt(report.oldUdharPaymentReceived)}</div></div>
         <div class="box"><div class="label">Supplier cash paid</div><div class="value">${fmt(report.purchaseCashPaid)}</div></div>
-        <div class="box"><div class="label">Supplier UPI/bank paid</div><div class="value">${fmt(report.purchaseUpiPaid)}</div></div>
+        <div class="box"><div class="label">Supplier UPI paid</div><div class="value">${fmt(report.purchaseUpiPaid)}</div></div>
+        <div class="box"><div class="label">Supplier bank paid</div><div class="value">${fmt(report.purchaseBankPaid)}</div></div>
         <div class="box"><div class="label">Supplier due</div><div class="value">${fmt(report.purchaseDue)}</div></div>
         <div class="box"><div class="label">Expected cash in drawer</div><div class="value">${fmt(report.expectedCashInDrawer)}</div></div>
-        <div class="box"><div class="label">Expected UPI/bank net</div><div class="value">${fmt(report.expectedUpiInBank)}</div></div>
+        <div class="box"><div class="label">Expected UPI net</div><div class="value">${fmt(report.expectedUpiInBank)}</div></div>
+        <div class="box"><div class="label">Expected bank net</div><div class="value">${fmt(report.expectedBankInBank)}</div></div>
       </div>
       <h2>Top sold products</h2><table><tr><th>Product</th><th class="right">Qty</th><th class="right">Sales</th></tr>${report.topSoldProducts.map((p) => `<tr><td>${p.name}</td><td class="right">${p.quantitySold}</td><td class="right">${fmt(p.revenue)}</td></tr>`).join("") || "<tr><td colspan='3'>No product sales</td></tr>"}</table>
       <h2>Low-stock items</h2><table><tr><th>Product</th><th class="right">Stock</th><th class="right">Alert</th></tr>${report.lowStockItems.map((p) => `<tr><td>${p.name}</td><td class="right">${p.stock} ${p.unit ?? ""}</td><td class="right">${p.threshold}</td></tr>`).join("") || "<tr><td colspan='3'>No low-stock items</td></tr>"}</table>
@@ -58,25 +61,42 @@ export default function DailyClosingPage() {
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [report, setReport] = useState<DailyClosingReport | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const load = async () => {
-    setLoading(true);
-    try { setReport(await buildDailyClosingReport(date)); }
-    finally { setLoading(false); }
-  };
+  const reportRef = useRef<DailyClosingReport | null>(null);
+  const refreshTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    void load();
-    const refresh = () => void load();
+    reportRef.current = report;
+  }, [report]);
+
+  const load = useCallback(async (options?: { showLoader?: boolean }) => {
+    const showLoader = options?.showLoader ?? !reportRef.current;
+    if (showLoader) setLoading(true);
+    try { setReport(await buildDailyClosingReport(date)); }
+    finally { if (showLoader) setLoading(false); }
+  }, [date]);
+
+  useEffect(() => {
+    void load({ showLoader: !reportRef.current });
+    const refresh = () => {
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      refreshTimer.current = window.setTimeout(() => {
+        refreshTimer.current = null;
+        void load({ showLoader: false });
+      }, 220);
+    };
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
     return () => {
+      if (refreshTimer.current) {
+        window.clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+      }
       window.removeEventListener("kirana:local-data-changed", refresh);
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
-  }, [date]);
+  }, [load]);
 
-  const totalIncomingTender = (report?.cashReceived ?? 0) + (report?.upiReceived ?? 0);
+  const totalIncomingTender = (report?.cashReceived ?? 0) + (report?.upiReceived ?? 0) + (report?.bankReceived ?? 0);
   const cashPct = totalIncomingTender > 0 ? Math.round(((report?.cashReceived ?? 0) / totalIncomingTender) * 100) : 0;
   const upiPct = totalIncomingTender > 0 ? Math.round(((report?.upiReceived ?? 0) / totalIncomingTender) * 100) : 0;
 
@@ -106,7 +126,7 @@ export default function DailyClosingPage() {
           <Link href="/reports"><Button variant="outline" className="rounded-xl"><CalendarDays size={15} className="mr-1.5" />Reports</Button></Link>
           <Button variant="outline" className="rounded-xl" onClick={() => report && printClosing(report)} disabled={!report}><Printer size={15} className="mr-1.5" />Print</Button>
           <Button variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => report && shareDailyClosingOnWhatsapp({ report, shopName: shop?.name, include: summaryInclude })} disabled={!report}><MessageCircle size={15} className="mr-1.5" />Share</Button>
-          <Button onClick={load} disabled={loading} className="rounded-xl"><RefreshCw size={15} className="mr-1.5" />Refresh</Button>
+          <Button onClick={() => void load({ showLoader: !reportRef.current })} disabled={loading && !report} className="rounded-xl"><RefreshCw size={15} className="mr-1.5" />Refresh</Button>
         </div>
       </div>
 
@@ -143,7 +163,10 @@ export default function DailyClosingPage() {
                     <ArrowUpRight size={13} />Cash in {fmt(report?.cashReceived)}
                   </span>
                   <span className="flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300">
-                    <CreditCard size={13} />UPI/bank in {fmt(report?.upiReceived)}
+                    <CreditCard size={13} />UPI in {fmt(report?.upiReceived)}
+                  </span>
+                  <span className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200/60 dark:bg-indigo-950/40 dark:text-indigo-300">
+                    <CreditCard size={13} />Bank in {fmt(report?.bankReceived)}
                   </span>
                   {(report?.purchaseCashPaid ?? 0) > 0 && (
                     <span className="flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 ring-1 ring-orange-200/60 dark:bg-orange-950/40 dark:text-orange-300">
@@ -156,7 +179,7 @@ export default function DailyClosingPage() {
           </div>
           <div className="hidden lg:block bg-border" />
           <div className="border-t p-5 sm:p-6 lg:border-t-0">
-            <p className="app-muted-label">Cash vs UPI split</p>
+            <p className="app-muted-label">Cash, UPI, and bank split</p>
             {loading ? (
               <Skeleton className="mt-3 h-24 w-full" />
             ) : (
@@ -173,13 +196,22 @@ export default function DailyClosingPage() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-semibold text-sky-700 dark:text-sky-400">UPI/bank in</span>
+                    <span className="font-semibold text-sky-700 dark:text-sky-400">UPI in</span>
                     <span className="font-black tabular-nums">{fmt(report?.upiReceived)}</span>
                   </div>
                   <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full bg-sky-500 transition-all duration-500" style={{ width: `${upiPct}%` }} />
                   </div>
                   <p className="mt-0.5 text-right text-[11px] text-muted-foreground">{upiPct}%</p>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-semibold text-indigo-700 dark:text-indigo-400">Bank in</span>
+                    <span className="font-black tabular-nums">{fmt(report?.bankReceived)}</span>
+                  </div>
+                  <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-indigo-500 transition-all duration-500" style={{ width: `${totalIncomingTender > 0 ? Math.round(((report?.bankReceived ?? 0) / totalIncomingTender) * 100) : 0}%` }} />
+                  </div>
                 </div>
                 {(report?.oldUdharPaymentReceived ?? 0) > 0 && (
                   <div className="rounded-xl border bg-amber-50/50 p-3 text-sm dark:bg-amber-950/20">
@@ -221,12 +253,13 @@ export default function DailyClosingPage() {
                 hint="All bills for the day"
               />
               <FlowRow label="Cash sales" value={fmt(report?.cashSales)} direction="in" />
-              <FlowRow label="UPI / digital sales" value={fmt(report?.upiSales)} direction="in" />
+              <FlowRow label="UPI sales" value={fmt(report?.upiSales)} direction="in" />
+              <FlowRow label="Bank sales" value={fmt(report?.bankSales)} direction="in" />
               <FlowRow
                 label="Old udhar recovered"
                 value={fmt(report?.oldUdharPaymentReceived)}
                 direction="in"
-                hint={`Cash ${fmt(report?.oldUdharCashReceived)} / UPI ${fmt(report?.oldUdharUpiReceived)}`}
+                hint={`Cash ${fmt(report?.oldUdharCashReceived)} / UPI ${fmt(report?.oldUdharUpiReceived)} / Bank ${fmt(report?.oldUdharBankReceived)}`}
               />
             </div>
           )}
@@ -256,7 +289,8 @@ export default function DailyClosingPage() {
                 hint="Credit extended to customers"
               />
               <FlowRow label="Supplier cash paid" value={fmt(report?.purchaseCashPaid)} direction="out" />
-              <FlowRow label="Supplier UPI/bank paid" value={fmt(report?.purchaseUpiPaid)} direction="out" />
+              <FlowRow label="Supplier UPI paid" value={fmt(report?.purchaseUpiPaid)} direction="out" />
+              <FlowRow label="Supplier bank paid" value={fmt(report?.purchaseBankPaid)} direction="out" />
               <FlowRow
                 label="Supplier due (unpaid)"
                 value={fmt(report?.purchaseDue)}

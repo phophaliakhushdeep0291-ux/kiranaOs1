@@ -161,7 +161,7 @@ function durableEchoIdentity(row: MutableRow): string | undefined {
 
 function paymentEchoSignature(row: MutableRow): string | undefined {
   const mode = normalizedIdText(readStringFrom(row, ["mode", "paymentMode", "payment_mode"]));
-  if (mode !== "cash" && mode !== "upi" && mode !== "card") return undefined;
+  if (mode !== "cash" && mode !== "upi" && mode !== "bank" && mode !== "card") return undefined;
   const rawAmount = readNumberFrom(row, ["amount", "paidAmount", "paid_amount"]);
   const amount = amountKey(rawAmount);
   if (!amount) return undefined;
@@ -187,7 +187,7 @@ function paymentEchoSignature(row: MutableRow): string | undefined {
 
 export function paymentDuplicateSignature(row: MutableRow): string | undefined {
   const mode = normalizedIdText(readStringFrom(row, ["mode", "paymentMode", "payment_mode"]));
-  if (mode !== "cash" && mode !== "upi" && mode !== "card") return undefined;
+  if (mode !== "cash" && mode !== "upi" && mode !== "bank" && mode !== "card") return undefined;
   const amount = amountKey(readNumberFrom(row, ["amount", "paidAmount", "paid_amount"]));
   if (!amount) return undefined;
   const billId = readStringFrom(row, [

@@ -32,6 +32,7 @@ export interface LocalDashboardSnapshot {
   billCount: number;
   cash: number;
   upi: number;
+  bank: number;
   credit: number;
   paymentTotal: number;
   totalOutstanding: number;
@@ -67,7 +68,7 @@ function normaliseCustomerForCache(customer: Customer): Customer {
   return { ...customer, udharAmount: udhar, totalUdhar: udhar };
 }
 
-function billTenderFromCacheBill(bill: Bill): { cash: number; upi: number } {
+function billTenderFromCacheBill(bill: Bill): { cash: number; upi: number; bank: number } {
   const record = bill as Bill & Record<string, unknown> & { payments?: Array<Record<string, unknown>> };
   const billId = String(record.id ?? record.billId ?? record.bill_id ?? "");
   const customerId = String(record.customerId ?? record.customer_id ?? "");
@@ -82,20 +83,22 @@ function billTenderFromCacheBill(bill: Bill): { cash: number; upi: number } {
       paidAt: String(payment.paidAt ?? payment.paid_at ?? payment.createdAt ?? payment.created_at ?? record.createdAt ?? record.created_at ?? ""),
     }));
     const payments = dedupePaymentsForDisplay(normalizedPayments);
-    return payments.reduce<{ cash: number; upi: number }>(
+    return payments.reduce<{ cash: number; upi: number; bank: number }>(
       (sum, payment) => {
         const amount = Number(payment.amount ?? 0);
         const mode = String(payment.mode ?? "").toLowerCase();
         if (mode === BillPaymentMode.cash) sum.cash += amount;
         if (mode === BillPaymentMode.upi) sum.upi += amount;
+        if (mode === BillPaymentMode.bank) sum.bank += amount;
         return sum;
       },
-      { cash: 0, upi: 0 },
+      { cash: 0, upi: 0, bank: 0 },
     );
   }
   return {
     cash: Number(record.cashAmount ?? record.cash_amount ?? 0),
     upi: Number(record.upiAmount ?? record.upi_amount ?? 0),
+    bank: Number(record.bankAmount ?? record.bank_amount ?? 0),
   };
 }
 
@@ -108,6 +111,7 @@ export function getLocalDashboardSnapshot(date = new Date()): LocalDashboardSnap
 
   let cash = 0;
   let upi = 0;
+  let bank = 0;
   let credit = 0;
   let revenue = 0;
   let grossProfit = 0;
@@ -124,13 +128,14 @@ export function getLocalDashboardSnapshot(date = new Date()): LocalDashboardSnap
     const tender = billTenderFromCacheBill(bill);
     cash += tender.cash;
     upi += tender.upi;
+    bank += tender.bank;
 
     // Credit/udhar is debt, not a real tender payment. Count it from the
     // normalized bill amount even for partial bills with cash/UPI rows.
     const explicitCreditAmount = Number(bill.creditAmount ?? (bill as unknown as Record<string, unknown>).dueAmount ?? 0);
     credit += explicitCreditAmount > 0 ? explicitCreditAmount : legacyCreditFromPaymentRows;
 
-    if (payments.length === 0 && tender.cash === 0 && tender.upi === 0) {
+    if (payments.length === 0 && tender.cash === 0 && tender.upi === 0 && tender.bank === 0) {
       const paid = Number(bill.paidAmount ?? bill.buyerPaidAmount ?? 0);
       if (paid > 0) cash += paid;
     }
@@ -178,6 +183,7 @@ export function getLocalDashboardSnapshot(date = new Date()): LocalDashboardSnap
   grossProfit = roundMoney(grossProfit);
   cash = roundMoney(cash);
   upi = roundMoney(upi);
+  bank = roundMoney(bank);
   credit = roundMoney(credit);
 
   return {
@@ -190,8 +196,9 @@ export function getLocalDashboardSnapshot(date = new Date()): LocalDashboardSnap
     billCount: todayBills.length,
     cash,
     upi,
+    bank,
     credit,
-    paymentTotal: roundMoney(cash + upi + credit),
+    paymentTotal: roundMoney(cash + upi + bank + credit),
     totalOutstanding,
     outstandingCustomers,
   };

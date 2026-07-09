@@ -19,19 +19,24 @@ export interface DateRange {
 export interface ReportPaymentBreakdown {
   cash: number;
   upi: number;
+  bank: number;
   udhar: number;
   received: number;
   oldUdharReceived: number;
   oldUdharCashReceived: number;
   oldUdharUpiReceived: number;
+  oldUdharBankReceived: number;
   purchaseCashPaid: number;
   purchaseUpiPaid: number;
+  purchaseBankPaid: number;
   purchasePaid: number;
   purchaseDue: number;
   netCashInHand: number;
   netUpiInBank: number;
+  netBankInBank: number;
   cashIn: number;
   upiIn: number;
+  bankIn: number;
 }
 
 export interface ReportMetricWindow {
@@ -39,6 +44,7 @@ export interface ReportMetricWindow {
   bills: number;
   cashSales: number;
   upiSales: number;
+  bankSales: number;
   udharSales: number;
   paymentsReceived: number;
   discount: number;
@@ -73,6 +79,7 @@ export interface ReportDailyPoint {
   profit: number;
   cash: number;
   upi: number;
+  bank: number;
   udhar: number;
   stockIn: number;
   stockOut: number;
@@ -139,18 +146,23 @@ export interface DailyClosingReport {
   billCount: number;
   cashSales: number;
   upiSales: number;
+  bankSales: number;
   cashReceived: number;
   upiReceived: number;
+  bankReceived: number;
   udharGiven: number;
   oldUdharPaymentReceived: number;
   oldUdharCashReceived: number;
   oldUdharUpiReceived: number;
+  oldUdharBankReceived: number;
   purchaseCashPaid: number;
   purchaseUpiPaid: number;
+  purchaseBankPaid: number;
   purchasePaid: number;
   purchaseDue: number;
   expectedCashInDrawer: number;
   expectedUpiInBank: number;
+  expectedBankInBank: number;
   topSoldProducts: ReportTopProduct[];
   lowStockItems: ReportLowStockItem[];
   pendingSyncCount: number;
@@ -255,8 +267,9 @@ function toMetricWindow(snapshot: FinancialAggregationSnapshot): ReportMetricWin
     bills: snapshot.totalBillsToday,
     cashSales: snapshot.cashSalesToday,
     upiSales: snapshot.upiSalesToday,
+    bankSales: snapshot.bankSalesToday,
     udharSales: snapshot.udharSalesToday,
-    paymentsReceived: roundMoney(snapshot.cashSalesToday + snapshot.upiSalesToday),
+    paymentsReceived: roundMoney(snapshot.cashSalesToday + snapshot.upiSalesToday + snapshot.bankSalesToday),
     discount: snapshot.discountToday,
     profitEstimate: snapshot.profitToday,
   };
@@ -266,19 +279,24 @@ function toPaymentBreakdown(snapshot: FinancialAggregationSnapshot): ReportPayme
   return {
     cash: snapshot.cashSalesToday,
     upi: snapshot.upiSalesToday,
+    bank: snapshot.bankSalesToday,
     udhar: snapshot.udharSalesToday,
-    received: roundMoney(snapshot.cashSalesToday + snapshot.upiSalesToday),
-    oldUdharReceived: roundMoney(snapshot.cashUdharRecoveryToday + snapshot.upiUdharRecoveryToday),
+    received: roundMoney(snapshot.cashSalesToday + snapshot.upiSalesToday + snapshot.bankSalesToday),
+    oldUdharReceived: roundMoney(snapshot.cashUdharRecoveryToday + snapshot.upiUdharRecoveryToday + snapshot.bankUdharRecoveryToday),
     oldUdharCashReceived: snapshot.cashUdharRecoveryToday,
     oldUdharUpiReceived: snapshot.upiUdharRecoveryToday,
+    oldUdharBankReceived: snapshot.bankUdharRecoveryToday,
     purchaseCashPaid: snapshot.supplierCashPaidToday,
     purchaseUpiPaid: snapshot.supplierUpiPaidToday,
-    purchasePaid: roundMoney(snapshot.supplierCashPaidToday + snapshot.supplierUpiPaidToday),
+    purchaseBankPaid: snapshot.supplierBankPaidToday,
+    purchasePaid: roundMoney(snapshot.supplierCashPaidToday + snapshot.supplierUpiPaidToday + snapshot.supplierBankPaidToday),
     purchaseDue: snapshot.purchaseDueToday,
     cashIn: snapshot.totalCashCollectedToday,
     upiIn: snapshot.totalUpiCollectedToday,
+    bankIn: snapshot.totalBankCollectedToday,
     netCashInHand: snapshot.cashDrawer.expectedClosingCash,
     netUpiInBank: roundMoney(snapshot.totalUpiCollectedToday - snapshot.supplierUpiPaidToday),
+    netBankInBank: roundMoney(snapshot.totalBankCollectedToday - snapshot.supplierBankPaidToday),
   };
 }
 
@@ -417,10 +435,11 @@ function buildDailyTrend(rows: LocalFinanceRows, range: DateRange): ReportDailyP
       date,
       label: parsed.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
       sales: snapshot.revenueToday,
-      collection: roundMoney(snapshot.totalCashCollectedToday + snapshot.totalUpiCollectedToday),
+      collection: roundMoney(snapshot.totalCashCollectedToday + snapshot.totalUpiCollectedToday + snapshot.totalBankCollectedToday),
       profit: snapshot.profitToday,
       cash: snapshot.totalCashCollectedToday,
       upi: snapshot.totalUpiCollectedToday,
+      bank: snapshot.totalBankCollectedToday,
       udhar: snapshot.udharSalesToday,
       stockIn: stock.inbound,
       stockOut: stock.outbound,
@@ -589,18 +608,23 @@ export async function buildDailyClosingReport(date: string): Promise<DailyClosin
     billCount: snapshot.selected.bills,
     cashSales: snapshot.paymentBreakdown.cash,
     upiSales: snapshot.paymentBreakdown.upi,
+    bankSales: snapshot.paymentBreakdown.bank,
     cashReceived: snapshot.paymentBreakdown.cashIn,
     upiReceived: snapshot.paymentBreakdown.upiIn,
+    bankReceived: snapshot.paymentBreakdown.bankIn,
     udharGiven: snapshot.paymentBreakdown.udhar,
     oldUdharPaymentReceived: snapshot.paymentBreakdown.oldUdharReceived,
     oldUdharCashReceived: snapshot.paymentBreakdown.oldUdharCashReceived,
     oldUdharUpiReceived: snapshot.paymentBreakdown.oldUdharUpiReceived,
+    oldUdharBankReceived: snapshot.paymentBreakdown.oldUdharBankReceived,
     purchaseCashPaid: snapshot.paymentBreakdown.purchaseCashPaid,
     purchaseUpiPaid: snapshot.paymentBreakdown.purchaseUpiPaid,
+    purchaseBankPaid: snapshot.paymentBreakdown.purchaseBankPaid,
     purchasePaid: snapshot.paymentBreakdown.purchasePaid,
     purchaseDue: snapshot.paymentBreakdown.purchaseDue,
     expectedCashInDrawer: snapshot.paymentBreakdown.netCashInHand,
     expectedUpiInBank: snapshot.paymentBreakdown.netUpiInBank,
+    expectedBankInBank: snapshot.paymentBreakdown.netBankInBank,
     topSoldProducts: snapshot.topProducts.slice(0, 8),
     lowStockItems: snapshot.lowStock.slice(0, 8),
     pendingSyncCount: snapshot.pendingSyncCount,

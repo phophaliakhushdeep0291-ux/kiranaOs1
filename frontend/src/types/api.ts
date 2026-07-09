@@ -346,6 +346,7 @@ export interface PurchaseBillInput {
 export const BillPaymentMode = {
   cash: "cash",
   upi: "upi",
+  bank: "bank",
   credit: "credit",
 } as const;
 
@@ -364,6 +365,7 @@ export const CustomerInputType = {
 export const UdharPaymentInputMode = {
   cash: "cash",
   upi: "upi",
+  bank: "bank",
 } as const;
 
 export interface BillPayment {
@@ -476,16 +478,20 @@ export interface PnLReport {
 export interface PaymentSummary {
   cash: number;
   upi: number;
+  bank?: number;
   credit: number;
   total: number;
   oldUdharRecovered?: number;
   cashInHand?: number;
   upiReceived?: number;
+  bankReceived?: number;
   purchaseCashPaid?: number;
   purchaseUpiPaid?: number;
+  purchaseBankPaid?: number;
   purchaseDue?: number;
   totalCollected?: number;
   netCashInHand?: number;
+  netBankInHand?: number;
 }
 
 export interface TopProductRow {

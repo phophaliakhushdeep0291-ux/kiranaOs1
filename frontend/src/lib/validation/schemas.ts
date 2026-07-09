@@ -117,7 +117,7 @@ export const billItemCreationSchema = z.object({
 });
 
 export const billPaymentSchema = z.object({
-  mode: z.enum(["cash", "upi", "credit"]),
+  mode: z.enum(["cash", "upi", "bank", "credit"]),
   amount: money,
   referenceNo: optionalText,
   note: optionalText,
@@ -182,7 +182,7 @@ export const paymentRecordingSchema = z.object({
   billId: optionalText,
   ledgerEntryId: optionalText,
   amount: positiveMoney,
-  mode: z.enum(["cash", "upi"]),
+  mode: z.enum(["cash", "upi", "bank"]),
   referenceNo: optionalText,
   note: optionalText,
   paidAt: optionalText,

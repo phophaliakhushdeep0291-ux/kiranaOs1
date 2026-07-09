@@ -162,7 +162,7 @@ export async function getDailyClosing(shopId, { date } = {}) {
     }),
     db.bill.count({ where: { shopId, billType: "estimate", createdAt: { gte: start, lte: end } } }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
     countPendingSync(shopId),
@@ -770,13 +770,16 @@ export async function getPaymentSummary(shopId, { from, to }) {
   const summary = {
     cash: 0,
     upi: 0,
+    bank: 0,
     credit: 0,
     total: 0,
     oldUdharRecovered: 0,
     cashInHand: 0,
     upiReceived: 0,
+    bankReceived: 0,
     purchaseCashPaid: 0,
     purchaseUpiPaid: 0,
+    purchaseBankPaid: 0,
     purchaseDue: 0,
     netCashInHand: 0,
   };
@@ -790,18 +793,22 @@ export async function getPaymentSummary(shopId, { from, to }) {
     summary.oldUdharRecovered = addMoney(summary.oldUdharRecovered, p.amount);
     if (p.mode === "cash") summary.cashInHand = addMoney(summary.cashInHand, p.amount);
     if (p.mode === "upi") summary.upiReceived = addMoney(summary.upiReceived, p.amount);
+    if (p.mode === "bank") summary.bankReceived = addMoney(summary.bankReceived, p.amount);
   }
   for (const purchase of purchases) {
     const paid = purchase.purchasePaidAmount || 0;
     const mode = String(purchase.purchasePaymentMode || "").toLowerCase();
     if (mode === "cash") summary.purchaseCashPaid = addMoney(summary.purchaseCashPaid, paid);
-    if (mode === "upi" || mode === "bank") summary.purchaseUpiPaid = addMoney(summary.purchaseUpiPaid, paid);
+    if (mode === "upi") summary.purchaseUpiPaid = addMoney(summary.purchaseUpiPaid, paid);
+    if (mode === "bank") summary.purchaseBankPaid = addMoney(summary.purchaseBankPaid, paid);
     summary.purchaseDue = addMoney(summary.purchaseDue, purchase.purchaseDueAmount || 0);
   }
   summary.cashInHand = addMoney(summary.cashInHand, summary.cash);
   summary.upiReceived = addMoney(summary.upiReceived, summary.upi);
-  summary.totalCollected = addMoney(summary.cashInHand, summary.upiReceived);
+  summary.bankReceived = addMoney(summary.bankReceived, summary.bank);
+  summary.totalCollected = addMoney(summary.cashInHand, summary.upiReceived, summary.bankReceived);
   summary.netCashInHand = Math.max(0, subtractMoney(summary.cashInHand, summary.purchaseCashPaid));
+  summary.netBankInHand = Math.max(0, subtractMoney(summary.bankReceived, summary.purchaseBankPaid));
 
   return { from: start.toISOString(), to: end.toISOString(), ...summary };
 }

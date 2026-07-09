@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { shouldPassSharedThrottle, shouldRunInteractiveNetworkWork } from "@/lib/browser/multiTabCoordinator";
 import { LOCAL_DATA_CHANGE_CHANNEL, type LocalDataChangeMessage } from "@/lib/offline/instant-cache";
 
-const FAST_REFRESH_DELAY_MS = 250;
+const FAST_REFRESH_DELAY_MS = 650;
 const FULL_REFRESH_DELAY_MS = 1_200;
 
 function isVisible() {
@@ -54,7 +54,18 @@ export function useRealtimeRefreshBridge() {
       }, FULL_REFRESH_DELAY_MS);
     };
 
-    const onLocalDataChanged = () => scheduleRefresh(FAST_REFRESH_DELAY_MS, "active");
+    const onLocalDataChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ source?: string }>).detail;
+      if (detail?.source === "broadcast") {
+        scheduleRefresh(FAST_REFRESH_DELAY_MS, "none");
+        return;
+      }
+      if (!shouldPassSharedThrottle("kirana.localActiveQueryRefresh.lastRun", 1_200)) {
+        scheduleRefresh(FAST_REFRESH_DELAY_MS, "none");
+        return;
+      }
+      scheduleRefresh(FAST_REFRESH_DELAY_MS, "active");
+    };
     const onSyncQueueUpdated = () => scheduleRefresh();
     const channel = typeof BroadcastChannel !== "undefined"
       ? new BroadcastChannel(LOCAL_DATA_CHANGE_CHANNEL)
