@@ -25,6 +25,13 @@ interface TaxConfig {
   roundOff: boolean;
   lockAfterBill: boolean;
   warnInvalidGstin: boolean;
+  hsnMappings: HsnRow[];
+}
+interface HsnRow {
+  cat: string;
+  rate: string;
+  hsn: string;
+  count: number;
 }
 interface GstReport {
   totalBills: number;
@@ -41,14 +48,27 @@ const DEFAULT_TAX: TaxConfig = {
   taxInvoice: true, composition: false,
   rates: { "0": true, "5": true, "12": true, "18": true, "28": true },
   eInvoice: false, eWayBill: false, showBreakup: true, roundOff: true, lockAfterBill: true, warnInvalidGstin: true,
+  hsnMappings: [],
 };
 const RATE_INFO: Record<string, string> = { "0": "Exempt / unbranded", "5": "Essentials", "12": "Processed foods", "18": "Standard", "28": "Luxury / sin" };
-const HSN_ROWS = [
+const HSN_ROWS: HsnRow[] = [
   { cat: "Packaged Food", rate: "5%", hsn: "1905", count: 124 },
   { cat: "Personal Care", rate: "18%", hsn: "3304", count: 42 },
   { cat: "Household", rate: "18%", hsn: "3402", count: 81 },
   { cat: "Beverages", rate: "12%", hsn: "2202", count: 36 },
 ];
+
+function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 export default function TaxesSettingsPage() {
   const { toast } = useToast();
@@ -70,6 +90,36 @@ export default function TaxesSettingsPage() {
   const update = (partial: Partial<TaxConfig>) => commit({ ...tax, ...partial });
   const setText = (partial: Partial<TaxConfig>) => setTax((t) => ({ ...t, ...partial }));
   const flush = () => patch({ taxes: tax });
+  const hsnRows = tax.hsnMappings.length > 0 ? tax.hsnMappings : HSN_ROWS;
+  const saveHsnRows = (rows: HsnRow[]) => update({ hsnMappings: rows });
+  function editHsn(row: HsnRow) {
+    const hsn = window.prompt(`HSN code for ${row.cat}`, row.hsn);
+    if (hsn == null) return;
+    const rate = window.prompt(`GST rate for ${row.cat} (example: 5%)`, row.rate);
+    if (rate == null) return;
+    saveHsnRows(hsnRows.map((r) => r.cat === row.cat ? { ...r, hsn: hsn.trim(), rate: rate.trim() || r.rate } : r));
+    toast({ title: "HSN mapping saved", description: `${row.cat} updated.` });
+  }
+  function bulkAssignHsn() {
+    const rate = window.prompt("Apply GST rate to all listed categories (example: 5%)", tax.defaultRate ? `${tax.defaultRate}%` : "5%");
+    if (rate == null) return;
+    saveHsnRows(hsnRows.map((row) => ({ ...row, rate: rate.trim() || row.rate })));
+    toast({ title: "Bulk GST rate saved", description: `Applied ${rate} to ${hsnRows.length} category mappings.` });
+  }
+  function exportGstReport() {
+    const report = gstQ.data;
+    const rows = [
+      ["Metric", "Value"],
+      ["GST Collected", String(report?.gstCollected ?? 0)],
+      ["Taxable Sales", String(report?.taxableSales ?? 0)],
+      ["CGST", String(report?.cgst ?? 0)],
+      ["SGST", String(report?.sgst ?? 0)],
+      ["GST Bills", String(report?.gstBills ?? 0)],
+      ["Total Bills", String(report?.totalBills ?? 0)],
+    ];
+    downloadText(`kiranaos-gst-report-${new Date().toISOString().slice(0, 10)}.csv`, rows.map((row) => row.join(",")).join("\n"));
+    toast({ title: "GST report downloaded" });
+  }
 
   return (
     <SettingsShell>
@@ -124,7 +174,7 @@ export default function TaxesSettingsPage() {
 
       {/* HSN / Product Mapping */}
       <Card>
-        <CardHead icon={<Boxes size={15} />} title="HSN / Product Mapping" sub="GST rate & HSN code by category" action={<button onClick={() => toast({ title: "Bulk assign", description: "Assign HSN/GST to many products at once — coming with the catalog tools." })} className="text-[12px] font-bold text-[#005dff] hover:underline">Bulk assign</button>} />
+        <CardHead icon={<Boxes size={15} />} title="HSN / Product Mapping" sub="GST rate & HSN code by category" action={<button onClick={bulkAssignHsn} className="text-[12px] font-bold text-[#005dff] hover:underline">Bulk assign</button>} />
         <div className="px-5 pb-5">
           <div className="app-table-scroll overflow-x-auto rounded-[10px] border border-[#eef2f8]">
             <table className="min-w-[680px] w-full text-[12px]">
@@ -138,13 +188,13 @@ export default function TaxesSettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {HSN_ROWS.map((row, i) => (
-                  <tr key={row.cat} className={i < HSN_ROWS.length - 1 ? "border-b border-[#eef2f8]" : ""}>
+                {hsnRows.map((row, i) => (
+                  <tr key={row.cat} className={i < hsnRows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
                     <td className="px-3 py-2.5 font-bold text-[#102347]">{row.cat}</td>
                     <td className="px-3 py-2.5"><Badge tone="gray">{row.rate}</Badge></td>
                     <td className="px-3 py-2.5 font-mono text-[#344668]">{row.hsn}</td>
                     <td className="px-3 py-2.5 text-[#64748b]">{row.count} products</td>
-                    <td className="px-3 py-2.5 text-right"><button onClick={() => toast({ title: `Edit ${row.cat}`, description: "Per-category HSN editing arrives with the catalog tools." })} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Pencil size={12} /> Edit</button></td>
+                    <td className="px-3 py-2.5 text-right"><button onClick={() => editHsn(row)} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Pencil size={12} /> Edit</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -156,7 +206,7 @@ export default function TaxesSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* GST Reports */}
         <Card>
-          <CardHead icon={<BarChart3 size={15} />} title="GST Reports" sub="This month" action={<button onClick={() => toast({ title: "Export started", description: "GST report export will download shortly." })} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Export</button>} />
+          <CardHead icon={<BarChart3 size={15} />} title="GST Reports" sub="This month" action={<button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Export</button>} />
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
             <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
             <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />

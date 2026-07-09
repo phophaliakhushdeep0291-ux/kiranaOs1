@@ -52,6 +52,7 @@ export default function StoreProfilePage() {
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const seeded = useRef(false);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
 
   const updateShop = useUpdateShop({
     mutation: {
@@ -170,6 +171,20 @@ export default function StoreProfilePage() {
     patch({ docs: { ...docs, [key]: "uploaded" } });
     toast({ title: "Document marked uploaded", description: "Verification is completed by our team after review." });
   }
+  function uploadLogo(file?: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Choose an image file", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      patch({ storeProfile: { ...sp, logoDataUrl: String(reader.result || "") } });
+      toast({ title: "Logo saved", description: "It will appear on this device and receipt preview settings." });
+    };
+    reader.onerror = () => toast({ title: "Could not read logo", variant: "destructive" });
+    reader.readAsDataURL(file);
+  }
 
   const storeId = shop?.id ? `KRN-${String(shop.id).slice(-6).toUpperCase()}` : "—";
   const planName = snapshot?.planCode ? snapshot.planCode.charAt(0).toUpperCase() + snapshot.planCode.slice(1) : "Free";
@@ -180,7 +195,9 @@ export default function StoreProfilePage() {
       <Card>
           <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <span className="grid h-[76px] w-[76px] shrink-0 place-items-center rounded-[16px] bg-[#eef5ff] text-4xl">🏪</span>
+            <span className="grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-[16px] bg-[#eef5ff] text-4xl">
+              {sp.logoDataUrl ? <img src={String(sp.logoDataUrl)} alt="Store logo" className="h-full w-full object-cover" /> : "🏪"}
+            </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-display text-[20px] font-black tracking-tight text-[#0f1e3d]">{biz.name || shop?.name || "My Store"}</h2>
@@ -192,7 +209,8 @@ export default function StoreProfilePage() {
             </div>
           </div>
           <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => toast({ title: "Logo upload coming soon", description: "Add your shop logo from a future update." })}><Upload size={15} /> Upload Logo</Button>
+            <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadLogo(e.target.files?.[0])} />
+            <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => logoInputRef.current?.click()}><Upload size={15} /> Upload Logo</Button>
             <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-10 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {updateShop.isPending ? <Loader2 size={15} className="animate-spin" /> : <Store size={15} />} Save Profile
             </Button>

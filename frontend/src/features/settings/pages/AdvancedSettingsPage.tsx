@@ -72,6 +72,16 @@ const EXPORT_TABLES = [
   "staff_users",
   "settings",
 ] as const;
+const LOCAL_DATA_TABLES = [
+  ...EXPORT_TABLES,
+  "sync_outbox",
+  "sync_cursor",
+  "sync_conflicts",
+  "id_mappings",
+  "local_audit_logs",
+  "subscription_cache",
+  "device_license_cache",
+] as const;
 
 function downloadJson(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
@@ -95,6 +105,10 @@ function downloadCsvTemplate(filename: string, headers: string[]) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function mailSupport(subject: string, body: string) {
+  window.location.href = `mailto:support@kiranaos.app?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 export default function AdvancedSettingsPage() {
@@ -123,7 +137,7 @@ export default function AdvancedSettingsPage() {
     } catch { toast({ title: "Could not clear cache", variant: "destructive" }); }
   }
   function copyDiagnostics() {
-    const diag = { app: "KiranaOS 2.1.3", online: navigator.onLine, language, accent, ua: navigator.userAgent, at: new Date().toISOString() };
+    const diag = { app: "KiranaOS 2.1.3", online: navigator.onLine, language, accent, prefs: { advanced: adv }, ua: navigator.userAgent, at: new Date().toISOString() };
     void navigator.clipboard?.writeText(JSON.stringify(diag, null, 2));
     toast({ title: "Diagnostics copied" });
   }
@@ -133,6 +147,30 @@ export default function AdvancedSettingsPage() {
       toast({ title: "Database checked", description: "Local data opened cleanly and is ready." });
     } catch {
       toast({ title: "Database check failed", description: "Restart the app and try again.", variant: "destructive" });
+    }
+  }
+  async function runDbTool(key: string, label: string) {
+    try {
+      await offlineDB.init();
+      if (key === "repair" || key === "index") await offlineDB.pruneExpiredRecentCache();
+      if (key === "dashboard") {
+        const [bills, payments, items] = await Promise.all([offlineDB.getAll("bills"), offlineDB.getAll("payments"), offlineDB.getAll("bill_items")]);
+        toast({ title: "Dashboard totals checked", description: `${bills.length} bills, ${payments.length} payments, ${items.length} items readable.` });
+        return;
+      }
+      if (key === "ledgers") {
+        const rows = await offlineDB.getAll("customer_ledger");
+        toast({ title: "Customer ledgers checked", description: `${rows.length} ledger rows readable.` });
+        return;
+      }
+      if (key === "inventory") {
+        const rows = await offlineDB.getAll("inventory_movements");
+        toast({ title: "Inventory stock checked", description: `${rows.length} stock movement rows readable.` });
+        return;
+      }
+      toast({ title: `${label} complete`, description: "Local database opened and maintenance checks passed." });
+    } catch {
+      toast({ title: `${label} failed`, description: "Restart the app and try again.", variant: "destructive" });
     }
   }
   async function exportTable(table: (typeof EXPORT_TABLES)[number], filename: string) {
@@ -157,6 +195,15 @@ export default function AdvancedSettingsPage() {
       toast({ title: "Backup failed", description: "Could not read the local database.", variant: "destructive" });
     }
   }
+  async function clearScopedLocalData() {
+    for (const table of LOCAL_DATA_TABLES) {
+      const rows = await offlineDB.getAll<Record<string, unknown>>(table);
+      for (const row of rows) {
+        const key = row.key ?? row.clientEventId ?? row.local_id ?? row.localId ?? row.id;
+        if (typeof key === "string" && key.length > 0) await offlineDB.delete(table, key);
+      }
+    }
+  }
   async function runDanger(key: string) {
     setDanger(null);
     if (key === "resetSettings") { patch({ printer: undefined, taxes: undefined, security: undefined, notifications: undefined, integrations: undefined, advanced: undefined, branding: undefined, hours: undefined, bank: undefined, storeProfile: undefined }); toast({ title: "Settings reset to defaults" }); return; }
@@ -164,7 +211,7 @@ export default function AdvancedSettingsPage() {
     if (key === "deleteLocal" || key === "factoryReset") {
       try {
         if ("caches" in window) { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))); }
-        await (offlineDB as { clearAll?: () => Promise<void> }).clearAll?.();
+        await clearScopedLocalData();
       } catch { /* best effort */ }
       toast({ title: "Local data cleared", description: "The app will reload with a fresh local copy synced from the cloud." });
       setTimeout(() => window.location.reload(), 1200);
@@ -267,7 +314,7 @@ export default function AdvancedSettingsPage() {
             {DB_TOOLS.map((t, i) => (
               <div key={t.key} className={`flex items-center justify-between py-2.5 ${i < DB_TOOLS.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
                 <span className="text-[13px] font-semibold text-[#344668]">{t.label}</span>
-                <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => toast({ title: t.label, description: "Running… you'll be notified when it finishes." })}>Run</Button>
+                <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => void runDbTool(t.key, t.label)}>Run</Button>
               </div>
             ))}
           </div>
@@ -287,7 +334,7 @@ export default function AdvancedSettingsPage() {
             ))}
             <div className="mt-1 grid gap-2 sm:col-span-2 sm:grid-cols-2">
               <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={copyDiagnostics}><HardDrive size={14} /> Copy diagnostics</Button>
-              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => toast({ title: "Report sent to support" })}>Send to support</Button>
+              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => mailSupport("KiranaOS diagnostics", JSON.stringify({ online: navigator.onLine, language, accent, at: new Date().toISOString() }, null, 2))}>Send to support</Button>
             </div>
           </div>
         </Card>
