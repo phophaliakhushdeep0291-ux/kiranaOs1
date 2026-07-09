@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Inbox, MapPin, MessageCircle, Phone, RefreshCw, ShoppingCart, XCircle } from "lucide-react";
@@ -37,6 +37,33 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
+// Short two-note chime so a busy owner hears a new order arrive. Web Audio only — no asset to
+// bundle — and fully best-effort (blocked autoplay / no AudioContext just no-ops).
+function playNewOrderChime(): void {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const now = ctx.currentTime;
+    [880, 1174].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const start = now + i * 0.14;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.16, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.13);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.14);
+    });
+    setTimeout(() => void ctx.close().catch(() => undefined), 600);
+  } catch {
+    /* audio unavailable — the toast is still the signal */
+  }
+}
+
 export default function OrdersReceivedPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -49,8 +76,23 @@ export default function OrdersReceivedPage() {
   const ordersQuery = useQuery({
     queryKey: ["customer-orders", status],
     queryFn: () => listCustomerOrders(status),
-    refetchInterval: 30_000, // poll so new customer orders surface without a manual refresh
+    refetchInterval: 20_000, // poll so new customer orders surface without a manual refresh
   });
+
+  // Chime + toast when the count of new orders climbs while the owner is watching. newCount is the
+  // shop-wide "new" total (independent of the active tab), so it's a reliable arrival signal.
+  const prevNewCountRef = useRef<number | null>(null);
+  const newCount = ordersQuery.data?.newCount ?? null;
+  useEffect(() => {
+    if (newCount == null) return;
+    const prev = prevNewCountRef.current;
+    if (prev != null && newCount > prev) {
+      playNewOrderChime();
+      const added = newCount - prev;
+      toast({ title: `${added} new order${added === 1 ? "" : "s"} received`, description: "Open the New tab to review." });
+    }
+    prevNewCountRef.current = newCount;
+  }, [newCount, toast]);
 
   const productsQuery = useListProducts({ limit: 500 }, { query: { staleTime: 60_000 } });
   const products = useMemo(() => (productsQuery.data ?? []).filter((p) => p.deletedAt == null), [productsQuery.data]);
