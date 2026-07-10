@@ -12,6 +12,13 @@ const optionalTrimmedString = z.preprocess((value) => {
   return trimmed === "" ? undefined : trimmed;
 }, z.string().optional());
 
+const optionalEmail = z.preprocess((value) => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed === "" ? undefined : trimmed;
+}, z.string().email("Valid email address required").optional());
+
 export const normalizeIndianMobile = (value) => {
   if (typeof value !== "string") return value;
   let text = value.trim();
@@ -26,12 +33,19 @@ const indianMobile = z.preprocess(
   z.string().regex(/^[6-9]\d{9}$/, "Valid Indian mobile number required")
 );
 
+const optionalIndianMobile = z.preprocess((value) => {
+  if (value === undefined || value === null) return undefined;
+  const normalized = normalizeIndianMobile(value);
+  return normalized === "" ? undefined : normalized;
+}, z.string().regex(/^[6-9]\d{9}$/, "Valid Indian mobile number required").optional());
+
 export const registerSchema = z.object({
   shopName:  trimmedString(2),
   ownerName: trimmedString(2),
   city:      trimmedString(2),
   address:   trimmedString(5),
   mobile:    indianMobile,
+  email:     optionalEmail,
   password:  z.string().min(6),
   ownerPin:  z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits").optional(),
   gstNumber: optionalTrimmedString,
@@ -39,9 +53,35 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  mobile:   indianMobile,
-  password: z.string(),
-  shopId:   z.string().optional(),
+  mobile:     optionalIndianMobile,
+  email:      optionalEmail,
+  identifier: optionalTrimmedString,
+  password:   z.string(),
+  shopId:     z.string().optional(),
+}).refine((value) => value.mobile || value.email || value.identifier, {
+  message: "Mobile number or email is required",
+  path: ["identifier"],
+});
+
+export const verifyEmailSchema = z.object({
+  token: z.string().min(20),
+});
+
+export const resendVerificationSchema = z.object({
+  mobile:     optionalIndianMobile,
+  email:      optionalEmail,
+  identifier: optionalTrimmedString,
+  shopId:     z.string().optional(),
+}).refine((value) => value.mobile || value.email || value.identifier, {
+  message: "Mobile number or email is required",
+  path: ["identifier"],
+});
+
+export const forgotPasswordSchema = resendVerificationSchema;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(20),
+  newPassword: z.string().min(6),
 });
 
 export const setPinSchema = z.object({

@@ -19,6 +19,11 @@ const envSchema = z.object({
   API_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(1000),
   AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(15 * 60 * 1000),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
+  FRONTEND_APP_URL: z.string().url().optional(),
+  EMAIL_PROVIDER: z.enum(["console", "gmail_smtp", "disabled"]).default("console"),
+  AUTH_EMAIL_FROM: z.string().optional(),
+  GMAIL_SMTP_USER: z.string().optional(),
+  GMAIL_APP_PASSWORD: z.string().optional(),
   AI_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(15 * 60 * 1000),
   AI_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(60),
   OWNER_PIN_REQUIRED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
@@ -186,6 +191,17 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.METRICS_REQUIRE_TOKEN &
 if (parsed.data.NODE_ENV === "production" && parsed.data.METRICS_REQUIRE_TOKEN && parsed.data.METRICS_TOKEN && parsed.data.METRICS_TOKEN.length < 24) {
   console.error("❌ METRICS_TOKEN must be at least 24 characters in production");
   process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === "production" && parsed.data.EMAIL_PROVIDER === "gmail_smtp") {
+  const missing = [
+    ["GMAIL_SMTP_USER", parsed.data.GMAIL_SMTP_USER],
+    ["GMAIL_APP_PASSWORD", parsed.data.GMAIL_APP_PASSWORD],
+  ].filter(([, value]) => !value).map(([key]) => key);
+  if (missing.length) {
+    console.error(`❌ ${missing.join(", ")} required in production when EMAIL_PROVIDER=gmail_smtp`);
+    process.exit(1);
+  }
 }
 
 if (parsed.data.NODE_ENV === "production" && parsed.data.ERROR_TRACKING_ENABLED && !parsed.data.SENTRY_DSN) {

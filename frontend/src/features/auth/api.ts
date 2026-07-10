@@ -2,7 +2,9 @@ import { apiRequest, getStoredRefreshToken, ApiClientError } from "@/lib/api/htt
 import type { AuthResponse, Shop, User } from "@/types/api";
 
 export interface LoginRequest {
-  mobile: string;
+  mobile?: string;
+  email?: string;
+  identifier?: string;
   password: string;
   shopId?: string;
 }
@@ -18,6 +20,20 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+export interface ForgotPasswordRequest {
+  identifier: string;
+  shopId?: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword: string;
+}
+
+export interface VerifyEmailRequest {
+  token: string;
+}
+
 export function login(data: LoginRequest) {
   return apiRequest<AuthResponse>("/auth/login", {
     method: "POST",
@@ -29,6 +45,42 @@ export function login(data: LoginRequest) {
 
 export function register(data: RegisterRequest) {
   return apiRequest<AuthResponse>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(data),
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
+export function verifyEmail(data: VerifyEmailRequest) {
+  return apiRequest<{ success?: boolean; message?: string }>("/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify(data),
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
+export function resendVerification(data: ForgotPasswordRequest) {
+  return apiRequest<{ success?: boolean; message?: string }>("/auth/resend-verification", {
+    method: "POST",
+    body: JSON.stringify(data),
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
+export function forgotPassword(data: ForgotPasswordRequest) {
+  return apiRequest<{ success?: boolean; message?: string }>("/auth/password/forgot", {
+    method: "POST",
+    body: JSON.stringify(data),
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
+export function resetPassword(data: ResetPasswordRequest) {
+  return apiRequest<{ success?: boolean; message?: string }>("/auth/password/reset", {
     method: "POST",
     body: JSON.stringify(data),
     skipAuth: true,
