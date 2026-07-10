@@ -1089,11 +1089,11 @@ function PaymentBreakdownCard({ rows, total, period }: { rows: Array<{ key: stri
         <h2 className="text-[14px] font-extrabold text-[#13254a]">Payment Mode Breakdown</h2>
         <span className="rounded-[6px] border border-[#dfe7f2] bg-[#fbfcfe] px-2.5 py-1 text-[10px] font-bold text-[#405273]">{period}</span>
       </header>
-      <div className="grid min-h-[210px] items-center gap-3 px-4 py-4 sm:grid-cols-[170px_1fr]">
-        <div className="relative mx-auto h-[160px] w-[160px]">
+      <div className="grid min-h-[220px] items-center gap-3 px-4 py-4 sm:grid-cols-[184px_1fr]">
+        <div className="relative mx-auto h-[176px] w-[176px]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={chartRows} dataKey="value" nameKey="label" innerRadius={50} outerRadius={76} paddingAngle={1.5} stroke="#fff" strokeWidth={3}>
+              <Pie data={chartRows} dataKey="value" nameKey="label" innerRadius={56} outerRadius={84} paddingAngle={1.5} stroke="#fff" strokeWidth={3}>
                 {chartRows.map((row) => <Cell key={row.key} fill={row.color} />)}
               </Pie>
             </PieChart>
