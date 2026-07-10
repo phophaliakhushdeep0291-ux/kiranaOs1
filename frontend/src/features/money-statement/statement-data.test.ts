@@ -85,4 +85,33 @@ describe("money statement", () => {
     expect(result.rows[0]?.source).toBe("Purchase payment");
     expect(result.totals.cashOut).toBe(25);
   });
+
+  it("resolves party name and mobile from server ids and row fallbacks", () => {
+    const result = buildMoneyStatement({
+      customers: [{ id: "local-c1", server_id: "server-c1", name: "Khushdeep", mobile: "9571738238" }],
+      payments: [{
+        id: "pay-1",
+        customer_id: "server-c1",
+        mode: "cash",
+        amount: 40,
+        paidAt: "2026-07-10T09:30:00",
+      }],
+      bills: [{
+        id: "bill-1",
+        customerName: "Fallback Buyer",
+        customerMobile: "9000000000",
+        paymentMode: "upi",
+        paidAmount: 80,
+        createdAt: "2026-07-10T10:45:00",
+      }],
+    }, { from: "2026-07-10", to: "2026-07-10" });
+
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[1]?.partyName).toBe("Khushdeep");
+    expect(result.rows[1]?.partyMobile).toBe("9571738238");
+    expect(result.rows[0]?.partyName).toBe("Fallback Buyer");
+    expect(result.rows[0]?.partyMobile).toBe("9000000000");
+    expect(result.rows[0]?.dateLabel).toBe("10 Jul 2026");
+    expect(result.rows[0]?.timeLabel).toMatch(/10:45/);
+  });
 });

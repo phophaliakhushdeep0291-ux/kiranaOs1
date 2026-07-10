@@ -699,6 +699,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           deltaLabel="vs yesterday"
           icon={<ShoppingCart size={18} />}
           iconBg="border border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.22)]"
+          color="#075fff"
+          spark={mobileSparkline(yesterdaySales, dashboard.revenue)}
           loading={isLoading}
           onClick={() => openDrilldown("revenue")}
         />
@@ -709,6 +711,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           deltaLabel="vs yesterday"
           icon={<Wallet size={18} />}
           iconBg="border border-[#c8f1d5] bg-[#e7faee] text-[#11a84b] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]"
+          color="#18ad50"
+          spark={mobileSparkline(dashboard.previousCashCollected, dashboard.cashCollected)}
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
@@ -719,6 +723,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           deltaLabel="vs yesterday"
           icon={<Smartphone size={18} />}
           iconBg="border border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb] shadow-[0_0_0_4px_rgba(112,71,235,0.035),0_10px_26px_rgba(112,71,235,0.20)]"
+          color="#7047eb"
+          spark={mobileSparkline(dashboard.previousUpiCollected, dashboard.upiCollected)}
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
@@ -730,6 +736,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
             deltaLabel="vs yesterday"
             icon={<Landmark size={18} />}
             iconBg="border border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.20)]"
+            color="#075fff"
+            spark={mobileSparkline(dashboard.previousBankCollected, dashboard.bankCollected)}
             loading={isLoading}
           />
         </Link>
@@ -742,6 +750,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
             deltaPositiveIsBad
             icon={<AlertTriangle size={18} />}
             iconBg="border border-[#ffcfd7] bg-[#ffecef] text-[#ff2748] shadow-[0_0_0_4px_rgba(255,39,72,0.035),0_10px_26px_rgba(255,39,72,0.20)]"
+            color="#ff304f"
+            spark={mobileSparkline(dashboard.previousOutstanding, dashboard.totalOutstanding)}
             loading={isLoading}
           />
         </Link>
@@ -752,6 +762,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           deltaLabel="vs yesterday"
           icon={<TrendingUp size={18} />}
           iconBg="border border-[#c8f1d5] bg-[#e7faee] text-[#11a84b] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]"
+          color="#18ad50"
+          spark={mobileSparkline(dashboard.previousGrossProfit, dashboard.grossProfit)}
           loading={isLoading}
           onClick={() => openDrilldown("profit")}
         />
@@ -1269,14 +1281,15 @@ function DashboardPeriodSelect({ value, onChange, compact = false }: { value: Da
   );
 }
 
-function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, iconBg, loading, footer, onClick }: {
+function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, iconBg, color, spark, loading, footer, onClick }: {
   label: string; value: string; delta?: number | null; deltaLabel?: string; deltaPositiveIsBad?: boolean;
-  icon: ReactNode; iconBg: string; loading?: boolean; footer?: ReactNode; onClick?: () => void;
+  icon: ReactNode; iconBg: string; color?: string; spark?: Array<{ value: number }>; loading?: boolean; footer?: ReactNode; onClick?: () => void;
 }) {
   const isPositive = (delta ?? 0) > 0;
   const isNegative = (delta ?? 0) < 0;
   const isBad = deltaPositiveIsBad ? isPositive : isNegative;
   const DeltaIcon = delta === null || delta === undefined || delta === 0 ? Minus : isPositive ? ArrowUpRight : ArrowDownRight;
+  const gradientId = `dashboard-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
     <div
       role={onClick ? "button" : undefined}
@@ -1308,6 +1321,22 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
         </div>
         {footer && <div className="mt-3 leading-none">{footer}</div>}
       </div>
+      {spark && color ? (
+        <div className="mt-2 h-8">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={spark} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.28} />
+                  <stop offset="72%" stopColor={color} stopOpacity={0.08} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#${gradientId})`} dot={false} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -138,8 +138,12 @@ function matchSearch(row: MoneyStatementRow, search?: string): boolean {
   ].some((value) => asString(value).toLowerCase().includes(term));
 }
 
+function rowKeys(row: Record<string, unknown>, keys: string[]): string[] {
+  return [...new Set(keys.map((key) => firstString(row, [key])).filter(Boolean))];
+}
+
 function customerId(row: Record<string, unknown>): string {
-  return firstString(row, ["customerId", "customer_id", "customerLocalId", "customer_local_id"]);
+  return firstString(row, ["customerId", "customer_id", "customerLocalId", "customer_local_id", "customerServerId", "customer_server_id"]);
 }
 
 function billId(row: Record<string, unknown>): string {
@@ -154,10 +158,10 @@ function compactBillReference(row: Record<string, unknown>): string {
   return firstString(row, ["billNo", "billNumber", "invoiceNumber", "reference", "id"]) || "Bill";
 }
 
-function partyFromCustomer(customer: Record<string, unknown> | undefined, fallback = "Customer") {
+function partyFromCustomer(customer: Record<string, unknown> | undefined, fallback = "Customer", fallbackMobile?: string) {
   return {
-    name: firstString(customer ?? {}, ["name", "customerName", "customer_name"]) || fallback,
-    mobile: firstString(customer ?? {}, ["mobile", "phone", "customerMobile", "customer_mobile"]) || undefined,
+    name: firstString(customer ?? {}, ["name", "customerName", "customer_name", "buyerName", "buyer_name"]) || fallback,
+    mobile: firstString(customer ?? {}, ["mobile", "phone", "customerMobile", "customer_mobile"]) || fallbackMobile || undefined,
   };
 }
 
@@ -203,8 +207,14 @@ function dedupePurchaseBills(rows: Array<Record<string, unknown>>): Array<Record
 }
 
 export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneyStatementFilters = {}): MoneyStatementResult {
-  const customers = new Map((input.customers ?? []).map((customer) => [firstString(customer, ["id", "local_id", "server_id"]), customer]));
-  const suppliers = new Map((input.suppliers ?? []).map((supplier) => [firstString(supplier, ["id", "local_id", "server_id"]), supplier]));
+  const customers = new Map<string, Record<string, unknown>>();
+  (input.customers ?? []).forEach((customer) => {
+    rowKeys(customer, ["id", "local_id", "server_id", "localId", "serverId", "customerId", "customer_id"]).forEach((key) => customers.set(key, customer));
+  });
+  const suppliers = new Map<string, Record<string, unknown>>();
+  (input.suppliers ?? []).forEach((supplier) => {
+    rowKeys(supplier, ["id", "local_id", "server_id", "localId", "serverId", "supplierId", "supplier_id"]).forEach((key) => suppliers.set(key, supplier));
+  });
   const rows: MoneyStatementRow[] = [];
 
   const payments = dedupePaymentsForDisplay((input.payments ?? []).filter((row) => !isDeleted(row)));
@@ -216,7 +226,11 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
     const relatedBillId = firstString(payment, ["billId", "bill_id"]);
     if (relatedBillId) paymentBillIds.add(relatedBillId);
     const cid = customerId(payment);
-    const party = partyFromCustomer(customers.get(cid), firstString(payment, ["customerName", "customer_name", "payerName", "payer_name"]) || "Customer");
+    const party = partyFromCustomer(
+      customers.get(cid),
+      firstString(payment, ["customerName", "customer_name", "payerName", "payer_name", "buyerName", "buyer_name", "name"]) || "Customer",
+      firstString(payment, ["customerMobile", "customer_mobile", "payerMobile", "payer_mobile", "mobile", "phone"]),
+    );
     const occurredAt = dateValue(payment, ["paid_at", "paidAt", "entry_at", "createdAt", "created_at"]);
     rows.push({
       id: `payment:${rowId(payment, "payment", index)}`,
@@ -240,7 +254,11 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
     const id = billId(bill);
     if (id && paymentBillIds.has(id)) return;
     const occurredAt = dateValue(bill, ["createdAt", "created_at", "billDate", "bill_date"]);
-    const party = partyFromCustomer(customers.get(customerId(bill)), firstString(bill, ["customerName", "customer_name"]) || "Walk-in customer");
+    const party = partyFromCustomer(
+      customers.get(customerId(bill)),
+      firstString(bill, ["customerName", "customer_name", "buyerName", "buyer_name", "name"]) || "Walk-in customer",
+      firstString(bill, ["customerMobile", "customer_mobile", "buyerMobile", "buyer_mobile", "mobile", "phone"]),
+    );
     buildEmbeddedBillPayments(bill).forEach((payment) => {
       rows.push({
         id: `bill:${id || billIndex}:${payment.id}:${payment.mode}`,
