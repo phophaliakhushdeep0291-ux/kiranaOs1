@@ -35,6 +35,7 @@ const Suppliers = lazy(() => import("@/features/suppliers/pages/SuppliersPage"))
 const Expenses = lazy(() => import("@/features/expenses/pages/ExpensesPage"));
 const Offers = lazy(() => import("@/features/offers/pages/OffersPage"));
 const Reports = lazy(() => import("@/features/reports/pages/ReportsPage"));
+const MoneyStatementPage = lazy(() => import("@/features/money-statement/pages/MoneyStatementPage"));
 const DailyClosingPage = lazy(() => import("@/features/reports/pages/DailyClosingPage"));
 const Settings = lazy(() => import("@/features/settings/pages/SettingsPage"));
 const StoreProfileSettings = lazy(() => import("@/features/settings/pages/StoreProfilePage"));
@@ -209,6 +210,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/reports">
         <ProtectedRoute component={Reports} />
+      </Route>
+      <Route path="/money-statement">
+        <ProtectedRoute component={MoneyStatementPage} />
       </Route>
       <Route path="/daily-closing">
         <ProtectedRoute component={DailyClosingPage} />
