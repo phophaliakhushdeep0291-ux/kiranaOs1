@@ -3,28 +3,41 @@ import { useParams } from "wouter";
 import {
   ArrowLeft,
   Bell,
+  CalendarDays,
   CheckCircle2,
   ChefHat,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock,
+  CreditCard,
+  Download,
+  Edit3,
+  FileText,
+  Gift,
   Heart,
   Home,
   LayoutGrid,
   List,
   Loader2,
+  Mail,
   MapPin,
   Menu,
+  MessageCircle,
   Minus,
+  MoreVertical,
   PackageCheck,
+  Phone,
   Plus,
   QrCode,
   RefreshCw,
   Search,
   Send,
+  Settings,
+  ShieldCheck,
   ShoppingBag,
   ShoppingCart,
+  Star,
   Store,
   Trash2,
   Truck,
@@ -72,6 +85,7 @@ type LoadState =
 
 type FulfillmentMode = "delivery" | "pickup";
 type ViewMode = "grid" | "list";
+type CustomerStorefrontView = "shop" | "orders" | "lists" | "offers" | "wallet" | "addresses" | "payments" | "settings" | "support";
 
 interface CartItem {
   product: CustomerCatalogProduct;
@@ -88,6 +102,7 @@ export default function CustomerOrderPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [activeView, setActiveView] = useState<CustomerStorefrontView>("shop");
   const [fulfillment, setFulfillment] = useState<FulfillmentMode>("delivery");
   const [timeSlot, setTimeSlot] = useState(timeSlots[0]);
   const [sheet, setSheet] = useState<"none" | "checkout" | "qr">("none");
@@ -176,7 +191,7 @@ export default function CustomerOrderPage() {
     const count = cartItems.reduce((sum, item) => sum + item.qty, 0);
     const subtotal = cartItems.reduce((sum, item) => sum + item.lineTotal, 0);
     const promoDiscount = subtotal >= 500 ? 20 : 0;
-    const deliveryCharge = subtotal <= 0 || fulfillment === "pickup" || subtotal >= 500 ? 0 : 30;
+    const deliveryCharge = subtotal <= 0 || fulfillment === "pickup" ? 0 : 30;
     const taxable = Math.max(0, subtotal - promoDiscount + deliveryCharge);
     const gst = Math.round(taxable * 5) / 100;
     const grandTotal = taxable + gst;
@@ -303,16 +318,16 @@ export default function CustomerOrderPage() {
 
   const { catalog, source } = state;
   const shopLocation = catalog.shop.city ? `${catalog.shop.city}, India` : "Local store";
-  const deliveryShortfall = Math.max(0, 500 - totals.subtotal);
 
   return (
-    <div className="min-h-screen bg-[#f7faff] text-[#071432] lg:bg-[#f4f8ff]">
+    <div className="min-h-screen bg-white text-[#071432] lg:bg-[#f4f8ff]">
       <div className="lg:flex">
         <CustomerSidebar
           shopName={catalog.shop.name}
           shopLocation={shopLocation}
           trackedOrderId={trackedOrderId}
-          onTrack={() => setShowTracker(true)}
+          activeView={activeView}
+          onView={setActiveView}
         />
 
         <div className="min-w-0 flex-1 lg:pl-[264px] xl:pl-[280px]">
@@ -324,110 +339,75 @@ export default function CustomerOrderPage() {
             fulfillment={fulfillment}
             onFulfillment={setFulfillment}
           />
+          <CustomerMobileNav activeView={activeView} onView={setActiveView} />
 
-          <main className="mx-auto grid w-full max-w-[1500px] gap-5 px-4 pb-32 pt-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8 lg:pb-8 2xl:grid-cols-[minmax(0,1fr)_390px]">
-            <section className="min-w-0 space-y-5">
-              <CategoryRail categories={categories} active={category} onSelect={setCategory} />
+          <main className={`mx-auto w-full max-w-[1500px] px-3 pb-32 pt-4 sm:px-6 lg:px-8 lg:pb-8 ${activeView === "shop" ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
+            {activeView === "shop" ? (
+              <>
+                <section className="min-w-0 space-y-5">
+                  <CategoryRail categories={categories} active={category} onSelect={setCategory} />
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <PromoCard tone="green" title="Free delivery above Rs 500" body={deliveryShortfall > 0 ? `Shop for ${formatRs(deliveryShortfall)} more to get free delivery` : "Your order gets free delivery"} />
-                <PromoCard tone="blue" title="Express delivery in 60 mins" body="Fresh items from the store to your doorstep" />
-                <PromoCard tone="orange" title="Pickup in 20 mins" body="Order online and pick up from store" />
-              </div>
-
-              <section className="rounded-[24px] border border-[#e4ecf7] bg-white p-4 shadow-[0_18px_60px_rgba(20,60,120,0.06)] sm:p-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="font-display text-xl font-black tracking-[-0.01em] text-[#081332]">Popular Products</h2>
-                    <p className="mt-1 text-sm font-medium text-[#6d7890]">Select items and send your order directly to the shop.</p>
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                    <PromoCard tone="green" title="Fresh store stock" body="Products are packed from the live shop counter" />
+                    <PromoCard tone="blue" title="Express delivery in 60 mins" body="Fresh items from the store to your doorstep" />
+                    <PromoCard tone="orange" title="Pickup in 20 mins" body="Order online and pick up from store" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="hidden items-center gap-2 text-xs font-semibold text-[#52617a] sm:flex">
-                      Sort by:
-                      <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-[#dfe8f5] bg-white px-3 py-2 font-bold text-[#172544]">
-                        Popularity <ChevronDown size={14} />
-                      </button>
-                    </div>
-                    <div className="flex rounded-xl border border-[#dfe8f5] bg-[#f7faff] p-1">
-                      <button
-                        type="button"
-                        aria-label="Grid view"
-                        onClick={() => setViewMode("grid")}
-                        className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "grid" ? "bg-white text-[#075fff] shadow-sm" : "text-[#70809c]"}`}
-                      >
-                        <LayoutGrid size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="List view"
-                        onClick={() => setViewMode("list")}
-                        className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "list" ? "bg-white text-[#075fff] shadow-sm" : "text-[#70809c]"}`}
-                      >
-                        <List size={16} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
 
-                {filtered.length === 0 ? (
-                  <div className="mt-8 rounded-2xl border border-dashed border-[#d8e3f2] bg-[#f9fbff] py-14 text-center text-sm font-semibold text-[#71809a]">
-                    {products.length === 0 ? "This shop has no items listed yet." : "No items match your search."}
-                  </div>
-                ) : viewMode === "grid" ? (
-                  <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                    {filtered.map((p) => (
-                      <ProductCard key={p.id} product={p} qty={qty[p.id] ?? 0} onChange={(n) => setItemQty(p.id, n)} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-5 space-y-2">
-                    {filtered.map((p) => (
-                      <ProductListRow key={p.id} product={p} qty={qty[p.id] ?? 0} onChange={(n) => setItemQty(p.id, n)} />
-                    ))}
-                  </div>
-                )}
+                  <ShopProductsSection
+                    products={products}
+                    filtered={filtered}
+                    viewMode={viewMode}
+                    setViewMode={setViewMode}
+                    qty={qty}
+                    setItemQty={setItemQty}
+                  />
 
-                {filtered.length > 8 && (
-                  <button type="button" className="mx-auto mt-5 flex items-center gap-2 rounded-xl border border-[#dbe6f5] bg-white px-6 py-3 text-sm font-black text-[#075fff]">
-                    View More Products <ChevronRight size={16} />
-                  </button>
-                )}
-              </section>
+                  <HowOrderingWorks />
+                </section>
 
-              <HowOrderingWorks />
-            </section>
-
-            <OrderSummaryPanel
-              cartItems={cartItems}
-              totals={totals}
-              form={form}
-              setForm={setForm}
-              mobileOk={mobileOk}
-              canPlace={canPlace}
-              placing={placing}
-              fulfillment={fulfillment}
-              setFulfillment={setFulfillment}
-              timeSlot={timeSlot}
-              setTimeSlot={setTimeSlot}
-              submitError={submitError}
-              onQtyChange={setItemQty}
-              onClear={() => setQty({})}
-              onPlace={() => void placeOrder()}
-              onQr={() => setSheet("qr")}
-            />
+                <OrderSummaryPanel
+                  cartItems={cartItems}
+                  totals={totals}
+                  form={form}
+                  setForm={setForm}
+                  mobileOk={mobileOk}
+                  canPlace={canPlace}
+                  placing={placing}
+                  fulfillment={fulfillment}
+                  setFulfillment={setFulfillment}
+                  timeSlot={timeSlot}
+                  setTimeSlot={setTimeSlot}
+                  submitError={submitError}
+                  onQtyChange={setItemQty}
+                  onClear={() => setQty({})}
+                  onPlace={() => void placeOrder()}
+                  onQr={() => setSheet("qr")}
+                />
+              </>
+            ) : (
+              <CustomerPortalPage
+                view={activeView}
+                catalog={catalog}
+                products={products}
+                onView={setActiveView}
+                onAddProduct={(productId) => setItemQty(productId, (qty[productId] ?? 0) + 1)}
+              />
+            )}
           </main>
         </div>
       </div>
 
-      <MobileCartBar
-        count={totals.count}
-        amount={totals.grandTotal}
-        disabled={submitItems.length === 0}
-        onOpen={() => {
-          setSubmitError(null);
-          setSheet("checkout");
-        }}
-      />
+      {activeView === "shop" && (
+        <MobileCartBar
+          count={totals.count}
+          amount={totals.grandTotal}
+          disabled={submitItems.length === 0}
+          onOpen={() => {
+            setSubmitError(null);
+            setSheet("checkout");
+          }}
+        />
+      )}
 
       {sheet === "checkout" && (
         <CheckoutSheet
@@ -473,8 +453,8 @@ function StorefrontHeader({
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[#e4ecf7] bg-white/95 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-4 pb-2 pt-4 sm:px-6 lg:hidden">
-        <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#075fff] shadow-[0_8px_24px_rgba(20,40,90,0.06)]">
+      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-2 pt-3 sm:px-6 lg:hidden">
+        <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#075fff] shadow-[0_8px_24px_rgba(20,40,90,0.06)]">
           <Menu size={21} />
         </button>
         <div className="min-w-0 flex-1">
@@ -483,20 +463,20 @@ function StorefrontHeader({
               <ShoppingCart size={21} />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate font-display text-2xl font-black tracking-[-0.03em] text-[#071432]">
+              <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-[#071432] sm:text-2xl">
                 {catalog.shop.name || "KiranaOS"}
               </h1>
               <p className="truncate text-xs font-semibold text-[#66758f]">{catalog.shop.city || "Smart POS for Modern Stores"}</p>
             </div>
           </div>
         </div>
-        <button type="button" className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dfe8f5] bg-white text-[#0d1a3a] shadow-[0_8px_24px_rgba(20,40,90,0.04)]">
+        <button type="button" className="relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dfe8f5] bg-white text-[#0d1a3a] shadow-[0_8px_24px_rgba(20,40,90,0.04)]">
           <Bell size={19} />
           <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[#075fff] text-[10px] font-black text-white">7</span>
         </button>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-4 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
+      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
         <button type="button" className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#405173] shadow-[0_8px_24px_rgba(20,40,90,0.06)] lg:hidden">
           <Menu size={21} />
         </button>
@@ -568,26 +548,132 @@ function StorefrontHeader({
   );
 }
 
+function ShopProductsSection({
+  products,
+  filtered,
+  viewMode,
+  setViewMode,
+  qty,
+  setItemQty,
+}: {
+  products: CustomerCatalogProduct[];
+  filtered: CustomerCatalogProduct[];
+  viewMode: ViewMode;
+  setViewMode: (mode: ViewMode) => void;
+  qty: Record<string, number>;
+  setItemQty: (id: string, next: number) => void;
+}) {
+  return (
+    <section className="rounded-[24px] border border-[#e4ecf7] bg-white p-4 shadow-[0_18px_60px_rgba(20,60,120,0.06)] sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-display text-xl font-black tracking-[-0.01em] text-[#081332]">Popular Products</h2>
+          <p className="mt-1 text-sm font-medium text-[#6d7890]">Select items and send your order directly to the shop.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 text-xs font-semibold text-[#52617a] sm:flex">
+            Sort by:
+            <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-[#dfe8f5] bg-white px-3 py-2 font-bold text-[#172544]">
+              Popularity <ChevronDown size={14} />
+            </button>
+          </div>
+          <div className="flex rounded-xl border border-[#dfe8f5] bg-[#f7faff] p-1">
+            <button
+              type="button"
+              aria-label="Grid view"
+              onClick={() => setViewMode("grid")}
+              className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "grid" ? "bg-white text-[#075fff] shadow-sm" : "text-[#70809c]"}`}
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button
+              type="button"
+              aria-label="List view"
+              onClick={() => setViewMode("list")}
+              className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "list" ? "bg-white text-[#075fff] shadow-sm" : "text-[#70809c]"}`}
+            >
+              <List size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="mt-8 rounded-2xl border border-dashed border-[#d8e3f2] bg-[#f9fbff] py-14 text-center text-sm font-semibold text-[#71809a]">
+          {products.length === 0 ? "This shop has no items listed yet." : "No items match your search."}
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {filtered.map((p) => (
+            <ProductCard key={p.id} product={p} qty={qty[p.id] ?? 0} onChange={(n) => setItemQty(p.id, n)} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 space-y-2">
+          {filtered.map((p) => (
+            <ProductListRow key={p.id} product={p} qty={qty[p.id] ?? 0} onChange={(n) => setItemQty(p.id, n)} />
+          ))}
+        </div>
+      )}
+
+      {filtered.length > 8 && (
+        <button type="button" className="mx-auto mt-5 flex items-center gap-2 rounded-xl border border-[#dbe6f5] bg-white px-6 py-3 text-sm font-black text-[#075fff]">
+          View More Products <ChevronRight size={16} />
+        </button>
+      )}
+    </section>
+  );
+}
+
+const CUSTOMER_NAV: Array<{ view: CustomerStorefrontView; label: string; icon: typeof Home; badge?: string; sub?: string }> = [
+  { view: "shop", label: "Shop Now", icon: Home },
+  { view: "orders", label: "My Orders", icon: ShoppingBag },
+  { view: "lists", label: "My Lists", icon: Heart, badge: "3" },
+  { view: "offers", label: "Offers & Deals", icon: Gift },
+  { view: "wallet", label: "Wallet & Credits", icon: WalletCards, sub: "Rs 250.00" },
+  { view: "addresses", label: "Addresses", icon: MapPin },
+  { view: "payments", label: "Payments", icon: CreditCard },
+  { view: "settings", label: "Settings", icon: Settings },
+  { view: "support", label: "Help & Support", icon: Bell },
+];
+
+function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefrontView; onView: (view: CustomerStorefrontView) => void }) {
+  return (
+    <div className="border-b border-[#e4ecf7] bg-white/95 px-3 py-2 lg:hidden">
+      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {CUSTOMER_NAV.map((item) => {
+          const Icon = item.icon;
+          const active = activeView === item.view;
+          return (
+            <button
+              type="button"
+              key={item.view}
+              onClick={() => onView(item.view)}
+              className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-black shadow-[0_8px_20px_rgba(20,40,90,0.04)] ${active ? "border-[#075fff] bg-[#075fff] text-white" : "border-[#dfe8f5] bg-white text-[#243653]"}`}
+            >
+              <Icon size={15} />
+              {item.label.replace(" & Credits", "")}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CustomerSidebar({
   shopName,
   shopLocation,
   trackedOrderId,
-  onTrack,
+  activeView,
+  onView,
 }: {
   shopName: string;
   shopLocation: string;
   trackedOrderId: string | null;
-  onTrack: () => void;
+  activeView: CustomerStorefrontView;
+  onView: (view: CustomerStorefrontView) => void;
 }) {
-  const nav = [
-    { label: "Shop Now", icon: Home, active: true },
-    { label: "My Orders", icon: ShoppingBag, onClick: trackedOrderId ? onTrack : undefined },
-    { label: "My Lists", icon: Heart, badge: "3" },
-    { label: "Wallet & Credits", icon: WalletCards, sub: "Rs 250.00" },
-    { label: "Addresses", icon: MapPin },
-    { label: "Payments", icon: WalletCards },
-    { label: "Help & Support", icon: Bell },
-  ];
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col overflow-y-auto bg-[#061a39] px-4 py-6 text-white lg:flex xl:w-[280px]">
       <div className="flex items-center gap-3">
@@ -601,18 +687,19 @@ function CustomerSidebar({
       </div>
 
       <nav className="mt-8 space-y-2">
-        {nav.map((item) => {
+        {CUSTOMER_NAV.map((item) => {
           const Icon = item.icon;
+          const active = activeView === item.view;
           return (
             <button
               type="button"
-              key={item.label}
-              onClick={item.onClick}
-              className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${item.active ? "bg-[#075fff] text-white shadow-[0_12px_30px_rgba(7,95,255,0.32)]" : "text-[#dbe7fb] hover:bg-white/8"}`}
+              key={item.view}
+              onClick={() => onView(item.view)}
+              className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${active ? "bg-[#075fff] text-white shadow-[0_12px_30px_rgba(7,95,255,0.32)]" : "text-[#dbe7fb] hover:bg-white/8"}`}
             >
               <Icon size={19} />
               <span className="min-w-0 flex-1">{item.label}</span>
-              {item.badge ? <span className="rounded-lg bg-[#075fff] px-2 py-0.5 text-xs">{item.badge}</span> : null}
+              {item.view === "orders" && trackedOrderId ? <span className="rounded-lg bg-[#075fff] px-2 py-0.5 text-xs">1</span> : item.badge ? <span className="rounded-lg bg-[#075fff] px-2 py-0.5 text-xs">{item.badge}</span> : null}
               {item.sub ? <span className="text-[11px] text-[#2be07e]">{item.sub}</span> : null}
             </button>
           );
@@ -621,9 +708,9 @@ function CustomerSidebar({
 
       <div className="mt-auto space-y-4 pt-8">
         <div className="rounded-2xl bg-white p-4 text-[#071432] shadow-[0_16px_50px_rgba(0,0,0,0.24)]">
-          <p className="text-sm font-black">Free delivery above</p>
-          <p className="mt-1 font-display text-3xl font-black text-[#075fff]">Rs 500</p>
-          <p className="mt-2 text-xs font-semibold text-[#5f6e88]">Fast and reliable delivery at your doorstep.</p>
+          <p className="text-sm font-black">Order online</p>
+          <p className="mt-1 font-display text-3xl font-black text-[#075fff]">20 min</p>
+          <p className="mt-2 text-xs font-semibold text-[#5f6e88]">Pickup or delivery from the live shop catalog.</p>
         </div>
         <div className="rounded-2xl border border-white/12 bg-white/8 p-4">
           <p className="text-sm font-black">{shopName}</p>
@@ -651,7 +738,7 @@ function CategoryRail({
   const all = [{ key: "all", label: "All" }, ...categories];
   return (
     <div className="overflow-x-auto pb-1">
-      <div className="flex min-w-max gap-3">
+      <div className="flex min-w-max gap-2 sm:gap-3">
         {all.map((cat) => {
           const selected = active === cat.key;
           return (
@@ -659,15 +746,15 @@ function CategoryRail({
               type="button"
               key={cat.key}
               onClick={() => onSelect(cat.key)}
-              className={`flex h-[82px] w-[84px] shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border bg-white text-center text-[11px] font-black transition sm:w-[92px] ${
+              className={`flex h-[72px] w-[74px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border bg-white text-center text-[10px] font-black transition sm:h-[82px] sm:w-[92px] sm:gap-2 sm:text-[11px] ${
                 selected
                   ? "border-[#075fff] text-[#075fff] shadow-[0_14px_34px_rgba(7,95,255,0.16)]"
                   : "border-[#dfe8f5] text-[#172544] hover:border-[#bcd0f4]"
               }`}
             >
-              <span className={`grid h-9 w-9 place-items-center rounded-xl ${selected ? "bg-[#eaf2ff]" : "bg-[#f4f7fc]"}`}>
+              <span className={`grid h-8 w-8 place-items-center rounded-xl sm:h-9 sm:w-9 ${selected ? "bg-[#eaf2ff]" : "bg-[#f4f7fc]"}`}>
                 {"product" in cat && cat.product?.imageUrl ? (
-                  <img src={cat.product.imageUrl} alt="" className="h-8 w-8 object-contain" />
+                  <img src={cat.product.imageUrl} alt="" className="h-7 w-7 object-contain sm:h-8 sm:w-8" />
                 ) : cat.key === "all" ? (
                   <ShoppingBag size={18} />
                 ) : (
@@ -689,7 +776,7 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
     blue: "border-[#dce8ff] bg-[#f4f8ff] text-[#075fff]",
     orange: "border-[#ffe4be] bg-[#fff8ed] text-[#f97316]",
   }[tone];
-  const Icon = tone === "green" ? Truck : tone === "blue" ? Clock : Store;
+  const Icon = tone === "green" ? PackageCheck : tone === "blue" ? Clock : Store;
   return (
     <div className={`flex items-center gap-3 rounded-2xl border p-4 ${styles}`}>
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/80">
@@ -705,8 +792,8 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
 
 function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
   return (
-    <article className="group rounded-2xl border border-[#e3ebf7] bg-white p-3 shadow-[0_12px_35px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)]">
-      <div className="relative grid aspect-square place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[#eef5ff]">
+    <article className="group rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_12px_35px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
+      <div className="relative grid aspect-[1.08/1] place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[#eef5ff] sm:aspect-square">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-[76%] w-[76%] object-contain transition duration-300 group-hover:scale-105" />
         ) : (
@@ -717,14 +804,14 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
             <span className="font-display text-lg font-black text-[#b9c6dc]">{product.name.charAt(0).toUpperCase()}</span>
           </div>
         )}
-        <button type="button" aria-label={`Save ${product.name}`} className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white text-[#7b8aa5] shadow-sm">
+        <button type="button" aria-label={`Save ${product.name}`} className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-white text-[#7b8aa5] shadow-sm sm:right-2 sm:top-2 sm:h-8 sm:w-8">
           <Heart size={16} />
         </button>
       </div>
-      <div className="mt-3 min-h-[86px]">
-        <h3 className="line-clamp-2 text-sm font-black leading-snug text-[#0b1735]">{product.name}</h3>
+      <div className="mt-2 min-h-[82px] sm:mt-3 sm:min-h-[86px]">
+        <h3 className="line-clamp-2 text-[13px] font-black leading-snug text-[#0b1735] sm:text-sm">{product.name}</h3>
         <p className="mt-1 text-xs font-semibold text-[#4f5f7b]">{product.unit}</p>
-        <p className="mt-2 text-base font-black text-[#071432]">
+        <p className="mt-1.5 text-sm font-black text-[#071432] sm:mt-2 sm:text-base">
           {formatRs(product.price)}
           {product.mrp && product.mrp > product.price ? (
             <span className="ml-2 text-xs font-semibold text-[#95a3bb] line-through">{formatRs(product.mrp)}</span>
@@ -738,7 +825,7 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
         <button
           type="button"
           onClick={() => onChange(1)}
-          className="mt-3 flex h-10 w-full items-center justify-center rounded-xl border border-[#cfe0ff] bg-[#f8fbff] text-sm font-black text-[#075fff] transition hover:bg-[#eaf2ff]"
+          className="mt-2 flex h-9 w-full items-center justify-center rounded-xl border border-[#cfe0ff] bg-[#f8fbff] text-sm font-black text-[#075fff] transition hover:bg-[#eaf2ff] sm:mt-3 sm:h-10"
         >
           Add
         </button>
@@ -777,12 +864,12 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
 
 function QuantityStepper({ qty, onChange, compact = false }: { qty: number; onChange: (next: number) => void; compact?: boolean }) {
   return (
-    <div className={`mt-3 flex items-center overflow-hidden rounded-xl border border-[#d9e4f2] bg-[#f8fbff] ${compact ? "mt-0" : ""}`}>
-      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-10 flex-1 place-items-center text-[#075fff]">
+    <div className={`mt-2 flex items-center overflow-hidden rounded-xl border border-[#d9e4f2] bg-[#f8fbff] sm:mt-3 ${compact ? "mt-0 sm:mt-0" : ""}`}>
+      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-9 flex-1 place-items-center text-[#075fff] sm:h-10">
         <Minus size={16} />
       </button>
-      <span className="grid h-10 min-w-10 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums">{qty}</span>
-      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-10 flex-1 place-items-center text-[#075fff]">
+      <span className="grid h-9 min-w-9 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums sm:h-10 sm:min-w-10">{qty}</span>
+      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-9 flex-1 place-items-center text-[#075fff] sm:h-10">
         <Plus size={16} />
       </button>
     </div>
@@ -1097,6 +1184,539 @@ function HowOrderingWorks() {
     </section>
   );
 }
+
+function CustomerPortalPage({
+  view,
+  catalog,
+  products,
+  onView,
+  onAddProduct,
+}: {
+  view: CustomerStorefrontView;
+  catalog: CustomerCatalog;
+  products: CustomerCatalogProduct[];
+  onView: (view: CustomerStorefrontView) => void;
+  onAddProduct: (productId: string) => void;
+}) {
+  const featured = products.slice(0, 6);
+  if (view === "orders") return <OrdersPortalPage products={featured} onView={onView} />;
+  if (view === "lists") return <ListsPortalPage products={featured} onView={onView} onAddProduct={onAddProduct} />;
+  if (view === "offers") return <OffersPortalPage products={featured} onView={onView} onAddProduct={onAddProduct} />;
+  if (view === "wallet") return <WalletPortalPage onView={onView} />;
+  if (view === "addresses") return <AddressesPortalPage catalog={catalog} onView={onView} />;
+  if (view === "payments") return <PaymentsPortalPage onView={onView} />;
+  if (view === "settings") return <CustomerSettingsPortalPage catalog={catalog} onView={onView} />;
+  return <SupportPortalPage catalog={catalog} onView={onView} />;
+}
+
+function PortalHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
+  return (
+    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-[#071432]">{title}</h1>
+        <p className="mt-1 text-sm font-semibold text-[#66758f]">{subtitle}</p>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function PortalCard({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <section className={`rounded-[22px] border border-[#e3ebf7] bg-white p-4 shadow-[0_18px_60px_rgba(20,60,120,0.055)] ${className}`}>
+      {children}
+    </section>
+  );
+}
+
+function IconBubble({ icon: Icon, tone = "blue" }: { icon: typeof Home; tone?: "blue" | "green" | "orange" | "red" | "purple" | "slate" }) {
+  const styles = {
+    blue: "bg-[#eaf2ff] text-[#075fff]",
+    green: "bg-[#e9fbf0] text-[#0f9f4a]",
+    orange: "bg-[#fff4e5] text-[#f97316]",
+    red: "bg-[#fff1f2] text-[#ef4444]",
+    purple: "bg-[#f4eaff] text-[#7c3aed]",
+    slate: "bg-[#f1f5f9] text-[#405173]",
+  }[tone];
+  return (
+    <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${styles}`}>
+      <Icon size={21} />
+    </span>
+  );
+}
+
+function ProductThumb({ product, size = "h-12 w-12" }: { product?: CustomerCatalogProduct; size?: string }) {
+  return (
+    <div className={`grid ${size} shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#f8fbff] to-[#eef5ff]`}>
+      {product?.imageUrl ? (
+        <img src={product.imageUrl} alt="" className="h-[82%] w-[82%] object-contain" />
+      ) : (
+        <PackageCheck size={20} className="text-[#075fff]" />
+      )}
+    </div>
+  );
+}
+
+function OrdersPortalPage({ products, onView }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void }) {
+  const orderItems = products.slice(0, 4);
+  const orders = [
+    { id: "KOS12345678", date: "Today, 10:32 AM", total: 847.3, status: "Out for Delivery", method: "Delivery" },
+    { id: "KOS12345677", date: "9 May 2025, 08:45 PM", total: 1235.6, status: "Delivered", method: "Delivery" },
+    { id: "KOS12345676", date: "8 May 2025, 07:15 PM", total: 635, status: "Delivered", method: "Self Pickup" },
+    { id: "KOS12345675", date: "7 May 2025, 06:20 PM", total: 892.4, status: "Returned", method: "Delivery" },
+  ];
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div>
+        <PortalHeader title="My Orders" subtitle="Track, manage, and reorder your purchases" />
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
+          <SearchBox placeholder="Search by order ID or item..." />
+          <div className="flex gap-2 overflow-x-auto">
+            {["All", "Processing", "Packed", "Out for Delivery", "Delivered", "Cancelled"].map((tab, index) => (
+              <button key={tab} type="button" className={`shrink-0 rounded-xl border px-4 py-2 text-xs font-black ${index === 0 ? "border-[#075fff] bg-[#eaf2ff] text-[#075fff]" : "border-[#dfe8f5] bg-white text-[#52617a]"}`}>{tab}</button>
+            ))}
+          </div>
+        </div>
+        <PortalCard className="mb-5 border-[#89b5ff] bg-[#f8fbff]">
+          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_120px] lg:items-center">
+            <div>
+              <span className="rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-black text-[#075fff]">Active Order</span>
+              <h2 className="mt-4 text-lg font-black">Order #KOS12345678</h2>
+              <p className="text-sm font-semibold text-[#66758f]">8 items - {formatRs(847.3)}</p>
+              <p className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#eaf2ff] px-3 py-2 text-xs font-black text-[#075fff]"><Truck size={15} /> Out for Delivery</p>
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {["Placed", "Confirmed", "Packed", "Out", "Delivered"].map((step, index) => (
+                <div key={step} className="text-center">
+                  <span className={`mx-auto grid h-11 w-11 place-items-center rounded-full ${index < 4 ? "bg-[#075fff] text-white" : "bg-white text-[#8aa0bd]"}`}>
+                    {index < 4 ? <CheckCircle2 size={18} /> : <PackageCheck size={18} />}
+                  </span>
+                  <p className="mt-2 text-[11px] font-black text-[#172544]">{step}</p>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="rounded-xl bg-[#075fff] px-4 py-3 text-sm font-black text-white">Track Order</button>
+          </div>
+        </PortalCard>
+        <PortalCard className="overflow-hidden p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-[#f8fbff] text-xs font-black uppercase tracking-wide text-[#70809a]">
+                <tr><th className="px-4 py-3">Order</th><th>Date & Time</th><th>Items</th><th>Total</th><th>Status</th><th>Method</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {orders.map((order) => (
+                  <tr key={order.id} className="border-t border-[#edf2f8]">
+                    <td className="px-4 py-4 font-black">#{order.id}</td>
+                    <td className="font-semibold text-[#52617a]">{order.date}</td>
+                    <td className="font-semibold">{Math.max(4, products.length)} items</td>
+                    <td className="font-black">{formatRs(order.total)}</td>
+                    <td><StatusPill status={order.status} /></td>
+                    <td className="font-semibold text-[#52617a]">{order.method}</td>
+                    <td><button type="button" className="rounded-xl border border-[#dfe8f5] px-3 py-2 text-xs font-black text-[#075fff]">View Details</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </PortalCard>
+      </div>
+      <aside className="space-y-4">
+        <PortalCard>
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg font-black">Order #KOS12345678</h2>
+            <button type="button" className="text-[#71809a]"><X size={18} /></button>
+          </div>
+          <p className="mt-2 rounded-xl bg-[#eaf2ff] px-3 py-2 text-sm font-black text-[#075fff]">Out for Delivery - Today, 12:15 PM</p>
+          <h3 className="mt-5 text-sm font-black">Items ({orderItems.length || 1})</h3>
+          <div className="mt-3 space-y-3">
+            {(orderItems.length ? orderItems : [undefined]).map((product, index) => (
+              <div key={product?.id ?? index} className="flex items-center gap-3">
+                <ProductThumb product={product} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-black">{product?.name ?? "Store item"}</p>
+                  <p className="text-xs font-semibold text-[#66758f]">{formatRs(product?.price ?? 120)}</p>
+                </div>
+                <span className="text-xs font-black">x1</span>
+              </div>
+            ))}
+          </div>
+          <PriceSummaryLine label="Grand Total" value={formatRs(847.3)} strong />
+          <button type="button" onClick={() => onView("shop")} className="mt-4 w-full rounded-xl border border-[#cfe0ff] py-3 text-sm font-black text-[#075fff]">Reorder</button>
+        </PortalCard>
+        <PortalCard className="bg-[#f1fbf5]">
+          <p className="font-black text-[#0f9f4a]">Need help?</p>
+          <p className="mt-1 text-sm font-semibold text-[#52617a]">Contact the store for order help.</p>
+          <button type="button" onClick={() => onView("support")} className="mt-4 w-full rounded-xl bg-white py-3 text-sm font-black text-[#075fff]">Chat with Support</button>
+        </PortalCard>
+      </aside>
+    </div>
+  );
+}
+
+function ListsPortalPage({ products, onView, onAddProduct }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void; onAddProduct: (id: string) => void }) {
+  const [selected, setSelected] = useState(() => new Set(products.slice(0, 3).map((p) => p.id)));
+  const total = products.reduce((sum, p) => sum + p.price, 0);
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div>
+        <PortalHeader
+          title="My Lists"
+          subtitle="Save time by creating and managing your shopping lists."
+          action={<button type="button" className="rounded-xl bg-[#075fff] px-5 py-3 text-sm font-black text-white"><Plus size={16} className="inline" /> Create New List</button>}
+        />
+        <div className="mb-5 grid gap-3 md:grid-cols-4">
+          {["Monthly Grocery", "Breakfast Items", "Cleaning Supplies", "Festival Shopping"].map((list, index) => (
+            <PortalCard key={list} className={index === 0 ? "border-[#075fff] bg-[#f8fbff]" : ""}>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-black text-[#075fff]">{list}</p>
+                  <p className="mt-2 text-xs font-semibold text-[#66758f]">{24 - index * 4} items</p>
+                  <p className="mt-3 text-sm font-black">Est. {formatRs(1847 - index * 320)}</p>
+                </div>
+                {index === 0 ? <Star size={17} className="fill-[#facc15] text-[#facc15]" /> : null}
+              </div>
+            </PortalCard>
+          ))}
+        </div>
+        <PortalCard className="overflow-hidden p-0">
+          <div className="flex flex-col gap-3 border-b border-[#edf2f8] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-display text-lg font-black">Monthly Grocery</h2>
+              <p className="text-xs font-semibold text-[#66758f]">{products.length || 8} items - Updated 2 hrs ago</p>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="rounded-xl border border-[#dfe8f5] px-4 py-2 text-xs font-black text-[#405173]"><Edit3 size={14} className="inline" /> Rename</button>
+              <button type="button" className="rounded-xl bg-[#075fff] px-4 py-2 text-xs font-black text-white" onClick={() => products.forEach((p) => selected.has(p.id) && onAddProduct(p.id))}>Move to Cart</button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+          <div className="min-w-[720px] divide-y divide-[#edf2f8]">
+            {(products.length ? products : []).map((product) => {
+              const checked = selected.has(product.id);
+              return (
+                <div key={product.id} className="grid grid-cols-[28px_52px_minmax(0,1fr)_120px_110px_40px] items-center gap-3 px-4 py-3 text-sm">
+                  <input type="checkbox" checked={checked} onChange={(e) => setSelected((prev) => {
+                    const next = new Set(prev);
+                    if (e.target.checked) next.add(product.id);
+                    else next.delete(product.id);
+                    return next;
+                  })} />
+                  <ProductThumb product={product} />
+                  <div className="min-w-0"><p className="truncate font-black">{product.name}</p><p className="text-xs font-semibold text-[#66758f]">{product.unit}</p></div>
+                  <p className="font-black">{formatRs(product.price)}</p>
+                  <p className="font-black text-[#0f9f4a]">In Stock</p>
+                  <button type="button" className="text-[#ef4444]"><Trash2 size={16} /></button>
+                </div>
+              );
+            })}
+          </div>
+          </div>
+          {products.length === 0 ? <EmptyPortal label="No list items yet" /> : null}
+        </PortalCard>
+      </div>
+      <aside className="space-y-4">
+        <PortalCard>
+          <h2 className="font-display text-lg font-black">Smart Suggestions</h2>
+          <div className="mt-3 space-y-3">
+            {products.slice(0, 4).map((p) => (
+              <div key={p.id} className="flex items-center gap-3">
+                <ProductThumb product={p} />
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{p.name}</p><p className="text-xs text-[#66758f]">Frequently bought</p></div>
+                <button type="button" onClick={() => onAddProduct(p.id)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#cfe0ff] text-[#075fff]"><Plus size={15} /></button>
+              </div>
+            ))}
+          </div>
+        </PortalCard>
+        <PortalCard>
+          <h2 className="font-display text-lg font-black">List Summary</h2>
+          <PriceSummaryLine label="Items in list" value={`${products.length}`} />
+          <PriceSummaryLine label="Items selected" value={`${selected.size}`} />
+          <PriceSummaryLine label="Estimated total" value={formatRs(total)} strong />
+          <button type="button" onClick={() => onView("shop")} className="mt-4 w-full rounded-xl bg-[#075fff] py-3 text-sm font-black text-white">Continue Shopping</button>
+        </PortalCard>
+      </aside>
+    </div>
+  );
+}
+
+function OffersPortalPage({ products, onView, onAddProduct }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void; onAddProduct: (id: string) => void }) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-5">
+        <PortalHeader title="Offers & Deals" subtitle="Best offers, biggest savings. Shop more, save more!" />
+        <section className="overflow-hidden rounded-[24px] bg-[#061a5f] p-6 text-white shadow-[0_24px_70px_rgba(7,95,255,0.22)]">
+          <h2 className="font-display text-3xl font-black">Weekend Super Saver!</h2>
+          <p className="mt-2 text-xl font-black text-[#ffc247]">Up to 50% OFF <span className="text-white">on daily essentials</span></p>
+          <button type="button" onClick={() => onView("shop")} className="mt-5 rounded-xl bg-white px-5 py-3 text-sm font-black text-[#075fff]">Shop Now</button>
+        </section>
+        <div className="grid gap-3 md:grid-cols-4">
+          {["FLAT Rs 50 OFF", "10% OFF", "FAST PICKUP", "Rs 75 CASHBACK"].map((offer, index) => (
+            <PortalCard key={offer} className={["border-dashed border-[#82e6b0] bg-[#f5fff8]", "border-dashed border-[#bcd0ff] bg-[#f7faff]", "border-dashed border-[#ffd08a] bg-[#fff8ed]", "border-dashed border-[#ddb7ff] bg-[#fbf6ff]"][index]}>
+              <IconBubble icon={index === 2 ? Store : index === 3 ? WalletCards : Gift} tone={index === 2 ? "orange" : index === 3 ? "purple" : "green"} />
+              <p className="mt-3 font-black">{offer}</p>
+              <p className="mt-1 text-xs font-semibold text-[#66758f]">Valid on selected orders</p>
+              <button type="button" className="mt-4 w-full rounded-xl bg-[#075fff] py-2 text-xs font-black text-white">Claim Offer</button>
+            </PortalCard>
+          ))}
+        </div>
+        <PortalCard>
+          <div className="flex items-center justify-between"><h2 className="font-display text-lg font-black">Limited Time Deals</h2><button className="text-sm font-black text-[#075fff]" type="button">View All</button></div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {products.map((product, index) => (
+              <div key={product.id} className="flex items-center gap-3 rounded-2xl border border-[#edf2f8] p-3">
+                <ProductThumb product={product} />
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{product.name}</p><p className="text-xs text-[#ef4444]">{20 + index * 2}% OFF</p><p className="font-black">{formatRs(product.price * 0.9)}</p></div>
+                <button type="button" onClick={() => onAddProduct(product.id)} className="rounded-lg border border-[#cfe0ff] px-3 py-2 text-xs font-black text-[#075fff]">Add</button>
+              </div>
+            ))}
+          </div>
+        </PortalCard>
+      </div>
+      <aside className="space-y-4">
+        <PortalCard><h2 className="font-display text-lg font-black">Your Savings Summary</h2><PriceSummaryLine label="Coupons Available" value="7" /><PriceSummaryLine label="Wallet Cashback" value="Rs 350.00" /><PriceSummaryLine label="Total Savings" value="Rs 326.00" strong /></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Applied Promotions</h2><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">GROCERY10 - saved Rs 82.50</p><p className="mt-2 rounded-xl bg-[#f7faff] p-3 text-sm font-black text-[#075fff]">PICKUP20 - priority pickup</p></PortalCard>
+      </aside>
+    </div>
+  );
+}
+
+function WalletPortalPage({ onView }: { onView: (view: CustomerStorefrontView) => void }) {
+  const rows = [
+    ["23 May 2025", "Order #ORD12345", "Payment", "-Rs 796.00", "Success"],
+    ["21 May 2025", "Added Money", "Add Money", "+Rs 500.00", "Success"],
+    ["20 May 2025", "Cashback - Offer", "Cashback", "+Rs 35.00", "Success"],
+    ["19 May 2025", "Refund - Order #ORD12210", "Refund", "+Rs 65.00", "Pending"],
+  ];
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-5">
+        <PortalHeader title="Wallet & Credits" subtitle="Manage your balance, credits and transactions" action={<span className="inline-flex items-center gap-2 text-sm font-black text-[#0f9f4a]"><ShieldCheck size={18} /> 100% Secure Payments</span>} />
+        <div className="grid gap-4 md:grid-cols-4">
+          <PortalCard className="bg-[#075fff] text-white md:col-span-2"><p className="text-sm font-bold opacity-90">Main Wallet Balance</p><p className="mt-5 font-display text-4xl font-black">Rs 250.00</p><button type="button" className="mt-5 w-full rounded-xl bg-white py-3 text-sm font-black text-[#075fff]"><Plus size={15} className="inline" /> Add Money</button></PortalCard>
+          <PortalCard className="bg-[#f1fbf5]"><p className="font-black text-[#0f9f4a]">Store Credit</p><p className="mt-8 font-display text-2xl font-black">Rs 120.00</p><p className="text-xs text-[#66758f]">Available to use</p></PortalCard>
+          <PortalCard className="bg-[#fff8ed]"><p className="font-black text-[#f97316]">Cashback Earned</p><p className="mt-8 font-display text-2xl font-black">Rs 85.00</p><p className="text-xs text-[#66758f]">Earned from offers</p></PortalCard>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          {[["Add Money", WalletCards], ["Use Credit", Gift], ["Refer & Earn", UsersFallbackIcon], ["View Offers", Gift]].map(([label, Icon]) => (
+            <PortalCard key={String(label)}><div className="flex items-center gap-3"><IconBubble icon={Icon as typeof Home} /><div><p className="font-black">{String(label)}</p><p className="text-xs text-[#66758f]">Quick wallet action</p></div><ChevronRight size={16} className="ml-auto" /></div></PortalCard>
+          ))}
+        </div>
+        <PortalCard className="overflow-hidden p-0">
+          <div className="flex items-center justify-between p-4"><h2 className="font-display text-lg font-black">Recent Wallet Transactions</h2><button type="button" className="text-sm font-black text-[#075fff]">View All Transactions</button></div>
+          <div className="divide-y divide-[#edf2f8]">
+            {rows.map(([date, ref, type, amount, status]) => <TransactionRow key={ref} left={date} title={ref} sub={type} amount={amount} status={status} />)}
+          </div>
+        </PortalCard>
+      </div>
+      <aside className="space-y-4">
+        <PortalCard><h2 className="font-display text-lg font-black">How to use Credits</h2>{["Store Credit can reduce your order amount.", "Cashback is added after delivery.", "Refunds arrive within 24-48 hours."].map((text) => <InfoLine key={text} text={text} />)}</PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Credit Expiry</h2><p className="mt-4 rounded-xl bg-[#fff8ed] p-3 text-sm font-black">Store Credit Rs 45.00 expires on 30 May 2025</p></PortalCard>
+        <PortalCard className="bg-[#061a39] text-white"><h2 className="font-display text-lg font-black">Loyalty Tier</h2><p className="mt-4 text-xl font-black">Gold Member</p><button type="button" onClick={() => onView("offers")} className="mt-4 text-sm font-black text-[#6fb0ff]">Explore All Benefits <ChevronRight size={15} className="inline" /></button></PortalCard>
+      </aside>
+    </div>
+  );
+}
+
+function AddressesPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (view: CustomerStorefrontView) => void }) {
+  const [addresses, setAddresses] = useState([
+    { label: "Home", detail: "21, Gandhi Market, Jaipur, Rajasthan - 302001", phone: "+91 98290 12345", default: true },
+    { label: "Work", detail: "2nd Floor, C-56, Patrika Gate, Malviya Nagar, Jaipur - 302017", phone: "+91 98765 43210", default: false },
+    { label: "Parents' House", detail: "14/102, Vaishali Nagar, Jaipur, Rajasthan - 302021", phone: "+91 99887 77665", default: false },
+  ]);
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div>
+        <PortalHeader title="Addresses" subtitle="Manage your delivery and pickup addresses" action={<button type="button" className="rounded-xl bg-[#075fff] px-5 py-3 text-sm font-black text-white"><Plus size={15} className="inline" /> Add New Address</button>} />
+        <div className="mb-5 flex gap-2 overflow-x-auto">{["All Addresses (3)", "Delivery Addresses (3)", "Pickup Addresses (0)"].map((tab, index) => <button key={tab} className={`shrink-0 rounded-xl px-4 py-2 text-sm font-black ${index === 0 ? "bg-[#eaf2ff] text-[#075fff]" : "text-[#52617a]"}`} type="button">{tab}</button>)}</div>
+        <div className="space-y-4">
+          {addresses.map((address) => (
+            <PortalCard key={address.label}>
+              <div className="flex gap-4">
+                <IconBubble icon={address.label === "Home" ? Home : address.label === "Work" ? ShoppingBag : User} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2"><h2 className="font-display text-lg font-black">{address.label}</h2>{address.default ? <span className="rounded-full bg-[#e9fbf0] px-2 py-1 text-xs font-black text-[#0f9f4a]">Default</span> : null}</div>
+                  <p className="mt-2 text-sm font-semibold text-[#283957]">{address.detail}</p>
+                  <p className="mt-2 text-sm text-[#66758f]">{address.phone}</p>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    <button type="button" className="rounded-xl border border-[#dfe8f5] py-2 text-sm font-black text-[#075fff]"><Edit3 size={14} className="inline" /> Edit</button>
+                    <button type="button" onClick={() => setAddresses((rows) => rows.filter((row) => row.label !== address.label))} className="rounded-xl border border-[#ffd6d6] py-2 text-sm font-black text-[#ef4444]"><Trash2 size={14} className="inline" /> Delete</button>
+                    <button type="button" onClick={() => setAddresses((rows) => rows.map((row) => ({ ...row, default: row.label === address.label })))} className="rounded-xl border border-[#dfe8f5] py-2 text-sm font-black text-[#405173]"><Star size={14} className="inline" /> Set as Default</button>
+                  </div>
+                </div>
+              </div>
+            </PortalCard>
+          ))}
+        </div>
+      </div>
+      <aside className="space-y-4">
+        <PortalCard><h2 className="font-display text-lg font-black">Serviceability Check</h2><div className="mt-4 grid h-56 place-items-center rounded-2xl bg-[#eef5ff] text-[#075fff]"><MapPin size={46} /></div><p className="mt-3 text-sm font-black text-[#0f9f4a]">We deliver to this location</p></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Pickup from Store</h2><p className="mt-3 font-black">{catalog.shop.name}</p><p className="text-sm text-[#66758f]">{catalog.shop.city || "Local store"}</p><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">Pickup in 20 mins</p></PortalCard>
+      </aside>
+    </div>
+  );
+}
+
+function PaymentsPortalPage({ onView }: { onView: (view: CustomerStorefrontView) => void }) {
+  const methods = ["ramesh@okicici", "Visa **** 4242", "Mastercard **** 8567", "HDFC Bank", "Cash on Delivery", "KiranaOS Wallet"];
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-5">
+        <PortalHeader title="Payments" subtitle="Manage your payment methods, preferences and transaction history" action={<button type="button" className="rounded-xl border border-[#cfe0ff] px-4 py-2 text-sm font-black text-[#075fff]"><Plus size={15} className="inline" /> Add Payment Method</button>} />
+        <PortalCard>
+          <h2 className="font-display text-lg font-black">Saved Payment Methods</h2>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {methods.map((method, index) => <div key={method} className={`rounded-2xl border p-4 ${index === 0 ? "border-[#075fff] bg-[#f8fbff]" : "border-[#e3ebf7]"}`}><div className="flex justify-between"><IconBubble icon={index < 3 ? CreditCard : index === 3 ? Store : WalletCards} tone={index === 0 ? "green" : "blue"} /><MoreVertical size={18} /></div><p className="mt-5 font-black">{method}</p><button className="mt-4 rounded-lg bg-[#eaf2ff] px-3 py-1.5 text-xs font-black text-[#075fff]" type="button">{index === 0 ? "Default" : "Set as Default"}</button></div>)}
+          </div>
+        </PortalCard>
+        <PortalCard className="overflow-hidden p-0">
+          <div className="flex items-center justify-between p-4"><h2 className="font-display text-lg font-black">Transaction History</h2><button type="button" className="rounded-xl border border-[#dfe8f5] px-3 py-2 text-xs font-black">Filter</button></div>
+          {["ORD-84521", "ORD-84520", "ORD-84519", "ORD-84518", "ORD-84517"].map((id, index) => <TransactionRow key={id} left={`#${id}`} title={`${12 - index} May 2025`} sub={methods[index % methods.length]} amount={formatRs([265, 120, 560, 200, 160][index])} status={index === 4 ? "Pending" : "Paid"} />)}
+        </PortalCard>
+      </div>
+      <aside className="space-y-4">
+        <PortalCard><IconBubble icon={ShieldCheck} /><h2 className="mt-3 font-display text-lg font-black">Payment Security</h2>{["PCI DSS compliant", "Bank-level encryption", "Secure UPI & card processing", "Your data is never stored"].map((text) => <InfoLine key={text} text={text} />)}</PortalCard>
+        <PortalCard><IconBubble icon={RefreshCw} /><h2 className="mt-3 font-display text-lg font-black">Refunds & Returns</h2><p className="mt-2 text-sm text-[#66758f]">Refunds are initiated to your original payment method within 3-5 business days.</p><button type="button" onClick={() => onView("support")} className="mt-4 text-sm font-black text-[#075fff]">View Refund Policy <ChevronRight size={15} className="inline" /></button></PortalCard>
+      </aside>
+    </div>
+  );
+}
+
+function CustomerSettingsPortalPage({ catalog, onView }: { catalog: CustomerCatalog; onView: (view: CustomerStorefrontView) => void }) {
+  const [toggles, setToggles] = useState({ offers: true, arrivals: true, discounts: true, delivered: true, whatsapp: true, sms: true, analytics: true });
+  const toggle = (key: keyof typeof toggles) => setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div>
+        <PortalHeader title="Settings" subtitle="Manage your account, preferences and privacy settings" />
+        <div className="mb-5 flex max-w-xl rounded-2xl border border-[#dfe8f5] bg-white p-1">
+          {["Account", "Preferences", "Notifications", "Privacy & Security"].map((tab, index) => <button key={tab} className={`flex-1 rounded-xl px-3 py-2 text-xs font-black ${index === 0 ? "bg-[#eaf2ff] text-[#075fff]" : "text-[#52617a]"}`} type="button">{tab}</button>)}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <PortalCard><SectionTitle icon={User} title="Profile Information" sub="Update your personal details and profile information." /><SettingsInput label="Full Name" value="Ramesh Sharma" /><SettingsInput label="Email Address" value="ramesh.sharma91@gmail.com" verified /><SettingsInput label="Date of Birth" value="12 March 1991" /><button type="button" className="mt-4 rounded-xl border border-[#cfe0ff] px-4 py-2 text-sm font-black text-[#075fff]">Edit Profile</button></PortalCard>
+          <PortalCard><SectionTitle icon={Phone} title="Mobile Number" sub="Used for order updates and notifications." /><SettingsInput label="Mobile Number" value="+91 98920 12345" verified /><div className="mt-4 rounded-2xl bg-[#f1fbf5] p-4 text-sm font-black text-[#0f9f4a]">Your account is secure</div></PortalCard>
+          <PortalCard><SectionTitle icon={Bell} title="Notification Preferences" sub="Choose how you want to receive updates." />{[["Promotions & Offers", "offers"], ["New Arrivals & Updates", "arrivals"], ["Exclusive Discounts", "discounts"]].map(([label, key]) => <ToggleRow key={key} label={label} checked={toggles[key as keyof typeof toggles]} onClick={() => toggle(key as keyof typeof toggles)} />)}</PortalCard>
+          <PortalCard><SectionTitle icon={Truck} title="Order Updates" sub="Get real-time updates for your orders." />{[["Order Delivered", "delivered"], ["WhatsApp Notifications", "whatsapp"], ["SMS Notifications", "sms"]].map(([label, key]) => <ToggleRow key={key} label={label} checked={toggles[key as keyof typeof toggles]} onClick={() => toggle(key as keyof typeof toggles)} />)}</PortalCard>
+          <PortalCard><SectionTitle icon={Settings} title="Theme Appearance" sub="Choose your preferred theme." /><div className="grid grid-cols-2 gap-3"><button type="button" className="rounded-xl border border-[#075fff] bg-[#f8fbff] py-3 font-black text-[#075fff]">Light</button><button type="button" className="rounded-xl border border-[#dfe8f5] py-3 font-black text-[#405173]">Dark</button></div></PortalCard>
+          <PortalCard><SectionTitle icon={ShieldCheck} title="Privacy Controls" sub="Manage your data and privacy preferences." /><ToggleRow label="Share data for recommendations" checked={toggles.analytics} onClick={() => toggle("analytics")} /><button type="button" className="mt-4 text-sm font-black text-[#ef4444]">Logout from All Devices</button></PortalCard>
+        </div>
+      </div>
+      <aside className="space-y-4">
+        <PortalCard><h2 className="font-display text-lg font-black">Account Summary</h2><div className="mt-4 flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-full bg-[#eaf2ff] font-black text-[#075fff]">RS</span><div><p className="font-black">Ramesh Sharma</p><p className="text-xs text-[#66758f]">Customer</p></div></div><PriceSummaryLine label="Wallet Balance" value="Rs 250.00" /><PriceSummaryLine label="Preferred Store" value={catalog.shop.name} /></PortalCard>
+        <PortalCard className="bg-[#061a39] text-white"><h2 className="font-display text-lg font-black">KiranaOS Plus</h2><p className="mt-3 text-sm text-[#b5c4df]">You are Rs 56 away from Gold membership</p><div className="mt-4 h-2 rounded-full bg-white/15"><div className="h-full w-2/3 rounded-full bg-[#ffc247]" /></div></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Quick Actions</h2>{[["Manage Addresses", "addresses"], ["Payment Methods", "payments"], ["My Lists", "lists"], ["Help & Support", "support"]].map(([label, target]) => <button key={label} type="button" onClick={() => onView(target as CustomerStorefrontView)} className="flex w-full items-center justify-between border-b border-[#edf2f8] py-3 text-sm font-black"><span>{label}</span><ChevronRight size={15} /></button>)}</PortalCard>
+      </aside>
+    </div>
+  );
+}
+
+function SupportPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (view: CustomerStorefrontView) => void }) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-5">
+        <PortalHeader title="Help & Support" subtitle="We're here to help! Find answers or connect with support." />
+        <PortalCard>
+          <h2 className="font-display text-lg font-black">How can we help you today?</h2>
+          <div className="mt-4 flex gap-3"><SearchBox placeholder="Search help articles, FAQs or issues..." /><button type="button" className="rounded-xl bg-[#075fff] px-6 text-sm font-black text-white">Search</button></div>
+          <div className="mt-3 flex flex-wrap gap-2">{["Track Order", "Refund Status", "Cancel Order", "Payment Issues", "Wrong Item"].map((tag) => <button key={tag} type="button" className="rounded-full border border-[#dfe8f5] px-3 py-1.5 text-xs font-black text-[#52617a]">{tag}</button>)}</div>
+        </PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Browse Help Topics</h2><div className="mt-4 grid gap-3 md:grid-cols-5">{[["Late Delivery", Clock, "Track delivery issues"], ["Wrong Item", PackageCheck, "Received wrong item"], ["Refund & Returns", RefreshCw, "Refund status"], ["Payment Issue", CreditCard, "Failed payments"], ["App & Technical", Settings, "Technical glitches"]].map(([title, Icon, sub], index) => <div key={String(title)} className="rounded-2xl border border-[#e3ebf7] p-4 text-center"><IconBubble icon={Icon as typeof Home} tone={["blue", "green", "purple", "orange", "red"][index] as "blue"} /><p className="mt-3 font-black">{String(title)}</p><p className="mt-1 text-xs text-[#66758f]">{String(sub)}</p></div>)}</div></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Contact Support</h2><div className="mt-4 grid gap-3 md:grid-cols-4">{[["Live Chat", MessageCircle, "Start Chat"], ["WhatsApp Help", MessageCircle, "Chat on WhatsApp"], ["Raise a Ticket", Mail, "Raise Ticket"], ["Call Support", Phone, "+91 98920 12345"]].map(([title, Icon, action]) => <div key={String(title)} className="rounded-2xl border border-[#e3ebf7] p-4"><IconBubble icon={Icon as typeof Home} /><p className="mt-3 font-black">{String(title)}</p><button type="button" className="mt-4 w-full rounded-xl border border-[#cfe0ff] py-2 text-xs font-black text-[#075fff]">{String(action)}</button></div>)}</div></PortalCard>
+        <PortalCard className="overflow-hidden p-0"><div className="p-4"><h2 className="font-display text-lg font-black">Your Support Tickets</h2></div>{["Late delivery", "Wrong item received", "Refund not received", "Payment failed but amount debited"].map((issue, index) => <TransactionRow key={issue} left={`#TK-${12458 - index}`} title={issue} sub={`Order #ORD-${89231 - index}`} amount={index === 0 ? "Today" : "Resolved"} status={index === 0 ? "In Progress" : "Resolved"} />)}</PortalCard>
+      </div>
+      <aside className="space-y-4">
+        <PortalCard><h2 className="font-display text-lg font-black">Store Contact</h2><div className="mt-4 flex gap-3"><IconBubble icon={Store} tone="orange" /><div><p className="font-black">{catalog.shop.name}</p><p className="text-sm text-[#66758f]">{catalog.shop.city || "Local store"}</p><p className="text-xs font-black text-[#0f9f4a]">Open</p></div></div><button type="button" className="mt-4 w-full rounded-xl border border-[#cfe0ff] py-3 text-sm font-black text-[#075fff]"><Phone size={15} className="inline" /> Call Store</button><button type="button" className="mt-2 w-full rounded-xl border border-[#cdebd8] bg-[#f1fbf5] py-3 text-sm font-black text-[#0f9f4a]"><MessageCircle size={15} className="inline" /> WhatsApp Store</button></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Store Operating Hours</h2>{["Mon - Fri 7:00 AM - 10:00 PM", "Saturday 7:00 AM - 10:00 PM", "Sunday 7:00 AM - 10:00 PM"].map((row) => <p key={row} className="border-b border-[#edf2f8] py-3 text-sm font-semibold text-[#52617a]">{row}</p>)}</PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black text-[#ef4444]">Emergency Support</h2><InfoLine text="Customer Support (24x7): +91 98920 12345" /><InfoLine text="Email: support@kiranaos.in" /></PortalCard>
+      </aside>
+    </div>
+  );
+}
+
+function SearchBox({ placeholder }: { placeholder: string }) {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-[#dfe8f5] bg-white px-3">
+      <Search size={17} className="text-[#72819a]" />
+      <input placeholder={placeholder} className="min-w-0 flex-1 bg-transparent py-3 text-sm font-semibold outline-none placeholder:text-[#7d8ba4]" />
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const tone = status.includes("Delivered") || status.includes("Paid") || status.includes("Resolved") || status.includes("Success")
+    ? "bg-[#e9fbf0] text-[#0f9f4a]"
+    : status.includes("Return") || status.includes("Pending") || status.includes("Progress")
+      ? "bg-[#fff8ed] text-[#f97316]"
+      : "bg-[#fff1f2] text-[#ef4444]";
+  return <span className={`rounded-lg px-2.5 py-1 text-xs font-black ${tone}`}>{status}</span>;
+}
+
+function PriceSummaryLine({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="mt-3 flex items-center justify-between border-t border-[#edf2f8] pt-3 text-sm">
+      <span className="font-semibold text-[#66758f]">{label}</span>
+      <span className={strong ? "font-display text-lg font-black text-[#075fff]" : "font-black text-[#071432]"}>{value}</span>
+    </div>
+  );
+}
+
+function TransactionRow({ left, title, sub, amount, status }: { left: string; title: string; sub: string; amount: string; status: string }) {
+  return (
+    <div className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[120px_minmax(0,1fr)_110px_110px] sm:items-center sm:gap-3">
+      <p className="font-black text-[#075fff]">{left}</p>
+      <div className="min-w-0"><p className="truncate font-black">{title}</p><p className="truncate text-xs text-[#66758f]">{sub}</p></div>
+      <p className="font-black">{amount}</p>
+      <div className="sm:text-right"><StatusPill status={status} /></div>
+    </div>
+  );
+}
+
+function InfoLine({ text }: { text: string }) {
+  return (
+    <div className="mt-3 flex items-start gap-2 text-sm font-semibold text-[#52617a]">
+      <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#0f9f4a]" />
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function SectionTitle({ icon, title, sub }: { icon: typeof Home; title: string; sub: string }) {
+  return (
+    <div className="mb-4 flex gap-3">
+      <IconBubble icon={icon} />
+      <div><h2 className="font-display text-lg font-black">{title}</h2><p className="text-xs font-semibold text-[#66758f]">{sub}</p></div>
+    </div>
+  );
+}
+
+function SettingsInput({ label, value, verified = false }: { label: string; value: string; verified?: boolean }) {
+  return (
+    <label className="mt-3 block">
+      <span className="text-xs font-black text-[#405173]">{label}</span>
+      <span className="mt-1 flex items-center justify-between rounded-xl border border-[#dfe8f5] bg-white px-3 py-2.5 text-sm font-semibold">
+        {value}
+        {verified ? <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[10px] font-black text-[#0f9f4a]">Verified</span> : null}
+      </span>
+    </label>
+  );
+}
+
+function ToggleRow({ label, checked, onClick }: { label: string; checked: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center justify-between border-t border-[#edf2f8] py-3 text-sm font-black">
+      <span>{label}</span>
+      <span className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[#075fff]" : "bg-[#cbd5e1]"}`}>
+        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${checked ? "left-6" : "left-1"}`} />
+      </span>
+    </button>
+  );
+}
+
+function EmptyPortal({ label }: { label: string }) {
+  return <div className="py-14 text-center text-sm font-semibold text-[#70809a]">{label}</div>;
+}
+
+const UsersFallbackIcon = User;
 
 function OrderQrOverlay({ urls, count, amount, onClose }: { urls: string[]; count: number; amount: number; onClose: () => void }) {
   const [part, setPart] = useState(0);
