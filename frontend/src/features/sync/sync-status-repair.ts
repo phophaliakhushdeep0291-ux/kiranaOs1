@@ -268,7 +268,7 @@ function readNumberFrom(record: unknown, keys: string[]): number | undefined {
 }
 
 function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return Math.round((value + Number.EPSILON) * 100) / 100 || 0;
 }
 
 function positiveMoneyFrom(record: unknown, keys: string[]): boolean {

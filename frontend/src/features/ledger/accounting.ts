@@ -57,7 +57,7 @@ function readNumber(value: unknown, fallback = 0): number {
 }
 
 export function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return Math.round((value + Number.EPSILON) * 100) / 100 || 0;
 }
 
 export function getLedgerCustomerId(entry: Partial<CustomerLedgerEntry>): string | null {

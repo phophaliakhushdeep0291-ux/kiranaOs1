@@ -68,7 +68,7 @@ export function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
 }
 
 export function roundMoney(value: number): number {
-  return Math.round((Number(value) || 0) * 100) / 100;
+  return Math.round((Number(value) || 0) * 100) / 100 || 0;
 }
 
 export function readNumber(value: unknown, fallback = 0): number {

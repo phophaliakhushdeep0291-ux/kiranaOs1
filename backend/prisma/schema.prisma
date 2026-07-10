@@ -612,6 +612,7 @@ model DailyClosingSnapshot {
   totalSalesPaise        Int       @default(0)
   cashReceivedPaise      Int       @default(0)
   upiReceivedPaise       Int       @default(0)
+  bankReceivedPaise      Int       @default(0)
   udharGivenPaise        Int       @default(0)
   oldUdharRecoveredPaise Int       @default(0)
   expectedCashPaise      Int       @default(0)

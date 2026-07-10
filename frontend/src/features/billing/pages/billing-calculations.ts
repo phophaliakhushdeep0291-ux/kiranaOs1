@@ -7,7 +7,7 @@ export function clampAmount(value: number, min: number, max: number): number {
 }
 
 export function roundMoney(value: number): number {
-  return Math.round((Number(value) || 0) * 100) / 100;
+  return Math.round((Number(value) || 0) * 100) / 100 || 0;
 }
 
 export function normalizeSearchText(value: string): string {

@@ -130,7 +130,7 @@ function money(n: number | undefined | null) {
 }
 
 function roundMoney(n: number) {
-  return Math.round(money(n) * 100) / 100;
+  return Math.round(money(n) * 100) / 100 || 0;
 }
 
 function fmt(n: number | undefined | null) {

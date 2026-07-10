@@ -285,7 +285,7 @@ export async function getPaymentModeReport(shopId, { from, to } = {}) {
       orderBy: { createdAt: "desc" },
     }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
   ]);

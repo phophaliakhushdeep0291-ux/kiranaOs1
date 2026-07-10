@@ -60,7 +60,7 @@ function sameLocalDate(dateLike: unknown, yyyyMmDd: string) {
 }
 
 function roundMoney(value: number) {
-  return Math.round((Number(value) || 0) * 100) / 100;
+  return Math.round((Number(value) || 0) * 100) / 100 || 0;
 }
 
 function normaliseCustomerForCache(customer: Customer): Customer {
