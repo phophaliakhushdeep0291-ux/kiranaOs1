@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import {
   ShoppingCart, AlertTriangle, TrendingUp, Minus,
   Wallet, CreditCard, Smartphone, CalendarCheck, Sparkles, HandCoins,
-  ReceiptText, Truck, PackagePlus, Layers, BarChart3, Building2,
+  ReceiptText, Truck, PackagePlus, Layers, BarChart3, Building2, Landmark,
   ChefHat, Wrench, Pill, ClipboardList, Package, ArrowUpRight,
   ArrowDownRight, RefreshCw, CheckCircle2, XCircle, ChevronRight, ChevronDown, Users,
   Wifi, Cloud, MonitorSmartphone,
@@ -231,7 +231,7 @@ function buildDashboardSalesChart(period: DashboardPeriod, range: { from: string
 }
 
 function summariseDashboardPayments(bills: Bill[]) {
-  const summary = { cash: 0, upi: 0, credit: 0, other: 0, total: 0 };
+  const summary = { cash: 0, upi: 0, bank: 0, credit: 0, other: 0, total: 0 };
   for (const bill of bills) {
     const record = bill as Bill & Record<string, unknown>;
     const total = dashboardBillAmount(bill);
@@ -245,14 +245,16 @@ function summariseDashboardPayments(bills: Bill[]) {
       const amount = Math.max(0, money(payment.amount as number));
       const paymentMode = String(payment.mode ?? "").toLowerCase();
       if (paymentMode === "cash") summary.cash += amount;
-      else if (["upi", "bank", "bank_transfer", "card"].includes(paymentMode)) summary.upi += amount;
+      else if (paymentMode === "upi") summary.upi += amount;
+      else if (["bank", "bank_transfer", "card"].includes(paymentMode)) summary.bank += amount;
       else if (paymentMode !== "credit") summary.other += amount;
       if (paymentMode !== "credit") tenderAccounted += amount;
     }
     const remainingPaid = Math.max(0, Math.min(total - credit, paid || total - credit) - tenderAccounted);
     if (remainingPaid > 0) {
       if (mode === "cash") summary.cash += remainingPaid;
-      else if (["upi", "bank", "bank_transfer", "card"].includes(mode)) summary.upi += remainingPaid;
+      else if (mode === "upi") summary.upi += remainingPaid;
+      else if (["bank", "bank_transfer", "card"].includes(mode)) summary.bank += remainingPaid;
       else summary.other += remainingPaid;
     }
     summary.credit += credit;
@@ -274,17 +276,21 @@ interface DashboardStats {
   outstandingCustomers: { customerId: string; customerName: string; mobile?: string | null; outstanding: number; }[];
   cash: number;
   upi: number;
+  bank: number;
   credit: number;
   cashCollected: number;
   upiCollected: number;
+  bankCollected: number;
   supplierCashPaid: number;
   supplierUpiPaid: number;
+  supplierBankPaid: number;
   supplierDue: number;
   purchaseDue: number;
   previousRevenue: number;
   previousGrossProfit: number;
   previousCashCollected: number;
   previousUpiCollected: number;
+  previousBankCollected: number;
   previousOutstanding: number;
   expensesToday: number;
   previousExpenses: number;
@@ -366,21 +372,25 @@ export default function Dashboard() {
     const grossProfit = roundMoney(money(finance?.profitToday ?? reportToday?.profitEstimate ?? localSnapshot.grossProfit ?? backendPnL?.grossProfit));
     const cash = finance?.cashSalesToday ?? reportToday?.cashSales ?? localSnapshot.cash ?? paymentSummary.data?.cash;
     const upi = finance?.upiSalesToday ?? reportToday?.upiSales ?? localSnapshot.upi ?? paymentSummary.data?.upi;
+    const bank = finance?.bankSalesToday ?? reportToday?.bankSales ?? localSnapshot.bank ?? paymentSummary.data?.bank;
     const credit = finance?.udharSalesToday ?? reportToday?.udharSales ?? localSnapshot.credit ?? paymentSummary.data?.credit;
     const todayUdhar = roundMoney(money(credit));
     const cashIn = roundMoney(money(cash));
     const upiIn = roundMoney(money(upi));
+    const bankIn = roundMoney(money(bank));
     const supplierCashPaid = roundMoney(money(finance?.supplierCashPaidToday ?? reportPayments?.purchaseCashPaid));
     const supplierUpiPaid = roundMoney(money(finance?.supplierUpiPaidToday ?? reportPayments?.purchaseUpiPaid));
+    const supplierBankPaid = roundMoney(money(finance?.supplierBankPaidToday ?? reportPayments?.purchaseBankPaid));
     const purchaseDue = roundMoney(money(finance?.purchaseDueToday ?? reportPayments?.purchaseDue));
     const supplierDue = roundMoney(money(finance?.supplierDue ?? reportPayments?.purchaseDue));
     const cashCollected = roundMoney(money(finance?.totalCashCollectedToday ?? reportPayments?.cashIn ?? cashIn));
     const upiCollected = roundMoney(money(finance?.totalUpiCollectedToday ?? reportPayments?.upiIn ?? upiIn));
+    const bankCollected = roundMoney(money(finance?.totalBankCollectedToday ?? reportPayments?.bankIn ?? bankIn));
     const grossMarginPct = revenue > 0
       ? Math.round((grossProfit / revenue) * 100)
       : roundMoney(money(localSnapshot.grossMarginPct ?? backendPnL?.grossMarginPct));
     const totalOutstanding = roundMoney(money(finance?.totalOutstandingUdhar ?? ownerReport?.pendingUdhar ?? localSnapshot.totalOutstanding ?? udharSummary.data?.totalOutstanding));
-    const recoveredToday = roundMoney(money(finance?.cashUdharRecoveryToday) + money(finance?.upiUdharRecoveryToday));
+    const recoveredToday = roundMoney(money(finance?.cashUdharRecoveryToday) + money(finance?.upiUdharRecoveryToday) + money(finance?.bankUdharRecoveryToday));
     const previousOutstanding = roundMoney(Math.max(0, totalOutstanding - todayUdhar + recoveredToday));
     const outstandingCustomers = finance?.outstandingCustomers?.length
       ? finance.outstandingCustomers
@@ -392,12 +402,13 @@ export default function Dashboard() {
       revenue, grossProfit, grossMarginPct,
       billCount: finance?.totalBillsToday ?? reportToday?.bills ?? localSnapshot.billCount ?? billsToday.data?.total ?? 0,
       totalOutstanding, outstandingCustomers,
-      cash: cashIn, upi: upiIn, credit: todayUdhar,
-      cashCollected, upiCollected, supplierCashPaid, supplierUpiPaid, supplierDue, purchaseDue,
+      cash: cashIn, upi: upiIn, bank: bankIn, credit: todayUdhar,
+      cashCollected, upiCollected, bankCollected, supplierCashPaid, supplierUpiPaid, supplierBankPaid, supplierDue, purchaseDue,
       previousRevenue: roundMoney(money(previousFinancialSnapshot?.revenueToday)),
       previousGrossProfit: roundMoney(money(previousFinancialSnapshot?.profitToday)),
       previousCashCollected: roundMoney(money(previousFinancialSnapshot?.totalCashCollectedToday)),
       previousUpiCollected: roundMoney(money(previousFinancialSnapshot?.totalUpiCollectedToday)),
+      previousBankCollected: roundMoney(money(previousFinancialSnapshot?.totalBankCollectedToday)),
       previousOutstanding,
       expensesToday: roundMoney(money(finance?.expensesToday)),
       previousExpenses: roundMoney(money(previousFinancialSnapshot?.expensesToday)),
@@ -619,19 +630,21 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
     const useDailyFallback = !activePeriodReport && periodBills.length === 0 && period === "today";
     const cash = activePeriodReport?.selected.cashSales ?? (useDailyFallback ? dashboard.cash : periodPaymentSummary.cash);
     const upi = activePeriodReport?.selected.upiSales ?? (useDailyFallback ? dashboard.upi : periodPaymentSummary.upi);
+    const bank = activePeriodReport?.selected.bankSales ?? (useDailyFallback ? dashboard.bank : periodPaymentSummary.bank);
     const credit = activePeriodReport?.selected.udharSales ?? (useDailyFallback ? dashboard.credit : periodPaymentSummary.credit);
     const other = useDailyFallback
-      ? Math.max(0, roundMoney(dashboard.revenue - cash - upi - credit))
+      ? Math.max(0, roundMoney(dashboard.revenue - cash - upi - bank - credit))
       : activePeriodReport
-        ? Math.max(0, roundMoney(periodSales - cash - upi - credit))
+        ? Math.max(0, roundMoney(periodSales - cash - upi - bank - credit))
         : periodPaymentSummary.other;
     return [
       { label: "Cash", value: cash, color: "#2fc45a", dot: "bg-[#2fc45a]" },
       { label: "UPI", value: upi, color: "#316df4", dot: "bg-[#316df4]" },
+      { label: "Bank", value: bank, color: "#06a4d9", dot: "bg-[#06a4d9]" },
       { label: "Udhar", value: credit, color: "#f2a20b", dot: "bg-[#f2a20b]" },
       { label: "Other", value: other, color: "#7557e8", dot: "bg-[#7557e8]" },
     ].filter((row) => row.value > 0);
-  }, [activePeriodReport, dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi, period, periodBills.length, periodPaymentSummary, periodSales]);
+  }, [activePeriodReport, dashboard.bank, dashboard.cash, dashboard.credit, dashboard.revenue, dashboard.upi, period, periodBills.length, periodPaymentSummary, periodSales]);
 
   const recentBills = useMemo(
     () => (dedupeBillsForDisplay([...(recentBillsQuery.data?.bills ?? []), ...localRecentBills]) as unknown as Bill[])
@@ -643,6 +656,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
   const salesDelta = pctChange(dashboard.revenue, yesterdaySales);
   const cashDelta = pctChange(dashboard.cashCollected, dashboard.previousCashCollected);
   const upiDelta = pctChange(dashboard.upiCollected, dashboard.previousUpiCollected);
+  const bankDelta = pctChange(dashboard.bankCollected, dashboard.previousBankCollected);
   const outstandingDelta = pctChange(dashboard.totalOutstanding, dashboard.previousOutstanding);
   const profitDelta = pctChange(dashboard.grossProfit, dashboard.previousGrossProfit);
   const expenseDelta = pctChange(dashboard.expensesToday, dashboard.previousExpenses);
@@ -665,6 +679,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         salesDelta={salesDelta}
         cashDelta={cashDelta}
         upiDelta={upiDelta}
+        bankDelta={bankDelta}
         outstandingDelta={outstandingDelta}
         profitDelta={profitDelta}
         expenseDelta={expenseDelta}
@@ -676,7 +691,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       <div className="hidden w-full space-y-4 bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
 
       {/* Counter focus */}
-      <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
         <KpiCard
           label="Today's Sales"
           value={fmtRs(dashboard.revenue)}
@@ -707,6 +722,17 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
+        <Link href="/money-statement?mode=bank" className="block h-full">
+          <KpiCard
+            label="Bank Collected"
+            value={fmtRs(dashboard.bankCollected)}
+            delta={bankDelta}
+            deltaLabel="vs yesterday"
+            icon={<Landmark size={18} />}
+            iconBg="border border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.20)]"
+            loading={isLoading}
+          />
+        </Link>
         <Link href="/customers?filter=udhar" className="block h-full">
           <KpiCard
             label="Outstanding Udhar"
@@ -976,6 +1002,7 @@ interface MobileGeneralDashboardProps {
   salesDelta: number | null;
   cashDelta: number | null;
   upiDelta: number | null;
+  bankDelta: number | null;
   outstandingDelta: number | null;
   profitDelta: number | null;
   expenseDelta: number | null;
@@ -998,6 +1025,7 @@ function MobileGeneralDashboard({
   salesDelta,
   cashDelta,
   upiDelta,
+  bankDelta,
   outstandingDelta,
   profitDelta,
   expenseDelta,
@@ -1040,6 +1068,7 @@ function MobileGeneralDashboard({
           <MobileMetricCard label="Total Sales" value={dashboard.revenue} previous={dashboard.previousRevenue} delta={salesDelta} color="#075fff" icon={<ShoppingCart size={13} />} iconClass="border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]" />
           <MobileMetricCard label="Cash Collection" value={dashboard.cashCollected} previous={dashboard.previousCashCollected} delta={cashDelta} color="#18ad50" icon={<Wallet size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
           <MobileMetricCard label="UPI Collection" value={dashboard.upiCollected} previous={dashboard.previousUpiCollected} delta={upiDelta} color="#7447eb" icon={<Smartphone size={13} />} iconClass="border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]" />
+          <MobileMetricCard label="Bank Collection" value={dashboard.bankCollected} previous={dashboard.previousBankCollected} delta={bankDelta} color="#075fff" icon={<Landmark size={13} />} iconClass="border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]" />
           <MobileMetricCard label="Profit (Est.)" value={dashboard.grossProfit} previous={dashboard.previousGrossProfit} delta={profitDelta} color="#18ad50" icon={<TrendingUp size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
           <MobileMetricCard label="Outstanding Udhar" value={dashboard.totalOutstanding} previous={dashboard.previousOutstanding} delta={outstandingDelta} color="#ff304f" icon={<AlertTriangle size={13} />} iconClass="border-[#ffcfd7] bg-[#ffecef] text-[#ff304f]" positiveIsBad />
           <MobileMetricCard label="Expense Total" value={dashboard.expensesToday} previous={dashboard.previousExpenses} delta={expenseDelta} color="#f39a0b" icon={<Wallet size={13} />} iconClass="border-[#ffdca8] bg-[#fff2df] text-[#f39a0b]" positiveIsBad />
@@ -1893,7 +1922,7 @@ function DashboardDrilldownDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const title = type === "revenue" ? "Revenue Breakdown" : type === "profit" ? "Profit Breakdown" : "Cash Collection";
-  const description = type === "revenue" ? "Bills included in today's revenue." : type === "profit" ? "Product-level profit from saved bill items." : "Cash drawer and UPI collection split for today.";
+  const description = type === "revenue" ? "Bills included in today's revenue." : type === "profit" ? "Product-level profit from saved bill items." : "Cash, UPI, and bank collection split for today.";
 
   return (
     <Dialog open={type !== null} onOpenChange={onOpenChange}>
@@ -1912,7 +1941,7 @@ function DashboardDrilldownDialog({
               <div key={row.billId} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{row.billNo} - {row.customerName}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Cash {fmt(row.cash)} - UPI {fmt(row.upi)} - Udhar {fmt(row.udhar)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Cash {fmt(row.cash)} - UPI {fmt(row.upi)} - Bank {fmt(row.bank)} - Udhar {fmt(row.udhar)}</p>
                 </div>
                 <MoneyBadge amount={row.amount} tone="success" compact />
               </div>
@@ -1943,6 +1972,8 @@ function DashboardDrilldownDialog({
             <CollectionTile label="Old udhar cash" value={fmt(snapshot.cashUdharRecoveryToday)}  icon={<HandCoins size={16} aria-hidden="true" />} />
             <CollectionTile label="UPI sales"      value={fmt(snapshot.upiSalesToday)}           icon={<Smartphone size={16} aria-hidden="true" />} />
             <CollectionTile label="Old udhar UPI"  value={fmt(snapshot.upiUdharRecoveryToday)}   icon={<CreditCard size={16} aria-hidden="true" />} />
+            <CollectionTile label="Bank sales"     value={fmt(snapshot.bankSalesToday)}          icon={<Landmark size={16} aria-hidden="true" />} />
+            <CollectionTile label="Old udhar bank" value={fmt(snapshot.bankUdharRecoveryToday)}  icon={<Landmark size={16} aria-hidden="true" />} />
             <div className="rounded-lg border bg-muted/35 p-3 sm:col-span-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Cash drawer</p>
               <div className="mt-2 flex items-center justify-between gap-3">
