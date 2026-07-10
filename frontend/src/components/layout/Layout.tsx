@@ -513,7 +513,7 @@ export function Layout({ children }: { children: ReactNode }) {
         )}
       >
         {/* Desktop topbar */}
-        <header className="sticky top-0 z-40 hidden min-h-[var(--app-desktop-topbar-height)] items-center gap-4 border-b border-[#e6ecf4] bg-white/94 px-5 shadow-[0_1px_0_rgba(15,35,80,0.02)] backdrop-blur-xl lg:flex xl:px-6">
+        <header className="sticky top-0 z-40 hidden min-h-[var(--app-desktop-topbar-height)] min-w-0 items-center gap-3 overflow-hidden border-b border-[#e6ecf4] bg-white/94 px-5 shadow-[0_1px_0_rgba(15,35,80,0.02)] backdrop-blur-xl lg:flex xl:px-6">
           <button
             type="button"
             aria-label="Toggle sidebar"
@@ -533,14 +533,14 @@ export function Layout({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label="Search products, bills, and customers"
-            className="hidden h-11 w-[320px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-[#f8fbff] px-3 text-left text-[#64748b] shadow-sm transition-colors hover:border-primary/40 hover:bg-white xl:flex"
+            className="hidden h-11 min-w-[220px] max-w-[320px] flex-[0_1_320px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-[#f8fbff] px-3 text-left text-[#64748b] shadow-sm transition-colors hover:border-primary/40 hover:bg-white xl:flex"
           >
             <Search size={17} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium">Search products, bills, customers...</span>
             <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
           </button>}
 
-          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <div className={cn("flex h-10 max-w-[178px] items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm", connectionBadgeClass)}>
+          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <div className={cn("hidden h-10 max-w-[178px] shrink items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm xl:flex", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
             <span className="truncate">{connectionLabel}</span>
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
@@ -562,10 +562,10 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 rounded-[14px] border border-[#dfe8f5] bg-white px-2.5 py-2 text-sm shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
-                <div className="hidden text-right xl:block">
-                  <div className="text-[13px] font-extrabold leading-tight text-[#0f2147]">{storeName}</div>
-                  <div className="text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
+              <button className="flex max-w-[230px] min-w-0 items-center gap-3 rounded-[14px] border border-[#dfe8f5] bg-white px-2.5 py-2 text-sm shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
+                <div className="hidden min-w-0 max-w-[150px] text-right 2xl:block">
+                  <div className="truncate text-[13px] font-extrabold leading-tight text-[#0f2147]">{storeName}</div>
+                  <div className="truncate text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
                 </div>
                 <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[#075cf7] text-sm font-bold text-white ring-2 ring-[#e7f0ff]">
                   {initials(storeName)}

@@ -35,7 +35,7 @@ export function StatCard({ label, value, description, icon, loading = false, ton
   return (
     <div
       className={cn(
-        "group min-h-[132px] overflow-hidden rounded-[18px] border border-t-2 bg-card p-3.5 text-card-foreground shadow-[0_10px_30px_rgba(15,35,80,0.055)] sm:min-h-[118px] sm:rounded-xl sm:p-5 sm:shadow-sm",
+        "group min-h-[132px] min-w-0 overflow-hidden rounded-[18px] border border-t-2 bg-card p-3.5 text-card-foreground shadow-[0_10px_30px_rgba(15,35,80,0.055)] sm:min-h-[118px] sm:rounded-xl sm:p-5 sm:shadow-sm",
         "transition-[border-color,box-shadow,transform] duration-200",
         toneBorderTop[tone],
         className,

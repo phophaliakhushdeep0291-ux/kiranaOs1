@@ -305,7 +305,7 @@
   }
 
   .app-main-scroll {
-    overflow-x: auto;
+    overflow-x: hidden;
     scroll-behavior: smooth;
     scroll-padding-block: calc(var(--app-desktop-topbar-height) + 1rem) 1.5rem;
   }
@@ -345,8 +345,10 @@
 
   .app-page-shell {
     width: 100%;
+    min-width: 0;
     max-width: var(--app-page-max);
     margin-inline: auto;
+    overflow-x: clip;
     padding: var(--app-page-gutter);
   }
 
@@ -374,19 +376,19 @@
   }
 
   .app-card {
-    @apply rounded-[14px] border border-[#e6ecf4] bg-white text-card-foreground shadow-sm;
+    @apply min-w-0 rounded-[14px] border border-[#e6ecf4] bg-white text-card-foreground shadow-sm;
   }
 
   .app-card-soft {
-    @apply rounded-[14px] border border-[#e6ecf4] bg-white/95 text-card-foreground shadow-sm backdrop-blur;
+    @apply min-w-0 rounded-[14px] border border-[#e6ecf4] bg-white/95 text-card-foreground shadow-sm backdrop-blur;
   }
 
   .premium-panel {
-    @apply rounded-[14px] border border-[#e6ecf4] bg-white text-card-foreground shadow-sm ring-1 ring-black/[0.02] transition-all duration-200;
+    @apply min-w-0 rounded-[14px] border border-[#e6ecf4] bg-white text-card-foreground shadow-sm ring-1 ring-black/[0.02] transition-[border-color,box-shadow] duration-200;
   }
 
   .premium-panel-muted {
-    @apply rounded-[14px] border border-[#e6ecf4] bg-white/95 text-card-foreground shadow-sm backdrop-blur ring-1 ring-black/[0.02];
+    @apply min-w-0 rounded-[14px] border border-[#e6ecf4] bg-white/95 text-card-foreground shadow-sm backdrop-blur ring-1 ring-black/[0.02];
   }
 
   .premium-hero {
@@ -398,7 +400,7 @@
   }
 
   .premium-kpi {
-    @apply rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-sm ring-1 ring-black/[0.02];
+    @apply min-w-0 rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-sm ring-1 ring-black/[0.02];
   }
 
   .premium-action {
@@ -442,7 +444,7 @@
   }
 
   .table-card {
-    @apply overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-sm;
+    @apply min-w-0 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-sm;
   }
 
   .app-table-scroll {
@@ -505,6 +507,8 @@
 
   .app-docked-page {
     min-height: 100%;
+    min-width: 0;
+    overflow-x: clip;
     background: #f7fbff;
     padding: var(--app-page-gutter);
   }
@@ -517,6 +521,8 @@
   .responsive-action-row {
     display: grid;
     width: 100%;
+    min-width: 0;
+    max-width: 100%;
     grid-template-columns: 1fr;
     gap: 0.5rem;
   }
@@ -658,7 +664,6 @@
   .premium-kpi:hover,
   .app-card:hover,
   .app-card-soft:hover {
-    transform: translateY(-1px);
     box-shadow: var(--shadow-md);
   }
 }

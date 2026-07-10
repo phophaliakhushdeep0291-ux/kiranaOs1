@@ -10,7 +10,7 @@ export function PageShell({ children, className, fullWidth = true, ...props }: P
   return (
     <div
       className={cn(
-        "app-page-shell",
+        "app-page-shell min-w-0 overflow-x-clip",
         fullWidth ? "max-w-[1600px]" : "max-w-7xl",
         className,
       )}
