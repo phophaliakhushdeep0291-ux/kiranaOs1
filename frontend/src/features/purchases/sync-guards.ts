@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 
 type MutableRow = Record<string, unknown>;
@@ -31,9 +32,7 @@ function readNumber(row: unknown, keys: string[], fallback = 0): number {
   return fallback;
 }
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100 || 0;
-}
+
 
 function normalizeKey(value: unknown): string {
   return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");

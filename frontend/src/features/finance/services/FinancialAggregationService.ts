@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import type { Bill, Customer, Product, Supplier } from "@/types/api";
 import {
@@ -156,9 +157,7 @@ function readNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(num) ? num : fallback;
 }
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100 || 0;
-}
+
 
 function readString(row: unknown, keys: string[], fallback = ""): string {
   if (!isRecord(row)) return fallback;

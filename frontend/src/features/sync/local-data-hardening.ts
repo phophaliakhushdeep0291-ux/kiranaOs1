@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { dexieDB, filterRowsForCurrentScope, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
 import { isLikelySyncedCopyOfPendingBill } from "@/features/sync/bill-reconciliation";
@@ -61,9 +62,7 @@ function readNumberFrom(row: unknown, keys: string[]): number | undefined {
   return undefined;
 }
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100 || 0;
-}
+
 
 function isDeleted(row: MutableRow): boolean {
   return Boolean(row.deleted_at ?? row.deletedAt ?? row.merged_into_id ?? row.mergedIntoId);

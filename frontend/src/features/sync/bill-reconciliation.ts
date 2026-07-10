@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import type { Table } from "dexie";
 import {
   dexieDB,
@@ -57,9 +58,7 @@ function getNumberFrom(record: unknown, keys: string[]): number | undefined {
 }
 
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100 || 0;
-}
+
 
 function readMoney(record: unknown, keys: string[], fallback = 0): number {
   const value = getNumberFrom(record, keys);

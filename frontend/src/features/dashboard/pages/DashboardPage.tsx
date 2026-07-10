@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
@@ -129,9 +130,7 @@ function money(n: number | undefined | null) {
   return Number.isFinite(value) ? value : 0;
 }
 
-function roundMoney(n: number) {
-  return Math.round(money(n) * 100) / 100 || 0;
-}
+
 
 function fmt(n: number | undefined | null) {
   return `Rs ${money(n).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;

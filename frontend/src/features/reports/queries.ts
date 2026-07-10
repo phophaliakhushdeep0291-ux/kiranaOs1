@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { useQuery } from "@tanstack/react-query";
 import { ApiClientError, isBrowserOnline } from "@/lib/api/http";
 import { RECENT_CACHE_DAYS, emitLocalDataChanged, readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
@@ -59,9 +60,7 @@ function sameLocalDate(dateLike: unknown, yyyyMmDd: string) {
   return `${y}-${m}-${d}` === yyyyMmDd;
 }
 
-function roundMoney(value: number) {
-  return Math.round((Number(value) || 0) * 100) / 100 || 0;
-}
+
 
 function normaliseCustomerForCache(customer: Customer): Customer {
   const udhar = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);

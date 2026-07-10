@@ -107,6 +107,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   const modes: { key: RefundMode; label: string; disabled?: boolean }[] = [
     { key: "cash", label: "₹ Cash" },
     { key: "upi", label: "UPI" },
+    { key: "bank", label: "Bank" },
     { key: "udhar", label: "Reduce udhar", disabled: !hasCustomer },
   ];
 
