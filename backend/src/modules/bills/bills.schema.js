@@ -11,7 +11,7 @@ const billItemSchema = z.object({
 });
 
 const paymentSchema = z.object({
-  mode: z.enum(["cash", "upi", "credit"]),
+  mode: z.enum(["cash", "upi", "bank", "credit"]),
   amount: moneyAmount({ positive: true }),
   clientPaymentId: z.string().min(1).optional(),
   client_payment_id: z.string().min(1).optional(),

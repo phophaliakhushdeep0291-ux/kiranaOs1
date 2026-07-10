@@ -15,7 +15,7 @@ import type { Bill, Customer, Product } from "@/types/api";
 const BILL_CACHE_KEY = "bills";
 const CUSTOMER_CACHE_KEY = "customers";
 
-export type RefundMode = "cash" | "upi" | "udhar";
+export type RefundMode = "cash" | "upi" | "bank" | "udhar";
 
 export interface SaleReturnItemInput {
   productId?: string;
@@ -83,7 +83,7 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
     });
   if (items.length === 0) throw new Error("Add at least one item to return");
 
-  const refundMode: RefundMode = ["cash", "upi", "udhar"].includes(input.refundMode) ? input.refundMode : "cash";
+  const refundMode: RefundMode = ["cash", "upi", "bank", "udhar"].includes(input.refundMode) ? input.refundMode : "cash";
   if (!/^\d{4}$/.test(String(input.ownerPin ?? ""))) {
     const err = new Error("Owner PIN (4 digits) is required to process a return");
     (err as Error & { code?: string }).code = "OWNER_PIN_REQUIRED";
@@ -94,7 +94,8 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
   }
 
   const gstMode = input.gstMode ?? "inclusive";
-  const isCashLike = refundMode === "cash" || refundMode === "upi";
+  // "Cash-like" = an immediate tender refund (money goes back out now) vs. reducing udhar.
+  const isCashLike = refundMode === "cash" || refundMode === "upi" || refundMode === "bank";
   const now = new Date().toISOString();
   const scope = getOfflineScope();
   const billId = createLocalId("bill");

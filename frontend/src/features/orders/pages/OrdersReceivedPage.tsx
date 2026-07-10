@@ -1,7 +1,25 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Inbox, MapPin, MessageCircle, Phone, RefreshCw, ShoppingCart, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  ChefHat,
+  ChevronRight,
+  Copy,
+  Inbox,
+  MapPin,
+  MessageCircle,
+  PackageCheck,
+  Phone,
+  Printer,
+  QrCode,
+  RefreshCw,
+  ShoppingCart,
+  StickyNote,
+  XCircle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/features/auth/useAuth";
 import { useListProducts } from "@/lib/api/client";
@@ -25,7 +43,18 @@ const STATUS_STYLE: Record<CustomerOrder["status"], string> = {
   rejected: "bg-[#f1f5f9] text-[#64748b]",
 };
 
+const STATUS_LABEL: Record<CustomerOrder["status"], string> = {
+  new: "Received",
+  accepted: "Preparing",
+  fulfilled: "Done",
+  rejected: "Rejected",
+};
+
 const fmtRs = (n: number) => `Rs ${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const fmtMoney = (n: number) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Friendly display code for a cuid order id, e.g. ORD-9B2AK4. */
+const orderCode = (id: string) => `ORD-${id.slice(-6).toUpperCase()}`;
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -37,6 +66,44 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 }
 
+function fullDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
+}
+
+function isSameLocalDay(iso: string, ref: Date): boolean {
+  const d = new Date(iso);
+  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
+}
+
+// Short two-note chime so a busy owner hears a new order arrive. Web Audio only — no asset to
+// bundle — and fully best-effort (blocked autoplay / no AudioContext just no-ops).
+function playNewOrderChime(): void {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const now = ctx.currentTime;
+    [880, 1174].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const start = now + i * 0.14;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.16, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.13);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.14);
+    });
+    setTimeout(() => void ctx.close().catch(() => undefined), 600);
+  } catch {
+    /* audio unavailable — the toast is still the signal */
+  }
+}
+
 export default function OrdersReceivedPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -45,12 +112,36 @@ export default function OrdersReceivedPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("new");
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const ordersQuery = useQuery({
     queryKey: ["customer-orders", status],
     queryFn: () => listCustomerOrders(status),
-    refetchInterval: 30_000, // poll so new customer orders surface without a manual refresh
+    refetchInterval: 20_000, // poll so new customer orders surface without a manual refresh
   });
+
+  // Unfiltered list for the stats strip and for keeping the detail view live even when the
+  // selected order moves out of the active tab (e.g. accepting it while on "New").
+  const allOrdersQuery = useQuery({
+    queryKey: ["customer-orders", "all"],
+    queryFn: () => listCustomerOrders("all"),
+    refetchInterval: 20_000,
+  });
+
+  // Chime + toast when the count of new orders climbs while the owner is watching. newCount is the
+  // shop-wide "new" total (independent of the active tab), so it's a reliable arrival signal.
+  const prevNewCountRef = useRef<number | null>(null);
+  const newCount = ordersQuery.data?.newCount ?? null;
+  useEffect(() => {
+    if (newCount == null) return;
+    const prev = prevNewCountRef.current;
+    if (prev != null && newCount > prev) {
+      playNewOrderChime();
+      const added = newCount - prev;
+      toast({ title: `${added} new order${added === 1 ? "" : "s"} received`, description: "Open the New tab to review." });
+    }
+    prevNewCountRef.current = newCount;
+  }, [newCount, toast]);
 
   const productsQuery = useListProducts({ limit: 500 }, { query: { staleTime: 60_000 } });
   const products = useMemo(() => (productsQuery.data ?? []).filter((p) => p.deletedAt == null), [productsQuery.data]);
@@ -149,121 +240,659 @@ export default function OrdersReceivedPage() {
     navigate("/billing");
   }
 
+  /** Compact printable order slip (not a bill — final price is set at billing). */
+  function printOrderSlip(order: CustomerOrder) {
+    const popup = window.open("", "_blank", "width=420,height=640");
+    if (!popup) {
+      toast({ title: "Print blocked", description: "Allow pop-ups to print the order slip.", variant: "destructive" });
+      return;
+    }
+    const rows = order.items
+      .map((it, i) => `<tr><td>${i + 1}</td><td>${it.qty}× ${it.name}</td><td style="text-align:right">${fmtMoney(it.qty * it.price)}</td></tr>`)
+      .join("");
+    popup.document.write(
+      `<!doctype html><html><head><title>Order slip ${orderCode(order.id)}</title></head>` +
+        `<body style="font-family:system-ui,sans-serif;padding:20px;margin:0;color:#111">` +
+        `<h2 style="margin:0 0 2px">${shopName || "Order slip"}</h2>` +
+        `<p style="margin:0 0 12px;color:#555;font-size:12px">${orderCode(order.id)} · ${fullDateTime(order.createdAt)}</p>` +
+        `<p style="margin:0 0 12px;font-size:13px"><b>${order.customerName}</b> · ${order.customerMobile}` +
+        `${order.customerAddress ? `<br/>${order.customerAddress}` : ""}</p>` +
+        `<table style="width:100%;border-collapse:collapse;font-size:13px">` +
+        `<thead><tr style="border-bottom:1px solid #ccc;text-align:left"><th>#</th><th>Item</th><th style="text-align:right">Rs</th></tr></thead>` +
+        `<tbody>${rows}</tbody>` +
+        `<tfoot><tr style="border-top:1px solid #ccc;font-weight:bold"><td></td><td>Estimated total</td><td style="text-align:right">${fmtMoney(order.estimatedTotal)}</td></tr></tfoot>` +
+        `</table>` +
+        `${order.note ? `<p style="margin-top:12px;font-size:12px;font-style:italic">"${order.note}"</p>` : ""}` +
+        `<p style="margin-top:14px;font-size:11px;color:#888">Final price is set at billing.</p>` +
+        `<script>window.onload=function(){window.print()}</script></body></html>`,
+    );
+    popup.document.close();
+  }
+
+  async function copyOrderDetails(order: CustomerOrder) {
+    const lines = [
+      `${orderCode(order.id)} · ${shopName}`,
+      `${order.customerName} · ${order.customerMobile}`,
+      ...(order.customerAddress ? [order.customerAddress] : []),
+      ...order.items.map((it) => `- ${it.qty}× ${it.name} @ ${fmtMoney(it.price)} = ${fmtMoney(it.qty * it.price)}`),
+      `Estimated total: ${fmtRs(order.estimatedTotal)}`,
+      ...(order.note ? [`Note: ${order.note}`] : []),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      toast({ title: "Order copied", description: "Details are on your clipboard." });
+    } catch {
+      toast({ title: "Could not copy", description: "Clipboard is unavailable in this browser.", variant: "destructive" });
+    }
+  }
+
   const orders = ordersQuery.data?.orders ?? [];
+  const allOrders = useMemo(() => allOrdersQuery.data?.orders ?? [], [allOrdersQuery.data?.orders]);
+
+  // ── Stats strip (from the unfiltered list) ─────────────────────────────────
+  const stats = useMemo(() => {
+    const today = new Date();
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    const todays = allOrders.filter((o) => isSameLocalDay(o.createdAt, today));
+    const yesterdays = allOrders.filter((o) => isSameLocalDay(o.createdAt, yesterday));
+    return {
+      ordersToday: todays.length,
+      yesterdayCount: yesterdays.length,
+      newOrders: allOrdersQuery.data?.newCount ?? 0,
+      preparing: allOrders.filter((o) => o.status === "accepted").length,
+      doneToday: todays.filter((o) => o.status === "fulfilled").length,
+    };
+  }, [allOrders, allOrdersQuery.data?.newCount]);
+
+  const todayDelta =
+    stats.yesterdayCount > 0 ? Math.round(((stats.ordersToday - stats.yesterdayCount) / stats.yesterdayCount) * 100) : null;
+
+  // Keep the detail view live across refetches and status changes.
+  const selectedOrder = useMemo(() => {
+    if (!selectedId) return null;
+    return allOrders.find((o) => o.id === selectedId) ?? orders.find((o) => o.id === selectedId) ?? null;
+  }, [selectedId, allOrders, orders]);
 
   return (
-    <div className="app-docked-page mx-auto max-w-3xl px-4 py-5">
+    <div className="app-docked-page mx-auto max-w-6xl px-4 py-5">
+      {/* Header */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-black text-[#0f1e3d]">Orders Received</h1>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">Orders customers sent from your QR page. Open one in Billing to edit items, rates, and payment before saving.</p>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">View and manage newly received customer orders.</p>
         </div>
         <button
           type="button"
-          onClick={() => void ordersQuery.refetch()}
-          className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] text-[#405273] hover:bg-[#f7faff]"
+          onClick={() => {
+            void ordersQuery.refetch();
+            void allOrdersQuery.refetch();
+          }}
+          className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] bg-white text-[#405273] hover:bg-[#f7faff]"
           aria-label="Refresh orders"
         >
-          <RefreshCw size={16} className={ordersQuery.isFetching ? "animate-spin" : ""} />
+          <RefreshCw size={16} className={ordersQuery.isFetching || allOrdersQuery.isFetching ? "animate-spin" : ""} />
         </button>
       </div>
 
-      <div className="mb-4 flex gap-1.5 overflow-x-auto">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => setStatus(tab.value)}
-            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${
-              status === tab.value ? "bg-[#075fff] text-white" : "border border-[#dfe7f2] bg-white text-[#536383] hover:bg-[#f7faff]"
-            }`}
-          >
-            {tab.label}
-            {tab.value === "new" && (ordersQuery.data?.newCount ?? 0) > 0 ? ` (${ordersQuery.data?.newCount})` : ""}
-          </button>
-        ))}
+      {/* Stats strip */}
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          icon={<CalendarDays size={18} />}
+          tint="bg-[#eaf2ff] text-[#075fff]"
+          label="Orders Today"
+          value={stats.ordersToday}
+          sub={todayDelta == null ? "first orders today" : `${todayDelta >= 0 ? "↑" : "↓"} ${Math.abs(todayDelta)}% vs yesterday`}
+          subTone={todayDelta == null ? "text-[#8290a8]" : todayDelta >= 0 ? "text-[#16a34a]" : "text-[#e11d48]"}
+        />
+        <StatCard
+          icon={<Inbox size={18} />}
+          tint="bg-[#e9fbf0] text-[#16a34a]"
+          label="New Orders"
+          value={stats.newOrders}
+          sub="awaiting confirmation"
+        />
+        <StatCard
+          icon={<ChefHat size={18} />}
+          tint="bg-[#fff7ed] text-[#c2410c]"
+          label="Preparing"
+          value={stats.preparing}
+          sub="accepted, being prepared"
+        />
+        <StatCard
+          icon={<PackageCheck size={18} />}
+          tint="bg-[#f3efff] text-[#7c3aed]"
+          label="Done Today"
+          value={stats.doneToday}
+          sub="completed today"
+        />
       </div>
 
-      {ordersQuery.isLoading ? (
-        <p className="py-16 text-center text-sm text-[#8290a8]">Loading orders...</p>
-      ) : orders.length === 0 ? (
-        <div className="flex flex-col items-center py-16 text-center">
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#eef2f8] text-[#94a3b8]"><Inbox size={26} /></div>
-          <p className="mt-3 text-sm font-semibold text-[#536383]">No {status === "all" ? "" : status} orders</p>
-          <p className="mt-1 max-w-xs text-[12px] text-[#8290a8]">When a customer scans your Order QR and sends an order, it shows up here.</p>
-        </div>
+      {selectedOrder ? (
+        <OrderDetail
+          order={selectedOrder}
+          shopName={shopName}
+          opening={openingOrderId === selectedOrder.id}
+          mutationPending={statusMutation.isPending}
+          onBack={() => setSelectedId(null)}
+          onAcceptBill={() => acceptAndBill(selectedOrder)}
+          onMessage={() => messageCustomer(selectedOrder, selectedOrder.status === "accepted" ? "ready" : "received")}
+          onMarkDone={() => statusMutation.mutate({ id: selectedOrder.id, next: "fulfilled" })}
+          onReject={() => statusMutation.mutate({ id: selectedOrder.id, next: "rejected" })}
+          onPrint={() => printOrderSlip(selectedOrder)}
+          onCopy={() => void copyOrderDetails(selectedOrder)}
+        />
       ) : (
-        <ul className="space-y-3">
-          {orders.map((order) => (
-            <li key={order.id} className="rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-bold text-[#13254a]">{order.customerName}</p>
-                  <a href={`tel:${order.customerMobile}`} className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[#075fff]">
-                    <Phone size={12} /> {order.customerMobile}
-                  </a>
-                  {order.customerAddress ? (
-                    <p className="mt-1 flex items-start gap-1 text-[12px] text-[#5b6b85]"><MapPin size={12} className="mt-0.5 shrink-0" /> {order.customerAddress}</p>
-                  ) : null}
-                </div>
-                <div className="shrink-0 text-right">
-                  <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${STATUS_STYLE[order.status]}`}>{order.status}</span>
-                  <p className="mt-1 text-[10px] font-semibold text-[#8290a8]">{timeAgo(order.createdAt)}</p>
-                </div>
-              </div>
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-4 flex gap-1.5 overflow-x-auto">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setStatus(tab.value)}
+                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${
+                  status === tab.value ? "bg-[#075fff] text-white" : "border border-[#dfe7f2] bg-white text-[#536383] hover:bg-[#f7faff]"
+                }`}
+              >
+                {tab.label}
+                {tab.value === "new" && (ordersQuery.data?.newCount ?? 0) > 0 ? ` (${ordersQuery.data?.newCount})` : ""}
+              </button>
+            ))}
+          </div>
 
-              <div className="mt-3 rounded-xl border border-[#eef2f8] bg-[#f9fbfe] p-2.5">
-                {order.items.map((it) => (
-                  <div key={it.productId} className="flex items-center justify-between py-0.5 text-[12.5px]">
-                    <span className="min-w-0 truncate text-[#334364]"><span className="font-bold">{it.qty}x</span> {it.name}</span>
-                    <span className="shrink-0 font-semibold text-[#64748b]">{fmtRs(it.qty * it.price)}</span>
+          {ordersQuery.isLoading ? (
+            <p className="py-16 text-center text-sm text-[#8290a8]">Loading orders...</p>
+          ) : orders.length === 0 ? (
+            <div className="flex flex-col items-center py-16 text-center">
+              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#eef2f8] text-[#94a3b8]"><Inbox size={26} /></div>
+              <p className="mt-3 text-sm font-semibold text-[#536383]">No {status === "all" ? "" : status} orders</p>
+              <p className="mt-1 max-w-xs text-[12px] text-[#8290a8]">When a customer scans your Order QR and sends an order, it shows up here.</p>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {orders.map((order) => (
+                <li
+                  key={order.id}
+                  onClick={() => setSelectedId(order.id)}
+                  className="cursor-pointer rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)] transition hover:border-[#c9dcff]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-bold text-[#13254a]">{order.customerName}</p>
+                      <a
+                        href={`tel:${order.customerMobile}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[#075fff]"
+                      >
+                        <Phone size={12} /> {order.customerMobile}
+                      </a>
+                      {order.customerAddress ? (
+                        <p className="mt-1 flex items-start gap-1 text-[12px] text-[#5b6b85]"><MapPin size={12} className="mt-0.5 shrink-0" /> {order.customerAddress}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 items-start gap-2 text-right">
+                      <div>
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${STATUS_STYLE[order.status]}`}>{STATUS_LABEL[order.status]}</span>
+                        <p className="mt-1 text-[10px] font-semibold text-[#8290a8]">{timeAgo(order.createdAt)}</p>
+                      </div>
+                      <ChevronRight size={16} className="mt-1 text-[#9aa7bd]" />
+                    </div>
                   </div>
-                ))}
-                <div className="mt-1.5 flex items-center justify-between border-t border-[#e7edf5] pt-1.5 text-[13px] font-black text-[#0f1e3d]">
-                  <span>Estimated total</span><span>{fmtRs(order.estimatedTotal)}</span>
-                </div>
-              </div>
-              {order.note ? <p className="mt-2 text-[12px] italic text-[#6b7a93]">"{order.note}"</p> : null}
 
-              {order.status !== "rejected" && order.status !== "fulfilled" ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={openingOrderId != null}
-                    onClick={() => acceptAndBill(order)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
-                  >
-                    <ShoppingCart size={14} /> {openingOrderId === order.id ? "Opening..." : "Open in Billing"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => messageCustomer(order, order.status === "accepted" ? "ready" : "received")}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#bfe6cd] bg-[#f0fbf4] px-3 py-2 text-[12px] font-bold text-[#16a34a]"
-                  >
-                    <MessageCircle size={14} /> Message
-                  </button>
-                  <button
-                    type="button"
-                    disabled={statusMutation.isPending}
-                    onClick={() => statusMutation.mutate({ id: order.id, next: "fulfilled" })}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe3ee] bg-white px-3 py-2 text-[12px] font-bold text-[#405273]"
-                  >
-                    <CheckCircle2 size={14} /> Mark done
-                  </button>
-                  <button
-                    type="button"
-                    disabled={statusMutation.isPending}
-                    onClick={() => statusMutation.mutate({ id: order.id, next: "rejected" })}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-[#f0d5d5] bg-[#fff5f5] px-3 py-2 text-[12px] font-bold text-[#e11d48]"
-                  >
-                    <XCircle size={14} /> Reject
-                  </button>
-                </div>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+                  <div className="mt-3 flex items-center justify-between rounded-xl border border-[#eef2f8] bg-[#f9fbfe] px-3 py-2 text-[12.5px]">
+                    <span className="min-w-0 truncate text-[#334364]">
+                      {order.items.slice(0, 3).map((it) => `${it.qty}× ${it.name}`).join(" · ")}
+                      {order.items.length > 3 ? ` +${order.items.length - 3} more` : ""}
+                    </span>
+                    <span className="ml-3 shrink-0 font-black text-[#0f1e3d]">{fmtRs(order.estimatedTotal)}</span>
+                  </div>
+
+                  {order.status !== "rejected" && order.status !== "fulfilled" ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={openingOrderId != null}
+                        onClick={(e: MouseEvent) => { e.stopPropagation(); acceptAndBill(order); }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
+                      >
+                        <ShoppingCart size={14} /> {openingOrderId === order.id ? "Opening..." : "Open in Billing"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e: MouseEvent) => { e.stopPropagation(); messageCustomer(order, order.status === "accepted" ? "ready" : "received"); }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#bfe6cd] bg-[#f0fbf4] px-3 py-2 text-[12px] font-bold text-[#16a34a]"
+                      >
+                        <MessageCircle size={14} /> Message
+                      </button>
+                      <button
+                        type="button"
+                        disabled={statusMutation.isPending}
+                        onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: "fulfilled" }); }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe3ee] bg-white px-3 py-2 text-[12px] font-bold text-[#405273]"
+                      >
+                        <CheckCircle2 size={14} /> Mark done
+                      </button>
+                      <button
+                        type="button"
+                        disabled={statusMutation.isPending}
+                        onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: "rejected" }); }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#f0d5d5] bg-[#fff5f5] px-3 py-2 text-[12px] font-bold text-[#e11d48]"
+                      >
+                        <XCircle size={14} /> Reject
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
+  );
+}
+
+function StatCard({
+  icon,
+  tint,
+  label,
+  value,
+  sub,
+  subTone = "text-[#8290a8]",
+}: {
+  icon: React.ReactNode;
+  tint: string;
+  label: string;
+  value: number;
+  sub: string;
+  subTone?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.04)]">
+      <div className="flex items-center gap-3">
+        <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tint}`}>{icon}</span>
+        <div className="min-w-0">
+          <p className="truncate text-[12px] font-semibold text-[#6d7c98]">{label}</p>
+          <p className="font-display text-xl font-black leading-tight text-[#0f1e3d]">{value}</p>
+        </div>
+      </div>
+      <p className={`mt-2 truncate text-[11px] font-semibold ${subTone}`}>{sub}</p>
+    </div>
+  );
+}
+
+// ── Order detail (reference-style: banner, items table, stepper, sidebar) ─────
+
+const BANNER: Record<CustomerOrder["status"], { title: string; desc: string; icon: React.ReactNode; tint: string }> = {
+  new: {
+    title: "Order Received Successfully",
+    desc: "The customer order has been received and is awaiting your confirmation.",
+    icon: <CheckCircle2 size={30} />,
+    tint: "bg-[#e9fbf0] text-[#16a34a]",
+  },
+  accepted: {
+    title: "Order Confirmed — Preparing",
+    desc: "Open it in Billing to adjust items and rates, then save the final bill.",
+    icon: <ChefHat size={30} />,
+    tint: "bg-[#eaf2ff] text-[#075fff]",
+  },
+  fulfilled: {
+    title: "Order Completed",
+    desc: "This order has been billed and handed over.",
+    icon: <PackageCheck size={30} />,
+    tint: "bg-[#e9fbf0] text-[#16a34a]",
+  },
+  rejected: {
+    title: "Order Rejected",
+    desc: "This order was declined. The customer sees it as declined on their tracker.",
+    icon: <XCircle size={30} />,
+    tint: "bg-[#fff1f2] text-[#e11d48]",
+  },
+};
+
+function OrderDetail({
+  order,
+  shopName,
+  opening,
+  mutationPending,
+  onBack,
+  onAcceptBill,
+  onMessage,
+  onMarkDone,
+  onReject,
+  onPrint,
+  onCopy,
+}: {
+  order: CustomerOrder;
+  shopName: string;
+  opening: boolean;
+  mutationPending: boolean;
+  onBack: () => void;
+  onAcceptBill: () => void;
+  onMessage: () => void;
+  onMarkDone: () => void;
+  onReject: () => void;
+  onPrint: () => void;
+  onCopy: () => void;
+}) {
+  const banner = BANNER[order.status];
+  const totalQty = order.items.reduce((sum, it) => sum + it.qty, 0);
+  const active = order.status === "new" || order.status === "accepted";
+  const initials = order.customerName
+    .split(/\s+/)
+    .map((w) => w.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div>
+      <button type="button" onClick={onBack} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[#075fff]">
+        <ArrowLeft size={14} /> All orders
+      </button>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Main column */}
+        <div className="min-w-0 space-y-4">
+          {/* Status banner */}
+          <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
+            <div className="flex items-start gap-4">
+              <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl ${banner.tint}`}>{banner.icon}</span>
+              <div className="min-w-0">
+                <h2 className="font-display text-lg font-black text-[#0f1e3d]">{banner.title}</h2>
+                <p className="mt-0.5 text-[12.5px] text-[#5b6b85]">{banner.desc}</p>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[#eef2f8] pt-4 sm:grid-cols-4">
+              <BannerField label="Order ID" value={orderCode(order.id)} />
+              <BannerField label="Date & Time" value={fullDateTime(order.createdAt)} />
+              <div>
+                <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Order Source</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[#13254a]"><QrCode size={13} className="text-[#075fff]" /> QR Order</p>
+              </div>
+              <div>
+                <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Status</p>
+                <span className={`mt-1 inline-block rounded-full px-2 py-1 text-[10px] font-black uppercase ${STATUS_STYLE[order.status]}`}>
+                  {STATUS_LABEL[order.status]}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Items table */}
+          <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
+            <p className="mb-3 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><ShoppingCart size={15} className="text-[#075fff]" /> Order Items</p>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[430px] text-[12.5px]">
+                <thead>
+                  <tr className="border-b border-[#eef2f8] text-left text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">
+                    <th className="pb-2 pr-2">#</th>
+                    <th className="pb-2 pr-2">Item</th>
+                    <th className="pb-2 pr-2 text-right">Qty</th>
+                    <th className="pb-2 pr-2">Unit</th>
+                    <th className="pb-2 pr-2 text-right">Rate (Rs)</th>
+                    <th className="pb-2 text-right">Amount (Rs)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {order.items.map((it, i) => (
+                    <tr key={`${it.productId}-${i}`} className="border-b border-[#f4f7fb] last:border-b-0">
+                      <td className="py-2.5 pr-2 text-[#8290a8]">{i + 1}</td>
+                      <td className="py-2.5 pr-2">
+                        <span className="flex items-center gap-2">
+                          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#f0f4fa] text-[11px] font-black text-[#8fa0ba]">
+                            {it.name.charAt(0).toUpperCase()}
+                          </span>
+                          <span className="min-w-0 truncate font-bold text-[#13254a]">{it.name}</span>
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-2 text-right font-bold tabular-nums text-[#13254a]">{it.qty}</td>
+                      <td className="py-2.5 pr-2 capitalize text-[#5b6b85]">{it.unit}</td>
+                      <td className="py-2.5 pr-2 text-right tabular-nums text-[#5b6b85]">{fmtMoney(it.price)}</td>
+                      <td className="py-2.5 text-right font-bold tabular-nums text-[#13254a]">{fmtMoney(it.qty * it.price)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 ml-auto w-full max-w-[260px] space-y-1.5 text-[12.5px]">
+              <div className="flex items-center justify-between text-[#5b6b85]">
+                <span>Subtotal</span><span className="tabular-nums">{fmtRs(order.estimatedTotal)}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-[#f4f8ff] px-2.5 py-2 text-[13.5px] font-black text-[#0f1e3d]">
+                <span>Estimated Total</span><span className="tabular-nums">{fmtRs(order.estimatedTotal)}</span>
+              </div>
+              <p className="text-[10.5px] leading-snug text-[#8290a8]">Discounts, delivery and GST are applied at billing.</p>
+            </div>
+          </div>
+
+          {/* Fulfillment progress */}
+          {order.status !== "rejected" && (
+            <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
+              <p className="mb-4 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><PackageCheck size={15} className="text-[#075fff]" /> Fulfillment Progress</p>
+              <FulfillmentStepper order={order} />
+            </div>
+          )}
+
+          {/* Action bar */}
+          {active && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={opening}
+                onClick={onAcceptBill}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#075fff] px-4 py-2.5 text-[12.5px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
+              >
+                <CheckCircle2 size={15} /> {opening ? "Opening..." : order.status === "new" ? "Confirm & Open in Billing" : "Open in Billing"}
+              </button>
+              <button type="button" onClick={onPrint} className="inline-flex items-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-4 py-2.5 text-[12.5px] font-bold text-[#405273]">
+                <Printer size={15} /> Print Slip
+              </button>
+              <button type="button" onClick={onMessage} className="inline-flex items-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-4 py-2.5 text-[12.5px] font-bold text-[#16a34a]">
+                <MessageCircle size={15} /> WhatsApp Customer
+              </button>
+              <button
+                type="button"
+                disabled={mutationPending}
+                onClick={onMarkDone}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-4 py-2.5 text-[12.5px] font-bold text-[#405273]"
+              >
+                <PackageCheck size={15} /> Mark Done
+              </button>
+              <button
+                type="button"
+                disabled={mutationPending}
+                onClick={onReject}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#f0d5d5] bg-[#fff5f5] px-4 py-2.5 text-[12.5px] font-bold text-[#e11d48]"
+              >
+                <XCircle size={15} /> Cancel Order
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-4">
+          {/* Customer details */}
+          <SideCard title="Customer Details">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eaf2ff] font-display text-[14px] font-black text-[#075fff]">{initials}</span>
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 font-bold text-[#13254a]">
+                  <span className="truncate">{order.customerName}</span>
+                  {order.status === "new" && <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[9.5px] font-black uppercase text-[#16a34a]">New</span>}
+                </p>
+                <a href={`tel:${order.customerMobile}`} className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[#075fff]">
+                  <Phone size={12} /> +91 {order.customerMobile}
+                </a>
+              </div>
+            </div>
+            {order.customerAddress ? (
+              <p className="mt-2.5 flex items-start gap-1.5 text-[12px] leading-snug text-[#5b6b85]">
+                <MapPin size={13} className="mt-0.5 shrink-0 text-[#8290a8]" /> {order.customerAddress}
+              </p>
+            ) : (
+              <p className="mt-2.5 text-[12px] text-[#9aa7bd]">No address given — counter pickup.</p>
+            )}
+          </SideCard>
+
+          {/* Payment & fulfillment */}
+          <SideCard title="Payment & Fulfillment">
+            <InfoRow label="Payment" chip="At billing" chipClass="bg-[#eaf2ff] text-[#075fff]" />
+            <InfoRow label="Order Source" chip="QR Order" chipClass="bg-[#eaf2ff] text-[#075fff]" />
+            <InfoRow label="Placed On" value={fullDateTime(order.createdAt)} />
+            <InfoRow label="Status" chip={STATUS_LABEL[order.status]} chipClass={STATUS_STYLE[order.status]} />
+            {order.billId ? <InfoRow label="Linked Bill" value={order.billId.length > 14 ? `…${order.billId.slice(-10)}` : order.billId} mono /> : null}
+          </SideCard>
+
+          {/* Order summary */}
+          <SideCard title="Order Summary">
+            <InfoRow label="Total Items" value={`${order.itemCount} item${order.itemCount === 1 ? "" : "s"} · ${totalQty} qty`} />
+            <InfoRow label="Estimated Amount" value={fmtRs(order.estimatedTotal)} />
+            <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2.5">
+              <span className="text-[13px] font-black text-[#0f1e3d]">Grand Total</span>
+              <span className="font-display text-[16px] font-black text-[#075fff]">{fmtRs(order.estimatedTotal)}</span>
+            </div>
+            <p className="mt-1 text-[10.5px] text-[#8290a8]">Estimated — final price is set when you bill it.</p>
+          </SideCard>
+
+          {/* Notes */}
+          <SideCard title="Notes / Instructions">
+            {order.note ? (
+              <p className="flex items-start gap-1.5 text-[12.5px] italic leading-snug text-[#5b6b85]">
+                <StickyNote size={13} className="mt-0.5 shrink-0 text-[#c2410c]" /> "{order.note}"
+              </p>
+            ) : (
+              <p className="text-[12px] text-[#9aa7bd]">No notes from the customer.</p>
+            )}
+          </SideCard>
+
+          {/* Quick actions */}
+          <SideCard title="Quick Actions">
+            <div className="grid grid-cols-3 gap-2">
+              <QuickAction icon={<ShoppingCart size={16} />} label="Open in Billing" disabled={!active || opening} onClick={onAcceptBill} />
+              <QuickAction icon={<MessageCircle size={16} />} label="WhatsApp" onClick={onMessage} />
+              <QuickAction icon={<Printer size={16} />} label="Print Slip" onClick={onPrint} />
+              <QuickAction icon={<Copy size={16} />} label="Copy Details" onClick={onCopy} />
+              <QuickAction icon={<PackageCheck size={16} />} label="Mark Done" disabled={!active || mutationPending} onClick={onMarkDone} />
+              <QuickAction icon={<XCircle size={16} />} label="Reject" tone="danger" disabled={!active || mutationPending} onClick={onReject} />
+            </div>
+          </SideCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BannerField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">{label}</p>
+      <p className="mt-1 truncate text-[12.5px] font-bold text-[#13254a]">{value}</p>
+    </div>
+  );
+}
+
+const STEPS = [
+  { label: "Order Received", pendingSub: "" },
+  { label: "Confirm by Store", pendingSub: "Next step" },
+  { label: "Prepare & Bill", pendingSub: "Pending" },
+  { label: "Completed", pendingSub: "Pending" },
+] as const;
+
+function FulfillmentStepper({ order }: { order: CustomerOrder }) {
+  // First step that is NOT done: new → confirm(1); accepted → bill(2); fulfilled → past the end.
+  const currentIndex = order.status === "new" ? 1 : order.status === "accepted" ? 2 : STEPS.length;
+
+  return (
+    <div>
+      <div className="grid grid-cols-4">
+        {STEPS.map((step, i) => {
+          const done = i < currentIndex;
+          const activeStep = i === currentIndex;
+          return (
+            <div key={step.label} className="relative flex justify-center">
+              {i > 0 && <span className={`absolute left-0 right-1/2 top-1/2 h-0.5 -translate-y-1/2 ${i <= currentIndex - 1 ? "bg-[#16a34a]" : "bg-[#e6ecf4]"}`} />}
+              {i < STEPS.length - 1 && <span className={`absolute left-1/2 right-0 top-1/2 h-0.5 -translate-y-1/2 ${i < currentIndex - 1 ? "bg-[#16a34a]" : "bg-[#e6ecf4]"}`} />}
+              <span
+                className={`relative z-10 grid h-9 w-9 place-items-center rounded-full text-[12px] font-black ${
+                  done ? "bg-[#16a34a] text-white" : activeStep ? "bg-[#075fff] text-white" : "border-2 border-[#e6ecf4] bg-white text-[#9aa7bd]"
+                }`}
+              >
+                {done ? <CheckCircle2 size={17} /> : i + 1}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-2 grid grid-cols-4 text-center">
+        {STEPS.map((step, i) => {
+          const done = i < currentIndex;
+          const activeStep = i === currentIndex;
+          const sub =
+            i === 0 ? fullDateTime(order.createdAt)
+            : done ? (i === STEPS.length - 1 ? timeAgo(order.updatedAt) : "Done")
+            : activeStep ? (i === 1 ? "Next step" : "Open in Billing")
+            : "Pending";
+          return (
+            <div key={step.label} className="px-1">
+              <p className={`text-[11px] font-black leading-tight ${done || activeStep ? "text-[#13254a]" : "text-[#9aa7bd]"}`}>{step.label}</p>
+              <p className="mt-0.5 truncate text-[10px] font-semibold text-[#8290a8]">{sub}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
+      <p className="mb-3 text-[13px] font-black text-[#0f1e3d]">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function InfoRow({ label, value, chip, chipClass, mono }: { label: string; value?: string; chip?: string; chipClass?: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-1.5 text-[12px]">
+      <span className="shrink-0 font-semibold text-[#6d7c98]">{label}</span>
+      {chip ? (
+        <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase ${chipClass ?? "bg-[#eef2f8] text-[#536383]"}`}>{chip}</span>
+      ) : (
+        <span className={`min-w-0 truncate text-right font-bold text-[#13254a] ${mono ? "font-mono text-[11px]" : ""}`}>{value}</span>
+      )}
+    </div>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  onClick,
+  disabled,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "danger";
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex flex-col items-center gap-1.5 rounded-xl border px-1 py-2.5 text-center transition disabled:cursor-not-allowed disabled:opacity-40 ${
+        tone === "danger"
+          ? "border-[#f0d5d5] bg-[#fff8f8] text-[#e11d48] hover:bg-[#fff1f2]"
+          : "border-[#e2eaf4] bg-[#fbfdff] text-[#405273] hover:border-[#c9dcff] hover:bg-[#f4f8ff]"
+      }`}
+    >
+      {icon}
+      <span className="text-[10px] font-bold leading-tight">{label}</span>
+    </button>
   );
 }

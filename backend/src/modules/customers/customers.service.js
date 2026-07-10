@@ -241,7 +241,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
       },
     });
 
-    // FinancialLedger: money in (cash_in/upi_in) + outstanding down (udhar_credit).
+    // FinancialLedger: money in (cash_in/upi_in/bank_in) + outstanding down (udhar_credit).
     await postUdharPaymentLedger(tx, {
       shopId,
       ledgerEntryId: ledger.id,
@@ -297,7 +297,7 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
         shopId,
         customerId,
         type: "payment",
-        mode: { in: ["cash", "upi"] },
+        mode: { in: ["cash", "upi", "bank"] },
       },
     });
 
@@ -339,7 +339,7 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
       },
     });
 
-    // FinancialLedger: undo the recovery — cash/upi back out + outstanding restored.
+    // FinancialLedger: undo the recovery — cash/UPI/bank back out + outstanding restored.
     // Keyed on the reversal entry id (distinct from the original payment) and dated to
     // the reversal, so it nets the original payment's ledger rows to zero.
     await postUdharPaymentLedger(tx, {

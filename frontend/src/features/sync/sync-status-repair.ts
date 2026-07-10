@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { dexieDB, filterRowsForCurrentScope, offlineDB, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
@@ -267,9 +268,7 @@ function readNumberFrom(record: unknown, keys: string[]): number | undefined {
   return undefined;
 }
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+
 
 function positiveMoneyFrom(record: unknown, keys: string[]): boolean {
   const value = readNumberFrom(record, keys);

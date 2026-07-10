@@ -57,6 +57,48 @@ export async function getPublicCatalog(shopId) {
 const MAX_ORDER_LINES = 100;
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
+// Customer-facing stage for each internal status, so the tracker reads like a real online order.
+const ORDER_STAGE = { new: "received", accepted: "preparing", fulfilled: "ready", rejected: "declined" };
+
+function parseOrderLines(json) {
+  try {
+    const parsed = JSON.parse(json || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((l) => ({ name: l.name, qty: l.qty, price: l.price, unit: l.unit }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Public order-status lookup for the customer's own tracker. The orderId is an unguessable cuid
+ * that only the customer who placed it holds, so echoing back its status is safe — and we return
+ * only order-shaped fields (status, lines, totals), never other customers' data. Same owner-opt-in
+ * 404 gate as the catalog so a disabled/unknown shop leaks nothing.
+ */
+export async function getPublicOrderStatus(shopId, orderId) {
+  const shop = await db.shop.findUnique({ where: { id: shopId } });
+  if (!shop || !isCustomerOrderingEnabled(shop.settingsJson)) {
+    throw new AppError("This shop is not accepting online orders.", 404);
+  }
+  const order = await db.customerOrder.findFirst({
+    where: { id: String(orderId ?? ""), shopId },
+    select: { id: true, status: true, itemCount: true, estimatedTotal: true, itemsJson: true, createdAt: true, updatedAt: true },
+  });
+  if (!order) throw new AppError("We couldn't find that order.", 404);
+  return {
+    orderId: order.id,
+    status: order.status,
+    stage: ORDER_STAGE[order.status] ?? order.status,
+    itemCount: order.itemCount,
+    estimatedTotal: order.estimatedTotal,
+    items: parseOrderLines(order.itemsJson),
+    shopName: shop.name,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  };
+}
+
 function cleanOrderIdempotencyKey(value) {
   const key = String(value ?? "").trim();
   if (!key) return null;

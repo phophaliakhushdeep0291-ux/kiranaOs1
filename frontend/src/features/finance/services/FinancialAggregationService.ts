@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import type { Bill, Customer, Product, Supplier } from "@/types/api";
 import {
@@ -45,6 +46,7 @@ export interface RevenueBreakdownRow {
   amount: number;
   cash: number;
   upi: number;
+  bank: number;
   udhar: number;
   date: string;
   status: string;
@@ -63,10 +65,13 @@ export interface ProfitByProductRow {
 export interface CollectionBreakdown {
   cashSalesToday: number;
   upiSalesToday: number;
+  bankSalesToday: number;
   cashUdharRecoveryToday: number;
   upiUdharRecoveryToday: number;
+  bankUdharRecoveryToday: number;
   totalCashCollectedToday: number;
   totalUpiCollectedToday: number;
+  totalBankCollectedToday: number;
 }
 
 export interface SupplierDueRow {
@@ -107,11 +112,14 @@ export interface FinancialAggregationSnapshot {
   discountToday: number;
   cashSalesToday: number;
   upiSalesToday: number;
+  bankSalesToday: number;
   udharSalesToday: number;
   cashUdharRecoveryToday: number;
   upiUdharRecoveryToday: number;
+  bankUdharRecoveryToday: number;
   totalCashCollectedToday: number;
   totalUpiCollectedToday: number;
+  totalBankCollectedToday: number;
   totalOutstandingUdhar: number;
   totalBillsToday: number;
   totalCustomersWithUdhar: number;
@@ -122,6 +130,7 @@ export interface FinancialAggregationSnapshot {
   supplierDueRows: SupplierDueRow[];
   supplierCashPaidToday: number;
   supplierUpiPaidToday: number;
+  supplierBankPaidToday: number;
   purchaseDueToday: number;
   expensesToday: number;
   ownerWithdrawalToday: number;
@@ -148,9 +157,7 @@ function readNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(num) ? num : fallback;
 }
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+
 
 function readString(row: unknown, keys: string[], fallback = ""): string {
   if (!isRecord(row)) return fallback;
@@ -164,6 +171,12 @@ function readString(row: unknown, keys: string[], fallback = ""): string {
 
 function isRecord(value: unknown): value is RecordLike {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+type TenderTotals = { cash: number; upi: number; bank: number };
+
+function emptyTenderTotals(): TenderTotals {
+  return { cash: 0, upi: 0, bank: 0 };
 }
 
 function isDeleted(row: RecordLike): boolean {
@@ -358,7 +371,7 @@ function paymentAmount(payment: RecordLike): number {
 
 function paymentMode(payment: RecordLike): string {
   const mode = String(payment.mode ?? payment.paymentMode ?? payment.payment_mode ?? "cash").toLowerCase();
-  if (mode === "bank" || mode === "card") return "upi";
+  if (mode === "card") return "bank";
   return mode;
 }
 
@@ -386,32 +399,34 @@ function normalizeEmbeddedPayments(bill: RecordLike): LocalPayment[] {
   }));
 }
 
-function sumPaymentTender(payments: LocalPayment[]): { cash: number; upi: number } {
+function sumPaymentTender(payments: LocalPayment[]): TenderTotals {
   return dedupePaymentsForDisplay(payments)
     .filter((payment) => isActivePayment(payment))
-    .reduce<{ cash: number; upi: number }>(
+    .reduce<TenderTotals>(
       (sum, payment) => {
         const mode = paymentMode(payment);
         if (mode === "cash") sum.cash = roundMoney(sum.cash + paymentAmount(payment));
         if (mode === "upi") sum.upi = roundMoney(sum.upi + paymentAmount(payment));
+        if (mode === "bank") sum.bank = roundMoney(sum.bank + paymentAmount(payment));
         return sum;
       },
-      { cash: 0, upi: 0 },
+      emptyTenderTotals(),
     );
 }
 
-function billEmbeddedTender(bill: RecordLike): { cash: number; upi: number } {
+function billEmbeddedTender(bill: RecordLike): TenderTotals {
   const embeddedPayments = normalizeEmbeddedPayments(bill);
   if (embeddedPayments.length > 0) return sumPaymentTender(embeddedPayments);
   return {
     cash: roundMoney(readNumber(bill.cashAmount ?? bill.cash_amount, 0)),
     upi: roundMoney(readNumber(bill.upiAmount ?? bill.upi_amount, 0)),
+    bank: roundMoney(readNumber(bill.bankAmount ?? bill.bank_amount, 0)),
   };
 }
 
-function billLinkedTender(bill: RecordLike, payments: LocalPayment[]): { cash: number; upi: number } {
+function billLinkedTender(bill: RecordLike, payments: LocalPayment[]): TenderTotals {
   const ids = new Set(billIdentityKeys(bill));
-  if (ids.size === 0) return { cash: 0, upi: 0 };
+  if (ids.size === 0) return emptyTenderTotals();
   return sumPaymentTender(
     payments.filter((payment) => {
       const billId = getBillId(payment);
@@ -420,9 +435,9 @@ function billLinkedTender(bill: RecordLike, payments: LocalPayment[]): { cash: n
   );
 }
 
-function tenderForBill(bill: RecordLike, payments: LocalPayment[]): { cash: number; upi: number } {
+function tenderForBill(bill: RecordLike, payments: LocalPayment[]): TenderTotals {
   const embedded = billEmbeddedTender(bill);
-  if (embedded.cash > 0 || embedded.upi > 0) return embedded;
+  if (embedded.cash > 0 || embedded.upi > 0 || embedded.bank > 0) return embedded;
   return billLinkedTender(bill, payments);
 }
 
@@ -464,7 +479,7 @@ function pushTenderSignature(
   amount: number,
   timeMs: number,
 ) {
-  if ((mode !== "cash" && mode !== "upi") || amount <= 0 || !Number.isFinite(timeMs)) return;
+  if ((mode !== "cash" && mode !== "upi" && mode !== "bank") || amount <= 0 || !Number.isFinite(timeMs)) return;
   signatures.push({ customerId, mode, amount: roundMoney(amount), timeMs });
 }
 
@@ -491,13 +506,14 @@ function buildTodayTenderSignatures(todayBills: LocalBill[]): TodayTenderSignatu
     const explicitTender = billEmbeddedTender(bill);
     pushTenderSignature(signatures, billCustomerId, "cash", explicitTender.cash, billTimeMs);
     pushTenderSignature(signatures, billCustomerId, "upi", explicitTender.upi, billTimeMs);
+    pushTenderSignature(signatures, billCustomerId, "bank", explicitTender.bank, billTimeMs);
   }
   return signatures;
 }
 
 function paymentLooksLikeTodayBillTender(payment: LocalPayment, todayTenderSignatures: TodayTenderSignature[]): boolean {
   const mode = paymentMode(payment);
-  if (mode !== "cash" && mode !== "upi") return false;
+  if (mode !== "cash" && mode !== "upi" && mode !== "bank") return false;
   const amount = paymentAmount(payment);
   if (amount <= 0) return false;
   const customerId = getCustomerId(payment);
@@ -512,15 +528,16 @@ function paymentLooksLikeTodayBillTender(payment: LocalPayment, todayTenderSigna
   });
 }
 
-function addRecoveryTender(total: { cash: number; upi: number }, mode: string, amount: number) {
+function addRecoveryTender(total: TenderTotals, mode: string, amount: number) {
   if (mode === "cash") total.cash = roundMoney(total.cash + amount);
   if (mode === "upi") total.upi = roundMoney(total.upi + amount);
+  if (mode === "bank") total.bank = roundMoney(total.bank + amount);
 }
 
 function subtractTenderAllowance(
-  candidate: { cash: number; upi: number },
-  allowance: { cash: number; upi: number },
-): { cash: number; upi: number } {
+  candidate: TenderTotals,
+  allowance: TenderTotals,
+): TenderTotals {
   const subtractLikelySaleEcho = (total: number, saleAllowance: number) => {
     if (saleAllowance > 0 && total + 0.004 >= saleAllowance) return roundMoney(Math.max(0, total - saleAllowance));
     return roundMoney(total);
@@ -529,18 +546,20 @@ function subtractTenderAllowance(
   return {
     cash: subtractLikelySaleEcho(candidate.cash, allowance.cash),
     upi: subtractLikelySaleEcho(candidate.upi, allowance.upi),
+    bank: subtractLikelySaleEcho(candidate.bank, allowance.bank),
   };
 }
 
-function buildTodayTenderAllowance(todayBills: LocalBill[], payments: LocalPayment[]): { cash: number; upi: number } {
-  return todayBills.reduce<{ cash: number; upi: number }>(
+function buildTodayTenderAllowance(todayBills: LocalBill[], payments: LocalPayment[]): TenderTotals {
+  return todayBills.reduce<TenderTotals>(
     (sum, bill) => {
       const tender = tenderForBill(bill, payments);
       sum.cash = roundMoney(sum.cash + tender.cash);
       sum.upi = roundMoney(sum.upi + tender.upi);
+      sum.bank = roundMoney(sum.bank + tender.bank);
       return sum;
     },
-    { cash: 0, upi: 0 },
+    emptyTenderTotals(),
   );
 }
 
@@ -560,7 +579,7 @@ function calculateOldUdharRecovery(
   bills: LocalBill[],
   rangeBills: LocalBill[],
   range: { from: string; to: string },
-): { cash: number; upi: number } {
+): TenderTotals {
   const { saleBillIds, todaySaleBillIds: rangeSaleBillIds } = buildSaleBillIdSets(bills, rangeBills);
   const paymentsByIdentity = buildPaymentByIdentity(payments);
   const rangeTenderAllowance = buildTodayTenderAllowance(rangeBills, payments);
@@ -576,17 +595,17 @@ function calculateOldUdharRecovery(
       const billId = getBillId(entry);
       return !billId || !saleBillIds.has(billId) || !rangeSaleBillIds.has(billId);
     })
-    .reduce<{ cash: number; upi: number }>(
+    .reduce<TenderTotals>(
       (sum, entry) => {
         for (const key of ledgerPaymentReferenceKeys(entry)) linkedPaymentIds.add(key);
         addRecoveryTender(sum, ledgerPaymentMode(entry, paymentsByIdentity), Math.abs(ledgerSignedAmount(entry)));
         return sum;
       },
-      { cash: 0, upi: 0 },
+      emptyTenderTotals(),
     );
 
-  const oldBillPaymentFallback = { cash: 0, upi: 0 };
-  const unlinkedPaymentFallback = { cash: 0, upi: 0 };
+  const oldBillPaymentFallback = emptyTenderTotals();
+  const unlinkedPaymentFallback = emptyTenderTotals();
   for (const payment of dedupePaymentsForDisplay(
     payments.filter((row) => isActivePayment(row) && isWithinDateRange(row, range)),
   )) {
@@ -606,6 +625,7 @@ function calculateOldUdharRecovery(
   return {
     cash: roundMoney(total.cash + oldBillPaymentFallback.cash + unlinkedOldUdharFallback.cash),
     upi: roundMoney(total.upi + oldBillPaymentFallback.upi + unlinkedOldUdharFallback.upi),
+    bank: roundMoney(total.bank + oldBillPaymentFallback.bank + unlinkedOldUdharFallback.bank),
   };
 }
 
@@ -670,6 +690,7 @@ function buildRevenueBreakdown(
       amount,
       cash: tender.cash,
       upi: tender.upi,
+      bank: tender.bank,
       udhar: billCredit(bill),
       date: getDateValue(bill),
       status: readString(bill, ["status"], "saved"),
@@ -802,7 +823,7 @@ function purchaseDue(row: RecordLike): number {
 
 function purchasePaymentMode(row: RecordLike): string {
   const mode = String(row.purchasePaymentMode ?? row.purchase_payment_mode ?? row.paymentMode ?? row.payment_mode ?? "cash").toLowerCase();
-  if (mode === "bank" || mode === "card") return "upi";
+  if (mode === "card") return "bank";
   return mode;
 }
 
@@ -978,17 +999,20 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const discountToday = roundMoney(todayBills.reduce((sum, bill) => sum + billDiscount(bill), 0));
   const cashSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.cash, 0));
   const upiSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.upi, 0));
+  const bankSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.bank, 0));
   const udharSalesToday = roundMoney(revenueBreakdown.reduce((sum, row) => sum + row.udhar, 0));
   const profitByProduct = calculateProfitByProduct(todayBills, billItems, products);
   const profitToday = calculateTotalBillProfit(todayBills, billItems, products);
   const oldUdhar = calculateOldUdharRecovery(payments, ledger, bills, todayBills, range);
   const totalCashCollectedToday = roundMoney(cashSalesToday + oldUdhar.cash);
   const totalUpiCollectedToday = roundMoney(upiSalesToday + oldUdhar.upi);
+  const totalBankCollectedToday = roundMoney(bankSalesToday + oldUdhar.bank);
   const outstandingCustomers = calculateOutstandingCustomers(ledger, customers);
   const supplierDueRows = buildSupplierDueRows(purchaseBills, inventoryMovements, suppliers);
   const todaySupplierRows = supplierDueRows.filter((row) => row.date && isWithinDateRange({ created_at: row.date }, range));
   const supplierCashPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "cash").reduce((sum, row) => sum + row.paid, 0));
   const supplierUpiPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "upi").reduce((sum, row) => sum + row.paid, 0));
+  const supplierBankPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "bank").reduce((sum, row) => sum + row.paid, 0));
   const purchaseDueToday = roundMoney(todaySupplierRows.reduce((sum, row) => sum + row.due, 0));
   const supplierDue = roundMoney(supplierDueRows.reduce((sum, row) => sum + row.due, 0));
   const expensesToday = 0;
@@ -1012,11 +1036,14 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
     discountToday,
     cashSalesToday,
     upiSalesToday,
+    bankSalesToday,
     udharSalesToday,
     cashUdharRecoveryToday: oldUdhar.cash,
     upiUdharRecoveryToday: oldUdhar.upi,
+    bankUdharRecoveryToday: oldUdhar.bank,
     totalCashCollectedToday,
     totalUpiCollectedToday,
+    totalBankCollectedToday,
     totalOutstandingUdhar: roundMoney(outstandingCustomers.reduce((sum, row) => sum + row.outstanding, 0)),
     totalBillsToday: todayBills.length,
     totalCustomersWithUdhar: outstandingCustomers.length,
@@ -1025,15 +1052,19 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
     collectionBreakdown: {
       cashSalesToday,
       upiSalesToday,
+      bankSalesToday,
       cashUdharRecoveryToday: oldUdhar.cash,
       upiUdharRecoveryToday: oldUdhar.upi,
+      bankUdharRecoveryToday: oldUdhar.bank,
       totalCashCollectedToday,
       totalUpiCollectedToday,
+      totalBankCollectedToday,
     },
     supplierDue,
     supplierDueRows,
     supplierCashPaidToday,
     supplierUpiPaidToday,
+    supplierBankPaidToday,
     purchaseDueToday,
     expensesToday,
     ownerWithdrawalToday,

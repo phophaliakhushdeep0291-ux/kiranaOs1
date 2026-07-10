@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
-import { ArrowLeftRight, Banknote, QrCode, UserRound } from "lucide-react";
+import { ArrowLeftRight, Banknote, Landmark, QrCode, UserRound } from "lucide-react";
 
 interface BillingPaymentPanelProps {
   billType: BillTypeSelection;
@@ -61,7 +61,7 @@ export function BillingPaymentPanel({
       <p className="text-[12px] font-extrabold text-[#13274d]">Payment Method</p>
 
       {showPaymentMode ? (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.cash}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]"><Banknote size={17} /></span>}
@@ -77,6 +77,14 @@ export function BillingPaymentPanel({
             selected={paymentMode === BillPaymentMode.upi}
             activeClass="border-[#e6d5ff] bg-[#faf5ff] text-[#7c3aed]"
             onClick={() => setPaymentMode(BillPaymentMode.upi)}
+          />
+          <PayModeBtn
+            testId={`button-payment-${BillPaymentMode.bank}`}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eaf3ff] text-[#0b63f6]"><Landmark size={17} /></span>}
+            label="Bank"
+            selected={paymentMode === BillPaymentMode.bank}
+            activeClass="border-[#cfe0ff] bg-[#f3f7ff] text-[#0b63f6]"
+            onClick={() => setPaymentMode(BillPaymentMode.bank)}
           />
           <PayModeBtn
             testId={`button-payment-${SPLIT_PAYMENT}`}

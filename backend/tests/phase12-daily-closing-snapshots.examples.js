@@ -43,6 +43,7 @@ for (const schema of [sqliteSchema, pgSchema]) {
   assert(schema.includes("topProductsJson") && schema.includes("lowStockJson"), "Snapshot must persist JSON report summaries");
   assert(schema.includes("@@unique([shopId, date])"), "Snapshot must be idempotent per shop/date");
   assert(schema.includes("lockedAt") && schema.includes("lockedByUserId"), "Snapshot must support locking");
+  assert(schema.includes("bankReceivedPaise"), "Snapshot must persist bank tender (bank is a first-class payment mode)");
 }
 
 assert(migration.includes('ALTER TABLE "Bill" ADD COLUMN IF NOT EXISTS "createdByUserId"'), "Migration must add Bill.createdByUserId safely");
@@ -71,6 +72,8 @@ assert(snapshotService.includes("upsert"), "Snapshot generation must upsert idem
 assert(snapshotService.includes("shopId_date"), "Snapshot service must use unique shop/date key");
 assert(snapshotService.includes("SNAPSHOT_LOCKED"), "Locked snapshots must not be silently overwritten");
 assert(snapshotService.includes("getDailyClosing"), "Snapshot generation must reuse live Phase 11 computation");
+assert(snapshotService.includes("bankReceivedPaise: dailyClosing.bankReceivedPaise"), "Snapshot writer must persist bank tender");
+assert(snapshotService.includes("bankReceivedPaise: snapshot.bankReceivedPaise"), "Snapshot reader must return bank tender");
 
 assert(reportService.includes("createdByUserId") && reportService.includes("Unknown / Legacy"), "staff-sales must group by createdByUserId and include legacy bucket");
 assert(!reportService.includes("Bill schema does not currently store createdByUserId"), "staff-sales should no longer be limitation-only");

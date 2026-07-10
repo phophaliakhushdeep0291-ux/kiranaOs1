@@ -25,7 +25,9 @@ describe("multi-session request isolation", () => {
   });
 
   it("actively refetches visible queries after local writes without hammering sync status churn", () => {
-    expect(realtimeBridge).toContain("const onLocalDataChanged = () => scheduleRefresh(FAST_REFRESH_DELAY_MS, \"active\")");
+    expect(realtimeBridge).toContain("scheduleRefresh(FAST_REFRESH_DELAY_MS, \"active\")");
+    expect(realtimeBridge).toContain("detail?.source === \"broadcast\"");
+    expect(realtimeBridge).toContain("kirana.localActiveQueryRefresh.lastRun");
     expect(realtimeBridge).toContain("const onSyncQueueUpdated = () => scheduleRefresh()");
     expect(realtimeBridge).toContain("void queryClient.invalidateQueries({ refetchType })");
   });

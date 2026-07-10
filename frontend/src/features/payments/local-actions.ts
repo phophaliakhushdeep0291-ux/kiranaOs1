@@ -142,7 +142,7 @@ function buildPaymentLedgerEntry(input: {
   ledgerEntryId: string;
   idempotencyKey: string;
   amount: number;
-  mode: "cash" | "upi";
+  mode: "cash" | "upi" | "bank";
   nextBalance: number;
   note?: string;
   at: string;

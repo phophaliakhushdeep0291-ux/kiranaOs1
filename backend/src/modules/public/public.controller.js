@@ -19,3 +19,12 @@ export async function submitOrder(req, res, next) {
     next(err);
   }
 }
+
+export async function orderStatus(req, res, next) {
+  try {
+    const data = await svc.getPublicOrderStatus(req.params.shopId, req.params.orderId);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}

@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { z } from "zod";
 import { ApiClientError } from "@/lib/api/http";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
@@ -67,9 +68,7 @@ export function parseOrThrow<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data;
 }
 
-export function roundMoney(value: number): number {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
+export { roundMoney };
 
 export function readNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { ArrowRightLeft, CheckCircle2, ClipboardList, Download, Package, Search, SlidersHorizontal } from "lucide-react";
 import { useGetStockLedger } from "@/lib/api/client";
@@ -70,12 +70,24 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
   const ledger = useGetStockLedger({ limit: 500 });
   // Local movements keep this register offline-first: unsynced corrections show
   // immediately and the page still works without the backend.
+  const queryClient = useQueryClient();
   const localMovements = useQuery({
     queryKey: ["inventory-register-local"],
     queryFn: () => offlineDB.getAll<MovementRow>("inventory_movements").catch(() => [] as MovementRow[]),
     staleTime: 2_000,
-    refetchInterval: 5_000, // movements recorded elsewhere appear without a remount
+    refetchInterval: 30_000, // slow fallback; the local-data events below are the fast path
   });
+  useEffect(() => {
+    // Movements recorded elsewhere in the app announce themselves — re-read on those
+    // events instead of hammering IndexedDB on a tight poll (was every 5s).
+    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["inventory-register-local"] });
+    window.addEventListener("kirana:local-data-changed", refresh);
+    window.addEventListener("kirana:sync-queue-updated", refresh);
+    return () => {
+      window.removeEventListener("kirana:local-data-changed", refresh);
+      window.removeEventListener("kirana:sync-queue-updated", refresh);
+    };
+  }, [queryClient]);
   const isAdjustments = mode === "adjustments";
   const sourceRows = useMemo(() => {
     const merged = new Map<string, MovementRow>();

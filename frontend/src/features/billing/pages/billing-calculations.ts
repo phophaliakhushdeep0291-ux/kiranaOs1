@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import type { Product } from "@/lib/api/client";
 import type { CartItem } from "./billing-types";
 
@@ -6,9 +7,7 @@ export function clampAmount(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-export function roundMoney(value: number): number {
-  return Math.round((Number(value) || 0) * 100) / 100;
-}
+export { roundMoney };
 
 export function normalizeSearchText(value: string): string {
   return value

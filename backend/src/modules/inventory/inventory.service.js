@@ -86,7 +86,8 @@ function firstText(...values) {
 function normalizePaymentMode(mode, paidAmount) {
   if (paidAmount <= 0) return null;
   const normalized = String(mode || "cash").toLowerCase();
-  return normalized === "bank" ? "upi" : normalized;
+  // Parity with the sync replay path: bank is a first-class tender, card folds into bank.
+  return normalized === "card" ? "bank" : normalized;
 }
 
 function parsePurchaseDueDate(value, dueAmount) {

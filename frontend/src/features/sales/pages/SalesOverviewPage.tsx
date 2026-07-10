@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { roundMoney } from "@/lib/money";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "wouter";
 import {
   Area,
@@ -72,9 +73,7 @@ function readNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(number) ? number : fallback;
 }
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+
 
 function money(value: number | undefined, fractionDigits = 0): string {
   return `\u20b9${Math.round(readNumber(value, 0)).toLocaleString("en-IN", {
@@ -264,29 +263,47 @@ export default function SalesOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [dateOpen, setDateOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const dataRef = useRef<SalesData | null>(null);
+  const refreshTimer = useRef<number | null>(null);
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
 
   useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  useEffect(() => {
     let cancelled = false;
-    const run = async () => {
-      setLoading(true);
+    const run = async (options?: { showLoader?: boolean }) => {
+      if (cancelled) return;
+      const showLoader = options?.showLoader ?? !dataRef.current;
+      if (showLoader) setLoading(true);
       try {
         const next = await loadSalesData(range);
         if (!cancelled) setData(next);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && showLoader) setLoading(false);
       }
     };
-    void run();
-    const refresh = () => void run();
+    void run({ showLoader: !dataRef.current });
+    const refresh = () => {
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      refreshTimer.current = window.setTimeout(() => {
+        refreshTimer.current = null;
+        void run({ showLoader: false });
+      }, 220);
+    };
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
     return () => {
       cancelled = true;
+      if (refreshTimer.current) {
+        window.clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+      }
       window.removeEventListener("kirana:local-data-changed", refresh);
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
-  }, [range.from, range.to]);
+  }, [range]);
 
   const applyPeriod = (nextPeriod: Exclude<SalesPeriod, "custom">) => {
     const nextRange = periodRange(nextPeriod);

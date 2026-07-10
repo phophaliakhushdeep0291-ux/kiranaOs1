@@ -162,7 +162,7 @@ export async function getDailyClosing(shopId, { date } = {}) {
     }),
     db.bill.count({ where: { shopId, billType: "estimate", createdAt: { gte: start, lte: end } } }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
     countPendingSync(shopId),
@@ -178,16 +178,20 @@ export async function getDailyClosing(shopId, { date } = {}) {
   const activePayments = activeBills.flatMap((b) => b.payments);
   const billCash = sumPaymentsByMode(activePayments, "cash");
   const billUpi = sumPaymentsByMode(activePayments, "upi");
+  const billBank = sumPaymentsByMode(activePayments, "bank");
   const oldUdharCash = sumMoney(oldUdharRecovered.filter((u) => u.mode === "cash").map((u) => u.amount));
   const oldUdharUpi = sumMoney(oldUdharRecovered.filter((u) => u.mode === "upi").map((u) => u.amount));
+  const oldUdharBank = sumMoney(oldUdharRecovered.filter((u) => u.mode === "bank").map((u) => u.amount));
   const cashReceived = addMoney(billCash, oldUdharCash);
   const upiReceived = addMoney(billUpi, oldUdharUpi);
+  const bankReceived = addMoney(billBank, oldUdharBank);
 
   return {
     date: dateKey,
     totalSalesPaise: toPaise(sumMoney(activeBills.map((b) => b.grandTotal))),
     cashReceivedPaise: toPaise(cashReceived),
     upiReceivedPaise: toPaise(upiReceived),
+    bankReceivedPaise: toPaise(bankReceived),
     udharGivenPaise: toPaise(sumMoney(activeBills.map((b) => b.creditAmount))),
     oldUdharRecoveredPaise: toPaise(sumMoney(oldUdharRecovered.map((u) => u.amount))),
     expectedCashPaise: toPaise(cashReceived),
@@ -235,11 +239,12 @@ export async function getSalesSummary(shopId, { range, from, to, includeProfit =
   const daily = new Map();
   for (const b of bills) {
     const key = groupByDay(b.createdAt);
-    const row = daily.get(key) ?? { date: key, totalSalesPaise: 0, totalBills: 0, cashSalesPaise: 0, upiSalesPaise: 0, udharSalesPaise: 0 };
+    const row = daily.get(key) ?? { date: key, totalSalesPaise: 0, totalBills: 0, cashSalesPaise: 0, upiSalesPaise: 0, bankSalesPaise: 0, udharSalesPaise: 0 };
     row.totalSalesPaise += toPaise(b.grandTotal);
     row.totalBills += 1;
     row.cashSalesPaise += toPaise(sumPaymentsByMode(b.payments, "cash"));
     row.upiSalesPaise += toPaise(sumPaymentsByMode(b.payments, "upi"));
+    row.bankSalesPaise += toPaise(sumPaymentsByMode(b.payments, "bank"));
     row.udharSalesPaise += toPaise(b.creditAmount);
     daily.set(key, row);
   }
@@ -253,6 +258,7 @@ export async function getSalesSummary(shopId, { range, from, to, includeProfit =
     averageBillValuePaise: bills.length ? toPaise(totalSales / bills.length) : 0,
     cashSalesPaise: toPaise(sumPaymentsByMode(payments, "cash")),
     upiSalesPaise: toPaise(sumPaymentsByMode(payments, "upi")),
+    bankSalesPaise: toPaise(sumPaymentsByMode(payments, "bank")),
     udharSalesPaise: toPaise(sumMoney(bills.map((b) => b.creditAmount))),
     partialSalesPaise: toPaise(sumMoney(bills.filter((b) => b.paidAmount > 0 && b.creditAmount > 0).map((b) => b.grandTotal))),
     cancelledSalesPaise: toPaise(sumMoney(cancelledBills.map((b) => b.grandTotal))),
@@ -279,7 +285,7 @@ export async function getPaymentModeReport(shopId, { from, to } = {}) {
       orderBy: { createdAt: "desc" },
     }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
   ]);
@@ -303,25 +309,31 @@ export async function getPaymentModeReport(shopId, { from, to } = {}) {
 
   const billCash = sumPaymentsByMode(payments, "cash");
   const billUpi = sumPaymentsByMode(payments, "upi");
+  const billBank = sumPaymentsByMode(payments, "bank");
   const oldUdharCash = sumMoney(oldUdharRecovered.filter((u) => u.mode === "cash").map((u) => u.amount));
   const oldUdharUpi = sumMoney(oldUdharRecovered.filter((u) => u.mode === "upi").map((u) => u.amount));
+  const oldUdharBank = sumMoney(oldUdharRecovered.filter((u) => u.mode === "bank").map((u) => u.amount));
   const totalCashInHand = addMoney(billCash, oldUdharCash);
   const totalUpiReceived = addMoney(billUpi, oldUdharUpi);
+  const totalBankReceived = addMoney(billBank, oldUdharBank);
 
   return {
     from: start.toISOString(),
     to: end.toISOString(),
     cashPaise: toPaise(billCash),
     upiPaise: toPaise(billUpi),
+    bankPaise: toPaise(billBank),
     cardPaise: toPaise(sumPaymentsByMode(payments, "card")),
     creditUdharPaise: toPaise(sumMoney(bills.map((b) => b.creditAmount))),
     mixedPayments,
     oldUdharRecoveredPaise: toPaise(sumMoney(oldUdharRecovered.map((u) => u.amount))),
     oldUdharRecoveredCashPaise: toPaise(oldUdharCash),
     oldUdharRecoveredUpiPaise: toPaise(oldUdharUpi),
+    oldUdharRecoveredBankPaise: toPaise(oldUdharBank),
     totalCashInHandPaise: toPaise(totalCashInHand),
     totalUpiReceivedPaise: toPaise(totalUpiReceived),
-    totalCollectedPaise: toPaise(addMoney(totalCashInHand, totalUpiReceived)),
+    totalBankReceivedPaise: toPaise(totalBankReceived),
+    totalCollectedPaise: toPaise(addMoney(totalCashInHand, totalUpiReceived, totalBankReceived)),
     refundPaise: 0,
     reversalPaise: 0,
     unsupported: { refunds: false, reversals: false },
@@ -457,6 +469,7 @@ export async function getPnL(shopId, { range, from, to }) {
 
   const cashCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "cash");
   const upiCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "upi");
+  const bankCollected = sumPaymentsByMode(bills.flatMap((b) => b.payments), "bank");
   const udharGivenThisPeriod = sumMoney(udharCreated.map((u) => u.amount));
   const udharRecoveredThisPeriod = sumMoney(udharRecovered.map((u) => u.amount));
   const cancelledBillsValue = sumMoney(cancelledBills.map((b) => b.grandTotal));
@@ -475,9 +488,10 @@ export async function getPnL(shopId, { range, from, to }) {
     netProfit,
     cashCollected,
     upiCollected,
+    bankCollected,
     udharGivenThisPeriod,
     udharRecoveredThisPeriod,
-    totalCollected: addMoney(cashCollected, upiCollected, udharRecoveredThisPeriod),
+    totalCollected: addMoney(cashCollected, upiCollected, bankCollected, udharRecoveredThisPeriod),
   };
 }
 
@@ -758,7 +772,7 @@ export async function getPaymentSummary(shopId, { from, to }) {
       select: { creditAmount: true },
     }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { mode: true, amount: true },
     }),
     db.stockLedger.findMany({
@@ -770,13 +784,16 @@ export async function getPaymentSummary(shopId, { from, to }) {
   const summary = {
     cash: 0,
     upi: 0,
+    bank: 0,
     credit: 0,
     total: 0,
     oldUdharRecovered: 0,
     cashInHand: 0,
     upiReceived: 0,
+    bankReceived: 0,
     purchaseCashPaid: 0,
     purchaseUpiPaid: 0,
+    purchaseBankPaid: 0,
     purchaseDue: 0,
     netCashInHand: 0,
   };
@@ -790,18 +807,22 @@ export async function getPaymentSummary(shopId, { from, to }) {
     summary.oldUdharRecovered = addMoney(summary.oldUdharRecovered, p.amount);
     if (p.mode === "cash") summary.cashInHand = addMoney(summary.cashInHand, p.amount);
     if (p.mode === "upi") summary.upiReceived = addMoney(summary.upiReceived, p.amount);
+    if (p.mode === "bank") summary.bankReceived = addMoney(summary.bankReceived, p.amount);
   }
   for (const purchase of purchases) {
     const paid = purchase.purchasePaidAmount || 0;
     const mode = String(purchase.purchasePaymentMode || "").toLowerCase();
     if (mode === "cash") summary.purchaseCashPaid = addMoney(summary.purchaseCashPaid, paid);
-    if (mode === "upi" || mode === "bank") summary.purchaseUpiPaid = addMoney(summary.purchaseUpiPaid, paid);
+    if (mode === "upi") summary.purchaseUpiPaid = addMoney(summary.purchaseUpiPaid, paid);
+    if (mode === "bank") summary.purchaseBankPaid = addMoney(summary.purchaseBankPaid, paid);
     summary.purchaseDue = addMoney(summary.purchaseDue, purchase.purchaseDueAmount || 0);
   }
   summary.cashInHand = addMoney(summary.cashInHand, summary.cash);
   summary.upiReceived = addMoney(summary.upiReceived, summary.upi);
-  summary.totalCollected = addMoney(summary.cashInHand, summary.upiReceived);
+  summary.bankReceived = addMoney(summary.bankReceived, summary.bank);
+  summary.totalCollected = addMoney(summary.cashInHand, summary.upiReceived, summary.bankReceived);
   summary.netCashInHand = Math.max(0, subtractMoney(summary.cashInHand, summary.purchaseCashPaid));
+  summary.netBankInHand = Math.max(0, subtractMoney(summary.bankReceived, summary.purchaseBankPaid));
 
   return { from: start.toISOString(), to: end.toISOString(), ...summary };
 }

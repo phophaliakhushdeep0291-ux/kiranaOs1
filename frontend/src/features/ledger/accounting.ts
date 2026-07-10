@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import type { Customer } from "@/types/api";
 
 export type LedgerEntryType = "BILL" | "PAYMENT" | "ADJUSTMENT" | "REFUND" | "CORRECTION" | "CANCELLED_BILL";
@@ -56,9 +57,7 @@ function readNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(num) ? num : fallback;
 }
 
-export function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+export { roundMoney };
 
 export function getLedgerCustomerId(entry: Partial<CustomerLedgerEntry>): string | null {
   const id = entry.customerId ?? entry.customer_id;

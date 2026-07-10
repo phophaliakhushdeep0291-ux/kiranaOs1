@@ -555,11 +555,12 @@ export async function createSaleReturn(shopId, body, actor = {}) {
     reason,
   } = body;
 
-  const normalizedRefundMode = ["cash", "upi", "udhar"].includes(String(refundMode)) ? String(refundMode) : "cash";
+  const normalizedRefundMode = ["cash", "upi", "bank", "udhar"].includes(String(refundMode)) ? String(refundMode) : "cash";
   if (!Array.isArray(items) || items.length === 0) {
     throw new AppError("A return needs at least one item", 400);
   }
-  const isCashLike = normalizedRefundMode === "cash" || normalizedRefundMode === "upi";
+  // "Cash-like" = an immediate tender refund (money goes back out now) vs. reducing udhar.
+  const isCashLike = normalizedRefundMode === "cash" || normalizedRefundMode === "upi" || normalizedRefundMode === "bank";
   if (normalizedRefundMode === "udhar" && !customerId) {
     throw new AppError("Customer is required to refund a return to udhar", 400);
   }

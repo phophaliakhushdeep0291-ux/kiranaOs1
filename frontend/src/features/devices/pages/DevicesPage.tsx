@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { AlertTriangle, Clock, Laptop, MonitorSmartphone, Plus, RefreshCcw, ShieldCheck, Smartphone, Trash2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -65,11 +65,18 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
   const [removeTarget, setRemoveTarget] = useState<DeviceRegistration | null>(null);
   const [ownerPin, setOwnerPin] = useState("");
   const [upgradePlan, setUpgradePlan] = useState<PlanCode | null>(null);
+  const devicesRef = useRef<DeviceRegistration[]>([]);
+  const refreshTimer = useRef<number | null>(null);
 
   const scope = useMemo(() => getOfflineScope(), []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    devicesRef.current = devices;
+  }, [devices]);
+
+  const refresh = useCallback(async (options?: { showLoader?: boolean }) => {
+    const showLoader = options?.showLoader ?? devicesRef.current.length === 0;
+    if (showLoader) setLoading(true);
     try {
       await ensureCurrentDeviceRegistered();
       const [cachedLicense, currentEvaluation, cachedDevices] = await Promise.all([
@@ -81,16 +88,26 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       setEvaluation(currentEvaluation);
       setDevices(cachedDevices);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
-    const handler = () => void refresh();
+    void refresh({ showLoader: devicesRef.current.length === 0 });
+    const handler = () => {
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      refreshTimer.current = window.setTimeout(() => {
+        refreshTimer.current = null;
+        void refresh({ showLoader: false });
+      }, 220);
+    };
     window.addEventListener("kirana:local-data-changed", handler);
     window.addEventListener("kirana:sync-queue-updated", handler);
     return () => {
+      if (refreshTimer.current) {
+        window.clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+      }
       window.removeEventListener("kirana:local-data-changed", handler);
       window.removeEventListener("kirana:sync-queue-updated", handler);
     };

@@ -38,7 +38,7 @@ assert.doesNotMatch(billsService, /round2\(paidAmount \+ creditAmount \+ waivedA
 
 const reportsService = read("src/modules/reports/reports.service.js");
 assert.match(reportsService, /sumMoney\(bills\.map\(\(b\) => b\.grandTotal\)\)/, "report grossSales should use sumMoney");
-assert.match(reportsService, /totalCollected: addMoney\(cashCollected, upiCollected(?:, udharRecoveredThisPeriod)?\)/, "report totalCollected should use addMoney");
+assert.match(reportsService, /totalCollected: addMoney\(cashCollected, upiCollected(?:, bankCollected)?(?:, udharRecoveredThisPeriod)?\)/, "report totalCollected should use addMoney");
 assert.doesNotMatch(reportsService, /reduce\(\(s, [^)]+\) => s \+ [^)]+\.amount, 0\)/, "reports should not raw-sum amount fields");
 
 const suppliersService = read("src/modules/suppliers/suppliers.service.js");

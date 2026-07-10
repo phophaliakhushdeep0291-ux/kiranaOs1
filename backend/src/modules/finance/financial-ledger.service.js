@@ -6,7 +6,8 @@
 // Convention: a reversal is the SAME entryType with a NEGATED amount. So every KPI is a
 // plain sum of its entryType and cancellations/restores net out exactly:
 //   today sales     = sum(sale)        cash collected  = sum(cash_in)
-//   upi collected   = sum(upi_in)      udhar created   = sum(udhar_debit)
+//   upi collected   = sum(upi_in)      bank collected  = sum(bank_in)
+//   udhar created   = sum(udhar_debit)
 //   udhar recovered = sum(udhar_credit)
 //   outstanding     = sum(udhar_debit) - sum(udhar_credit)
 //
@@ -19,6 +20,7 @@ import { toPaiseBigInt } from "../../utils/money.js";
 const TENDER_ENTRY = {
   cash: { entryType: "cash_in", direction: "credit" },
   upi: { entryType: "upi_in", direction: "credit" },
+  bank: { entryType: "bank_in", direction: "credit" },
 };
 
 function ledgerRow({
@@ -150,7 +152,7 @@ export async function postBillRestoredLedger(tx, { restoreAt, ...args }) {
   });
 }
 
-// Udhar khata payment: money in (cash_in/upi_in) + outstanding down (udhar_credit).
+// Udhar khata payment: money in (cash_in/upi_in/bank_in) + outstanding down (udhar_credit).
 // sign=-1 reverses it (cash back out + outstanding restored). Keyed on the immutable
 // ledger entry id, which the caller already creates idempotently.
 export async function postUdharPaymentLedger(tx, {
@@ -199,7 +201,7 @@ export async function postUdharPaymentLedger(tx, {
 }
 
 const PAISE_PER_RUPEE = 100;
-const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "udhar_debit", "udhar_credit"];
+const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "bank_in", "udhar_debit", "udhar_credit"];
 
 /**
  * Summarize FinancialLedger rows into KPIs. Because a reversal is the SAME entryType with a
@@ -225,6 +227,7 @@ export function summarizeFinancialLedger(rows = []) {
     sales: rupees(totals.sale),
     cashCollected: rupees(totals.cash_in),
     upiCollected: rupees(totals.upi_in),
+    bankCollected: rupees(totals.bank_in),
     udharCreated,
     udharRecovered,
     outstanding: Math.round((udharCreated - udharRecovered) * PAISE_PER_RUPEE) / PAISE_PER_RUPEE,

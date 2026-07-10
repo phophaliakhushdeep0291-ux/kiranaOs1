@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import type { SupplierDueRow } from "@/features/finance/services/FinancialAggregationService";
@@ -44,9 +45,7 @@ function readNumber(row: unknown, keys: string[], fallback = 0): number {
   return fallback;
 }
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+
 
 function isDeleted(row: MutableRow): boolean {
   const status = String(row.status ?? row.purchasePaymentStatus ?? row.purchase_payment_status ?? "").toLowerCase();

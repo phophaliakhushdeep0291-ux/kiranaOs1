@@ -41,11 +41,15 @@ assert.equal(s.outstanding, 0, "outstanding back to 0 after full repayment");
 s = summarizeFinancialLedger([{ entryType: "mystery", amountPaise: P(999) }, { entryType: "sale", amountPaise: P(5) }]);
 assert.equal(s.sales, 5, "unknown entryType ignored");
 assert.deepEqual(summarizeFinancialLedger([]), {
-  sales: 0, cashCollected: 0, upiCollected: 0, udharCreated: 0, udharRecovered: 0, outstanding: 0,
+  sales: 0, cashCollected: 0, upiCollected: 0, bankCollected: 0, udharCreated: 0, udharRecovered: 0, outstanding: 0,
 }, "empty ledger = all zeros");
 
 // Accepts number / numeric-string amountPaise too (not just BigInt).
 s = summarizeFinancialLedger([{ entryType: "upi_in", amountPaise: 2500 }, { entryType: "upi_in", amountPaise: "2500" }]);
 assert.equal(s.upiCollected, 50, "number + string paise both summed");
+
+// Bank transfers are tracked separately from UPI so owners can reconcile bank deposits.
+s = summarizeFinancialLedger([{ entryType: "bank_in", amountPaise: P(125) }]);
+assert.equal(s.bankCollected, 125, "bank = sum(bank_in)");
 
 console.log("financial-ledger-summary.examples.js OK");

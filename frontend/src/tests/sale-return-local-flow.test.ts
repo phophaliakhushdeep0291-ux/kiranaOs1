@@ -120,6 +120,19 @@ describe("sale return local-first", () => {
     expect(/":\s*"device_/.test(payloadJson)).toBe(false);
   });
 
+  it("bank refund: negative bank payment row, tender refund like cash/upi", async () => {
+    const ret = await createSaleReturnLocalFirst({
+      items: [{ productId: "product_sugar", name: "Sugar", quantity: 2, enteredUnit: "piece", ratePerRateUnit: 25, gstRate: 0 }],
+      refundMode: "bank",
+      ownerPin: "4321",
+    });
+    expect(ret.billType).toBe("sales_return");
+    expect(rows("bills")[0]).toEqual(expect.objectContaining({ grandTotal: -50, paidAmount: -50, refundMode: "bank" }));
+    expect(rows("payments")[0]).toEqual(expect.objectContaining({ mode: "bank", amount: -50 }));
+    const op = rows("sync_outbox").find((row) => row.operation_type === "CREATE_SALE_RETURN");
+    expect((op?.payload as Record<string, unknown>)?.refundMode).toBe("bank");
+  });
+
   it("damaged refund: no restock, damage movement recorded", async () => {
     await createSaleReturnLocalFirst({
       items: [{ productId: "product_sugar", name: "Sugar", quantity: 1, enteredUnit: "piece", ratePerRateUnit: 25, gstRate: 0, damaged: true }],

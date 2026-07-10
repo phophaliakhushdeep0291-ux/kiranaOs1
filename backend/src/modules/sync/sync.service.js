@@ -81,7 +81,7 @@ const adjustStockPayloadSchema = z.object({
 const udharPaymentPayloadSchema = z.object({
   customerId: z.string().min(1),
   amount: moneyAmount({ positive: true }).optional(),
-  mode: z.enum(["cash", "upi"]).optional(),
+  mode: z.enum(["cash", "upi", "bank"]).optional(),
   note: z.string().optional(),
   payment: udharPaymentSchema.optional(),
 }).passthrough();
@@ -1537,7 +1537,7 @@ function normalizePurchaseLifecycleFields(payload, { deleted = false } = {}) {
     purchasePaidAmount: safePaid,
     purchaseDueAmount: due,
     purchasePaymentStatus: status,
-    purchasePaymentMode: mode === "bank" || mode === "card" ? "upi" : mode,
+    purchasePaymentMode: mode === "card" ? "bank" : mode,
     purchaseDueDate: parsePurchaseLifecycleDueDate(payload.purchaseDueDate, due),
   };
 }

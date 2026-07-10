@@ -135,6 +135,8 @@ export default function PurchaseBillsPage() {
   const [payMode, setPayMode] = useState("cash");
   const [payAmount, setPayAmount] = useState("");
   const purchaseHydrationAttemptedRef = useRef(false);
+  const snapshotRef = useRef<FinancialAggregationSnapshot | null>(null);
+  const refreshTimer = useRef<number | null>(null);
   const { accessToken, isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:purchases-panel-width", { defaultWidth: 440 });
@@ -157,42 +159,60 @@ export default function PurchaseBillsPage() {
   }, []);
 
   useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
+
+  useEffect(() => {
     let active = true;
-    const refresh = async () => {
-      setLoading(true);
-      const next = await FinancialAggregationService.buildSnapshot().catch(() => null);
-      if (!active) return;
-
-      if (
-        !authLoading &&
-        isAuthenticated &&
-        accessToken &&
-        !purchaseHydrationAttemptedRef.current
-      ) {
-        purchaseHydrationAttemptedRef.current = true;
-        const imported = await hydratePurchaseHistoryFromSyncPull().catch(() => 0);
+    const refresh = async (options?: { showLoader?: boolean }) => {
+      const showLoader = options?.showLoader ?? !snapshotRef.current;
+      if (showLoader) setLoading(true);
+      try {
+        const next = await FinancialAggregationService.buildSnapshot().catch(() => null);
         if (!active) return;
-        if (imported > 0) {
-          const afterImport = await FinancialAggregationService.buildSnapshot().catch(() => next);
-          if (!active) return;
-          setSnapshot(afterImport);
-          await reloadLocal();
-          setLoading(false);
-          return;
-        }
-      }
 
-      setSnapshot(next);
-      await reloadLocal();
-      setLoading(false);
+        if (
+          !authLoading &&
+          isAuthenticated &&
+          accessToken &&
+          !purchaseHydrationAttemptedRef.current
+        ) {
+          purchaseHydrationAttemptedRef.current = true;
+          const imported = await hydratePurchaseHistoryFromSyncPull().catch(() => 0);
+          if (!active) return;
+          if (imported > 0) {
+            const afterImport = await FinancialAggregationService.buildSnapshot().catch(() => next);
+            if (!active) return;
+            setSnapshot(afterImport);
+            await reloadLocal();
+            return;
+          }
+        }
+
+        setSnapshot(next);
+        await reloadLocal();
+      } finally {
+        if (active && showLoader) setLoading(false);
+      }
     };
-    void refresh();
-    window.addEventListener("kirana:local-data-changed", refresh);
-    window.addEventListener("kirana:sync-queue-updated", refresh);
+    void refresh({ showLoader: !snapshotRef.current });
+    const refreshQuietly = () => {
+      if (refreshTimer.current) window.clearTimeout(refreshTimer.current);
+      refreshTimer.current = window.setTimeout(() => {
+        refreshTimer.current = null;
+        void refresh({ showLoader: false });
+      }, 220);
+    };
+    window.addEventListener("kirana:local-data-changed", refreshQuietly);
+    window.addEventListener("kirana:sync-queue-updated", refreshQuietly);
     return () => {
       active = false;
-      window.removeEventListener("kirana:local-data-changed", refresh);
-      window.removeEventListener("kirana:sync-queue-updated", refresh);
+      if (refreshTimer.current) {
+        window.clearTimeout(refreshTimer.current);
+        refreshTimer.current = null;
+      }
+      window.removeEventListener("kirana:local-data-changed", refreshQuietly);
+      window.removeEventListener("kirana:sync-queue-updated", refreshQuietly);
     };
   }, [accessToken, authLoading, isAuthenticated, reloadLocal]);
 

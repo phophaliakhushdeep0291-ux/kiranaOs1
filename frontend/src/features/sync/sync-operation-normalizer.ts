@@ -1,3 +1,4 @@
+import { roundMoney } from "@/lib/money";
 import { dexieDB, rowMatchesCurrentScope, type PendingSyncEvent } from "@/lib/offline/db";
 import { getOfflineScope } from "@/lib/offline/context";
 import { tableNameForEntity } from "@/features/sync/sync-types";
@@ -115,9 +116,7 @@ function normaliseStockPayload(
 }
 
 
-function roundMoney(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+
 
 function readOptionalNumber(...values: unknown[]): number | undefined {
   for (const value of values) {
