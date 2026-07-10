@@ -7,6 +7,29 @@ import type { Bill, Customer, Expense, PurchaseBill, Supplier } from "@/types/ap
 export type MoneyStatementMode = "cash" | "upi" | "bank";
 export type MoneyStatementDirection = "in" | "out";
 
+export interface MoneyStatementItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unit?: string;
+  rate: number;
+  amount: number;
+}
+
+export interface MoneyStatementDetail {
+  kind: "bill" | "udhar-payment" | "purchase" | "expense";
+  title: string;
+  billNo?: string;
+  paymentId?: string;
+  subtotal?: number;
+  discount?: number;
+  total?: number;
+  paid?: number;
+  due?: number;
+  items: MoneyStatementItem[];
+  note?: string;
+}
+
 export interface MoneyStatementRow {
   id: string;
   occurredAt: string;
@@ -21,6 +44,7 @@ export interface MoneyStatementRow {
   amount: number;
   status?: string;
   note?: string;
+  detail?: MoneyStatementDetail;
 }
 
 export interface MoneyStatementTotals {
@@ -50,7 +74,10 @@ export interface MoneyStatementFilters {
 export interface MoneyStatementInput {
   bills?: Array<Record<string, unknown>>;
   payments?: Array<Record<string, unknown>>;
+  customerLedger?: Array<Record<string, unknown>>;
   customers?: Array<Record<string, unknown>>;
+  billItems?: Array<Record<string, unknown>>;
+  products?: Array<Record<string, unknown>>;
   purchaseBills?: Array<Record<string, unknown>>;
   suppliers?: Array<Record<string, unknown>>;
   expenses?: Array<Record<string, unknown>>;
@@ -150,12 +177,131 @@ function billId(row: Record<string, unknown>): string {
   return firstString(row, ["billId", "bill_id", "billLocalId", "bill_local_id", "id"]);
 }
 
+function billIdentityKeys(row: Record<string, unknown>): string[] {
+  return rowKeys(row, [
+    "id",
+    "local_id",
+    "server_id",
+    "localId",
+    "serverId",
+    "billId",
+    "bill_id",
+    "billLocalId",
+    "bill_local_id",
+    "billServerId",
+    "bill_server_id",
+  ]);
+}
+
 function rowId(row: Record<string, unknown>, prefix: string, index: number): string {
   return firstString(row, ["id", "local_id", "server_id", "paymentId", "payment_id", "invoiceNumber", "billNo", "billNumber"]) || `${prefix}-${index}`;
 }
 
+function paymentIdentityKeys(row: Record<string, unknown>): string[] {
+  return rowKeys(row, [
+    "id",
+    "local_id",
+    "server_id",
+    "paymentId",
+    "payment_id",
+    "localPaymentId",
+    "local_payment_id",
+    "clientPaymentId",
+    "client_payment_id",
+    "source_id",
+    "sourceId",
+  ]);
+}
+
+function isPaymentLedgerEntry(row: Record<string, unknown>): boolean {
+  const type = firstString(row, ["type", "entryType", "entry_type"]).toLowerCase();
+  const sourceType = firstString(row, ["source_type", "sourceType"]).toLowerCase();
+  return type === "payment" || sourceType === "payment";
+}
+
 function compactBillReference(row: Record<string, unknown>): string {
   return firstString(row, ["billNo", "billNumber", "invoiceNumber", "reference", "id"]) || "Bill";
+}
+
+function productId(row: Record<string, unknown>): string {
+  return firstString(row, ["productId", "product_id", "productLocalId", "product_local_id", "productServerId", "product_server_id"]);
+}
+
+function billItemBillKeys(row: Record<string, unknown>): string[] {
+  return rowKeys(row, ["billId", "bill_id", "billLocalId", "bill_local_id", "billServerId", "bill_server_id"]);
+}
+
+function productIdentityKeys(row: Record<string, unknown>): string[] {
+  return rowKeys(row, ["id", "local_id", "server_id", "localId", "serverId", "productId", "product_id"]);
+}
+
+function rowItems(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((row): row is Record<string, unknown> => typeof row === "object" && row !== null) : [];
+}
+
+function buildItemDetail(row: Record<string, unknown>, index: number, productsById: Map<string, Record<string, unknown>>): MoneyStatementItem {
+  const product = productsById.get(productId(row));
+  const quantity = firstNumber(row, ["quantity", "qty", "soldQty", "sold_qty", "purchaseQty", "purchase_qty"]);
+  const rate = firstNumber(row, ["ratePerRateUnit", "rate_per_rate_unit", "rate", "unitPrice", "unit_price", "sellingPrice", "selling_price", "costPrice", "cost_price"]);
+  return {
+    id: firstString(row, ["id", "local_id", "server_id"]) || `item-${index}`,
+    name: firstString(row, ["name", "productName", "product_name", "title"]) || firstString(product ?? {}, ["name", "productName", "product_name"]) || "Item",
+    quantity,
+    unit: firstString(row, ["enteredUnit", "entered_unit", "unit", "rateUnit", "rate_unit"]) || firstString(product ?? {}, ["unit", "unitName", "unit_name"]) || undefined,
+    rate,
+    amount: firstNumber(row, ["lineTotal", "line_total", "total", "amount"]) || roundMoney(quantity * rate),
+  };
+}
+
+function billFinancials(bill: Record<string, unknown>) {
+  const total = firstNumber(bill, ["grandTotal", "grand_total", "totalAmount", "total_amount", "netAmount", "net_amount"]);
+  const paid = firstNumber(bill, ["paidAmount", "paid_amount", "buyerPaidAmount", "buyer_paid_amount"]);
+  const explicitDue = firstNumber(bill, ["dueAmount", "due_amount", "creditAmount", "credit_amount"]);
+  return {
+    subtotal: firstNumber(bill, ["subtotal", "subtotalAmount", "subtotal_amount"]),
+    discount: firstNumber(bill, ["discount", "discountAmount", "discount_amount"]),
+    total,
+    paid,
+    due: explicitDue || Math.max(0, roundMoney(total - paid)),
+  };
+}
+
+function billDetail(
+  bill: Record<string, unknown> | undefined,
+  itemsByBillId: Map<string, Record<string, unknown>[]>,
+  productsById: Map<string, Record<string, unknown>>,
+  payment: Record<string, unknown> | undefined,
+): MoneyStatementDetail | undefined {
+  if (!bill) return undefined;
+  const rawItems = rowItems(bill.items).length > 0
+    ? rowItems(bill.items)
+    : billIdentityKeys(bill).flatMap((key) => itemsByBillId.get(key) ?? []);
+  const financials = billFinancials(bill);
+  return {
+    kind: "bill",
+    title: "Bill payment details",
+    billNo: compactBillReference(bill),
+    paymentId: payment ? firstString(payment, ["id", "local_id", "server_id", "paymentId", "payment_id"]) || undefined : undefined,
+    ...financials,
+    items: rawItems.map((item, index) => buildItemDetail(item, index, productsById)),
+    note: firstString(payment ?? {}, ["note", "remarks", "description"]) || firstString(bill, ["note", "remarks", "description"]),
+  };
+}
+
+function purchaseDetail(purchase: Record<string, unknown>, productsById: Map<string, Record<string, unknown>>): MoneyStatementDetail {
+  const total = firstNumber(purchase, ["billAmount", "bill_amount", "totalAmount", "total_amount", "grandTotal", "grand_total"]);
+  const paid = firstNumber(purchase, ["paidAmount", "paid_amount", "amountPaid", "amount_paid"]);
+  const due = firstNumber(purchase, ["dueAmount", "due_amount"]) || Math.max(0, roundMoney(total - paid));
+  return {
+    kind: "purchase",
+    title: "Purchase payment details",
+    billNo: firstString(purchase, ["invoiceNumber", "billNumber", "billNo", "reference"]) || "Purchase",
+    total,
+    paid,
+    due,
+    items: rowItems(purchase.items ?? purchase.products ?? purchase.lines).map((item, index) => buildItemDetail(item, index, productsById)),
+    note: firstString(purchase, ["note", "remarks", "description"]),
+  };
 }
 
 function partyFromCustomer(customer: Record<string, unknown> | undefined, fallback = "Customer", fallbackMobile?: string) {
@@ -215,21 +361,42 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
   (input.suppliers ?? []).forEach((supplier) => {
     rowKeys(supplier, ["id", "local_id", "server_id", "localId", "serverId", "supplierId", "supplier_id"]).forEach((key) => suppliers.set(key, supplier));
   });
+  const productsById = new Map<string, Record<string, unknown>>();
+  (input.products ?? []).forEach((product) => {
+    productIdentityKeys(product).forEach((key) => productsById.set(key, product));
+  });
+  const itemsByBillId = new Map<string, Record<string, unknown>[]>();
+  (input.billItems ?? []).filter((row) => !isDeleted(row)).forEach((item) => {
+    billItemBillKeys(item).forEach((key) => {
+      itemsByBillId.set(key, [...(itemsByBillId.get(key) ?? []), item]);
+    });
+  });
   const rows: MoneyStatementRow[] = [];
+  const bills = dedupeBillsForDisplay((input.bills ?? []).filter((row) => !isDeleted(row)));
+  const billsById = new Map<string, Record<string, unknown>>();
+  bills.forEach((bill) => {
+    billIdentityKeys(bill).forEach((key) => billsById.set(key, bill));
+  });
 
   const payments = dedupePaymentsForDisplay((input.payments ?? []).filter((row) => !isDeleted(row)));
   const paymentBillIds = new Set<string>();
+  const paymentIds = new Set<string>();
   payments.forEach((payment, index) => {
     const mode = normaliseMoneyMode(payment.mode ?? payment.paymentMode ?? payment.payment_mode);
     const amount = firstNumber(payment, ["amount", "paidAmount", "paid_amount"]);
     if (!mode || amount <= 0) return;
-    const relatedBillId = firstString(payment, ["billId", "bill_id"]);
+    paymentIdentityKeys(payment).forEach((key) => paymentIds.add(key));
+    const relatedBillId = firstString(payment, ["billId", "bill_id", "billLocalId", "bill_local_id", "billServerId", "bill_server_id"]);
+    const relatedBill = relatedBillId ? billsById.get(relatedBillId) : undefined;
     if (relatedBillId) paymentBillIds.add(relatedBillId);
-    const cid = customerId(payment);
+    const cid = customerId(payment) || customerId(relatedBill ?? {});
     const party = partyFromCustomer(
       customers.get(cid),
-      firstString(payment, ["customerName", "customer_name", "payerName", "payer_name", "buyerName", "buyer_name", "name"]) || "Customer",
-      firstString(payment, ["customerMobile", "customer_mobile", "payerMobile", "payer_mobile", "mobile", "phone"]),
+      firstString(payment, ["customerName", "customer_name", "payerName", "payer_name", "buyerName", "buyer_name", "name"])
+        || firstString(relatedBill ?? {}, ["customerName", "customer_name", "buyerName", "buyer_name", "name"])
+        || "Customer",
+      firstString(payment, ["customerMobile", "customer_mobile", "payerMobile", "payer_mobile", "mobile", "phone"])
+        || firstString(relatedBill ?? {}, ["customerMobile", "customer_mobile", "buyerMobile", "buyer_mobile", "mobile", "phone"]),
     );
     const occurredAt = dateValue(payment, ["paid_at", "paidAt", "entry_at", "createdAt", "created_at"]);
     rows.push({
@@ -240,19 +407,67 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
       partyName: party.name,
       partyMobile: party.mobile,
       source: relatedBillId ? "Bill payment" : "Udhar payment",
-      reference: firstString(payment, ["billNo", "billNumber", "reference", "description"]) || (relatedBillId ? "Bill payment" : "Udhar recovery"),
+      reference: firstString(payment, ["billNo", "billNumber", "reference", "description"]) || (relatedBill ? compactBillReference(relatedBill) : relatedBillId ? "Bill payment" : "Udhar recovery"),
       mode,
       direction: "in",
       amount,
-      status: firstString(payment, ["sync_status", "status"]),
+      status: firstString(payment, ["sync_status", "status"]) || firstString(relatedBill ?? {}, ["sync_status", "paymentStatus", "payment_status", "status"]),
       note: firstString(payment, ["note", "remarks", "description"]),
+      detail: relatedBill
+        ? billDetail(relatedBill, itemsByBillId, productsById, payment)
+        : {
+            kind: "udhar-payment",
+            title: "Udhar payment details",
+            paymentId: firstString(payment, ["id", "local_id", "server_id", "paymentId", "payment_id"]) || undefined,
+            paid: amount,
+            items: [],
+            note: firstString(payment, ["note", "remarks", "description"]) || "Payment received against customer outstanding balance.",
+          },
     });
   });
 
-  const bills = dedupeBillsForDisplay((input.bills ?? []).filter((row) => !isDeleted(row)));
+  (input.customerLedger ?? []).filter((row) => !isDeleted(row) && isPaymentLedgerEntry(row)).forEach((ledger, index) => {
+    const identityKeys = paymentIdentityKeys(ledger);
+    if (identityKeys.some((key) => paymentIds.has(key))) return;
+    const mode = normaliseMoneyMode(ledger.mode ?? ledger.paymentMode ?? ledger.payment_mode);
+    const amount = Math.abs(firstNumber(ledger, ["amount", "paidAmount", "paid_amount", "credit", "creditAmount", "credit_amount"]));
+    if (!mode || amount <= 0) return;
+    identityKeys.forEach((key) => paymentIds.add(key));
+    const cid = customerId(ledger);
+    const party = partyFromCustomer(
+      customers.get(cid),
+      firstString(ledger, ["customerName", "customer_name", "payerName", "payer_name", "buyerName", "buyer_name", "name"]) || "Customer",
+      firstString(ledger, ["customerMobile", "customer_mobile", "payerMobile", "payer_mobile", "mobile", "phone"]),
+    );
+    const occurredAt = dateValue(ledger, ["paid_at", "paidAt", "entry_at", "entryAt", "createdAt", "created_at"]);
+    rows.push({
+      id: `ledger-payment:${rowId(ledger, "ledger-payment", index)}`,
+      occurredAt,
+      dateLabel: dateLabel(occurredAt),
+      timeLabel: timeLabel(occurredAt),
+      partyName: party.name,
+      partyMobile: party.mobile,
+      source: "Udhar payment",
+      reference: firstString(ledger, ["reference", "description", "note", "remarks"]) || "Udhar recovery",
+      mode,
+      direction: "in",
+      amount,
+      status: firstString(ledger, ["sync_status", "status"]) || "posted",
+      note: firstString(ledger, ["note", "remarks", "description"]),
+      detail: {
+        kind: "udhar-payment",
+        title: "Udhar payment details",
+        paymentId: firstString(ledger, ["paymentId", "payment_id", "source_id", "sourceId", "id", "local_id", "server_id"]) || undefined,
+        paid: amount,
+        items: [],
+        note: firstString(ledger, ["note", "remarks", "description"]) || "Payment received against customer outstanding balance.",
+      },
+    });
+  });
+
   bills.forEach((bill, billIndex) => {
     const id = billId(bill);
-    if (id && paymentBillIds.has(id)) return;
+    if (id && billIdentityKeys(bill).some((key) => paymentBillIds.has(key))) return;
     const occurredAt = dateValue(bill, ["createdAt", "created_at", "billDate", "bill_date"]);
     const party = partyFromCustomer(
       customers.get(customerId(bill)),
@@ -273,6 +488,7 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
         direction: "in",
         amount: payment.amount,
         status: firstString(bill, ["paymentStatus", "payment_status", "status"]),
+        detail: billDetail(bill, itemsByBillId, productsById, undefined),
       });
     });
   });
@@ -297,6 +513,7 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
       direction: "out",
       amount,
       status: firstString(purchase, ["paymentStatus", "payment_status", "status"]),
+      detail: purchaseDetail(purchase, productsById),
     });
   });
 
@@ -318,6 +535,15 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
       amount,
       status: firstString(expense, ["status"]) || "paid",
       note: firstString(expense, ["notes", "description"]),
+      detail: {
+        kind: "expense",
+        title: "Expense payment details",
+        billNo: firstString(expense, ["title", "category", "reference"]) || "Expense",
+        total: amount,
+        paid: amount,
+        items: [],
+        note: firstString(expense, ["notes", "description"]),
+      },
     });
   });
 
@@ -354,17 +580,23 @@ export function buildMoneyStatement(input: MoneyStatementInput, filters: MoneySt
 }
 
 export async function loadMoneyStatementInput(): Promise<MoneyStatementInput> {
-  const [bills, payments, customers, purchaseBills, suppliers] = await Promise.all([
+  const [bills, billItems, payments, customerLedger, customers, products, purchaseBills, suppliers] = await Promise.all([
     offlineDB.getAll<Bill & Record<string, unknown>>("bills").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("bill_items").catch(() => []),
     offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("customer_ledger").catch(() => []),
     offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("products").catch(() => []),
     offlineDB.getAll<PurchaseBill & Record<string, unknown>>("purchase_bills").catch(() => []),
     offlineDB.getAll<Supplier & Record<string, unknown>>("suppliers").catch(() => []),
   ]);
   return {
     bills: filterRowsForCurrentScope(bills),
+    billItems: filterRowsForCurrentScope(billItems),
     payments: filterRowsForCurrentScope(payments),
+    customerLedger: filterRowsForCurrentScope(customerLedger),
     customers: filterRowsForCurrentScope(customers),
+    products: filterRowsForCurrentScope(products),
     purchaseBills: filterRowsForCurrentScope(purchaseBills),
     suppliers: filterRowsForCurrentScope(suppliers),
     expenses: [] satisfies Expense[],

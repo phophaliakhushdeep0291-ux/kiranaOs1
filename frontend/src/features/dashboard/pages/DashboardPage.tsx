@@ -33,7 +33,7 @@ import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, 
 import { cn } from "@/lib/utils";
 import type { Bill, Product } from "@/types/api";
 
-const DASH_CARD = "rounded-[12px] border border-[#e2e8f1] bg-white shadow-[0_4px_16px_rgba(32,55,92,0.045),0_1px_2px_rgba(32,55,92,0.025)] ring-1 ring-white transition-[border-color,box-shadow,transform] duration-300 ease-out dark:border-slate-800 dark:bg-card dark:ring-slate-800";
+const DASH_CARD = "min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white shadow-[0_4px_16px_rgba(32,55,92,0.045),0_1px_2px_rgba(32,55,92,0.025)] ring-1 ring-white transition-[border-color,box-shadow,transform] duration-300 ease-out dark:border-slate-800 dark:bg-card dark:ring-slate-800";
 const DASH_CARD_INTERACTIVE = "hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_10px_26px_rgba(32,55,92,0.075)] active:translate-y-0";
 const DASH_TITLE = "font-sans text-[14px] font-semibold leading-5 text-[#13223f] dark:text-card-foreground";
 const DASH_MUTED = "text-[#62708a] dark:text-muted-foreground";
@@ -688,10 +688,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         periodSales={periodSales}
         periodSalesDelta={periodSalesDelta}
       />
-      <div className="hidden w-full space-y-4 bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
+      <div className="hidden w-full min-w-0 space-y-4 overflow-x-hidden bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
 
       {/* Counter focus */}
-      <div className="grid auto-rows-fr gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+      <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-[1800px]:grid-cols-7">
         <KpiCard
           label="Today's Sales"
           value={fmtRs(dashboard.revenue)}
@@ -728,7 +728,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           loading={isLoading}
           onClick={() => openDrilldown("collection")}
         />
-        <Link href="/money-statement?mode=bank" className="block h-full">
+        <Link href="/money-statement?mode=bank" className="block h-full min-w-0">
           <KpiCard
             label="Bank Collected"
             value={fmtRs(dashboard.bankCollected)}
@@ -741,7 +741,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
             loading={isLoading}
           />
         </Link>
-        <Link href="/customers?filter=udhar" className="block h-full">
+        <Link href="/customers?filter=udhar" className="block h-full min-w-0">
           <KpiCard
             label="Outstanding Udhar"
             value={fmtRs(dashboard.totalOutstanding)}
@@ -767,7 +767,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           loading={isLoading}
           onClick={() => openDrilldown("profit")}
         />
-        <Link href="/inventory" className="block h-full">
+        <Link href="/inventory" className="block h-full min-w-0">
           <KpiCard
             label="Low Stock Items"
             value={String(lowStockCount)}
@@ -781,10 +781,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       </div>
 
       {/* Sales, payments, and stock */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[clamp(226px,27dvh,380px)] xl:grid-cols-[calc(50%_-_8px)_calc(21%_-_10px)_calc(29%_-_14px)]">
+      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2 2xl:auto-rows-[clamp(270px,29dvh,390px)] 2xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.68fr)_minmax(320px,0.9fr)]">
 
         {/* Sales Overview */}
-        <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col overflow-hidden p-4 lg:col-span-2 xl:col-span-1 xl:min-h-0 2xl:p-5")}>
+        <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 lg:col-span-2 2xl:col-span-1 2xl:min-h-0 2xl:p-5")}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -860,15 +860,15 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       </div>
 
       {/* ── Recent Bills + Quick Insights ── */}
-      <div className="grid items-stretch gap-4 lg:grid-cols-2 xl:auto-rows-[clamp(252px,27dvh,350px)] xl:grid-cols-[calc(48%_-_8px)_calc(23%_-_10px)_calc(29%_-_14px)]">
+      <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2 2xl:auto-rows-[clamp(292px,30dvh,380px)] 2xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.72fr)_minmax(320px,0.9fr)]">
 
         {/* Recent Bills */}
-        <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col overflow-hidden lg:col-span-2 xl:col-span-1 xl:min-h-0")}>
+        <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden lg:col-span-2 2xl:col-span-1 2xl:min-h-0")}>
           <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#e8edf4] px-4 py-3">
             <p className={DASH_TITLE}>Recent Bills</p>
             <Link href="/bills" className="text-[11px] font-bold text-[#075fff] hover:underline">View all</Link>
           </div>
-          <div className="min-h-0 flex-1 overflow-x-auto">
+          <div className="min-h-0 flex-1 overflow-auto">
             <table className="h-full w-full text-xs">
               <thead>
                 <tr className="border-b border-[#e8edf4] bg-[#f7f9fc]">
@@ -938,10 +938,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         </section>
 
         {/* Right column: Quick Insights + Sync & Health */}
-        <div className="contents">
+        <div className="contents 2xl:contents">
 
           {/* Quick Insights */}
-          <div className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col p-4 xl:min-h-0")}>
+          <div className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col p-4 2xl:min-h-0")}>
             <p className={cn(DASH_TITLE, "mb-3")}>Quick Insights</p>
             <div className="grid min-h-0 flex-1 grid-rows-4 gap-2">
               <InsightRow tone="emerald" icon={<Package size={16} />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Sales leaders" : "No sales yet"} href="/reports" />
@@ -952,7 +952,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           </div>
 
           {/* Sync & Health */}
-          <div className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col overflow-hidden p-4 xl:min-h-0")}>
+          <div className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0")}>
             <p className={cn(DASH_TITLE, "mb-2")}>Sync & Health</p>
             <div className="border-b border-[#edf2f8] pb-2.5">
               <div className="flex items-center gap-2 text-[13px] font-bold text-[#11a84b] dark:text-emerald-300">
@@ -1298,21 +1298,21 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
       className={cn(
         DASH_CARD,
-        "flex h-full min-h-[154px] flex-col overflow-hidden p-4 2xl:min-h-[166px] 2xl:p-5",
+        "flex h-full min-h-[154px] min-w-0 flex-col overflow-hidden p-4 2xl:min-h-[166px] 2xl:p-5",
         onClick && ["cursor-pointer", DASH_CARD_INTERACTIVE],
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex min-w-0 items-start justify-between gap-2">
         <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] 2xl:h-10 2xl:w-10", iconBg)}>{icon}</div>
       </div>
       <div className="mt-2.5 min-h-0 2xl:mt-3">
-        <p className={cn("text-[12px] font-medium leading-tight 2xl:text-[13px]", DASH_MUTED)}>{label}</p>
+        <p className={cn("line-clamp-2 text-[12px] font-medium leading-tight 2xl:text-[13px]", DASH_MUTED)}>{label}</p>
         {loading ? (
           <div className="mt-2 h-7 w-3/4 animate-pulse rounded bg-[#edf2f8]" />
         ) : (
           <p className="mt-1.5 break-words font-sans text-[20px] font-bold leading-none text-[#102347] dark:text-card-foreground 2xl:mt-2 2xl:text-[22px]">{value}</p>
         )}
-        <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-medium 2xl:mt-3 2xl:text-[11px]">
+        <div className="mt-2.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-medium 2xl:mt-3 2xl:text-[11px]">
           {delta === null || delta === undefined ? (
             <span className="font-bold text-[#94a3b8]">—</span>
           ) : (
@@ -1321,7 +1321,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
               {Math.abs(delta)}%
             </span>
           )}
-          <span className="text-[#7a879b]">{deltaLabel}</span>
+          <span className="min-w-0 truncate text-[#7a879b]">{deltaLabel}</span>
         </div>
         {footer && <div className="mt-2 leading-none">{footer}</div>}
       </div>
@@ -1352,9 +1352,9 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
   const chartAnimationKey = chartRows.map((row) => `${row.label}:${row.value}`).join("|");
 
   return (
-    <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col p-4 xl:min-h-0 2xl:p-5")}>
-      <div className="flex min-h-7 items-center justify-between gap-2">
-        <p className={DASH_TITLE}>Payment Mode Breakdown</p>
+    <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0 2xl:p-5")}>
+      <div className="flex min-h-7 min-w-0 items-center justify-between gap-2">
+        <p className={cn(DASH_TITLE, "min-w-0 truncate")}>Payment Mode Breakdown</p>
         <DashboardPeriodSelect value={period} onChange={onPeriodChange} compact />
       </div>
       <div className="relative mt-2 min-h-[132px] flex-1">
@@ -1388,16 +1388,16 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
           </div>
         </div>
       </div>
-      <div className="mt-1 space-y-1.5">
+      <div className="mt-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
         {(rows.length > 0 ? rows : chartRows).map((row) => {
           const pct = realTotal > 0 ? Math.round((row.value / realTotal) * 1000) / 10 : 0;
           return (
-            <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
-              <span className={cn("flex items-center gap-2 font-semibold", DASH_MUTED)}>
+            <div key={row.label} className="flex min-w-0 items-center justify-between gap-3 text-xs">
+              <span className={cn("flex min-w-0 items-center gap-2 font-semibold", DASH_MUTED)}>
                 <span className={cn("h-2 w-2 rounded-full", row.dot)} />
-                {row.label}
+                <span className="truncate">{row.label}</span>
               </span>
-              <span className="font-black text-[#102347] dark:text-card-foreground">{fmtRs(row.value)} {realTotal > 0 ? `(${pct}%)` : ""}</span>
+              <span className="shrink-0 whitespace-nowrap font-black text-[#102347] dark:text-card-foreground">{fmtRs(row.value)} {realTotal > 0 ? `(${pct}%)` : ""}</span>
             </div>
           );
         })}
@@ -1408,12 +1408,12 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
 
 function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["lowStock"]; productsById: Record<string, Product> }) {
   return (
-    <section className={cn(DASH_CARD, "flex h-full min-h-[276px] flex-col p-4 xl:min-h-0 2xl:p-5")}>
+    <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0 2xl:p-5")}>
       <div className="flex items-center justify-between gap-3">
         <p className={DASH_TITLE}>Low Stock Alerts</p>
         <Link href="/inventory" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
       </div>
-      <div className="mt-3 flex min-h-0 flex-1 flex-col justify-evenly gap-2">
+      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 2xl:justify-evenly">
         {items.length === 0 ? (
           <div className={cn("rounded-[10px] border border-dashed border-[#dce7f5] px-3 py-8 text-center text-sm font-semibold", DASH_MUTED)}>
             All stock healthy

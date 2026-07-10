@@ -36,6 +36,122 @@ describe("money statement", () => {
     expect(result.totals.totalIn).toBe(500);
   });
 
+  it("resolves bill payment customer name from the linked bill when payment has only bill id", () => {
+    const result = buildMoneyStatement({
+      bills: [{
+        id: "bill-10",
+        billNo: "KOS-2026-000010",
+        customerName: "Gopal Store",
+        customerMobile: "9000011111",
+        createdAt: "2026-07-10T09:00:00.000Z",
+        paymentMode: "bank",
+        paidAmount: 1000,
+      }],
+      payments: [{
+        id: "payment-10",
+        billId: "bill-10",
+        mode: "bank",
+        amount: 1000,
+        paidAt: "2026-07-10T13:28:00.000Z",
+        status: "synced",
+      }],
+    }, { from: "2026-07-10", to: "2026-07-10", mode: "bank" });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.partyName).toBe("Gopal Store");
+    expect(result.rows[0]?.partyMobile).toBe("9000011111");
+    expect(result.rows[0]?.reference).toBe("KOS-2026-000010");
+    expect(result.rows[0]?.dateLabel).toBe("10 Jul 2026");
+    expect(result.rows[0]?.timeLabel).toBeTruthy();
+  });
+
+  it("attaches bill item details to linked bill payment rows", () => {
+    const result = buildMoneyStatement({
+      products: [{ id: "prod-1", name: "Sugar", unit: "kg" }],
+      bills: [{
+        id: "bill-11",
+        billNo: "KOS-2026-000011",
+        customerName: "Ramesh",
+        createdAt: "2026-07-10T09:00:00.000Z",
+        grandTotal: 90,
+        paidAmount: 90,
+      }],
+      billItems: [{
+        id: "item-1",
+        billId: "bill-11",
+        productId: "prod-1",
+        quantity: 2,
+        ratePerRateUnit: 45,
+        lineTotal: 90,
+      }],
+      payments: [{
+        id: "payment-11",
+        billId: "bill-11",
+        mode: "cash",
+        amount: 90,
+        paidAt: "2026-07-10T13:28:00.000Z",
+      }],
+    }, { from: "2026-07-10", to: "2026-07-10" });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.detail?.billNo).toBe("KOS-2026-000011");
+    expect(result.rows[0]?.detail?.total).toBe(90);
+    expect(result.rows[0]?.detail?.items).toEqual([
+      { id: "item-1", name: "Sugar", quantity: 2, unit: "kg", rate: 45, amount: 90 },
+    ]);
+  });
+
+  it("includes bank udhar payments from customer ledger when payment cache is missing", () => {
+    const result = buildMoneyStatement({
+      customers: [{ id: "c1", name: "Ramesh Sharma", mobile: "9829012345" }],
+      customerLedger: [{
+        id: "ledger-1",
+        customerId: "c1",
+        type: "PAYMENT",
+        source_type: "payment",
+        paymentId: "payment-bank-1",
+        mode: "bank",
+        amount: 1000,
+        entry_at: "2026-07-10T13:28:00.000Z",
+        note: "Bank udhar recovery",
+      }],
+    }, { from: "2026-07-10", to: "2026-07-10", mode: "bank" });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.source).toBe("Udhar payment");
+    expect(result.rows[0]?.partyName).toBe("Ramesh Sharma");
+    expect(result.rows[0]?.mode).toBe("bank");
+    expect(result.totals.bankIn).toBe(1000);
+    expect(result.totals.totalIn).toBe(1000);
+  });
+
+  it("does not double count udhar payment when payment and ledger rows both exist", () => {
+    const result = buildMoneyStatement({
+      customers: [{ id: "c1", name: "Ramesh Sharma" }],
+      payments: [{
+        id: "payment-bank-1",
+        customerId: "c1",
+        mode: "bank",
+        amount: 1000,
+        paidAt: "2026-07-10T13:28:00.000Z",
+      }],
+      customerLedger: [{
+        id: "ledger-1",
+        customerId: "c1",
+        type: "PAYMENT",
+        source_type: "payment",
+        paymentId: "payment-bank-1",
+        source_id: "payment-bank-1",
+        mode: "bank",
+        amount: 1000,
+        entry_at: "2026-07-10T13:28:00.000Z",
+      }],
+    }, { from: "2026-07-10", to: "2026-07-10", mode: "bank" });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.totals.bankIn).toBe(1000);
+  });
+
   it("tracks cash upi and bank inflow and purchase expense outflow", () => {
     const result = buildMoneyStatement({
       customers: [{ id: "c1", name: "Suresh" }],
