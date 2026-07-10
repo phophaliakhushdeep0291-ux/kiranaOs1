@@ -459,7 +459,7 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-[repeat(auto-fit,minmax(158px,1fr))] gap-2">
+      <section className="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-7">
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} loading={loading || (kpi.label.includes("Expense") && expenseSummary.isLoading)} />
         ))}
@@ -503,9 +503,9 @@ export default function ReportsPage() {
 
         <Panel title="Payment Mode Breakdown" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           {loading ? <Skeleton className="m-4 h-[178px]" /> : paymentModes.length === 0 ? <EmptyChart /> : (
-            <div className="grid min-h-[208px] items-center gap-3 px-3 pb-2 sm:grid-cols-[minmax(150px,0.85fr)_minmax(0,1.15fr)]">
-              <div className="relative mx-auto h-[162px] w-[162px]">
-                <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={paymentModes} dataKey="value" nameKey="name" innerRadius={51} outerRadius={76} paddingAngle={1} stroke="#fff" strokeWidth={2}>{paymentModes.map((mode) => <Cell key={mode.name} fill={mode.color} />)}</Pie><Tooltip content={<MoneyTooltip />} /></PieChart></ResponsiveContainer>
+            <div className="grid min-h-[218px] items-center gap-3 px-3 pb-2 sm:grid-cols-[minmax(170px,0.9fr)_minmax(0,1.1fr)]">
+              <div className="relative mx-auto h-[176px] w-[176px]">
+                <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={paymentModes} dataKey="value" nameKey="name" innerRadius={56} outerRadius={84} paddingAngle={1} stroke="#fff" strokeWidth={2}>{paymentModes.map((mode) => <Cell key={mode.name} fill={mode.color} />)}</Pie><Tooltip content={<MoneyTooltip />} /></PieChart></ResponsiveContainer>
                 <div className="pointer-events-none absolute inset-0 grid place-items-center text-center"><div><strong className="block text-[15px] text-[#13244a]">{fmt(paymentTotal)}</strong><span className="text-[10px] text-[#7886a0]">Total Collection</span></div></div>
               </div>
               <div className="space-y-3 pr-2">

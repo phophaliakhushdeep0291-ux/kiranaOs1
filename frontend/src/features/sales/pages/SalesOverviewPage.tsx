@@ -463,7 +463,7 @@ export default function SalesOverviewPage() {
         </div>
       </section>
 
-      <section className="grid grid-cols-[repeat(auto-fit,minmax(168px,1fr))] gap-3">
+      <section className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {kpis.map((kpi) => <MetricCard key={kpi.label} {...kpi} loading={loading} />)}
       </section>
 
@@ -633,11 +633,11 @@ function DonutPanel({ title, total, rows, centerLabel }: { title: string; total:
   const chartRows = rows.length ? rows : [{ name: "No sales", value: 1, color: "#e6ebf2" }];
   return (
     <Panel title={title}>
-      <div className="grid min-h-[214px] items-center gap-3 px-4 pb-4 sm:grid-cols-[160px_1fr]">
-        <div className="relative mx-auto h-[160px] w-[160px]">
+      <div className="grid min-h-[224px] items-center gap-3 px-4 pb-4 sm:grid-cols-[184px_1fr]">
+        <div className="relative mx-auto h-[176px] w-[176px]">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={chartRows} dataKey="value" nameKey="name" innerRadius={50} outerRadius={75} paddingAngle={1} stroke="#fff" strokeWidth={2} isAnimationActive animationBegin={80} animationDuration={800}>
+              <Pie data={chartRows} dataKey="value" nameKey="name" innerRadius={56} outerRadius={84} paddingAngle={1} stroke="#fff" strokeWidth={2} isAnimationActive animationBegin={80} animationDuration={800}>
                 {chartRows.map((row) => <Cell key={row.name} fill={row.color} />)}
               </Pie>
             </PieChart>

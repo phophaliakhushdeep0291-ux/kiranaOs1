@@ -691,7 +691,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       <div className="hidden w-full min-w-0 space-y-4 overflow-x-hidden bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
 
       {/* Counter focus */}
-      <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-[1800px]:grid-cols-7">
+      <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <KpiCard
           label="Today's Sales"
           value={fmtRs(dashboard.revenue)}
@@ -1357,7 +1357,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
         <p className={cn(DASH_TITLE, "min-w-0 truncate")}>Payment Mode Breakdown</p>
         <DashboardPeriodSelect value={period} onChange={onPeriodChange} compact />
       </div>
-      <div className="relative mt-2 min-h-[132px] flex-1">
+      <div className="relative mt-2 min-h-[150px] flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
@@ -1365,8 +1365,8 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
               data={chartRows}
               dataKey="value"
               nameKey="label"
-              innerRadius={45}
-              outerRadius={68}
+              innerRadius={50}
+              outerRadius={76}
               paddingAngle={3}
               stroke="hsl(var(--card))"
               strokeWidth={3}

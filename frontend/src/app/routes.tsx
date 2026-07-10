@@ -66,7 +66,7 @@ function LoadingScreen() {
 function LazyPage({ component: Component }: { component: ComponentType }) {
   return (
     <Suspense fallback={<LoadingScreen />}>
-      <div className="animate-in fade-in duration-200">
+      <div className="min-w-0">
         <Component />
       </div>
     </Suspense>
