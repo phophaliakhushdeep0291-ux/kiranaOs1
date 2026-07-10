@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type { SyncStatus } from "@/types/domain";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
+import { StorageFullError, isQuotaExceededError } from "@/lib/offline/storage-errors";
 
 export interface OfflineRow {
   id: string;
@@ -575,7 +576,7 @@ class OfflineDBFacade {
       this.table(name),
     );
     const outboxEvents: PendingSyncEvent[] = [];
-    const result = await dexieDB.transaction("rw", tables, async () => {
+    const runTransaction = () => dexieDB.transaction("rw", tables, async () => {
       const tx: OfflineWriteTransaction = {
         put: async <Row>(storeName: string, value: Row) => {
           if (storeName === "settings") {
@@ -618,6 +619,26 @@ class OfflineDBFacade {
       };
       return callback(tx);
     });
+
+    let result: T;
+    try {
+      result = await runTransaction();
+    } catch (error) {
+      if (!isQuotaExceededError(error)) throw error;
+      // Storage is full: free the safely-prunable history (terminal-success sync rows,
+      // expired caches) and retry ONCE — a busy shop usually has megabytes of it. If the
+      // retry still can't fit, tell the user what actually happened instead of a generic
+      // "could not save".
+      outboxEvents.length = 0;
+      await this.pruneSyncedHistory().catch(() => undefined);
+      await this.pruneExpiredRecentCache().catch(() => undefined);
+      try {
+        result = await runTransaction();
+      } catch (retryError) {
+        if (isQuotaExceededError(retryError)) throw new StorageFullError();
+        throw retryError;
+      }
+    }
 
     for (const event of outboxEvents) {
       emitSyncQueueUpdated({

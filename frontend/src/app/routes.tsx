@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from "react";
-import { Redirect, Route, Switch } from "wouter";
+import { Redirect, Route, Switch, useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary, PageLoading } from "@/components/shared";
@@ -108,8 +108,10 @@ function PublicRoute({ component: Component }: { component: ComponentType }) {
 
 export function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [location] = useLocation();
+  const isCustomerOrderPath = /^\/order\/[^/]+/.test(location);
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading && !isCustomerOrderPath) return <LoadingScreen />;
 
   return (
     <Switch>
