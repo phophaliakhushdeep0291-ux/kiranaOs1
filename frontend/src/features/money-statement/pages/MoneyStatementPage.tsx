@@ -11,6 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { format } from "date-fns";
+import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { listExpenses } from "@/features/expenses/api";
 import { buildMoneyStatement, loadMoneyStatementInput, type MoneyStatementDirection, type MoneyStatementMode, type MoneyStatementRow } from "@/features/money-statement/statement-data";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,12 @@ const CARD = "rounded-[18px] border border-[#e3eaf4] bg-white shadow-[0_10px_28p
 
 function money(value: number) {
   return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+function miniTrend(value: number): Array<{ value: number }> {
+  const base = Math.max(Math.abs(value), 1);
+  const direction = value >= 0 ? 1 : -1;
+  return [0.72, 0.8, 0.74, 0.88, 0.82, 0.95, 1].map((step) => ({ value: base * step * direction }));
 }
 
 function todayKey() {
@@ -103,38 +110,47 @@ export default function MoneyStatementPage() {
     () => buildMoneyStatement(input ?? {}, { ...range, mode, direction, search }),
     [input, range, mode, direction, search],
   );
+  const summaryStatement = useMemo(
+    () => buildMoneyStatement(input ?? {}, { ...range, mode: "all", direction, search }),
+    [input, range, direction, search],
+  );
+  const summaryTotals = summaryStatement.totals;
 
   const modeCards = [
     {
       label: "Cash Balance",
-      sub: `${money(statement.totals.cashIn)} received · ${money(statement.totals.cashOut)} paid`,
-      value: statement.totals.cashNet,
+      sub: `${money(summaryTotals.cashIn)} received · ${money(summaryTotals.cashOut)} paid`,
+      value: summaryTotals.cashNet,
       icon: <Wallet size={18} />,
       href: "/money-statement?mode=cash",
+      color: "#18ad50",
       bg: "border-[#c8f1d5] bg-[#e7faee] text-[#159447] shadow-[0_0_0_4px_rgba(17,168,75,0.035),0_10px_26px_rgba(17,168,75,0.20)]",
     },
     {
       label: "UPI Balance",
-      sub: `${money(statement.totals.upiIn)} received · ${money(statement.totals.upiOut)} paid`,
-      value: statement.totals.upiNet,
+      sub: `${money(summaryTotals.upiIn)} received · ${money(summaryTotals.upiOut)} paid`,
+      value: summaryTotals.upiNet,
       icon: <Smartphone size={18} />,
       href: "/money-statement?mode=upi",
+      color: "#7047eb",
       bg: "border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb] shadow-[0_0_0_4px_rgba(112,71,235,0.035),0_10px_26px_rgba(112,71,235,0.20)]",
     },
     {
       label: "Bank Balance",
-      sub: `${money(statement.totals.bankIn)} received · ${money(statement.totals.bankOut)} paid`,
-      value: statement.totals.bankNet,
+      sub: `${money(summaryTotals.bankIn)} received · ${money(summaryTotals.bankOut)} paid`,
+      value: summaryTotals.bankNet,
       icon: <Landmark size={18} />,
       href: "/money-statement?mode=bank",
+      color: "#075fff",
       bg: "border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.20)]",
     },
     {
       label: "Total Net",
-      sub: `${money(statement.totals.totalIn)} in · ${money(statement.totals.totalOut)} out`,
-      value: statement.totals.totalNet,
+      sub: `${money(summaryTotals.totalIn)} in · ${money(summaryTotals.totalOut)} out`,
+      value: summaryTotals.totalNet,
       icon: <ArrowUpRight size={18} />,
       href: "/money-statement",
+      color: "#f39a0b",
       bg: "border-[#ffdca8] bg-[#fff2df] text-[#f39a0b] shadow-[0_0_0_4px_rgba(255,133,0,0.035),0_10px_26px_rgba(255,133,0,0.20)]",
     },
   ];
@@ -169,6 +185,20 @@ export default function MoneyStatementPage() {
               <p className="mt-3 text-[12px] font-bold text-[#62708a]">{card.label}</p>
               <p className="mt-1 font-display text-[25px] font-black tracking-tight text-[#071333]">{money(Math.abs(card.value))}</p>
               <p className="mt-2 text-[11px] font-semibold text-[#718096]">{card.sub}</p>
+              <div className="mt-3 h-8">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={miniTrend(card.value)} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id={`money-${card.label.replace(/\W+/g, "-").toLowerCase()}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={card.color} stopOpacity={0.28} />
+                        <stop offset="70%" stopColor={card.color} stopOpacity={0.08} />
+                        <stop offset="100%" stopColor={card.color} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="value" stroke={card.color} strokeWidth={2} fill={`url(#money-${card.label.replace(/\W+/g, "-").toLowerCase()})`} dot={false} isAnimationActive={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </Link>
           ))}
         </section>
