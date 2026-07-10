@@ -7,33 +7,52 @@ import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { assertDeviceCanOwnLoginSession } from "../devices/devices.service.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/authEmail.js";
 
 const REFRESH_TOKEN_BYTES = 48;
 const REFRESH_TOKEN_TTL_DAYS = 30;
+const AUTH_TOKEN_BYTES = 32;
+const EMAIL_VERIFICATION_TTL_HOURS = 24;
+const PASSWORD_RESET_TTL_MINUTES = 30;
 
-export async function registerShop({ shopName, ownerName, city, address, mobile, password, ownerPin, gstNumber, phone }, reqMeta = {}) {
+export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone }, reqMeta = {}) {
   // Mobile numbers are unique per shop, not globally. The same owner/staff mobile
   // may legitimately exist in multiple shop tenants; login handles that safely.
   const passwordHash = await bcrypt.hash(password, 10);
   const pinHash = ownerPin ? await bcrypt.hash(ownerPin, 10) : null;
+  const normalizedEmail = normalizeEmail(email);
 
   const result = await db.$transaction(async (tx) => {
     const shop = await tx.shop.create({
       data: { name: shopName, ownerName, city, address, gstNumber, phone },
     });
     const user = await tx.user.create({
-      data: { shopId: shop.id, name: ownerName, mobile, passwordHash, pinHash, role: "owner" },
+      data: { shopId: shop.id, name: ownerName, mobile, email: normalizedEmail, passwordHash, pinHash, role: "owner" },
     });
     return { shop, user };
   });
 
-  return issueAuthResponse(result.user, result.shop, reqMeta);
+  let emailVerification = null;
+  if (normalizedEmail) {
+    emailVerification = await createAndSendAuthToken({
+      user: result.user,
+      shop: result.shop,
+      type: "email_verification",
+      ttlMs: EMAIL_VERIFICATION_TTL_HOURS * 60 * 60 * 1000,
+    });
+  }
+
+  const auth = await issueAuthResponse(result.user, result.shop, reqMeta);
+  return { ...auth, emailVerification };
 }
 
-export async function login({ mobile, password, shopId }, reqMeta = {}) {
+export async function login({ mobile, email, identifier, password, shopId }, reqMeta = {}) {
+  const loginId = normalizeLoginIdentifier({ mobile, email, identifier });
+  if (!loginId) throw new AppError("Mobile number or email is required", 400, "LOGIN_IDENTIFIER_REQUIRED");
+
   const users = await db.user.findMany({
     where: {
-      mobile,
+      [loginId.kind]: loginId.value,
       disabledAt: null,
       ...(shopId ? { shopId } : {}),
     },
@@ -62,6 +81,54 @@ export async function login({ mobile, password, shopId }, reqMeta = {}) {
   const user = matchingUsers[0];
 
   return issueAuthResponse(user, user.shop, reqMeta);
+}
+
+export async function verifyEmail(token) {
+  const authToken = await consumeAuthToken(token, "email_verification");
+  await db.user.update({
+    where: { id: authToken.userId },
+    data: { emailVerifiedAt: new Date() },
+  });
+  return { success: true, message: "Email verified successfully" };
+}
+
+export async function resendEmailVerification(input) {
+  const user = await findUserForAccountEmail(input);
+  if (user?.email && !user.emailVerifiedAt) {
+    await createAndSendAuthToken({
+      user,
+      shop: user.shop,
+      type: "email_verification",
+      ttlMs: EMAIL_VERIFICATION_TTL_HOURS * 60 * 60 * 1000,
+    });
+  }
+  return genericEmailSecurityResponse();
+}
+
+export async function requestPasswordReset(input) {
+  const user = await findUserForAccountEmail(input);
+  if (user?.email) {
+    await createAndSendAuthToken({
+      user,
+      shop: user.shop,
+      type: "password_reset",
+      ttlMs: PASSWORD_RESET_TTL_MINUTES * 60 * 1000,
+    });
+  }
+  return genericEmailSecurityResponse();
+}
+
+export async function resetPassword({ token, newPassword }) {
+  const authToken = await consumeAuthToken(token, "password_reset");
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: authToken.userId }, data: { passwordHash } });
+    await tx.session.updateMany({
+      where: { userId: authToken.userId, shopId: authToken.shopId, revokedAt: null },
+      data: { revokedAt: new Date(), revokedReason: "PASSWORD_RESET" },
+    });
+  });
+  return { success: true, sessionsRevoked: true };
 }
 
 export async function refreshSession(refreshToken, reqMeta = {}) {
@@ -360,6 +427,104 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
 
 function normalizeDeviceId(deviceId) {
   return typeof deviceId === "string" && deviceId.trim() ? deviceId.trim() : null;
+}
+
+function normalizeEmail(email) {
+  return typeof email === "string" && email.trim() ? email.trim().toLowerCase() : null;
+}
+
+function normalizeLoginIdentifier({ mobile, email, identifier }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (normalizedEmail) return { kind: "email", value: normalizedEmail };
+  if (typeof mobile === "string" && mobile.trim()) return { kind: "mobile", value: mobile.trim() };
+  if (typeof identifier !== "string" || !identifier.trim()) return null;
+  const raw = identifier.trim();
+  if (raw.includes("@")) return { kind: "email", value: raw.toLowerCase() };
+  const normalizedMobile = raw.replace(/[\s\-()]/g, "").replace(/^\+91/, "").replace(/^91(?=\d{10}$)/, "");
+  if (/^[6-9]\d{9}$/.test(normalizedMobile)) return { kind: "mobile", value: normalizedMobile };
+  return null;
+}
+
+async function findUserForAccountEmail(input = {}) {
+  const loginId = normalizeLoginIdentifier(input);
+  if (!loginId) return null;
+  const users = await db.user.findMany({
+    where: {
+      [loginId.kind]: loginId.value,
+      disabledAt: null,
+      ...(input.shopId ? { shopId: input.shopId } : {}),
+    },
+    include: { shop: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (users.length !== 1) return null;
+  return users[0];
+}
+
+async function createAndSendAuthToken({ user, shop, type, ttlMs }) {
+  if (!user.email) return { sent: false, reason: "missing_email" };
+  const rawToken = crypto.randomBytes(AUTH_TOKEN_BYTES).toString("base64url");
+  const tokenHash = hashAuthToken(rawToken);
+  const expiresAt = new Date(Date.now() + ttlMs);
+  await db.$transaction(async (tx) => {
+    await tx.authToken.updateMany({
+      where: { userId: user.id, type, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    await tx.authToken.create({
+      data: {
+        userId: user.id,
+        shopId: shop.id,
+        type,
+        tokenHash,
+        sentToEmail: user.email,
+        expiresAt,
+      },
+    });
+  });
+
+  const emailResult = type === "password_reset"
+    ? await sendPasswordResetEmail({ to: user.email, name: user.name, token: rawToken })
+    : await sendVerificationEmail({ to: user.email, name: user.name, token: rawToken });
+
+  return {
+    sent: !!emailResult.delivered,
+    provider: emailResult.provider,
+    ...(env.NODE_ENV !== "production" && emailResult.devLink ? { devLink: emailResult.devLink } : {}),
+  };
+}
+
+async function consumeAuthToken(rawToken, type) {
+  const tokenHash = hashAuthToken(rawToken);
+  const authToken = await db.authToken.findFirst({
+    where: {
+      tokenHash,
+      type,
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+  });
+  if (!authToken) {
+    const err = new AppError("This link is invalid or expired. Please request a new one.", 400);
+    err.code = "AUTH_TOKEN_INVALID_OR_EXPIRED";
+    throw err;
+  }
+  await db.authToken.update({
+    where: { id: authToken.id },
+    data: { consumedAt: new Date() },
+  });
+  return authToken;
+}
+
+function hashAuthToken(token) {
+  return crypto.createHash("sha256").update(String(token || ""), "utf8").digest("hex");
+}
+
+function genericEmailSecurityResponse() {
+  return {
+    success: true,
+    message: "If an account with a verified email exists, we sent a secure link.",
+  };
 }
 
 function createRefreshSecret() {

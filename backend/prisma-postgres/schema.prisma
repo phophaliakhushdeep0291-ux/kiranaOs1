@@ -44,6 +44,7 @@ model Shop {
   aiActionLogs     AiActionLog[]
   auditLogs        AuditLog[]
   sessions         Session[]
+  authTokens       AuthToken[]
   offlineSyncEvents OfflineSyncEvent[]
   syncIdMappings   SyncIdMapping[]
   syncCommands      SyncCommand[]
@@ -112,6 +113,7 @@ model User {
   name         String
   mobile       String?
   email        String?
+  emailVerifiedAt DateTime?
   passwordHash String
   role         String   @default("staff")  // owner | staff | admin
   pinHash      String?                     // 4-digit PIN for owner actions
@@ -123,11 +125,32 @@ model User {
   aiActionLogs AiActionLog[]
   auditLogs    AuditLog[]
   sessions     Session[]
+  authTokens    AuthToken[]
   devices      Device[]
   reportExportJobs ReportExportJob[]
 
   @@unique([shopId, mobile])
   @@unique([shopId, email])
+}
+
+model AuthToken {
+  id          String    @id @default(cuid())
+  userId      String
+  shopId      String
+  type        String    // email_verification | password_reset
+  tokenHash   String    @unique
+  sentToEmail String
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([userId, type, consumedAt])
+  @@index([shopId, type, createdAt])
+  @@index([expiresAt])
 }
 
 // ─────────────────────────────────────────────

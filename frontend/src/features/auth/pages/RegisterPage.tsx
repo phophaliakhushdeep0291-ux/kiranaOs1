@@ -33,6 +33,7 @@ const schema = z.object({
     normalizeIndianMobile,
     z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number")
   ),
+  email: z.string().trim().email("Enter a valid email address").optional().or(z.literal("")),
   password: z.string().min(6, "Min 6 characters"),
   ownerPin: z.string().length(4, "Must be exactly 4 digits").regex(/^\d{4}$/, "Digits only"),
 });
@@ -50,7 +51,7 @@ export default function Register() {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { shopName: "", ownerName: "", city: "", address: "", mobile: "", password: "", ownerPin: "" },
+    defaultValues: { shopName: "", ownerName: "", city: "", address: "", mobile: "", email: "", password: "", ownerPin: "" },
   });
 
   const registerMutation = useRegister({
@@ -168,6 +169,12 @@ export default function Register() {
                   <Input id="mobile" data-testid="input-mobile" className="mt-1 h-11" placeholder="9876543210" {...form.register("mobile")} />
                   {form.formState.errors.mobile && <p className="mt-1 text-xs text-destructive">{form.formState.errors.mobile.message}</p>}
                 </div>
+              </div>
+              <div>
+                <Label htmlFor="email">Gmail / Email for recovery</Label>
+                <Input id="email" data-testid="input-email" type="email" className="mt-1 h-11" placeholder="owner@gmail.com" {...form.register("email")} />
+                <p className="mt-1 text-xs text-muted-foreground">Used to verify your account and recover your password.</p>
+                {form.formState.errors.email && <p className="mt-1 text-xs text-destructive">{form.formState.errors.email.message}</p>}
               </div>
               <div>
                 <Label htmlFor="address">Address</Label>

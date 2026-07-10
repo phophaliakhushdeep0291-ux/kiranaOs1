@@ -16,7 +16,7 @@ import { getOfflineScope } from "@/lib/offline/context";
 import { ChevronLeft, ChevronRight, Laptop, Loader2, LockKeyhole, LogOut, Store } from "lucide-react";
 
 const schema = z.object({
-  mobile: z.string().min(10, "Enter a valid mobile number"),
+  identifier: z.string().min(3, "Enter your mobile number or email"),
   password: z.string().min(1, "Password is required"),
 });
 type FormData = z.infer<typeof schema>;
@@ -56,7 +56,7 @@ export default function Login() {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { mobile: "", password: "" },
+    defaultValues: { identifier: "", password: "" },
   });
 
   const loginMutation = useLogin({
@@ -108,14 +108,14 @@ export default function Login() {
     setShopChoices(null);
     setLoginShopId(null);
     setDeviceLimit(null);
-    loginMutation.mutate({ data: { mobile: values.mobile, password: values.password } });
+    loginMutation.mutate({ data: { identifier: values.identifier, password: values.password } });
   };
 
   const retryLogin = () => {
     const values = form.getValues();
     loginMutation.mutate({
       data: {
-        mobile: values.mobile,
+        identifier: values.identifier,
         password: values.password,
         ...(loginShopId ? { shopId: loginShopId } : {}),
       },
@@ -126,7 +126,7 @@ export default function Login() {
     const values = form.getValues();
     setLoginShopId(shopId);
     setServerError(null);
-    loginMutation.mutate({ data: { mobile: values.mobile, password: values.password, shopId } });
+    loginMutation.mutate({ data: { identifier: values.identifier, password: values.password, shopId } });
   };
 
   const backToSignIn = () => {
@@ -304,16 +304,16 @@ export default function Login() {
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div>
-              <Label htmlFor="mobile">Mobile Number</Label>
+              <Label htmlFor="mobile">Mobile number or email</Label>
               <Input
                 id="mobile"
                 data-testid="input-mobile"
                 className="mt-1 h-11 rounded-lg"
-                placeholder="9876543210"
-                {...form.register("mobile")}
+                placeholder="9876543210 or owner@gmail.com"
+                {...form.register("identifier")}
               />
-              {form.formState.errors.mobile && (
-                <p className="text-destructive text-xs mt-1">{form.formState.errors.mobile.message}</p>
+              {form.formState.errors.identifier && (
+                <p className="text-destructive text-xs mt-1">{form.formState.errors.identifier.message}</p>
               )}
             </div>
 
@@ -330,6 +330,14 @@ export default function Login() {
               {form.formState.errors.password && (
                 <p className="text-destructive text-xs mt-1">{form.formState.errors.password.message}</p>
               )}
+            </div>
+
+            <div className="-mt-2 flex justify-end">
+              <Link href="/forgot-password">
+                <span className="cursor-pointer text-sm font-semibold text-primary hover:underline">
+                  Forgot password?
+                </span>
+              </Link>
             </div>
 
             {serverError && (

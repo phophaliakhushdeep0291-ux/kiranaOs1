@@ -6,7 +6,8 @@ import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import {
   registerSchema, loginSchema, setPinSchema,
   verifyPinSchema, inviteStaffSchema, changePasswordSchema,
-  refreshSchema, logoutSchema
+  refreshSchema, logoutSchema, forgotPasswordSchema, resetPasswordSchema,
+  verifyEmailSchema, resendVerificationSchema
 } from "./auth.schema.js";
 import * as ctrl from "./auth.controller.js";
 import { z } from "zod";
@@ -16,6 +17,10 @@ const router = Router();
 // Public
 router.post("/register", validate(registerSchema), ctrl.register);
 router.post("/login",    validate(loginSchema),    ctrl.login);
+router.post("/verify-email", validate(verifyEmailSchema), ctrl.verifyEmail);
+router.post("/resend-verification", validate(resendVerificationSchema), ctrl.resendVerification);
+router.post("/password/forgot", validate(forgotPasswordSchema), ctrl.forgotPassword);
+router.post("/password/reset", validate(resetPasswordSchema), ctrl.resetPassword);
 router.post("/refresh",  validate(refreshSchema),  ctrl.refresh);
 router.post("/logout",   validate(logoutSchema),   ctrl.logout);
 

@@ -1,6 +1,7 @@
 import Dexie, { type Table } from "dexie";
 import type { SyncStatus } from "@/types/domain";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
+import { StorageFullError, isQuotaExceededError } from "@/lib/offline/storage-errors";
 
 export interface OfflineRow {
   id: string;
@@ -575,7 +576,7 @@ class OfflineDBFacade {
       this.table(name),
     );
     const outboxEvents: PendingSyncEvent[] = [];
-    const result = await dexieDB.transaction("rw", tables, async () => {
+    const runTransaction = () => dexieDB.transaction("rw", tables, async () => {
       const tx: OfflineWriteTransaction = {
         put: async <Row>(storeName: string, value: Row) => {
           if (storeName === "settings") {
@@ -618,6 +619,26 @@ class OfflineDBFacade {
       };
       return callback(tx);
     });
+
+    let result: T;
+    try {
+      result = await runTransaction();
+    } catch (error) {
+      if (!isQuotaExceededError(error)) throw error;
+      // Storage is full: free the safely-prunable history (terminal-success sync rows,
+      // expired caches) and retry ONCE — a busy shop usually has megabytes of it. If the
+      // retry still can't fit, tell the user what actually happened instead of a generic
+      // "could not save".
+      outboxEvents.length = 0;
+      await this.pruneSyncedHistory().catch(() => undefined);
+      await this.pruneExpiredRecentCache().catch(() => undefined);
+      try {
+        result = await runTransaction();
+      } catch (retryError) {
+        if (isQuotaExceededError(retryError)) throw new StorageFullError();
+        throw retryError;
+      }
+    }
 
     for (const event of outboxEvents) {
       emitSyncQueueUpdated({
@@ -846,6 +867,32 @@ class OfflineDBFacade {
           keys.push(String(cursor.primaryKey));
       });
     if (keys.length > 0) await table.bulkDelete(keys);
+  }
+
+  /**
+   * Terminal-success sync history and old local audit copies grow without bound on a
+   * busy shop (every bill enqueues several outbox ops + audit rows that are kept after
+   * syncing). Prune SYNCED outbox rows past `outboxDays`; PENDING/SYNCING/FAILED/
+   * CONFLICT rows are retryable state and are never touched. Local audit rows are
+   * capped at `auditDays` — they push to the server through their own outbox ops, so
+   * the authoritative trail lives there.
+   */
+  async pruneSyncedHistory(outboxDays = 30, auditDays = 90): Promise<void> {
+    await this.init();
+    const cutoff = Date.now() - outboxDays * 24 * 60 * 60 * 1000;
+    const doneKeys: string[] = [];
+    await dexieDB.sync_outbox
+      .filter(rowMatchesCurrentScope)
+      .each((row, cursor) => {
+        const record = row as unknown as Record<string, unknown>;
+        const done = record.status === "SYNCED" || record.sync_status === "synced";
+        const raw = record.createdAt ?? record.client_created_at ?? record.created_at;
+        const time = typeof raw === "number" ? raw : new Date(String(raw ?? "")).getTime();
+        if (done && Number.isFinite(time) && time < cutoff)
+          doneKeys.push(String(cursor.primaryKey));
+      });
+    if (doneKeys.length > 0) await dexieDB.sync_outbox.bulkDelete(doneKeys);
+    await this.pruneStoreOlderThan("local_audit_logs", auditDays);
   }
 
   async getIdMap(): Promise<Record<string, string>> {

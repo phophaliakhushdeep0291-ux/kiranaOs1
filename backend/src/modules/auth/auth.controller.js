@@ -23,6 +23,26 @@ export async function login(req, res, next) {
   catch (err) { next(err); }
 }
 
+export async function verifyEmail(req, res, next) {
+  try { res.json({ success: true, data: await authService.verifyEmail(req.body.token) }); }
+  catch (err) { next(err); }
+}
+
+export async function resendVerification(req, res, next) {
+  try { res.json({ success: true, data: await authService.resendEmailVerification(req.body) }); }
+  catch (err) { next(err); }
+}
+
+export async function forgotPassword(req, res, next) {
+  try { res.json({ success: true, data: await authService.requestPasswordReset(req.body) }); }
+  catch (err) { next(err); }
+}
+
+export async function resetPassword(req, res, next) {
+  try { res.json({ success: true, data: await authService.resetPassword(req.body) }); }
+  catch (err) { next(err); }
+}
+
 export async function refresh(req, res, next) {
   try { res.json({ success: true, data: await authService.refreshSession(req.body.refreshToken, requestMeta(req)) }); }
   catch (err) { next(err); }

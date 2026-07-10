@@ -7,6 +7,7 @@ export interface User {
   name: string;
   mobile?: string;
   email?: string;
+  emailVerifiedAt?: string | null;
   role: "owner" | "staff" | string;
   createdAt?: string;
   updatedAt?: string;

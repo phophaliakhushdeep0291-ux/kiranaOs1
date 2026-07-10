@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType } from "react";
-import { Redirect, Route, Switch } from "wouter";
+import { Redirect, Route, Switch, useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary, PageLoading } from "@/components/shared";
@@ -9,6 +9,9 @@ import { stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
 
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/auth/pages/RegisterPage"));
+const ForgotPassword = lazy(() => import("@/features/auth/pages/ForgotPasswordPage"));
+const ResetPassword = lazy(() => import("@/features/auth/pages/ResetPasswordPage"));
+const VerifyEmail = lazy(() => import("@/features/auth/pages/VerifyEmailPage"));
 const CustomerOrder = lazy(() => import("@/features/customer-order/CustomerOrderPage"));
 const ImportOrder = lazy(() => import("@/features/customer-order/ImportOrderPage"));
 const Dashboard = lazy(() => import("@/features/dashboard/pages/DashboardPage"));
@@ -105,8 +108,10 @@ function PublicRoute({ component: Component }: { component: ComponentType }) {
 
 export function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
+  const [location] = useLocation();
+  const isCustomerOrderPath = /^\/order\/[^/]+/.test(location);
 
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading && !isCustomerOrderPath) return <LoadingScreen />;
 
   return (
     <Switch>
@@ -115,6 +120,15 @@ export function AppRoutes() {
       </Route>
       <Route path="/register">
         <PublicRoute component={Register} />
+      </Route>
+      <Route path="/forgot-password">
+        <PublicRoute component={ForgotPassword} />
+      </Route>
+      <Route path="/reset-password">
+        <PublicRoute component={ResetPassword} />
+      </Route>
+      <Route path="/verify-email">
+        <PublicRoute component={VerifyEmail} />
       </Route>
       {/* Customer QR self-order page: fully public (no auth gate, no redirect-if-logged-in) so a
           customer on their own phone — or an owner previewing — can always open it. */}
