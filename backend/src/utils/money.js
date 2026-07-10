@@ -73,8 +73,14 @@ export function moneyEquals(a, b) {
  * @returns {number} new weighted average cost per rateUnit
  */
 export function weightedAvgCost(currentQty, currentCost, newQty, newCost) {
+  // Overselling is allowed, so on-hand stock can be negative (and cost can be
+  // unset/0). A weighted average against non-positive stock or cost is
+  // undefined and can produce absurd values (e.g. -10000g @40 + 10001g @50
+  // averages to ₹100,050/kg), silently poisoning every later profit figure.
+  // Convention: the fresh purchase price becomes the cost.
+  if (!(currentQty > 0) || !(currentCost > 0)) return round2(newCost);
   const totalQty = currentQty + newQty;
-  if (totalQty === 0) return 0;
+  if (totalQty <= 0) return round2(newCost);
   return round2((currentQty * currentCost + newQty * newCost) / totalQty);
 }
 
