@@ -91,4 +91,11 @@ assert.ok(ownerRoutes.includes("requireShop"), "owner orders API must require a 
 assert.ok(ownerRoutes.includes('router.get("/", ctrl.list)'), "owner must be able to list received orders");
 assert.ok(ownerRoutes.includes('router.patch("/:id", ctrl.updateStatus)'), "owner must be able to update order status");
 
+// Inbox pagination: the list used to truncate silently at 200 orders.
+const ordersService = read("../src/modules/orders/orders.service.js");
+assert.ok(ordersService.includes("nextCursor"), "orders list must return a nextCursor when more pages exist");
+assert.ok(ordersService.includes("take: take + 1"), "orders list must over-fetch by one to detect a further page");
+assert.ok(ordersService.includes('{ createdAt: "desc" }, { id: "desc" }'), "orders cursor needs the id tiebreaker for stable ordering");
+assert.ok(read("../src/modules/orders/orders.controller.js").includes("cursor: req.query.cursor"), "orders controller must pass the cursor through");
+
 console.log("customer-orders.examples.js OK");

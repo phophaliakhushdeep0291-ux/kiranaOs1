@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useLocation } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CalendarDays,
@@ -114,9 +114,13 @@ export default function OrdersReceivedPage() {
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const ordersQuery = useQuery({
-    queryKey: ["customer-orders", status],
-    queryFn: () => listCustomerOrders(status),
+  // Cursor-paginated so a busy shop's inbox no longer truncates silently at 200 orders.
+  // Key is namespaced under "list" so it can't collide with the stats query below.
+  const ordersQuery = useInfiniteQuery({
+    queryKey: ["customer-orders", "list", status],
+    queryFn: ({ pageParam }) => listCustomerOrders(status, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor ?? null,
     refetchInterval: 20_000, // poll so new customer orders surface without a manual refresh
   });
 
@@ -131,7 +135,7 @@ export default function OrdersReceivedPage() {
   // Chime + toast when the count of new orders climbs while the owner is watching. newCount is the
   // shop-wide "new" total (independent of the active tab), so it's a reliable arrival signal.
   const prevNewCountRef = useRef<number | null>(null);
-  const newCount = ordersQuery.data?.newCount ?? null;
+  const newCount = ordersQuery.data?.pages[0]?.newCount ?? null;
   useEffect(() => {
     if (newCount == null) return;
     const prev = prevNewCountRef.current;
@@ -286,7 +290,7 @@ export default function OrdersReceivedPage() {
     }
   }
 
-  const orders = ordersQuery.data?.orders ?? [];
+  const orders = useMemo(() => ordersQuery.data?.pages.flatMap((page) => page.orders) ?? [], [ordersQuery.data]);
   const allOrders = useMemo(() => allOrdersQuery.data?.orders ?? [], [allOrdersQuery.data?.orders]);
 
   // ── Stats strip (from the unfiltered list) ─────────────────────────────────
@@ -394,7 +398,7 @@ export default function OrdersReceivedPage() {
                 }`}
               >
                 {tab.label}
-                {tab.value === "new" && (ordersQuery.data?.newCount ?? 0) > 0 ? ` (${ordersQuery.data?.newCount})` : ""}
+                {tab.value === "new" && (newCount ?? 0) > 0 ? ` (${newCount})` : ""}
               </button>
             ))}
           </div>
@@ -485,6 +489,19 @@ export default function OrdersReceivedPage() {
               ))}
             </ul>
           )}
+
+          {ordersQuery.hasNextPage ? (
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                disabled={ordersQuery.isFetchingNextPage}
+                onClick={() => void ordersQuery.fetchNextPage()}
+                className="rounded-xl border border-[#dfe7f2] bg-white px-5 py-2.5 text-[12.5px] font-bold text-[#405273] hover:bg-[#f7faff] disabled:cursor-wait disabled:opacity-60"
+              >
+                {ordersQuery.isFetchingNextPage ? "Loading..." : "Load older orders"}
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
