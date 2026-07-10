@@ -848,6 +848,32 @@ class OfflineDBFacade {
     if (keys.length > 0) await table.bulkDelete(keys);
   }
 
+  /**
+   * Terminal-success sync history and old local audit copies grow without bound on a
+   * busy shop (every bill enqueues several outbox ops + audit rows that are kept after
+   * syncing). Prune SYNCED outbox rows past `outboxDays`; PENDING/SYNCING/FAILED/
+   * CONFLICT rows are retryable state and are never touched. Local audit rows are
+   * capped at `auditDays` — they push to the server through their own outbox ops, so
+   * the authoritative trail lives there.
+   */
+  async pruneSyncedHistory(outboxDays = 30, auditDays = 90): Promise<void> {
+    await this.init();
+    const cutoff = Date.now() - outboxDays * 24 * 60 * 60 * 1000;
+    const doneKeys: string[] = [];
+    await dexieDB.sync_outbox
+      .filter(rowMatchesCurrentScope)
+      .each((row, cursor) => {
+        const record = row as unknown as Record<string, unknown>;
+        const done = record.status === "SYNCED" || record.sync_status === "synced";
+        const raw = record.createdAt ?? record.client_created_at ?? record.created_at;
+        const time = typeof raw === "number" ? raw : new Date(String(raw ?? "")).getTime();
+        if (done && Number.isFinite(time) && time < cutoff)
+          doneKeys.push(String(cursor.primaryKey));
+      });
+    if (doneKeys.length > 0) await dexieDB.sync_outbox.bulkDelete(doneKeys);
+    await this.pruneStoreOlderThan("local_audit_logs", auditDays);
+  }
+
   async getIdMap(): Promise<Record<string, string>> {
     await this.init();
     const scope = getOfflineScope();

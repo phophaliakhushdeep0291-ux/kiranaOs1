@@ -46,7 +46,9 @@ async function getShopAndCustomer(shopId, customerId) {
 
 async function lastPaymentDate(shopId, customerId) {
   const payment = await db.udharLedger.findFirst({
-    where: { shopId, customerId, type: "payment" },
+    // Real customer payments only: cancellation reversals are type "payment" with
+    // mode "reversal" and must not read as "last paid on ...".
+    where: { shopId, customerId, type: "payment", mode: { not: "reversal" }, reversedAt: null },
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
@@ -195,7 +197,9 @@ export async function sendStatementReminder(shopId, user, input, { req = null } 
   const where = { shopId, customerId, ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}) };
   const [billCount, paymentAgg] = await Promise.all([
     db.bill.count({ where: { shopId, customerId, status: "active", ...(from || to ? { createdAt: where.createdAt } : {}) } }),
-    db.udharLedger.aggregate({ where: { ...where, type: "payment" }, _sum: { amount: true } }),
+    // Real payments only — exclude cancellation reversals and reversed payments so the
+    // statement message doesn't tell the customer they paid more than they did.
+    db.udharLedger.aggregate({ where: { ...where, type: "payment", mode: { not: "reversal" }, reversedAt: null }, _sum: { amount: true } }),
   ]);
   const variables = await buildVariables(shop, customer, {
     billCount,

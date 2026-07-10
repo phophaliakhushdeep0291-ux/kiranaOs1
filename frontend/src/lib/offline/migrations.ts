@@ -67,4 +67,5 @@ export async function initializeOfflineStorage(): Promise<void> {
   await migrateLegacyLocalStorageToDexie();
   await hydrateInstantCacheFromIndexedDB([...BUSINESS_CACHE_KEYS]);
   await offlineDB.pruneExpiredRecentCache().catch(() => undefined);
+  await offlineDB.pruneSyncedHistory().catch(() => undefined);
 }
