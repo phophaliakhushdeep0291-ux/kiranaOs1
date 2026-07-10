@@ -63,7 +63,9 @@
     "test:phase46": "node tests/phase46-multidevice-smoothness.examples.js",
     "test:bill-return-migration": "node tests/bill-return-reference-migration.examples.js",
     "loadtest": "node loadtest/loadtest.js",
-    "loadtest:smoke": "node loadtest/loadtest.js --smoke"
+    "loadtest:smoke": "node loadtest/loadtest.js --smoke",
+    "wac:backfill": "node scripts/wac-cost-backfill.js",
+    "wac:backfill:write": "node scripts/run-with-env.js ALLOW_WAC_BACKFILL=true -- node scripts/wac-cost-backfill.js --write"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
