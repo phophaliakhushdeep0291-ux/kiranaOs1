@@ -110,12 +110,17 @@ export default function MoneyStatementPage() {
     () => buildMoneyStatement(input ?? {}, { ...range, mode, direction, search }),
     [input, range, mode, direction, search],
   );
+  const summaryStatement = useMemo(
+    () => buildMoneyStatement(input ?? {}, { ...range, mode: "all", direction, search }),
+    [input, range, direction, search],
+  );
+  const summaryTotals = summaryStatement.totals;
 
   const modeCards = [
     {
       label: "Cash Balance",
-      sub: `${money(statement.totals.cashIn)} received · ${money(statement.totals.cashOut)} paid`,
-      value: statement.totals.cashNet,
+      sub: `${money(summaryTotals.cashIn)} received · ${money(summaryTotals.cashOut)} paid`,
+      value: summaryTotals.cashNet,
       icon: <Wallet size={18} />,
       href: "/money-statement?mode=cash",
       color: "#18ad50",
@@ -123,8 +128,8 @@ export default function MoneyStatementPage() {
     },
     {
       label: "UPI Balance",
-      sub: `${money(statement.totals.upiIn)} received · ${money(statement.totals.upiOut)} paid`,
-      value: statement.totals.upiNet,
+      sub: `${money(summaryTotals.upiIn)} received · ${money(summaryTotals.upiOut)} paid`,
+      value: summaryTotals.upiNet,
       icon: <Smartphone size={18} />,
       href: "/money-statement?mode=upi",
       color: "#7047eb",
@@ -132,8 +137,8 @@ export default function MoneyStatementPage() {
     },
     {
       label: "Bank Balance",
-      sub: `${money(statement.totals.bankIn)} received · ${money(statement.totals.bankOut)} paid`,
-      value: statement.totals.bankNet,
+      sub: `${money(summaryTotals.bankIn)} received · ${money(summaryTotals.bankOut)} paid`,
+      value: summaryTotals.bankNet,
       icon: <Landmark size={18} />,
       href: "/money-statement?mode=bank",
       color: "#075fff",
@@ -141,8 +146,8 @@ export default function MoneyStatementPage() {
     },
     {
       label: "Total Net",
-      sub: `${money(statement.totals.totalIn)} in · ${money(statement.totals.totalOut)} out`,
-      value: statement.totals.totalNet,
+      sub: `${money(summaryTotals.totalIn)} in · ${money(summaryTotals.totalOut)} out`,
+      value: summaryTotals.totalNet,
       icon: <ArrowUpRight size={18} />,
       href: "/money-statement",
       color: "#f39a0b",

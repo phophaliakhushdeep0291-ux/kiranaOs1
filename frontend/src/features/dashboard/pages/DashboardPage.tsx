@@ -1296,12 +1296,16 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
-      className={cn(DASH_CARD, "h-full min-h-[clamp(102px,11.5dvh,142px)] overflow-hidden p-4 2xl:p-5", onClick && ["cursor-pointer", DASH_CARD_INTERACTIVE])}
+      className={cn(
+        DASH_CARD,
+        "flex h-full min-h-[154px] flex-col overflow-hidden p-4 2xl:min-h-[166px] 2xl:p-5",
+        onClick && ["cursor-pointer", DASH_CARD_INTERACTIVE],
+      )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] 2xl:h-10 2xl:w-10", iconBg)}>{icon}</div>
       </div>
-      <div className="mt-2.5 2xl:mt-3">
+      <div className="mt-2.5 min-h-0 2xl:mt-3">
         <p className={cn("text-[12px] font-medium leading-tight 2xl:text-[13px]", DASH_MUTED)}>{label}</p>
         {loading ? (
           <div className="mt-2 h-7 w-3/4 animate-pulse rounded bg-[#edf2f8]" />
@@ -1319,10 +1323,10 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
           )}
           <span className="text-[#7a879b]">{deltaLabel}</span>
         </div>
-        {footer && <div className="mt-3 leading-none">{footer}</div>}
+        {footer && <div className="mt-2 leading-none">{footer}</div>}
       </div>
       {spark && color ? (
-        <div className="mt-2 h-8">
+        <div className="mt-auto h-8 w-full shrink-0 pt-2 2xl:h-9">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={spark} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
               <defs>
