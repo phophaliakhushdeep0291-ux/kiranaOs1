@@ -27,11 +27,16 @@ export interface CustomerOrder {
 export interface CustomerOrdersResponse {
   orders: CustomerOrder[];
   newCount: number;
+  /** Cursor for the next page; null/absent when this page is the last. */
+  nextCursor?: string | null;
 }
 
-export function listCustomerOrders(status?: string) {
-  const query = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest<CustomerOrdersResponse>(`/orders${query}`);
+export function listCustomerOrders(status?: string, cursor?: string | null) {
+  const params = new URLSearchParams();
+  if (status && status !== "all") params.set("status", status);
+  if (cursor) params.set("cursor", cursor);
+  const query = params.toString();
+  return apiRequest<CustomerOrdersResponse>(`/orders${query ? `?${query}` : ""}`);
 }
 
 export function updateCustomerOrder(id: string, data: { status?: CustomerOrder["status"]; billId?: string | null }) {

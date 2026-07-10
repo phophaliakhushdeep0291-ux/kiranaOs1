@@ -19,18 +19,32 @@ function shapeOrder(order) {
 
 /**
  * The owner's "Orders Received" inbox — customer orders submitted from the public QR page.
- * Shop-scoped; newest first. Returns the count of still-new orders for the nav badge.
+ * Shop-scoped; newest first; cursor-paginated (the list used to silently truncate at 200).
+ * Returns the count of still-new orders for the nav badge and a nextCursor when more exist.
  */
-export async function listCustomerOrders(shopId, { status } = {}) {
+export async function listCustomerOrders(shopId, { status, cursor, limit } = {}) {
   const where = { shopId };
   if (status && status !== "all") where.status = status;
+  const take = Math.min(Math.max(Number(limit) || 200, 1), 200);
 
-  const [orders, newCount] = await Promise.all([
-    db.customerOrder.findMany({ where, orderBy: { createdAt: "desc" }, take: 200 }),
+  const [rows, newCount] = await Promise.all([
+    db.customerOrder.findMany({
+      where,
+      // id is the tiebreaker so the cursor is stable across equal createdAt values.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: take + 1,
+      ...(cursor ? { cursor: { id: String(cursor) }, skip: 1 } : {}),
+    }),
     db.customerOrder.count({ where: { shopId, status: "new" } }),
   ]);
 
-  return { orders: orders.map(shapeOrder), newCount };
+  const hasMore = rows.length > take;
+  const orders = hasMore ? rows.slice(0, take) : rows;
+  return {
+    orders: orders.map(shapeOrder),
+    newCount,
+    nextCursor: hasMore && orders.length > 0 ? orders[orders.length - 1].id : null,
+  };
 }
 
 export async function updateCustomerOrderStatus(shopId, orderId, { status, billId } = {}) {

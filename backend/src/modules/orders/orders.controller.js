@@ -2,7 +2,11 @@ import * as svc from "./orders.service.js";
 
 export async function list(req, res, next) {
   try {
-    const data = await svc.listCustomerOrders(req.shopId, { status: req.query.status });
+    const data = await svc.listCustomerOrders(req.shopId, {
+      status: req.query.status,
+      cursor: req.query.cursor,
+      limit: req.query.limit,
+    });
     res.json({ success: true, data });
   } catch (err) {
     next(err);
