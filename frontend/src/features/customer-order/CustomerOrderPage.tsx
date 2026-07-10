@@ -191,7 +191,7 @@ export default function CustomerOrderPage() {
     const count = cartItems.reduce((sum, item) => sum + item.qty, 0);
     const subtotal = cartItems.reduce((sum, item) => sum + item.lineTotal, 0);
     const promoDiscount = subtotal >= 500 ? 20 : 0;
-    const deliveryCharge = subtotal <= 0 || fulfillment === "pickup" || subtotal >= 500 ? 0 : 30;
+    const deliveryCharge = subtotal <= 0 || fulfillment === "pickup" ? 0 : 30;
     const taxable = Math.max(0, subtotal - promoDiscount + deliveryCharge);
     const gst = Math.round(taxable * 5) / 100;
     const grandTotal = taxable + gst;
@@ -318,10 +318,9 @@ export default function CustomerOrderPage() {
 
   const { catalog, source } = state;
   const shopLocation = catalog.shop.city ? `${catalog.shop.city}, India` : "Local store";
-  const deliveryShortfall = Math.max(0, 500 - totals.subtotal);
 
   return (
-    <div className="min-h-screen bg-[#f7faff] text-[#071432] lg:bg-[#f4f8ff]">
+    <div className="min-h-screen bg-white text-[#071432] lg:bg-[#f4f8ff]">
       <div className="lg:flex">
         <CustomerSidebar
           shopName={catalog.shop.name}
@@ -342,14 +341,14 @@ export default function CustomerOrderPage() {
           />
           <CustomerMobileNav activeView={activeView} onView={setActiveView} />
 
-          <main className={`mx-auto w-full max-w-[1500px] px-4 pb-32 pt-4 sm:px-6 lg:px-8 lg:pb-8 ${activeView === "shop" ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
+          <main className={`mx-auto w-full max-w-[1500px] px-3 pb-32 pt-4 sm:px-6 lg:px-8 lg:pb-8 ${activeView === "shop" ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
             {activeView === "shop" ? (
               <>
                 <section className="min-w-0 space-y-5">
                   <CategoryRail categories={categories} active={category} onSelect={setCategory} />
 
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <PromoCard tone="green" title="Free delivery above Rs 500" body={deliveryShortfall > 0 ? `Shop for ${formatRs(deliveryShortfall)} more to get free delivery` : "Your order gets free delivery"} />
+                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+                    <PromoCard tone="green" title="Fresh store stock" body="Products are packed from the live shop counter" />
                     <PromoCard tone="blue" title="Express delivery in 60 mins" body="Fresh items from the store to your doorstep" />
                     <PromoCard tone="orange" title="Pickup in 20 mins" body="Order online and pick up from store" />
                   </div>
@@ -454,8 +453,8 @@ function StorefrontHeader({
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[#e4ecf7] bg-white/95 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-4 pb-2 pt-4 sm:px-6 lg:hidden">
-        <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#075fff] shadow-[0_8px_24px_rgba(20,40,90,0.06)]">
+      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-2 pt-3 sm:px-6 lg:hidden">
+        <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#075fff] shadow-[0_8px_24px_rgba(20,40,90,0.06)]">
           <Menu size={21} />
         </button>
         <div className="min-w-0 flex-1">
@@ -464,20 +463,20 @@ function StorefrontHeader({
               <ShoppingCart size={21} />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate font-display text-2xl font-black tracking-[-0.03em] text-[#071432]">
+              <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-[#071432] sm:text-2xl">
                 {catalog.shop.name || "KiranaOS"}
               </h1>
               <p className="truncate text-xs font-semibold text-[#66758f]">{catalog.shop.city || "Smart POS for Modern Stores"}</p>
             </div>
           </div>
         </div>
-        <button type="button" className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dfe8f5] bg-white text-[#0d1a3a] shadow-[0_8px_24px_rgba(20,40,90,0.04)]">
+        <button type="button" className="relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dfe8f5] bg-white text-[#0d1a3a] shadow-[0_8px_24px_rgba(20,40,90,0.04)]">
           <Bell size={19} />
           <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[#075fff] text-[10px] font-black text-white">7</span>
         </button>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-4 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
+      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
         <button type="button" className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#405173] shadow-[0_8px_24px_rgba(20,40,90,0.06)] lg:hidden">
           <Menu size={21} />
         </button>
@@ -640,8 +639,8 @@ const CUSTOMER_NAV: Array<{ view: CustomerStorefrontView; label: string; icon: t
 
 function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefrontView; onView: (view: CustomerStorefrontView) => void }) {
   return (
-    <div className="border-b border-[#e4ecf7] bg-white/95 px-4 py-2 lg:hidden">
-      <div className="flex gap-2 overflow-x-auto pb-1">
+    <div className="border-b border-[#e4ecf7] bg-white/95 px-3 py-2 lg:hidden">
+      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {CUSTOMER_NAV.map((item) => {
           const Icon = item.icon;
           const active = activeView === item.view;
@@ -650,7 +649,7 @@ function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefr
               type="button"
               key={item.view}
               onClick={() => onView(item.view)}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-black ${active ? "border-[#075fff] bg-[#075fff] text-white" : "border-[#dfe8f5] bg-white text-[#243653]"}`}
+              className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-black shadow-[0_8px_20px_rgba(20,40,90,0.04)] ${active ? "border-[#075fff] bg-[#075fff] text-white" : "border-[#dfe8f5] bg-white text-[#243653]"}`}
             >
               <Icon size={15} />
               {item.label.replace(" & Credits", "")}
@@ -709,9 +708,9 @@ function CustomerSidebar({
 
       <div className="mt-auto space-y-4 pt-8">
         <div className="rounded-2xl bg-white p-4 text-[#071432] shadow-[0_16px_50px_rgba(0,0,0,0.24)]">
-          <p className="text-sm font-black">Free delivery above</p>
-          <p className="mt-1 font-display text-3xl font-black text-[#075fff]">Rs 500</p>
-          <p className="mt-2 text-xs font-semibold text-[#5f6e88]">Fast and reliable delivery at your doorstep.</p>
+          <p className="text-sm font-black">Order online</p>
+          <p className="mt-1 font-display text-3xl font-black text-[#075fff]">20 min</p>
+          <p className="mt-2 text-xs font-semibold text-[#5f6e88]">Pickup or delivery from the live shop catalog.</p>
         </div>
         <div className="rounded-2xl border border-white/12 bg-white/8 p-4">
           <p className="text-sm font-black">{shopName}</p>
@@ -739,7 +738,7 @@ function CategoryRail({
   const all = [{ key: "all", label: "All" }, ...categories];
   return (
     <div className="overflow-x-auto pb-1">
-      <div className="flex min-w-max gap-3">
+      <div className="flex min-w-max gap-2 sm:gap-3">
         {all.map((cat) => {
           const selected = active === cat.key;
           return (
@@ -747,15 +746,15 @@ function CategoryRail({
               type="button"
               key={cat.key}
               onClick={() => onSelect(cat.key)}
-              className={`flex h-[82px] w-[84px] shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border bg-white text-center text-[11px] font-black transition sm:w-[92px] ${
+              className={`flex h-[72px] w-[74px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border bg-white text-center text-[10px] font-black transition sm:h-[82px] sm:w-[92px] sm:gap-2 sm:text-[11px] ${
                 selected
                   ? "border-[#075fff] text-[#075fff] shadow-[0_14px_34px_rgba(7,95,255,0.16)]"
                   : "border-[#dfe8f5] text-[#172544] hover:border-[#bcd0f4]"
               }`}
             >
-              <span className={`grid h-9 w-9 place-items-center rounded-xl ${selected ? "bg-[#eaf2ff]" : "bg-[#f4f7fc]"}`}>
+              <span className={`grid h-8 w-8 place-items-center rounded-xl sm:h-9 sm:w-9 ${selected ? "bg-[#eaf2ff]" : "bg-[#f4f7fc]"}`}>
                 {"product" in cat && cat.product?.imageUrl ? (
-                  <img src={cat.product.imageUrl} alt="" className="h-8 w-8 object-contain" />
+                  <img src={cat.product.imageUrl} alt="" className="h-7 w-7 object-contain sm:h-8 sm:w-8" />
                 ) : cat.key === "all" ? (
                   <ShoppingBag size={18} />
                 ) : (
@@ -777,7 +776,7 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
     blue: "border-[#dce8ff] bg-[#f4f8ff] text-[#075fff]",
     orange: "border-[#ffe4be] bg-[#fff8ed] text-[#f97316]",
   }[tone];
-  const Icon = tone === "green" ? Truck : tone === "blue" ? Clock : Store;
+  const Icon = tone === "green" ? PackageCheck : tone === "blue" ? Clock : Store;
   return (
     <div className={`flex items-center gap-3 rounded-2xl border p-4 ${styles}`}>
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/80">
@@ -793,8 +792,8 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
 
 function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
   return (
-    <article className="group rounded-2xl border border-[#e3ebf7] bg-white p-3 shadow-[0_12px_35px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)]">
-      <div className="relative grid aspect-square place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[#eef5ff]">
+    <article className="group rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_12px_35px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
+      <div className="relative grid aspect-[1.08/1] place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[#eef5ff] sm:aspect-square">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-[76%] w-[76%] object-contain transition duration-300 group-hover:scale-105" />
         ) : (
@@ -805,14 +804,14 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
             <span className="font-display text-lg font-black text-[#b9c6dc]">{product.name.charAt(0).toUpperCase()}</span>
           </div>
         )}
-        <button type="button" aria-label={`Save ${product.name}`} className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-white text-[#7b8aa5] shadow-sm">
+        <button type="button" aria-label={`Save ${product.name}`} className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-white text-[#7b8aa5] shadow-sm sm:right-2 sm:top-2 sm:h-8 sm:w-8">
           <Heart size={16} />
         </button>
       </div>
-      <div className="mt-3 min-h-[86px]">
-        <h3 className="line-clamp-2 text-sm font-black leading-snug text-[#0b1735]">{product.name}</h3>
+      <div className="mt-2 min-h-[82px] sm:mt-3 sm:min-h-[86px]">
+        <h3 className="line-clamp-2 text-[13px] font-black leading-snug text-[#0b1735] sm:text-sm">{product.name}</h3>
         <p className="mt-1 text-xs font-semibold text-[#4f5f7b]">{product.unit}</p>
-        <p className="mt-2 text-base font-black text-[#071432]">
+        <p className="mt-1.5 text-sm font-black text-[#071432] sm:mt-2 sm:text-base">
           {formatRs(product.price)}
           {product.mrp && product.mrp > product.price ? (
             <span className="ml-2 text-xs font-semibold text-[#95a3bb] line-through">{formatRs(product.mrp)}</span>
@@ -826,7 +825,7 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
         <button
           type="button"
           onClick={() => onChange(1)}
-          className="mt-3 flex h-10 w-full items-center justify-center rounded-xl border border-[#cfe0ff] bg-[#f8fbff] text-sm font-black text-[#075fff] transition hover:bg-[#eaf2ff]"
+          className="mt-2 flex h-9 w-full items-center justify-center rounded-xl border border-[#cfe0ff] bg-[#f8fbff] text-sm font-black text-[#075fff] transition hover:bg-[#eaf2ff] sm:mt-3 sm:h-10"
         >
           Add
         </button>
@@ -865,12 +864,12 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
 
 function QuantityStepper({ qty, onChange, compact = false }: { qty: number; onChange: (next: number) => void; compact?: boolean }) {
   return (
-    <div className={`mt-3 flex items-center overflow-hidden rounded-xl border border-[#d9e4f2] bg-[#f8fbff] ${compact ? "mt-0" : ""}`}>
-      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-10 flex-1 place-items-center text-[#075fff]">
+    <div className={`mt-2 flex items-center overflow-hidden rounded-xl border border-[#d9e4f2] bg-[#f8fbff] sm:mt-3 ${compact ? "mt-0 sm:mt-0" : ""}`}>
+      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-9 flex-1 place-items-center text-[#075fff] sm:h-10">
         <Minus size={16} />
       </button>
-      <span className="grid h-10 min-w-10 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums">{qty}</span>
-      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-10 flex-1 place-items-center text-[#075fff]">
+      <span className="grid h-9 min-w-9 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums sm:h-10 sm:min-w-10">{qty}</span>
+      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-9 flex-1 place-items-center text-[#075fff] sm:h-10">
         <Plus size={16} />
       </button>
     </div>
@@ -1452,9 +1451,9 @@ function OffersPortalPage({ products, onView, onAddProduct }: { products: Custom
           <button type="button" onClick={() => onView("shop")} className="mt-5 rounded-xl bg-white px-5 py-3 text-sm font-black text-[#075fff]">Shop Now</button>
         </section>
         <div className="grid gap-3 md:grid-cols-4">
-          {["FLAT Rs 50 OFF", "10% OFF", "FREE DELIVERY", "Rs 75 CASHBACK"].map((offer, index) => (
+          {["FLAT Rs 50 OFF", "10% OFF", "FAST PICKUP", "Rs 75 CASHBACK"].map((offer, index) => (
             <PortalCard key={offer} className={["border-dashed border-[#82e6b0] bg-[#f5fff8]", "border-dashed border-[#bcd0ff] bg-[#f7faff]", "border-dashed border-[#ffd08a] bg-[#fff8ed]", "border-dashed border-[#ddb7ff] bg-[#fbf6ff]"][index]}>
-              <IconBubble icon={index === 2 ? Truck : index === 3 ? WalletCards : Gift} tone={index === 2 ? "orange" : index === 3 ? "purple" : "green"} />
+              <IconBubble icon={index === 2 ? Store : index === 3 ? WalletCards : Gift} tone={index === 2 ? "orange" : index === 3 ? "purple" : "green"} />
               <p className="mt-3 font-black">{offer}</p>
               <p className="mt-1 text-xs font-semibold text-[#66758f]">Valid on selected orders</p>
               <button type="button" className="mt-4 w-full rounded-xl bg-[#075fff] py-2 text-xs font-black text-white">Claim Offer</button>
@@ -1476,7 +1475,7 @@ function OffersPortalPage({ products, onView, onAddProduct }: { products: Custom
       </div>
       <aside className="space-y-4">
         <PortalCard><h2 className="font-display text-lg font-black">Your Savings Summary</h2><PriceSummaryLine label="Coupons Available" value="7" /><PriceSummaryLine label="Wallet Cashback" value="Rs 350.00" /><PriceSummaryLine label="Total Savings" value="Rs 326.00" strong /></PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Applied Promotions</h2><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">GROCERY10 - saved Rs 82.50</p><p className="mt-2 rounded-xl bg-[#f7faff] p-3 text-sm font-black text-[#075fff]">FREEDEL - free delivery</p></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Applied Promotions</h2><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">GROCERY10 - saved Rs 82.50</p><p className="mt-2 rounded-xl bg-[#f7faff] p-3 text-sm font-black text-[#075fff]">PICKUP20 - priority pickup</p></PortalCard>
       </aside>
     </div>
   );
