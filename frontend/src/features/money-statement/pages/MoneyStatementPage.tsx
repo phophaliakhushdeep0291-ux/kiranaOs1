@@ -5,9 +5,12 @@ import {
   CalendarDays,
   Download,
   Landmark,
+  PackageOpen,
   RefreshCw,
+  ReceiptText,
   Search,
   Smartphone,
+  X,
   Wallet,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -84,6 +87,7 @@ export default function MoneyStatementPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState<Awaited<ReturnType<typeof loadMoneyStatementInput>> | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
 
   const refresh = () => {
     setLoading(true);
@@ -115,6 +119,14 @@ export default function MoneyStatementPage() {
     [input, range, direction, search],
   );
   const summaryTotals = summaryStatement.totals;
+  const selectedRow = useMemo(
+    () => statement.rows.find((row) => row.id === selectedRowId) ?? null,
+    [statement.rows, selectedRowId],
+  );
+
+  useEffect(() => {
+    if (selectedRowId && !selectedRow) setSelectedRowId(null);
+  }, [selectedRow, selectedRowId]);
 
   const modeCards = [
     {
@@ -239,13 +251,18 @@ export default function MoneyStatementPage() {
             </button>
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              {(["all", "cash", "upi", "bank"] as Array<MoneyStatementMode | "all">).map((item) => (
-                <button key={item} type="button" onClick={() => setMode(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", mode === item ? "border-[#075fff] bg-[#edf4ff] text-[#075fff]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item}</button>
-              ))}
-              {(["all", "in", "out"] as Array<MoneyStatementDirection | "all">).map((item) => (
-                <button key={item} type="button" onClick={() => setDirection(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", direction === item ? "border-[#075fff] bg-[#edf4ff] text-[#075fff]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item === "in" ? "Received" : item === "out" ? "Paid" : "All flow"}</button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-2">
+                {(["all", "cash", "upi", "bank"] as Array<MoneyStatementMode | "all">).map((item) => (
+                  <button key={item} type="button" onClick={() => setMode(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", mode === item ? "border-[#075fff] bg-[#edf4ff] text-[#075fff]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item}</button>
+                ))}
+              </div>
+              <span className="mx-1 hidden h-8 w-px rounded-full bg-[#d6e0ee] sm:block" aria-hidden="true" />
+              <div className="flex flex-wrap gap-2 border-l border-[#d6e0ee] pl-3 sm:border-l-0 sm:pl-0">
+                {(["all", "in", "out"] as Array<MoneyStatementDirection | "all">).map((item) => (
+                  <button key={item} type="button" onClick={() => setDirection(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", direction === item ? "border-[#075fff] bg-[#edf4ff] text-[#075fff]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item === "in" ? "Received" : item === "out" ? "Paid" : "All flow"}</button>
+                ))}
+              </div>
             </div>
             <button
               type="button"
@@ -284,7 +301,19 @@ export default function MoneyStatementPage() {
               </thead>
               <tbody className="divide-y divide-[#edf2f8]">
                 {statement.rows.map((row) => (
-                  <tr key={row.id} className="text-[12px] font-semibold text-[#253854] hover:bg-[#fbfdff]">
+                  <tr
+                    key={row.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedRowId(row.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedRowId(row.id);
+                      }
+                    }}
+                    className="cursor-pointer text-[12px] font-semibold text-[#253854] outline-none transition-colors hover:bg-[#fbfdff] focus-visible:bg-[#edf4ff]"
+                  >
                     <td className="px-4 py-3">
                       <p className="font-black text-[#102347]">{row.dateLabel}</p>
                       <p className="text-[11px] text-[#718096]">{row.timeLabel}</p>
@@ -309,7 +338,7 @@ export default function MoneyStatementPage() {
 
           <div className="divide-y divide-[#edf2f8] lg:hidden">
             {statement.rows.map((row) => (
-              <div key={row.id} className="p-4">
+              <button key={row.id} type="button" onClick={() => setSelectedRowId(row.id)} className="w-full p-4 text-left transition-colors active:bg-[#f5f9ff]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-[14px] font-black text-[#102347]">{row.partyName}</p>
@@ -324,7 +353,7 @@ export default function MoneyStatementPage() {
                   <span className="rounded-full bg-[#f3f7fc] px-2 py-1 text-[10px] font-black text-[#62708a]">{row.source}</span>
                   <span className="text-[11px] font-semibold text-[#718096]">{row.reference}</span>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
 
@@ -339,6 +368,7 @@ export default function MoneyStatementPage() {
           )}
         </section>
       </div>
+      {selectedRow && <MoneyStatementDetailPanel row={selectedRow} onClose={() => setSelectedRowId(null)} />}
     </div>
   );
 }
@@ -350,4 +380,140 @@ function ModeBadge({ mode }: { mode: MoneyStatementMode }) {
     bank: "border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]",
   }[mode];
   return <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase", styles)}>{mode}</span>;
+}
+
+function DetailMetric({ label, value, tone = "default" }: { label: string; value?: number; tone?: "default" | "in" | "out" }) {
+  return (
+    <div className="rounded-[14px] border border-[#e3eaf4] bg-[#fbfdff] p-3">
+      <p className="text-[10px] font-black uppercase tracking-[0.04em] text-[#75839d]">{label}</p>
+      <p className={cn("mt-1 font-display text-[18px] font-black", tone === "in" ? "text-[#159447]" : tone === "out" ? "text-[#ef3340]" : "text-[#071333]")}>
+        {typeof value === "number" ? money(value) : "-"}
+      </p>
+    </div>
+  );
+}
+
+function MoneyStatementDetailPanel({ row, onClose }: { row: MoneyStatementRow; onClose: () => void }) {
+  const detail = row.detail;
+  const items = detail?.items ?? [];
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#071333]/45 px-3 py-3 backdrop-blur-sm sm:items-center sm:p-6" onClick={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Money movement details"
+        onClick={(event) => event.stopPropagation()}
+        className="max-h-[92vh] w-full max-w-[820px] overflow-hidden rounded-[22px] border border-[#dfe8f5] bg-white shadow-[0_24px_70px_rgba(7,19,51,0.22)]"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[#e7edf5] px-5 py-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="grid h-10 w-10 place-items-center rounded-[12px] border border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]">
+                <ReceiptText size={18} />
+              </span>
+              <div>
+                <h3 className="font-display text-[20px] font-black text-[#071333]">{detail?.title ?? row.source}</h3>
+                <p className="text-[12px] font-semibold text-[#718096]">{row.dateLabel} at {row.timeLabel}</p>
+              </div>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-[#dfe8f5] text-[#405273] transition-colors hover:bg-[#f5f9ff]">
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="max-h-[calc(92vh-76px)] overflow-y-auto p-5">
+          <div className="grid gap-3 sm:grid-cols-[1.2fr_0.8fr]">
+            <div className="rounded-[16px] border border-[#e3eaf4] bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.04em] text-[#75839d]">Party</p>
+              <p className="mt-1 font-display text-[19px] font-black text-[#071333]">{row.partyName}</p>
+              {row.partyMobile && <p className="mt-1 text-[12px] font-semibold text-[#718096]">{row.partyMobile}</p>}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <ModeBadge mode={row.mode} />
+                <span className="rounded-full bg-[#f3f7fc] px-2.5 py-1 text-[10px] font-black uppercase text-[#62708a]">{row.status || "posted"}</span>
+                <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-black uppercase", row.direction === "in" ? "bg-[#e8f9ee] text-[#159447]" : "bg-[#ffecef] text-[#ef3340]")}>
+                  {row.direction === "in" ? "Received" : "Paid"}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-[16px] border border-[#e3eaf4] bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-[0.04em] text-[#75839d]">Reference</p>
+              <p className="mt-1 font-display text-[18px] font-black text-[#071333]">{detail?.billNo || row.reference}</p>
+              <p className="mt-1 text-[12px] font-semibold text-[#718096]">{row.source}</p>
+              {detail?.paymentId && <p className="mt-2 break-all text-[11px] font-semibold text-[#8a96aa]">Payment ID: {detail.paymentId}</p>}
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-4">
+            <DetailMetric label="Bill Total" value={detail?.total} />
+            <DetailMetric label="Paid" value={detail?.paid ?? row.amount} tone={row.direction === "in" ? "in" : "out"} />
+            <DetailMetric label="Due" value={detail?.due} tone="out" />
+            <DetailMetric label="This Entry" value={row.amount} tone={row.direction === "in" ? "in" : "out"} />
+          </div>
+
+          {typeof detail?.discount === "number" && detail.discount > 0 && (
+            <div className="mt-3 rounded-[14px] border border-[#e3eaf4] bg-[#fbfdff] px-4 py-3 text-[12px] font-bold text-[#405273]">
+              Subtotal {money(detail.subtotal ?? 0)} · Discount {money(detail.discount)}
+            </div>
+          )}
+
+          <div className="mt-4 overflow-hidden rounded-[16px] border border-[#e3eaf4] bg-white">
+            <div className="flex items-center justify-between gap-3 border-b border-[#e7edf5] px-4 py-3">
+              <div>
+                <h4 className="font-display text-[16px] font-black text-[#071333]">Items / purpose</h4>
+                <p className="text-[11px] font-semibold text-[#718096]">What this payment belongs to.</p>
+              </div>
+              <span className="rounded-full bg-[#f3f7fc] px-2.5 py-1 text-[10px] font-black text-[#62708a]">{items.length} items</span>
+            </div>
+
+            {items.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[620px] text-left">
+                  <thead>
+                    <tr className="border-b border-[#edf2f8] bg-[#f8fbff] text-[10px] font-black uppercase text-[#66758c]">
+                      <th className="px-4 py-3">Item</th>
+                      <th className="px-4 py-3 text-right">Qty</th>
+                      <th className="px-4 py-3 text-right">Rate</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#edf2f8]">
+                    {items.map((item) => (
+                      <tr key={item.id} className="text-[12px] font-semibold text-[#253854]">
+                        <td className="px-4 py-3 font-black text-[#102347]">{item.name}</td>
+                        <td className="px-4 py-3 text-right">{item.quantity} {item.unit ?? ""}</td>
+                        <td className="px-4 py-3 text-right">{money(item.rate)}</td>
+                        <td className="px-4 py-3 text-right font-black">{money(item.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="grid min-h-[150px] place-items-center px-4 py-6 text-center">
+                <div>
+                  <div className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-[#f3f7fc] text-[#62708a]">
+                    <PackageOpen size={21} />
+                  </div>
+                  <p className="mt-3 text-[13px] font-black text-[#102347]">
+                    {detail?.kind === "udhar-payment" ? "Payment against outstanding udhar" : "No item rows found"}
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold text-[#718096]">{detail?.note || row.note || "This entry has no item-level details saved locally."}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {(detail?.note || row.note) && items.length > 0 && (
+            <div className="mt-3 rounded-[14px] border border-[#e3eaf4] bg-[#fbfdff] px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.04em] text-[#75839d]">Note</p>
+              <p className="mt-1 text-[12px] font-semibold text-[#405273]">{detail?.note || row.note}</p>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  );
 }
