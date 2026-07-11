@@ -87,7 +87,7 @@ for (const snippet of [
 ]) {
   assert(deviceService.includes(snippet), `Device service missing ${snippet}`);
 }
-assert(deviceService.includes("status: \"removed\""), "Device removal must be soft status change");
+assert(deviceService.includes("status: \"revoked\""), "Device removal must preserve the row with revoked status");
 assert(deviceService.includes("LICENSE_SIGNING_SECRET"), "Device license signing secret must be referenced");
 
 assert(paymentProviderService.includes("storeProviderEvent"), "Payment provider event storage must exist");

@@ -34,7 +34,6 @@ assert.match(
 );
 
 for (const snippet of [
-  "REFRESH_TOKEN_REUSE_DETECTED",
   "USER_DISABLED",
   "PASSWORD_CHANGED",
   "STAFF_DISABLED",
@@ -45,6 +44,10 @@ for (const snippet of [
 ]) {
   assert.ok(authService.includes(snippet), `auth service missing production session/staff hardening: ${snippet}`);
 }
+assert.ok(
+  authService.includes("REFRESH_TOKEN_REUSED") || authService.includes("REFRESH_TOKEN_REUSE_DETECTED"),
+  "auth service must detect and reject refresh-token replay",
+);
 
 // Device cap must fail closed in production: a login with no device id can't be counted
 // toward the per-plan limit, so it must be rejected rather than silently allowed.

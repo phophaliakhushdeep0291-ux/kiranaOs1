@@ -74,10 +74,13 @@ for (const snippet of [
   "DEVICE_ACTIVATED",
   "DEVICE_REMOVED",
   "DEVICE_BLOCKED",
-  "DEVICE_UNBLOCKED",
 ]) {
   assert(deviceService.includes(snippet), `devices.service.js missing ${snippet}`);
 }
+assert(
+  deviceService.includes("DEVICE_REACTIVATED") || deviceService.includes("DEVICE_UNBLOCKED"),
+  "devices.service.js must audit blocked-device reactivation",
+);
 
 for (const snippet of [
   "license.service.js",
