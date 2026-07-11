@@ -67,9 +67,9 @@ export async function assertRequestDevice(req) {
   }
   if (["removed", "revoked"].includes(device.status)) {
     // In local development, the same shop is often opened in Chrome, Vite preview,
-    // and an embedded browser at the same time. A removed dev device should be able
+    // and an embedded browser at the same time. A revoked dev device should be able
     // to rejoin automatically so multi-session testing does not deadlock with 403s.
-    // Production still rejects removed devices until owner/admin reactivates them.
+    // Production still rejects revoked devices until owner/admin reactivates them.
     if (env.NODE_ENV !== "production") {
       return activateMissingRequestDevice(req, deviceId);
     }
@@ -156,9 +156,26 @@ async function reclaimOldestDevelopmentDevice(shopId, userId, incomingDeviceId) 
   });
 
   if (!oldDevice) return;
-  await db.device.update({
-    where: { id: oldDevice.id },
-    data: { status: "removed", removedAt: new Date() },
+  const revokedAt = new Date();
+  await db.$transaction(async (tx) => {
+    await tx.device.update({
+      where: { id: oldDevice.id },
+      data: {
+        status: "revoked",
+        sessionVersion: { increment: 1 },
+        removedAt: revokedAt,
+        revokedAt,
+        revokeReason: "development_device_reclaimed",
+      },
+    });
+    await tx.session.updateMany({
+      where: {
+        shopId,
+        OR: [{ deviceRecordId: oldDevice.id }, { deviceId: oldDevice.deviceId }],
+        revokedAt: null,
+      },
+      data: { revokedAt, revokedReason: "DEVELOPMENT_DEVICE_RECLAIMED" },
+    });
   });
   await revokeDeviceLicense(shopId, oldDevice.deviceId, "development_device_reclaimed");
 }
