@@ -459,7 +459,7 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-7">
+      <section className="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} loading={loading || (kpi.label.includes("Expense") && expenseSummary.isLoading)} />
         ))}
