@@ -1,5 +1,6 @@
 import { apiRequest, getStoredRefreshToken, ApiClientError } from "@/lib/api/http";
 import type { AuthResponse, Shop, User } from "@/types/api";
+import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
 
 export interface LoginRequest {
   mobile?: string;
@@ -34,10 +35,11 @@ export interface VerifyEmailRequest {
   token: string;
 }
 
-export function login(data: LoginRequest) {
+export async function login(data: LoginRequest) {
+  await hydrateDeviceIdentity();
   return apiRequest<AuthResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, device: getDeviceMetadata() }),
     skipAuth: true,
     skipRefresh: true,
   });
@@ -49,19 +51,21 @@ export interface GoogleLoginRequest {
   shopId?: string;
 }
 
-export function googleLogin(data: GoogleLoginRequest) {
+export async function googleLogin(data: GoogleLoginRequest) {
+  await hydrateDeviceIdentity();
   return apiRequest<AuthResponse>("/auth/google", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, device: getDeviceMetadata() }),
     skipAuth: true,
     skipRefresh: true,
   });
 }
 
-export function register(data: RegisterRequest) {
+export async function register(data: RegisterRequest) {
+  await hydrateDeviceIdentity();
   return apiRequest<AuthResponse>("/auth/register", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, device: getDeviceMetadata() }),
     skipAuth: true,
     skipRefresh: true,
   });

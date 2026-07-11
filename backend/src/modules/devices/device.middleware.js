@@ -60,9 +60,12 @@ export async function assertRequestDevice(req) {
   }
   const device = await db.device.findUnique({ where: { shopId_deviceId: { shopId: req.shopId, deviceId } } });
   if (!device) {
+    if (env.NODE_ENV === "production") {
+      throw new AppError("Registered device not found for this session.", 401, "DEVICE_SESSION_REVOKED");
+    }
     return activateMissingRequestDevice(req, deviceId);
   }
-  if (device.status === "removed") {
+  if (["removed", "revoked"].includes(device.status)) {
     // In local development, the same shop is often opened in Chrome, Vite preview,
     // and an embedded browser at the same time. A removed dev device should be able
     // to rejoin automatically so multi-session testing does not deadlock with 403s.
@@ -83,6 +86,12 @@ export async function assertRequestDevice(req) {
     const err = new AppError("Device is not active", 403);
     err.code = "DEVICE_NOT_ACTIVE";
     throw err;
+  }
+  if (req.user?.deviceRecordId && req.user.deviceRecordId !== device.id) {
+    throw new AppError("Device context does not match this session.", 401, "DEVICE_SESSION_REVOKED");
+  }
+  if (req.user?.sessionVersion !== null && req.user?.sessionVersion !== undefined && req.user.sessionVersion !== device.sessionVersion) {
+    throw new AppError("This device session was revoked.", 401, "DEVICE_SESSION_REVOKED");
   }
   await assertDeviceHasActiveLoginSession(req.shopId, req.user, deviceId);
   return device;

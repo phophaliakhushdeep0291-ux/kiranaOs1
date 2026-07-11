@@ -56,12 +56,12 @@ export async function ensurePlansSeeded(client = db) {
   if (count < PLAN_CODES.length) await seedPlans(client);
 }
 
-export async function getCurrentSubscription(shopId) {
-  await ensurePlansSeeded();
-  const subscription = await db.subscription.findUnique({ where: { shopId } });
+export async function getCurrentSubscription(shopId, client = db) {
+  await ensurePlansSeeded(client);
+  const subscription = await client.subscription.findUnique({ where: { shopId } });
   if (!subscription) return fallbackSubscription(shopId);
   const normalized = normalizeSubscriptionDates(subscription);
-  const plan = await getPlanByCode(normalized.planCode);
+  const plan = await getPlanByCode(normalized.planCode, client);
   return {
     ...normalized,
     active: isSubscriptionActive(normalized),
@@ -71,10 +71,10 @@ export async function getCurrentSubscription(shopId) {
   };
 }
 
-export async function getEffectivePlan(shopId) {
-  const subscription = await getCurrentSubscription(shopId);
+export async function getEffectivePlan(shopId, client = db) {
+  const subscription = await getCurrentSubscription(shopId, client);
   const planCode = subscription.planCode || "starter";
-  const plan = await getPlanByCode(planCode);
+  const plan = await getPlanByCode(planCode, client);
   return {
     planCode,
     plan: serializePlan(plan),
@@ -338,8 +338,8 @@ export function isPlanAtLeast(planCode, minimumPlanCode) {
   return planAtLeast(planCode, minimumPlanCode);
 }
 
-export async function getPlanByCode(planCode) {
-  const plan = await db.plan.findUnique({ where: { code: planCode } });
+export async function getPlanByCode(planCode, client = db) {
+  const plan = await client.plan.findUnique({ where: { code: planCode } });
   if (plan) return plan;
   const cfg = getPlanConfig(planCode);
   return {

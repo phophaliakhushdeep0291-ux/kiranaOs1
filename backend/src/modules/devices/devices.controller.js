@@ -1,7 +1,10 @@
 import * as service from "./devices.service.js";
 
 export async function list(req, res, next) {
-  try { res.json({ success: true, data: await service.listDevices(req.shopId) }); }
+  try {
+    const currentDeviceId = req.headers["x-device-id"] ?? null;
+    res.json({ success: true, data: await service.getDeviceManagementSnapshot(req.shopId, currentDeviceId) });
+  }
   catch (err) { next(err); }
 }
 
@@ -20,13 +23,7 @@ export async function activate(req, res, next) {
 export async function logoutDevice(req, res, next) {
   try {
     const currentDeviceId = req.body.currentDeviceId ?? req.headers["x-device-id"] ?? null;
-    const data = req.body.deviceLimitToken
-      ? await service.logoutActiveDeviceWithChallenge({
-          deviceLimitToken: req.body.deviceLimitToken,
-          targetDeviceId: req.body.deviceId,
-          currentDeviceId,
-        }, req)
-      : await service.logoutActiveDeviceForUser(req.shopId, req.user, req.body.deviceId, currentDeviceId, req);
+    const data = await service.logoutActiveDeviceForUser(req.shopId, req.user, req.body.deviceId, currentDeviceId, req);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -46,8 +43,20 @@ export async function unblock(req, res, next) {
   catch (err) { next(err); }
 }
 
+export async function rename(req, res, next) {
+  try { res.json({ success: true, data: await service.renameDevice(req.shopId, req.params.deviceId, req.body.deviceName, req.user?.userId ?? req.user?.id, req) }); }
+  catch (err) { next(err); }
+}
+
+export async function current(req, res, next) {
+  try {
+    const deviceId = req.headers["x-device-id"] ?? req.user?.deviceId ?? null;
+    res.json({ success: true, data: await service.getCurrentDevice(req.shopId, deviceId) });
+  } catch (err) { next(err); }
+}
+
 export async function heartbeat(req, res, next) {
-  try { res.json({ success: true, data: await service.heartbeat(req.shopId, req.body.deviceId) }); }
+  try { res.json({ success: true, data: await service.heartbeat(req.shopId, req.headers["x-device-id"] ?? req.body.deviceId) }); }
   catch (err) { next(err); }
 }
 

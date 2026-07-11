@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { AUTH_SESSION_EXPIRED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type Shop, type User } from "@/lib/api/client";
+import { AUTH_SESSION_EXPIRED_EVENT, DEVICE_SESSION_REVOKED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type Shop, type User } from "@/lib/api/client";
 import { clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
 import { writeAuditLog } from "@/features/audit-logs/local-actions";
-import { activateDevice } from "@/features/devices/api";
+import { activateDevice, heartbeatDevice } from "@/features/devices/api";
 import { ensureCurrentDeviceRegistered, writeOfflineLicenseToken } from "@/features/devices/license";
 import { getOfflineScope } from "@/lib/offline/context";
 import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
+import { offlineDB } from "@/lib/offline/db";
 import { AuthContext } from "./auth-context";
 
 function persistAuth(data: AuthResponse) {
@@ -160,6 +161,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
     return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, [setLocation]);
+
+  useEffect(() => {
+    const handleDeviceRevoked = async () => {
+      authGenerationRef.current += 1;
+      const pendingCount = await offlineDB.getPendingCount().catch(() => 0);
+      try { window.sessionStorage.setItem("kirana:revoked-device-pending-count", String(pendingCount)); } catch { /* optional display hint */ }
+      clearAuthStorage();
+      setAccessToken(null);
+      setUser(null);
+      setShop(null);
+      setIsLoading(false);
+      setLocation("/device-removed");
+    };
+    window.addEventListener(DEVICE_SESSION_REVOKED_EVENT, handleDeviceRevoked);
+    return () => window.removeEventListener(DEVICE_SESSION_REVOKED_EVENT, handleDeviceRevoked);
+  }, [setLocation]);
+
+  useEffect(() => {
+    if (!accessToken || !user) return;
+    const sendHeartbeat = () => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      void heartbeatDevice().catch(() => undefined);
+    };
+    sendHeartbeat();
+    const timer = window.setInterval(sendHeartbeat, 5 * 60 * 1000);
+    window.addEventListener("online", sendHeartbeat);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("online", sendHeartbeat);
+    };
+  }, [accessToken, user]);
 
   const login = (token: string | undefined | null, refresh: string | undefined | null, userData: User, shopData?: Shop | null) => {
     if (!token || !refresh) throw new Error("Login response missing token or refresh token");

@@ -1,6 +1,6 @@
 import type { AuthResponse } from "@/types/api";
 import { clearAuthStorage, getAuthValue, saveAuthSession } from "@/lib/storage/auth-storage";
-import { getOfflineScope } from "@/lib/offline/context";
+import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
 
 export interface ApiErrorData {
   message?: string;
@@ -41,6 +41,7 @@ const readRateLimitCooldownByBucket = new Map<string, number>();
 let refreshPromise: Promise<AuthResponse> | null = null;
 
 export const AUTH_SESSION_EXPIRED_EVENT = "kirana:auth-session-expired";
+export const DEVICE_SESSION_REVOKED_EVENT = "kirana:device-session-revoked";
 
 export function setAuthTokenGetter(getter: () => string | null) {
   authTokenGetter = getter;
@@ -229,6 +230,11 @@ function notifyAuthSessionExpired() {
   window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
 }
 
+function notifyDeviceSessionRevoked(code: string) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(DEVICE_SESSION_REVOKED_EVENT, { detail: { code } }));
+}
+
 async function getSharedRefreshedAuth(refreshToken: string) {
   if (!refreshPromise) {
     refreshPromise = refreshAuthSession(refreshToken)
@@ -238,8 +244,10 @@ async function getSharedRefreshedAuth(refreshToken: string) {
       })
       .catch((error) => {
         if (isFinalRefreshFailure(error)) {
+          const code = error instanceof ApiClientError ? error.data.code : undefined;
           clearAuthStorage();
-          notifyAuthSessionExpired();
+          if (code === "DEVICE_SESSION_REVOKED" || code === "DEVICE_BLOCKED") notifyDeviceSessionRevoked(code);
+          else notifyAuthSessionExpired();
         }
         throw error;
       })
@@ -252,6 +260,7 @@ async function getSharedRefreshedAuth(refreshToken: string) {
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { ownerPin, skipAuth, skipRefresh, skipDevice, background, ...fetchOptions } = options;
+  if (!skipDevice) await hydrateDeviceIdentity();
   let token = getStoredAccessToken();
 
   if (!token && !skipAuth && !skipRefresh) {
@@ -280,7 +289,14 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   if (token && !skipAuth) headers.set("Authorization", `Bearer ${token}`);
   if (!skipDevice && !headers.has("x-device-id")) {
     try {
-      headers.set("x-device-id", getOfflineScope().device_id);
+      const device = getDeviceMetadata();
+      headers.set("x-device-id", device.deviceId);
+      headers.set("x-device-name", device.deviceName);
+      headers.set("x-device-platform", device.platform);
+      headers.set("x-device-type", device.deviceType);
+      headers.set("x-device-os", device.operatingSystem);
+      headers.set("x-device-browser", device.browser);
+      headers.set("x-app-version", device.appVersion);
     } catch {
       // Device ID is best-effort on non-browser/test environments.
     }
@@ -311,5 +327,13 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     }
   }
 
-  return parseResponse<T>(response);
+  try {
+    return await parseResponse<T>(response);
+  } catch (error) {
+    if (error instanceof ApiClientError && (error.data.code === "DEVICE_SESSION_REVOKED" || error.data.code === "DEVICE_BLOCKED")) {
+      clearAuthStorage();
+      notifyDeviceSessionRevoked(String(error.data.code));
+    }
+    throw error;
+  }
 }

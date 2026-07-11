@@ -2,6 +2,7 @@
 // uses LICENSE_SIGNING_SECRET, and rejects removed or blocked devices.
 // Backward compatibility note: Removed or blocked devices cannot receive active license.
 import db from "../../db.js";
+import bcrypt from "bcryptjs";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -9,39 +10,302 @@ import { getEffectivePlan } from "../subscription/subscription.service.js";
 import { issueDeviceLicense, refreshDeviceLicense, revokeDeviceLicense } from "./license.service.js";
 import jwt from "jsonwebtoken";
 
-const DEVICE_LIMIT_TOKEN_PURPOSE = "device_limit_management";
-const DEVICE_LIMIT_TOKEN_TTL = "10m";
+const DEVICE_LIMIT_TOKEN_PURPOSE = "DEVICE_REPLACEMENT";
+const DEVICE_LIMIT_TOKEN_TTL = "5m";
+const SLOT_OCCUPYING_STATUSES = ["active", "logged_out", "blocked"];
+const shopDeviceLocks = new Map();
 
 function isDevelopmentMultiDeviceOverrideEnabled() {
   return env.NODE_ENV === "development" && env.ENABLE_DEV_DEVICE_LIMIT_OVERRIDE && env.DEV_MAX_ACTIVE_DEVICES > 0;
 }
 
-function getRuntimeDeviceLimit(planMaxDevices, subscription = null) {
+export function getRuntimeDeviceLimit(planMaxDevices, subscription = null) {
   if (isDevelopmentMultiDeviceOverrideEnabled()) {
     return Math.max(Number(planMaxDevices) || 1, env.DEV_MAX_ACTIVE_DEVICES);
   }
   return Number(planMaxDevices) || 1;
 }
 
-export async function listDevices(shopId) {
-  return db.device.findMany({ where: { shopId }, orderBy: { createdAt: "asc" } });
+export function deviceStatusOccupiesSlot(status) {
+  return SLOT_OCCUPYING_STATUSES.includes(normalizeDeviceStatus(status));
+}
+
+function normalizeDeviceStatus(status) {
+  if (status === "removed") return "revoked";
+  return status || "active";
+}
+
+function normalizeDeviceMetadata(reqMeta = {}) {
+  const supplied = reqMeta.device && typeof reqMeta.device === "object" ? reqMeta.device : {};
+  const deviceId = String(supplied.deviceId ?? reqMeta.deviceId ?? "").trim();
+  return {
+    deviceId,
+    deviceName: cleanText(supplied.deviceName, 120) || inferDeviceName(reqMeta.userAgent),
+    deviceType: cleanText(supplied.deviceType, 24) || "desktop",
+    operatingSystem: cleanText(supplied.operatingSystem, 60),
+    browser: cleanText(supplied.browser, 60),
+    appVersion: cleanText(supplied.appVersion, 40),
+    platform: cleanText(supplied.platform, 50) || "web",
+    userAgent: cleanText(reqMeta.userAgent, 500),
+    ipAddress: cleanText(reqMeta.ipAddress, 120),
+  };
+}
+
+function cleanText(value, maxLength) {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, maxLength) : null;
+}
+
+async function acquireShopRegistrationLock(tx, shopId) {
+  if (/^postgres(?:ql)?:\/\//i.test(env.DATABASE_URL || "")) {
+    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", shopId);
+  }
+}
+
+async function withProcessShopLock(shopId, work) {
+  const previous = shopDeviceLocks.get(shopId) ?? Promise.resolve();
+  let release;
+  const current = new Promise((resolve) => { release = resolve; });
+  const tail = previous.then(() => current);
+  shopDeviceLocks.set(shopId, tail);
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+    if (shopDeviceLocks.get(shopId) === tail) shopDeviceLocks.delete(shopId);
+  }
+}
+
+/**
+ * Registers/reactivates the installation and creates its refresh session as one
+ * critical operation. The in-process lock protects SQLite/tests; PostgreSQL's
+ * advisory transaction lock protects concurrent registrations across servers.
+ */
+export async function createDeviceBoundLoginSession({ user, reqMeta, sessionData }) {
+  const metadata = normalizeDeviceMetadata(reqMeta);
+  if (!metadata.deviceId) {
+    const err = new AppError("A device id is required to sign in. Please reload the app and try again.", 400);
+    err.code = "DEVICE_ID_REQUIRED";
+    throw err;
+  }
+
+  const result = await withProcessShopLock(user.shopId, () => db.$transaction(async (tx) => {
+    await acquireShopRegistrationLock(tx, user.shopId);
+    const effective = await getEffectivePlan(user.shopId, tx);
+    const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
+    const existing = await tx.device.findUnique({
+      where: { shopId_deviceId: { shopId: user.shopId, deviceId: metadata.deviceId } },
+    });
+    const existingStatus = normalizeDeviceStatus(existing?.status);
+
+    if (existingStatus === "blocked") {
+      return { blocked: true };
+    }
+
+    const registeredDeviceCount = await tx.device.count({
+      where: { shopId: user.shopId, status: { in: SLOT_OCCUPYING_STATUSES } },
+    });
+    const needsSlot = !existing || existingStatus === "revoked";
+    if (needsSlot && registeredDeviceCount >= allowedMaxDevices) {
+      return {
+        limitReached: true,
+        registeredDeviceCount,
+        allowedMaxDevices,
+        planCode: effective.planCode,
+        metadata,
+      };
+    }
+
+    const now = new Date();
+    const device = existing
+      ? await tx.device.update({
+          where: { id: existing.id },
+          data: {
+            userId: user.id,
+            deviceName: metadata.deviceName ?? existing.deviceName,
+            platform: metadata.platform ?? existing.platform,
+            deviceType: metadata.deviceType ?? existing.deviceType,
+            operatingSystem: metadata.operatingSystem ?? existing.operatingSystem,
+            browser: metadata.browser ?? existing.browser,
+            userAgent: metadata.userAgent ?? existing.userAgent,
+            appVersion: metadata.appVersion ?? existing.appVersion,
+            lastIpAddress: metadata.ipAddress ?? existing.lastIpAddress,
+            status: "active",
+            activatedAt: existing.activatedAt ?? now,
+            lastActiveAt: now,
+            lastLoginAt: now,
+            lastSeenAt: now,
+            removedAt: null,
+            revokedAt: null,
+            revokedByUserId: null,
+            revokeReason: null,
+            ...(existingStatus === "revoked" ? { sessionVersion: { increment: 1 } } : {}),
+          },
+        })
+      : await tx.device.create({
+          data: {
+            shopId: user.shopId,
+            userId: user.id,
+            deviceId: metadata.deviceId,
+            deviceName: metadata.deviceName,
+            platform: metadata.platform,
+            deviceType: metadata.deviceType,
+            operatingSystem: metadata.operatingSystem,
+            browser: metadata.browser,
+            userAgent: metadata.userAgent,
+            appVersion: metadata.appVersion,
+            lastIpAddress: metadata.ipAddress,
+            status: "active",
+            activatedAt: now,
+            lastActiveAt: now,
+            lastLoginAt: now,
+            lastSeenAt: now,
+          },
+        });
+
+    const session = await tx.session.create({
+      data: {
+        ...sessionData,
+        userId: user.id,
+        shopId: user.shopId,
+        deviceId: metadata.deviceId,
+        deviceRecordId: device.id,
+        deviceSessionVersion: device.sessionVersion,
+        lastUsedAt: now,
+      },
+    });
+    return { device, session };
+  }));
+
+  if (result.blocked) {
+    throw new AppError("This device has been blocked by the shop owner.", 403, "DEVICE_BLOCKED");
+  }
+  if (result.limitReached) {
+    const challenge = await createReplacementChallenge(user, result.metadata);
+    const activeDevices = await listSafeDevices(user.shopId, { currentDeviceId: result.metadata.deviceId });
+    const message = `Your current plan allows only ${result.allowedMaxDevices} registered device${result.allowedMaxDevices === 1 ? "" : "s"}.`;
+    const err = new AppError(message, 403, "DEVICE_LIMIT_EXCEEDED");
+    err.publicData = {
+      deviceLimit: result.allowedMaxDevices,
+      registeredDeviceCount: result.registeredDeviceCount,
+      requiresDeviceReplacement: true,
+      activeDevices,
+      devices: activeDevices,
+      plan: { code: result.planCode, maxDevices: result.allowedMaxDevices, allowedMaxDevices: result.allowedMaxDevices },
+      deviceLimitToken: challenge.token,
+      replacementToken: challenge.token,
+    };
+    await auditDeviceAction({
+      shopId: user.shopId,
+      userId: user.id,
+      action: "DEVICE_LIMIT_LOGIN_REJECTED",
+      entityId: result.metadata.deviceId,
+      metadata: { registeredDeviceCount: result.registeredDeviceCount, deviceLimit: result.allowedMaxDevices },
+    });
+    throw err;
+  }
+
+  await auditDeviceAction({
+    shopId: user.shopId,
+    userId: user.id,
+    action: "DEVICE_LOGIN",
+    entityId: result.device.id,
+    metadata: { deviceId: result.device.deviceId, status: result.device.status },
+  });
+  return result;
+}
+
+async function createReplacementChallenge(user, metadata) {
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  const challenge = await db.deviceReplacementChallenge.create({
+    data: {
+      shopId: user.shopId,
+      userId: user.id,
+      newDeviceId: metadata.deviceId,
+      deviceJson: JSON.stringify(metadata),
+      expiresAt,
+    },
+  });
+  const token = jwt.sign(
+    { purpose: DEVICE_LIMIT_TOKEN_PURPOSE, challengeId: challenge.id, userId: user.id, shopId: user.shopId },
+    env.JWT_SECRET,
+    { expiresIn: DEVICE_LIMIT_TOKEN_TTL },
+  );
+  return { challenge, token };
+}
+
+export async function listDevices(shopId, { currentDeviceId = null } = {}) {
+  return listSafeDevices(shopId, { currentDeviceId });
+}
+
+export async function listSafeDevices(shopId, { currentDeviceId = null } = {}) {
+  const rows = await db.device.findMany({
+    where: { shopId },
+    include: { user: { select: { id: true, name: true, role: true } } },
+    orderBy: [{ lastSeenAt: "desc" }, { createdAt: "desc" }],
+  });
+  return rows.map((device) => serializeDevice(device, currentDeviceId));
+}
+
+export async function getDeviceManagementSnapshot(shopId, currentDeviceId = null) {
+  const effective = await getEffectivePlan(shopId);
+  const deviceLimit = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
+  const devices = await listSafeDevices(shopId, { currentDeviceId });
+  const devicesUsed = devices.filter((device) => deviceStatusOccupiesSlot(device.status)).length;
+  return {
+    plan: { code: effective.planCode, name: effective.plan?.name ?? effective.planCode, deviceLimit },
+    devicesUsed,
+    remainingSlots: Math.max(0, deviceLimit - devicesUsed),
+    overLimit: devicesUsed > deviceLimit,
+    devices,
+  };
+}
+
+function serializeDevice(device, currentDeviceId = null) {
+  const lastSeenAt = device.lastSeenAt ?? device.lastActiveAt ?? device.lastLoginAt ?? device.createdAt;
+  const age = Date.now() - new Date(lastSeenAt).getTime();
+  const activity = age <= 10 * 60 * 1000 ? "online" : age <= 24 * 60 * 60 * 1000 ? "recent" : "offline";
+  return {
+    id: device.id,
+    deviceId: device.deviceId,
+    deviceName: device.deviceName || inferDeviceName(device.userAgent),
+    deviceType: device.deviceType || "desktop",
+    operatingSystem: device.operatingSystem || null,
+    browser: device.browser || null,
+    platform: device.platform || null,
+    status: normalizeDeviceStatus(device.status),
+    isTrusted: Boolean(device.isTrusted),
+    registeredAt: device.createdAt,
+    lastLoginAt: device.lastLoginAt ?? device.activatedAt ?? null,
+    lastSeenAt,
+    lastSyncAt: device.lastSyncAt ?? null,
+    lastUserName: device.user?.name ?? null,
+    lastUserRole: device.user?.role ?? null,
+    isCurrentDevice: Boolean(currentDeviceId && device.deviceId === currentDeviceId),
+    current: Boolean(currentDeviceId && device.deviceId === currentDeviceId),
+    isOnline: activity === "online",
+    activity,
+  };
 }
 
 export async function listActiveDevices(shopId, { currentDeviceId = null } = {}) {
-  const rows = await getActiveDeviceSessionRows(shopId);
-  const deviceIds = [...new Set(rows.map((row) => row.deviceId).filter(Boolean))];
-  const devices = deviceIds.length
-    ? await db.device.findMany({ where: { shopId, deviceId: { in: deviceIds } } })
-    : [];
-  const deviceById = new Map(devices.map((device) => [device.deviceId, device]));
-  return serializeActiveDeviceRows(rows, currentDeviceId, deviceById);
+  const devices = await listSafeDevices(shopId, { currentDeviceId });
+  return devices
+    .filter((device) => deviceStatusOccupiesSlot(device.status))
+    .map((device) => ({
+      ...device,
+      userName: device.lastUserName,
+      userRole: device.lastUserRole,
+      current: device.isCurrentDevice,
+    }));
 }
 
 export async function assertDeviceCanOwnLoginSession(shopId, user, deviceId) {
   if (!shopId || !deviceId) return;
 
   const existing = await db.device.findUnique({ where: { shopId_deviceId: { shopId, deviceId } } });
-  if (existing?.status === "blocked") {
+  const existingStatus = normalizeDeviceStatus(existing?.status);
+  if (existingStatus === "blocked") {
     const err = new AppError("Device is blocked", 403);
     err.code = "DEVICE_BLOCKED";
     throw err;
@@ -50,18 +314,16 @@ export async function assertDeviceCanOwnLoginSession(shopId, user, deviceId) {
   // A manually removed device should not silently come back for staff in production.
   // Owner/admin can reactivate it, and any device can log in again if its old session
   // was merely logged out and the same browser device id is reused.
-  if (existing?.status === "removed" && env.NODE_ENV === "production" && !["owner", "admin"].includes(user?.role)) {
+  if (existingStatus === "revoked" && env.NODE_ENV === "production" && !["owner", "admin"].includes(user?.role)) {
     const err = new AppError("Removed device reactivation requires owner/admin approval", 403);
     err.code = "DEVICE_REMOVED_REACTIVATION_REQUIRES_OWNER";
     throw err;
   }
 
   const effective = await getEffectivePlan(shopId);
-  const activeSessionDeviceIds = await getActiveSessionDeviceIds(shopId);
-  activeSessionDeviceIds.delete(deviceId);
-
   const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
-  if (activeSessionDeviceIds.size >= allowedMaxDevices) {
+  const registeredDeviceCount = await db.device.count({ where: { shopId, status: { in: SLOT_OCCUPYING_STATUSES } } });
+  if ((!existing || existingStatus === "revoked") && registeredDeviceCount >= allowedMaxDevices) {
     const activeDevices = await listActiveDevices(shopId, { currentDeviceId: deviceId });
     const message = `Your plan allows only ${allowedMaxDevices} active devices. Logout from another device to continue.`;
     const err = new AppError(message, 403);
@@ -73,15 +335,9 @@ export async function assertDeviceCanOwnLoginSession(shopId, user, deviceId) {
         maxDevices: effective.limits.maxDevices,
         allowedMaxDevices,
       },
-      deviceLimitToken: createDeviceLimitToken({
-        shopId,
-        userId: user?.userId ?? user?.id ?? null,
-        role: user?.role ?? null,
-        currentDeviceId: deviceId,
-      }),
     };
     err.meta = {
-      activeCount: activeSessionDeviceIds.size,
+      activeCount: registeredDeviceCount,
       maxDevices: effective.limits.maxDevices,
       allowedMaxDevices,
       planCode: effective.planCode,
@@ -304,7 +560,7 @@ export async function activateDevice(shopId, user, input, req = null) {
     throw err;
   }
 
-  if (existing?.status === "removed" && env.NODE_ENV === "production" && !["owner", "admin"].includes(user?.role)) {
+  if (["removed", "revoked"].includes(normalizeDeviceStatus(existing?.status)) && env.NODE_ENV === "production" && !["owner", "admin"].includes(user?.role)) {
     const err = new AppError("Removed device reactivation requires owner/admin approval", 403);
     err.code = "DEVICE_REMOVED_REACTIVATION_REQUIRES_OWNER";
     throw err;
@@ -322,6 +578,10 @@ export async function activateDevice(shopId, user, input, req = null) {
           activatedAt: existing.activatedAt ?? now,
           lastActiveAt: now,
           removedAt: null,
+          revokedAt: null,
+          revokedByUserId: null,
+          revokeReason: null,
+          sessionVersion: { increment: 1 },
         },
       })
     : await db.device.create({
@@ -344,22 +604,185 @@ export async function activateDevice(shopId, user, input, req = null) {
   return withLicense(device, license);
 }
 
-export async function logoutActiveDeviceWithChallenge({ deviceLimitToken, targetDeviceId, currentDeviceId = null }, req = null) {
-  const payload = verifyDeviceLimitToken(deviceLimitToken);
-  if (currentDeviceId && payload.currentDeviceId && currentDeviceId !== payload.currentDeviceId) {
-    const err = new AppError("Device context changed. Please sign in again.", 409);
-    err.code = "DEVICE_LIMIT_CONTEXT_CHANGED";
-    throw err;
-  }
-  return revokeActiveDeviceSessions({
-    shopId: payload.shopId,
-    actorUserId: payload.userId,
-    actorRole: payload.role,
-    targetDeviceId,
-    currentDeviceId: payload.currentDeviceId,
-    req,
-    reason: "device_limit_login_replaced",
+export async function completeDeviceReplacement({ replacementToken, targetDeviceId, ownerPin, reqMeta, sessionData }) {
+  const payload = verifyReplacementToken(replacementToken);
+  const challenge = await db.deviceReplacementChallenge.findFirst({
+    where: {
+      id: payload.challengeId,
+      shopId: payload.shopId,
+      userId: payload.userId,
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+    },
   });
+  if (!challenge) {
+    throw new AppError("Device replacement session expired or was already used.", 401, "DEVICE_REPLACEMENT_TOKEN_EXPIRED");
+  }
+
+  const user = await db.user.findFirst({
+    where: { id: challenge.userId, shopId: challenge.shopId, disabledAt: null },
+    include: { shop: true },
+  });
+  if (!user || !["owner", "admin"].includes(user.role)) {
+    throw new AppError("Only the shop owner or an authorized administrator can replace devices.", 403, "DEVICE_ACCESS_DENIED");
+  }
+  if (!/^\d{4}$/.test(String(ownerPin || ""))) {
+    throw new AppError("Enter the 4-digit owner PIN to continue.", 403, "OWNER_VERIFICATION_REQUIRED");
+  }
+  const owner = await db.user.findFirst({
+    where: { shopId: user.shopId, role: "owner", disabledAt: null },
+    select: { pinHash: true },
+  });
+  const ownerVerified = Boolean(owner?.pinHash && await bcrypt.compare(String(ownerPin), owner.pinHash));
+  if (!ownerVerified) {
+    await auditDeviceAction({
+      shopId: user.shopId,
+      userId: user.id,
+      action: "DEVICE_OWNER_VERIFICATION_FAILED",
+      entityId: targetDeviceId,
+      metadata: { challengeId: challenge.id },
+    });
+    throw new AppError("Owner verification failed.", 403, "OWNER_VERIFICATION_FAILED");
+  }
+
+  const metadata = parseDeviceMetadata(challenge.deviceJson, challenge.newDeviceId, reqMeta);
+  const result = await withProcessShopLock(user.shopId, () => db.$transaction(async (tx) => {
+    await acquireShopRegistrationLock(tx, user.shopId);
+    const freshChallenge = await tx.deviceReplacementChallenge.findFirst({
+      where: { id: challenge.id, consumedAt: null, expiresAt: { gt: new Date() } },
+    });
+    if (!freshChallenge) return { challengeUsed: true };
+
+    const target = await tx.device.findFirst({
+      where: { shopId: user.shopId, OR: [{ id: targetDeviceId }, { deviceId: targetDeviceId }] },
+    });
+    if (!target || !deviceStatusOccupiesSlot(target.status)) return { targetUnavailable: true };
+    if (target.deviceId === metadata.deviceId) return { targetIsIncoming: true };
+
+    const effective = await getEffectivePlan(user.shopId, tx);
+    const deviceLimit = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
+    const registeredDeviceCount = await tx.device.count({
+      where: { shopId: user.shopId, status: { in: SLOT_OCCUPYING_STATUSES } },
+    });
+    if (registeredDeviceCount > deviceLimit) return { overLimit: true };
+
+    const now = new Date();
+    await tx.device.update({
+      where: { id: target.id },
+      data: {
+        status: "revoked",
+        sessionVersion: { increment: 1 },
+        revokedAt: now,
+        removedAt: now,
+        revokedByUserId: user.id,
+        revokeReason: "device_replaced_during_login",
+      },
+    });
+    await tx.session.updateMany({
+      where: { shopId: user.shopId, OR: [{ deviceRecordId: target.id }, { deviceId: target.deviceId }], revokedAt: null },
+      data: { revokedAt: now, revokedReason: "DEVICE_REPLACED" },
+    });
+    await tx.deviceLicense.updateMany({
+      where: { shopId: user.shopId, deviceId: target.deviceId, revokedAt: null },
+      data: { revokedAt: now },
+    });
+
+    const existingIncoming = await tx.device.findUnique({
+      where: { shopId_deviceId: { shopId: user.shopId, deviceId: metadata.deviceId } },
+    });
+    const incoming = existingIncoming
+      ? await tx.device.update({
+          where: { id: existingIncoming.id },
+          data: {
+            userId: user.id,
+            deviceName: metadata.deviceName,
+            platform: metadata.platform,
+            deviceType: metadata.deviceType,
+            operatingSystem: metadata.operatingSystem,
+            browser: metadata.browser,
+            userAgent: metadata.userAgent,
+            appVersion: metadata.appVersion,
+            lastIpAddress: metadata.ipAddress,
+            status: "active",
+            sessionVersion: { increment: 1 },
+            activatedAt: existingIncoming.activatedAt ?? now,
+            lastActiveAt: now,
+            lastLoginAt: now,
+            lastSeenAt: now,
+            removedAt: null,
+            revokedAt: null,
+            revokedByUserId: null,
+            revokeReason: null,
+          },
+        })
+      : await tx.device.create({
+          data: {
+            shopId: user.shopId,
+            userId: user.id,
+            deviceId: metadata.deviceId,
+            deviceName: metadata.deviceName,
+            platform: metadata.platform,
+            deviceType: metadata.deviceType,
+            operatingSystem: metadata.operatingSystem,
+            browser: metadata.browser,
+            userAgent: metadata.userAgent,
+            appVersion: metadata.appVersion,
+            lastIpAddress: metadata.ipAddress,
+            status: "active",
+            activatedAt: now,
+            lastActiveAt: now,
+            lastLoginAt: now,
+            lastSeenAt: now,
+          },
+        });
+
+    const postReplacementCount = await tx.device.count({
+      where: { shopId: user.shopId, status: { in: SLOT_OCCUPYING_STATUSES } },
+    });
+    if (postReplacementCount > deviceLimit) {
+      throw new AppError("The shop is still above its device limit. Remove another device first.", 409, "DEVICE_LIMIT_EXCEEDED");
+    }
+
+    const consumed = await tx.deviceReplacementChallenge.updateMany({
+      where: { id: challenge.id, consumedAt: null },
+      data: { consumedAt: now },
+    });
+    if (consumed.count !== 1) return { challengeUsed: true };
+    const session = await tx.session.create({
+      data: {
+        ...sessionData,
+        userId: user.id,
+        shopId: user.shopId,
+        deviceId: incoming.deviceId,
+        deviceRecordId: incoming.id,
+        deviceSessionVersion: incoming.sessionVersion,
+        lastUsedAt: now,
+      },
+    });
+    return { target, incoming, session };
+  }));
+
+  if (result.challengeUsed) throw new AppError("This replacement request was already used.", 409, "DEVICE_REPLACEMENT_ALREADY_USED");
+  if (result.targetUnavailable) throw new AppError("The selected device is no longer available for replacement.", 409, "DEVICE_NOT_FOUND");
+  if (result.targetIsIncoming) throw new AppError("Select a different registered device.", 400, "DEVICE_REPLACEMENT_TARGET_INVALID");
+  if (result.overLimit) throw new AppError("The shop is still above its device limit. Remove another device first.", 409, "DEVICE_LIMIT_EXCEEDED");
+
+  await auditDeviceAction({
+    shopId: user.shopId,
+    userId: user.id,
+    action: "DEVICE_REPLACED",
+    entityId: result.target.id,
+    metadata: { removedDeviceId: result.target.deviceId, newDeviceId: result.incoming.deviceId },
+  });
+  return { user, shop: user.shop, device: result.incoming, session: result.session, removedDeviceName: result.target.deviceName };
+}
+
+function parseDeviceMetadata(deviceJson, fallbackDeviceId, reqMeta) {
+  try {
+    return normalizeDeviceMetadata({ ...reqMeta, device: { ...JSON.parse(deviceJson || "{}"), deviceId: fallbackDeviceId } });
+  } catch {
+    return normalizeDeviceMetadata({ ...reqMeta, device: { deviceId: fallbackDeviceId } });
+  }
 }
 
 export async function logoutActiveDeviceForUser(shopId, user, targetDeviceId, currentDeviceId = null, req = null) {
@@ -417,7 +840,7 @@ async function revokeActiveDeviceSessions({ shopId, actorUserId, actorRole, targ
 
   await db.device.updateMany({
     where: { shopId, deviceId: targetDeviceId },
-    data: { lastActiveAt: revokedAt },
+    data: { status: "logged_out", lastActiveAt: revokedAt, lastSeenAt: revokedAt },
   });
 
   await auditDeviceAction({
@@ -444,8 +867,29 @@ async function revokeActiveDeviceSessions({ shopId, actorUserId, actorRole, targ
 
 export async function removeDevice(shopId, deviceId, userId = null, req = null) {
   const device = await findDevice(shopId, deviceId);
+  const currentDeviceId = cleanText(req?.headers?.["x-device-id"], 128);
+  if (currentDeviceId && currentDeviceId === device.deviceId) {
+    throw new AppError("Use Log out and remove this device for the device you are currently using.", 400, "CURRENT_DEVICE_REMOVE_REQUIRES_LOGOUT");
+  }
   const removedAt = new Date();
-  const updated = await db.device.update({ where: { id: device.id }, data: { status: "removed", removedAt } });
+  const updated = await db.$transaction(async (tx) => {
+    const revoked = await tx.device.update({
+      where: { id: device.id },
+      data: {
+        status: "revoked",
+        sessionVersion: { increment: 1 },
+        removedAt,
+        revokedAt: removedAt,
+        revokedByUserId: userId,
+        revokeReason: "owner_removed_device",
+      },
+    });
+    await tx.session.updateMany({
+      where: { shopId, OR: [{ deviceRecordId: device.id }, { deviceId: device.deviceId }], revokedAt: null },
+      data: { revokedAt: removedAt, revokedReason: "DEVICE_REMOVED" },
+    });
+    return revoked;
+  });
   await revokeDeviceLicense(shopId, device.deviceId, "device_removed");
   await auditDeviceAction({ shopId, userId, action: "DEVICE_REMOVED", entityId: device.id, metadata: { deviceId: device.deviceId }, req });
   return updated;
@@ -453,7 +897,18 @@ export async function removeDevice(shopId, deviceId, userId = null, req = null) 
 
 export async function blockDevice(shopId, deviceId, userId = null, req = null) {
   const device = await findDevice(shopId, deviceId);
-  const updated = await db.device.update({ where: { id: device.id }, data: { status: "blocked" } });
+  const now = new Date();
+  const updated = await db.$transaction(async (tx) => {
+    const blocked = await tx.device.update({
+      where: { id: device.id },
+      data: { status: "blocked", sessionVersion: { increment: 1 }, revokedByUserId: userId, revokeReason: "owner_blocked_device" },
+    });
+    await tx.session.updateMany({
+      where: { shopId, OR: [{ deviceRecordId: device.id }, { deviceId: device.deviceId }], revokedAt: null },
+      data: { revokedAt: now, revokedReason: "DEVICE_BLOCKED" },
+    });
+    return blocked;
+  });
   await revokeDeviceLicense(shopId, device.deviceId, "device_blocked");
   await auditDeviceAction({ shopId, userId, action: "DEVICE_BLOCKED", entityId: device.id, metadata: { deviceId: device.deviceId }, req });
   return updated;
@@ -462,14 +917,29 @@ export async function blockDevice(shopId, deviceId, userId = null, req = null) {
 export async function unblockDevice(shopId, deviceId, userId = null, req = null) {
   const device = await findDevice(shopId, deviceId);
   if (device.status !== "blocked") return device;
-  const updated = await db.device.update({ where: { id: device.id }, data: { status: "removed", removedAt: new Date() } });
-  await auditDeviceAction({ shopId, userId, action: "DEVICE_UNBLOCKED", entityId: device.id, metadata: { deviceId: device.deviceId, nextStatus: "removed" }, req });
+  const updated = await db.device.update({
+    where: { id: device.id },
+    data: { status: "revoked", sessionVersion: { increment: 1 }, revokedAt: new Date(), removedAt: new Date(), revokedByUserId: null, revokeReason: "device_unblocked_requires_login" },
+  });
+  await auditDeviceAction({ shopId, userId, action: "DEVICE_REACTIVATED", entityId: device.id, metadata: { deviceId: device.deviceId, nextStatus: "revoked" }, req });
   return updated;
+}
+
+export async function renameDevice(shopId, deviceId, deviceName, userId = null, req = null) {
+  const device = await findDevice(shopId, deviceId);
+  const updated = await db.device.update({ where: { id: device.id }, data: { deviceName: cleanText(deviceName, 120) } });
+  await auditDeviceAction({ shopId, userId, action: "DEVICE_RENAMED", entityId: device.id, metadata: { deviceId: device.deviceId }, req });
+  return serializeDevice(updated, req?.headers?.["x-device-id"] ?? null);
+}
+
+export async function getCurrentDevice(shopId, deviceId) {
+  const device = await findDevice(shopId, deviceId);
+  return serializeDevice(device, deviceId);
 }
 
 export async function heartbeat(shopId, deviceId) {
   const device = await findDevice(shopId, deviceId);
-  if (device.status === "removed") {
+  if (["removed", "revoked"].includes(device.status)) {
     const err = new AppError("Device has been removed", 403);
     err.code = "DEVICE_REMOVED";
     throw err;
@@ -484,7 +954,18 @@ export async function heartbeat(shopId, deviceId) {
     err.code = "DEVICE_NOT_ACTIVE";
     throw err;
   }
-  return db.device.update({ where: { id: device.id }, data: { lastActiveAt: new Date() } });
+  const now = new Date();
+  const updated = await db.device.update({ where: { id: device.id }, data: { lastActiveAt: now, lastSeenAt: now } });
+  return serializeDevice(updated, deviceId);
+}
+
+export async function markDeviceSynced(shopId, deviceId) {
+  if (!shopId || !deviceId) return;
+  const now = new Date();
+  await db.device.updateMany({
+    where: { shopId, deviceId, status: "active" },
+    data: { lastSyncAt: now, lastSeenAt: now, lastActiveAt: now },
+  });
 }
 
 export async function getDeviceLicense(shopId, deviceId) {
@@ -497,7 +978,7 @@ async function findDevice(shopId, deviceId) {
     err.code = "DEVICE_REQUIRED";
     throw err;
   }
-  const device = await db.device.findUnique({ where: { shopId_deviceId: { shopId, deviceId } } });
+  const device = await db.device.findFirst({ where: { shopId, OR: [{ id: deviceId }, { deviceId }] } });
   if (!device) {
     const err = new AppError("Device not found", 404);
     err.code = "DEVICE_NOT_FOUND";
@@ -518,30 +999,14 @@ function auditDeviceAction({ shopId, userId, action, entityId, metadata, req }) 
   return createAuditLog({ shopId, userId, action, entityType: "Device", entityId, metadata, req });
 }
 
-function createDeviceLimitToken({ shopId, userId, role, currentDeviceId }) {
-  return jwt.sign(
-    {
-      purpose: DEVICE_LIMIT_TOKEN_PURPOSE,
-      shopId,
-      userId,
-      role,
-      currentDeviceId,
-    },
-    env.JWT_SECRET,
-    { expiresIn: DEVICE_LIMIT_TOKEN_TTL }
-  );
-}
-
-function verifyDeviceLimitToken(token) {
+function verifyReplacementToken(token) {
   try {
     const payload = jwt.verify(token, env.JWT_SECRET);
-    if (payload?.purpose !== DEVICE_LIMIT_TOKEN_PURPOSE || !payload.shopId || !payload.userId) {
+    if (payload?.purpose !== DEVICE_LIMIT_TOKEN_PURPOSE || !payload.shopId || !payload.userId || !payload.challengeId) {
       throw new Error("invalid purpose");
     }
     return payload;
   } catch {
-    const err = new AppError("Device management session expired. Please sign in again.", 401);
-    err.code = "DEVICE_LIMIT_TOKEN_INVALID";
-    throw err;
+    throw new AppError("Device replacement session expired. Please sign in again.", 401, "DEVICE_REPLACEMENT_TOKEN_EXPIRED");
   }
 }

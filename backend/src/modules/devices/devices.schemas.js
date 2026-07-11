@@ -8,7 +8,7 @@ export const activateDeviceSchema = z.object({
 });
 
 export const heartbeatSchema = z.object({
-  deviceId: z.string().min(3).max(128),
+  deviceId: z.string().min(3).max(128).optional(),
 });
 
 export const logoutDeviceSchema = z.object({
@@ -19,4 +19,8 @@ export const logoutDeviceSchema = z.object({
 
 export const licenseQuerySchema = z.object({
   deviceId: z.string().min(3).max(128).optional(),
+});
+
+export const renameDeviceSchema = z.object({
+  deviceName: z.string().trim().min(1).max(120),
 });

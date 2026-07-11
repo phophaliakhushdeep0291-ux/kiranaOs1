@@ -6,7 +6,7 @@ import { signToken } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
-import { assertDeviceCanOwnLoginSession } from "../devices/devices.service.js";
+import { completeDeviceReplacement, createDeviceBoundLoginSession } from "../devices/devices.service.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/authEmail.js";
 import { verifyGoogleIdToken } from "./google.service.js";
 
@@ -201,7 +201,7 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
       revokedAt: null,
       expiresAt: { gt: new Date() },
     },
-    include: { user: { include: { shop: true } } },
+    include: { user: { include: { shop: true } }, device: true },
   });
 
   if (!session) throw new AppError("Invalid or expired refresh token", 401);
@@ -212,15 +212,28 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
     throw err;
   }
 
+  if (session.device) {
+    if (["revoked", "removed"].includes(session.device.status)) {
+      await revokeSessionFamily(session, "DEVICE_REVOKED");
+      throw new AppError("This device was removed from the shop.", 401, "DEVICE_SESSION_REVOKED");
+    }
+    if (session.device.status === "blocked") {
+      await revokeSessionFamily(session, "DEVICE_BLOCKED");
+      throw new AppError("This device has been blocked by the shop owner.", 403, "DEVICE_BLOCKED");
+    }
+    if (session.deviceSessionVersion !== null && session.deviceSessionVersion !== session.device.sessionVersion) {
+      await revokeSessionFamily(session, "DEVICE_SESSION_VERSION_CHANGED");
+      throw new AppError("This device session is no longer valid.", 401, "DEVICE_SESSION_REVOKED");
+    }
+  }
+
   const ok = await bcrypt.compare(parsed.secret, session.refreshTokenHash);
   if (!ok) {
     // A refresh token for this session id was presented but the secret no longer
     // matches. That usually means a rotated refresh token was reused. Revoke the
     // session to avoid silently allowing token replay races.
-    await revokeSession(session.id, "REFRESH_TOKEN_REUSE_DETECTED");
-    const err = new AppError("Refresh token reuse detected", 401);
-    err.code = "REFRESH_TOKEN_REUSE_DETECTED";
-    throw err;
+    await revokeSessionFamily(session, "REFRESH_TOKEN_REUSED");
+    throw new AppError("Refresh token reuse detected", 401, "REFRESH_TOKEN_REUSED");
   }
 
   const nextSecret = createRefreshSecret();
@@ -233,7 +246,7 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
       err.code = "SESSION_DEVICE_MISMATCH";
       throw err;
     }
-    await assertDeviceCanOwnLoginSession(session.shopId, session.user, nextDeviceId);
+    throw new AppError("Legacy unbound sessions cannot move to another device. Please sign in again.", 401, "DEVICE_SESSION_REAUTH_REQUIRED");
   }
 
   await db.session.update({
@@ -244,15 +257,11 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
       userAgent: reqMeta.userAgent ?? session.userAgent,
       ipAddress: reqMeta.ipAddress ?? session.ipAddress,
       expiresAt: refreshExpiryDate(),
+      lastUsedAt: new Date(),
     },
   });
 
-  const accessToken = signToken({
-    userId: session.user.id,
-    shopId: session.shopId,
-    role: session.user.role,
-    sessionId: session.id,
-  });
+  const accessToken = signDeviceAccessToken(session.user, session, session.device);
 
   return {
     accessToken,
@@ -296,7 +305,35 @@ export async function logout(refreshToken, user = null) {
         where: { id: session.id, revokedAt: null },
         data: { revokedAt, revokedReason: "LOGOUT" },
       });
+  if (session.deviceId) {
+    await db.device.updateMany({
+      where: { shopId: session.shopId, deviceId: session.deviceId, status: "active" },
+      data: { status: "logged_out", lastActiveAt: revokedAt, lastSeenAt: revokedAt },
+    });
+  }
   return { success: true, message: "Logged out", revokedSessions: result.count };
+}
+
+export async function replaceDeviceDuringLogin({ replacementToken, targetDeviceId, ownerPin }, reqMeta = {}) {
+  const refreshSecret = createRefreshSecret();
+  const refreshTokenHash = await bcrypt.hash(refreshSecret, 10);
+  const tokenFamily = crypto.randomUUID();
+  const result = await completeDeviceReplacement({
+    replacementToken,
+    targetDeviceId,
+    ownerPin,
+    reqMeta,
+    sessionData: { refreshTokenHash, tokenFamily, userAgent: reqMeta.userAgent, ipAddress: reqMeta.ipAddress, expiresAt: refreshExpiryDate() },
+  });
+  const accessToken = signDeviceAccessToken(result.user, result.session, result.device);
+  return {
+    accessToken,
+    token: accessToken,
+    refreshToken: formatRefreshToken(result.session.id, refreshSecret),
+    shop: result.shop,
+    user: sanitizeUser(result.user),
+    replacement: { removedDeviceName: result.removedDeviceName, registeredDeviceName: result.device.deviceName },
+  };
 }
 
 export async function getMe(userId, shopId) {
@@ -457,24 +494,24 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
   if (!deviceId && env.NODE_ENV === "production") {
     throw new AppError("A device id is required to sign in. Please reload the app and try again.", 400, "DEVICE_ID_REQUIRED");
   }
-  if (deviceId) {
-    await assertDeviceCanOwnLoginSession(user.shopId, user, deviceId);
-  }
-
   const refreshSecret = createRefreshSecret();
   const refreshTokenHash = await bcrypt.hash(refreshSecret, 10);
-  const session = await db.session.create({
-    data: {
-      userId: user.id,
-      shopId: user.shopId,
-      deviceId,
-      refreshTokenHash,
-      userAgent: reqMeta.userAgent,
-      ipAddress: reqMeta.ipAddress,
-      expiresAt: refreshExpiryDate(),
-    },
-  });
-  const accessToken = signToken({ userId: user.id, shopId: user.shopId, role: user.role, sessionId: session.id });
+  const tokenFamily = crypto.randomUUID();
+  const sessionData = {
+    refreshTokenHash,
+    tokenFamily,
+    userAgent: reqMeta.userAgent,
+    ipAddress: reqMeta.ipAddress,
+    expiresAt: refreshExpiryDate(),
+  };
+  const bound = deviceId
+    ? await createDeviceBoundLoginSession({ user, reqMeta, sessionData })
+    : {
+        device: null,
+        session: await db.session.create({ data: { ...sessionData, userId: user.id, shopId: user.shopId } }),
+      };
+  const { device, session } = bound;
+  const accessToken = signDeviceAccessToken(user, session, device);
 
   return {
     accessToken,
@@ -483,6 +520,19 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
     shop,
     user: sanitizeUser(user),
   };
+}
+
+function signDeviceAccessToken(user, session, device) {
+  return signToken({
+    userId: user.id,
+    shopId: user.shopId,
+    role: user.role,
+    sessionId: session.id,
+    deviceRecordId: device?.id ?? session.deviceRecordId ?? null,
+    deviceId: device?.deviceId ?? session.deviceId ?? null,
+    sessionVersion: device?.sessionVersion ?? session.deviceSessionVersion ?? null,
+    tokenType: "ACCESS",
+  });
 }
 
 function normalizeDeviceId(deviceId) {
@@ -600,6 +650,13 @@ async function revokeSession(sessionId, reason) {
     where: { id: sessionId, revokedAt: null },
     data: { revokedAt: new Date(), revokedReason: reason },
   });
+}
+
+async function revokeSessionFamily(session, reason) {
+  const where = session.tokenFamily
+    ? { shopId: session.shopId, tokenFamily: session.tokenFamily, revokedAt: null }
+    : { id: session.id, revokedAt: null };
+  await db.session.updateMany({ where, data: { revokedAt: new Date(), revokedReason: reason } });
 }
 
 function parseRefreshToken(refreshToken) {

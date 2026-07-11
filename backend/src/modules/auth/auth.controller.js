@@ -1,15 +1,26 @@
 import * as authService from "./auth.service.js";
 
 function requestMeta(req) {
+  const bodyDevice = req.body?.device && typeof req.body.device === "object" ? req.body.device : {};
   return {
     userAgent: req.get("user-agent") || null,
     ipAddress: req.ip || req.socket?.remoteAddress || null,
     deviceId: getRequestDeviceId(req),
+    device: {
+      ...bodyDevice,
+      deviceId: bodyDevice.deviceId || getRequestDeviceId(req),
+      deviceName: bodyDevice.deviceName || req.get("x-device-name") || undefined,
+      deviceType: bodyDevice.deviceType || req.get("x-device-type") || undefined,
+      operatingSystem: bodyDevice.operatingSystem || req.get("x-device-os") || undefined,
+      browser: bodyDevice.browser || req.get("x-device-browser") || undefined,
+      platform: bodyDevice.platform || req.get("x-device-platform") || undefined,
+      appVersion: bodyDevice.appVersion || req.get("x-app-version") || undefined,
+    },
   };
 }
 
 function getRequestDeviceId(req) {
-  const raw = req.get("x-device-id") || req.body?.deviceId || req.query?.deviceId || null;
+  const raw = req.get("x-device-id") || req.body?.device?.deviceId || req.body?.deviceId || req.query?.deviceId || null;
   return typeof raw === "string" && raw.trim() ? raw.trim() : null;
 }
 
@@ -55,6 +66,11 @@ export async function refresh(req, res, next) {
 
 export async function logout(req, res, next) {
   try { res.json({ success: true, data: await authService.logout(req.body.refreshToken, req.user ?? null) }); }
+  catch (err) { next(err); }
+}
+
+export async function completeDeviceReplacement(req, res, next) {
+  try { res.json({ success: true, data: await authService.replaceDeviceDuringLogin(req.body, requestMeta(req)) }); }
   catch (err) { next(err); }
 }
 

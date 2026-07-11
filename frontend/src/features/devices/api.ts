@@ -12,6 +12,26 @@ export interface DeviceDto {
   last_active_at?: string;
   lastActiveAt?: string;
   sync_status?: string;
+  deviceType?: string | null;
+  platform?: string | null;
+  operatingSystem?: string | null;
+  browser?: string | null;
+  registeredAt?: string;
+  lastLoginAt?: string | null;
+  lastSeenAt?: string | null;
+  lastSyncAt?: string | null;
+  lastUserName?: string | null;
+  isCurrentDevice?: boolean;
+  isOnline?: boolean;
+  activity?: "online" | "recent" | "offline";
+}
+
+export interface DeviceManagementSnapshot {
+  plan: { code: string; name?: string; deviceLimit: number };
+  devicesUsed: number;
+  remainingSlots: number;
+  overLimit: boolean;
+  devices: DeviceDto[];
 }
 
 export interface ActiveDeviceDto {
@@ -37,7 +57,7 @@ function platformName() {
 }
 
 export function listDevices() {
-  return apiRequest<{ devices: DeviceDto[]; license?: OfflineLicenseToken }>("/devices");
+  return apiRequest<DeviceManagementSnapshot>("/devices");
 }
 
 export function listActiveDevices(currentDeviceId = getOfflineScope().device_id) {
@@ -57,16 +77,23 @@ export function activateDevice(deviceName: string, deviceId = getOfflineScope().
   });
 }
 
-export function logoutDevice(deviceId: string, options: { deviceLimitToken?: string; currentDeviceId?: string } = {}) {
+export function logoutDevice(deviceId: string, ownerPin: string, currentDeviceId = getOfflineScope().device_id) {
   return apiRequest<{ success: boolean; activeDevices?: ActiveDeviceDto[]; revokedSessions?: number }>("/devices/logout-device", {
     method: "POST",
     body: JSON.stringify({
       deviceId,
-      currentDeviceId: options.currentDeviceId ?? getOfflineScope().device_id,
-      deviceLimitToken: options.deviceLimitToken,
+      currentDeviceId,
     }),
-    skipAuth: Boolean(options.deviceLimitToken),
-    skipRefresh: Boolean(options.deviceLimitToken),
+    ownerPin,
+  });
+}
+
+export function completeDeviceReplacement(input: { replacementToken: string; targetDeviceId: string; ownerPin: string }) {
+  return apiRequest<import("@/types/api").AuthResponse>("/auth/device-replacement/complete", {
+    method: "POST",
+    body: JSON.stringify(input),
+    skipAuth: true,
+    skipRefresh: true,
   });
 }
 
@@ -75,6 +102,25 @@ export function removeDevice(deviceId: string, ownerPin: string) {
     method: "DELETE",
     ownerPin,
   });
+}
+
+export function renameDevice(deviceId: string, deviceName: string) {
+  return apiRequest<DeviceDto>(`/devices/${encodeURIComponent(deviceId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ deviceName }),
+  });
+}
+
+export function blockDevice(deviceId: string, ownerPin: string) {
+  return apiRequest<DeviceDto>(`/devices/${encodeURIComponent(deviceId)}/block`, { method: "POST", body: "{}", ownerPin });
+}
+
+export function reactivateDevice(deviceId: string, ownerPin: string) {
+  return apiRequest<DeviceDto>(`/devices/${encodeURIComponent(deviceId)}/reactivate`, { method: "POST", body: "{}", ownerPin });
+}
+
+export function getCurrentDevice() {
+  return apiRequest<DeviceDto>("/devices/current");
 }
 
 export function getOfflineLicense(deviceId = getOfflineScope().device_id) {

@@ -39,6 +39,16 @@ const optionalIndianMobile = z.preprocess((value) => {
   return normalized === "" ? undefined : normalized;
 }, z.string().regex(/^[6-9]\d{9}$/, "Valid Indian mobile number required").optional());
 
+const deviceMetadataSchema = z.object({
+  deviceId: z.string().min(3).max(128),
+  deviceName: z.string().trim().min(1).max(120).optional(),
+  deviceType: z.enum(["desktop", "laptop", "mobile", "tablet"]).optional(),
+  operatingSystem: z.string().trim().max(60).optional(),
+  browser: z.string().trim().max(60).optional(),
+  platform: z.string().trim().max(50).optional(),
+  appVersion: z.string().trim().max(40).optional(),
+}).strict();
+
 export const registerSchema = z.object({
   shopName:  trimmedString(2),
   ownerName: trimmedString(2),
@@ -58,6 +68,7 @@ export const loginSchema = z.object({
   identifier: optionalTrimmedString,
   password:   z.string(),
   shopId:     z.string().optional(),
+  device:     deviceMetadataSchema.optional(),
 }).refine((value) => value.mobile || value.email || value.identifier, {
   message: "Mobile number or email is required",
   path: ["identifier"],
@@ -66,7 +77,15 @@ export const loginSchema = z.object({
 export const googleLoginSchema = z.object({
   credential: z.string().min(20).max(16_384), // GIS ID token (JWT), bounded before decode/verification.
   shopId: z.string().min(1).optional(),
+  device: deviceMetadataSchema.optional(),
 });
+
+export const deviceReplacementSchema = z.object({
+  replacementToken: z.string().min(20).max(4096),
+  targetDeviceId: z.string().min(1).max(128),
+  ownerPin: z.string().regex(/^\d{4}$/, "Owner PIN must be exactly 4 digits"),
+  device: deviceMetadataSchema.optional(),
+}).strict();
 
 export const verifyEmailSchema = z.object({
   token: z.string().min(20),

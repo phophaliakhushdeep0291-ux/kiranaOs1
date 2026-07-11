@@ -49,13 +49,42 @@ export async function requireAuth(req, _res, next) {
           revokedAt: null,
           expiresAt: { gt: new Date() },
         },
-        select: { id: true, deviceId: true },
+        include: { device: true },
       });
 
       if (!session) {
         const err = new AppError("Login session is no longer active", 401);
         err.code = "SESSION_INACTIVE";
         throw err;
+      }
+
+      if (session.device) {
+        const status = session.device.status === "removed" ? "revoked" : session.device.status;
+        if (status === "revoked") {
+          throw new AppError("This device was removed from the shop.", 401, "DEVICE_SESSION_REVOKED");
+        }
+        if (status === "blocked") {
+          throw new AppError("This device has been blocked by the shop owner.", 403, "DEVICE_BLOCKED");
+        }
+        if (status !== "active") {
+          throw new AppError("This device is not signed in.", 401, "DEVICE_SESSION_REVOKED");
+        }
+        if (payload.deviceRecordId && payload.deviceRecordId !== session.device.id) {
+          throw new AppError("This device session is no longer valid.", 401, "DEVICE_SESSION_REVOKED");
+        }
+        if (payload.deviceId && payload.deviceId !== session.device.deviceId) {
+          throw new AppError("This access token belongs to another device.", 401, "DEVICE_SESSION_REVOKED");
+        }
+        const tokenVersion = payload.sessionVersion ?? session.deviceSessionVersion;
+        if (tokenVersion !== null && tokenVersion !== undefined && tokenVersion !== session.device.sessionVersion) {
+          throw new AppError("This device session was revoked.", 401, "DEVICE_SESSION_REVOKED");
+        }
+        const requestDeviceId = normalizeHeader(req.headers["x-device-id"]);
+        if (requestDeviceId && requestDeviceId !== session.device.deviceId) {
+          throw new AppError("Device context does not match this session.", 401, "DEVICE_SESSION_REVOKED");
+        }
+      } else if (payload.deviceRecordId && env.NODE_ENV === "production") {
+        throw new AppError("Registered device not found for this session.", 401, "DEVICE_SESSION_REVOKED");
       }
     }
 
@@ -69,12 +98,19 @@ export async function requireAuth(req, _res, next) {
       role: user.role,
       sessionId: session?.id ?? payload.sessionId ?? payload.sid ?? null,
       deviceId: session?.deviceId ?? null,
+      deviceRecordId: session?.deviceRecordId ?? payload.deviceRecordId ?? null,
+      sessionVersion: session?.device?.sessionVersion ?? payload.sessionVersion ?? null,
     };
     next();
   } catch (error) {
     if (error instanceof AppError) return next(error);
     next(new AppError("Invalid or expired token", 401));
   }
+}
+
+function normalizeHeader(value) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
 }
 
 /**

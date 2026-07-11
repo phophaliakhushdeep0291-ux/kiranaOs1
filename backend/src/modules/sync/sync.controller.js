@@ -2,6 +2,7 @@ import { env } from "../../config/env.js";
 import * as svc from "./sync.service.js";
 import { incrementMetric } from "../../lib/metrics.js";
 import { getEffectivePlan, isSubscriptionActive } from "../subscription/subscription.service.js";
+import { markDeviceSynced } from "../devices/devices.service.js";
 
 // ── Sync logger ───────────────────────────────────────────────────────────────
 // Follows the same pattern as the global requestLogger in security.js:
@@ -98,6 +99,7 @@ export async function pull(req, res, next) {
     // Legacy contract kept for old tests/clients: pullSince(req.shopId, since, { cursor, limit })
     // Role drives field-level redaction so a cashier device never receives cost/profit data.
     const data = await svc.pullSince(req.shopId, since, { cursor, limit, cursors, role: req.user?.role });
+    await markDeviceSynced(req.shopId, req.device?.deviceId);
     incrementMetric("sync_pull_total", { status: "success" });
 
     if (shouldSyncLog()) {
@@ -138,6 +140,7 @@ export async function push(req, res, next) {
   const batchSize = (req.body?.events ?? []).length;
   try {
     const data = await svc.pushOfflineActions(req.shopId, req.body.events ?? [], { ...req.user, deviceId: req.device?.deviceId ?? null });
+    await markDeviceSynced(req.shopId, req.device?.deviceId);
     incrementMetric("sync_push_total", { status: "success" });
 
     if (shouldSyncLog()) {

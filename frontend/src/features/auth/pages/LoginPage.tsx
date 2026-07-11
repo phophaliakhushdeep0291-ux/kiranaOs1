@@ -15,9 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
-import { logoutDevice, type ActiveDeviceDto } from "@/features/devices/api";
-import { getOfflineScope } from "@/lib/offline/context";
-import { ChevronLeft, ChevronRight, Laptop, Loader2, LockKeyhole, LogOut, Store } from "lucide-react";
+import { completeDeviceReplacement, type ActiveDeviceDto } from "@/features/devices/api";
+import { ChevronLeft, ChevronRight, Laptop, Loader2, LockKeyhole, Store } from "lucide-react";
 
 const schema = z.object({
   identifier: z.string().min(3, "Enter your mobile number or email"),
@@ -57,6 +56,8 @@ export default function Login() {
   const [loginShopId, setLoginShopId] = useState<string | null>(null);
   const [deviceLimit, setDeviceLimit] = useState<DeviceLimitState | null>(null);
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
+  const [selectedReplacementDeviceId, setSelectedReplacementDeviceId] = useState<string | null>(null);
+  const [replacementOwnerPin, setReplacementOwnerPin] = useState("");
   // When set, the pending sign-in is Google-based: shop selection and device-limit
   // retries must replay the Google credential instead of the password form.
   const [googleCredential, setGoogleCredential] = useState<string | null>(null);
@@ -100,6 +101,8 @@ export default function Login() {
         deviceLimitToken: token,
         plan: typeof err.data.plan === "object" && err.data.plan ? err.data.plan as DeviceLimitState["plan"] : undefined,
       });
+      setSelectedReplacementDeviceId(null);
+      setReplacementOwnerPin("");
       setServerError(null);
       return;
     }
@@ -152,21 +155,6 @@ export default function Login() {
     loginMutation.mutate({ data: { identifier: values.identifier, password: values.password } });
   };
 
-  const retryLogin = () => {
-    if (googleCredential) {
-      googleMutation.mutate({ credential: googleCredential, ...(loginShopId ? { shopId: loginShopId } : {}) });
-      return;
-    }
-    const values = form.getValues();
-    loginMutation.mutate({
-      data: {
-        identifier: values.identifier,
-        password: values.password,
-        ...(loginShopId ? { shopId: loginShopId } : {}),
-      },
-    });
-  };
-
   const selectShop = (shopId: string) => {
     setLoginShopId(shopId);
     setServerError(null);
@@ -184,28 +172,35 @@ export default function Login() {
     setDeviceLimit(null);
     setServerError(null);
     setGoogleCredential(null);
+    setSelectedReplacementDeviceId(null);
+    setReplacementOwnerPin("");
   };
 
-  const logoutSelectedDevice = async (deviceId: string) => {
+  const replaceSelectedDevice = async () => {
     if (!deviceLimit?.deviceLimitToken) {
       setServerError("Device management session expired. Please sign in again.");
       setDeviceLimit(null);
       return;
     }
-    setRevokingDeviceId(deviceId);
+    if (!selectedReplacementDeviceId) {
+      setServerError("Select one registered device to replace.");
+      return;
+    }
+    if (!/^\d{4}$/.test(replacementOwnerPin)) {
+      setServerError("Enter the 4-digit owner PIN to continue.");
+      return;
+    }
+    setRevokingDeviceId(selectedReplacementDeviceId);
     setServerError(null);
     try {
-      const currentDeviceId = getOfflineScope().device_id;
-      const result = await logoutDevice(deviceId, {
-        deviceLimitToken: deviceLimit.deviceLimitToken,
-        currentDeviceId,
+      const result = await completeDeviceReplacement({
+        replacementToken: deviceLimit.deviceLimitToken,
+        targetDeviceId: selectedReplacementDeviceId,
+        ownerPin: replacementOwnerPin,
       });
-      setDeviceLimit((state) => state
-        ? { ...state, activeDevices: result.activeDevices ?? state.activeDevices.filter((device) => device.deviceId !== deviceId) }
-        : state);
-      retryLogin();
+      handleAuthSuccess(result);
     } catch (error) {
-      const msg = error instanceof ApiClientError ? error.message : "Could not logout that device";
+      const msg = error instanceof ApiClientError ? error.message : "Could not replace that device";
       setServerError(msg);
     } finally {
       setRevokingDeviceId(null);
@@ -308,7 +303,13 @@ export default function Login() {
 
               <div className="space-y-2">
                 {deviceLimit.activeDevices.map((device) => (
-                  <div key={device.deviceId} className="flex items-center gap-3 rounded-lg border bg-card p-3">
+                  <button
+                    key={device.deviceId}
+                    type="button"
+                    className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${selectedReplacementDeviceId === device.deviceId ? "border-primary bg-primary/5 ring-1 ring-primary" : "bg-card hover:border-primary/50"}`}
+                    onClick={() => setSelectedReplacementDeviceId(device.deviceId)}
+                    disabled={revokingDeviceId !== null || device.current}
+                  >
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <Laptop size={18} />
                     </div>
@@ -318,19 +319,26 @@ export default function Login() {
                         {device.userName || "Shop user"}{device.lastSeenAt ? ` - last used ${new Date(device.lastSeenAt).toLocaleString()}` : ""}
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0"
-                      onClick={() => void logoutSelectedDevice(device.deviceId)}
-                      disabled={revokingDeviceId !== null || device.current}
-                    >
-                      {revokingDeviceId === device.deviceId ? <Loader2 size={15} className="animate-spin" /> : <LogOut size={15} />}
-                      <span className="ml-1 hidden sm:inline">Logout</span>
-                    </Button>
-                  </div>
+                    <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border ${selectedReplacementDeviceId === device.deviceId ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
+                      {selectedReplacementDeviceId === device.deviceId ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
+                    </span>
+                  </button>
                 ))}
+              </div>
+
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                <Label htmlFor="replacement-owner-pin">Owner PIN</Label>
+                <Input
+                  id="replacement-owner-pin"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  autoComplete="one-time-code"
+                  value={replacementOwnerPin}
+                  onChange={(event) => setReplacementOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="4-digit PIN"
+                />
+                <p className="text-xs text-muted-foreground">Removing a device immediately revokes its sessions. Unsynced local records on that device are preserved for owner-approved recovery.</p>
               </div>
 
               {serverError && (
@@ -343,8 +351,8 @@ export default function Login() {
                 <Button type="button" variant="outline" onClick={backToSignIn}>
                   Back to sign in
                 </Button>
-                <Button type="button" onClick={retryLogin} disabled={authPending || revokingDeviceId !== null}>
-                  {authPending ? <><Loader2 size={16} className="mr-2 animate-spin" />Continuing...</> : "Continue login"}
+                <Button type="button" onClick={() => void replaceSelectedDevice()} disabled={!selectedReplacementDeviceId || replacementOwnerPin.length !== 4 || revokingDeviceId !== null}>
+                  {revokingDeviceId ? <><Loader2 size={16} className="mr-2 animate-spin" />Replacing...</> : "Remove selected device and continue"}
                 </Button>
               </div>
             </div>

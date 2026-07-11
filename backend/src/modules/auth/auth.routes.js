@@ -7,7 +7,7 @@ import {
   registerSchema, loginSchema, setPinSchema,
   verifyPinSchema, inviteStaffSchema, changePasswordSchema,
   refreshSchema, logoutSchema, forgotPasswordSchema, resetPasswordSchema,
-  verifyEmailSchema, resendVerificationSchema, googleLoginSchema
+  verifyEmailSchema, resendVerificationSchema, googleLoginSchema, deviceReplacementSchema
 } from "./auth.schema.js";
 import * as ctrl from "./auth.controller.js";
 import { z } from "zod";
@@ -24,6 +24,7 @@ router.post("/password/forgot", validate(forgotPasswordSchema), ctrl.forgotPassw
 router.post("/password/reset", validate(resetPasswordSchema), ctrl.resetPassword);
 router.post("/refresh",  validate(refreshSchema),  ctrl.refresh);
 router.post("/logout",   validate(logoutSchema),   ctrl.logout);
+router.post("/device-replacement/complete", validate(deviceReplacementSchema), ctrl.completeDeviceReplacement);
 
 // Authenticated
 router.get("/me", requireAuth, ctrl.me);

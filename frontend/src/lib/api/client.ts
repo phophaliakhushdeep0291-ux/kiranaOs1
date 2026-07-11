@@ -1,5 +1,6 @@
 export {
   AUTH_SESSION_EXPIRED_EVENT,
+  DEVICE_SESSION_REVOKED_EVENT,
   ApiClientError,
   apiRequest,
   buildQuery,

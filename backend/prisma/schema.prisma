@@ -52,6 +52,7 @@ model Shop {
   paymentTransactions PaymentTransaction[]
   devices          Device[]
   deviceLicenses   DeviceLicense[]
+  deviceReplacementChallenges DeviceReplacementChallenge[]
   reportExportJobs ReportExportJob[]
   reminderTemplates ReminderTemplate[]
   reminderLogs      ReminderLog[]
@@ -125,6 +126,7 @@ model User {
   sessions     Session[]
   authTokens    AuthToken[]
   devices      Device[]
+  deviceReplacementChallenges DeviceReplacementChallenge[]
   reportExportJobs ReportExportJob[]
 
   @@unique([shopId, mobile])
@@ -160,20 +162,27 @@ model Session {
   userId           String
   shopId           String
   deviceId         String?   // Browser/device id that owns this login session. Used for concurrent device limits.
+  deviceRecordId   String?
+  deviceSessionVersion Int?
+  tokenFamily      String?
   refreshTokenHash String
   userAgent        String?
   ipAddress        String?
   expiresAt        DateTime
   revokedAt        DateTime?
   revokedReason    String?
+  lastUsedAt       DateTime?
   createdAt        DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id])
   shop Shop @relation(fields: [shopId], references: [id])
+  device Device? @relation(fields: [deviceRecordId], references: [id], onDelete: SetNull)
 
   @@index([userId, revokedAt])
   @@index([shopId, revokedAt])
   @@index([shopId, deviceId, revokedAt])
+  @@index([deviceRecordId, revokedAt])
+  @@index([tokenFamily])
   @@index([expiresAt])
 }
 
@@ -948,20 +957,53 @@ model Device {
   deviceId        String
   deviceName      String?
   platform        String?
+  deviceType      String?
+  operatingSystem String?
+  browser         String?
+  userAgent       String?
+  appVersion      String?
   fingerprintHash String?
-  status          String    @default("active") // active | removed | blocked
+  status          String    @default("active") // active | logged_out | blocked | revoked
+  isTrusted       Boolean   @default(false)
   activatedAt     DateTime?
   lastActiveAt    DateTime?
+  lastLoginAt     DateTime?
+  lastSeenAt      DateTime?
+  lastSyncAt      DateTime?
+  lastIpAddress   String?
+  sessionVersion  Int       @default(1)
   removedAt       DateTime?
+  revokedAt       DateTime?
+  revokedByUserId String?
+  revokeReason    String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   shop Shop  @relation(fields: [shopId], references: [id])
   user User? @relation(fields: [userId], references: [id])
+  sessions Session[]
 
   @@unique([shopId, deviceId])
   @@index([shopId, status])
+  @@index([shopId, lastSeenAt])
   @@index([userId])
+}
+
+model DeviceReplacementChallenge {
+  id              String    @id @default(cuid())
+  shopId          String
+  userId          String
+  newDeviceId     String
+  deviceJson      String    @default("{}")
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([shopId, expiresAt])
+  @@index([userId, consumedAt])
 }
 
 model DeviceLicense {
