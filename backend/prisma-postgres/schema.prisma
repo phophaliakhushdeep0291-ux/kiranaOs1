@@ -114,6 +114,7 @@ model User {
   mobile       String?
   email        String?
   emailVerifiedAt DateTime?
+  googleSub    String?                     // Google account id (ID-token `sub`) once linked
   passwordHash String
   role         String   @default("staff")  // owner | staff | admin
   pinHash      String?                     // 4-digit PIN for owner actions
@@ -131,6 +132,7 @@ model User {
 
   @@unique([shopId, mobile])
   @@unique([shopId, email])
+  @@index([googleSub])
 }
 
 model AuthToken {

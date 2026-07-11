@@ -24,6 +24,9 @@ const envSchema = z.object({
   AUTH_EMAIL_FROM: z.string().optional(),
   GMAIL_SMTP_USER: z.string().optional(),
   GMAIL_APP_PASSWORD: z.string().optional(),
+  // Google sign-in (OAuth client id). Unset = the /auth/google endpoint responds 503
+  // and the frontend hides the button (frontend uses VITE_GOOGLE_CLIENT_ID, same value).
+  GOOGLE_CLIENT_ID: z.string().optional(),
   AI_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(15 * 60 * 1000),
   AI_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(60),
   OWNER_PIN_REQUIRED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),

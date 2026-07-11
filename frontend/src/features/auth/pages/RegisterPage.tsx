@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRegister, type AuthResponse } from "@/lib/api/client";
+import { consumeGoogleSignupPrefill } from "@/features/auth/google-signup";
 import { useAuth } from "@/features/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,10 +49,23 @@ export default function Register() {
   const [selectedType, setSelectedType] = useState<BusinessType>("kirana");
   const [hoveredType, setHoveredType] = useState<BusinessType | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  // Arriving from "Continue with Google" with no account yet: prefill the verified
+  // Google identity. They still pick a password (offline-first accounts need one);
+  // their next Google sign-in links the account automatically by email.
+  const googlePrefill = useMemo(() => consumeGoogleSignupPrefill(), []);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { shopName: "", ownerName: "", city: "", address: "", mobile: "", email: "", password: "", ownerPin: "" },
+    defaultValues: {
+      shopName: "",
+      ownerName: googlePrefill?.name ?? "",
+      city: "",
+      address: "",
+      mobile: "",
+      email: googlePrefill?.email ?? "",
+      password: "",
+      ownerPin: "",
+    },
   });
 
   const registerMutation = useRegister({
@@ -148,6 +162,13 @@ export default function Register() {
             </div>
 
             <form className="space-y-3" onSubmit={(e) => e.preventDefault()}>
+              {googlePrefill && (
+                <div className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-sm text-foreground" data-testid="google-signup-banner">
+                  Signing up with Google as <span className="font-bold">{googlePrefill.email}</span> — add your shop
+                  details and choose a password (used when Google is unreachable). Next time, one tap on
+                  &ldquo;Continue with Google&rdquo; signs you straight in.
+                </div>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="shopName">Shop Name</Label>

@@ -8,6 +8,7 @@ import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.
 import { createAuditLog } from "../audit/audit.service.js";
 import { assertDeviceCanOwnLoginSession } from "../devices/devices.service.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/authEmail.js";
+import { verifyGoogleIdToken } from "./google.service.js";
 
 const REFRESH_TOKEN_BYTES = 48;
 const REFRESH_TOKEN_TTL_DAYS = 30;
@@ -79,6 +80,64 @@ export async function login({ mobile, email, identifier, password, shopId }, req
   }
 
   const user = matchingUsers[0];
+
+  return issueAuthResponse(user, user.shop, reqMeta);
+}
+
+/**
+ * Google sign-in. The token is verified against Google's certs (audience = our
+ * client id, verified email required). Accounts match by previously linked
+ * googleSub first, else by verified email — the first Google sign-in on an
+ * email/password account links it permanently. Brand-new Google users are told
+ * to register (the normal form, prefilled client-side), so every account keeps
+ * a password and stays usable when Google is unreachable. Multi-shop emails get
+ * the same SHOP_SELECTION_REQUIRED retry contract as password login.
+ */
+export async function googleLogin({ credential, shopId }, reqMeta = {}) {
+  const identity = await verifyGoogleIdToken(credential);
+
+  const users = await db.user.findMany({
+    where: {
+      disabledAt: null,
+      OR: [{ googleSub: identity.sub }, { email: identity.email }],
+      ...(shopId ? { shopId } : {}),
+    },
+    include: { shop: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // A user whose email matches but is already linked to a DIFFERENT Google
+  // account must not be reachable through this token.
+  const linked = users.filter((u) => u.googleSub === identity.sub);
+  const candidates = linked.length > 0 ? linked : users.filter((u) => !u.googleSub);
+
+  if (candidates.length === 0) {
+    const err = new AppError("No shop account uses this Google account yet. Create your shop first.", 404);
+    err.code = "GOOGLE_ACCOUNT_NOT_REGISTERED";
+    err.publicData = { email: identity.email, name: identity.name };
+    throw err;
+  }
+
+  if (!shopId && candidates.length > 1) {
+    const err = new AppError("Multiple shops found for this Google account. Please select a shop to continue.", 409);
+    err.code = "SHOP_SELECTION_REQUIRED";
+    err.publicData = {
+      shops: candidates.map((u) => ({ id: u.shop.id, name: u.shop.name, city: u.shop.city })),
+    };
+    throw err;
+  }
+
+  const user = candidates[0];
+  if (user.googleSub !== identity.sub || !user.emailVerifiedAt) {
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        googleSub: identity.sub,
+        // Google already verified this email — no need to make them click our mail too.
+        ...(user.emailVerifiedAt ? {} : { emailVerifiedAt: new Date() }),
+      },
+    });
+  }
 
   return issueAuthResponse(user, user.shop, reqMeta);
 }

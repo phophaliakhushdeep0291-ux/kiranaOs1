@@ -3,7 +3,11 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useMutation } from "@tanstack/react-query";
 import { ApiClientError, useLogin, type AuthResponse } from "@/lib/api/client";
+import { googleLogin as googleLoginRequest } from "@/features/auth/api";
+import { GoogleSignInButton, isGoogleSignInConfigured } from "@/features/auth/GoogleSignInButton";
+import { stashGoogleSignupPrefill } from "@/features/auth/google-signup";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLandingRoute } from "@/features/settings/landing-page";
 import { consumePostLoginRedirect } from "@/features/auth/post-login-redirect";
@@ -53,65 +57,106 @@ export default function Login() {
   const [loginShopId, setLoginShopId] = useState<string | null>(null);
   const [deviceLimit, setDeviceLimit] = useState<DeviceLimitState | null>(null);
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
+  // When set, the pending sign-in is Google-based: shop selection and device-limit
+  // retries must replay the Google credential instead of the password form.
+  const [googleCredential, setGoogleCredential] = useState<string | null>(null);
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { identifier: "", password: "" },
   });
 
+  const handleAuthSuccess = (data: AuthResponse) => {
+    auth.login(data.accessToken || data.token, data.refreshToken, data.user, data.shop);
+    const next = consumePostLoginRedirect();
+    if (next) {
+      // A deep link with a #hash (e.g. the QR order import) needs a full navigation to
+      // restore the fragment; plain paths can stay in-SPA.
+      if (next.includes("#")) window.location.replace(next);
+      else setLocation(next);
+    } else {
+      setLocation(getLandingRoute());
+    }
+  };
+
+  const handleAuthError = (err: unknown) => {
+    if (err instanceof ApiClientError && err.data?.code === "SHOP_SELECTION_REQUIRED") {
+      const shops = getShopChoices(err);
+      if (shops.length > 0) {
+        setShopChoices(shops);
+        setLoginShopId(null);
+        setDeviceLimit(null);
+        setServerError(null);
+        return;
+      }
+    }
+    if (err instanceof ApiClientError && err.data?.code === "DEVICE_LIMIT_EXCEEDED") {
+      const activeDevices = Array.isArray(err.data.activeDevices) ? err.data.activeDevices as ActiveDeviceDto[] : [];
+      const token = typeof err.data.deviceLimitToken === "string" ? err.data.deviceLimitToken : "";
+      setShopChoices(null);
+      setDeviceLimit({
+        message: err.message,
+        activeDevices,
+        deviceLimitToken: token,
+        plan: typeof err.data.plan === "object" && err.data.plan ? err.data.plan as DeviceLimitState["plan"] : undefined,
+      });
+      setServerError(null);
+      return;
+    }
+    const msg = (err as { data?: { message?: string }; message?: string })?.data?.message ?? (err as { message?: string })?.message ?? "Login failed";
+    setServerError(msg);
+  };
+
   const loginMutation = useLogin({
     mutation: {
-      onSuccess: (data: AuthResponse) => {
-        auth.login(data.accessToken || data.token, data.refreshToken, data.user, data.shop);
-        const next = consumePostLoginRedirect();
-        if (next) {
-          // A deep link with a #hash (e.g. the QR order import) needs a full navigation to
-          // restore the fragment; plain paths can stay in-SPA.
-          if (next.includes("#")) window.location.replace(next);
-          else setLocation(next);
-        } else {
-          setLocation(getLandingRoute());
-        }
-      },
-      onError: (err: unknown) => {
-        if (err instanceof ApiClientError && err.data?.code === "SHOP_SELECTION_REQUIRED") {
-          const shops = getShopChoices(err);
-          if (shops.length > 0) {
-            setShopChoices(shops);
-            setLoginShopId(null);
-            setDeviceLimit(null);
-            setServerError(null);
-            return;
-          }
-        }
-        if (err instanceof ApiClientError && err.data?.code === "DEVICE_LIMIT_EXCEEDED") {
-          const activeDevices = Array.isArray(err.data.activeDevices) ? err.data.activeDevices as ActiveDeviceDto[] : [];
-          const token = typeof err.data.deviceLimitToken === "string" ? err.data.deviceLimitToken : "";
-          setShopChoices(null);
-          setDeviceLimit({
-            message: err.message,
-            activeDevices,
-            deviceLimitToken: token,
-            plan: typeof err.data.plan === "object" && err.data.plan ? err.data.plan as DeviceLimitState["plan"] : undefined,
-          });
-          setServerError(null);
-          return;
-        }
-        const msg = (err as { data?: { message?: string }; message?: string })?.data?.message ?? (err as { message?: string })?.message ?? "Login failed";
-        setServerError(msg);
-      },
+      onSuccess: handleAuthSuccess,
+      onError: handleAuthError,
     },
   });
+
+  const googleMutation = useMutation({
+    mutationFn: googleLoginRequest,
+    onSuccess: handleAuthSuccess,
+    onError: (err: unknown) => {
+      // First Google sign-in with no account yet: take them to registration with the
+      // verified Google identity prefilled. They set a password there (offline-first
+      // accounts need one); the next Google sign-in links automatically by email.
+      if (err instanceof ApiClientError && err.data?.code === "GOOGLE_ACCOUNT_NOT_REGISTERED") {
+        const email = typeof err.data.email === "string" ? err.data.email : "";
+        const name = typeof err.data.name === "string" ? err.data.name : null;
+        if (email) stashGoogleSignupPrefill({ email, name });
+        setLocation("/register");
+        return;
+      }
+      handleAuthError(err);
+    },
+  });
+
+  const authPending = loginMutation.isPending || googleMutation.isPending;
+
+  const onGoogleCredential = (credential: string) => {
+    setServerError(null);
+    setShopChoices(null);
+    setLoginShopId(null);
+    setDeviceLimit(null);
+    setGoogleCredential(credential);
+    googleMutation.mutate({ credential });
+  };
 
   const onSubmit = (values: FormData) => {
     setServerError(null);
     setShopChoices(null);
     setLoginShopId(null);
     setDeviceLimit(null);
+    setGoogleCredential(null);
     loginMutation.mutate({ data: { identifier: values.identifier, password: values.password } });
   };
 
   const retryLogin = () => {
+    if (googleCredential) {
+      googleMutation.mutate({ credential: googleCredential, ...(loginShopId ? { shopId: loginShopId } : {}) });
+      return;
+    }
     const values = form.getValues();
     loginMutation.mutate({
       data: {
@@ -123,9 +168,13 @@ export default function Login() {
   };
 
   const selectShop = (shopId: string) => {
-    const values = form.getValues();
     setLoginShopId(shopId);
     setServerError(null);
+    if (googleCredential) {
+      googleMutation.mutate({ credential: googleCredential, shopId });
+      return;
+    }
+    const values = form.getValues();
     loginMutation.mutate({ data: { identifier: values.identifier, password: values.password, shopId } });
   };
 
@@ -134,6 +183,7 @@ export default function Login() {
     setLoginShopId(null);
     setDeviceLimit(null);
     setServerError(null);
+    setGoogleCredential(null);
   };
 
   const logoutSelectedDevice = async (deviceId: string) => {
@@ -214,7 +264,7 @@ export default function Login() {
                     type="button"
                     className="flex min-h-16 w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => selectShop(shop.id)}
-                    disabled={loginMutation.isPending}
+                    disabled={authPending}
                     data-testid={`shop-choice-${shop.id}`}
                   >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -224,7 +274,7 @@ export default function Login() {
                       <span className="block truncate text-sm font-bold text-card-foreground">{shop.name}</span>
                       {shop.city && <span className="block truncate text-xs text-muted-foreground">{shop.city}</span>}
                     </span>
-                    {loginMutation.isPending && loginShopId === shop.id
+                    {authPending && loginShopId === shop.id
                       ? <Loader2 size={18} className="shrink-0 animate-spin text-primary" aria-label="Opening shop" />
                       : <ChevronRight size={18} className="shrink-0 text-muted-foreground" aria-hidden="true" />}
                   </button>
@@ -237,7 +287,7 @@ export default function Login() {
                 </div>
               )}
 
-              <Button type="button" variant="outline" className="w-full" onClick={backToSignIn} disabled={loginMutation.isPending}>
+              <Button type="button" variant="outline" className="w-full" onClick={backToSignIn} disabled={authPending}>
                 <ChevronLeft size={16} className="mr-2" aria-hidden="true" />
                 Back to sign in
               </Button>
@@ -293,8 +343,8 @@ export default function Login() {
                 <Button type="button" variant="outline" onClick={backToSignIn}>
                   Back to sign in
                 </Button>
-                <Button type="button" onClick={retryLogin} disabled={loginMutation.isPending || revokingDeviceId !== null}>
-                  {loginMutation.isPending ? <><Loader2 size={16} className="mr-2 animate-spin" />Continuing...</> : "Continue login"}
+                <Button type="button" onClick={retryLogin} disabled={authPending || revokingDeviceId !== null}>
+                  {authPending ? <><Loader2 size={16} className="mr-2 animate-spin" />Continuing...</> : "Continue login"}
                 </Button>
               </div>
             </div>
@@ -350,13 +400,26 @@ export default function Login() {
               type="submit"
               className="w-full"
               data-testid="button-login"
-              disabled={loginMutation.isPending}
+              disabled={authPending}
             >
-              {loginMutation.isPending ? (
+              {authPending ? (
                 <><Loader2 size={16} className="mr-2 animate-spin" />Signing in...</>
               ) : "Sign In"}
             </Button>
           </form>
+
+          {isGoogleSignInConfigured() && (
+            <div className="mt-5">
+              <div className="flex items-center gap-3">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-xs font-semibold uppercase text-muted-foreground">or</span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <div className="mt-4">
+                <GoogleSignInButton onCredential={onGoogleCredential} />
+              </div>
+            </div>
+          )}
 
           <p className="mt-5 text-center text-sm text-muted-foreground">
             New shop?{" "}

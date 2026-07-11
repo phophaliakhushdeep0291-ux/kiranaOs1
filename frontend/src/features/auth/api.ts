@@ -43,6 +43,21 @@ export function login(data: LoginRequest) {
   });
 }
 
+export interface GoogleLoginRequest {
+  /** GIS ID token from the "Continue with Google" button. */
+  credential: string;
+  shopId?: string;
+}
+
+export function googleLogin(data: GoogleLoginRequest) {
+  return apiRequest<AuthResponse>("/auth/google", {
+    method: "POST",
+    body: JSON.stringify(data),
+    skipAuth: true,
+    skipRefresh: true,
+  });
+}
+
 export function register(data: RegisterRequest) {
   return apiRequest<AuthResponse>("/auth/register", {
     method: "POST",

@@ -23,6 +23,11 @@ export async function login(req, res, next) {
   catch (err) { next(err); }
 }
 
+export async function googleLogin(req, res, next) {
+  try { res.json({ success: true, data: await authService.googleLogin(req.body, requestMeta(req)) }); }
+  catch (err) { next(err); }
+}
+
 export async function verifyEmail(req, res, next) {
   try { res.json({ success: true, data: await authService.verifyEmail(req.body.token) }); }
   catch (err) { next(err); }

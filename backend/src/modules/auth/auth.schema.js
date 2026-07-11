@@ -63,6 +63,11 @@ export const loginSchema = z.object({
   path: ["identifier"],
 });
 
+export const googleLoginSchema = z.object({
+  credential: z.string().min(20), // GIS ID token (JWT)
+  shopId: z.string().min(1).optional(),
+});
+
 export const verifyEmailSchema = z.object({
   token: z.string().min(20),
 });
