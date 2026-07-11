@@ -23,6 +23,8 @@ assert.match(googleService, /accounts\.google\.com/, "must verify the Google iss
 assert.match(googleService, /email_verified/, "must require a verified Google email");
 assert.match(googleService, /GOOGLE_LOGIN_NOT_CONFIGURED/, "must fail closed (503) when GOOGLE_CLIENT_ID is unset");
 assert.match(googleService, /googleapis\.com\/oauth2\/v1\/certs/, "must verify against Google's published certs");
+assert.match(googleService, /AbortSignal\.timeout\(GOOGLE_CERTS_TIMEOUT_MS\)/, "Google certificate lookup must have a bounded timeout");
+assert.match(googleService, /GOOGLE_CERTS_UNAVAILABLE/, "Google network failures must return a stable public error code");
 
 // Login semantics
 assert.match(authService, /googleSub: identity\.sub/, "first Google sign-in must link googleSub");
@@ -31,9 +33,11 @@ assert.match(authService, /users\.filter\(\(u\) => !u\.googleSub\)/, "an email a
 assert.match(authService, /GOOGLE_ACCOUNT_NOT_REGISTERED/, "unknown Google accounts are sent to registration");
 assert.ok(authService.includes("SHOP_SELECTION_REQUIRED") , "multi-shop Google logins reuse the shop-selection contract");
 assert.match(authService, /return issueAuthResponse\(user, user\.shop, reqMeta\)/, "Google login must issue the SAME session/device flow as password login");
+assert.match(authService, /user = \{ \.\.\.user, \.\.\.updatedUser \}/, "first-time linking must return the freshly updated user state");
 
 // Wiring
 assert.match(authSchema, /googleLoginSchema/, "google login body schema must exist");
+assert.match(authSchema, /credential: z\.string\(\)\.min\(20\)\.max\(16_384\)/, "Google credentials must be size bounded before JWT decoding");
 assert.match(authRoutes, /router\.post\("\/google",\s*validate\(googleLoginSchema\), ctrl\.googleLogin\)/, "POST /auth/google must be mounted with validation");
 assert.match(authController, /authService\.googleLogin\(req\.body, requestMeta\(req\)\)/, "controller must pass device/request meta");
 assert.match(envConfig, /GOOGLE_CLIENT_ID: z\.string\(\)\.optional\(\)/, "GOOGLE_CLIENT_ID env must be declared optional");

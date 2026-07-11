@@ -64,7 +64,7 @@ export const loginSchema = z.object({
 });
 
 export const googleLoginSchema = z.object({
-  credential: z.string().min(20), // GIS ID token (JWT)
+  credential: z.string().min(20).max(16_384), // GIS ID token (JWT), bounded before decode/verification.
   shopId: z.string().min(1).optional(),
 });
 

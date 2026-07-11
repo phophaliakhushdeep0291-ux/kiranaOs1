@@ -127,9 +127,9 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
     throw err;
   }
 
-  const user = candidates[0];
+  let user = candidates[0];
   if (user.googleSub !== identity.sub || !user.emailVerifiedAt) {
-    await db.user.update({
+    const updatedUser = await db.user.update({
       where: { id: user.id },
       data: {
         googleSub: identity.sub,
@@ -137,6 +137,7 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
         ...(user.emailVerifiedAt ? {} : { emailVerifiedAt: new Date() }),
       },
     });
+    user = { ...user, ...updatedUser };
   }
 
   return issueAuthResponse(user, user.shop, reqMeta);

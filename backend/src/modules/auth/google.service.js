@@ -16,6 +16,7 @@ import { AppError } from "../../middleware/error.js";
 
 const GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v1/certs";
 const GOOGLE_ISSUERS = ["accounts.google.com", "https://accounts.google.com"];
+const GOOGLE_CERTS_TIMEOUT_MS = 5_000;
 
 let certCache = { certs: null, expiresAt: 0 };
 
@@ -24,7 +25,14 @@ export function isGoogleLoginConfigured() {
 }
 
 async function fetchGoogleCerts() {
-  const res = await fetch(GOOGLE_CERTS_URL);
+  let res;
+  try {
+    res = await fetch(GOOGLE_CERTS_URL, {
+      signal: AbortSignal.timeout(GOOGLE_CERTS_TIMEOUT_MS),
+    });
+  } catch {
+    throw new AppError("Could not reach Google to verify the sign-in. Please try again.", 503, "GOOGLE_CERTS_UNAVAILABLE");
+  }
   if (!res.ok) {
     throw new AppError("Could not reach Google to verify the sign-in. Please try again.", 503, "GOOGLE_CERTS_UNAVAILABLE");
   }

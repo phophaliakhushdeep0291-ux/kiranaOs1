@@ -1219,7 +1219,10 @@ function CustomerListPanel({ customers, selectedId, loading, search, filter, tot
           return <button key={customer.id} onClick={() => onSelect(customer.id)} className={cn("relative flex w-full items-center gap-2.5 border-b border-[#edf1f6] px-3 py-2.5 text-left last:border-0", active ? "bg-[#eef5ff] ring-1 ring-inset ring-[#075fff]" : "hover:bg-[#f8fbff]")}><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#edf4ff] text-[10px] font-black text-[#075fff]">{initials(customer.name)}</span><span className="min-w-0 flex-1"><span className="block truncate text-[10.5px] font-black text-[#102347]">{customer.name}</span><span className="mt-0.5 block truncate text-[8.8px] text-[#60708e]">{customer.address || "No address"}</span><span className="mt-0.5 block text-[8.5px] text-[#7c899f]">{customer.mobile}</span></span><span className="pr-1 text-right"><span className={cn("block text-[10.5px] font-black", customer.ledgerBalance > 0 ? "text-[#102347]" : "text-[#102347]")}>{fmtMoney(customer.ledgerBalance)}</span><span className={cn("mt-0.5 block text-[8px] font-bold", customer.ledgerBalance <= 0 ? "text-emerald-600" : ageing.thirtyPlus > 0 ? "text-rose-600" : "text-amber-600")}>{ageLabel}</span><span className={cn("mt-0.5 inline-flex rounded-[4px] px-1.5 py-0.5 text-[7.5px] font-bold", risk.cls)}>{risk.label}</span></span>{active && <CheckCircle2 size={12} className="absolute right-1.5 top-1.5 text-[#075fff]" />}</button>;
         })}
       </div>
-      <footer className="flex h-10 items-center justify-between border-t border-[#e8edf4] px-3 text-[8.5px] text-[#60708e]"><span>Showing 1 to {Math.min(7, customers.length)} of {total}</span><span className="flex items-center gap-1"><button className="grid h-5 w-5 place-items-center rounded border border-[#dfe7f2] text-[#94a3b8]">‹</button><button className="grid h-5 w-5 place-items-center rounded bg-[#075fff] font-bold text-white">1</button><button className="grid h-5 w-5 place-items-center rounded border border-[#dfe7f2]">2</button><button className="grid h-5 w-5 place-items-center rounded border border-[#dfe7f2]">3</button><span>…</span><button className="grid h-5 w-5 place-items-center rounded border border-[#dfe7f2]">›</button></span></footer>
+      <footer className="flex h-10 items-center justify-between border-t border-[#e8edf4] px-3 text-[8.5px] text-[#60708e]">
+        <span>{customers.length === 0 ? `Showing 0 of ${total}` : `Showing ${customers.length} of ${total}`}</span>
+        <span>{customers.length === 0 ? "No customers" : `${customers.length} loaded`}</span>
+      </footer>
     </section>
   );
 }
@@ -1271,15 +1274,8 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
         })}
       </div>
       <footer className="flex min-h-12 items-center justify-between gap-2 border-t border-[#e8edf4] px-3 text-[9px] text-[#60708e]">
-        <span>Showing 1 to {Math.min(7, customers.length)} of {total} customers</span>
-        <span className="flex items-center gap-1">
-          <button aria-label="Previous page" className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2] text-[#94a3b8]">{"<"}</button>
-          <button className="grid h-6 w-6 place-items-center rounded-[6px] bg-[#0b63f6] font-bold text-white">1</button>
-          <button className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">2</button>
-          <button className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">3</button>
-          <span>...</span>
-          <button aria-label="Next page" className="grid h-6 w-6 place-items-center rounded-[6px] border border-[#dfe7f2]">{">"}</button>
-        </span>
+        <span>{customers.length === 0 ? `Showing 0 of ${total} customers` : `Showing ${customers.length} of ${total} customers`}</span>
+        <span>{customers.length === 0 ? "No customers" : `${customers.length} loaded`}</span>
       </footer>
     </section>
   );
