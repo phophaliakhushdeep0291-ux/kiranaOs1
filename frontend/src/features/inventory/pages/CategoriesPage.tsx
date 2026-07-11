@@ -153,7 +153,8 @@ export default function CategoriesPage() {
 
       {/* Table */}
       <div className="mt-3.5 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <table className="w-full text-left text-[13px]">
+        <div className="app-scrollbar overflow-x-auto">
+        <table className="min-w-[620px] w-full text-left text-[13px]">
           <thead>
             <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
               <th className="px-4 py-3 font-bold">Category Name</th>
@@ -215,6 +216,7 @@ export default function CategoriesPage() {
             )}
           </tbody>
         </table>
+        </div>
 
         {rows.length > 0 && (
           <div className="flex flex-col items-center gap-3 border-t border-[#eef1f6] px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-0">

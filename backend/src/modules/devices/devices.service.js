@@ -911,7 +911,10 @@ export async function removeDevice(shopId, deviceId, userId = null, req = null, 
   });
   await revokeDeviceLicense(shopId, device.deviceId, "device_removed");
   await auditDeviceAction({ shopId, userId, action: "DEVICE_REMOVED", entityId: device.id, metadata: { deviceId: device.deviceId }, req });
-  return { ...updated, removedCurrentDevice: removingCurrentDevice };
+  return {
+    ...serializeDevice(updated, currentDeviceId),
+    removedCurrentDevice: removingCurrentDevice,
+  };
 }
 
 export async function blockDevice(shopId, deviceId, userId = null, req = null) {
@@ -930,18 +933,18 @@ export async function blockDevice(shopId, deviceId, userId = null, req = null) {
   });
   await revokeDeviceLicense(shopId, device.deviceId, "device_blocked");
   await auditDeviceAction({ shopId, userId, action: "DEVICE_BLOCKED", entityId: device.id, metadata: { deviceId: device.deviceId }, req });
-  return updated;
+  return serializeDevice(updated, req?.headers?.["x-device-id"] ?? null);
 }
 
 export async function unblockDevice(shopId, deviceId, userId = null, req = null) {
   const device = await findDevice(shopId, deviceId);
-  if (device.status !== "blocked") return device;
+  if (device.status !== "blocked") return serializeDevice(device, req?.headers?.["x-device-id"] ?? null);
   const updated = await db.device.update({
     where: { id: device.id },
     data: { status: "logged_out", sessionVersion: { increment: 1 }, revokedAt: null, removedAt: null, revokedByUserId: null, revokeReason: "device_reactivated_requires_login" },
   });
   await auditDeviceAction({ shopId, userId, action: "DEVICE_REACTIVATED", entityId: device.id, metadata: { deviceId: device.deviceId, nextStatus: "logged_out" }, req });
-  return updated;
+  return serializeDevice(updated, req?.headers?.["x-device-id"] ?? null);
 }
 
 export async function renameDevice(shopId, deviceId, deviceName, userId = null, req = null) {

@@ -203,6 +203,48 @@ if (ctx.skip) {
       assert.equal(refresh.status, 401);
     });
 
+    test("reactivating a blocked device retains its slot and only restores that installation", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "starter" });
+      assertSuccess(await loginDevice(tenant, "device-target"));
+      const manager = assertSuccess(await loginDevice(tenant, "device-manager"));
+
+      assertSuccess(await ctx.post("/api/devices/device-target/block", {}, {
+        token: manager.accessToken,
+        ownerPin: tenant.ownerPin,
+        headers: { "x-device-id": "device-manager" },
+        autoDevice: false,
+      }));
+      const blockedSnapshot = assertSuccess(await ctx.get("/api/devices", {
+        token: manager.accessToken,
+        headers: { "x-device-id": "device-manager" },
+        autoDevice: false,
+      }));
+      assert.equal(blockedSnapshot.devicesUsed, 2);
+
+      const reactivated = assertSuccess(await ctx.post("/api/devices/device-target/reactivate", {}, {
+        token: manager.accessToken,
+        ownerPin: tenant.ownerPin,
+        headers: { "x-device-id": "device-manager" },
+        autoDevice: false,
+      }));
+      assert.equal(reactivated.status, "logged_out");
+      const reactivatedSnapshot = assertSuccess(await ctx.get("/api/devices", {
+        token: manager.accessToken,
+        headers: { "x-device-id": "device-manager" },
+        autoDevice: false,
+      }));
+      assert.equal(reactivatedSnapshot.devicesUsed, 2);
+
+      const unrelated = assertFailure(await loginDevice(tenant, "device-unrelated"), 403);
+      assert.equal(unrelated.code, "DEVICE_LIMIT_EXCEEDED");
+
+      assertSuccess(await loginDevice(tenant, "device-target"));
+      assert.equal(await ctx.db.device.count({ where: { shopId: tenant.shop.id } }), 2);
+      assert.equal(await ctx.db.device.count({
+        where: { shopId: tenant.shop.id, status: { in: ["active", "logged_out", "blocked"] } },
+      }), 2);
+    });
+
     test("concurrent refresh-token reuse revokes the token family", async () => {
       const tenant = await createTenant(ctx.db, { planCode: "starter" });
       const signedIn = assertSuccess(await loginDevice(tenant, "refresh-device"));

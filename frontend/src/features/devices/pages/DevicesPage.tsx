@@ -233,7 +233,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
             const status = statusOf(device);
             const current = Boolean(device.isCurrentDevice || id === currentDeviceId);
             return (
-              <article key={device.id || id} className="grid gap-4 p-4 transition-colors hover:bg-[#fbfcfe] lg:grid-cols-[minmax(220px,1.3fr)_minmax(170px,1fr)_minmax(160px,1fr)_auto] lg:items-center">
+              <article key={device.id || id} className="grid gap-4 p-4 transition-colors hover:bg-[#fbfcfe] xl:grid-cols-[minmax(220px,1.3fr)_minmax(170px,1fr)_minmax(160px,1fr)_auto] xl:items-center">
                 <div className="flex min-w-0 gap-3">
                   <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#edf4ff] text-[#075fff]"><DeviceIcon device={device} /></div>
                   <div className="min-w-0">
@@ -247,17 +247,17 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs lg:grid-cols-1">
+                <div className="grid grid-cols-2 gap-3 text-xs xl:grid-cols-1">
                   <div><p className="font-semibold text-[#8a97ab]">Last active</p><p className="mt-1 font-bold text-[#102347]">{relative(device.lastSeenAt || device.last_active_at)}</p></div>
                   <div><p className="font-semibold text-[#8a97ab]">Last login</p><p className="mt-1 font-bold text-[#102347]">{relative(device.lastLoginAt)}</p></div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs lg:grid-cols-1">
+                <div className="grid grid-cols-2 gap-3 text-xs xl:grid-cols-1">
                   <div><p className="font-semibold text-[#8a97ab]">Last user</p><p className="mt-1 font-bold text-[#102347]">{device.lastUserName || "Not available"}</p></div>
                   <div className="flex items-center gap-1.5 font-bold text-[#102347]">{device.activity === "online" ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5 text-[#94a3b8]" />}Last sync {relative(device.lastSyncAt)}</div>
                 </div>
 
-                {canManageDevices ? <div className="flex flex-wrap gap-2 lg:justify-end">
+                {canManageDevices ? <div className="flex min-w-0 flex-wrap gap-2 xl:justify-end">
                   <Button size="icon" variant="outline" title="Rename device" onClick={() => { setRenaming(device); setDeviceName(deviceNameOf(device)); }} disabled={offlineFallback}><Pencil className="h-4 w-4" /></Button>
                   {status === "blocked" ? (
                     <Button size="sm" variant="outline" onClick={() => openProtectedAction(device, "reactivate")} disabled={offlineFallback}><CheckCircle2 className="mr-1.5 h-4 w-4" />Reactivate</Button>
