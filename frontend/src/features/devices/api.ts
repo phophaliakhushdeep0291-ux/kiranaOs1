@@ -97,9 +97,10 @@ export function completeDeviceReplacement(input: { replacementToken: string; tar
   });
 }
 
-export function removeDevice(deviceId: string, ownerPin: string) {
-  return apiRequest<{ success: boolean }>(`/devices/${encodeURIComponent(deviceId)}`, {
+export function removeDevice(deviceId: string, ownerPin: string, options: { removeCurrentDevice?: boolean } = {}) {
+  return apiRequest<DeviceDto & { removedCurrentDevice?: boolean }>(`/devices/${encodeURIComponent(deviceId)}`, {
     method: "DELETE",
+    body: JSON.stringify({ removeCurrentDevice: options.removeCurrentDevice === true }),
     ownerPin,
   });
 }

@@ -29,7 +29,16 @@ export async function logoutDevice(req, res, next) {
 }
 
 export async function remove(req, res, next) {
-  try { res.json({ success: true, data: await service.removeDevice(req.shopId, req.params.deviceId, req.user?.userId ?? req.user?.id, req) }); }
+  try {
+    const data = await service.removeDevice(
+      req.shopId,
+      req.params.deviceId,
+      req.user?.userId ?? req.user?.id,
+      req,
+      { allowCurrentDevice: req.body?.removeCurrentDevice === true },
+    );
+    res.json({ success: true, data });
+  }
   catch (err) { next(err); }
 }
 

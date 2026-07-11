@@ -296,12 +296,12 @@ export default function Login() {
                 </p>
                 {deviceLimit.plan?.code && (
                   <p className="mt-2 inline-flex rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                    {deviceLimit.plan.code} plan - {deviceLimit.plan.allowedMaxDevices ?? deviceLimit.plan.maxDevices} active devices
+                    {deviceLimit.plan.code} plan - {deviceLimit.plan.allowedMaxDevices ?? deviceLimit.plan.maxDevices} registered devices
                   </p>
                 )}
               </div>
 
-              <div className="space-y-2">
+              <div className="max-h-[42vh] space-y-2 overflow-y-auto pr-1">
                 {deviceLimit.activeDevices.map((device) => (
                   <button
                     key={device.deviceId}

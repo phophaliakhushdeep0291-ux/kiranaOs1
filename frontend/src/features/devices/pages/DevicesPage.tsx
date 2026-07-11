@@ -11,9 +11,11 @@ import { Label } from "@/components/ui/label";
 import { PageHeader, PageShell, StatCard, StatsGrid } from "@/components/shared";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionSnapshot, PlanBadge } from "@/features/subscription";
-import { blockDevice, listDevices, reactivateDevice, removeDevice, renameDevice, type DeviceDto, type DeviceManagementSnapshot } from "@/features/devices/api";
+import { blockDevice, getCurrentDevice, listDevices, reactivateDevice, removeDevice, renameDevice, type DeviceDto, type DeviceManagementSnapshot } from "@/features/devices/api";
 import { getOfflineScope } from "@/lib/offline/context";
 import { listCachedDevices } from "@/features/devices/license";
+import { DEVICE_SESSION_REVOKED_EVENT } from "@/lib/api/client";
+import { useAuth } from "@/features/auth/useAuth";
 
 type ProtectedAction = "remove" | "block" | "reactivate";
 
@@ -59,6 +61,7 @@ function statusStyle(status: string) {
 
 export default function DevicesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { snapshot: subscription } = useSubscriptionSnapshot();
   const currentDeviceId = useMemo(() => getOfflineScope().device_id, []);
@@ -72,17 +75,27 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
   const [renaming, setRenaming] = useState<DeviceDto | null>(null);
   const [deviceName, setDeviceName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const canManageDevices = user?.role === "owner" || user?.role === "admin";
 
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setRefreshing(true);
     try {
-      const snapshot = await listDevices();
+      const snapshot = canManageDevices
+        ? await listDevices()
+        : await getCurrentDevice().then((device): DeviceManagementSnapshot => ({
+            plan: { code: subscription?.planCode ?? "current", name: "Current device", deviceLimit: 1 },
+            devicesUsed: 1,
+            remainingSlots: 0,
+            overLimit: false,
+            devices: [device],
+          }));
       setData(snapshot);
       setOfflineFallback(false);
     } catch {
       const cached = await listCachedDevices().catch(() => []);
       const maxDevices = subscription?.plan.maxDevices ?? 1;
-      const devices: DeviceDto[] = cached.map((device) => ({
+      const visibleCached = canManageDevices ? cached : cached.filter((device) => device.device_id === currentDeviceId);
+      const devices: DeviceDto[] = visibleCached.map((device) => ({
         id: device.id,
         deviceId: device.device_id,
         deviceName: device.device_name,
@@ -104,7 +117,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       setLoading(false);
       setRefreshing(false);
     }
-  }, [currentDeviceId, subscription]);
+  }, [canManageDevices, currentDeviceId, subscription]);
 
   useEffect(() => { void refresh(true); }, [refresh]);
 
@@ -117,15 +130,20 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
   async function submitProtectedAction() {
     if (!actionTarget || !actionKind || !/^\d{4}$/.test(ownerPin)) return;
     const id = deviceIdOf(actionTarget);
+    const removingCurrentDevice = actionKind === "remove" && Boolean(actionTarget.isCurrentDevice || id === currentDeviceId);
     setSubmitting(true);
     try {
-      if (actionKind === "remove") await removeDevice(id, ownerPin);
+      if (actionKind === "remove") await removeDevice(id, ownerPin, { removeCurrentDevice: removingCurrentDevice });
       else if (actionKind === "block") await blockDevice(id, ownerPin);
       else await reactivateDevice(id, ownerPin);
-      toast({ title: actionKind === "remove" ? "Device removed" : actionKind === "block" ? "Device blocked" : "Device can register again" });
+      toast({ title: actionKind === "remove" ? "Device removed" : actionKind === "block" ? "Device blocked" : "Device can sign in again" });
       setActionTarget(null);
       setActionKind(null);
       setOwnerPin("");
+      if (removingCurrentDevice) {
+        window.dispatchEvent(new CustomEvent(DEVICE_SESSION_REVOKED_EVENT, { detail: { code: "DEVICE_SESSION_REVOKED" } }));
+        return;
+      }
       await refresh(true);
     } catch (error) {
       toast({ title: "Action could not be completed", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
@@ -155,7 +173,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
     <>
       <PageHeader
         title="Devices"
-        description="Registered phones, computers, and counters that can access this shop."
+        description={canManageDevices ? "Registered phones, computers, and counters that can access this shop." : "Details for the device currently signed in to this account."}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {subscription ? <PlanBadge planCode={subscription.planCode} status={subscription.status} /> : null}
@@ -174,14 +192,18 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
         </Alert>
       ) : null}
 
-      <StatsGrid>
+      {canManageDevices ? <StatsGrid>
         <StatCard label="Current plan" value={data?.plan.name || data?.plan.code || "Starter"} description={`${data?.plan.deviceLimit ?? 1} registered device slots`} tone="blue" />
         <StatCard label="Devices used" value={`${data?.devicesUsed ?? 0} / ${data?.plan.deviceLimit ?? 1}`} description={data?.overLimit ? "Above current plan limit" : "Backend verified"} tone={data?.overLimit ? "red" : "green"} />
         <StatCard label="Slots remaining" value={String(data?.remainingSlots ?? 0)} description={(data?.remainingSlots ?? 0) > 0 ? "Ready for a new sign-in" : "All slots are in use"} tone={(data?.remainingSlots ?? 0) > 0 ? "green" : "amber"} />
         <StatCard label="This device" value={deviceNameOf(devices.find((device) => device.isCurrentDevice) ?? { id: currentDeviceId })} description="Current browser installation" />
-      </StatsGrid>
+      </StatsGrid> : <StatsGrid>
+        <StatCard label="This device" value={deviceNameOf(devices[0] ?? { id: currentDeviceId })} description="Current browser installation" tone="blue" />
+        <StatCard label="Status" value={statusOf(devices[0] ?? { id: currentDeviceId }).replace(/_/g, " ")} description="Verified by the backend" tone="green" />
+        <StatCard label="Last active" value={relative(devices[0]?.lastSeenAt)} description="Recent authenticated activity" />
+      </StatsGrid>}
 
-      {(data?.remainingSlots ?? 0) === 0 ? (
+      {canManageDevices && (data?.remainingSlots ?? 0) === 0 ? (
         <Alert className="border-amber-200 bg-amber-50 text-amber-950">
           <Clock3 className="h-4 w-4" />
           <AlertTitle>All device slots are currently in use</AlertTitle>
@@ -196,7 +218,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
         <div className="flex flex-col gap-2 border-b border-[#e8edf4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-black text-[#102347]">Registered devices</h2>
-            <p className="text-sm text-[#60708e]">Logging out keeps a slot. Removing a device frees it and revokes access immediately.</p>
+            <p className="text-sm text-[#60708e]">{canManageDevices ? "Logging out keeps a slot. Removing a device frees it and revokes access immediately." : "Only owners and authorized administrators can rename, block, or remove shop devices."}</p>
           </div>
           <Badge variant="outline" className="w-fit">{devices.length} total</Badge>
         </div>
@@ -235,15 +257,15 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
                   <div className="flex items-center gap-1.5 font-bold text-[#102347]">{device.activity === "online" ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5 text-[#94a3b8]" />}Last sync {relative(device.lastSyncAt)}</div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 lg:justify-end">
+                {canManageDevices ? <div className="flex flex-wrap gap-2 lg:justify-end">
                   <Button size="icon" variant="outline" title="Rename device" onClick={() => { setRenaming(device); setDeviceName(deviceNameOf(device)); }} disabled={offlineFallback}><Pencil className="h-4 w-4" /></Button>
                   {status === "blocked" ? (
                     <Button size="sm" variant="outline" onClick={() => openProtectedAction(device, "reactivate")} disabled={offlineFallback}><CheckCircle2 className="mr-1.5 h-4 w-4" />Reactivate</Button>
                   ) : (
                     <Button size="icon" variant="outline" title="Block device" onClick={() => openProtectedAction(device, "block")} disabled={offlineFallback || current || status === "revoked"}><Ban className="h-4 w-4" /></Button>
                   )}
-                  <Button size="icon" variant="outline" title="Remove device" className="text-rose-600 hover:text-rose-700" onClick={() => openProtectedAction(device, "remove")} disabled={offlineFallback || current || status === "revoked"}><Trash2 className="h-4 w-4" /></Button>
-                </div>
+                  <Button size={current ? "sm" : "icon"} variant="outline" title={current ? "Log out and remove this device" : "Remove device"} className="text-rose-600 hover:text-rose-700" onClick={() => openProtectedAction(device, "remove")} disabled={offlineFallback || status === "revoked"}><Trash2 className={current ? "mr-1.5 h-4 w-4" : "h-4 w-4"} />{current ? "Log out & remove" : null}</Button>
+                </div> : null}
               </article>
             );
           })}
@@ -253,7 +275,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       <Alert className="border-emerald-200 bg-emerald-50 text-emerald-950">
         <ShieldCheck className="h-4 w-4" />
         <AlertTitle>Device access is enforced by the backend</AlertTitle>
-        <AlertDescription>Refresh tokens are rotated and hashed. Removing or blocking a device revokes its sessions; unsynced offline records are never automatically deleted.</AlertDescription>
+        <AlertDescription>{canManageDevices ? "Refresh tokens are rotated and hashed. Removing or blocking a device revokes its sessions; unsynced offline records are never automatically deleted." : "Device management is limited to the shop owner and authorized administrators. Your current device status is shown above."}</AlertDescription>
       </Alert>
 
       <Dialog open={Boolean(renaming)} onOpenChange={(open) => { if (!open) setRenaming(null); }}>
@@ -267,11 +289,11 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       <Dialog open={Boolean(actionTarget && actionKind)} onOpenChange={(open) => { if (!open) { setActionTarget(null); setActionKind(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{actionKind === "remove" ? `Remove “${actionTarget ? deviceNameOf(actionTarget) : "device"}”?` : actionKind === "block" ? "Block this device?" : "Allow this device to register again?"}</DialogTitle>
-            <DialogDescription>{actionKind === "remove" ? "It will be logged out immediately and its slot will be freed. Unsynced data on that installation may require recovery." : actionKind === "block" ? "All sessions will be revoked immediately. A blocked device cannot sign in until reactivated." : "The device becomes eligible to register again when a plan slot is available."}</DialogDescription>
+            <DialogTitle>{actionKind === "remove" ? `${actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId) ? "Log out and remove" : "Remove"} \"${actionTarget ? deviceNameOf(actionTarget) : "device"}\"?` : actionKind === "block" ? "Block this device?" : "Allow this device to register again?"}</DialogTitle>
+            <DialogDescription>{actionKind === "remove" ? `${actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId) ? "You will be signed out on this device. " : ""}It will lose access immediately and its slot will be freed. Unsynced data on that installation will be preserved for controlled recovery or export.` : actionKind === "block" ? "All sessions will be revoked immediately. A blocked device cannot sign in until reactivated." : "The device will keep its registered slot and can sign in again."}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2"><Label htmlFor="device-owner-pin">Owner PIN</Label><Input id="device-owner-pin" type="password" inputMode="numeric" maxLength={4} value={ownerPin} onChange={(event) => setOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4-digit PIN" /></div>
-          <DialogFooter><Button variant="outline" onClick={() => { setActionTarget(null); setActionKind(null); }}>Cancel</Button><Button variant={actionKind === "reactivate" ? "default" : "destructive"} onClick={() => void submitProtectedAction()} disabled={ownerPin.length !== 4 || submitting}>{submitting ? "Working..." : actionKind === "remove" ? "Remove device" : actionKind === "block" ? "Block device" : "Reactivate device"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => { setActionTarget(null); setActionKind(null); }}>Cancel</Button><Button variant={actionKind === "reactivate" ? "default" : "destructive"} onClick={() => void submitProtectedAction()} disabled={ownerPin.length !== 4 || submitting}>{submitting ? "Working..." : actionKind === "remove" ? actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId) ? "Log out & remove" : "Remove device" : actionKind === "block" ? "Block device" : "Reactivate device"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </>

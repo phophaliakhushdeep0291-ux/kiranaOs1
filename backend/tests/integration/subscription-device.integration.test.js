@@ -54,7 +54,14 @@ if (ctx.skip) {
       const thirdAuth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
       const over = assertFailure(await ctx.post("/api/devices/activate", { deviceId: "device-3", deviceName: "Counter 3" }, { token: thirdAuth.accessToken }), 403);
       assert.equal(over.code, "DEVICE_LIMIT_EXCEEDED");
-      assertSuccess(await ctx.delete("/api/devices/device-1", { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
+      // ownerAuth's session is bound to device-1 (it activated it), so removing that slot is
+      // "remove the device you're on" — which now requires the explicit removeCurrentDevice flag.
+      assertSuccess(await ctx.request("DELETE", "/api/devices/device-1", {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        headers: { "x-device-id": "device-1" },
+        body: { removeCurrentDevice: true },
+      }));
       const d3 = assertSuccess(await ctx.post("/api/devices/activate", { deviceId: "device-3", deviceName: "Counter 3" }, { token: thirdAuth.accessToken }), 201);
       assert.equal(d3.deviceId, "device-3");
     });

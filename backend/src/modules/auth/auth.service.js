@@ -221,10 +221,17 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
       await revokeSessionFamily(session, "DEVICE_BLOCKED");
       throw new AppError("This device has been blocked by the shop owner.", 403, "DEVICE_BLOCKED");
     }
+    if (session.device.status !== "active") {
+      await revokeSessionFamily(session, "DEVICE_LOGGED_OUT");
+      throw new AppError("This device is not signed in.", 401, "DEVICE_SESSION_REVOKED");
+    }
     if (session.deviceSessionVersion !== null && session.deviceSessionVersion !== session.device.sessionVersion) {
       await revokeSessionFamily(session, "DEVICE_SESSION_VERSION_CHANGED");
       throw new AppError("This device session is no longer valid.", 401, "DEVICE_SESSION_REVOKED");
     }
+  } else if (session.deviceRecordId) {
+    await revokeSessionFamily(session, "DEVICE_RECORD_MISSING");
+    throw new AppError("This device is no longer registered.", 401, "DEVICE_SESSION_REVOKED");
   }
 
   const ok = await bcrypt.compare(parsed.secret, session.refreshTokenHash);
@@ -249,8 +256,8 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
     throw new AppError("Legacy unbound sessions cannot move to another device. Please sign in again.", 401, "DEVICE_SESSION_REAUTH_REQUIRED");
   }
 
-  await db.session.update({
-    where: { id: session.id },
+  const rotated = await db.session.updateMany({
+    where: { id: session.id, refreshTokenHash: session.refreshTokenHash, revokedAt: null },
     data: {
       deviceId: nextDeviceId,
       refreshTokenHash,
@@ -260,6 +267,10 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
       lastUsedAt: new Date(),
     },
   });
+  if (rotated.count !== 1) {
+    await revokeSessionFamily(session, "REFRESH_TOKEN_REUSED");
+    throw new AppError("Refresh token reuse detected", 401, "REFRESH_TOKEN_REUSED");
+  }
 
   const accessToken = signDeviceAccessToken(session.user, session, session.device);
 

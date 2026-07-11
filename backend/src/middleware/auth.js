@@ -27,6 +27,9 @@ export async function requireAuth(req, _res, next) {
       err.code = "INVALID_TOKEN_PAYLOAD";
       throw err;
     }
+    if (payload.tokenType && payload.tokenType !== "ACCESS") {
+      throw new AppError("Invalid access token type", 401, "INVALID_TOKEN_TYPE");
+    }
 
     const user = await db.user.findFirst({
       where: { id: payload.userId, shopId: payload.shopId, disabledAt: null },
@@ -82,6 +85,14 @@ export async function requireAuth(req, _res, next) {
         const requestDeviceId = normalizeHeader(req.headers["x-device-id"]);
         if (requestDeviceId && requestDeviceId !== session.device.deviceId) {
           throw new AppError("Device context does not match this session.", 401, "DEVICE_SESSION_REVOKED");
+        }
+        const lastSeenAt = session.device.lastSeenAt ?? session.device.lastActiveAt;
+        if (!lastSeenAt || Date.now() - new Date(lastSeenAt).getTime() >= 2 * 60 * 1000) {
+          const now = new Date();
+          await db.device.updateMany({
+            where: { id: session.device.id, status: "active", lastSeenAt: session.device.lastSeenAt },
+            data: { lastSeenAt: now, lastActiveAt: now },
+          });
         }
       } else if (payload.deviceRecordId && env.NODE_ENV === "production") {
         throw new AppError("Registered device not found for this session.", 401, "DEVICE_SESSION_REVOKED");

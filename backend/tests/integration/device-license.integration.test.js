@@ -35,22 +35,27 @@ if (ctx.skip) {
       assert.equal(second.idempotent, true);
     });
 
-    test("removed device can rejoin in non-production local flows", async () => {
+    test("removed device loses access immediately and cannot silently rejoin", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       await activateDeviceViaApi(ctx, ownerAuth.accessToken, { deviceId: "removed-device" });
-      assertSuccess(await ctx.delete("/api/devices/removed-device", { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
-      const license = assertSuccess(await ctx.get("/api/devices/license?deviceId=removed-device", { token: ownerAuth.accessToken, headers: { "x-device-id": "removed-device" } }));
-      assert.equal(license.payload.deviceId, "removed-device");
-      const sync = assertSuccess(await ctx.get(`/api/sync/pull?since=${encodeURIComponent(new Date(0).toISOString())}`, { token: ownerAuth.accessToken, headers: { "x-device-id": "removed-device" } }));
-      assert.ok(Array.isArray(sync.products));
+      assertSuccess(await ctx.request("DELETE", "/api/devices/removed-device", {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        headers: { "x-device-id": "removed-device" },
+        body: { removeCurrentDevice: true },
+      }));
+      const license = assertFailure(await ctx.get("/api/devices/license?deviceId=removed-device", { token: ownerAuth.accessToken, headers: { "x-device-id": "removed-device" } }), 401);
+      assert.equal(license.code, "SESSION_INACTIVE");
+      const sync = assertFailure(await ctx.get(`/api/sync/pull?since=${encodeURIComponent(new Date(0).toISOString())}`, { token: ownerAuth.accessToken, headers: { "x-device-id": "removed-device" } }), 401);
+      assert.equal(sync.code, "SESSION_INACTIVE");
     });
 
     test("blocked device cannot get active license", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       await activateDeviceViaApi(ctx, ownerAuth.accessToken, { deviceId: "blocked-device" });
       assertSuccess(await ctx.post("/api/devices/blocked-device/block", {}, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
-      const blocked = assertFailure(await ctx.get("/api/devices/license?deviceId=blocked-device", { token: ownerAuth.accessToken, headers: { "x-device-id": "blocked-device" } }), 403);
-      assert.equal(blocked.code, "DEVICE_BLOCKED");
+      const blocked = assertFailure(await ctx.get("/api/devices/license?deviceId=blocked-device", { token: ownerAuth.accessToken, headers: { "x-device-id": "blocked-device" } }), 401);
+      assert.equal(blocked.code, "SESSION_INACTIVE");
     });
 
     test("sync requires device id", async () => {

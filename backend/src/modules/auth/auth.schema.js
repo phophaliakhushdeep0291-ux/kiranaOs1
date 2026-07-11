@@ -60,6 +60,7 @@ export const registerSchema = z.object({
   ownerPin:  z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits").optional(),
   gstNumber: optionalTrimmedString,
   phone:     optionalTrimmedString,
+  device:    deviceMetadataSchema.optional(),
 });
 
 export const loginSchema = z.object({

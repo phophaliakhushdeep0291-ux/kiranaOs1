@@ -8,7 +8,8 @@ describe("multi-shop login", () => {
     expect(source).toContain('err.data?.code === "SHOP_SELECTION_REQUIRED"');
     expect(source).toContain('data-testid="shop-selection-panel"');
     expect(source).toContain("selectShop(shop.id)");
-    expect(source).toContain("shopId: loginShopId");
+    expect(source).toContain("setLoginShopId(shopId)");
+    expect(source).toContain("password: values.password, shopId }");
   });
 
   it("exposes verified shop choices in production error responses", () => {
