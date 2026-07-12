@@ -69,6 +69,74 @@ if (ctx.skip) {
       assert.equal(await ctx.db.device.count({ where: { shopId: tenant.shop.id } }), 2);
     });
 
+    test("normal logout revokes only the presented session while another login remains active", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "starter" });
+      const first = assertSuccess(await loginDevice(tenant, "shared-device"));
+      const second = assertSuccess(await loginDevice(tenant, "shared-device"));
+
+      const firstLogout = assertSuccess(await ctx.post("/api/auth/logout", { refreshToken: first.refreshToken }, {
+        headers: { "x-device-id": "shared-device" },
+        autoDevice: false,
+      }));
+      assert.equal(firstLogout.revokedSessions, 1);
+      assert.equal(firstLogout.remainingDeviceSessions, 1);
+      assert.equal(firstLogout.deviceStatus, "active");
+      assert.equal(await ctx.db.session.count({
+        where: { shopId: tenant.shop.id, deviceId: "shared-device", revokedAt: null },
+      }), 1);
+      assert.equal((await ctx.db.device.findUnique({
+        where: { shopId_deviceId: { shopId: tenant.shop.id, deviceId: "shared-device" } },
+      })).status, "active");
+
+      assertSuccess(await ctx.get("/api/auth/me", {
+        token: second.accessToken,
+        headers: { "x-device-id": "shared-device" },
+        autoDevice: false,
+      }));
+      assertSuccess(await ctx.post("/api/auth/logout", { refreshToken: second.refreshToken }, {
+        headers: { "x-device-id": "shared-device" },
+        autoDevice: false,
+      }));
+      assert.equal((await ctx.db.device.findUnique({
+        where: { shopId_deviceId: { shopId: tenant.shop.id, deviceId: "shared-device" } },
+      })).status, "logged_out");
+    });
+
+    test("owner device logout revokes every session and increments the session version", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "starter" });
+      const targetFirst = assertSuccess(await loginDevice(tenant, "device-target"));
+      assertSuccess(await loginDevice(tenant, "device-target"));
+      const manager = assertSuccess(await loginDevice(tenant, "device-manager"));
+      const before = await ctx.db.device.findUnique({
+        where: { shopId_deviceId: { shopId: tenant.shop.id, deviceId: "device-target" } },
+      });
+
+      const result = assertSuccess(await ctx.post("/api/devices/logout-device", {
+        deviceId: "device-target",
+        currentDeviceId: "device-manager",
+      }, {
+        token: manager.accessToken,
+        ownerPin: tenant.ownerPin,
+        headers: { "x-device-id": "device-manager" },
+        autoDevice: false,
+      }));
+      assert.equal(result.revokedSessions, 2);
+      const after = await ctx.db.device.findUnique({
+        where: { shopId_deviceId: { shopId: tenant.shop.id, deviceId: "device-target" } },
+      });
+      assert.equal(after.status, "logged_out");
+      assert.equal(after.sessionVersion, before.sessionVersion + 1);
+      assert.equal(await ctx.db.session.count({
+        where: { shopId: tenant.shop.id, deviceId: "device-target", revokedAt: null },
+      }), 0);
+      const revoked = assertFailure(await ctx.get("/api/auth/me", {
+        token: targetFirst.accessToken,
+        headers: { "x-device-id": "device-target" },
+        autoDevice: false,
+      }), 401);
+      assert.ok(["SESSION_INACTIVE", "DEVICE_SESSION_REVOKED"].includes(revoked.code));
+    });
+
     test("simultaneous logins for the final slots cannot over-register the plan", async () => {
       const tenant = await createTenant(ctx.db, { planCode: "starter" });
       const responses = await Promise.all([

@@ -6,7 +6,7 @@ import { signToken } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
-import { completeDeviceReplacement, createDeviceBoundLoginSession } from "../devices/devices.service.js";
+import { completeDeviceReplacement, createDeviceBoundLoginSession, withDeviceLifecycleTransaction } from "../devices/devices.service.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/authEmail.js";
 import { verifyGoogleIdToken } from "./google.service.js";
 
@@ -302,27 +302,35 @@ export async function logout(refreshToken, user = null) {
   if (!ok) throw new AppError("Invalid refresh token", 401);
 
   const revokedAt = new Date();
-  const result = session.deviceId
-    ? await db.session.updateMany({
-        where: {
-          userId: session.userId,
-          shopId: session.shopId,
-          deviceId: session.deviceId,
-          revokedAt: null,
-        },
-        data: { revokedAt, revokedReason: "LOGOUT" },
-      })
-    : await db.session.updateMany({
-        where: { id: session.id, revokedAt: null },
-        data: { revokedAt, revokedReason: "LOGOUT" },
-      });
-  if (session.deviceId) {
-    await db.device.updateMany({
-      where: { shopId: session.shopId, deviceId: session.deviceId, status: "active" },
-      data: { status: "logged_out", lastActiveAt: revokedAt, lastSeenAt: revokedAt },
+  const result = await withDeviceLifecycleTransaction(session.shopId, async (tx) => {
+    const revoked = await tx.session.updateMany({
+      where: { id: session.id, revokedAt: null },
+      data: { revokedAt, revokedReason: "LOGOUT" },
     });
-  }
-  return { success: true, message: "Logged out", revokedSessions: result.count };
+    if (!session.deviceId || revoked.count === 0) {
+      return { revokedSessions: revoked.count, remainingDeviceSessions: null, deviceStatus: null };
+    }
+
+    const remainingDeviceSessions = await tx.session.count({
+      where: {
+        shopId: session.shopId,
+        deviceId: session.deviceId,
+        revokedAt: null,
+        expiresAt: { gt: revokedAt },
+      },
+    });
+    let deviceStatus = "active";
+    if (remainingDeviceSessions === 0) {
+      await tx.device.updateMany({
+        where: { shopId: session.shopId, deviceId: session.deviceId, status: "active" },
+        data: { status: "logged_out", lastActiveAt: revokedAt, lastSeenAt: revokedAt },
+      });
+      deviceStatus = "logged_out";
+    }
+    return { revokedSessions: revoked.count, remainingDeviceSessions, deviceStatus };
+  });
+
+  return { success: true, message: "Logged out", ...result };
 }
 
 export async function replaceDeviceDuringLogin({ replacementToken, targetDeviceId, ownerPin }, reqMeta = {}) {

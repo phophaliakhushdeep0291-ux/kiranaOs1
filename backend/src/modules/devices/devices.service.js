@@ -76,6 +76,13 @@ async function withProcessShopLock(shopId, work) {
   }
 }
 
+export async function withDeviceLifecycleTransaction(shopId, work) {
+  return withProcessShopLock(shopId, () => db.$transaction(async (tx) => {
+    await acquireShopRegistrationLock(tx, shopId);
+    return work(tx);
+  }));
+}
+
 /**
  * Registers/reactivates the installation and creates its refresh session as one
  * critical operation. The in-process lock protects SQLite/tests; PostgreSQL's
@@ -833,33 +840,41 @@ async function revokeActiveDeviceSessions({ shopId, actorUserId, actorRole, targ
   }
 
   const canManageShopDevices = ["owner", "admin"].includes(actorRole);
-  const where = {
-    shopId,
-    deviceId: targetDeviceId,
-    revokedAt: null,
-    expiresAt: { gt: new Date() },
-    ...(canManageShopDevices ? {} : { userId: actorUserId }),
-  };
-  const activeSessions = await db.session.findMany({
-    where,
-    select: { id: true, userId: true, deviceId: true },
+  const revokedAt = new Date();
+  const lifecycle = await withDeviceLifecycleTransaction(shopId, async (tx) => {
+    const activeSessions = await tx.session.findMany({
+      where: {
+        shopId,
+        deviceId: targetDeviceId,
+        revokedAt: null,
+        expiresAt: { gt: revokedAt },
+        ...(canManageShopDevices ? {} : { userId: actorUserId }),
+      },
+      select: { id: true },
+    });
+    if (activeSessions.length === 0) return null;
+
+    const revoked = await tx.session.updateMany({
+      where: { id: { in: activeSessions.map((session) => session.id) } },
+      data: { revokedAt, revokedReason: reason },
+    });
+    const devices = await tx.device.updateMany({
+      where: { shopId, deviceId: targetDeviceId, status: { not: "revoked" } },
+      data: {
+        status: "logged_out",
+        sessionVersion: { increment: 1 },
+        lastActiveAt: revokedAt,
+        lastSeenAt: revokedAt,
+      },
+    });
+    return { revokedSessions: revoked.count, updatedDevices: devices.count };
   });
-  if (activeSessions.length === 0) {
+
+  if (!lifecycle) {
     const err = new AppError("No active session found for this device", 404);
     err.code = "ACTIVE_DEVICE_SESSION_NOT_FOUND";
     throw err;
   }
-
-  const revokedAt = new Date();
-  const result = await db.session.updateMany({
-    where: { id: { in: activeSessions.map((session) => session.id) } },
-    data: { revokedAt, revokedReason: reason },
-  });
-
-  await db.device.updateMany({
-    where: { shopId, deviceId: targetDeviceId },
-    data: { status: "logged_out", lastActiveAt: revokedAt, lastSeenAt: revokedAt },
-  });
 
   await auditDeviceAction({
     shopId,
@@ -868,7 +883,7 @@ async function revokeActiveDeviceSessions({ shopId, actorUserId, actorRole, targ
     entityId: targetDeviceId,
     metadata: {
       deviceId: targetDeviceId,
-      revokedSessions: result.count,
+      revokedSessions: lifecycle.revokedSessions,
       reason,
       managedShopDevices: canManageShopDevices,
     },
@@ -878,7 +893,7 @@ async function revokeActiveDeviceSessions({ shopId, actorUserId, actorRole, targ
   return {
     success: true,
     deviceId: targetDeviceId,
-    revokedSessions: result.count,
+    revokedSessions: lifecycle.revokedSessions,
     activeDevices: await listActiveDevices(shopId, { currentDeviceId }),
   };
 }
