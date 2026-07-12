@@ -18,7 +18,7 @@ import { BillingOrderQrButton } from "@/features/customer-order/BillingOrderQrBu
 import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./open-bills";
 import { updateCustomerOrder } from "@/features/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
+import { billNeedsCustomer, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
 import { resolveLinePrice } from "@/features/pricing/resolve-line-price";
 import { useShopPricingRules } from "@/features/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -811,7 +811,7 @@ export default function Billing() {
     const actions: BillingSensitiveAction[] = [];
     const isLargeDiscount = subtotal > 0 && safeDiscount >= Math.max(100, subtotal * 0.1);
     if (isLargeDiscount) actions.push("large_discount");
-    const hasBelowMinimumRate = cart.some((item) => !item.isCustom && item.rate < productMinSellingPrice(item.product));
+    const hasBelowMinimumRate = cart.some(lineNeedsOwnerApproval);
     if (hasBelowMinimumRate) actions.push("selling_below_minimum_price");
     return actions;
   }
