@@ -1847,7 +1847,7 @@ if (exists("src/middleware/auth.js") && exists("src/modules/auth/auth.service.js
   if (!/req\.user = \{\s*\.\.\.payload/s.test(authMiddleware)) {
     errors.push("auth middleware missing active-user/stale-role protection: req.user payload compatibility");
   }
-  for (const snippet of ["REFRESH_TOKEN_REUSE_DETECTED", "STAFF_DISABLED", "PASSWORD_CHANGED", "revokedReason", "mobile: null", "email: null", "createAuditLog"]) {
+  for (const snippet of ["REFRESH_TOKEN_REUSED", "STAFF_DISABLED", "PASSWORD_CHANGED", "revokedReason", "mobile: null", "email: null", "createAuditLog"]) {
     if (!authService.includes(snippet)) errors.push(`auth service missing session/staff production protection: ${snippet}`);
   }
 }
