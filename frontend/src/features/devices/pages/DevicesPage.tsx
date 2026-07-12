@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
-import { Ban, CheckCircle2, Clock3, Laptop, MonitorSmartphone, Pencil, RefreshCcw, ShieldCheck, Smartphone, Trash2, Wifi, WifiOff } from "lucide-react";
+import { Ban, CheckCircle2, Clock3, Laptop, LogOut, MonitorSmartphone, Pencil, RefreshCcw, ShieldCheck, Smartphone, Trash2, Wifi, WifiOff } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,13 @@ import { Label } from "@/components/ui/label";
 import { PageHeader, PageShell, StatCard, StatsGrid } from "@/components/shared";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionSnapshot, PlanBadge } from "@/features/subscription";
-import { blockDevice, getCurrentDevice, listDevices, reactivateDevice, removeDevice, renameDevice, type DeviceDto, type DeviceManagementSnapshot } from "@/features/devices/api";
+import { blockDevice, getCurrentDevice, listDevices, logoutDevice, reactivateDevice, removeDevice, renameDevice, type DeviceDto, type DeviceManagementSnapshot } from "@/features/devices/api";
 import { getOfflineScope } from "@/lib/offline/context";
 import { listCachedDevices } from "@/features/devices/license";
 import { DEVICE_SESSION_REVOKED_EVENT } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/useAuth";
 
-type ProtectedAction = "remove" | "block" | "reactivate";
+type ProtectedAction = "logout" | "remove" | "block" | "reactivate";
 
 function relative(value?: string | null) {
   if (!value) return "Never";
@@ -134,9 +134,10 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
     setSubmitting(true);
     try {
       if (actionKind === "remove") await removeDevice(id, ownerPin, { removeCurrentDevice: removingCurrentDevice });
+      else if (actionKind === "logout") await logoutDevice(id, ownerPin, currentDeviceId);
       else if (actionKind === "block") await blockDevice(id, ownerPin);
       else await reactivateDevice(id, ownerPin);
-      toast({ title: actionKind === "remove" ? "Device removed" : actionKind === "block" ? "Device blocked" : "Device can sign in again" });
+      toast({ title: actionKind === "remove" ? "Device removed" : actionKind === "logout" ? "Device logged out" : actionKind === "block" ? "Device blocked" : "Device can sign in again" });
       setActionTarget(null);
       setActionKind(null);
       setOwnerPin("");
@@ -169,6 +170,31 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
   }
 
   const devices = data?.devices ?? [];
+  const actionDeviceName = actionTarget ? deviceNameOf(actionTarget) : "device";
+  const actionIsCurrent = Boolean(actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId));
+  const actionCopy = actionKind === "remove"
+    ? {
+        title: `${actionIsCurrent ? "Log out and remove" : "Remove"} \"${actionDeviceName}\"?`,
+        description: `${actionIsCurrent ? "You will be signed out on this device. " : ""}It will lose access immediately and its slot will be freed. Unsynced data on that installation will be preserved for controlled recovery or export.`,
+        button: actionIsCurrent ? "Log out & remove" : "Remove device",
+      }
+    : actionKind === "logout"
+      ? {
+          title: `Log out \"${actionDeviceName}\"?`,
+          description: "Every active session on this device will end immediately. The device stays registered and continues to occupy its plan slot.",
+          button: "Log out device",
+        }
+      : actionKind === "block"
+        ? {
+            title: "Block this device?",
+            description: "All sessions will be revoked immediately. A blocked device cannot sign in until reactivated.",
+            button: "Block device",
+          }
+        : {
+            title: "Allow this device to register again?",
+            description: "The device will keep its registered slot and can sign in again.",
+            button: "Reactivate device",
+          };
   const content = (
     <>
       <PageHeader
@@ -259,6 +285,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
 
                 {canManageDevices ? <div className="flex min-w-0 flex-wrap gap-2 xl:justify-end">
                   <Button size="icon" variant="outline" title="Rename device" onClick={() => { setRenaming(device); setDeviceName(deviceNameOf(device)); }} disabled={offlineFallback}><Pencil className="h-4 w-4" /></Button>
+                  {!current && status === "active" ? <Button size="icon" variant="outline" title="Log out device" onClick={() => openProtectedAction(device, "logout")} disabled={offlineFallback}><LogOut className="h-4 w-4" /></Button> : null}
                   {status === "blocked" ? (
                     <Button size="sm" variant="outline" onClick={() => openProtectedAction(device, "reactivate")} disabled={offlineFallback}><CheckCircle2 className="mr-1.5 h-4 w-4" />Reactivate</Button>
                   ) : (
@@ -289,11 +316,11 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       <Dialog open={Boolean(actionTarget && actionKind)} onOpenChange={(open) => { if (!open) { setActionTarget(null); setActionKind(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{actionKind === "remove" ? `${actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId) ? "Log out and remove" : "Remove"} \"${actionTarget ? deviceNameOf(actionTarget) : "device"}\"?` : actionKind === "block" ? "Block this device?" : "Allow this device to register again?"}</DialogTitle>
-            <DialogDescription>{actionKind === "remove" ? `${actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId) ? "You will be signed out on this device. " : ""}It will lose access immediately and its slot will be freed. Unsynced data on that installation will be preserved for controlled recovery or export.` : actionKind === "block" ? "All sessions will be revoked immediately. A blocked device cannot sign in until reactivated." : "The device will keep its registered slot and can sign in again."}</DialogDescription>
+            <DialogTitle>{actionCopy.title}</DialogTitle>
+            <DialogDescription>{actionCopy.description}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2"><Label htmlFor="device-owner-pin">Owner PIN</Label><Input id="device-owner-pin" type="password" inputMode="numeric" maxLength={4} value={ownerPin} onChange={(event) => setOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4-digit PIN" /></div>
-          <DialogFooter><Button variant="outline" onClick={() => { setActionTarget(null); setActionKind(null); }}>Cancel</Button><Button variant={actionKind === "reactivate" ? "default" : "destructive"} onClick={() => void submitProtectedAction()} disabled={ownerPin.length !== 4 || submitting}>{submitting ? "Working..." : actionKind === "remove" ? actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId) ? "Log out & remove" : "Remove device" : actionKind === "block" ? "Block device" : "Reactivate device"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => { setActionTarget(null); setActionKind(null); }}>Cancel</Button><Button variant={actionKind === "reactivate" ? "default" : "destructive"} onClick={() => void submitProtectedAction()} disabled={ownerPin.length !== 4 || submitting}>{submitting ? "Working..." : actionCopy.button}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </>

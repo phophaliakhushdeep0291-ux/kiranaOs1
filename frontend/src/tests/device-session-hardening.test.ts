@@ -38,6 +38,8 @@ describe("device-bound frontend sessions", () => {
     expect(devicesPage).toContain('user?.role === "owner" || user?.role === "admin"');
     expect(devicesPage).toContain("visibleCached");
     expect(devicesPage).toContain("4-digit PIN");
+    expect(devicesPage).toContain("logoutDevice");
+    expect(devicesPage).toContain("Log out device");
     expect(devicesPage).toContain("Log out & remove");
     expect(devicesPage).not.toContain("Add device");
   });
