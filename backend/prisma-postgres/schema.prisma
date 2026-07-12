@@ -63,6 +63,55 @@ model Shop {
   expenses          Expense[]
   offers            Offer[]
   customerOrders    CustomerOrder[]
+  pricingRules      PricingRule[]
+}
+
+// ─────────────────────────────────────────────
+// PRICING RULE — Smart Adaptive Pricing Engine.
+// A normalized owner-defined price rule (customer / group / quantity / promo).
+// String enums per repo convention. Money is Float rupees; the engine rounds to
+// paise via the shared roundMoney. Rules are the backend source of truth;
+// clients cache active rules for offline pricing.
+// ─────────────────────────────────────────────
+model PricingRule {
+  id                    String    @id @default(cuid())
+  shopId                String
+  name                  String
+  description           String?
+  ruleType              String    // CUSTOMER_FIXED_PRICE | CUSTOMER_QUANTITY_PRICE | CUSTOMER_GROUP_PRICE | CUSTOMER_GROUP_QUANTITY_PRICE | PRODUCT_QUANTITY_PRICE | SELLING_UNIT_PRICE | PROMOTIONAL_PRICE | PAYMENT_METHOD_PRICE
+  status                String    @default("ACTIVE") // DRAFT | ACTIVE | PAUSED | EXPIRED | ARCHIVED
+  priority              Int       @default(0)
+
+  productId             String?
+  unitCode              String?
+  customerId            String?
+  customerGroup         String?
+
+  minQuantity           Float?
+  maxQuantity           Float?
+
+  fixedUnitPrice        Float?
+  adjustmentType        String?   // FIXED_PRICE | FIXED_DISCOUNT | PERCENTAGE_DISCOUNT | MARKUP_ON_COST | MARGIN_ON_COST
+  adjustmentValue       Float?
+
+  minimumMarginPercent  Float?
+  paymentMethod         String?
+  combinePolicy         String?   // CANNOT_COMBINE | CAN_COMBINE | BEST_PRICE_WINS | CUSTOMER_CONTRACT_WINS | PROMOTION_WINS
+  validFrom             DateTime?
+  validUntil            DateTime?
+
+  requiresOwnerApproval Boolean   @default(false)
+  createdByUserId       String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id])
+
+  @@index([shopId, status, priority])
+  @@index([shopId, productId])
+  @@index([shopId, customerId])
+  @@index([shopId, customerGroup])
+  @@index([shopId, updatedAt, id])
 }
 
 // ─────────────────────────────────────────────
@@ -253,6 +302,7 @@ model Customer {
   name                   String
   mobile                 String?
   type                   String    @default("regular")  // regular | udhar
+  customerGroup          String?                          // owner-defined pricing group (Wholesale/VIP/…)
   udharAmount            Float     @default(0)           // current outstanding
   udharAmountPaise      BigInt?                         // Phase 27 shadow integer paise column
   reminderOverrideUntil  DateTime?

@@ -1,0 +1,50 @@
+[
+  {
+    "name": "default price when nothing matches",
+    "context": { "shopId": "s", "productId": "p", "unitCode": "packet", "quantity": 1, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 30, "minimumSellingPrice": 24, "maximumRetailPrice": 35, "source": "BILLING" },
+    "rules": [{ "id": "g", "ruleType": "CUSTOMER_GROUP_PRICE", "customerGroup": "wholesale", "fixedUnitPrice": 27 }],
+    "expected": { "recommendedUnitPrice": 30, "appliedRuleType": "DEFAULT_PRICE", "requiresApproval": false }
+  },
+  {
+    "name": "customer fixed overrides group",
+    "context": { "shopId": "s", "productId": "p", "unitCode": "packet", "quantity": 1, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 30, "minimumSellingPrice": 24, "maximumRetailPrice": 35, "customerId": "raj", "customerGroup": "wholesale", "source": "BILLING" },
+    "rules": [
+      { "id": "g", "ruleType": "CUSTOMER_GROUP_PRICE", "customerGroup": "wholesale", "fixedUnitPrice": 27 },
+      { "id": "c", "ruleType": "CUSTOMER_FIXED_PRICE", "customerId": "raj", "fixedUnitPrice": 25.5 }
+    ],
+    "expected": { "recommendedUnitPrice": 25.5, "appliedRuleType": "CUSTOMER_FIXED_PRICE", "requiresApproval": false }
+  },
+  {
+    "name": "customer quantity overrides customer fixed in band",
+    "context": { "shopId": "s", "productId": "p", "unitCode": "packet", "quantity": 12, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 30, "minimumSellingPrice": 24, "maximumRetailPrice": 35, "customerId": "raj", "source": "BILLING" },
+    "rules": [
+      { "id": "c", "ruleType": "CUSTOMER_FIXED_PRICE", "customerId": "raj", "fixedUnitPrice": 25.5 },
+      { "id": "cq", "ruleType": "CUSTOMER_QUANTITY_PRICE", "customerId": "raj", "minQuantity": 12, "fixedUnitPrice": 24.5 }
+    ],
+    "expected": { "recommendedUnitPrice": 24.5, "appliedRuleType": "CUSTOMER_QUANTITY_PRICE", "requiresApproval": false }
+  },
+  {
+    "name": "below-minimum floors and requires approval",
+    "context": { "shopId": "s", "productId": "p", "unitCode": "packet", "quantity": 1, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 30, "minimumSellingPrice": 24, "customerId": "c", "source": "BILLING" },
+    "rules": [{ "id": "cheap", "ruleType": "CUSTOMER_FIXED_PRICE", "customerId": "c", "fixedUnitPrice": 18 }],
+    "expected": { "recommendedUnitPrice": 24, "appliedRuleType": "CUSTOMER_FIXED_PRICE", "requiresApproval": true }
+  },
+  {
+    "name": "above-MRP caps",
+    "context": { "shopId": "s", "productId": "p", "unitCode": "packet", "quantity": 1, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 30, "minimumSellingPrice": 24, "maximumRetailPrice": 35, "customerId": "c", "source": "BILLING" },
+    "rules": [{ "id": "hi", "ruleType": "CUSTOMER_FIXED_PRICE", "customerId": "c", "fixedUnitPrice": 60 }],
+    "expected": { "recommendedUnitPrice": 35, "appliedRuleType": "CUSTOMER_FIXED_PRICE", "requiresApproval": false }
+  },
+  {
+    "name": "expired promo ignored",
+    "context": { "shopId": "s", "productId": "p", "unitCode": "packet", "quantity": 1, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 30, "minimumSellingPrice": 24, "source": "BILLING" },
+    "rules": [{ "id": "promo", "ruleType": "PROMOTIONAL_PRICE", "fixedUnitPrice": 22, "validUntil": "2026-06-01T00:00:00.000Z" }],
+    "expected": { "recommendedUnitPrice": 30, "appliedRuleType": "DEFAULT_PRICE", "requiresApproval": false }
+  },
+  {
+    "name": "percentage discount resolves and rounds",
+    "context": { "shopId": "s", "productId": "p", "unitCode": "packet", "quantity": 1, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 30, "minimumSellingPrice": 0, "source": "BILLING" },
+    "rules": [{ "id": "pct", "ruleType": "PROMOTIONAL_PRICE", "adjustmentType": "PERCENTAGE_DISCOUNT", "adjustmentValue": 10 }],
+    "expected": { "recommendedUnitPrice": 27, "appliedRuleType": "PROMOTIONAL_PRICE", "requiresApproval": false }
+  }
+]
