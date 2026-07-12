@@ -146,7 +146,7 @@ describe("bill input reconstruction helpers", () => {
       { customerId: "c1", customerName: "Ramesh", gstMode: "inclusive", discount: 10, billType: "normal_sale" },
       [{ name: "Sugar", quantity: 2, rate_per_rate_unit: 50, entered_unit: "kg", gst_rate: 0 }],
     );
-    expect(input.items).toEqual([{ productId: undefined, name: "Sugar", quantity: 2, enteredUnit: "kg", ratePerRateUnit: 50, gstRate: 0 }]);
+    expect(input.items).toEqual([{ productId: undefined, name: "Sugar", quantity: 2, enteredUnit: "kg", ratePerRateUnit: 50, gstRate: 0, wasPriceOverridden: false }]);
     expect(input.customerId).toBe("c1");
     expect(input.gstMode).toBe("inclusive");
     // total = 2*50 - 10 discount = 90, defaulted to a single full cash payment

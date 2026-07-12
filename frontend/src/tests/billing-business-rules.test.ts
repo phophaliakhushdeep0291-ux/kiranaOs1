@@ -200,6 +200,55 @@ describe("billing business rules", () => {
     expect(tableRows("local_audit_logs").some((row) => row.action === "selling_below_minimum_price" && row.owner_pin_provided === true)).toBe(true);
   });
 
+  it("persists the pricing snapshot on bill items and carries it into the CREATE_BILL sync payload", async () => {
+    await createBillLocalFirst(baseInput({
+      items: [{
+        productId: "product_1",
+        name: "Sugar",
+        quantity: 10,
+        enteredUnit: "kg",
+        ratePerRateUnit: 40,
+        gstRate: 0,
+        originalUnitPrice: 45,
+        appliedPricingRuleId: "rule_bulk_1",
+        appliedPricingRuleType: "PRODUCT_QUANTITY_PRICE",
+        pricingExplanation: "Bulk price for 10+ kg",
+        pricingConfidence: 1,
+        pricingCalculationVersion: "pricing-v1",
+        wasPriceOverridden: false,
+      }],
+      actualAmount: 400,
+      buyerPaidAmount: 400,
+      payments: [{ mode: BillPaymentMode.cash, amount: 400 }],
+    }));
+
+    // 1. The durable local bill_items row keeps the full "why this price" snapshot
+    //    (snake_case is the persisted column convention).
+    const item = tableRows("bill_items")[0];
+    expect(item).toMatchObject({
+      applied_pricing_rule_id: "rule_bulk_1",
+      applied_pricing_rule_type: "PRODUCT_QUANTITY_PRICE",
+      pricing_explanation: "Bulk price for 10+ kg",
+      original_unit_price: 45,
+      pricing_calculation_version: "pricing-v1",
+      was_price_overridden: false,
+    });
+
+    // 2. The same snapshot rides the CREATE_BILL outbox payload to the backend
+    //    (camelCase — the FE→BE sync contract the audit trail depends on). A
+    //    future refactor that strips these from the schema/payload fails here.
+    const createBill = tableRows("sync_outbox").find((op) => op.operation_type === "CREATE_BILL");
+    expect(createBill).toBeTruthy();
+    const payloadItems = (createBill!.payload as { items: Array<Record<string, unknown>> }).items;
+    expect(payloadItems[0]).toMatchObject({
+      appliedPricingRuleId: "rule_bulk_1",
+      appliedPricingRuleType: "PRODUCT_QUANTITY_PRICE",
+      pricingExplanation: "Bulk price for 10+ kg",
+      originalUnitPrice: 45,
+      pricingCalculationVersion: "pricing-v1",
+    });
+  });
+
   it("creates bill items, payments, ledger entries, inventory movements, audit logs and outbox in one transaction", async () => {
     const bill = await createBillLocalFirst(baseInput({
       buyerPaidAmount: 40,
