@@ -23,6 +23,7 @@ export async function listProducts(shopId, { category, search, lowStock } = {}) 
   const products = await db.product.findMany({
     where,
     orderBy: { name: "asc" },
+    include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
   });
 
   // Parse aliasesJson back to array for response
@@ -40,6 +41,7 @@ export async function listProducts(shopId, { category, search, lowStock } = {}) 
 export async function getProduct(shopId, id) {
   const product = await db.product.findFirst({
     where: { id, shopId, deletedAt: null },
+    include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
   });
   if (!product) throw new AppError("Product not found", 404);
   return deserializeProduct(product);
@@ -60,22 +62,31 @@ export async function createProduct(shopId, data, { identity = null } = {}) {
 
   await assertNoActiveProductNameConflict(shopId, data.name);
 
-  const { aliases, baseUpdatedAt: _baseUpdatedAt, ...rest } = data;
+  const { aliases, sellingUnits, baseUpdatedAt: _baseUpdatedAt, ...rawRest } = data;
+  const normalizedUnits = normalizeSellingUnits(rawRest, sellingUnits);
+  const rest = applyDefaultSellingUnitToProduct(rawRest, normalizedUnits);
   try {
-    const product = await db.product.create({
-      data: {
-        ...rest,
-        ...moneyShadows({
-          costPerRateUnit: rest.costPerRateUnit,
-          minPricePerRateUnit: rest.minPricePerRateUnit,
-          defaultPricePerRateUnit: rest.defaultPricePerRateUnit,
-        }),
-        shopId,
-        aliasesJson: JSON.stringify(aliases ?? []),
-        clientProductId: productIdentity.clientProductId,
-        idempotencyKey: productIdentity.idempotencyKey,
-        sourceDeviceId: productIdentity.sourceDeviceId,
-      },
+    const product = await db.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          ...rest,
+          ...moneyShadows({
+            costPerRateUnit: rest.costPerRateUnit,
+            minPricePerRateUnit: rest.minPricePerRateUnit,
+            defaultPricePerRateUnit: rest.defaultPricePerRateUnit,
+          }),
+          shopId,
+          aliasesJson: JSON.stringify(aliases ?? []),
+          clientProductId: productIdentity.clientProductId,
+          idempotencyKey: productIdentity.idempotencyKey,
+          sourceDeviceId: productIdentity.sourceDeviceId,
+        },
+      });
+      await writeSellingUnits(tx, shopId, created.id, normalizedUnits);
+      return tx.product.findUnique({
+        where: { id: created.id },
+        include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
+      });
     });
     return deserializeProduct(product);
   } catch (error) {
@@ -124,18 +135,21 @@ async function findExistingProductByIdentity(client, shopId, identity) {
   if (identity.idempotencyKey) {
     const byKey = await client.product.findFirst({
       where: { shopId, idempotencyKey: identity.idempotencyKey },
+      include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
     });
     if (byKey) return byKey;
   }
   if (identity.sourceDeviceId && identity.clientProductId) {
     const byDevice = await client.product.findFirst({
       where: { shopId, sourceDeviceId: identity.sourceDeviceId, clientProductId: identity.clientProductId },
+      include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
     });
     if (byDevice) return byDevice;
   }
   if (identity.clientProductId) {
     return client.product.findFirst({
       where: { shopId, clientProductId: identity.clientProductId },
+      include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
     });
   }
   return null;
@@ -145,7 +159,9 @@ export async function updateProduct(shopId, id, data) {
   const existing = await getProduct(shopId, id); // ensures it exists and belongs to shop
   if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id);
 
-  const { aliases, baseUpdatedAt, ...rest } = data;
+  const { aliases, sellingUnits, baseUpdatedAt, ...rawRest } = data;
+  const normalizedUnits = sellingUnits === undefined ? undefined : normalizeSellingUnits({ ...existing, ...rawRest }, sellingUnits);
+  const rest = normalizedUnits ? applyDefaultSellingUnitToProduct(rawRest, normalizedUnits) : rawRest;
 
   // Optimistic concurrency: reject if the server moved past the version this edit
   // was based on (another device changed it first). A 1s tolerance avoids
@@ -169,9 +185,16 @@ export async function updateProduct(shopId, id, data) {
   };
   if (aliases !== undefined) updateData.aliasesJson = JSON.stringify(aliases);
 
-  const updated = await db.product.update({
-    where: { id },
-    data: updateData,
+  const updated = await db.$transaction(async (tx) => {
+    await tx.product.update({
+      where: { id },
+      data: updateData,
+    });
+    if (normalizedUnits) await writeSellingUnits(tx, shopId, id, normalizedUnits);
+    return tx.product.findUnique({
+      where: { id },
+      include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
+    });
   });
   return deserializeProduct(updated);
 }
@@ -338,5 +361,124 @@ export function deserializeProduct(p) {
   return {
     ...p,
     aliases: JSON.parse(p.aliasesJson ?? "[]"),
+    sellingUnits: Array.isArray(p.sellingUnits) ? p.sellingUnits : undefined,
   };
+}
+
+function compactText(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function unitCodeFor(unit, index) {
+  const explicit = compactText(unit?.unitCode);
+  if (explicit) return explicit.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  const type = compactText(unit?.unitType) ?? "unit";
+  const size = Number(unit?.packSizeValue ?? 0) > 0 ? String(Number(unit.packSizeValue)) : String(index + 1);
+  const measure = compactText(unit?.packSizeUnit) ?? "count";
+  return `${type}-${size}-${measure}`.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+}
+
+function legacySellingUnit(product) {
+  const unitType = compactText(product.rateUnit) ?? compactText(product.displayUnit) ?? "piece";
+  const baseUnit = compactText(product.baseUnit) ?? unitType;
+  let conversionToBase = 1;
+  if (["kg", "kilogram"].includes(unitType.toLowerCase()) && ["g", "gram"].includes(baseUnit.toLowerCase())) conversionToBase = 1000;
+  if (["litre", "liter", "l"].includes(unitType.toLowerCase()) && baseUnit.toLowerCase() === "ml") conversionToBase = 1000;
+  if (unitType.toLowerCase() === "dozen" && baseUnit.toLowerCase() === "piece") conversionToBase = 12;
+  return {
+    name: unitType,
+    unitType,
+    unitCode: unitType,
+    packSizeValue: null,
+    packSizeUnit: null,
+    conversionToBase,
+    barcode: compactText(product.barcode),
+    defaultPrice: Number(product.defaultPricePerRateUnit ?? 0),
+    minimumPrice: Number(product.minPricePerRateUnit ?? 0) || null,
+    maximumPrice: Number(product.mrp ?? 0) || null,
+    costPrice: Number(product.costPerRateUnit ?? 0) || null,
+    isDefault: true,
+    isActive: true,
+  };
+}
+
+function normalizeSellingUnits(product, units) {
+  const source = Array.isArray(units) && units.length ? units : [legacySellingUnit(product)];
+  const seen = new Set();
+  let defaultAssigned = false;
+  return source.map((unit, index) => {
+    const unitCode = unitCodeFor(unit, index);
+    if (!unitCode || seen.has(unitCode)) throw new AppError("Selling-unit codes must be unique for this product", 400);
+    seen.add(unitCode);
+    const unitType = compactText(unit.unitType) ?? "piece";
+    const packSizeValue = unit.packSizeValue == null ? null : Number(unit.packSizeValue);
+    const packSizeUnit = compactText(unit.packSizeUnit);
+    if (["packet", "pack", "pouch"].includes(unitType.toLowerCase()) && (!(packSizeValue > 0) || !packSizeUnit)) {
+      throw new AppError("Packet and pouch units require a pack size and measurement unit", 400);
+    }
+    const isDefault = !defaultAssigned && (unit.isDefault === true || !source.some((row) => row.isDefault === true));
+    if (isDefault) defaultAssigned = true;
+    return {
+      id: compactText(unit.id),
+      name: compactText(unit.name) ?? [unitType, packSizeValue, packSizeUnit].filter(Boolean).join(" "),
+      unitType,
+      unitCode,
+      packSizeValue,
+      packSizeUnit,
+      conversionToBase: Number(unit.conversionToBase),
+      barcode: compactText(unit.barcode),
+      defaultPrice: Number(unit.defaultPrice),
+      minimumPrice: unit.minimumPrice == null ? null : Number(unit.minimumPrice),
+      maximumPrice: unit.maximumPrice == null ? null : Number(unit.maximumPrice),
+      costPrice: unit.costPrice == null ? null : Number(unit.costPrice),
+      isDefault,
+      isActive: unit.isActive !== false,
+    };
+  });
+}
+
+function applyDefaultSellingUnitToProduct(product, units) {
+  const unit = units.find((row) => row.isDefault) ?? units[0];
+  if (!unit) return product;
+  return {
+    ...product,
+    displayUnit: unit.name,
+    rateUnit: unit.unitType,
+    barcode: unit.barcode ?? product.barcode,
+    costPerRateUnit: unit.costPrice ?? product.costPerRateUnit ?? 0,
+    minPricePerRateUnit: unit.minimumPrice ?? product.minPricePerRateUnit ?? 0,
+    defaultPricePerRateUnit: unit.defaultPrice,
+    mrp: unit.maximumPrice ?? product.mrp ?? 0,
+  };
+}
+
+async function writeSellingUnits(tx, shopId, productId, units) {
+  await tx.productSellingUnit.updateMany({ where: { shopId, productId }, data: { isDefault: false } });
+  for (const unit of units) {
+    const data = {
+      name: unit.name,
+      unitType: unit.unitType,
+      packSizeValue: unit.packSizeValue,
+      packSizeUnit: unit.packSizeUnit,
+      conversionToBase: unit.conversionToBase,
+      barcode: unit.barcode,
+      defaultPrice: unit.defaultPrice,
+      ...moneyShadows({
+        defaultPrice: unit.defaultPrice,
+        minimumPrice: unit.minimumPrice,
+        maximumPrice: unit.maximumPrice,
+        costPrice: unit.costPrice,
+      }),
+      minimumPrice: unit.minimumPrice,
+      maximumPrice: unit.maximumPrice,
+      costPrice: unit.costPrice,
+      isDefault: unit.isDefault,
+      isActive: unit.isActive,
+    };
+    await tx.productSellingUnit.upsert({
+      where: { shopId_productId_unitCode: { shopId, productId, unitCode: unit.unitCode } },
+      update: data,
+      create: { ...(unit.id ? { id: unit.id } : {}), shopId, productId, unitCode: unit.unitCode, ...data },
+    });
+  }
 }

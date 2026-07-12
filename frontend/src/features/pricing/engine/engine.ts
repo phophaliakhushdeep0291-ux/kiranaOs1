@@ -32,6 +32,7 @@ function specificity(rule: PricingRule): number {
   let score = 0;
   if (rule.customerId) score += 8;
   if (rule.customerGroup) score += 4;
+  if (rule.sellingUnitId) score += 3;
   if (rule.unitCode) score += 2;
   if (rule.minQuantity != null || rule.maxQuantity != null) score += 1;
   return score;
@@ -64,6 +65,7 @@ function resolveRulePrice(rule: PricingRule, ctx: PricingContext): number | null
 /** Returns [matched, reason] for the trace. */
 function matchRule(rule: PricingRule, ctx: PricingContext): [boolean, string] {
   if (rule.productId && rule.productId !== ctx.productId) return [false, "Different product"];
+  if (rule.sellingUnitId && rule.sellingUnitId !== ctx.sellingUnitId) return [false, "Different selling unit or pack size"];
   if (rule.unitCode && rule.unitCode !== ctx.unitCode) return [false, `Applies to unit ${rule.unitCode}`];
   if (rule.customerId && rule.customerId !== ctx.customerId) return [false, "Different customer"];
   if (rule.customerGroup && rule.customerGroup !== ctx.customerGroup) return [false, `Applies to ${rule.customerGroup} group`];
@@ -79,11 +81,11 @@ function defaultExplanation(rule: PricingRule, ctx: PricingContext): string {
   if (rule.label) return rule.label;
   switch (rule.ruleType) {
     case PricingRuleType.CUSTOMER_FIXED_PRICE: return "Customer price applied";
-    case PricingRuleType.CUSTOMER_QUANTITY_PRICE: return `Customer bulk price for ${ctx.quantity}+ units`;
+    case PricingRuleType.CUSTOMER_QUANTITY_PRICE: return `Customer bulk price for ${ctx.quantity}+ ${ctx.unitLabel ?? ctx.unitCode}`;
     case PricingRuleType.CUSTOMER_GROUP_PRICE: return `${ctx.customerGroup ?? "Group"} customer price applied`;
     case PricingRuleType.CUSTOMER_GROUP_QUANTITY_PRICE: return `${ctx.customerGroup ?? "Group"} bulk price applied`;
-    case PricingRuleType.PRODUCT_QUANTITY_PRICE: return `Quantity price applied: ${rule.minQuantity ?? ""}+ units`;
-    case PricingRuleType.SELLING_UNIT_PRICE: return `Price for unit ${ctx.unitCode}`;
+    case PricingRuleType.PRODUCT_QUANTITY_PRICE: return `Quantity price applied: ${rule.minQuantity ?? ""}+ ${ctx.unitLabel ?? ctx.unitCode}`;
+    case PricingRuleType.SELLING_UNIT_PRICE: return `Price for ${ctx.unitLabel ?? ctx.unitCode}`;
     case PricingRuleType.PROMOTIONAL_PRICE: return rule.label ?? "Promotional price applied";
     case PricingRuleType.PAYMENT_METHOD_PRICE: return `${ctx.paymentMethod ?? "Payment"} price applied`;
     case PricingRuleType.LEARNED_RECOMMENDATION: return "Suggested from past accepted sales";

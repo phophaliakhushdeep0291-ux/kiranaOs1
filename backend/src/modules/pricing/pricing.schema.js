@@ -5,6 +5,7 @@ const qty = z.coerce.number().finite().nonnegative();
 
 export const evaluateSchema = z.object({
   productId: z.string().min(1),
+  sellingUnitId: z.string().min(1).optional(),
   unitCode: z.string().optional(),
   customerId: z.string().optional(),
   customerGroup: z.string().optional(),
@@ -25,6 +26,7 @@ const ruleBody = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "EXPIRED", "ARCHIVED"]).optional(),
   priority: z.coerce.number().int().optional(),
   productId: z.string().optional().nullable(),
+  sellingUnitId: z.string().optional().nullable(),
   unitCode: z.string().optional().nullable(),
   customerId: z.string().optional().nullable(),
   customerGroup: z.string().optional().nullable(),
@@ -43,6 +45,24 @@ const ruleBody = z.object({
 
 export const createRuleSchema = ruleBody;
 export const updateRuleSchema = ruleBody.partial();
+
+export const sellingUnitSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  unitType: z.string().trim().min(1).max(40),
+  unitCode: z.string().trim().min(1).max(80),
+  packSizeValue: qty.positive().optional().nullable(),
+  packSizeUnit: z.string().trim().min(1).max(40).optional().nullable(),
+  conversionToBase: qty.positive(),
+  barcode: z.string().trim().max(120).optional().nullable(),
+  defaultPrice: money.positive(),
+  minimumPrice: money.optional().nullable(),
+  maximumPrice: money.optional().nullable(),
+  costPrice: money.optional().nullable(),
+  isDefault: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const updateSellingUnitSchema = sellingUnitSchema.partial();
 
 export const pricingSettingsSchema = z.object({
   smartPricingEnabled: z.boolean().optional(),

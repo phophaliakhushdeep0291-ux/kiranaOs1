@@ -16,6 +16,7 @@ export interface ApiPricingRule {
   status?: string;
   priority?: number | null;
   productId?: string | null;
+  sellingUnitId?: string | null;
   unitCode?: string | null;
   customerId?: string | null;
   customerGroup?: string | null;
@@ -43,6 +44,7 @@ export function normalizeApiRule(row: ApiPricingRule): PricingRule | null {
     ruleType: row.ruleType as PricingRuleType,
     priority: row.priority ?? undefined,
     productId: row.productId ?? undefined,
+    sellingUnitId: row.sellingUnitId ?? undefined,
     unitCode: row.unitCode ?? undefined,
     customerId: row.customerId ?? undefined,
     customerGroup: row.customerGroup ?? undefined,
@@ -66,6 +68,12 @@ export interface ResolveLinePriceInput {
   quantity: number;
   billDate?: string;
   unitCode?: string;
+  sellingUnitId?: string;
+  unitLabel?: string;
+  defaultPrice?: number;
+  minimumSellingPrice?: number;
+  maximumRetailPrice?: number;
+  productCost?: number;
   customerId?: string;
   customerGroup?: string;
   paymentMethod?: string;
@@ -81,6 +89,12 @@ export function resolveLinePrice(product: Product, input: ResolveLinePriceInput)
     quantity: input.quantity,
     billDate: input.billDate ?? new Date().toISOString(),
     unitCode: input.unitCode,
+    sellingUnitId: input.sellingUnitId,
+    unitLabel: input.unitLabel,
+    defaultPrice: input.defaultPrice,
+    minimumSellingPrice: input.minimumSellingPrice,
+    maximumRetailPrice: input.maximumRetailPrice,
+    productCost: input.productCost,
     customerId: input.customerId,
     customerGroup: input.customerGroup,
     paymentMethod: input.paymentMethod,

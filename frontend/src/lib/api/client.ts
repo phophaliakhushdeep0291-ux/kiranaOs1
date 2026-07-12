@@ -29,6 +29,7 @@ export type {
   PnLReport,
   Product,
   ProductInput,
+  ProductSellingUnit,
   PurchaseBill,
   PurchaseBillInput,
   QueryParams,

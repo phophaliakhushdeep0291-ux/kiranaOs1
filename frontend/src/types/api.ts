@@ -45,6 +45,27 @@ export interface CustomerSpecificPrice {
   price: number;
 }
 
+export interface ProductSellingUnit {
+  id?: string;
+  shopId?: string;
+  productId?: string;
+  name: string;
+  unitType: string;
+  unitCode: string;
+  packSizeValue?: number | null;
+  packSizeUnit?: string | null;
+  conversionToBase: number;
+  barcode?: string | null;
+  defaultPrice: number;
+  minimumPrice?: number | null;
+  maximumPrice?: number | null;
+  costPrice?: number | null;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Product {
   id: string;
   shopId?: string;
@@ -77,6 +98,7 @@ export interface Product {
   wholesaleFromQuantity?: number;
   quantitySlabPricing?: QuantitySlabPrice[];
   customerSpecificPricing?: CustomerSpecificPrice[] | Record<string, number>;
+  sellingUnits?: ProductSellingUnit[];
   gstRate?: number;
   hsn?: string | null;
   brand?: string | null;
@@ -127,6 +149,7 @@ export interface ProductInput {
   wholesaleFromQuantity?: number;
   quantitySlabPricing?: QuantitySlabPrice[];
   customerSpecificPricing?: CustomerSpecificPrice[] | Record<string, number>;
+  sellingUnits?: ProductSellingUnit[];
   gstRate?: number;
   hsn?: string;
   brand?: string;

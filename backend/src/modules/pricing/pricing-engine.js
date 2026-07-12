@@ -39,6 +39,7 @@ function specificity(rule) {
   let s = 0;
   if (rule.customerId) s += 8;
   if (rule.customerGroup) s += 4;
+  if (rule.sellingUnitId) s += 3;
   if (rule.unitCode) s += 2;
   if (rule.minQuantity != null || rule.maxQuantity != null) s += 1;
   return s;
@@ -69,6 +70,7 @@ function resolveRulePrice(rule, ctx) {
 
 function matchRule(rule, ctx) {
   if (rule.productId && rule.productId !== ctx.productId) return [false, "Different product"];
+  if (rule.sellingUnitId && rule.sellingUnitId !== ctx.sellingUnitId) return [false, "Different selling unit or pack size"];
   if (rule.unitCode && rule.unitCode !== ctx.unitCode) return [false, `Applies to unit ${rule.unitCode}`];
   if (rule.customerId && rule.customerId !== ctx.customerId) return [false, "Different customer"];
   if (rule.customerGroup && rule.customerGroup !== ctx.customerGroup) return [false, `Applies to ${rule.customerGroup} group`];
@@ -84,11 +86,11 @@ function defaultExplanation(rule, ctx) {
   if (rule.label) return rule.label;
   switch (rule.ruleType) {
     case "CUSTOMER_FIXED_PRICE": return "Customer price applied";
-    case "CUSTOMER_QUANTITY_PRICE": return `Customer bulk price for ${ctx.quantity}+ units`;
+    case "CUSTOMER_QUANTITY_PRICE": return `Customer bulk price for ${ctx.quantity}+ ${ctx.unitLabel ?? ctx.unitCode}`;
     case "CUSTOMER_GROUP_PRICE": return `${ctx.customerGroup ?? "Group"} customer price applied`;
     case "CUSTOMER_GROUP_QUANTITY_PRICE": return `${ctx.customerGroup ?? "Group"} bulk price applied`;
-    case "PRODUCT_QUANTITY_PRICE": return `Quantity price applied: ${rule.minQuantity ?? ""}+ units`;
-    case "SELLING_UNIT_PRICE": return `Price for unit ${ctx.unitCode}`;
+    case "PRODUCT_QUANTITY_PRICE": return `Quantity price applied: ${rule.minQuantity ?? ""}+ ${ctx.unitLabel ?? ctx.unitCode}`;
+    case "SELLING_UNIT_PRICE": return `Price for ${ctx.unitLabel ?? ctx.unitCode}`;
     case "PROMOTIONAL_PRICE": return rule.label ?? "Promotional price applied";
     case "PAYMENT_METHOD_PRICE": return `${ctx.paymentMethod ?? "Payment"} price applied`;
     case "LEARNED_RECOMMENDATION": return "Suggested from past accepted sales";

@@ -1,13 +1,33 @@
 import { z } from "zod";
-import type { Product, ProductInput } from "@/lib/api/client";
+import type { Product, ProductInput, ProductSellingUnit } from "@/lib/api/client";
 import { mergeProductAliasSuggestions, splitProductAliases } from "@/features/products/product-reliability";
-import { averageCost, baseUnitFor, fromBaseQty, round2, toBaseQty } from "./product-pricing";
+import { averageCost, baseUnitFor, fromBaseQty, round2, sellingUnitCode, sellingUnitConversion, sellingUnitName, toBaseQty } from "./product-pricing";
+
+const sellingUnitFormSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  unitType: z.string(),
+  unitCode: z.string(),
+  packSizeValue: z.number().nullable().optional(),
+  packSizeUnit: z.string().nullable().optional(),
+  conversionToBase: z.number(),
+  barcode: z.string().nullable().optional(),
+  defaultPrice: z.number(),
+  minimumPrice: z.number().nullable().optional(),
+  maximumPrice: z.number().nullable().optional(),
+  costPrice: z.number().nullable().optional(),
+  isDefault: z.boolean(),
+  isActive: z.boolean(),
+});
 
 export const productFormSchema = z.object({
   name: z.string().trim().min(1, "Product name required"),
   category: z.string().trim().min(1).default("general"),
   brand: z.string().trim().optional(),
   unit: z.string().trim().min(1).default("piece"),
+  packSizeValue: z.coerce.number().positive("Pack size must be greater than zero").default(1),
+  packSizeUnit: z.string().trim().min(1).default("piece"),
+  sellingUnits: z.array(sellingUnitFormSchema).default([]),
   barcode: z.string().trim().optional(),
   hsn: z.string().trim().optional(),
   aliasesText: z.string().optional(),
@@ -27,6 +47,12 @@ export const productFormSchema = z.object({
   imageUrl: z.string().optional(),
   isLooseItem: z.boolean().default(false),
   isActive: z.boolean().default(true),
+}).superRefine((value, ctx) => {
+  if (!value.isLooseItem && ["packet", "pack", "pouch"].includes(value.unit.toLowerCase())) {
+    if (!(value.packSizeValue > 0) || !value.packSizeUnit) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["packSizeValue"], message: "Tell us what one packet contains" });
+    }
+  }
 });
 
 export type ProductFormData = z.infer<typeof productFormSchema>;
@@ -102,13 +128,17 @@ export function readProductDraftEventDetail(detail: unknown): ProductDraftEventD
 }
 
 export function productToForm(product?: Product): ProductFormData {
-  const unit = product?.unit ?? product?.displayUnit ?? product?.rateUnit ?? "piece";
+  const defaultUnit = product?.sellingUnits?.find((row) => row.isDefault) ?? product?.sellingUnits?.[0];
+  const unit = defaultUnit?.unitType ?? product?.unit ?? product?.rateUnit ?? product?.displayUnit ?? "piece";
   const sellingPrice = product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? 0;
   return {
     name: product?.name ?? "",
     category: product?.category ?? "general",
     brand: product?.brand ?? "",
     unit,
+    packSizeValue: defaultUnit?.packSizeValue ?? 1,
+    packSizeUnit: defaultUnit?.packSizeUnit ?? product?.baseUnit ?? (product?.isLooseItem ? unit : "piece"),
+    sellingUnits: product?.sellingUnits ?? [],
     barcode: product?.barcode ?? product?.sku ?? "",
     hsn: product?.hsn ?? "",
     aliasesText: (product?.aliases ?? []).join(", "),
@@ -121,8 +151,12 @@ export function productToForm(product?: Product): ProductFormData {
     retailFromQuantity: product?.retailFromQuantity ?? 1,
     wholesalePrice: product?.wholesalePrice ?? product?.wholesalePricePerRateUnit ?? sellingPrice,
     wholesaleFromQuantity: product?.wholesaleFromQuantity ?? 10,
-    stockQuantity: fromBaseQty(product?.stockBaseQty, unit),
-    lowStockAlert: fromBaseQty(product?.lowStockThreshold, unit),
+    stockQuantity: defaultUnit?.conversionToBase
+      ? round2(Number(product?.stockBaseQty ?? 0) / defaultUnit.conversionToBase)
+      : fromBaseQty(product?.stockBaseQty, unit),
+    lowStockAlert: defaultUnit?.conversionToBase
+      ? round2(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
+      : fromBaseQty(product?.lowStockThreshold, unit),
     reorderLevel: product?.reorderLevel ?? 0,
     description: product?.description ?? "",
     imageUrl: product?.imageUrl ?? "",
@@ -132,26 +166,53 @@ export function productToForm(product?: Product): ProductFormData {
 }
 
 export function formToInput(values: ProductFormData, ownerPin?: string, reason?: string): ProductInput {
-  const baseUnit = baseUnitFor(values.unit);
+  const baseUnit = values.isLooseItem ? baseUnitFor(values.unit) : baseUnitFor(values.packSizeUnit);
+  const conversionToBase = values.isLooseItem
+    ? toBaseQty(1, values.unit)
+    : sellingUnitConversion(values.packSizeValue, values.packSizeUnit);
   const sellingPrice = round2(values.sellingPrice);
   const minPrice = round2(values.minimumSellingPrice);
   const retailPrice = round2(values.retailPrice || sellingPrice);
   const wholesalePrice = round2(values.wholesalePrice || sellingPrice);
   const avgCost = round2(values.costPrice);
+  const previousDefault = values.sellingUnits.find((row) => row.isDefault) ?? values.sellingUnits[0];
+  const unitName = values.isLooseItem
+    ? values.unit
+    : sellingUnitName(values.unit, values.packSizeValue, values.packSizeUnit);
+  const defaultSellingUnit: ProductSellingUnit = {
+    ...(previousDefault?.id ? { id: previousDefault.id } : {}),
+    name: unitName,
+    unitType: values.unit,
+    unitCode: previousDefault?.unitCode || sellingUnitCode(values.unit, values.packSizeValue, values.packSizeUnit),
+    packSizeValue: values.isLooseItem ? null : values.packSizeValue,
+    packSizeUnit: values.isLooseItem ? null : values.packSizeUnit,
+    conversionToBase,
+    barcode: values.barcode?.trim() || null,
+    defaultPrice: sellingPrice,
+    minimumPrice: minPrice || null,
+    maximumPrice: round2(values.mrp) || null,
+    costPrice: avgCost || null,
+    isDefault: true,
+    isActive: true,
+  };
+  const sellingUnits = [
+    defaultSellingUnit,
+    ...values.sellingUnits.filter((row) => row.id !== previousDefault?.id && row.unitCode !== previousDefault?.unitCode),
+  ];
 
   return {
     name: values.name.trim(),
     category: values.category,
     brand: values.brand?.trim() || undefined,
     unit: values.unit,
-    displayUnit: values.unit,
+    displayUnit: unitName,
     rateUnit: values.unit,
     baseUnit,
     barcode: values.barcode?.trim() || undefined,
     sku: values.barcode?.trim() || undefined,
     hsn: values.hsn?.trim() || undefined,
     aliases: splitProductAliases(values.aliasesText),
-    stockBaseQty: toBaseQty(values.stockQuantity, values.unit),
+    stockBaseQty: round2(values.stockQuantity * conversionToBase),
     stockQuantity: values.stockQuantity,
     stockUnit: values.unit,
     stockTrackingEnabled: true,
@@ -171,13 +232,14 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     wholesaleFromQuantity: Number(values.wholesaleFromQuantity || 10),
     quantitySlabPricing: [],
     customerSpecificPricing: [],
+    sellingUnits,
     mrp: round2(values.mrp),
     gstRate: Number(values.gstRate || 0),
     reorderLevel: Number(values.reorderLevel || 0),
     description: values.description?.trim() || undefined,
     imageUrl: values.imageUrl || undefined,
     isLooseItem: values.isLooseItem,
-    lowStockThreshold: toBaseQty(values.lowStockAlert, values.unit),
+    lowStockThreshold: round2(values.lowStockAlert * conversionToBase),
     lowStockAlert: values.lowStockAlert,
     isActive: values.isActive,
     status: values.isActive ? "active" : "inactive",

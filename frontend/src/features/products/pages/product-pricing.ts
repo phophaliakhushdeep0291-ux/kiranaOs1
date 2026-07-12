@@ -44,6 +44,25 @@ export function baseUnitFor(unit: string): string {
   return UNIT_TO_BASE_UNIT[unit] ?? unit ?? "piece";
 }
 
+export function sellingUnitConversion(packSizeValue: number, packSizeUnit: string): number {
+  return round2(Number(packSizeValue || 0) * (UNIT_FACTOR_TO_BASE[packSizeUnit] ?? 1));
+}
+
+export function sellingUnitName(unitType: string, packSizeValue?: number | null, packSizeUnit?: string | null): string {
+  const type = String(unitType || "unit").trim();
+  if (!(Number(packSizeValue) > 0) || !packSizeUnit) return type;
+  if (Number(packSizeValue) === 1 && packSizeUnit === type) return type;
+  return `${type} ${Number(packSizeValue)} ${packSizeUnit}`;
+}
+
+export function sellingUnitCode(unitType: string, packSizeValue?: number | null, packSizeUnit?: string | null): string {
+  return [unitType, Number(packSizeValue) > 0 ? Number(packSizeValue) : 1, packSizeUnit || "count"]
+    .join("-")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function toBaseQty(quantity: number, unit: string): number {
   return round2(Number(quantity || 0) * (UNIT_FACTOR_TO_BASE[unit] ?? 1));
 }

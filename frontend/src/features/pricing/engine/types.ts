@@ -81,6 +81,7 @@ export interface PricingRule {
 
   // Match predicates — undefined means "matches anything".
   productId?: string;
+  sellingUnitId?: string;
   unitCode?: string;
   customerId?: string;
   customerGroup?: string;
@@ -113,8 +114,10 @@ export type PricingSource = "BILLING" | "ESTIMATE" | "ORDER" | "OFFLINE_BILLING"
 export interface PricingContext {
   shopId: string;
   productId: string;
-  /** rateUnit string (KiranaOS has no per-unit table yet). */
+  /** Durable product selling-unit identity (packet 500 g, packet 1 kg, box, etc.). */
+  sellingUnitId?: string;
   unitCode: string;
+  unitLabel?: string;
 
   customerId?: string;
   customerGroup?: string;

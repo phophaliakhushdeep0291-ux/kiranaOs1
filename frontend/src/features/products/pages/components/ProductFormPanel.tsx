@@ -11,10 +11,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useBusinessType } from "@/features/settings/business-types";
 import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAliases } from "@/features/products/product-reliability";
 import { fetchGroqAliasSuggestions } from "../product-aliases";
-import { UNITS } from "../product-pricing";
+import { baseUnitFor, sellingUnitConversion, UNITS } from "../product-pricing";
 import type { ProductFormData } from "../product-form-state";
 
 const GST_RATES = [0, 5, 12, 18, 28];
+const PACK_MEASURE_UNITS = ["piece", "packet", "gram", "kg", "ml", "litre"];
 
 interface ProductFormPanelProps {
   open: boolean;
@@ -76,6 +77,12 @@ export function ProductFormPanel({
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
   const isLoose = !!form.watch("isLooseItem");
+  const selectedUnit = form.watch("unit");
+  const packSizeValue = Number(form.watch("packSizeValue") || 0);
+  const packSizeUnit = form.watch("packSizeUnit");
+  const showPackContent = !isLoose && selectedUnit !== "piece";
+  const packBaseQuantity = sellingUnitConversion(packSizeValue, packSizeUnit);
+  const packBaseUnit = baseUnitFor(packSizeUnit);
   const err = form.formState.errors;
 
   /* aliases */
@@ -222,6 +229,31 @@ export function ProductFormPanel({
                 {UnitField}
               </div>
             )}
+
+            {showPackContent ? (
+              <Field label={`One ${selectedUnit} contains`} required error={err.packSizeValue?.message}>
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(120px,0.9fr)] gap-2">
+                  <Input
+                    className="h-10"
+                    type="number"
+                    inputMode="decimal"
+                    min="0.001"
+                    step="0.001"
+                    placeholder="e.g. 500"
+                    {...form.register("packSizeValue")}
+                  />
+                  <Select value={packSizeUnit} onValueChange={(v) => form.setValue("packSizeUnit", v, { shouldDirty: true, shouldValidate: true })}>
+                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PACK_MEASURE_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="mt-1.5 rounded-lg bg-[#eef5ff] px-2.5 py-2 text-[11px] font-semibold leading-relaxed text-[#31527e]">
+                  1 {selectedUnit} = {packBaseQuantity || 0} {packBaseUnit} in stock. Quantity pricing uses the number of {selectedUnit}s.
+                </p>
+              </Field>
+            ) : null}
 
             <Field label="HSN (Optional)">
               <Input className="h-10" placeholder="e.g. 25010010" {...form.register("hsn")} />

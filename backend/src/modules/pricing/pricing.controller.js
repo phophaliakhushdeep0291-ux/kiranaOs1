@@ -43,3 +43,23 @@ export async function updateSettings(req, res, next) {
   try { res.json({ success: true, data: await svc.updatePricingSettings(req.shopId, req.body, actor(req)) }); }
   catch (err) { next(err); }
 }
+
+export async function listSellingUnits(req, res, next) {
+  try { res.json({ success: true, data: await svc.listSellingUnits(req.shopId, req.params.productId) }); }
+  catch (err) { next(err); }
+}
+
+export async function createSellingUnit(req, res, next) {
+  try { res.status(201).json({ success: true, data: await svc.createSellingUnit(req.shopId, req.params.productId, req.body, actor(req)) }); }
+  catch (err) { next(err); }
+}
+
+export async function updateSellingUnit(req, res, next) {
+  try { res.json({ success: true, data: await svc.updateSellingUnit(req.shopId, req.params.productId, req.params.unitId, req.body, actor(req)) }); }
+  catch (err) { next(err); }
+}
+
+export async function deleteSellingUnit(req, res, next) {
+  try { res.json({ success: true, data: await svc.archiveSellingUnit(req.shopId, req.params.productId, req.params.unitId, actor(req)) }); }
+  catch (err) { next(err); }
+}

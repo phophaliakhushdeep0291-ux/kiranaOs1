@@ -102,6 +102,7 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
     wholesaleFromQuantity: normalized.wholesaleFromQuantity ?? existing?.wholesaleFromQuantity ?? 10,
     quantitySlabPricing: [],
     customerSpecificPricing: [],
+    sellingUnits: normalized.sellingUnits ?? existing?.sellingUnits ?? [],
     gstRate: normalized.gstRate,
     hsn: normalized.hsn ?? existing?.hsn ?? null,
     brand: normalized.brand ?? existing?.brand ?? null,

@@ -40,6 +40,23 @@ export const customerSpecificPriceSchema = z.object({
   price: positiveMoney,
 });
 
+const productSellingUnitSchema = z.object({
+  id: optionalText,
+  name: z.string().trim().min(1).max(80),
+  unitType: z.string().trim().min(1).max(40),
+  unitCode: z.string().trim().min(1).max(80),
+  packSizeValue: quantity.optional().nullable(),
+  packSizeUnit: optionalText.nullable(),
+  conversionToBase: quantity,
+  barcode: optionalText.nullable(),
+  defaultPrice: positiveMoney,
+  minimumPrice: money.optional().nullable(),
+  maximumPrice: money.optional().nullable(),
+  costPrice: money.optional().nullable(),
+  isDefault: z.boolean(),
+  isActive: z.boolean(),
+});
+
 export const productCreationSchema = z.object({
   name: z.string().trim().min(1, "Product name is required").max(160),
   category: optionalText,
@@ -78,6 +95,7 @@ export const productCreationSchema = z.object({
   wholesaleFromQuantity: nonNegativeQuantity.optional(),
   quantitySlabPricing: z.array(quantitySlabPriceSchema).default([]),
   customerSpecificPricing: z.union([z.array(customerSpecificPriceSchema), z.record(z.coerce.number().finite().nonnegative())]).optional(),
+  sellingUnits: z.array(productSellingUnitSchema).max(30).optional(),
   gstRate: percentage.default(0),
   lowStockThreshold: nonNegativeQuantity.optional(),
   lowStockAlert: nonNegativeQuantity.optional(),

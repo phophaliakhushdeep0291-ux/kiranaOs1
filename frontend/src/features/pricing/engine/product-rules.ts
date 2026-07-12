@@ -41,6 +41,12 @@ export function contextFromProduct(
     quantity: number;
     billDate: string;
     unitCode?: string;
+    sellingUnitId?: string;
+    unitLabel?: string;
+    defaultPrice?: number;
+    minimumSellingPrice?: number;
+    maximumRetailPrice?: number;
+    productCost?: number;
     customerId?: string;
     customerGroup?: string;
     paymentMethod?: string;
@@ -50,20 +56,22 @@ export function contextFromProduct(
   },
 ): PricingContext {
   const p = product as ProductPricingFields;
-  const defaultPrice = num(p.sellingPrice ?? p.defaultPricePerRateUnit);
+  const defaultPrice = num(opts.defaultPrice ?? p.sellingPrice ?? p.defaultPricePerRateUnit);
   return {
     shopId: opts.shopId,
     productId: product.id,
+    sellingUnitId: opts.sellingUnitId,
     unitCode: opts.unitCode ?? product.rateUnit ?? product.displayUnit ?? "piece",
+    unitLabel: opts.unitLabel,
     customerId: opts.customerId,
     customerGroup: opts.customerGroup,
     quantity: opts.quantity,
     billDate: opts.billDate,
     paymentMethod: opts.paymentMethod,
-    productCost: num(p.averageCostPrice ?? p.costPrice ?? product.costPerRateUnit),
+    productCost: num(opts.productCost ?? p.averageCostPrice ?? p.costPrice ?? product.costPerRateUnit),
     defaultPrice,
-    minimumSellingPrice: num(p.minimumSellingPrice ?? product.minPricePerRateUnit),
-    maximumRetailPrice: num((product as { mrp?: number }).mrp),
+    minimumSellingPrice: num(opts.minimumSellingPrice ?? p.minimumSellingPrice ?? product.minPricePerRateUnit),
+    maximumRetailPrice: num(opts.maximumRetailPrice ?? (product as { mrp?: number }).mrp),
     source: opts.source,
     staffUserId: opts.staffUserId,
     deviceId: opts.deviceId,

@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireShop } from "../../middleware/permissions.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { validate } from "../../middleware/validate.js";
-import { evaluateSchema, createRuleSchema, updateRuleSchema, pricingSettingsSchema } from "./pricing.schema.js";
+import { evaluateSchema, createRuleSchema, updateRuleSchema, pricingSettingsSchema, sellingUnitSchema, updateSellingUnitSchema } from "./pricing.schema.js";
 import * as ctrl from "./pricing.controller.js";
 
 const router = Router();
@@ -14,11 +14,15 @@ router.post("/evaluate", validate(evaluateSchema), ctrl.evaluate);
 router.get("/rules", ctrl.listRules);
 router.get("/settings", ctrl.getSettings);
 router.get("/products/:productId", ctrl.productPricing);
+router.get("/products/:productId/units", ctrl.listSellingUnits);
 
 // Mutations — owner/admin only (managing permanent prices + smart-pricing config).
 router.post("/rules", requireRole("owner", "admin"), validate(createRuleSchema), ctrl.createRule);
 router.patch("/rules/:id", requireRole("owner", "admin"), validate(updateRuleSchema), ctrl.updateRule);
 router.delete("/rules/:id", requireRole("owner", "admin"), ctrl.deleteRule);
+router.post("/products/:productId/units", requireRole("owner", "admin"), validate(sellingUnitSchema), ctrl.createSellingUnit);
+router.patch("/products/:productId/units/:unitId", requireRole("owner", "admin"), validate(updateSellingUnitSchema), ctrl.updateSellingUnit);
+router.delete("/products/:productId/units/:unitId", requireRole("owner", "admin"), ctrl.deleteSellingUnit);
 router.patch("/settings", requireRole("owner", "admin"), validate(pricingSettingsSchema), ctrl.updateSettings);
 
 export default router;
