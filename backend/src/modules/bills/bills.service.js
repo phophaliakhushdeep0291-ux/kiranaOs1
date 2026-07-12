@@ -110,6 +110,16 @@ export async function confirmBill(shopId, body, actor = {}) {
       where: { id: { in: productIds }, shopId, deletedAt: null },
     });
     const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
+    const dbSellingUnits = productIds.length > 0
+      ? await tx.productSellingUnit.findMany({ where: { shopId, productId: { in: productIds }, isActive: true } })
+      : [];
+    const sellingUnitById = new Map(dbSellingUnits.map((unit) => [unit.id, unit]));
+    const sellingUnitByCode = new Map(dbSellingUnits.map((unit) => [`${unit.productId}:${unit.unitCode}`, unit]));
+    const defaultSellingUnitByProduct = new Map();
+    for (const unit of dbSellingUnits) {
+      const current = defaultSellingUnitByProduct.get(unit.productId);
+      if (!current || unit.isDefault) defaultSellingUnitByProduct.set(unit.productId, unit);
+    }
 
     // ── 2. Build bill items + validate stock ──────────────────
     let subtotal = 0;
@@ -125,14 +135,29 @@ export async function confirmBill(shopId, body, actor = {}) {
         throw new AppError(`Product not found: ${item.productId}`, 404);
       }
 
+      const sellingUnit = product
+        ? (item.sellingUnitId ? sellingUnitById.get(item.sellingUnitId) : null)
+          ?? (item.sellingUnitCode ? sellingUnitByCode.get(`${product.id}:${item.sellingUnitCode}`) : null)
+          ?? defaultSellingUnitByProduct.get(product.id)
+          ?? null
+        : null;
+      if (sellingUnit && sellingUnit.productId !== product?.id) {
+        throw new AppError("Selling unit does not belong to the selected product", 400);
+      }
+      if (product && (item.sellingUnitId || item.sellingUnitCode) && !sellingUnit) {
+        throw new AppError(`Selling unit is unavailable for "${product.name}". Refresh product pricing and try again.`, 409);
+      }
+
       // Determine units from product if productId given, else use what's passed
       const baseUnit = product?.baseUnit ?? item.enteredUnit;
-      const rateUnit = product?.rateUnit ?? item.enteredUnit;
-      const costPerRateUnit = product?.costPerRateUnit ?? 0;
+      const rateUnit = sellingUnit?.name ?? product?.rateUnit ?? item.enteredUnit;
+      const costPerRateUnit = sellingUnit?.costPrice ?? product?.costPerRateUnit ?? 0;
 
       // Convert entered qty to base qty
-      const qtyInBase = product
-        ? toBaseQty(item.quantity, item.enteredUnit, product.baseUnit)
+      const qtyInBase = sellingUnit
+        ? round2(item.quantity * sellingUnit.conversionToBase)
+        : product
+          ? toBaseQty(item.quantity, item.enteredUnit, product.baseUnit)
         : item.quantity;
 
       // Overselling is allowed (allowStockShortfall) for the live counter and offline sync alike:
@@ -151,9 +176,18 @@ export async function confirmBill(shopId, body, actor = {}) {
 
       // Line totals must use quantity converted into the product's rate unit.
       // Example: rate ₹46/kg and quantity 500g => qtyInRateUnit 0.5 => lineTotal ₹23.
-      const qtyInRateUnit = product
-        ? baseQtyToRateQty(qtyInBase, product.rateUnit, product.baseUnit)
+      const qtyInRateUnit = sellingUnit
+        ? item.quantity
+        : product
+          ? baseQtyToRateQty(qtyInBase, product.rateUnit, product.baseUnit)
         : item.quantity;
+
+      const maximumPrice = Number(sellingUnit?.maximumPrice ?? product?.mrp ?? 0);
+      if (maximumPrice > 0 && item.ratePerRateUnit > maximumPrice + 0.005) {
+        const error = new AppError(`Price for "${product?.name ?? item.name}" exceeds the configured maximum of Rs ${maximumPrice}`, 400);
+        error.code = "PRICE_ABOVE_CONFIGURED_MAXIMUM";
+        throw error;
+      }
       const lineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
       // GST: exclusive adds tax on top of the entered price; inclusive (kirana
       // MRP default) extracts the tax already inside it; none disables GST.
@@ -172,6 +206,10 @@ export async function confirmBill(shopId, body, actor = {}) {
 
       billItems.push({
         productId: item.productId ?? null,
+        sellingUnitId: sellingUnit?.id ?? null,
+        sellingUnitCode: sellingUnit?.unitCode ?? item.sellingUnitCode ?? null,
+        sellingUnitLabel: sellingUnit?.name ?? item.sellingUnitLabel ?? item.enteredUnit,
+        conversionToBase: sellingUnit?.conversionToBase ?? item.conversionToBase ?? null,
         name: product?.name ?? item.name,
         quantity: item.quantity,
         enteredUnit: item.enteredUnit,
@@ -184,7 +222,16 @@ export async function confirmBill(shopId, body, actor = {}) {
         lineTotal,
         lineCost,
         lineProfit,
-        ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineTotal, lineCost, lineProfit }),
+        originalUnitPrice: item.originalUnitPrice ?? item.ratePerRateUnit,
+        appliedPricingRuleId: item.appliedPricingRuleId ?? null,
+        appliedPricingRuleType: item.appliedPricingRuleType ?? null,
+        pricingExplanation: item.pricingExplanation ?? null,
+        pricingConfidence: item.pricingConfidence ?? null,
+        pricingCalculationVersion: item.pricingCalculationVersion ?? null,
+        wasPriceOverridden: item.wasPriceOverridden === true,
+        priceOverrideReason: item.priceOverrideReason ?? null,
+        priceApprovedByUserId: item.wasPriceOverridden ? createdByUserId : null,
+        ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineTotal, lineCost, lineProfit, originalUnitPrice: item.originalUnitPrice ?? item.ratePerRateUnit }),
       });
 
       if (product) {

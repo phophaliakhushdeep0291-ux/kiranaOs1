@@ -162,11 +162,18 @@ export default function BillDetailPage() {
   const billTypeStr = String(bill?.billType ?? "normal_sale");
   const canReturn = Boolean(bill) && bill?.status !== "cancelled" && billTypeStr !== "sales_return";
   const returnLines: ReturnLineInput[] = useMemo(() => visibleItems.map((item) => ({
+    billItemId: String(item.id ?? "") || undefined,
     productId: (item.productId ?? item.product_id) as string | undefined,
+    sellingUnitId: String(item.sellingUnitId ?? item.selling_unit_id ?? "") || undefined,
+    sellingUnitCode: String(item.sellingUnitCode ?? item.selling_unit_code ?? "") || undefined,
+    sellingUnitLabel: String(item.sellingUnitLabel ?? item.selling_unit_label ?? "") || undefined,
+    conversionToBase: readNumber(item.conversionToBase ?? item.conversion_to_base, 0) || undefined,
     name: String(item.name ?? item.productName ?? "Item"),
     soldQty: Math.abs(readNumber(item.quantity, 0)),
     enteredUnit: String(item.enteredUnit ?? item.entered_unit ?? "piece"),
     ratePerRateUnit: readNumber(item.ratePerRateUnit ?? item.rate_per_rate_unit ?? item.rate, 0),
+    costPerRateUnit: readNumber(item.costPerRateUnit ?? item.cost_per_rate_unit, 0) || undefined,
+    originalUnitPrice: readNumber(item.originalUnitPrice ?? item.original_unit_price, 0) || undefined,
     gstRate: readNumber(item.gstRate ?? item.gst_rate, 0),
   })), [visibleItems]);
 

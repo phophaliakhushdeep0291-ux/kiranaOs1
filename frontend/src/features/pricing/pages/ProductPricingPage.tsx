@@ -1,10 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Layers, Plus, Trash2, Users, UserSquare } from "lucide-react";
-import { useListCustomers, useListProducts, type Customer, type Product } from "@/lib/api/client";
+import { ArrowLeft, Box, Layers, Package, Plus, Trash2, Users, UserSquare } from "lucide-react";
+import { getListProductsQueryKey, useListCustomers, useListProducts, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { usePricingRules, partitionProductRules } from "@/features/pricing/use-pricing-rules";
 import type { ApiPricingRule } from "@/features/pricing/api";
+import { createProductSellingUnit, deleteProductSellingUnit, listProductSellingUnits } from "@/features/pricing/api";
+import { baseUnitFor, sellingUnitCode, sellingUnitConversion, sellingUnitName } from "@/features/products/pages/product-pricing";
 
 const GROUPS = ["Retail", "Regular", "VIP", "Reseller", "Wholesale", "Institutional", "Staff"];
 const rs = (n: unknown) => `₹${Number(n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -14,6 +17,7 @@ export default function ProductPricingPage() {
   const productId = params.productId ?? "";
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const productsQuery = useListProducts({ limit: 1000 }, { query: { staleTime: 60_000 } });
   const product = useMemo(
@@ -21,19 +25,59 @@ export default function ProductPricingPage() {
     [productsQuery.data, productId],
   );
   const customersQuery = useListCustomers();
+  const unitsQuery = useQuery({
+    queryKey: ["product-selling-units", productId],
+    queryFn: () => listProductSellingUnits(productId),
+    enabled: Boolean(productId),
+    initialData: product?.sellingUnits,
+  });
+  const createUnit = useMutation({
+    mutationFn: (body: ProductSellingUnit) => createProductSellingUnit(productId, body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["product-selling-units", productId] });
+      await queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+    },
+  });
+  const removeUnit = useMutation({
+    mutationFn: (unitId: string) => deleteProductSellingUnit(productId, unitId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["product-selling-units", productId] });
+      await queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
+    },
+  });
   const { query, create, remove } = usePricingRules();
   const rules = query.data ?? [];
-  const { quantitySlabs, groupPrices, customerPrices } = useMemo(
-    () => partitionProductRules(rules, productId),
-    [rules, productId],
-  );
+  const partitioned = useMemo(() => partitionProductRules(rules, productId), [rules, productId]);
+  const units = unitsQuery.data ?? product?.sellingUnits ?? [];
+  const [selectedUnitKey, setSelectedUnitKey] = useState("");
+  const selectedUnit = units.find((unit) => (unit.id ?? unit.unitCode) === selectedUnitKey)
+    ?? units.find((unit) => unit.isDefault)
+    ?? units[0];
+  useEffect(() => {
+    if (!selectedUnitKey && selectedUnit) setSelectedUnitKey(selectedUnit.id ?? selectedUnit.unitCode);
+  }, [selectedUnitKey, selectedUnit]);
+  const appliesToSelectedUnit = (rule: ApiPricingRule) => selectedUnit
+    ? rule.sellingUnitId
+      ? rule.sellingUnitId === selectedUnit.id
+      : rule.unitCode
+        ? rule.unitCode === selectedUnit.unitCode
+        : selectedUnit.isDefault
+    : !rule.sellingUnitId && !rule.unitCode;
+  const quantitySlabs = partitioned.quantitySlabs.filter(appliesToSelectedUnit);
+  const groupPrices = partitioned.groupPrices.filter(appliesToSelectedUnit);
+  const customerPrices = partitioned.customerPrices.filter(appliesToSelectedUnit);
 
-  const unit = product?.rateUnit ?? product?.displayUnit ?? "unit";
-  const busy = create.isPending || remove.isPending;
+  const unit = selectedUnit?.name ?? product?.rateUnit ?? product?.displayUnit ?? "unit";
+  const busy = create.isPending || remove.isPending || createUnit.isPending || removeUnit.isPending;
 
   const add = async (body: Partial<ApiPricingRule> & { name: string; ruleType: string }) => {
     try {
-      await create.mutateAsync({ ...body, productId });
+      await create.mutateAsync({
+        ...body,
+        productId,
+        sellingUnitId: selectedUnit?.id,
+        unitCode: selectedUnit?.unitCode,
+      });
       toast({ title: "Pricing rule added" });
     } catch (e) {
       toast({ title: "Could not add rule", description: e instanceof Error ? e.message : "Try again", variant: "destructive" });
@@ -66,8 +110,62 @@ export default function ProductPricingPage() {
         <Metric label="MRP" value={product.mrp ? rs(product.mrp) : "—"} />
       </div>
 
+      <Section icon={<Package size={15} />} title="Selling units & pack sizes" hint="Each packet, pouch, bottle, box, or carton has its own stock conversion and price.">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {units.map((row) => {
+            const active = selectedUnit && (row.id ?? row.unitCode) === (selectedUnit.id ?? selectedUnit.unitCode);
+            return (
+              <button
+                key={row.id ?? row.unitCode}
+                type="button"
+                onClick={() => setSelectedUnitKey(row.id ?? row.unitCode)}
+                className={`relative rounded-xl border p-3 text-left transition-colors ${active ? "border-[#075fff] bg-[#eef4ff]" : "border-[#e6ecf4] bg-white hover:border-[#b9cef7]"}`}
+              >
+                <span className="flex items-start justify-between gap-2">
+                  <span>
+                    <span className="block text-[13px] font-black text-[#13254a]">{row.name}</span>
+                    <span className="mt-0.5 block text-[10.5px] font-semibold text-[#6d7c98]">1 {row.unitType} removes {row.conversionToBase} {product.baseUnit ?? "base units"}</span>
+                  </span>
+                  {row.isDefault ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-700">Default</span> : null}
+                </span>
+                <span className="mt-2 flex items-center gap-3 text-[11px] font-bold text-[#405273]">
+                  <span>{rs(row.defaultPrice)}</span>
+                  {row.minimumPrice ? <span>Min {rs(row.minimumPrice)}</span> : null}
+                  {!row.isDefault && row.id ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => { event.stopPropagation(); void removeUnit.mutateAsync(row.id!).catch((error) => toast({ title: "Could not disable unit", description: error instanceof Error ? error.message : "Try again", variant: "destructive" })); }}
+                      className="ml-auto text-rose-600"
+                    >Disable</span>
+                  ) : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <SellingUnitAdd
+          product={product}
+          disabled={busy}
+          onAdd={async (row) => {
+            try {
+              const created = await createUnit.mutateAsync(row);
+              setSelectedUnitKey(created.id ?? created.unitCode);
+              toast({ title: `${created.name} added`, description: "You can now add quantity slabs for this exact pack size." });
+            } catch (error) {
+              toast({ title: "Could not add selling unit", description: error instanceof Error ? error.message : "Try again", variant: "destructive" });
+            }
+          }}
+        />
+      </Section>
+
       {/* Quantity slabs */}
-      <Section icon={<Layers size={15} />} title="Quantity slabs" hint={`Price per ${unit} at different quantities`}>
+      <Section icon={<Layers size={15} />} title="Quantity slabs" hint={`Quantity is counted in ${unit}. Stock conversion happens separately.`}>
+        {selectedUnit ? (
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#31527e]">
+            Example: minimum quantity 4 means 4 × {selectedUnit.name}; stock changes by {4 * selectedUnit.conversionToBase} {product.baseUnit ?? "base units"}.
+          </div>
+        ) : null}
         {quantitySlabs.map((r) => (
           <Row key={r.id} onDelete={() => del(r.id)} busy={busy}
             main={`${r.minQuantity ?? 0}${r.maxQuantity != null ? `–${r.maxQuantity}` : "+"} ${unit}`}
@@ -143,6 +241,110 @@ function SlabAdd({ unit, onAdd, disabled }: { unit: string; onAdd: (min: number,
       <span className="text-[12px] text-[#8290a8]">{unit} @</span>
       <input className={`${inputCls} w-20`} inputMode="decimal" placeholder="₹ price" value={price} onChange={(e) => setPrice(e.target.value)} />
       <button className={addBtn} disabled={disabled || !ok} onClick={() => { onAdd(Number(min), max === "" ? null : Number(max), Number(price)); setMin(""); setMax(""); setPrice(""); }}><Plus size={14} /> Add</button>
+    </div>
+  );
+}
+
+function SellingUnitAdd({ product, onAdd, disabled }: { product: Product; onAdd: (unit: ProductSellingUnit) => Promise<void>; disabled: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [unitType, setUnitType] = useState("packet");
+  const [packSize, setPackSize] = useState("500");
+  const [packMeasure, setPackMeasure] = useState(product.baseUnit ?? "gram");
+  const [conversion, setConversion] = useState("500");
+  const [barcode, setBarcode] = useState("");
+  const [price, setPrice] = useState("");
+  const [minimum, setMinimum] = useState("");
+  const [maximum, setMaximum] = useState("");
+  const [cost, setCost] = useState("");
+  const name = sellingUnitName(unitType, Number(packSize), packMeasure);
+  const valid = name && Number(packSize) > 0 && Number(conversion) > 0 && Number(price) > 0
+    && (minimum === "" || Number(minimum) >= 0)
+    && (maximum === "" || Number(maximum) >= Number(minimum || 0));
+
+  function updatePackSize(next: string) {
+    setPackSize(next);
+    if (baseUnitFor(packMeasure) === (product.baseUnit ?? baseUnitFor(packMeasure))) {
+      setConversion(String(sellingUnitConversion(Number(next), packMeasure)));
+    }
+  }
+
+  function updatePackMeasure(next: string) {
+    setPackMeasure(next);
+    if (baseUnitFor(next) === (product.baseUnit ?? baseUnitFor(next))) {
+      setConversion(String(sellingUnitConversion(Number(packSize), next)));
+    }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" disabled={disabled} onClick={() => setOpen(true)} className="mt-1 inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-[#9dbcf4] px-3 text-[12px] font-black text-[#075fff] hover:bg-[#f5f8ff] disabled:opacity-50">
+        <Plus size={14} /> Add another pack / unit
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-[#dce7f7] bg-[#f9fbff] p-3">
+      <p className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-black text-[#13254a]"><Box size={14} className="text-[#075fff]" />New selling unit</p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Sell as
+          <select className={`${inputCls} mt-1 w-full normal-case`} value={unitType} onChange={(event) => setUnitType(event.target.value)}>
+            {["piece", "packet", "pouch", "bottle", "strip", "dozen", "bundle", "box", "case", "carton", "kg", "gram", "litre", "ml", "custom"].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Pack contains
+          <input className={`${inputCls} mt-1 w-full normal-case`} inputMode="decimal" value={packSize} onChange={(event) => updatePackSize(event.target.value)} placeholder="500" />
+        </label>
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Measure
+          <select className={`${inputCls} mt-1 w-full normal-case`} value={packMeasure} onChange={(event) => updatePackMeasure(event.target.value)}>
+            {["piece", "packet", "gram", "kg", "ml", "litre"].map((value) => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Stock removed ({product.baseUnit ?? "base"})
+          <input className={`${inputCls} mt-1 w-full normal-case`} inputMode="decimal" value={conversion} onChange={(event) => setConversion(event.target.value)} placeholder="500" />
+        </label>
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Selling price
+          <input className={`${inputCls} mt-1 w-full normal-case`} inputMode="decimal" value={price} onChange={(event) => setPrice(event.target.value)} placeholder="Rs 0" />
+        </label>
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Minimum price
+          <input className={`${inputCls} mt-1 w-full normal-case`} inputMode="decimal" value={minimum} onChange={(event) => setMinimum(event.target.value)} placeholder="Optional" />
+        </label>
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">MRP / maximum
+          <input className={`${inputCls} mt-1 w-full normal-case`} inputMode="decimal" value={maximum} onChange={(event) => setMaximum(event.target.value)} placeholder="Optional" />
+        </label>
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Cost price
+          <input className={`${inputCls} mt-1 w-full normal-case`} inputMode="decimal" value={cost} onChange={(event) => setCost(event.target.value)} placeholder="Optional" />
+        </label>
+        <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Barcode
+          <input className={`${inputCls} mt-1 w-full normal-case`} value={barcode} onChange={(event) => setBarcode(event.target.value)} placeholder="Optional" />
+        </label>
+      </div>
+      <p className="mt-2 text-[11px] font-semibold text-[#31527e]">{name}: quantity 4 means four {name}s and removes {Number(conversion || 0) * 4} {product.baseUnit ?? "base units"} from stock.</p>
+      <div className="mt-3 flex justify-end gap-2">
+        <button type="button" onClick={() => setOpen(false)} className="h-9 rounded-lg border border-[#dce5f1] px-3 text-[12px] font-bold text-[#405273]">Cancel</button>
+        <button
+          type="button"
+          disabled={disabled || !valid}
+          onClick={() => void onAdd({
+            name,
+            unitType,
+            unitCode: sellingUnitCode(unitType, Number(packSize), packMeasure),
+            packSizeValue: Number(packSize),
+            packSizeUnit: packMeasure,
+            conversionToBase: Number(conversion),
+            barcode: barcode.trim() || null,
+            defaultPrice: Number(price),
+            minimumPrice: minimum === "" ? null : Number(minimum),
+            maximumPrice: maximum === "" ? null : Number(maximum),
+            costPrice: cost === "" ? null : Number(cost),
+            isDefault: false,
+            isActive: true,
+          }).then(() => { setOpen(false); setPrice(""); setBarcode(""); })}
+          className={addBtn}
+        >
+          <Plus size={14} /> Add {name}
+        </button>
+      </div>
     </div>
   );
 }

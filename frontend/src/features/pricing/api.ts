@@ -1,11 +1,13 @@
 import { apiRequest } from "@/lib/api/http";
 import type { ApiPricingRule } from "./resolve-line-price";
 import type { PricingResult, PricingSettings } from "./engine/types";
+import type { ProductSellingUnit } from "@/types/api";
 
 export type { ApiPricingRule } from "./resolve-line-price";
 
 export interface EvaluateRequest {
   productId: string;
+  sellingUnitId?: string;
   unitCode?: string;
   customerId?: string;
   customerGroup?: string;
@@ -42,4 +44,28 @@ export function getPricingSettings() {
 
 export function updatePricingSettings(body: Partial<PricingSettings>) {
   return apiRequest<PricingSettings>("/pricing/settings", { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function listProductSellingUnits(productId: string) {
+  return apiRequest<ProductSellingUnit[]>(`/pricing/products/${encodeURIComponent(productId)}/units`);
+}
+
+export function createProductSellingUnit(productId: string, body: ProductSellingUnit) {
+  return apiRequest<ProductSellingUnit>(`/pricing/products/${encodeURIComponent(productId)}/units`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateProductSellingUnit(productId: string, unitId: string, body: Partial<ProductSellingUnit>) {
+  return apiRequest<ProductSellingUnit>(`/pricing/products/${encodeURIComponent(productId)}/units/${encodeURIComponent(unitId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteProductSellingUnit(productId: string, unitId: string) {
+  return apiRequest<{ id: string; isActive: boolean }>(`/pricing/products/${encodeURIComponent(productId)}/units/${encodeURIComponent(unitId)}`, {
+    method: "DELETE",
+  });
 }

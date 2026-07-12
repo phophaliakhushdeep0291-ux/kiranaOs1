@@ -275,7 +275,12 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role } 
   const orderBy = [{ updatedAt: "asc" }, { id: "asc" }];
 
   const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory] = await Promise.all([
-    db.product.findMany({ where: buildWhere("products"), orderBy, take: limit }),
+    db.product.findMany({
+      where: buildWhere("products"),
+      include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
+      orderBy,
+      take: limit,
+    }),
     db.customer.findMany({ where: buildWhere("customers"), orderBy, take: limit }),
     db.bill.findMany({ where: buildWhere("bills"), include: { items: true, payments: true }, orderBy, take: limit }),
     db.stockLedger.findMany({ where: buildWhere("stockLedger"), orderBy, take: limit }),
@@ -333,6 +338,7 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role } 
 }
 
 const CASHIER_HIDDEN_PRODUCT_FIELDS = ["costPerRateUnit", "costPerRateUnitPaise"];
+const CASHIER_HIDDEN_SELLING_UNIT_FIELDS = ["costPrice", "costPricePaise"];
 const CASHIER_HIDDEN_BILL_FIELDS = ["grossProfit", "grossProfitPaise"];
 const CASHIER_HIDDEN_BILL_ITEM_FIELDS = [
   "costPerRateUnit", "costPerRateUnitPaise",
@@ -348,7 +354,11 @@ function omitFields(row, fields) {
 }
 
 function redactProductCostForCashier(product) {
-  return omitFields(product, CASHIER_HIDDEN_PRODUCT_FIELDS);
+  const redacted = omitFields(product, CASHIER_HIDDEN_PRODUCT_FIELDS);
+  if (Array.isArray(redacted.sellingUnits)) {
+    redacted.sellingUnits = redacted.sellingUnits.map((unit) => omitFields(unit, CASHIER_HIDDEN_SELLING_UNIT_FIELDS));
+  }
+  return redacted;
 }
 
 function redactBillProfitForCashier(bill) {

@@ -3,10 +3,22 @@ import { moneyAmount, percentageRate, quantityAmount } from "../../utils/validat
 
 const billItemSchema = z.object({
   productId: z.string().optional(),
+  sellingUnitId: z.string().optional(),
+  sellingUnitCode: z.string().optional(),
+  sellingUnitLabel: z.string().optional(),
+  conversionToBase: quantityAmount({ positive: true }).optional(),
   name: z.string().min(1),
   quantity: quantityAmount({ positive: true }),
   enteredUnit: z.string(),
   ratePerRateUnit: moneyAmount(),
+  originalUnitPrice: moneyAmount().optional(),
+  appliedPricingRuleId: z.string().optional(),
+  appliedPricingRuleType: z.string().optional(),
+  pricingExplanation: z.string().max(500).optional(),
+  pricingConfidence: z.coerce.number().min(0).max(1).optional(),
+  pricingCalculationVersion: z.string().optional(),
+  wasPriceOverridden: z.boolean().optional(),
+  priceOverrideReason: z.string().max(500).optional(),
   gstRate: percentageRate().default(0),
 });
 
@@ -17,6 +29,9 @@ const paymentSchema = z.object({
   client_payment_id: z.string().min(1).optional(),
   idempotencyKey: z.string().min(1).optional(),
   idempotency_key: z.string().min(1).optional(),
+  ownerPin: z.string().optional(),
+  reason: z.string().optional(),
+  sensitiveActions: z.array(z.string()).optional(),
 });
 
 export const confirmBillSchema = z.object({

@@ -84,7 +84,10 @@ export interface ResolveLinePriceInput {
 }
 
 export function resolveLinePrice(product: Product, input: ResolveLinePriceInput): PricingResult {
-  const rules = [...(input.useLegacyProductRules === false ? [] : rulesFromProduct(product)), ...(input.shopRules ?? [])];
+  const ownerRules = input.useLegacyProductRules === false
+    ? (input.shopRules ?? []).filter((rule) => rule.productId !== product.id || Boolean(rule.sellingUnitId || rule.unitCode))
+    : (input.shopRules ?? []);
+  const rules = [...(input.useLegacyProductRules === false ? [] : rulesFromProduct(product)), ...ownerRules];
   const ctx = contextFromProduct(product, {
     shopId: input.shopId ?? "",
     quantity: input.quantity,

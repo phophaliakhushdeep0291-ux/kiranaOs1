@@ -8,11 +8,18 @@ import { cn } from "@/lib/utils";
 import { createSaleReturnLocalFirst, type RefundMode } from "@/features/returns/local-actions";
 
 export interface ReturnLineInput {
+  billItemId?: string;
   productId?: string;
+  sellingUnitId?: string;
+  sellingUnitCode?: string;
+  sellingUnitLabel?: string;
+  conversionToBase?: number;
   name: string;
   soldQty: number; // max returnable; 0 = unlimited (standalone)
   enteredUnit: string;
   ratePerRateUnit: number;
+  costPerRateUnit?: number;
+  originalUnitPrice?: number;
   gstRate?: number;
 }
 
@@ -58,11 +65,18 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
       .map((line, i) => ({ line, returnQty: getQty(i), isDamaged: Boolean(damaged[i]) }))
       .filter((row) => row.returnQty > 0)
       .map(({ line, returnQty, isDamaged }) => ({
+        originalBillItemId: line.billItemId,
         productId: line.productId,
+        sellingUnitId: line.sellingUnitId,
+        sellingUnitCode: line.sellingUnitCode,
+        sellingUnitLabel: line.sellingUnitLabel,
+        conversionToBase: line.conversionToBase,
         name: line.name,
         quantity: returnQty,
         enteredUnit: line.enteredUnit,
         ratePerRateUnit: line.ratePerRateUnit,
+        costPerRateUnit: line.costPerRateUnit,
+        originalUnitPrice: line.originalUnitPrice,
         gstRate: line.gstRate ?? 0,
         damaged: isDamaged,
       }));

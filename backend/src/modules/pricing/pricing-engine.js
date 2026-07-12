@@ -100,7 +100,7 @@ function defaultExplanation(rule, ctx) {
 
 export function evaluatePricing(ctx, rules, settings) {
   const originalUnitPrice = roundMoney(ctx.defaultPrice);
-  const minimumAllowedPrice = roundMoney(ctx.minimumSellingPrice ?? 0);
+  const configuredMinimumPrice = roundMoney(ctx.minimumSellingPrice ?? 0);
   const maximumAllowedPrice = ctx.maximumRetailPrice && ctx.maximumRetailPrice > 0 ? roundMoney(ctx.maximumRetailPrice) : null;
 
   const considered = [];
@@ -121,6 +121,11 @@ export function evaluatePricing(ctx, rules, settings) {
   });
 
   const winner = matched[0];
+  const marginPercent = winner?.rule.minimumMarginPercent ?? ctx.minimumMarginPercent;
+  const marginFloor = ctx.productCost && marginPercent != null && marginPercent > 0 && marginPercent < 100
+    ? roundMoney(ctx.productCost / (1 - marginPercent / 100))
+    : 0;
+  const minimumAllowedPrice = roundMoney(Math.max(configuredMinimumPrice, marginFloor));
   let finalPrice = winner ? winner.price : originalUnitPrice;
   let belowMinimum = false;
   let aboveMaximum = false;

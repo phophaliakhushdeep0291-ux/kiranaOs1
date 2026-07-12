@@ -123,7 +123,10 @@ export async function evaluate(shopId, body = {}) {
     source: body.source || "BILLING",
   };
   const settings = await getPricingSettings(shopId);
-  const result = evaluatePricing(ctx, rows.map(toEngineRule), settings);
+  const applicableRows = sellingUnit?.isDefault === false
+    ? rows.filter((row) => row.productId !== product.id || Boolean(row.sellingUnitId || row.unitCode))
+    : rows;
+  const result = evaluatePricing(ctx, applicableRows.map(toEngineRule), settings);
   return {
     ...result,
     sellingUnit: sellingUnit ? {

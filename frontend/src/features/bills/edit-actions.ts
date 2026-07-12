@@ -49,11 +49,27 @@ export function billItemsToInput(itemRows: AnyRow[]): BillInputItem[] {
     .filter((row) => row && (row.name ?? row.productName))
     .map((row) => ({
       productId: str(row.productId ?? row.product_id) || undefined,
+      sellingUnitId: str(row.sellingUnitId ?? row.selling_unit_id) || undefined,
+      sellingUnitCode: str(row.sellingUnitCode ?? row.selling_unit_code) || undefined,
+      sellingUnitLabel: str(row.sellingUnitLabel ?? row.selling_unit_label) || undefined,
+      conversionToBase: readNumber(row.conversionToBase ?? row.conversion_to_base, 0) || undefined,
       name: str(row.name ?? row.productName) || "Item",
       quantity: readNumber(row.quantity, 0),
       enteredUnit: str(row.enteredUnit ?? row.entered_unit ?? row.unit) || "piece",
       ratePerRateUnit: readNumber(row.ratePerRateUnit ?? row.rate_per_rate_unit ?? row.rate, 0),
+      originalUnitPrice: readNumber(row.originalUnitPrice ?? row.original_unit_price, 0) || undefined,
+      appliedPricingRuleId: str(row.appliedPricingRuleId ?? row.applied_pricing_rule_id) || undefined,
+      appliedPricingRuleType: str(row.appliedPricingRuleType ?? row.applied_pricing_rule_type) || undefined,
+      pricingExplanation: str(row.pricingExplanation ?? row.pricing_explanation) || undefined,
+      pricingConfidence: readNumber(row.pricingConfidence ?? row.pricing_confidence, Number.NaN),
+      pricingCalculationVersion: str(row.pricingCalculationVersion ?? row.pricing_calculation_version) || undefined,
+      wasPriceOverridden: Boolean(row.wasPriceOverridden ?? row.was_price_overridden),
+      priceOverrideReason: str(row.priceOverrideReason ?? row.price_override_reason) || undefined,
       gstRate: readNumber(row.gstRate ?? row.gst_rate, 0),
+    }))
+    .map((item) => ({
+      ...item,
+      pricingConfidence: Number.isFinite(item.pricingConfidence) ? item.pricingConfidence : undefined,
     }));
 }
 

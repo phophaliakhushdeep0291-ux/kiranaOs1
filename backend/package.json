@@ -65,7 +65,8 @@
     "loadtest": "node loadtest/loadtest.js",
     "loadtest:smoke": "node loadtest/loadtest.js --smoke",
     "wac:backfill": "node scripts/wac-cost-backfill.js",
-    "wac:backfill:write": "node scripts/run-with-env.js ALLOW_WAC_BACKFILL=true -- node scripts/wac-cost-backfill.js --write"
+    "wac:backfill:write": "node scripts/run-with-env.js ALLOW_WAC_BACKFILL=true -- node scripts/wac-cost-backfill.js --write",
+    "pricing:backfill-units": "node scripts/backfill-product-selling-units.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
