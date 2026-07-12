@@ -29,7 +29,7 @@ import { computeGstBreakdown } from "@/lib/gst";
 import { redeemOffer } from "@/features/offers/api";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
-import { SPLIT_PAYMENT, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
+import { SPLIT_PAYMENT, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const FAVORITE_PRODUCTS_KEY = "kirana-os:billing-favorite-products:v1";
@@ -316,13 +316,16 @@ export default function Billing() {
       let changed = false;
       const next = previous.map((item) => {
         if (item.manualRate || item.isCustom) return item;
-        const rate = priceFor(item.product, item.quantity);
-        if (Math.abs(rate - item.rate) > 0.005) { changed = true; return { ...item, rate }; }
+        const priced = resolveLine(item.product, item.quantity);
+        if (Math.abs(priced.rate - item.rate) > 0.005 || item.pricing?.explanation !== priced.pricing.explanation) {
+          changed = true;
+          return { ...item, rate: priced.rate, pricing: priced.pricing };
+        }
         return item;
       });
       return changed ? next : previous;
     });
-    // priceFor closes over the same inputs listed here; excluded to avoid a new identity each render.
+    // resolveLine closes over the same inputs listed here; excluded to avoid a new identity each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftHydrated, resolvedCustomerId, selectedCustomer, paymentMode, shopPricingRules]);
 
@@ -458,8 +461,9 @@ export default function Billing() {
   // Canonical price for a line: the Smart Pricing engine over product tiers +
   // owner rules + this bill's customer/group/payment. With no rules it returns
   // exactly productSellingPrice(), so behaviour is unchanged until rules exist.
-  function priceFor(product: Product, quantity: number): number {
-    return resolveLinePrice(product, {
+  // Returns the rate + the metadata the cart chip shows (why this price).
+  function resolveLine(product: Product, quantity: number): { rate: number; pricing: LinePricingMeta } {
+    const result = resolveLinePrice(product, {
       shopId: shop?.id,
       quantity,
       shopRules: shopPricingRules,
@@ -467,7 +471,17 @@ export default function Billing() {
       customerGroup: (selectedCustomer as { customerGroup?: string } | undefined)?.customerGroup || undefined,
       paymentMethod: paymentMode !== SPLIT_PAYMENT ? String(paymentMode) : undefined,
       source: "BILLING",
-    }).recommendedUnitPrice;
+    });
+    return {
+      rate: result.recommendedUnitPrice,
+      pricing: {
+        explanation: result.explanation,
+        appliedRuleType: result.appliedRuleType,
+        originalUnitPrice: result.originalUnitPrice,
+        requiresApproval: result.requiresApproval,
+        confidence: result.confidence,
+      },
+    };
   }
 
   function addToCart(product: Product, options?: { custom?: boolean }) {
@@ -475,10 +489,12 @@ export default function Billing() {
       const existing = previous.find((item) => item.product.id === product.id && !item.isCustom);
       if (existing && !options?.custom) {
         const quantity = roundMoney(existing.quantity + 1);
-        return previous.map((item) => item.product.id === product.id ? { ...item, quantity, rate: item.manualRate ? item.rate : priceFor(product, quantity) } : item);
+        const priced = resolveLine(product, quantity);
+        return previous.map((item) => item.product.id === product.id ? { ...item, quantity, rate: item.manualRate ? item.rate : priced.rate, pricing: item.manualRate ? item.pricing : priced.pricing } : item);
       }
       const quantity = 1;
-      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priceFor(product, quantity), unit: product.rateUnit ?? product.displayUnit ?? "piece", isCustom: options?.custom, manualRate: options?.custom }];
+      const priced = resolveLine(product, quantity);
+      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: product.rateUnit ?? product.displayUnit ?? "piece", isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing }];
     });
     rememberRecentProduct(product.id);
     setSearch("");
@@ -672,7 +688,9 @@ export default function Billing() {
       .map((item) => {
         if (item.product.id !== productId) return item;
         const quantity = Math.max(0, roundMoney(nextQuantity));
-        return { ...item, quantity, rate: item.manualRate || item.isCustom ? item.rate : priceFor(item.product, quantity) };
+        if (item.manualRate || item.isCustom) return { ...item, quantity };
+        const priced = resolveLine(item.product, quantity);
+        return { ...item, quantity, rate: priced.rate, pricing: priced.pricing };
       })
       .filter((item) => item.quantity > 0));
   }

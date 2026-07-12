@@ -149,6 +149,16 @@ function CartRow({
             <Pencil size={10} className="text-[#9aa7bd] group-hover:text-[#0057ff]" aria-hidden="true" />
           </button>
         )}
+        {/* Smart Pricing explanation — why this rate (only when a rule beat the default). */}
+        {!item.manualRate && !item.isCustom && item.pricing && item.pricing.appliedRuleType !== "DEFAULT_PRICE" ? (
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[10px] leading-tight" data-testid={`price-why-${item.product.id}`}>
+            <span className="font-semibold text-[#1a8a4e]">{item.pricing.explanation}</span>
+            {item.pricing.originalUnitPrice > item.rate + 0.005 ? (
+              <span className="tabular-nums text-[#9aa7bd] line-through">₹{item.pricing.originalUnitPrice.toLocaleString("en-IN")}</span>
+            ) : null}
+            {item.pricing.requiresApproval ? <span className="font-bold text-red-600">· needs approval</span> : null}
+          </p>
+        ) : null}
       </div>
 
       {/* Qty stepper — 84px, 3 columns */}

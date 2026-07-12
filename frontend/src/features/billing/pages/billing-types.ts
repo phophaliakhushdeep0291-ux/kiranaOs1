@@ -7,6 +7,16 @@ export interface CartItem {
   unit: string;
   isCustom?: boolean;
   manualRate?: boolean;
+  /** Smart Adaptive Pricing — why this rate was chosen (for the cart chip). */
+  pricing?: LinePricingMeta;
+}
+
+export interface LinePricingMeta {
+  explanation: string;
+  appliedRuleType: string;
+  originalUnitPrice: number;
+  requiresApproval: boolean;
+  confidence: number;
 }
 
 export const SPLIT_PAYMENT = "split" as const;
