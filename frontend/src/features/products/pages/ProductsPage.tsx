@@ -467,6 +467,9 @@ export default function ProductsPage() {
                             <DropdownMenuItem onClick={() => openEdit(product)}>
                               <Pencil size={14} className="mr-2" /> Edit
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setLocation(`/products/${product.id}/pricing`)}>
+                              <Layers size={14} className="mr-2" /> Pricing
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
                               onClick={() => {
