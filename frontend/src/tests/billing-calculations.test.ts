@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@/lib/api/client";
-import { calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/billing/pages/billing-calculations";
+import { calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/billing/pages/billing-calculations";
 import type { CartItem } from "@/features/billing/pages/billing-types";
 
 function product(overrides: Partial<Product> = {}): Product {
@@ -52,6 +52,27 @@ describe("billing calculations", () => {
     expect(productCostPrice(item.product)).toBe(35);
     expect(productMinSellingPrice(product({ minimumSellingPrice: 39 }))).toBe(39);
     expect(cartItemProfit(item)).toBe(21);
+  });
+
+  it("flags lines that need owner PIN — typed-below-min and engine-floored", () => {
+    const priced = product({ minimumSellingPrice: 40, defaultPricePerRateUnit: 45 });
+
+    // Auto-priced at or above the floor → no approval.
+    expect(lineNeedsOwnerApproval({ product: priced, quantity: 1, rate: 45, unit: "kg" })).toBe(false);
+    // Cashier typed a rate under the floor → approval.
+    expect(lineNeedsOwnerApproval({ product: priced, quantity: 1, rate: 38, unit: "kg", manualRate: true })).toBe(true);
+    // Custom line is never gated by this rule.
+    expect(lineNeedsOwnerApproval({ product: priced, quantity: 1, rate: 5, unit: "kg", isCustom: true })).toBe(false);
+    // Engine floored a below-margin rule: rate sits AT the min, but the flag is set → approval.
+    expect(lineNeedsOwnerApproval({
+      product: priced, quantity: 12, rate: 40, unit: "kg",
+      pricing: { explanation: "Bulk", appliedRuleType: "PRODUCT_QUANTITY_PRICE", originalUnitPrice: 45, requiresApproval: true, confidence: 1 },
+    })).toBe(true);
+    // Manual override lifted the price above the floor — a stale flag must NOT re-gate it.
+    expect(lineNeedsOwnerApproval({
+      product: priced, quantity: 12, rate: 44, unit: "kg", manualRate: true,
+      pricing: { explanation: "Bulk", appliedRuleType: "PRODUCT_QUANTITY_PRICE", originalUnitPrice: 45, requiresApproval: true, confidence: 1 },
+    })).toBe(false);
   });
 
   it("normalizes product search text for aliases and Hindi names", () => {

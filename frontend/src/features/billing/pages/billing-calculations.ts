@@ -48,6 +48,23 @@ export function productMinSellingPrice(product: Product): number {
   return roundMoney(Number(product.minimumSellingPrice ?? product.minPricePerRateUnit ?? 0));
 }
 
+/**
+ * Does this line need owner PIN before the bill can be saved? Two ways a line
+ * dips under margin:
+ *  1. A rate typed below the product floor (covers custom + manual overrides).
+ *  2. Smart Pricing flagged it — a rule resolved below the margin floor (the
+ *     engine floors the rate UP to the minimum, so case 1 can't see it) or an
+ *     owner-approval rule applied. The flag is trusted only for auto-priced
+ *     lines; a manual override is judged by its typed rate in case 1.
+ * This is the single source of truth for the confirm-time approval gate.
+ */
+export function lineNeedsOwnerApproval(item: CartItem): boolean {
+  if (item.isCustom) return false;
+  if (item.rate < productMinSellingPrice(item.product)) return true;
+  if (!item.manualRate && item.pricing?.requiresApproval === true) return true;
+  return false;
+}
+
 export function cartItemProfit(item: CartItem): number {
   if (item.isCustom) return 0;
   return roundMoney((Number(item.rate) - productCostPrice(item.product)) * Number(item.quantity));
