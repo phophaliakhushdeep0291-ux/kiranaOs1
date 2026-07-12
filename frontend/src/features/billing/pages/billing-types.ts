@@ -1,10 +1,11 @@
-import { BillInputBillType, BillPaymentMode, type Product } from "@/lib/api/client";
+import { BillInputBillType, BillPaymentMode, type Product, type ProductSellingUnit } from "@/lib/api/client";
 
 export interface CartItem {
   product: Product;
   quantity: number;
   rate: number;
   unit: string;
+  sellingUnit?: ProductSellingUnit;
   isCustom?: boolean;
   manualRate?: boolean;
   /** Smart Adaptive Pricing — why this rate was chosen (for the cart chip). */
@@ -17,6 +18,10 @@ export interface LinePricingMeta {
   originalUnitPrice: number;
   requiresApproval: boolean;
   confidence: number;
+  appliedRuleId?: string | null;
+  calculationVersion?: string;
+  minimumAllowedPrice?: number;
+  maximumAllowedPrice?: number | null;
 }
 
 export const SPLIT_PAYMENT = "split" as const;

@@ -127,10 +127,22 @@ export const productCreationSchema = z.object({
 export const billItemCreationSchema = z.object({
   productId: optionalText,
   productLocalId: optionalText,
+  sellingUnitId: optionalText,
+  sellingUnitCode: optionalText,
+  sellingUnitLabel: optionalText,
+  conversionToBase: quantity.optional(),
   name: z.string().trim().min(1, "Item name is required").max(160),
   quantity,
   enteredUnit: z.string().trim().min(1),
   ratePerRateUnit: money,
+  originalUnitPrice: money.optional(),
+  appliedPricingRuleId: optionalText,
+  appliedPricingRuleType: optionalText,
+  pricingExplanation: z.string().trim().max(500).optional(),
+  pricingConfidence: z.coerce.number().min(0).max(1).optional(),
+  pricingCalculationVersion: optionalText,
+  wasPriceOverridden: z.boolean().optional(),
+  priceOverrideReason: z.string().trim().max(500).optional(),
   gstRate: percentage.default(0),
 });
 

@@ -74,6 +74,7 @@ export interface ResolveLinePriceInput {
   minimumSellingPrice?: number;
   maximumRetailPrice?: number;
   productCost?: number;
+  useLegacyProductRules?: boolean;
   customerId?: string;
   customerGroup?: string;
   paymentMethod?: string;
@@ -83,7 +84,7 @@ export interface ResolveLinePriceInput {
 }
 
 export function resolveLinePrice(product: Product, input: ResolveLinePriceInput): PricingResult {
-  const rules = [...rulesFromProduct(product), ...(input.shopRules ?? [])];
+  const rules = [...(input.useLegacyProductRules === false ? [] : rulesFromProduct(product)), ...(input.shopRules ?? [])];
   const ctx = contextFromProduct(product, {
     shopId: input.shopId ?? "",
     quantity: input.quantity,

@@ -186,12 +186,36 @@ function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode
       bill_id: billId,
       productId: item.productId ?? null,
       product_id: item.productId ?? null,
+      sellingUnitId: item.sellingUnitId ?? null,
+      selling_unit_id: item.sellingUnitId ?? null,
+      sellingUnitCode: item.sellingUnitCode ?? null,
+      selling_unit_code: item.sellingUnitCode ?? null,
+      sellingUnitLabel: item.sellingUnitLabel ?? item.enteredUnit,
+      selling_unit_label: item.sellingUnitLabel ?? item.enteredUnit,
+      conversionToBase: item.conversionToBase ?? null,
+      conversion_to_base: item.conversionToBase ?? null,
       name: item.name,
       quantity: item.quantity,
       enteredUnit: item.enteredUnit,
       entered_unit: item.enteredUnit,
       ratePerRateUnit: item.ratePerRateUnit,
       rate_per_rate_unit: item.ratePerRateUnit,
+      originalUnitPrice: item.originalUnitPrice ?? item.ratePerRateUnit,
+      original_unit_price: item.originalUnitPrice ?? item.ratePerRateUnit,
+      appliedPricingRuleId: item.appliedPricingRuleId ?? null,
+      applied_pricing_rule_id: item.appliedPricingRuleId ?? null,
+      appliedPricingRuleType: item.appliedPricingRuleType ?? null,
+      applied_pricing_rule_type: item.appliedPricingRuleType ?? null,
+      pricingExplanation: item.pricingExplanation ?? null,
+      pricing_explanation: item.pricingExplanation ?? null,
+      pricingConfidence: item.pricingConfidence ?? null,
+      pricing_confidence: item.pricingConfidence ?? null,
+      pricingCalculationVersion: item.pricingCalculationVersion ?? null,
+      pricing_calculation_version: item.pricingCalculationVersion ?? null,
+      wasPriceOverridden: item.wasPriceOverridden === true,
+      was_price_overridden: item.wasPriceOverridden === true,
+      priceOverrideReason: item.priceOverrideReason ?? null,
+      price_override_reason: item.priceOverrideReason ?? null,
       gstRate: item.gstRate ?? 0,
       gst_rate: item.gstRate ?? 0,
       line_subtotal: subtotal,
@@ -245,6 +269,9 @@ function productBaseUnit(product: Product | undefined, fallbackUnit: string) {
 }
 
 function billItemBaseQuantity(item: BillInputItem, product?: Product) {
+  if (Number(item.conversionToBase) > 0) {
+    return Math.abs(roundMoney(item.quantity * Number(item.conversionToBase)));
+  }
   return Math.abs(toInventoryBaseQty(item.quantity, item.enteredUnit, productBaseUnit(product, item.enteredUnit)));
 }
 

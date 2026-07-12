@@ -399,10 +399,22 @@ export interface BillPayment {
 
 export interface BillInputItem {
   productId?: string;
+  sellingUnitId?: string;
+  sellingUnitCode?: string;
+  sellingUnitLabel?: string;
+  conversionToBase?: number;
   name: string;
   quantity: number;
   enteredUnit: string;
   ratePerRateUnit: number;
+  originalUnitPrice?: number;
+  appliedPricingRuleId?: string;
+  appliedPricingRuleType?: string;
+  pricingExplanation?: string;
+  pricingConfidence?: number;
+  pricingCalculationVersion?: string;
+  wasPriceOverridden?: boolean;
+  priceOverrideReason?: string;
   gstRate?: number;
 }
 

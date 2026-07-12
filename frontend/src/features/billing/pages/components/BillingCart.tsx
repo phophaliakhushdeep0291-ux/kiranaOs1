@@ -13,7 +13,7 @@ interface BillingCartProps {
   onRemoveItem: (productId: string) => void;
 }
 
-export function BillingCart({ cart, onUpdateQty, onUpdateRate, onRemoveItem }: BillingCartProps) {
+export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onRemoveItem }: BillingCartProps) {
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
@@ -36,6 +36,7 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onRemoveItem }: B
           item={item}
           onUpdateQty={onUpdateQty}
           onUpdateRate={onUpdateRate}
+          onUpdateUnit={onUpdateUnit}
           onRemoveItem={onRemoveItem}
         />
       ))}
@@ -47,11 +48,13 @@ function CartRow({
   item,
   onUpdateQty,
   onUpdateRate,
+  onUpdateUnit,
   onRemoveItem,
 }: {
   item: CartItem;
   onUpdateQty: (id: string, qty: number) => void;
   onUpdateRate: (id: string, rate: number) => void;
+  onUpdateUnit: (id: string, unitCode: string) => void;
   onRemoveItem: (id: string) => void;
 }) {
   const [editingRate, setEditingRate] = useState(false);
@@ -64,6 +67,7 @@ function CartRow({
     item.rate < productMinSellingPrice(item.product);
   const color = productPlaceholderColor(item.product.name);
   const emoji = getProductEmoji(item.product.name, item.product.category);
+  const sellingUnits = (item.product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
 
   function startEditRate() {
     setRateDraft(String(item.rate));
@@ -110,6 +114,18 @@ function CartRow({
         <p className="truncate text-[12px] font-extrabold leading-[1.2] text-[#13274d]">
           {item.product.name}
         </p>
+        {sellingUnits.length > 1 ? (
+          <select
+            aria-label={`Selling unit for ${item.product.name}`}
+            value={item.sellingUnit?.unitCode ?? sellingUnits.find((unit) => unit.isDefault)?.unitCode ?? sellingUnits[0]?.unitCode}
+            onChange={(event) => onUpdateUnit(item.product.id, event.target.value)}
+            className="mt-1 h-6 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[#0057ff]"
+          >
+            {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{unit.name}</option>)}
+          </select>
+        ) : item.sellingUnit?.packSizeValue && item.sellingUnit.packSizeUnit ? (
+          <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">{item.sellingUnit.name}</p>
+        ) : null}
         {editingRate ? (
           <div
             className={cn(

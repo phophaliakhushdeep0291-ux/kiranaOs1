@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, useListProducts, type Bill, type Customer, type Product } from "@/lib/api/client";
+import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, useListProducts, type Bill, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useAuth } from "@/features/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -65,7 +65,19 @@ function isStockTracked(product: Product) {
 }
 
 function cartItemBaseQuantity(item: CartItem) {
+  if (item.sellingUnit && item.sellingUnit.conversionToBase > 0) {
+    return roundMoney(item.quantity * item.sellingUnit.conversionToBase);
+  }
   return toInventoryBaseQty(item.quantity, item.unit, item.product.baseUnit ?? item.product.unit ?? item.unit);
+}
+
+function activeSellingUnits(product: Product): ProductSellingUnit[] {
+  return (product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
+}
+
+function defaultSellingUnit(product: Product): ProductSellingUnit | undefined {
+  const units = activeSellingUnits(product);
+  return units.find((unit) => unit.isDefault) ?? units[0];
 }
 
 let billingDraftCache: BillingDraft = {};
@@ -316,7 +328,7 @@ export default function Billing() {
       let changed = false;
       const next = previous.map((item) => {
         if (item.manualRate || item.isCustom) return item;
-        const priced = resolveLine(item.product, item.quantity);
+        const priced = resolveLine(item.product, item.quantity, item.sellingUnit);
         if (Math.abs(priced.rate - item.rate) > 0.005 || item.pricing?.explanation !== priced.pricing.explanation) {
           changed = true;
           return { ...item, rate: priced.rate, pricing: priced.pricing };
@@ -462,10 +474,18 @@ export default function Billing() {
   // owner rules + this bill's customer/group/payment. With no rules it returns
   // exactly productSellingPrice(), so behaviour is unchanged until rules exist.
   // Returns the rate + the metadata the cart chip shows (why this price).
-  function resolveLine(product: Product, quantity: number): { rate: number; pricing: LinePricingMeta } {
+  function resolveLine(product: Product, quantity: number, selectedUnit = defaultSellingUnit(product)): { rate: number; pricing: LinePricingMeta } {
     const result = resolveLinePrice(product, {
       shopId: shop?.id,
       quantity,
+      sellingUnitId: selectedUnit?.id,
+      unitCode: selectedUnit?.unitCode ?? product.rateUnit ?? product.displayUnit ?? "piece",
+      unitLabel: selectedUnit?.name,
+      defaultPrice: selectedUnit?.defaultPrice,
+      minimumSellingPrice: selectedUnit?.minimumPrice ?? undefined,
+      maximumRetailPrice: selectedUnit?.maximumPrice ?? undefined,
+      productCost: selectedUnit?.costPrice ?? undefined,
+      useLegacyProductRules: selectedUnit?.isDefault !== false,
       shopRules: shopPricingRules,
       customerId: resolvedCustomerId || undefined,
       customerGroup: (selectedCustomer as { customerGroup?: string } | undefined)?.customerGroup || undefined,
@@ -480,6 +500,10 @@ export default function Billing() {
         originalUnitPrice: result.originalUnitPrice,
         requiresApproval: result.requiresApproval,
         confidence: result.confidence,
+        appliedRuleId: result.appliedRuleId,
+        calculationVersion: result.calculationVersion,
+        minimumAllowedPrice: result.minimumAllowedPrice,
+        maximumAllowedPrice: result.maximumAllowedPrice,
       },
     };
   }
@@ -489,12 +513,13 @@ export default function Billing() {
       const existing = previous.find((item) => item.product.id === product.id && !item.isCustom);
       if (existing && !options?.custom) {
         const quantity = roundMoney(existing.quantity + 1);
-        const priced = resolveLine(product, quantity);
+        const priced = resolveLine(product, quantity, existing.sellingUnit);
         return previous.map((item) => item.product.id === product.id ? { ...item, quantity, rate: item.manualRate ? item.rate : priced.rate, pricing: item.manualRate ? item.pricing : priced.pricing } : item);
       }
       const quantity = 1;
-      const priced = resolveLine(product, quantity);
-      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: product.rateUnit ?? product.displayUnit ?? "piece", isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing }];
+      const sellingUnit = defaultSellingUnit(product);
+      const priced = resolveLine(product, quantity, sellingUnit);
+      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece", sellingUnit, isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing }];
     });
     rememberRecentProduct(product.id);
     setSearch("");
@@ -689,7 +714,7 @@ export default function Billing() {
         if (item.product.id !== productId) return item;
         const quantity = Math.max(0, roundMoney(nextQuantity));
         if (item.manualRate || item.isCustom) return { ...item, quantity };
-        const priced = resolveLine(item.product, quantity);
+        const priced = resolveLine(item.product, quantity, item.sellingUnit);
         return { ...item, quantity, rate: priced.rate, pricing: priced.pricing };
       })
       .filter((item) => item.quantity > 0));
@@ -699,8 +724,14 @@ export default function Billing() {
     setCart((previous) => previous.map((item) => item.product.id === productId ? { ...item, rate: Math.max(0, roundMoney(nextRate)), manualRate: true } : item));
   }
 
-  function updateUnit(productId: string, unit: string) {
-    setCart((previous) => previous.map((item) => item.product.id === productId ? { ...item, unit } : item));
+  function updateUnit(productId: string, unitCode: string) {
+    setCart((previous) => previous.map((item) => {
+      if (item.product.id !== productId) return item;
+      const sellingUnit = activeSellingUnits(item.product).find((candidate) => candidate.unitCode === unitCode);
+      if (!sellingUnit) return item;
+      const priced = resolveLine(item.product, item.quantity, sellingUnit);
+      return { ...item, unit: sellingUnit.name, sellingUnit, rate: priced.rate, pricing: priced.pricing, manualRate: false };
+    }));
   }
 
   function removeItem(productId: string) {
@@ -869,10 +900,21 @@ export default function Billing() {
         advanceAmount,
         items: cart.map((item) => ({
           productId: item.isCustom ? undefined : item.product.id,
+          sellingUnitId: item.sellingUnit?.id,
+          sellingUnitCode: item.sellingUnit?.unitCode,
+          sellingUnitLabel: item.sellingUnit?.name ?? item.unit,
+          conversionToBase: item.sellingUnit?.conversionToBase,
           name: item.product.name,
           quantity: item.quantity,
           enteredUnit: item.unit,
           ratePerRateUnit: item.rate,
+          originalUnitPrice: item.pricing?.originalUnitPrice,
+          appliedPricingRuleId: item.pricing?.appliedRuleId ?? undefined,
+          appliedPricingRuleType: item.pricing?.appliedRuleType,
+          pricingExplanation: item.pricing?.explanation,
+          pricingConfidence: item.pricing?.confidence,
+          pricingCalculationVersion: item.pricing?.calculationVersion,
+          wasPriceOverridden: item.manualRate === true,
           gstRate: item.product.gstRate ?? 0,
         })),
         payments,
