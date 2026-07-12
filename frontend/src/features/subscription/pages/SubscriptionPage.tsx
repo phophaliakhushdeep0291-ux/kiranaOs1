@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PLAN_DEFINITIONS, PLAN_ORDER, type PlanCode } from "@/features/subscription/plans";
 import { useSubscriptionSnapshot } from "@/features/subscription/access";
-import { PlanBadge, UpgradeModal } from "@/features/subscription/components";
+import { CancelSubscriptionDialog, PlanBadge, UpgradeModal } from "@/features/subscription/components";
 import { subscriptionRefreshLocalFirst } from "@/features/subscription/local-actions";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -22,6 +22,7 @@ export default function SubscriptionPage() {
   const { snapshot, loading, refresh } = useSubscriptionSnapshot();
   const { toast } = useToast();
   const [targetPlan, setTargetPlan] = useState<PlanCode | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   async function refreshSubscription() {
@@ -39,6 +40,12 @@ export default function SubscriptionPage() {
 
   const stateIcon = snapshot.isPaymentFailed ? CreditCard : snapshot.isExpired ? CloudOff : snapshot.isTrial || snapshot.graceActive ? AlertTriangle : CheckCircle2;
   const StateIcon = stateIcon;
+
+  // Only a paid, active plan can be cancelled (trials/expired/grace have nothing to cancel).
+  const canCancel = snapshot.status === "active";
+  const currentIndex = PLAN_ORDER.indexOf(snapshot.planCode);
+  const nextPlan = currentIndex >= 0 && currentIndex < PLAN_ORDER.length - 1 ? PLAN_ORDER[currentIndex + 1] : null;
+  const periodEndLabel = snapshot.currentPeriodEnd ? new Date(snapshot.currentPeriodEnd).toLocaleDateString("en-IN") : null;
 
   return (
     <PageShell className="space-y-5">
@@ -74,7 +81,12 @@ export default function SubscriptionPage() {
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => setTargetPlan("standard")}>Upgrade plan</Button>
+        {nextPlan && <Button onClick={() => setTargetPlan(nextPlan)}>Upgrade plan</Button>}
+        {canCancel && (
+          <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
+            Cancel subscription
+          </Button>
+        )}
         <Button variant="outline" onClick={() => void refreshSubscription()} disabled={refreshing}><RefreshCcw className="mr-1.5 h-4 w-4" />{refreshing ? "Queuing..." : "Refresh subscription"}</Button>
       </div>
 
@@ -84,13 +96,22 @@ export default function SubscriptionPage() {
           <CardDescription>Current and higher plans at a glance.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-4">
-          {PLAN_ORDER.map((code) => {
+          {PLAN_ORDER.map((code, index) => {
             const plan = PLAN_DEFINITIONS[code];
+            const isCurrent = snapshot.planCode === plan.code;
+            const isHigher = index > currentIndex;
+            // Clicking the plan you already have shouldn't try to sell it back to you:
+            // if it's active, offer to cancel; otherwise start checkout to renew/switch.
+            const handleClick = () => (isCurrent && canCancel ? setCancelOpen(true) : setTargetPlan(plan.code));
+            const hint = isCurrent
+              ? canCancel ? "Active - tap to cancel" : "Current plan - tap to renew"
+              : isHigher ? "Tap to upgrade" : "Tap to switch";
             return (
-              <button key={plan.code} onClick={() => setTargetPlan(plan.code)} className={`rounded-lg border p-4 text-left hover:bg-muted ${snapshot.planCode === plan.code ? "border-primary" : ""}`}>
-                <div className="flex items-center justify-between"><p className="font-semibold">{plan.name}</p>{snapshot.planCode === plan.code && <Badge>Current</Badge>}</div>
+              <button key={plan.code} onClick={handleClick} className={`rounded-lg border p-4 text-left hover:bg-muted ${isCurrent ? "border-primary" : ""}`}>
+                <div className="flex items-center justify-between"><p className="font-semibold">{plan.name}</p>{isCurrent && <Badge>Current</Badge>}</div>
                 <p className="mt-1 text-sm text-muted-foreground">Rs {plan.price}/month</p>
                 <p className="mt-2 text-xs text-muted-foreground">{plan.maxStores} store - {plan.maxDevices} devices</p>
+                <p className={`mt-2 text-xs font-medium ${isCurrent ? "text-primary" : "text-muted-foreground"}`}>{hint}</p>
               </button>
             );
           })}

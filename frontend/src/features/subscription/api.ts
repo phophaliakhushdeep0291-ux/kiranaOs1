@@ -103,3 +103,14 @@ export function verifySubscriptionPayment(data: VerifySubscriptionPaymentDto) {
     body: JSON.stringify(data),
   });
 }
+
+/**
+ * Cancel the active subscription. Backend requires owner role + owner PIN
+ * (sent in the body). Returns the updated subscription row (status "cancelled").
+ */
+export function cancelSubscription(ownerPin?: string) {
+  return apiRequest<SubscriptionStatusDto>("/subscription/cancel", {
+    method: "POST",
+    body: JSON.stringify(ownerPin ? { ownerPin } : {}),
+  });
+}
