@@ -19,6 +19,8 @@ import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./
 import { updateCustomerOrder } from "@/features/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { billNeedsCustomer, clampAmount, normalizeSearchText, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
+import { resolveLinePrice } from "@/features/pricing/resolve-line-price";
+import { useShopPricingRules } from "@/features/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
 import { shareBillOnWhatsapp, derivePaymentModeLabel, type BillShareInput } from "@/features/bills/share";
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
@@ -169,6 +171,8 @@ export default function Billing() {
     query: { staleTime: 2 * 60_000, placeholderData: (previousData: Product[] | undefined) => previousData ?? [] },
   });
   const customers = useListCustomers();
+  // Smart Adaptive Pricing — the shop's owner-defined rules (cached, offline-safe).
+  const { rules: shopPricingRules } = useShopPricingRules();
 
   const subtotal = useMemo(() => roundMoney(cart.reduce((sum, item) => sum + item.quantity * item.rate, 0)), [cart]);
   // GST: one engine for UI, local record and server. Inclusive (kirana MRP
@@ -301,6 +305,27 @@ export default function Billing() {
     writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
   }, [draftHydrated, activeBillId, sourceOrderId, cart, safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
 
+  // Re-price the cart when a pricing input changes (customer, group, payment
+  // mode, or the shop's rules). Manual/custom lines keep the cashier's price;
+  // everything else follows the engine. This is the spec's "recalculate on
+  // relevant change" behaviour. Runs only after the draft has hydrated so it
+  // never fights the initial restore.
+  useEffect(() => {
+    if (!draftHydrated) return;
+    setCart((previous) => {
+      let changed = false;
+      const next = previous.map((item) => {
+        if (item.manualRate || item.isCustom) return item;
+        const rate = priceFor(item.product, item.quantity);
+        if (Math.abs(rate - item.rate) > 0.005) { changed = true; return { ...item, rate }; }
+        return item;
+      });
+      return changed ? next : previous;
+    });
+    // priceFor closes over the same inputs listed here; excluded to avoid a new identity each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftHydrated, resolvedCustomerId, selectedCustomer, paymentMode, shopPricingRules]);
+
   useEffect(() => {
     if (discount !== safeDiscount) setDiscount(safeDiscount);
   }, [discount, safeDiscount]);
@@ -430,15 +455,30 @@ export default function Billing() {
     });
   }
 
+  // Canonical price for a line: the Smart Pricing engine over product tiers +
+  // owner rules + this bill's customer/group/payment. With no rules it returns
+  // exactly productSellingPrice(), so behaviour is unchanged until rules exist.
+  function priceFor(product: Product, quantity: number): number {
+    return resolveLinePrice(product, {
+      shopId: shop?.id,
+      quantity,
+      shopRules: shopPricingRules,
+      customerId: resolvedCustomerId || undefined,
+      customerGroup: (selectedCustomer as { customerGroup?: string } | undefined)?.customerGroup || undefined,
+      paymentMethod: paymentMode !== SPLIT_PAYMENT ? String(paymentMode) : undefined,
+      source: "BILLING",
+    }).recommendedUnitPrice;
+  }
+
   function addToCart(product: Product, options?: { custom?: boolean }) {
     setCart((previous) => {
       const existing = previous.find((item) => item.product.id === product.id && !item.isCustom);
       if (existing && !options?.custom) {
         const quantity = roundMoney(existing.quantity + 1);
-        return previous.map((item) => item.product.id === product.id ? { ...item, quantity, rate: item.manualRate ? item.rate : productSellingPrice(product, quantity) } : item);
+        return previous.map((item) => item.product.id === product.id ? { ...item, quantity, rate: item.manualRate ? item.rate : priceFor(product, quantity) } : item);
       }
       const quantity = 1;
-      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : productSellingPrice(product, quantity), unit: product.rateUnit ?? product.displayUnit ?? "piece", isCustom: options?.custom, manualRate: options?.custom }];
+      return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priceFor(product, quantity), unit: product.rateUnit ?? product.displayUnit ?? "piece", isCustom: options?.custom, manualRate: options?.custom }];
     });
     rememberRecentProduct(product.id);
     setSearch("");
@@ -632,7 +672,7 @@ export default function Billing() {
       .map((item) => {
         if (item.product.id !== productId) return item;
         const quantity = Math.max(0, roundMoney(nextQuantity));
-        return { ...item, quantity, rate: item.manualRate || item.isCustom ? item.rate : productSellingPrice(item.product, quantity) };
+        return { ...item, quantity, rate: item.manualRate || item.isCustom ? item.rate : priceFor(item.product, quantity) };
       })
       .filter((item) => item.quantity > 0));
   }
