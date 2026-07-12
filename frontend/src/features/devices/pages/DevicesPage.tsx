@@ -16,6 +16,7 @@ import { getOfflineScope } from "@/lib/offline/context";
 import { listCachedDevices } from "@/features/devices/license";
 import { DEVICE_SESSION_REVOKED_EVENT } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/useAuth";
+import { countSlotOccupyingDevices, normalizeDeviceStatus } from "@/features/devices/device-slot-policy";
 
 type ProtectedAction = "logout" | "remove" | "block" | "reactivate";
 
@@ -42,7 +43,7 @@ function deviceNameOf(device: DeviceDto) {
 }
 
 function statusOf(device: DeviceDto) {
-  return String(device.status || "active").toLowerCase() === "removed" ? "revoked" : String(device.status || "active").toLowerCase();
+  return normalizeDeviceStatus(device.status);
 }
 
 function DeviceIcon({ device }: { device: DeviceDto }) {
@@ -105,11 +106,12 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
         isCurrentDevice: device.device_id === currentDeviceId,
         activity: "offline",
       }));
+      const devicesUsed = countSlotOccupyingDevices(devices);
       setData({
         plan: { code: subscription?.planCode ?? "starter", name: subscription?.plan.name, deviceLimit: maxDevices },
-        devicesUsed: devices.filter((device) => ["active", "logged_out", "blocked"].includes(statusOf(device))).length,
-        remainingSlots: Math.max(0, maxDevices - devices.length),
-        overLimit: devices.length > maxDevices,
+        devicesUsed,
+        remainingSlots: Math.max(0, maxDevices - devicesUsed),
+        overLimit: devicesUsed > maxDevices,
         devices,
       });
       setOfflineFallback(true);
@@ -170,6 +172,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
   }
 
   const devices = data?.devices ?? [];
+  const overLimitBy = Math.max(0, (data?.devicesUsed ?? 0) - (data?.plan.deviceLimit ?? 0));
   const actionDeviceName = actionTarget ? deviceNameOf(actionTarget) : "device";
   const actionIsCurrent = Boolean(actionTarget && (actionTarget.isCurrentDevice || deviceIdOf(actionTarget) === currentDeviceId));
   const actionCopy = actionKind === "remove"
@@ -232,9 +235,13 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       {canManageDevices && (data?.remainingSlots ?? 0) === 0 ? (
         <Alert className="border-amber-200 bg-amber-50 text-amber-950">
           <Clock3 className="h-4 w-4" />
-          <AlertTitle>All device slots are currently in use</AlertTitle>
+          <AlertTitle>{data?.overLimit ? "Your shop is above its device limit" : "All device slots are currently in use"}</AlertTitle>
           <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>Remove an old device or upgrade your subscription before another installation signs in.</span>
+            <span>
+              {data?.overLimit
+                ? `Your plan allows ${data.plan.deviceLimit} device${data.plan.deviceLimit === 1 ? "" : "s"}, but ${data.devicesUsed} are currently registered. Remove ${overLimitBy === 1 ? "one device" : `${overLimitBy} devices`} to continue. Existing devices were not removed automatically.`
+                : "Remove an old device or upgrade your subscription before another installation signs in."}
+            </span>
             <Button size="sm" onClick={() => setLocation("/plans")}>View upgrade options</Button>
           </AlertDescription>
         </Alert>

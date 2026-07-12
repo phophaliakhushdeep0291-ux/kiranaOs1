@@ -3,6 +3,14 @@ const LEADER_KEY = "kirana.background.leader";
 const LEADER_TTL_MS = 20_000;
 const HEARTBEAT_MS = 5_000;
 
+interface BrowserLockManager {
+  request<T>(
+    name: string,
+    options: { mode: "exclusive" },
+    callback: () => Promise<T> | T,
+  ): Promise<T>;
+}
+
 interface LeaderRecord {
   tabId: string;
   updatedAt: number;
@@ -111,6 +119,17 @@ export function shouldRunInteractiveNetworkWork() {
 export function shouldRunScheduledNetworkWork() {
   if (typeof document !== "undefined" && document.visibilityState !== "visible") return false;
   return isBackgroundLeader();
+}
+
+/**
+ * Serializes a short critical section across tabs in the same browser profile.
+ * Refresh-token rotation uses this so two tabs cannot replay the same token.
+ */
+export async function withCrossTabLock<T>(name: string, callback: () => Promise<T> | T): Promise<T> {
+  if (typeof navigator === "undefined") return callback();
+  const locks = (navigator as Navigator & { locks?: BrowserLockManager }).locks;
+  if (!locks?.request) return callback();
+  return locks.request(name, { mode: "exclusive" }, callback);
 }
 
 // Backward-compatible name used by older modules. It now means scheduled work,

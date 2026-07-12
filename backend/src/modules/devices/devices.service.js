@@ -95,6 +95,9 @@ export async function createDeviceBoundLoginSession({ user, reqMeta, sessionData
     err.code = "DEVICE_ID_REQUIRED";
     throw err;
   }
+  if (metadata.deviceId.length < 3 || metadata.deviceId.length > 128) {
+    throw new AppError("Device id must be between 3 and 128 characters.", 400, "DEVICE_ID_INVALID");
+  }
 
   return withProcessShopLock(user.shopId, async () => {
     const result = await db.$transaction(async (tx) => {

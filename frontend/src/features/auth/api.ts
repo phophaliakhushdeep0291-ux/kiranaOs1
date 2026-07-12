@@ -1,4 +1,4 @@
-import { apiRequest, getStoredRefreshToken, ApiClientError } from "@/lib/api/http";
+import { apiRequest, getStoredRefreshToken, refreshStoredAuthSession } from "@/lib/api/http";
 import type { AuthResponse, Shop, User } from "@/types/api";
 import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
 
@@ -108,13 +108,7 @@ export function resetPassword(data: ResetPasswordRequest) {
 }
 
 export function refreshAccessToken(refreshToken = getStoredRefreshToken()) {
-  if (!refreshToken) throw new ApiClientError("Refresh token missing", 401);
-  return apiRequest<AuthResponse>("/auth/refresh", {
-    method: "POST",
-    body: JSON.stringify({ refreshToken }),
-    skipAuth: true,
-    skipRefresh: true,
-  });
+  return refreshStoredAuthSession(refreshToken);
 }
 
 export function logoutSession(refreshToken = getStoredRefreshToken()) {

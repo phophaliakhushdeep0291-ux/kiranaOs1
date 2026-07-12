@@ -58,6 +58,9 @@ export async function assertRequestDevice(req) {
     err.code = "DEVICE_REQUIRED";
     throw err;
   }
+  if (deviceId.length < 3 || deviceId.length > 128) {
+    throw new AppError("Device id must be between 3 and 128 characters.", 400, "DEVICE_ID_INVALID");
+  }
   const device = await db.device.findUnique({ where: { shopId_deviceId: { shopId: req.shopId, deviceId } } });
   if (!device) {
     if (env.NODE_ENV === "production") {

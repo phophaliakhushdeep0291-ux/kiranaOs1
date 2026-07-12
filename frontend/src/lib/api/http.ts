@@ -1,6 +1,7 @@
 import type { AuthResponse } from "@/types/api";
-import { clearAuthStorage, getAuthValue, saveAuthSession } from "@/lib/storage/auth-storage";
+import { clearAuthStorage, getAuthValue, loadAuthSession, saveAuthSession } from "@/lib/storage/auth-storage";
 import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
+import { withCrossTabLock } from "@/lib/browser/multiTabCoordinator";
 
 export interface ApiErrorData {
   message?: string;
@@ -39,6 +40,7 @@ export interface ApiRequestOptions extends RequestInit {
 let authTokenGetter: (() => string | null) | null = null;
 const readRateLimitCooldownByBucket = new Map<string, number>();
 let refreshPromise: Promise<AuthResponse> | null = null;
+const AUTH_REFRESH_LOCK_NAME = "kiranaos.auth.refresh";
 
 export const AUTH_SESSION_EXPIRED_EVENT = "kirana:auth-session-expired";
 export const DEVICE_SESSION_REVOKED_EVENT = "kirana:device-session-revoked";
@@ -237,7 +239,25 @@ function notifyDeviceSessionRevoked(code: string) {
 
 async function getSharedRefreshedAuth(refreshToken: string) {
   if (!refreshPromise) {
-    refreshPromise = refreshAuthSession(refreshToken)
+    refreshPromise = withCrossTabLock(AUTH_REFRESH_LOCK_NAME, async () => {
+      const stored = loadAuthSession();
+      if (
+        stored.refreshToken
+        && stored.refreshToken !== refreshToken
+        && stored.accessToken
+        && stored.user
+      ) {
+        return {
+          accessToken: stored.accessToken,
+          token: stored.accessToken,
+          refreshToken: stored.refreshToken,
+          user: stored.user,
+          ...(stored.shop ? { shop: stored.shop } : {}),
+        } satisfies AuthResponse;
+      }
+
+      return refreshAuthSession(stored.refreshToken || refreshToken);
+    })
       .then((refreshed) => {
         persistRefreshedAuth(refreshed);
         return refreshed;
@@ -256,6 +276,11 @@ async function getSharedRefreshedAuth(refreshToken: string) {
       });
   }
   return refreshPromise;
+}
+
+export function refreshStoredAuthSession(refreshToken = getStoredRefreshToken()) {
+  if (!refreshToken) throw new ApiClientError("Refresh token missing", 401, { code: "AUTH_REFRESH_TOKEN_MISSING" });
+  return getSharedRefreshedAuth(refreshToken);
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {

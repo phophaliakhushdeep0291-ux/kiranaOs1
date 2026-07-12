@@ -1,12 +1,12 @@
 import type { Shop, User } from "@/types/api";
 
-const SESSION_KEY = "kiranaos.auth.session.v1";
+export const AUTH_SESSION_STORAGE_KEY = "kiranaos.auth.session.v1";
 
 // Legacy individual keys that used to be stored in sessionStorage or localStorage.
 const LEGACY_KEYS = ["accessToken", "refreshToken", "user", "shop"] as const;
 type LegacyKey = typeof LEGACY_KEYS[number];
 
-interface AuthSession {
+export interface AuthSession {
   accessToken?: string | null;
   refreshToken?: string | null;
   user?: User | null;
@@ -60,17 +60,17 @@ export function saveAuthSession(session: AuthSession): void {
   for (const [k, v] of Object.entries(merged)) {
     if (v !== undefined) clean[k] = v;
   }
-  safeSet(window.localStorage, SESSION_KEY, JSON.stringify(clean));
+  safeSet(window.localStorage, AUTH_SESSION_STORAGE_KEY, JSON.stringify(clean));
 }
 
 export function loadAuthSession(): AuthSession {
   if (typeof window === "undefined") return {};
-  return parseJson<AuthSession>(safeGet(window.localStorage, SESSION_KEY)) ?? {};
+  return parseJson<AuthSession>(safeGet(window.localStorage, AUTH_SESSION_STORAGE_KEY)) ?? {};
 }
 
 export function clearAuthSession(): void {
   if (typeof window === "undefined") return;
-  safeRemove(window.localStorage, SESSION_KEY);
+  safeRemove(window.localStorage, AUTH_SESSION_STORAGE_KEY);
 }
 
 // ─── Legacy migration: clean up old per-key storage on startup ───────────────
@@ -79,7 +79,7 @@ export function migrateAuthFromLocalStorage(): void {
   if (typeof window === "undefined") return;
 
   // If new session key is already present, just clean up legacy keys and return.
-  const hasNewKey = safeGet(window.localStorage, SESSION_KEY) !== null;
+  const hasNewKey = safeGet(window.localStorage, AUTH_SESSION_STORAGE_KEY) !== null;
 
   // Attempt to migrate from old individual localStorage keys.
   if (!hasNewKey) {

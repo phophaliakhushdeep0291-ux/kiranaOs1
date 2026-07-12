@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
-import { createTenant } from "./factories.js";
+import { createStaff, createTenant } from "./factories.js";
 
 const ctx = await createIntegrationContext();
 
@@ -48,6 +48,34 @@ if (ctx.skip) {
       assert.notEqual(first.refreshToken, second.refreshToken);
       assert.equal(await ctx.db.device.count({ where: { shopId: tenant.shop.id } }), 1);
       assert.equal(await ctx.db.session.count({ where: { shopId: tenant.shop.id, deviceId: "device-a", revokedAt: null } }), 2);
+    });
+
+    test("the header device id is canonical and malformed ids never create a session", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "starter" });
+      const body = {
+        mobile: tenant.ownerMobile,
+        password: tenant.ownerPassword,
+        device: metadata("body-device"),
+      };
+
+      const malformed = assertFailure(await ctx.post("/api/auth/login", body, {
+        headers: { "x-device-id": "x" },
+        autoDevice: false,
+      }), 400);
+      assert.equal(malformed.code, "DEVICE_ID_INVALID");
+      assert.equal(await ctx.db.device.count({ where: { shopId: tenant.shop.id } }), 0);
+      assert.equal(await ctx.db.session.count({ where: { shopId: tenant.shop.id } }), 0);
+
+      assertSuccess(await ctx.post("/api/auth/login", body, {
+        headers: { "x-device-id": "header-device" },
+        autoDevice: false,
+      }));
+      assert.ok(await ctx.db.device.findUnique({
+        where: { shopId_deviceId: { shopId: tenant.shop.id, deviceId: "header-device" } },
+      }));
+      assert.equal(await ctx.db.device.findUnique({
+        where: { shopId_deviceId: { shopId: tenant.shop.id, deviceId: "body-device" } },
+      }), null);
     });
 
     test("normal logout keeps the registered slot and the same device can sign in again", async () => {
@@ -150,6 +178,107 @@ if (ctx.skip) {
       assert.equal(await ctx.db.device.count({
         where: { shopId: tenant.shop.id, status: { in: ["active", "logged_out", "blocked"] } },
       }), 2);
+    });
+
+    test("plan downgrade keeps existing devices, reports over-limit, blocks new slots, and allows retry after upgrade", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "growth" });
+      const deviceA = assertSuccess(await loginDevice(tenant, "device-a"));
+      assertSuccess(await loginDevice(tenant, "device-b"));
+      assertSuccess(await loginDevice(tenant, "device-c"));
+
+      await ctx.db.subscription.update({
+        where: { shopId: tenant.shop.id },
+        data: { planCode: "starter" },
+      });
+
+      const snapshot = assertSuccess(await ctx.get("/api/devices", {
+        token: deviceA.accessToken,
+        headers: { "x-device-id": "device-a" },
+        autoDevice: false,
+      }));
+      assert.equal(snapshot.plan.deviceLimit, 2);
+      assert.equal(snapshot.devicesUsed, 3);
+      assert.equal(snapshot.remainingSlots, 0);
+      assert.equal(snapshot.overLimit, true);
+      assert.equal(snapshot.devices.filter((device) => device.status === "active").length, 3);
+
+      assertSuccess(await loginDevice(tenant, "device-a"));
+      const denied = assertFailure(await loginDevice(tenant, "device-d"), 403);
+      assert.equal(denied.code, "DEVICE_LIMIT_EXCEEDED");
+      assert.equal(denied.registeredDeviceCount, 3);
+      assert.equal(await ctx.db.device.count({
+        where: { shopId: tenant.shop.id, status: { in: ["active", "logged_out", "blocked"] } },
+      }), 3);
+
+      await ctx.db.subscription.update({
+        where: { shopId: tenant.shop.id },
+        data: { planCode: "pro" },
+      });
+      assertSuccess(await loginDevice(tenant, "device-d"));
+      assert.equal(await ctx.db.device.count({
+        where: { shopId: tenant.shop.id, status: { in: ["active", "logged_out", "blocked"] } },
+      }), 4);
+    });
+
+    test("expired subscriptions keep account access for renewal but block cloud sync", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "starter" });
+      assertSuccess(await loginDevice(tenant, "device-a"));
+      const expiredAt = new Date(Date.now() - 60_000);
+      await ctx.db.subscription.update({
+        where: { shopId: tenant.shop.id },
+        data: { status: "expired", currentPeriodEnd: expiredAt, graceEndsAt: expiredAt },
+      });
+
+      const renewedLogin = assertSuccess(await loginDevice(tenant, "device-a"));
+      const syncStatus = assertSuccess(await ctx.get("/api/sync/status", {
+        token: renewedLogin.accessToken,
+        headers: { "x-device-id": "device-a" },
+        autoDevice: false,
+      }));
+      assert.equal(syncStatus.allowed, false);
+      assert.equal(syncStatus.reason, "subscription_inactive");
+
+      const blockedPush = assertFailure(await ctx.post("/api/sync/push", { events: [] }, {
+        token: renewedLogin.accessToken,
+        headers: { "x-device-id": "device-a" },
+        autoDevice: false,
+      }), 402);
+      assert.equal(blockedPush.code, "SYNC_SUBSCRIPTION_INACTIVE");
+    });
+
+    test("staff and cross-shop owners cannot manage another shop device", async () => {
+      const tenant = await createTenant(ctx.db, { planCode: "growth" });
+      const owner = assertSuccess(await loginDevice(tenant, "owner-device"));
+      const staffIdentity = await createStaff(ctx.db, tenant.shop.id);
+      const staff = assertSuccess(await ctx.post("/api/auth/login", {
+        mobile: staffIdentity.staffMobile,
+        password: staffIdentity.staffPassword,
+        device: metadata("staff-device"),
+      }, { headers: { "x-device-id": "staff-device" }, autoDevice: false }));
+
+      const staffDenied = assertFailure(await ctx.delete("/api/devices/owner-device", {
+        token: staff.accessToken,
+        ownerPin: tenant.ownerPin,
+        headers: { "x-device-id": "staff-device" },
+        autoDevice: false,
+      }), 403);
+      assert.equal(staffDenied.code, "FORBIDDEN");
+
+      const otherTenant = await createTenant(ctx.db, { planCode: "starter" });
+      const otherOwner = assertSuccess(await loginDevice(otherTenant, "other-owner-device"));
+      const crossShop = assertFailure(await ctx.delete("/api/devices/owner-device", {
+        token: otherOwner.accessToken,
+        ownerPin: otherTenant.ownerPin,
+        headers: { "x-device-id": "other-owner-device" },
+        autoDevice: false,
+      }), 404);
+      assert.equal(crossShop.code, "DEVICE_NOT_FOUND");
+
+      assertSuccess(await ctx.get("/api/auth/me", {
+        token: owner.accessToken,
+        headers: { "x-device-id": "owner-device" },
+        autoDevice: false,
+      }));
     });
 
     test("owner-PIN replacement is one-use and immediately revokes the old device", async () => {

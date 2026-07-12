@@ -555,7 +555,12 @@ function signDeviceAccessToken(user, session, device) {
 }
 
 function normalizeDeviceId(deviceId) {
-  return typeof deviceId === "string" && deviceId.trim() ? deviceId.trim() : null;
+  if (typeof deviceId !== "string" || !deviceId.trim()) return null;
+  const normalized = deviceId.trim();
+  if (normalized.length < 3 || normalized.length > 128) {
+    throw new AppError("Device id must be between 3 and 128 characters.", 400, "DEVICE_ID_INVALID");
+  }
+  return normalized;
 }
 
 function normalizeEmail(email) {

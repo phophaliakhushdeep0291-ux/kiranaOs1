@@ -9,6 +9,7 @@ const realtimeBridge = readFileSync("src/lib/realtime/useRealtimeRefreshBridge.t
 const syncApi = readFileSync("src/features/sync/api.ts", "utf8");
 const syncEngine = readFileSync("src/features/sync/sync-engine.ts", "utf8");
 const syncPull = readFileSync("src/features/sync/sync-pull.ts", "utf8");
+const authContext = readFileSync("src/features/auth/AuthContext.tsx", "utf8");
 
 describe("multi-session request isolation", () => {
   it("allows visible tabs/devices to make interactive requests independently", () => {
@@ -51,5 +52,15 @@ describe("multi-session request isolation", () => {
     expect(syncApi).toContain("background: params.background");
     expect(syncEngine).toContain("getSyncStatus({ background: true })");
     expect(syncPull).toContain("background: true");
+  });
+
+  it("serializes refresh rotation across tabs and propagates shared session changes", () => {
+    expect(coordinator).toContain("withCrossTabLock");
+    expect(coordinator).toContain("locks.request(name, { mode: \"exclusive\" }, callback)");
+    expect(http).toContain("AUTH_REFRESH_LOCK_NAME");
+    expect(http).toContain("stored.refreshToken !== refreshToken");
+    expect(http).toContain("refreshStoredAuthSession");
+    expect(authContext).toContain("AUTH_SESSION_STORAGE_KEY");
+    expect(authContext).toContain('window.addEventListener("storage", handleSharedSessionChange)');
   });
 });

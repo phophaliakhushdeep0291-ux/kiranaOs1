@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { AUTH_SESSION_EXPIRED_EVENT, DEVICE_SESSION_REVOKED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type Shop, type User } from "@/lib/api/client";
-import { clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
+import { AUTH_SESSION_STORAGE_KEY, clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
 import { writeAuditLog } from "@/features/audit-logs/local-actions";
 import { activateDevice, heartbeatDevice } from "@/features/devices/api";
 import { ensureCurrentDeviceRegistered, writeOfflineLicenseToken } from "@/features/devices/license";
@@ -56,6 +56,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authGenerationRef = useRef(0);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const currentUserIdRef = useRef<string | null>(null);
+  const currentShopIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentUserIdRef.current = user?.id ?? null;
+    currentShopIdRef.current = shop?.id ?? user?.shopId ?? null;
+  }, [shop?.id, user?.id, user?.shopId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,6 +168,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
     return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, [setLocation]);
+
+  useEffect(() => {
+    const handleSharedSessionChange = (event: StorageEvent) => {
+      if (event.key !== AUTH_SESSION_STORAGE_KEY) return;
+      authGenerationRef.current += 1;
+      const session = loadAuthSession();
+      const nextUser = session.user ?? null;
+      const nextShop = session.shop ?? null;
+      const nextToken = session.accessToken ?? null;
+      const nextUserId = nextUser?.id ?? null;
+      const nextShopId = nextShop?.id ?? nextUser?.shopId ?? null;
+      const identityChanged = Boolean(
+        currentUserIdRef.current
+        && (currentUserIdRef.current !== nextUserId || currentShopIdRef.current !== nextShopId),
+      );
+
+      if (identityChanged || (!nextToken && currentUserIdRef.current)) {
+        clearInstantMemoryCache();
+        queryClient.clear();
+      }
+
+      currentUserIdRef.current = nextUserId;
+      currentShopIdRef.current = nextShopId;
+      setAccessToken(nextToken);
+      setUser(nextUser);
+      setShop(nextShop);
+      setIsLoading(false);
+
+      if (!nextToken || !nextUser) setLocation("/login");
+    };
+
+    window.addEventListener("storage", handleSharedSessionChange);
+    return () => window.removeEventListener("storage", handleSharedSessionChange);
+  }, [queryClient, setLocation]);
 
   useEffect(() => {
     const handleDeviceRevoked = async () => {

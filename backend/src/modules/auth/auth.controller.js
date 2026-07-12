@@ -2,13 +2,17 @@ import * as authService from "./auth.service.js";
 
 function requestMeta(req) {
   const bodyDevice = req.body?.device && typeof req.body.device === "object" ? req.body.device : {};
+  const deviceId = getRequestDeviceId(req);
   return {
     userAgent: req.get("user-agent") || null,
     ipAddress: req.ip || req.socket?.remoteAddress || null,
-    deviceId: getRequestDeviceId(req),
+    deviceId,
     device: {
       ...bodyDevice,
-      deviceId: bodyDevice.deviceId || getRequestDeviceId(req),
+      // The request header identifies the browser installation making the
+      // request. Keeping it canonical prevents a body/header mismatch from
+      // creating tokens for a different device than subsequent API calls use.
+      deviceId,
       deviceName: bodyDevice.deviceName || req.get("x-device-name") || undefined,
       deviceType: bodyDevice.deviceType || req.get("x-device-type") || undefined,
       operatingSystem: bodyDevice.operatingSystem || req.get("x-device-os") || undefined,
