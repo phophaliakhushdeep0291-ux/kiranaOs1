@@ -47,7 +47,7 @@ function assertRemotePayment(intent, orderId, paymentId, payment, order) {
     && payment?.order_id === orderId
     && Number(payment?.amount) === intent.amountPaise
     && String(payment?.currency || "").toUpperCase() === intent.currency
-    && ["captured", "authorized"].includes(String(payment?.status || "").toLowerCase())
+    && String(payment?.status || "").toLowerCase() === "captured"
     && (!order || (order.id === orderId && Number(order.amount) === intent.amountPaise));
   if (!valid) throw new AppError("Razorpay payment does not match this retail intent", 409, "RETAIL_PAYMENT_MISMATCH");
 }

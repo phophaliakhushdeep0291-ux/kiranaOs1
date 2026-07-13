@@ -419,10 +419,6 @@ function isScopedRecord<T>(row: T): boolean {
   return rowMatchesCurrentScope(row);
 }
 
-function isDeletedRecord(row: Record<string, unknown>): boolean {
-  return Boolean(row.deleted_at ?? row.deletedAt);
-}
-
 function isOutboxPendingOrRetryable(event: PendingSyncEvent): boolean {
   return (
     event.status === "PENDING" ||

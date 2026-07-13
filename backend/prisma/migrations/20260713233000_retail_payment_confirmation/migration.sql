@@ -1,10 +1,3 @@
-ALTER TABLE "Payment" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'confirmed';
-ALTER TABLE "Payment" ADD COLUMN "provider" TEXT;
-ALTER TABLE "Payment" ADD COLUMN "providerReference" TEXT;
-ALTER TABLE "Payment" ADD COLUMN "confirmationSource" TEXT NOT NULL DEFAULT 'manual';
-ALTER TABLE "Payment" ADD COLUMN "confirmedAt" DATETIME;
-ALTER TABLE "Payment" ADD COLUMN "retailPaymentIntentId" TEXT REFERENCES "RetailPaymentIntent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
 CREATE TABLE "RetailPaymentIntent" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "shopId" TEXT NOT NULL,
@@ -26,6 +19,13 @@ CREATE TABLE "RetailPaymentIntent" (
   CONSTRAINT "RetailPaymentIntent_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT "RetailPaymentIntent_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "StoreLocation" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
+
+ALTER TABLE "Payment" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'confirmed';
+ALTER TABLE "Payment" ADD COLUMN "provider" TEXT;
+ALTER TABLE "Payment" ADD COLUMN "providerReference" TEXT;
+ALTER TABLE "Payment" ADD COLUMN "confirmationSource" TEXT NOT NULL DEFAULT 'manual';
+ALTER TABLE "Payment" ADD COLUMN "confirmedAt" DATETIME;
+ALTER TABLE "Payment" ADD COLUMN "retailPaymentIntentId" TEXT REFERENCES "RetailPaymentIntent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 CREATE UNIQUE INDEX "Payment_retailPaymentIntentId_key" ON "Payment"("retailPaymentIntentId");
 CREATE UNIQUE INDEX "RetailPaymentIntent_providerOrderId_key" ON "RetailPaymentIntent"("providerOrderId");

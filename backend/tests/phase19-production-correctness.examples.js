@@ -5,6 +5,8 @@ function read(file) { return fs.readFileSync(file, "utf8"); }
 
 const billsService = read("src/modules/bills/bills.service.js");
 const inventoryService = read("src/modules/inventory/inventory.service.js");
+const locationInventoryService = read("src/modules/stores/location-context.service.js");
+const inventoryConcurrency = `${inventoryService}\n${locationInventoryService}`;
 const paymentService = read("src/modules/payment-provider/paymentProvider.service.js");
 const subscriptionService = read("src/modules/subscription/subscription.service.js");
 const tasks = read("docs/PRODUCTION_HARDENING_TASKS.md");
@@ -17,11 +19,11 @@ assert(billsService.includes("RESTORE_INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION
 assert(billsService.includes("syncCustomerUdharBalance(tx, shopId, customerId"), "credit bill udhar update must derive balance from ledger");
 assert(billsService.includes("syncCustomerUdharBalance(tx, shopId, bill.customerId"), "bill cancellation udhar reversal must derive balance from ledger");
 
-assert(inventoryService.includes("CONCURRENT_STOCK_MODIFICATION_RETRY"), "purchase/correction must fail safely on concurrent stock writes");
-assert(inventoryService.includes("stockBaseQty: oldStock"), "purchase must use optimistic stock guard");
-assert(inventoryService.includes("stockBaseQty: product.stockBaseQty"), "manual correction must use optimistic stock guard");
-assert(inventoryService.includes("stockBaseQty: { decrement: qtyInBase }"), "damage must use atomic conditional decrement");
-assert(inventoryService.includes("stockBaseQty: { increment: qtyInBase }"), "purchase must use atomic increment");
+assert(inventoryConcurrency.includes("CONCURRENT_STOCK_MODIFICATION_RETRY"), "purchase/correction must fail safely on concurrent stock writes");
+assert(inventoryConcurrency.includes("expectedGlobalStockBaseQty"), "purchase must use optimistic stock guard");
+assert(inventoryConcurrency.includes("stockBaseQty: product.stockBaseQty"), "manual correction must use optimistic stock guard");
+assert(inventoryConcurrency.includes("stockBaseQty: { decrement: quantity }"), "damage must use atomic conditional decrement");
+assert(inventoryConcurrency.includes("stockBaseQty: { increment: quantity }"), "purchase must use atomic increment");
 
 assert(paymentService.includes("reconcileSubscriptionAfterRefund"), "refund webhook must reconcile subscription entitlement");
 assert(paymentService.includes("PAYMENT_REFUNDED"), "refund webhook must audit refunded payments");
