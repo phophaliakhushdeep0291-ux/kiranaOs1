@@ -49,25 +49,35 @@ export default function SubscriptionPage() {
     ? "growth"
     : currentIndex < PUBLIC_PLAN_ORDER.length - 1 ? PUBLIC_PLAN_ORDER[currentIndex + 1] : null;
   const periodEndLabel = snapshot.currentPeriodEnd ? new Date(snapshot.currentPeriodEnd).toLocaleDateString("en-IN") : null;
+  const planMessage = snapshot.status === "active" && snapshot.cloudSyncAllowed
+    ? `Your ${snapshot.plan.name} features are ready and this device is protected.`
+    : snapshot.message;
 
   return (
     <PageShell className="space-y-5">
       <PageHeader
         title="Subscription"
-        description="Manage plan access, sync permission, and expiry behavior."
+        description="Your plan, billing cycle, and store protection in one place."
         actions={<PlanBadge planCode={snapshot.planCode} status={snapshot.status} />}
       />
 
-      <Card className={snapshot.localOnlyAfterExpiry ? "border-amber-300" : ""}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><StateIcon className="h-5 w-5" />{snapshot.plan.name} - Rs {snapshot.plan.price}/month</CardTitle>
-          <CardDescription>{snapshot.message}</CardDescription>
+      <Card className={`overflow-hidden rounded-[18px] shadow-[0_16px_42px_rgba(16,35,71,0.08)] ${snapshot.localOnlyAfterExpiry ? "border-amber-300" : "border-[#d7e3f3]"}`}>
+        <CardHeader className="border-b border-[#dbe7f7] bg-[linear-gradient(135deg,#f7faff_0%,#edf4ff_100%)] p-5 sm:p-6">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#075fff]">Current plan</p>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <CardTitle className="flex items-center gap-2.5 font-display text-2xl font-black tracking-tight text-[#102347]">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-[#075fff] shadow-sm ring-1 ring-[#d8e5fa]"><StateIcon className="h-5 w-5" /></span>
+              {snapshot.plan.name}
+            </CardTitle>
+            <p className="font-display text-2xl font-black tracking-tight text-[#102347]">₹{snapshot.plan.price}<span className="text-sm font-semibold text-[#66758d]">/month</span></p>
+          </div>
+          <CardDescription className="max-w-2xl text-sm leading-6 text-[#536383]">{planMessage}</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <div className="rounded-lg border p-3"><p className="text-sm text-muted-foreground">Status</p><p className="font-semibold capitalize">{snapshot.status.replace(/_/g, " ")}</p></div>
-          <div className="rounded-lg border p-3"><p className="text-sm text-muted-foreground">Plan ends</p><p className="font-semibold text-sm">{formatDate(snapshot.currentPeriodEnd)}</p></div>
-          <div className="rounded-lg border p-3"><p className="text-sm text-muted-foreground">Offline grace</p><p className="font-semibold text-sm">{formatDate(snapshot.offlineGraceEndsAt)}</p></div>
-          <div className="rounded-lg border p-3"><p className="text-sm text-muted-foreground">Cloud sync</p><Badge variant={snapshot.cloudSyncAllowed ? "default" : "destructive"}>{snapshot.cloudSyncAllowed ? "Allowed" : "Disabled"}</Badge></div>
+        <CardContent className="grid gap-3 p-4 sm:p-5 md:grid-cols-4">
+          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Plan status</p><p className="mt-1 font-bold capitalize text-[#102347]">{snapshot.status.replace(/_/g, " ")}</p></div>
+          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Access until</p><p className="mt-1 text-sm font-bold text-[#102347]">{formatDate(snapshot.currentPeriodEnd)}</p></div>
+          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Offline protection</p><p className="mt-1 text-sm font-bold text-[#102347]">{formatDate(snapshot.offlineGraceEndsAt)}</p></div>
+          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Automatic backup</p><Badge className="mt-1" variant={snapshot.cloudSyncAllowed ? "default" : "destructive"}>{snapshot.cloudSyncAllowed ? "Protected" : "Paused"}</Badge></div>
         </CardContent>
       </Card>
 
@@ -83,20 +93,20 @@ export default function SubscriptionPage() {
         </Card>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {nextPlan && <Button onClick={() => setTargetPlan(nextPlan)}>Upgrade plan</Button>}
+      <div className="grid gap-2 sm:flex sm:flex-wrap">
+        {nextPlan && <Button className="h-11 rounded-xl px-5 font-bold shadow-[0_10px_24px_rgba(7,95,255,0.2)]" onClick={() => setTargetPlan(nextPlan)}>Compare and upgrade</Button>}
         {canCancel && (
-          <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
-            Cancel subscription
+          <Button variant="outline" className="h-11 rounded-xl text-destructive hover:text-destructive" onClick={() => setCancelOpen(true)}>
+            Cancel plan
           </Button>
         )}
-        <Button variant="outline" onClick={() => void refreshSubscription()} disabled={refreshing}><RefreshCcw className="mr-1.5 h-4 w-4" />{refreshing ? "Queuing..." : "Refresh subscription"}</Button>
+        <Button variant="ghost" className="h-11 rounded-xl text-[#536383]" onClick={() => void refreshSubscription()} disabled={refreshing}><RefreshCcw className="mr-1.5 h-4 w-4" />{refreshing ? "Checking..." : "Check payment status"}</Button>
       </div>
 
-      <Card>
+      <Card className="rounded-[18px] border-[#dce5f2]">
         <CardHeader>
-          <CardTitle>Plan limits</CardTitle>
-          <CardDescription>Current and higher plans at a glance.</CardDescription>
+          <CardTitle className="font-display text-xl font-black tracking-tight">Compare plans</CardTitle>
+          <CardDescription>Choose the capacity that matches how your store works.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">
           {PUBLIC_PLAN_ORDER.map((code, index) => {
@@ -110,10 +120,10 @@ export default function SubscriptionPage() {
               ? canCancel ? "Active - tap to cancel" : "Current plan - tap to renew"
               : isHigher ? "Tap to upgrade" : "Tap to switch";
             return (
-              <button key={plan.code} onClick={handleClick} className={`rounded-lg border p-4 text-left hover:bg-muted ${isCurrent ? "border-primary" : ""}`}>
+              <button key={plan.code} onClick={handleClick} className={`rounded-[14px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${isCurrent ? "border-primary bg-[#f3f7ff] ring-1 ring-primary/15" : "border-[#e0e8f3] hover:bg-muted"}`}>
                 <div className="flex items-center justify-between"><p className="font-semibold">{plan.name}</p>{isCurrent && <Badge>Current</Badge>}</div>
-                <p className="mt-1 text-sm text-muted-foreground">Rs {plan.price}/month</p>
-                <p className="mt-2 text-xs text-muted-foreground">{plan.maxStores} store - {plan.maxDevices} devices - {plan.maxStaff || "no"} staff</p>
+                <p className="mt-1 text-sm font-bold text-[#102347]">₹{plan.price}<span className="font-medium text-muted-foreground">/month</span></p>
+                <p className="mt-2 text-xs text-muted-foreground">{plan.maxStores} store · {plan.maxDevices} devices · {plan.maxStaff || "no"} staff</p>
                 <p className={`mt-2 text-xs font-medium ${isCurrent ? "text-primary" : "text-muted-foreground"}`}>{hint}</p>
               </button>
             );

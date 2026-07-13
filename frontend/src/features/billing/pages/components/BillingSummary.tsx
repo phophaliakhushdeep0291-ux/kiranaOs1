@@ -539,7 +539,7 @@ export function BillingSummary({
             </>
           ) : (
             <>
-              {isEstimateBill ? `Save Estimate · ${fmtRs(grandTotal)}` : `${paymentAction} · ${fmtRs(grandTotal)}`}
+              {isEstimateBill ? `Save Estimate Bill · ${fmtRs(grandTotal)}` : `${paymentAction} · ${fmtRs(grandTotal)}`}
               <span className="absolute right-2.5 top-1/2 hidden h-6 min-w-[34px] -translate-y-1/2 items-center justify-center rounded-[7px] bg-[rgba(0,35,140,0.35)] px-1.5 text-[11px] font-black text-white sm:inline-flex">
                 F12
               </span>

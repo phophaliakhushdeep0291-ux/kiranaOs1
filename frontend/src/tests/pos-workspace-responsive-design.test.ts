@@ -22,8 +22,10 @@ describe("POS workspace responsive design", () => {
     expect(billingPage).toContain('aria-label={mobileCheckoutOpen ? "Review and collect payment" : undefined}');
   });
 
-  it("removes redundant floating actions while billing", () => {
-    expect(layout.match(/cleanPath\(loc\) !== \"\/billing\"/g)).toHaveLength(2);
+  it("keeps mobile navigation unobstructed and removes redundant billing actions", () => {
+    expect(layout.match(/cleanPath\(loc\) !== \"\/billing\"/g)).toHaveLength(1);
+    expect(layout).not.toContain('aria-label="Create new bill"');
+    expect(billingSummary).toContain("hidden grid-cols-5 gap-1.5 border-t");
   });
 
   it("does not squeeze seven owner metrics into a standard laptop row", () => {

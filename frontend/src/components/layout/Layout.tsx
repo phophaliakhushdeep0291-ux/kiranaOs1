@@ -524,7 +524,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <div className="min-w-0 flex-1">
             <h1 className="truncate font-display text-[22px] font-black tracking-tight text-[#0f2147] leading-none">{getPageTitle(loc)}</h1>
             {getPageSubtitle(loc) && (
-              <p className="mt-1.5 truncate text-[12px] font-medium leading-none text-[#64748b]">{getPageSubtitle(loc)}</p>
+              <p className="mt-1.5 hidden truncate text-[12px] font-medium leading-none text-[#64748b] 2xl:block">{getPageSubtitle(loc)}</p>
             )}
           </div>
 

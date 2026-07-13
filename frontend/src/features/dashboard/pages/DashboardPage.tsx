@@ -486,12 +486,23 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
   const [recentProducts, setRecentProducts] = useState<Product[]>([]);
   const [productsById, setProductsById] = useState<Record<string, Product>>({});
   const [localRecentBills, setLocalRecentBills] = useState<Bill[]>([]);
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() =>
+    typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches,
+  );
 
   const recentBillsQuery = useListBills({ limit: 10 }, { query: { staleTime: 60_000 } });
   const periodBillsQuery = useListBills({ ...periodRange, limit: 1000 }, { query: { staleTime: 60_000 } });
   const previousPeriodBillsQuery = useListBills({ ...previousPeriodRange, limit: 1000 }, { query: { staleTime: 60_000 } });
 
   const lowStockItems = ownerReport?.lowStock ?? [];
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const updateViewport = () => setIsDesktopViewport(media.matches);
+    updateViewport();
+    media.addEventListener("change", updateViewport);
+    return () => media.removeEventListener("change", updateViewport);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -666,7 +677,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
 
   return (
     <>
-      <MobileGeneralDashboard
+      {!isDesktopViewport && <MobileGeneralDashboard
         dashboard={dashboard}
         ownerReport={ownerReport}
         salesChartData={salesChartData}
@@ -687,8 +698,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
         onPeriodChange={setPeriod}
         periodSales={periodSales}
         periodSalesDelta={periodSalesDelta}
-      />
-      <div className="hidden w-full min-w-0 space-y-4 overflow-x-hidden bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
+      />}
+      {isDesktopViewport && <div className="w-full min-w-0 space-y-4 overflow-x-hidden bg-white p-4 font-sans sm:p-5 lg:p-5 2xl:p-6">
 
       {!dashboard.hasBusinessData && (
         <section className="overflow-hidden rounded-[18px] border border-[#cfe0ff] bg-[linear-gradient(135deg,#f3f7ff_0%,#ffffff_62%)] p-5 shadow-[0_14px_36px_rgba(7,95,255,0.08)]">
@@ -1011,7 +1022,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
 
       <RecentProductsRail products={recentProducts} />
 
-      </div>
+      </div>}
     </>
   );
 }

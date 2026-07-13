@@ -23,7 +23,7 @@ type AssistantPosition = { x: number; y: number };
 
 const VOICE_ASSISTANT_POSITION_KEY = "kirana:voice-assistant-position";
 const FLOATING_MARGIN = 12;
-const MOBILE_BOTTOM_NAV_OFFSET = 96;
+const MOBILE_BOTTOM_NAV_OFFSET = 110;
 
 function getFloatingBottomOffset(): number {
   if (typeof window === "undefined") return FLOATING_MARGIN + 4;
@@ -258,7 +258,7 @@ export function VoiceAssistant() {
   return (
     <div
       ref={containerRef}
-      className={`fixed z-50 print:hidden transition-[opacity,transform] duration-200 ${assistantIsIdle ? "opacity-[0.22] hover:opacity-100 focus-within:opacity-100" : "opacity-100"} ${dragging ? "select-none" : ""}`}
+      className={`fixed z-40 print:hidden transition-[opacity,transform] duration-200 ${assistantIsIdle ? "opacity-75 hover:opacity-100 focus-within:opacity-100" : "z-[60] opacity-100"} ${dragging ? "select-none" : ""}`}
       style={floatingStyle}
     >
       {open && (
@@ -300,20 +300,22 @@ export function VoiceAssistant() {
         </div>
       )}
       <div className={`flex justify-end gap-1.5 transition-transform duration-200 ${assistantIsIdle ? "scale-95" : "scale-100"}`}>
-        <button
-          type="button"
-          aria-label="Move voice assistant"
-          title="Move voice assistant"
-          onPointerDown={handleMovePointerDown}
-          className={`flex cursor-grab items-center justify-center rounded-full border backdrop-blur-md transition-all duration-200 active:cursor-grabbing ${open ? "h-10 w-9 bg-card text-muted-foreground shadow-xl hover:bg-muted hover:text-foreground" : "h-8 w-7 bg-background/25 text-muted-foreground/45 shadow-sm hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-xl"}`}
-        >
-          <GripVertical className="h-4 w-4" aria-hidden="true" />
-        </button>
+        {open && (
+          <button
+            type="button"
+            aria-label="Move voice assistant"
+            title="Move voice assistant"
+            onPointerDown={handleMovePointerDown}
+            className="flex h-10 w-9 cursor-grab items-center justify-center rounded-full border bg-card text-muted-foreground shadow-xl backdrop-blur-md transition-all duration-200 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
         <Button
           type="button"
           size="icon"
           variant="ghost"
-          className={`rounded-full border backdrop-blur-md transition-all duration-200 ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-9 w-9 bg-background/30 text-muted-foreground/55 shadow-md hover:-translate-y-0.5 hover:bg-sidebar hover:text-sidebar-foreground hover:shadow-2xl"}`}
+          className={`rounded-full border backdrop-blur-md transition-all duration-200 ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-11 w-11 border-[#cfe0ff] bg-white text-[#075fff] shadow-[0_12px_28px_rgba(7,95,255,0.2)] hover:-translate-y-0.5 hover:bg-[#075fff] hover:text-white hover:shadow-2xl"}`}
           onClick={() => (open ? startMic() : setOpen(true))}
         >
           <Mic className="h-4 w-4" aria-hidden="true" />
