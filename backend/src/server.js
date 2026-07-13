@@ -4,6 +4,7 @@ import db from "./db.js";
 import { initErrorTracking, captureException } from "./lib/errorTracking.js";
 import { closeRedis } from "./lib/redis.js";
 import { seedPlans } from "./modules/subscription/subscription.service.js";
+import { recoverWebhookDeliveries } from "./modules/integrations/integrations.service.js";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 let httpServer = null;
@@ -22,6 +23,13 @@ async function main() {
     console.log(JSON.stringify({ type: "startup", message: "Plans seeded/updated", time: new Date().toISOString() }));
   } catch (err) {
     console.error(JSON.stringify({ type: "startup_warn", message: "Plan seed failed (non-fatal)", error: err.message, time: new Date().toISOString() }));
+  }
+
+  try {
+    const recovery = await recoverWebhookDeliveries();
+    console.log(JSON.stringify({ type: "startup", message: "Webhook delivery recovery scheduled", ...recovery, time: new Date().toISOString() }));
+  } catch (err) {
+    console.error(JSON.stringify({ type: "startup_warn", message: "Webhook delivery recovery failed (non-fatal)", error: err.message, time: new Date().toISOString() }));
   }
 
   httpServer = app.listen(env.PORT, () => {

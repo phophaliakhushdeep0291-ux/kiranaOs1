@@ -280,11 +280,11 @@ export function AppRoutes() {
       <Route path="/daily-closing">
         <ProtectedRoute component={DailyClosingPage} />
       </Route>
-      <Route path="/settings">
-        <ProtectedRoute component={Settings} />
-      </Route>
       <Route path="/settings/setup">
         <ProtectedRoute component={MerchantSetupSettings} />
+      </Route>
+      <Route path="/settings">
+        <ProtectedRoute component={Settings} />
       </Route>
       <Route path="/settings/store-profile">
         <ProtectedRoute component={StoreProfileSettings} />

@@ -3,7 +3,6 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { validate, validateQuery } from "../../middleware/validate.js";
-import { AppError } from "../../middleware/error.js";
 import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import * as ctrl from "./integrations.controller.js";
 import * as svc from "./integrations.service.js";

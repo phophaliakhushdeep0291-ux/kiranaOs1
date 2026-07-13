@@ -4,6 +4,7 @@ export const QUEUE_NAMES = Object.freeze({
   exportsQueue: "kiranaos:exports",
   backupQueue: "kiranaos:backups",
   syncCleanupQueue: "kiranaos:sync-cleanup",
+  webhooksQueue: "kiranaos:webhooks",
 });
 
 export const JOB_NAMES = Object.freeze({
@@ -18,6 +19,7 @@ export const JOB_NAMES = Object.freeze({
   ARCHIVE_OLD_SYNC_EVENTS: "ARCHIVE_OLD_SYNC_EVENTS",
   RUN_SHOP_BACKUP: "RUN_SHOP_BACKUP",
   RUN_DATABASE_BACKUP: "RUN_DATABASE_BACKUP",
+  DELIVER_WEBHOOK: "DELIVER_WEBHOOK",
 });
 
 export function listQueueNames() {

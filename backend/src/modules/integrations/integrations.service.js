@@ -9,6 +9,8 @@ import { recordIntegrationApiAuth, recordWebhookDelivery } from "../../lib/metri
 import { dateRangeForDateOnly, daysBetweenInclusive, formatDateInTimeZone } from "../../utils/dates.js";
 import { getWhatsAppProviderStatus } from "../reminders/whatsapp.provider.js";
 import { hasFeature, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
+import { addJob } from "../../lib/queue.js";
+import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 const MAX_ACTIVE_API_KEYS = 10;
@@ -169,6 +171,40 @@ export async function retryWebhookDelivery(shopId, deliveryId) {
   return deliverWebhook(delivery.endpoint, delivery.eventType, JSON.parse(delivery.payloadJson), delivery.eventId, delivery.createdAt);
 }
 
+async function scheduleWebhookDelivery(delivery) {
+  try {
+    const queued = await addJob(
+      QUEUE_NAMES.webhooksQueue,
+      JOB_NAMES.DELIVER_WEBHOOK,
+      { shopId: delivery.shopId, deliveryId: delivery.id },
+      { jobId: `webhook_${delivery.id}` },
+    );
+    if (queued.queued) return { deliveryId: delivery.id, queued: true };
+  } catch {
+    // Redis is an accelerator here, not a reason to lose a persisted event.
+  }
+  setImmediate(() => {
+    void retryWebhookDelivery(delivery.shopId, delivery.id).catch(() => {});
+  });
+  return { deliveryId: delivery.id, queued: false };
+}
+
+export async function recoverWebhookDeliveries({ limit = 100 } = {}) {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const deliveries = await db.webhookDelivery.findMany({
+    where: {
+      status: { in: ["pending", "failed"] },
+      attemptCount: { lt: 3 },
+      createdAt: { gte: since },
+      endpoint: { enabled: true, deletedAt: null },
+    },
+    orderBy: { createdAt: "asc" },
+    take: Math.min(Math.max(Number(limit) || 100, 1), 500),
+  });
+  await Promise.all(deliveries.map(scheduleWebhookDelivery));
+  return { recovered: deliveries.length };
+}
+
 export async function readResponseSnippet(response, maxBytes = 2048) {
   if (!response.body?.getReader) return (await response.text()).slice(0, 500);
   const reader = response.body.getReader();
@@ -246,11 +282,7 @@ export async function publishIntegrationEvent(shopId, eventType, payload) {
     data: { shopId, endpointId: endpoint.id, eventId, eventType, payloadJson },
   })));
 
-  setImmediate(() => {
-    for (const endpoint of matching) {
-      void deliverWebhook(endpoint, eventType, payload, eventId, eventCreatedAt).catch(() => {});
-    }
-  });
+  await Promise.all(pending.map(scheduleWebhookDelivery));
   return pending;
 }
 

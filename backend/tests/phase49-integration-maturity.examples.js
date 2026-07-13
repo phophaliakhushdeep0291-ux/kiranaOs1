@@ -41,12 +41,17 @@ const frontend = read("../frontend/src/features/settings/pages/IntegrationsSetti
 const sqliteSchema = read("prisma/schema.prisma");
 const postgresSchema = read("prisma-postgres/schema.prisma");
 const metrics = read("src/lib/metrics.js");
+const queueNames = read("src/workers/queueNames.js");
+const workerRegistry = read("src/workers/queues.js");
+const server = read("src/server.js");
 
 assert.match(service, /keyHash:\s*hashApiKey\(secret\)/, "only the key hash should be persisted");
 assert.doesNotMatch(service, /data:\s*\{[^}]*secret[,}]/s, "plaintext API keys must not be written to Prisma");
 assert.match(service, /redirect:\s*"error"/, "webhook redirects must be blocked against SSRF pivots");
 assert.match(service, /dns\.lookup/, "webhook destinations must be resolved before delivery");
-assert.match(service, /setImmediate[\s\S]*deliverWebhook/, "persisted deliveries must dispatch without blocking the business response");
+assert.match(service, /webhookDelivery\.create[\s\S]*scheduleWebhookDelivery/, "delivery evidence must be persisted before dispatch");
+assert.match(service, /addJob[\s\S]*webhooksQueue[\s\S]*DELIVER_WEBHOOK/, "production webhook delivery must use the durable worker queue");
+assert.match(service, /status:\s*\{\s*in:\s*\["pending",\s*"failed"\]/, "recoverable deliveries must be discovered after restart");
 assert.match(service, /hasMore[\s\S]*nextCursor/, "public API resources must expose a continuation contract");
 assert.match(service, /billType:\s*\{\s*not:\s*"estimate"\s*\}/, "accounting exports must exclude non-posted estimates");
 assert.match(routes, /requireIntegrationKey.*validateQuery/s, "public integration resources require API-key authentication");
@@ -59,6 +64,9 @@ assert.match(frontend, /Automatic expiry/, "API key creation must default to a b
 assert.match(frontend, /QueryFailure/, "integration query failures must not masquerade as empty data");
 assert.match(metrics, /integration_api_auth_total/, "API authentication must be observable");
 assert.match(metrics, /webhook_delivery_duration_ms/, "webhook delivery latency must be observable");
+assert.match(queueNames, /webhooksQueue:\s*"kiranaos:webhooks"/, "webhooks must have a dedicated queue");
+assert.match(workerRegistry, /webhooksQueue[\s\S]*handleWebhookJob/, "the webhook worker must be registered");
+assert.match(server, /recoverWebhookDeliveries/, "startup must recover persisted webhook deliveries");
 
 for (const model of ["IntegrationApiKey", "WebhookEndpoint", "WebhookDelivery"]) {
   assert.match(sqliteSchema, new RegExp(`model ${model}\\s*\\{`));

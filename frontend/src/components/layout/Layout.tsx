@@ -84,6 +84,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/expenses": "Track shop expenses and outflows",
   "/offers": "Create coupons and discounts for billing",
   "/settings": "Manage your store, preferences, and system configurations",
+  "/settings/setup": "Get the shop ready before real counter use",
   "/sync-status": "Monitor cloud backup and local-first safety",
 };
 
@@ -111,6 +112,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/expenses": "Expenses",
   "/offers": "Offers & Discounts",
   "/settings": "Settings",
+  "/settings/setup": "Merchant Setup",
   "/settings/store-profile": "Store Profile",
   "/settings/printer": "Printer & Receipt",
   "/settings/billing": "Billing Preferences",

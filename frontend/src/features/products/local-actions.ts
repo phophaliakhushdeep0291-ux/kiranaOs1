@@ -362,7 +362,7 @@ export async function importProductsLocalFirst(
     await tx.setSetting(LAST_PRODUCT_IMPORT_SETTING_KEY, session);
   });
 
-  const refreshedProducts = await offlineDB.getAll<Product>("products");
+  const refreshedProducts = (await offlineDB.getAll<Product>("products")).slice(0, 1000);
   writeInstantCache(CACHE_KEY, refreshedProducts, 3650);
   writeInstantCache(INVENTORY_CACHE_KEY, refreshedProducts, 3650);
   emitLocalDataChanged({
