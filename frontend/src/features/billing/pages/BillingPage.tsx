@@ -154,6 +154,7 @@ export default function Billing() {
   const [draftRestored, setDraftRestored] = useState(false);
   const [sensitivePinOpen, setSensitivePinOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [mobileCheckoutOpen, setMobileCheckoutOpen] = useState(false);
   const [sensitiveApproval, setSensitiveApproval] = useState<{ ownerPin: string; reason: string; actions: BillingSensitiveAction[] } | null>(null);
   const [pendingSensitiveBillType, setPendingSensitiveBillType] = useState<BillTypeSelection | null>(null);
   const [voiceCommand, setVoiceCommand] = useState("");
@@ -419,6 +420,7 @@ export default function Billing() {
             .catch(() => undefined);
         }
         setSensitiveApproval(null);
+        setMobileCheckoutOpen(false);
         resetCurrentBill();
         setActiveBillId(newBillId());
         clearBillingDraft();
@@ -1216,6 +1218,29 @@ export default function Billing() {
       </div>
 
       {/* ── RIGHT PANEL: cart + customer + payment ── */}
+      <div
+        className={mobileCheckoutOpen
+          ? "fixed inset-0 z-[70] flex min-h-0 flex-col bg-[#f7f9fd] lg:static lg:z-auto lg:flex lg:bg-transparent"
+          : "hidden lg:static lg:flex lg:min-h-0"}
+        role={mobileCheckoutOpen ? "dialog" : undefined}
+        aria-modal={mobileCheckoutOpen ? "true" : undefined}
+        aria-label={mobileCheckoutOpen ? "Review and collect payment" : undefined}
+      >
+        <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#e1e8f2] bg-white px-4 lg:hidden">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#64748b]">Checkout</p>
+            <h2 className="font-display text-[19px] font-black text-[#102347]">Review &amp; collect ₹{grandTotal.toLocaleString("en-IN")}</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setMobileCheckoutOpen(false)}
+            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dce5f1] px-4 text-[13px] font-black text-[#42526e]"
+            aria-label="Close checkout"
+          >
+            Back
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:p-0">
       <BillingSummary
         summaryWidth={summaryWidth}
         onStartSummaryResize={startSummaryResize}
@@ -1274,6 +1299,8 @@ export default function Billing() {
         onRemoveItem={removeItem}
         negativeStockWarnings={negativeStockWarnings}
       />
+        </div>
+      </div>
       </div>
 
       {/* Sticky mobile checkout bar — keeps the running total and the single next
@@ -1298,7 +1325,7 @@ export default function Billing() {
             <button
               type="button"
               data-testid="mobile-save-bill"
-              onClick={() => handleConfirm()}
+              onClick={() => setMobileCheckoutOpen(true)}
               disabled={confirmBill.isPending || !newBillingFeature.allowed}
               className="inline-flex h-12 min-w-[150px] items-center justify-center rounded-xl bg-[#0057ff] px-5 text-[15px] font-black text-white shadow-sm transition-transform active:scale-[0.99] disabled:opacity-50"
             >
@@ -1306,7 +1333,7 @@ export default function Billing() {
                 ? "Saving…"
                 : billType === BillInputBillType.estimate
                   ? `Review estimate · ₹${grandTotal.toLocaleString("en-IN")}`
-                  : `Collect ₹${grandTotal.toLocaleString("en-IN")}`}
+                  : `Review & pay ₹${grandTotal.toLocaleString("en-IN")}`}
             </button>
           </div>
         </div>

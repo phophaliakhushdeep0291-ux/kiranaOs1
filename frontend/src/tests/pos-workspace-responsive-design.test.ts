@@ -5,6 +5,8 @@ const billingPage = readFileSync(new URL("../features/billing/pages/BillingPage.
 const billingSearch = readFileSync(new URL("../features/billing/pages/components/BillingSearch.tsx", import.meta.url), "utf8");
 const layout = readFileSync(new URL("../components/layout/Layout.tsx", import.meta.url), "utf8");
 const dashboard = readFileSync(new URL("../features/dashboard/pages/DashboardPage.tsx", import.meta.url), "utf8");
+const products = readFileSync(new URL("../features/products/pages/ProductsPage.tsx", import.meta.url), "utf8");
+const billingSummary = readFileSync(new URL("../features/billing/pages/components/BillingSummary.tsx", import.meta.url), "utf8");
 
 describe("POS workspace responsive design", () => {
   it("keeps secondary billing panels out of ordinary laptop widths", () => {
@@ -13,8 +15,9 @@ describe("POS workspace responsive design", () => {
   });
 
   it("uses one amount-specific mobile checkout action above navigation", () => {
-    expect(billingPage).toContain("Collect ₹${grandTotal.toLocaleString(\"en-IN\")}");
+    expect(billingPage).toContain("Review & pay ₹${grandTotal.toLocaleString(\"en-IN\")}");
     expect(billingPage).toContain("+ 1.5rem + env(safe-area-inset-bottom)");
+    expect(billingPage).toContain('aria-label={mobileCheckoutOpen ? "Review and collect payment" : undefined}');
   });
 
   it("removes redundant floating actions while billing", () => {
@@ -23,5 +26,16 @@ describe("POS workspace responsive design", () => {
 
   it("does not squeeze seven owner metrics into a standard laptop row", () => {
     expect(dashboard).toContain("xl:grid-cols-4 2xl:grid-cols-7");
+  });
+
+  it("keeps product overview compact and avoids a duplicate floating add action", () => {
+    expect(products).toContain("grid grid-cols-2 gap-2.5");
+    expect(products).not.toContain("button-add-product-mobile");
+  });
+
+  it("describes the exact payment action and amount at confirmation", () => {
+    expect(billingSummary).toContain("Collect Cash");
+    expect(billingSummary).toContain("Save as Udhar");
+    expect(billingSummary).toContain("${paymentAction} · ${fmtRs(grandTotal)}");
   });
 });

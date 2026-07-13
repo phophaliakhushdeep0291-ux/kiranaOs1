@@ -185,6 +185,15 @@ export function BillingSummary({
   const needsOptionsVisible =
     billType !== BillInputBillType.normal_sale || selectedCustomerId !== "walk_in";
   const isEstimateBill = billType === BillInputBillType.estimate;
+  const paymentAction = String(paymentMode) === "credit"
+    ? "Save as Udhar"
+    : String(paymentMode) === "upi"
+      ? "Collect by UPI"
+      : String(paymentMode) === "bank" || String(paymentMode) === "bank_transfer"
+        ? "Collect by Bank"
+        : String(paymentMode) === "split"
+          ? "Complete Split Payment"
+          : "Collect Cash";
 
   useEffect(() => {
     const onAction = (event: Event) => {
@@ -202,7 +211,7 @@ export function BillingSummary({
 
   return (
     <div
-      className="relative flex w-full shrink-0 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.055)] lg:h-full lg:w-[var(--bill-summary-width)]"
+      className="relative flex h-full w-full shrink-0 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.055)] lg:w-[var(--bill-summary-width)]"
       style={{ "--bill-summary-width": `${summaryWidth}px` } as CSSProperties}
       data-testid="bill-summary-panel"
     >
@@ -530,7 +539,7 @@ export function BillingSummary({
             </>
           ) : (
             <>
-              {isEstimateBill ? "Save Estimate Bill" : "Save Pakka Bill"}
+              {isEstimateBill ? `Save Estimate · ${fmtRs(grandTotal)}` : `${paymentAction} · ${fmtRs(grandTotal)}`}
               <span className="absolute right-2.5 top-1/2 inline-flex h-6 min-w-[34px] -translate-y-1/2 items-center justify-center rounded-[7px] bg-[rgba(0,35,140,0.35)] px-1.5 text-[11px] font-black text-white">
                 F12
               </span>

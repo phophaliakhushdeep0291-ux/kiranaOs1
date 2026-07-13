@@ -320,7 +320,7 @@ export default function ProductsPage() {
       style={open && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       {/* ── Stat cards ── */}
-      <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5 xl:grid-cols-4">
         <StatCard icon={<Package size={18} />} iconClass="bg-blue-50 text-blue-600" label="Total Products" value={stats.total.toLocaleString("en-IN")} sub="Active listings" />
         <StatCard icon={<AlertTriangle size={18} />} iconClass="bg-amber-50 text-amber-600" label="Low Stock" value={stats.lowStock.toLocaleString("en-IN")} sub="Needs attention" />
         <StatCard icon={<XCircle size={18} />} iconClass="bg-rose-50 text-rose-600" label="Out of Stock" value={stats.outOfStock.toLocaleString("en-IN")} sub="Unavailable" />
@@ -362,7 +362,7 @@ export default function ProductsPage() {
           variant="outline"
           onClick={() => setImportOpen(true)}
           disabled={!manageProducts.allowed}
-          className="h-11 shrink-0 gap-1.5 rounded-[10px] px-4 text-[13px] font-bold"
+          className="hidden h-11 shrink-0 gap-1.5 rounded-[10px] px-4 text-[13px] font-bold lg:inline-flex"
         >
           <Upload size={16} /> Import
         </Button>
@@ -519,20 +519,6 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {!open && (
-        <button
-          type="button"
-          data-testid="button-add-product-mobile"
-          onClick={openAdd}
-          disabled={!manageProducts.allowed}
-          className="fixed bottom-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom)+16px)] right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full bg-[#075fff] px-5 text-[13px] font-black text-white shadow-[0_14px_30px_rgba(0,91,255,0.34)] transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-[#9aa6bb] lg:hidden"
-          aria-label="Add product"
-        >
-          <Plus size={17} aria-hidden="true" />
-          Add Product
-        </button>
-      )}
-
       <ProductFormPanel
         open={open}
         editing={editing}
@@ -584,12 +570,12 @@ export default function ProductsPage() {
 /* ── Stat card ── */
 function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNode; iconClass: string; label: string; value: string; sub: string }) {
   return (
-    <div className="flex items-center gap-3.5 rounded-[14px] border border-[#e6ecf4] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[12px] ${iconClass}`}>{icon}</span>
+    <div className="flex min-h-[92px] items-center gap-2.5 rounded-[14px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:gap-3.5 sm:p-4">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] sm:h-11 sm:w-11 sm:rounded-[12px] ${iconClass}`}>{icon}</span>
       <div className="min-w-0">
-        <p className="text-[12px] font-semibold text-[#6d7c98]">{label}</p>
-        <p className="font-display text-[22px] font-black leading-tight tracking-tight text-[#0f1e3d]">{value}</p>
-        <p className="text-[11px] text-[#9aa6bb]">{sub}</p>
+        <p className="text-[11px] font-semibold leading-tight text-[#6d7c98] sm:text-[12px]">{label}</p>
+        <p className="font-display text-[20px] font-black leading-tight tracking-tight text-[#0f1e3d] sm:text-[22px]">{value}</p>
+        <p className="hidden text-[11px] text-[#9aa6bb] sm:block">{sub}</p>
       </div>
     </div>
   );
