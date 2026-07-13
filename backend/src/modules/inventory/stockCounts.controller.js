@@ -1,0 +1,13 @@
+import * as service from "./stockCounts.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
+
+const actor = (req) => ({ userId: req.user?.userId ?? null, note: req.body?.note ?? null });
+
+export async function list(req, res, next) { try { res.json({ success: true, data: await service.listStockCounts(req.shopId, requestLocationId(req), req.query) }); } catch (error) { next(error); } }
+export async function get(req, res, next) { try { res.json({ success: true, data: await service.getStockCount(req.shopId, requestLocationId(req), req.params.id) }); } catch (error) { next(error); } }
+export async function create(req, res, next) { try { const data = await service.createStockCount(req.shopId, requestLocationId(req), req.body, actor(req)); await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "STOCK_COUNT_STARTED", entityType: "StockCountSession", entityId: data.id, metadata: { locationId: data.locationId, totalLines: data.summary.totalLines, blindCount: data.blindCount }, req }); res.status(201).json({ success: true, data }); } catch (error) { next(error); } }
+export async function updateLines(req, res, next) { try { res.json({ success: true, data: await service.updateStockCountLines(req.shopId, requestLocationId(req), req.params.id, req.body, actor(req)) }); } catch (error) { next(error); } }
+export async function submit(req, res, next) { try { const data = await service.submitStockCount(req.shopId, requestLocationId(req), req.params.id); await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "STOCK_COUNT_SUBMITTED", entityType: "StockCountSession", entityId: data.id, metadata: data.summary, req }); res.json({ success: true, data }); } catch (error) { next(error); } }
+export async function apply(req, res, next) { try { const data = await service.applyStockCount(req.shopId, requestLocationId(req), req.params.id, actor(req)); await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "STOCK_COUNT_APPLIED", entityType: "StockCountSession", entityId: data.id, metadata: { ...data.summary, locationId: data.locationId }, req }); res.json({ success: true, data }); } catch (error) { next(error); } }
+export async function cancel(req, res, next) { try { const data = await service.cancelStockCount(req.shopId, requestLocationId(req), req.params.id, actor(req)); await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "STOCK_COUNT_CANCELLED", entityType: "StockCountSession", entityId: data.id, metadata: { note: req.body?.note ?? null, locationId: data.locationId }, req }); res.json({ success: true, data }); } catch (error) { next(error); } }

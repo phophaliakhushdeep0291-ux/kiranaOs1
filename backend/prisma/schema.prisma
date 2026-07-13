@@ -506,7 +506,6 @@ model Bill {
   udharLedger         UdharLedger[]
   stockLedger         StockLedger[]
   loyaltyTransactions LoyaltyTransaction[]
-  stockCountSessions StockCountSession[]
   complianceDocuments ComplianceDocument[]
 
   @@unique([shopId, billNo])
@@ -658,6 +657,7 @@ model StoreLocation {
   userAccess        UserLocationAccess[]
   pricingRules      PricingRule[]
   loyaltyTransactions LoyaltyTransaction[]
+  stockCountSessions StockCountSession[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])

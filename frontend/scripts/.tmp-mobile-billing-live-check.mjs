@@ -166,45 +166,15 @@ async function main() {
     await client.evaluate(`(async () => {
       const demo = await import('/src/features/demo/demo-shop-data.ts');
       await demo.seedDemoShopData();
-      const session = JSON.parse(localStorage.getItem('kiranaos.auth.session.v1') || '{}');
-      const token = session.accessToken;
-      const deviceId = localStorage.getItem('kiranaos_device_id') || localStorage.getItem('kirana-os:device-id:v1');
-      const response = await fetch(${JSON.stringify(API_URL)} + '/products', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer ' + token,
-          'x-device-id': deviceId,
-          'x-owner-pin': '2468',
-        },
-        body: JSON.stringify({
-          name: 'Live QA Sugar',
-          category: 'Grocery',
-          aliases: ['sugar'],
-          displayUnit: 'kg',
-          baseUnit: 'kg',
-          rateUnit: 'kg',
-          stockBaseQty: 25,
-          costPerRateUnit: 28,
-          minPricePerRateUnit: 30,
-          defaultPricePerRateUnit: 42,
-          gstRate: 0,
-          mrp: 45,
-          reorderLevel: 2,
-          isLooseItem: true,
-          lowStockThreshold: 5,
-        }),
-      });
-      const json = await response.json();
-      if (!response.ok) throw new Error(JSON.stringify(json));
-      return true;
-    })()`);
-    await client.evaluate(`(async () => {
-      const products = await import('/src/features/products/local-actions.ts');
-      await products.createProductLocalFirst({
+      const { offlineDB } = await import('/src/lib/offline/db.ts');
+      const product = {
+        id: 'qa-live-sugar',
+        productId: 'qa-live-sugar',
         name: 'Live QA Sugar',
         category: 'Grocery',
+        aliases: ['sugar'],
         displayUnit: 'kg',
+        unit: 'kg',
         baseUnit: 'kg',
         rateUnit: 'kg',
         stockBaseQty: 25,
@@ -219,10 +189,71 @@ async function main() {
         wholesalePrice: 40,
         mrp: 45,
         gstRate: 0,
-        aliases: ['sugar'],
+        deletedAt: null,
+        sellingUnits: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await offlineDB.setSetting('kirana-os:billing-draft:v1', {
+        activeBillId: 'qa-live-bill',
+        cart: [{ product, quantity: 1, rate: 42, unit: 'kg' }],
+        discount: 0,
+        paymentMode: 'cash',
+        billType: 'normal_sale',
+        selectedCustomerId: 'walk_in',
+        customerName: '',
+        customerMobile: '',
+        paidAmount: '',
+        splitCashAmount: '',
+        splitUpiAmount: '',
+        allowAdvancePayment: false,
       });
       return true;
     })()`);
+    await client.send("Page.addScriptToEvaluateOnNewDocument", {
+      source: `
+        (() => {
+          const product = {
+            id: 'qa-live-sugar',
+            productId: 'qa-live-sugar',
+            name: 'Live QA Sugar',
+            category: 'Grocery',
+            aliases: ['sugar'],
+            displayUnit: 'kg',
+            unit: 'kg',
+            baseUnit: 'kg',
+            rateUnit: 'kg',
+            stockBaseQty: 25,
+            stockQuantity: 25,
+            stockUnit: 'kg',
+            stockTrackingEnabled: true,
+            costPerRateUnit: 28,
+            minPricePerRateUnit: 30,
+            defaultPricePerRateUnit: 42,
+            sellingPrice: 42,
+            retailPrice: 42,
+            wholesalePrice: 40,
+            mrp: 45,
+            gstRate: 0,
+            deletedAt: null,
+            sellingUnits: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          const originalFetch = window.fetch.bind(window);
+          window.fetch = async (input, init) => {
+            const url = typeof input === 'string' ? input : input?.url || '';
+            if (/\\/api\\/products(?:\\?|$)/.test(url)) {
+              return new Response(JSON.stringify({ success: true, data: [product] }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              });
+            }
+            return originalFetch(input, init);
+          };
+        })();
+      `,
+    });
     await navigate(client, `${FRONTEND_URL}/billing`);
     await waitForPage(client, "Boolean(document.querySelector('#main-content') && document.body.innerText.length > 200)");
     await sleep(1_500);
@@ -320,7 +351,71 @@ async function main() {
       captureBeyondViewport: false,
     });
     await writeFile(path.resolve("billing-mobile-live.png"), Buffer.from(image.data, "base64"));
-    console.log(JSON.stringify({ beforeAdd, addResult, report }, null, 2));
+    await client.evaluate(`document.querySelector('[data-testid="mobile-save-bill"]')?.click()`);
+    await sleep(700);
+    const checkoutReport = await client.evaluate(`(() => {
+      const isVisible = (node) => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return rect.width > 1 && rect.height > 1 && style.visibility !== 'hidden' && style.display !== 'none' && Number(style.opacity || 1) > 0.01;
+      };
+      const rectObj = (node) => {
+        if (!node) return null;
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return {
+          tag: node.tagName.toLowerCase(),
+          text: (node.textContent || node.getAttribute('aria-label') || '').trim().replace(/\\s+/g, ' ').slice(0, 110),
+          position: style.position,
+          zIndex: style.zIndex,
+          top: Math.round(rect.top),
+          bottom: Math.round(rect.bottom),
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          className: String(node.className || '').slice(0, 140),
+        };
+      };
+      const fixedBottom = [...document.querySelectorAll('body *')]
+        .filter((node) => isVisible(node))
+        .filter((node) => {
+          const style = getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return ['fixed', 'sticky'].includes(style.position) && rect.bottom > innerHeight - 320;
+        })
+        .map(rectObj)
+        .sort((a, b) => a.top - b.top);
+      const actionable = [...document.querySelectorAll('button,a,input,select,textarea,[role="button"]')]
+        .filter((node) => isVisible(node))
+        .filter((node) => {
+          const rect = node.getBoundingClientRect();
+          return rect.top >= 0 && rect.top < innerHeight && rect.bottom > innerHeight - 360;
+        })
+        .map((node) => {
+          const rect = node.getBoundingClientRect();
+          const x = Math.max(1, Math.min(innerWidth - 1, rect.left + rect.width / 2));
+          const y = Math.max(1, Math.min(innerHeight - 1, rect.top + rect.height / 2));
+          const hit = document.elementFromPoint(x, y);
+          const blocked = Boolean(hit && hit !== node && !node.contains(hit) && !hit.contains(node));
+          return { ...rectObj(node), hitTag: hit?.tagName?.toLowerCase() || null, hitText: (hit?.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 80), blocked };
+        });
+      return {
+        bodyText: document.body.innerText.split('\\n').slice(-45).join(' | '),
+        dialog: rectObj(document.querySelector('[role="dialog"]')),
+        nav: rectObj(document.querySelector('nav[aria-label="Mobile navigation"]')),
+        fixedBottom,
+        actionable,
+        blocked: actionable.filter((item) => item.blocked),
+      };
+    })()`);
+    const checkoutImage = await client.send("Page.captureScreenshot", {
+      format: "png",
+      fromSurface: true,
+      captureBeyondViewport: false,
+    });
+    await writeFile(path.resolve("billing-mobile-checkout-live.png"), Buffer.from(checkoutImage.data, "base64"));
+    console.log(JSON.stringify({ beforeAdd, addResult, report, checkoutReport }, null, 2));
   } finally {
     client?.close();
     chrome.kill();

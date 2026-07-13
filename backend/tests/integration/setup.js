@@ -167,6 +167,8 @@ export async function resetDatabase(db) {
   await db.$transaction([
     db.pricingDecisionEvent.deleteMany(),
     db.customerOrder.deleteMany(),
+    db.stockCountLine.deleteMany(),
+    db.stockCountSession.deleteMany(),
     db.purchaseReceiptItem.deleteMany(),
     db.purchaseReceipt.deleteMany(),
     db.purchaseOrderItem.deleteMany(),
