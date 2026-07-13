@@ -213,8 +213,9 @@ if (ctx.skip) {
       }), { token: ownerAuth.accessToken }), 201);
       // Stock is now 8.
 
-      // Two cancels race. The atomic active->cancelled transition must let only one win,
-      // so stock is restored exactly once (8 -> 10), never twice (12).
+      // Two cancels race. A request that observes the committed cancellation may
+      // return the existing bill idempotently; an overlapping loser may return a
+      // conflict. In either schedule, the reversal itself must happen only once.
       const [a, b] = await Promise.all([
         ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Race A" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }),
         ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Race B" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }),
@@ -222,7 +223,7 @@ if (ctx.skip) {
 
       const statuses = [a.status, b.status];
       assert.ok(statuses.includes(200), "one cancel succeeds");
-      assert.ok(statuses.some((s) => s >= 400), "the other cancel is rejected, not silently double-applied");
+      assert.ok(statuses.every((status) => status === 200 || status === 409), "the other cancel is idempotent or rejected");
 
       const refreshed = await ctx.db.product.findUnique({ where: { id: product.id } });
       assert.equal(refreshed.stockBaseQty, 10, "stock restored exactly once (not doubled)");
