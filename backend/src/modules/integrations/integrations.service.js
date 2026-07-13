@@ -105,6 +105,10 @@ async function postWebhookRequest({ rawUrl, headers, body, signal, maxResponseBy
         responseSnippet: Buffer.concat(chunks).toString("utf8").slice(0, 500),
       }));
       response.on("error", (error) => finish(error));
+      response.on("aborted", () => finish(new Error("Webhook response ended unexpectedly")));
+      response.on("close", () => {
+        if (!response.complete) finish(new Error("Webhook response closed before completion"));
+      });
     });
     const abort = () => {
       const error = new Error("Webhook request timed out");
