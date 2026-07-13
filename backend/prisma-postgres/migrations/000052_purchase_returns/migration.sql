@@ -15,6 +15,7 @@ ALTER TABLE "PurchaseReturn" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEF
 ALTER TABLE "PurchaseReturn" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3);
 ALTER TABLE "PurchaseReturn" ADD COLUMN IF NOT EXISTS "cancelledByUserId" TEXT;
 ALTER TABLE "PurchaseReturn" ADD COLUMN IF NOT EXISTS "cancellationReason" TEXT;
+ALTER TABLE "PurchaseReturn" ADD COLUMN IF NOT EXISTS "idempotencyKey" TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS "PurchaseReturn_shopId_returnNumber_key" ON "PurchaseReturn"("shopId", "returnNumber");
 CREATE UNIQUE INDEX IF NOT EXISTS "PurchaseReturn_shopId_idempotencyKey_key" ON "PurchaseReturn"("shopId", "idempotencyKey");
 CREATE INDEX IF NOT EXISTS "PurchaseReturn_shopId_locationId_createdAt_idx" ON "PurchaseReturn"("shopId", "locationId", "createdAt");
@@ -23,6 +24,13 @@ CREATE INDEX IF NOT EXISTS "PurchaseReturn_shopId_purchaseReceiptId_createdAt_id
 CREATE INDEX IF NOT EXISTS "PurchaseReturn_shopId_status_createdAt_idx" ON "PurchaseReturn"("shopId", "status", "createdAt");
 CREATE UNIQUE INDEX IF NOT EXISTS "PurchaseReturnItem_purchaseReturnId_purchaseReceiptItemId_key" ON "PurchaseReturnItem"("purchaseReturnId", "purchaseReceiptItemId");
 CREATE INDEX IF NOT EXISTS "PurchaseReturnItem_productId_idx" ON "PurchaseReturnItem"("productId");
+ALTER TABLE "PurchaseReturn" DROP CONSTRAINT IF EXISTS "PurchaseReturn_shopId_fkey";
+ALTER TABLE "PurchaseReturn" DROP CONSTRAINT IF EXISTS "PurchaseReturn_locationId_fkey";
+ALTER TABLE "PurchaseReturn" DROP CONSTRAINT IF EXISTS "PurchaseReturn_supplierId_fkey";
+ALTER TABLE "PurchaseReturn" DROP CONSTRAINT IF EXISTS "PurchaseReturn_purchaseReceiptId_fkey";
+ALTER TABLE "PurchaseReturnItem" DROP CONSTRAINT IF EXISTS "PurchaseReturnItem_purchaseReturnId_fkey";
+ALTER TABLE "PurchaseReturnItem" DROP CONSTRAINT IF EXISTS "PurchaseReturnItem_purchaseReceiptItemId_fkey";
+ALTER TABLE "PurchaseReturnItem" DROP CONSTRAINT IF EXISTS "PurchaseReturnItem_productId_fkey";
 ALTER TABLE "PurchaseReturn" ADD CONSTRAINT "PurchaseReturn_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "PurchaseReturn" ADD CONSTRAINT "PurchaseReturn_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "StoreLocation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "PurchaseReturn" ADD CONSTRAINT "PurchaseReturn_supplierId_fkey" FOREIGN KEY ("supplierId") REFERENCES "Supplier"("id") ON DELETE SET NULL ON UPDATE CASCADE;
