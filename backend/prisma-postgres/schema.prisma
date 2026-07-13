@@ -1115,6 +1115,7 @@ model WebhookEndpoint {
   url             String
   eventsJson      String    @default("[]")
   enabled         Boolean   @default(true)
+  deletedAt       DateTime?
   createdByUserId String?
   lastSuccessAt   DateTime?
   lastFailureAt   DateTime?
@@ -1125,7 +1126,7 @@ model WebhookEndpoint {
   shop       Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
   deliveries WebhookDelivery[]
 
-  @@index([shopId, enabled, createdAt])
+  @@index([shopId, deletedAt, enabled, createdAt])
 }
 
 model WebhookDelivery {

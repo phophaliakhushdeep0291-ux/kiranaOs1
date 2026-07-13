@@ -23,7 +23,7 @@ export async function confirm(req, res, next) {
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       allowStockShortfall: true,
     });
-    void publishIntegrationEvent(req.shopId, "bill.created", {
+    await publishIntegrationEvent(req.shopId, "bill.created", {
       id: data.id,
       billNo: data.billNo,
       billType: data.billType,
@@ -34,7 +34,7 @@ export async function confirm(req, res, next) {
       paidAmount: data.paidAmount,
       creditAmount: data.creditAmount,
       createdAt: data.createdAt,
-    }).catch(() => {});
+    }).catch(() => []);
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
 }

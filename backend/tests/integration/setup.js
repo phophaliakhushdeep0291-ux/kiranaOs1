@@ -165,6 +165,9 @@ function jsonReplacer(_key, value) {
 
 export async function resetDatabase(db) {
   await db.$transaction([
+    db.webhookDelivery.deleteMany(),
+    db.webhookEndpoint.deleteMany(),
+    db.integrationApiKey.deleteMany(),
     db.deviceReplacementChallenge.deleteMany(),
     db.deviceLicense.deleteMany(),
     db.device.deleteMany(),

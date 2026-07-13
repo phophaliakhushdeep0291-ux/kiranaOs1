@@ -5,9 +5,15 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { getObjectStorageStatus } from "../../lib/objectStorage.js";
+import { recordIntegrationApiAuth, recordWebhookDelivery } from "../../lib/metrics.js";
+import { dateRangeForDateOnly, daysBetweenInclusive, formatDateInTimeZone } from "../../utils/dates.js";
 import { getWhatsAppProviderStatus } from "../reminders/whatsapp.provider.js";
+import { hasFeature, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
+const MAX_ACTIVE_API_KEYS = 10;
+const MAX_WEBHOOK_ENDPOINTS = 10;
+const MAX_TALLY_BILLS = 10000;
 
 function jsonArray(value) {
   try { const parsed = JSON.parse(value || "[]"); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
@@ -61,7 +67,7 @@ async function assertPublicDestination(rawUrl) {
 export async function getOverview(shopId) {
   const [activeKeys, activeWebhooks, recentDeliveries] = await Promise.all([
     db.integrationApiKey.count({ where: { shopId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } }),
-    db.webhookEndpoint.count({ where: { shopId, enabled: true } }),
+    db.webhookEndpoint.count({ where: { shopId, enabled: true, deletedAt: null } }),
     db.webhookDelivery.findMany({ where: { shopId }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, eventType: true, status: true, httpStatus: true, durationMs: true, createdAt: true, lastAttemptAt: true } }),
   ]);
   const storage = getObjectStorageStatus();
@@ -84,6 +90,8 @@ export async function listApiKeys(shopId) {
 }
 
 export async function createApiKey({ shopId, userId, input }) {
+  const activeCount = await db.integrationApiKey.count({ where: { shopId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } });
+  if (activeCount >= MAX_ACTIVE_API_KEYS) throw new AppError(`A shop can have at most ${MAX_ACTIVE_API_KEYS} active API keys`, 409, "INTEGRATION_KEY_LIMIT_REACHED");
   const raw = crypto.randomBytes(32).toString("base64url");
   const secret = `kos_${env.NODE_ENV === "production" ? "live" : "test"}_${raw}`;
   const row = await db.integrationApiKey.create({ data: { shopId, name: input.name, keyPrefix: secret.slice(0, 18), keyHash: hashApiKey(secret), scopesJson: JSON.stringify([...new Set(input.scopes)].sort()), createdByUserId: userId || null, expiresAt: input.expiresAt ? new Date(input.expiresAt) : null }, select: { id: true, name: true, keyPrefix: true, scopesJson: true, expiresAt: true, createdAt: true } });
@@ -96,34 +104,52 @@ export async function revokeApiKey(shopId, id) {
 }
 
 export async function authenticateApiKey(secret) {
-  if (!/^kos_(live|test)_[A-Za-z0-9_-]{32,}$/.test(secret || "")) throw new AppError("Valid integration API key required", 401, "INTEGRATION_KEY_INVALID");
+  if (!/^kos_(live|test)_[A-Za-z0-9_-]{32,}$/.test(secret || "")) {
+    recordIntegrationApiAuth("invalid_format");
+    throw new AppError("Valid integration API key required", 401, "INTEGRATION_KEY_INVALID");
+  }
   const row = await db.integrationApiKey.findUnique({ where: { keyHash: hashApiKey(secret) } });
-  if (!row || row.revokedAt || (row.expiresAt && row.expiresAt <= new Date())) throw new AppError("Integration API key is invalid, expired, or revoked", 401, "INTEGRATION_KEY_INVALID");
+  if (!row || row.revokedAt || (row.expiresAt && row.expiresAt <= new Date())) {
+    recordIntegrationApiAuth(row?.revokedAt ? "revoked" : row?.expiresAt ? "expired" : "not_found");
+    throw new AppError("Integration API key is invalid, expired, or revoked", 401, "INTEGRATION_KEY_INVALID");
+  }
+  await requireFeatureAccess(row.shopId, "api_webhook_later");
+  recordIntegrationApiAuth("success");
   void db.integrationApiKey.update({ where: { id: row.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
   return { id: row.id, shopId: row.shopId, scopes: jsonArray(row.scopesJson) };
 }
 
 export async function listWebhookEndpoints(shopId) {
-  const rows = await db.webhookEndpoint.findMany({ where: { shopId }, orderBy: { createdAt: "desc" }, include: { _count: { select: { deliveries: true } } } });
+  const rows = await db.webhookEndpoint.findMany({ where: { shopId, deletedAt: null }, orderBy: { createdAt: "desc" }, include: { _count: { select: { deliveries: true } } } });
   return rows.map((row) => ({ ...row, events: jsonArray(row.eventsJson), eventsJson: undefined, signingSecretConfigured: true }));
 }
 
 export async function createWebhookEndpoint({ shopId, userId, input }) {
-  assertWebhookUrlSyntax(input.url);
-  const row = await db.webhookEndpoint.create({ data: { shopId, name: input.name, url: input.url, eventsJson: JSON.stringify([...new Set(input.events)].sort()), createdByUserId: userId || null } });
+  const url = assertWebhookUrlSyntax(input.url).toString();
+  const [endpointCount, duplicate] = await Promise.all([
+    db.webhookEndpoint.count({ where: { shopId, deletedAt: null } }),
+    db.webhookEndpoint.findFirst({ where: { shopId, deletedAt: null, url }, select: { id: true } }),
+  ]);
+  if (endpointCount >= MAX_WEBHOOK_ENDPOINTS) throw new AppError(`A shop can have at most ${MAX_WEBHOOK_ENDPOINTS} webhook endpoints`, 409, "WEBHOOK_LIMIT_REACHED");
+  if (duplicate) throw new AppError("This webhook URL is already configured", 409, "WEBHOOK_URL_DUPLICATE");
+  const row = await db.webhookEndpoint.create({ data: { shopId, name: input.name, url, eventsJson: JSON.stringify([...new Set(input.events)].sort()), createdByUserId: userId || null } });
   return { ...row, events: jsonArray(row.eventsJson), eventsJson: undefined, secret: deriveWebhookSecret(row.id) };
 }
 
 export async function updateWebhookEndpoint(shopId, id, input) {
-  if (input.url) assertWebhookUrlSyntax(input.url);
-  const existing = await db.webhookEndpoint.findFirst({ where: { id, shopId } });
+  const normalizedUrl = input.url ? assertWebhookUrlSyntax(input.url).toString() : undefined;
+  const existing = await db.webhookEndpoint.findFirst({ where: { id, shopId, deletedAt: null } });
   if (!existing) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
-  const row = await db.webhookEndpoint.update({ where: { id }, data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(input.url !== undefined ? { url: input.url } : {}), ...(input.events !== undefined ? { eventsJson: JSON.stringify([...new Set(input.events)].sort()) } : {}), ...(input.enabled !== undefined ? { enabled: input.enabled } : {}) } });
+  if (normalizedUrl) {
+    const duplicate = await db.webhookEndpoint.findFirst({ where: { shopId, url: normalizedUrl, deletedAt: null, NOT: { id } }, select: { id: true } });
+    if (duplicate) throw new AppError("This webhook URL is already configured", 409, "WEBHOOK_URL_DUPLICATE");
+  }
+  const row = await db.webhookEndpoint.update({ where: { id }, data: { ...(input.name !== undefined ? { name: input.name } : {}), ...(normalizedUrl !== undefined ? { url: normalizedUrl } : {}), ...(input.events !== undefined ? { eventsJson: JSON.stringify([...new Set(input.events)].sort()) } : {}), ...(input.enabled !== undefined ? { enabled: input.enabled } : {}) } });
   return { ...row, events: jsonArray(row.eventsJson), eventsJson: undefined };
 }
 
 export async function deleteWebhookEndpoint(shopId, id) {
-  const result = await db.webhookEndpoint.deleteMany({ where: { id, shopId } });
+  const result = await db.webhookEndpoint.updateMany({ where: { id, shopId, deletedAt: null }, data: { enabled: false, deletedAt: new Date() } });
   if (!result.count) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
 }
 
@@ -132,77 +158,142 @@ export async function listWebhookDeliveries(shopId, { limit, cursor }) {
 }
 
 export async function testWebhookEndpoint(shopId, endpointId) {
-  const endpoint = await db.webhookEndpoint.findFirst({ where: { id: endpointId, shopId } });
+  const endpoint = await db.webhookEndpoint.findFirst({ where: { id: endpointId, shopId, deletedAt: null } });
   if (!endpoint) throw new AppError("Webhook endpoint not found", 404, "WEBHOOK_NOT_FOUND");
   return deliverWebhook(endpoint, "integration.test", { message: "KiranaOS webhook connection test", shopId, sentAt: new Date().toISOString() });
 }
 
 export async function retryWebhookDelivery(shopId, deliveryId) {
   const delivery = await db.webhookDelivery.findFirst({ where: { id: deliveryId, shopId }, include: { endpoint: true } });
-  if (!delivery) throw new AppError("Webhook delivery not found", 404, "WEBHOOK_DELIVERY_NOT_FOUND");
-  return deliverWebhook(delivery.endpoint, delivery.eventType, JSON.parse(delivery.payloadJson), delivery.eventId);
+  if (!delivery || delivery.endpoint.deletedAt) throw new AppError("Webhook delivery not found or endpoint has been archived", 404, "WEBHOOK_DELIVERY_NOT_FOUND");
+  return deliverWebhook(delivery.endpoint, delivery.eventType, JSON.parse(delivery.payloadJson), delivery.eventId, delivery.createdAt);
 }
 
-async function deliverWebhook(endpoint, eventType, payload, existingEventId = null) {
+export async function readResponseSnippet(response, maxBytes = 2048) {
+  if (!response.body?.getReader) return (await response.text()).slice(0, 500);
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      const remaining = maxBytes - total;
+      chunks.push(chunk.subarray(0, remaining));
+      total += Math.min(chunk.length, remaining);
+      if (chunk.length > remaining) break;
+    }
+  } finally {
+    try { await reader.cancel(); } catch { /* response stream already closed */ }
+  }
+  return Buffer.concat(chunks).toString("utf8").slice(0, 500);
+}
+
+function integrationJsonReplacer(_key, value) {
+  return typeof value === "bigint" ? value.toString() : value;
+}
+
+async function deliverWebhook(endpoint, eventType, payload, existingEventId = null, existingCreatedAt = null) {
   if (!endpoint.enabled) throw new AppError("Webhook endpoint is disabled", 409, "WEBHOOK_DISABLED");
-  await assertPublicDestination(endpoint.url);
   const eventId = existingEventId || `evt_${crypto.randomUUID().replaceAll("-", "")}`;
-  const body = JSON.stringify({ id: eventId, type: eventType, createdAt: new Date().toISOString(), data: payload });
+  const eventCreatedAt = existingCreatedAt ? new Date(existingCreatedAt).toISOString() : new Date().toISOString();
+  const payloadJson = JSON.stringify(payload, integrationJsonReplacer);
+  const body = JSON.stringify({ id: eventId, type: eventType, createdAt: eventCreatedAt, data: JSON.parse(payloadJson) });
   if (Buffer.byteLength(body) > MAX_WEBHOOK_BODY_BYTES) throw new AppError("Webhook payload is too large", 413, "WEBHOOK_PAYLOAD_TOO_LARGE");
-  const delivery = await db.webhookDelivery.upsert({ where: { endpointId_eventId: { endpointId: endpoint.id, eventId } }, create: { shopId: endpoint.shopId, endpointId: endpoint.id, eventId, eventType, payloadJson: JSON.stringify(payload) }, update: {} });
+  const delivery = await db.webhookDelivery.upsert({ where: { endpointId_eventId: { endpointId: endpoint.id, eventId } }, create: { shopId: endpoint.shopId, endpointId: endpoint.id, eventId, eventType, payloadJson }, update: {} });
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = signWebhookPayload({ endpointId: endpoint.id, timestamp, body });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), env.INTEGRATION_WEBHOOK_TIMEOUT_MS);
   const startedAt = Date.now();
   try {
+    await assertPublicDestination(endpoint.url);
     const response = await fetch(endpoint.url, { method: "POST", redirect: "error", signal: controller.signal, headers: { "content-type": "application/json", "user-agent": "KiranaOS-Webhooks/1.0", "x-kiranaos-event": eventType, "x-kiranaos-delivery": delivery.id, "x-kiranaos-timestamp": timestamp, "x-kiranaos-signature": `v1=${signature}` }, body });
-    const responseSnippet = (await response.text()).slice(0, 500);
+    const responseSnippet = await readResponseSnippet(response);
     const delivered = response.ok;
     const now = new Date();
     const updated = await db.webhookDelivery.update({ where: { id: delivery.id }, data: { status: delivered ? "delivered" : "failed", attemptCount: { increment: 1 }, httpStatus: response.status, durationMs: Date.now() - startedAt, responseSnippet, lastError: delivered ? null : `HTTP ${response.status}`, lastAttemptAt: now, deliveredAt: delivered ? now : null } });
     await db.webhookEndpoint.update({ where: { id: endpoint.id }, data: delivered ? { lastSuccessAt: now, lastError: null } : { lastFailureAt: now, lastError: `HTTP ${response.status}` } });
+    recordWebhookDelivery({ eventType, status: updated.status, durationMs: updated.durationMs });
     return updated;
   } catch (error) {
     const message = error?.name === "AbortError" ? "Webhook request timed out" : String(error?.message || "Webhook request failed").slice(0, 500);
     const now = new Date();
-    const updated = await db.webhookDelivery.update({ where: { id: delivery.id }, data: { status: "failed", attemptCount: { increment: 1 }, durationMs: Date.now() - startedAt, lastError: message, lastAttemptAt: now } });
+    const updated = await db.webhookDelivery.update({ where: { id: delivery.id }, data: { status: "failed", attemptCount: { increment: 1 }, httpStatus: null, responseSnippet: null, deliveredAt: null, durationMs: Date.now() - startedAt, lastError: message, lastAttemptAt: now } });
     await db.webhookEndpoint.update({ where: { id: endpoint.id }, data: { lastFailureAt: now, lastError: message } });
+    recordWebhookDelivery({ eventType, status: "failed", durationMs: updated.durationMs });
     return updated;
   } finally { clearTimeout(timer); }
 }
 
 // Business writes call this only after their database transaction succeeds.
-// Delivery is isolated per endpoint: one slow or failing consumer cannot block
-// the POS response or another consumer's delivery evidence.
+// Persist pending delivery evidence before returning, then perform network I/O
+// in the background. A slow consumer never blocks the POS response, while an
+// immediate process restart cannot make the event disappear without a trace.
 export async function publishIntegrationEvent(shopId, eventType, payload) {
-  const endpoints = await db.webhookEndpoint.findMany({ where: { shopId, enabled: true } });
+  if (!(await hasFeature(shopId, "api_webhook_later"))) return [];
+  const endpoints = await db.webhookEndpoint.findMany({ where: { shopId, enabled: true, deletedAt: null } });
   const matching = endpoints.filter((endpoint) => jsonArray(endpoint.eventsJson).includes(eventType));
   if (!matching.length) return [];
   const eventId = `evt_${crypto.randomUUID().replaceAll("-", "")}`;
-  return Promise.allSettled(matching.map((endpoint) => deliverWebhook(endpoint, eventType, payload, eventId)));
+  const eventCreatedAt = new Date();
+  const payloadJson = JSON.stringify(payload, integrationJsonReplacer);
+  const envelope = JSON.stringify({ id: eventId, type: eventType, createdAt: eventCreatedAt.toISOString(), data: JSON.parse(payloadJson) });
+  if (Buffer.byteLength(envelope) > MAX_WEBHOOK_BODY_BYTES) throw new AppError("Webhook payload is too large", 413, "WEBHOOK_PAYLOAD_TOO_LARGE");
+
+  const pending = await Promise.all(matching.map((endpoint) => db.webhookDelivery.create({
+    data: { shopId, endpointId: endpoint.id, eventId, eventType, payloadJson },
+  })));
+
+  setImmediate(() => {
+    for (const endpoint of matching) {
+      void deliverWebhook(endpoint, eventType, payload, eventId, eventCreatedAt).catch(() => {});
+    }
+  });
+  return pending;
 }
 
 export async function listApiResource({ shopId, resource, scope, query }) {
   if (!scope) throw new AppError("API key does not have the required scope", 403, "INTEGRATION_SCOPE_REQUIRED");
   const take = query.limit;
-  const paging = query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {};
-  if (resource === "catalog") return db.product.findMany({ where: { shopId, deletedAt: null }, orderBy: { id: "asc" }, take, ...paging, select: { id: true, name: true, category: true, sku: true, barcode: true, displayUnit: true, stockBaseQty: true, defaultPricePerRateUnit: true, gstRate: true, updatedAt: true } });
-  if (resource === "customers") return db.customer.findMany({ where: { shopId, deletedAt: null }, orderBy: { id: "asc" }, take, ...paging, select: { id: true, name: true, mobile: true, type: true, customerGroup: true, udharAmount: true, updatedAt: true } });
-  return db.bill.findMany({ where: { shopId }, orderBy: { id: "asc" }, take, ...paging, select: { id: true, billNo: true, billType: true, status: true, customerName: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true } });
+  const cursorFilter = query.cursor ? { id: { gt: query.cursor } } : {};
+  let rows;
+  if (resource === "catalog") rows = await db.product.findMany({ where: { shopId, deletedAt: null, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, name: true, category: true, sku: true, barcode: true, displayUnit: true, stockBaseQty: true, defaultPricePerRateUnit: true, gstRate: true, updatedAt: true } });
+  else if (resource === "customers") rows = await db.customer.findMany({ where: { shopId, deletedAt: null, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, name: true, mobile: true, type: true, customerGroup: true, udharAmount: true, updatedAt: true } });
+  else rows = await db.bill.findMany({ where: { shopId, ...cursorFilter }, orderBy: { id: "asc" }, take: take + 1, select: { id: true, billNo: true, billType: true, status: true, customerName: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true } });
+  const hasMore = rows.length > take;
+  const items = hasMore ? rows.slice(0, take) : rows;
+  return { items, hasMore, nextCursor: hasMore ? items.at(-1)?.id ?? null : null };
 }
 
 function xml(value) { return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&apos;"); }
-function tallyDate(date) { return new Date(date).toISOString().slice(0, 10).replaceAll("-", ""); }
+function tallyDate(date, timeZone = env.DAILY_CLOSING_TIMEZONE) { return formatDateInTimeZone(date, timeZone).replaceAll("-", ""); }
 
 export async function buildTallyExport(shopId, query) {
-  const to = query.to ? new Date(`${query.to}T23:59:59.999Z`) : new Date();
-  const from = query.from ? new Date(`${query.from}T00:00:00.000Z`) : new Date(to.getTime() - 30 * 86400000);
-  if (from > to || to.getTime() - from.getTime() > 366 * 86400000) throw new AppError("Choose a valid date range of up to 366 days", 400, "EXPORT_DATE_RANGE_INVALID");
+  const timeZone = env.DAILY_CLOSING_TIMEZONE;
+  const toKey = query.to || formatDateInTimeZone(new Date(), timeZone);
+  const defaultFromDate = new Date(`${toKey}T12:00:00.000Z`);
+  defaultFromDate.setUTCDate(defaultFromDate.getUTCDate() - 29);
+  const fromKey = query.from || defaultFromDate.toISOString().slice(0, 10);
+  const fromRange = dateRangeForDateOnly(fromKey, timeZone);
+  const toRange = dateRangeForDateOnly(toKey, timeZone);
+  const from = fromRange.start;
+  const to = toRange.end;
+  if (from > to || daysBetweenInclusive(from, to) > 366) throw new AppError("Choose a valid date range of up to 366 days", 400, "EXPORT_DATE_RANGE_INVALID");
   const [shop, bills] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { name: true, gstNumber: true } }),
-    db.bill.findMany({ where: { shopId, status: "active", createdAt: { gte: from, lte: to } }, orderBy: { createdAt: "asc" }, take: 10000, include: { items: true } }),
+    db.bill.findMany({ where: { shopId, status: "active", billType: { not: "estimate" }, createdAt: { gte: from, lte: to } }, orderBy: { createdAt: "asc" }, take: MAX_TALLY_BILLS + 1 }),
   ]);
-  const vouchers = bills.map((bill) => `<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="Sales" ACTION="Create"><DATE>${tallyDate(bill.createdAt)}</DATE><VOUCHERNUMBER>${xml(bill.billNo)}</VOUCHERNUMBER><PARTYLEDGERNAME>${xml(bill.customerName || "Cash")}</PARTYLEDGERNAME><NARRATION>KiranaOS ${xml(bill.billType)}</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>${xml(bill.customerName || "Cash")}</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-${Number(bill.grandTotal).toFixed(2)}</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>${Number(bill.grandTotal).toFixed(2)}</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE>`).join("");
-  return { filename: `kiranaos-tally-${query.from || tallyDate(from)}-${query.to || tallyDate(to)}.xml`, xml: `<?xml version="1.0" encoding="UTF-8"?><ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>${xml(shop?.name || "KiranaOS")}</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>${vouchers}</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>`, count: bills.length };
+  if (bills.length > MAX_TALLY_BILLS) throw new AppError(`Export exceeds ${MAX_TALLY_BILLS} bills. Choose a smaller date range.`, 422, "TALLY_EXPORT_TOO_LARGE");
+  const vouchers = bills.map((bill) => {
+    const isReturn = bill.billType === "sales_return";
+    const voucherType = isReturn ? "Credit Note" : "Sales";
+    const party = bill.customerName && bill.customerName !== "Walk-in" ? bill.customerName : "Cash";
+    const total = Math.abs(Number(bill.grandTotal || 0)).toFixed(2);
+    const partyAmount = isReturn ? total : `-${total}`;
+    const salesAmount = isReturn ? `-${total}` : total;
+    return `<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="${voucherType}" ACTION="Create"><DATE>${tallyDate(bill.createdAt, timeZone)}</DATE><VOUCHERNUMBER>${xml(bill.billNo)}</VOUCHERNUMBER><PARTYLEDGERNAME>${xml(party)}</PARTYLEDGERNAME><PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW><NARRATION>KiranaOS ${xml(bill.billType)}</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>${xml(party)}</LEDGERNAME><ISDEEMEDPOSITIVE>${isReturn ? "No" : "Yes"}</ISDEEMEDPOSITIVE><AMOUNT>${partyAmount}</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><ISDEEMEDPOSITIVE>${isReturn ? "Yes" : "No"}</ISDEEMEDPOSITIVE><AMOUNT>${salesAmount}</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER></TALLYMESSAGE>`;
+  }).join("");
+  return { filename: `kiranaos-tally-${fromKey}-${toKey}.xml`, xml: `<?xml version="1.0" encoding="UTF-8"?><ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>${xml(shop?.name || "KiranaOS")}</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>${vouchers}</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>`, count: bills.length };
 }

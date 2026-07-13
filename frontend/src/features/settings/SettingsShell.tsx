@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
-  Bell, ChevronRight, Cloud, CreditCard, MonitorSmartphone, Plug, Printer, Receipt,
+  Bell, ChevronRight, Cloud, CreditCard, ListChecks, MonitorSmartphone, Plug, Printer, Receipt,
   Settings2, Shield, Sliders, Store, UsersRound, Sparkles, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ export interface SettingsMenuItem {
 
 export const SETTINGS_MENU: SettingsMenuItem[] = [
   { id: "general", label: "General", href: "/settings", icon: Settings2 },
+  { id: "setup", label: "Merchant Setup", href: "/settings/setup", icon: ListChecks },
   { id: "store", label: "Store Profile", href: "/settings/store-profile", icon: Store },
   { id: "billing", label: "Billing & Subscription", href: "/settings/billing", icon: CreditCard },
   { id: "staff", label: "Staff & Permissions", href: "/settings/staff", icon: UsersRound },

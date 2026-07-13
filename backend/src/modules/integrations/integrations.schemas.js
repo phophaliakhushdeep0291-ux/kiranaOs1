@@ -7,6 +7,12 @@ export const createApiKeySchema = z.object({
   name: z.string().trim().min(2).max(80),
   scopes: z.array(z.enum(INTEGRATION_SCOPES)).min(1).max(INTEGRATION_SCOPES.length),
   expiresAt: z.string().datetime().nullable().optional(),
+}).superRefine((value, ctx) => {
+  if (!value.expiresAt) return;
+  const expiresAt = Date.parse(value.expiresAt);
+  const now = Date.now();
+  if (expiresAt <= now + 5 * 60 * 1000) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["expiresAt"], message: "Expiry must be at least 5 minutes in the future" });
+  if (expiresAt > now + 2 * 365 * 24 * 60 * 60 * 1000) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["expiresAt"], message: "Expiry cannot be more than 2 years away" });
 });
 
 export const createWebhookSchema = z.object({

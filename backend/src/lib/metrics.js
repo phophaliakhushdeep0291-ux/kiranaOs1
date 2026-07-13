@@ -19,6 +19,9 @@ const KNOWN_METRICS = [
   "reminders_failed_total",
   "reminders_skipped_total",
   "whatsapp_provider_errors_total",
+  "integration_api_auth_total",
+  "webhook_deliveries_total",
+  "webhook_delivery_duration_ms",
   "queue_jobs_waiting",
   "queue_jobs_failed",
   "db_ready_status",
@@ -127,6 +130,15 @@ export function recordReminderMetric({ status, provider = "disabled", channel = 
 
 export function recordWhatsAppProviderError(provider = "disabled", status = "failed") {
   incrementMetric("whatsapp_provider_errors_total", { provider, status, channel: "whatsapp" });
+}
+
+export function recordIntegrationApiAuth(status) {
+  incrementMetric("integration_api_auth_total", { status });
+}
+
+export function recordWebhookDelivery({ eventType, status, durationMs }) {
+  incrementMetric("webhook_deliveries_total", { eventType, status });
+  observeMetric("webhook_delivery_duration_ms", { eventType, status }, durationMs || 0);
 }
 
 export function getMetricsSnapshot() {
