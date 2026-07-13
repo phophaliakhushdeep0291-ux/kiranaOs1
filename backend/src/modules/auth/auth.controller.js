@@ -130,6 +130,24 @@ export async function removeStaff(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function getStaffLocations(req, res, next) {
+  try { res.json({ success: true, data: await authService.getStaffLocationAssignments(req.user.shopId, req.params.id) }); }
+  catch (err) { next(err); }
+}
+
+export async function updateStaffLocations(req, res, next) {
+  try {
+    const data = await authService.setStaffLocationAssignments(
+      req.user.shopId,
+      req.params.id,
+      req.body.locations,
+      req.user.userId,
+      { req },
+    );
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function changePassword(req, res, next) {
   try {
     const data = await authService.changePassword(req.user.userId, req.user.shopId, req.body);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,8 @@ import {
   type StaffRole,
 } from "@/features/staff/permissions";
 import { createStaffLocalFirst, deactivateStaffLocalFirst, listStaffLocalFirst, updateStaffLocalFirst, type StaffMember } from "@/features/staff/local-actions";
-import { Edit, ShieldAlert, UserPlus, UserRoundX, UsersRound } from "lucide-react";
+import { getStaffLocationAssignments, updateStaffLocationAssignments, type StaffLocationAccessRow } from "@/features/staff/api";
+import { Edit, MapPin, ShieldAlert, UserPlus, UserRoundX, UsersRound } from "lucide-react";
 import { DataTableCard, EmptyState, PageHeader, PageShell, PermissionDenied, SyncBadge } from "@/components/shared";
 
 const STAFF_QUERY_KEY = ["staff-users-local"];
@@ -79,11 +80,24 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
   const [form, setForm] = useState<StaffFormState>(emptyForm);
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<"save" | "deactivate" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"save" | "deactivate" | "locations" | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<StaffMember | null>(null);
   const [saving, setSaving] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [locationTarget, setLocationTarget] = useState<StaffMember | null>(null);
+  const [locationDraft, setLocationDraft] = useState<StaffLocationAccessRow[]>([]);
 
   const staff = useQuery({ queryKey: STAFF_QUERY_KEY, queryFn: listStaffLocalFirst, staleTime: 2_000 });
+  const locationTargetId = locationTarget?.server_id ?? (locationTarget?.sync_status === "synced" ? locationTarget.id : undefined);
+  const locationAccess = useQuery({
+    queryKey: ["staff-location-access", locationTargetId],
+    queryFn: () => getStaffLocationAssignments(locationTargetId!),
+    enabled: locationOpen && Boolean(locationTargetId),
+  });
+
+  useEffect(() => {
+    if (locationAccess.data) setLocationDraft(locationAccess.data.locations);
+  }, [locationAccess.data]);
 
   const activeCount = useMemo(() => (staff.data ?? []).filter(isActive).length, [staff.data]);
   const inactiveCount = useMemo(() => (staff.data ?? []).filter((member) => !isActive(member)).length, [staff.data]);
@@ -154,6 +168,27 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
     setPinOpen(true);
   }
 
+  function openLocations(member: StaffMember) {
+    if (!manageStaff.allowed) return;
+    setLocationTarget(member);
+    setLocationDraft([]);
+    setLocationOpen(true);
+  }
+
+  function changeLocation(locationId: string, patch: Partial<StaffLocationAccessRow>) {
+    setLocationDraft((current) => current.map((row) => row.id === locationId ? { ...row, ...patch } : row));
+  }
+
+  function requestLocationSave() {
+    if (!locationDraft.some((row) => row.assigned)) {
+      toast({ title: "Assign at least one location", description: "Deactivate the staff account if it should have no store access.", variant: "destructive" });
+      return;
+    }
+    setPendingAction("locations");
+    setPinError(null);
+    setPinOpen(true);
+  }
+
   async function confirmWithPin(ownerPin: string, reason: string) {
     setSaving(true);
     setPinError(null);
@@ -172,6 +207,19 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
         await deactivateStaffLocalFirst(deactivateTarget.id, ownerPin, reason || "Deactivated by owner");
         toast({ title: "Staff deactivated", description: "This is a soft deactivate and will sync later." });
       }
+      if (pendingAction === "locations" && locationTargetId) {
+        const locations = locationDraft.filter((row) => row.assigned).map((row) => ({
+          locationId: row.id,
+          canSell: row.canSell,
+          canPurchase: row.canPurchase,
+          canManageInventory: row.canManageInventory,
+          canTransfer: row.canTransfer,
+        }));
+        await updateStaffLocationAssignments(locationTargetId, locations, ownerPin);
+        toast({ title: "Store access updated", description: `${locationTarget?.name ?? "Staff"} can now work only in the selected locations.` });
+        setLocationOpen(false);
+        void queryClient.invalidateQueries({ queryKey: ["staff-location-access", locationTargetId] });
+      }
       setPinOpen(false);
       setPendingAction(null);
       setDeactivateTarget(null);
@@ -187,7 +235,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
     <>
         <PageHeader
           title={<span className="flex items-center gap-2"><UsersRound size={24} />Staff & Permissions</span>}
-          description="Manage shop roles safely. Backend must still enforce permissions during sync/API calls."
+          description="Manage roles and enforce exactly which stores each person can sell, purchase, or adjust stock in."
           actions={(
             <>
               <Badge variant="outline">{activeCount} active</Badge>
@@ -222,6 +270,7 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
                     </div>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => openEdit(member)} disabled={!manageStaff.allowed || member.role === "owner"}><Edit size={14} className="mr-1" />Edit</Button>
+                      {member.role !== "owner" ? <Button size="sm" variant="outline" onClick={() => openLocations(member)} disabled={!manageStaff.allowed}><MapPin size={14} className="mr-1" />Stores</Button> : null}
                       {member.role !== "owner" && isActive(member) ? <Button size="sm" variant="outline" onClick={() => requestDeactivate(member)} disabled={!manageStaff.allowed}><UserRoundX size={14} className="mr-1" />Deactivate</Button> : null}
                     </div>
                   </div>
@@ -280,12 +329,56 @@ export default function StaffPage({ embedded = false }: { embedded?: boolean } =
           </DialogContent>
         </Dialog>
 
+        <Dialog open={locationOpen} onOpenChange={setLocationOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Store access · {locationTarget?.name}</DialogTitle></DialogHeader>
+            {!locationTargetId ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                This staff account is still waiting for cloud sync. Sync it first, then store-level restrictions can be enforced on every device.
+              </div>
+            ) : locationAccess.isLoading ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">Loading store permissions…</div>
+            ) : locationAccess.isError ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">Could not load store access. Check the connection and try again.</div>
+            ) : (
+              <div className="space-y-3">
+                {!locationAccess.data?.explicitScope ? <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">This user currently has legacy all-store access. Saving below switches them to deny-by-default access outside selected stores.</div> : null}
+                {locationDraft.map((location) => (
+                  <div key={location.id} className="rounded-xl border p-4">
+                    <label className="flex items-start gap-3">
+                      <Checkbox checked={location.assigned} onCheckedChange={(checked) => changeLocation(location.id, { assigned: checked === true })} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2 font-semibold">{location.name}{location.isPrimary ? <Badge variant="secondary">Primary</Badge> : null}</span>
+                        <span className="text-xs text-muted-foreground">{location.code}{location.city ? ` · ${location.city}` : ""}</span>
+                      </span>
+                    </label>
+                    <div className="mt-3 grid gap-2 pl-7 sm:grid-cols-2 lg:grid-cols-4">
+                      {([
+                        ["canSell", "Sell & return"],
+                        ["canPurchase", "Purchase & receive"],
+                        ["canManageInventory", "Adjust inventory"],
+                        ["canTransfer", "Transfer stock"],
+                      ] as const).map(([field, label]) => (
+                        <label key={field} className="flex items-center gap-2 rounded-lg bg-muted/40 p-2 text-xs">
+                          <Checkbox disabled={!location.assigned} checked={location.assigned && location[field]} onCheckedChange={(checked) => changeLocation(location.id, { [field]: checked === true })} />
+                          <span>{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setLocationOpen(false)}>Cancel</Button><Button onClick={requestLocationSave}>Save with owner PIN</Button></div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
         <OwnerPinModal
           open={pinOpen}
           onCancel={() => setPinOpen(false)}
-          title={pendingAction === "deactivate" ? "Deactivate staff" : "Approve staff permission change"}
-          description="Owner PIN is required for staff create/edit/deactivate. The action is saved locally and backend must enforce it again."
-          confirmLabel={pendingAction === "deactivate" ? "Deactivate" : "Save staff"}
+          title={pendingAction === "deactivate" ? "Deactivate staff" : pendingAction === "locations" ? "Approve store access" : "Approve staff permission change"}
+          description={pendingAction === "locations" ? "This immediately changes which store data and actions this user can access." : "Owner PIN is required for staff create, edit, or deactivation."}
+          confirmLabel={pendingAction === "deactivate" ? "Deactivate" : pendingAction === "locations" ? "Save access" : "Save staff"}
           reasonRequired
           loading={saving}
           error={pinError}

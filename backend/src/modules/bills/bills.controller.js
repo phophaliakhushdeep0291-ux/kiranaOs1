@@ -3,6 +3,7 @@ import { createAuditLog } from "../audit/audit.service.js";
 import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
+import { assertLocationCapability } from "../stores/location-access.service.js";
 
 export async function list(req, res, next) {
   try {
@@ -14,6 +15,7 @@ export async function list(req, res, next) {
 export async function get(req, res, next) {
   try {
     const data = await svc.getBill(req.shopId, req.params.id);
+    await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId: data.locationId, capability: "view" });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -46,6 +48,8 @@ export async function confirm(req, res, next) {
 
 export async function cancel(req, res, next) {
   try {
+    const existing = await svc.getBill(req.shopId, req.params.id);
+    await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId: existing.locationId, capability: "sell" });
     const data = await svc.cancelBill(req.shopId, req.params.id, req.body);
     await createAuditLog({
       shopId: req.shopId,

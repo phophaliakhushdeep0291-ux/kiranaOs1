@@ -398,10 +398,82 @@ export async function hasPin(shopId) {
 export async function listStaff(shopId) {
   const users = await db.user.findMany({
     where: { shopId, disabledAt: null },
-    select: { id: true, name: true, mobile: true, email: true, role: true, disabledAt: true, createdAt: true, updatedAt: true },
+    select: {
+      id: true, name: true, mobile: true, email: true, role: true, disabledAt: true, createdAt: true, updatedAt: true,
+      _count: { select: { locationAccess: { where: { active: true } } } },
+    },
     orderBy: { createdAt: "asc" },
   });
   return users;
+}
+
+async function requireManageableStaff(shopId, staffId, client = db) {
+  const staff = await client.user.findFirst({
+    where: { id: staffId, shopId, disabledAt: null },
+    select: { id: true, name: true, mobile: true, email: true, role: true },
+  });
+  if (!staff) throw new AppError("Staff member not found", 404, "STAFF_NOT_FOUND");
+  if (staff.role === "owner") throw new AppError("Owner location access cannot be restricted", 403, "OWNER_LOCATION_ACCESS_UNRESTRICTED");
+  return staff;
+}
+
+export async function getStaffLocationAssignments(shopId, staffId) {
+  const [staff, locations, assignments] = await Promise.all([
+    requireManageableStaff(shopId, staffId),
+    db.storeLocation.findMany({ where: { shopId, active: true }, orderBy: [{ isPrimary: "desc" }, { name: "asc" }] }),
+    db.userLocationAccess.findMany({ where: { shopId, userId: staffId, active: true } }),
+  ]);
+  const byLocation = new Map(assignments.map((assignment) => [assignment.locationId, assignment]));
+  return {
+    staff,
+    explicitScope: assignments.length > 0,
+    locations: locations.map((location) => {
+      const assignment = byLocation.get(location.id);
+      return {
+        id: location.id,
+        code: location.code,
+        name: location.name,
+        city: location.city,
+        isPrimary: location.isPrimary,
+        assigned: Boolean(assignment),
+        canSell: assignment?.canSell ?? true,
+        canPurchase: assignment?.canPurchase ?? false,
+        canManageInventory: assignment?.canManageInventory ?? false,
+        canTransfer: assignment?.canTransfer ?? false,
+      };
+    }),
+  };
+}
+
+export async function setStaffLocationAssignments(shopId, staffId, locations, requestingUserId, reqMeta = {}) {
+  await requireFeatureAccess(shopId, "role_based_access");
+  const result = await db.$transaction(async (tx) => {
+    const staff = await requireManageableStaff(shopId, staffId, tx);
+    const locationIds = locations.map((location) => location.locationId);
+    const validLocations = await tx.storeLocation.findMany({
+      where: { shopId, id: { in: locationIds }, active: true },
+      select: { id: true },
+    });
+    if (validLocations.length !== locationIds.length) {
+      throw new AppError("One or more store locations are invalid or inactive", 400, "INVALID_STORE_LOCATION");
+    }
+    await tx.userLocationAccess.deleteMany({ where: { shopId, userId: staffId } });
+    await tx.userLocationAccess.createMany({
+      data: locations.map((location) => ({ shopId, userId: staffId, ...location, active: true })),
+    });
+    return { staff, assignedLocationCount: locations.length };
+  });
+
+  await createAuditLog({
+    shopId,
+    userId: requestingUserId,
+    action: "STAFF_LOCATION_ACCESS_UPDATED",
+    entityType: "User",
+    entityId: staffId,
+    metadata: { locations },
+    req: reqMeta.req,
+  });
+  return { ...result, assignments: await getStaffLocationAssignments(shopId, staffId) };
 }
 
 export async function inviteStaff(shopId, { name, mobile, password, role = "staff" }) {

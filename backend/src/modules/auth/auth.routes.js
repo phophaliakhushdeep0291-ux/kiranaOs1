@@ -7,7 +7,8 @@ import {
   registerSchema, loginSchema, setPinSchema,
   verifyPinSchema, inviteStaffSchema, changePasswordSchema,
   refreshSchema, logoutSchema, forgotPasswordSchema, resetPasswordSchema,
-  verifyEmailSchema, resendVerificationSchema, googleLoginSchema, deviceReplacementSchema
+  verifyEmailSchema, resendVerificationSchema, googleLoginSchema, deviceReplacementSchema,
+  staffLocationAssignmentsSchema
 } from "./auth.schema.js";
 import * as ctrl from "./auth.controller.js";
 import { z } from "zod";
@@ -40,6 +41,8 @@ router.post("/staff",         requireAuth, requireShop, requireRole("owner"), re
 router.patch("/staff/:id/role", requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin,
   validate(z.object({ role: z.enum(["staff","admin"]) })), ctrl.updateStaffRole);
 router.delete("/staff/:id",   requireAuth, requireShop, requireRole("owner"), requireFeature("staff_login"), requireOwnerPin, ctrl.removeStaff);
+router.get("/staff/:id/locations", requireAuth, requireShop, requireRole("owner"), requireFeature("role_based_access"), ctrl.getStaffLocations);
+router.put("/staff/:id/locations", requireAuth, requireShop, requireRole("owner"), requireFeature("role_based_access"), requireOwnerPin, validate(staffLocationAssignmentsSchema), ctrl.updateStaffLocations);
 
 // Self-service
 router.post("/change-password", requireAuth, validate(changePasswordSchema), ctrl.changePassword);

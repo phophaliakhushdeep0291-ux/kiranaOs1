@@ -125,6 +125,31 @@ export const inviteStaffSchema = z.object({
   role:     z.enum(["staff", "admin"]).default("staff"),
 });
 
+const staffLocationAssignmentSchema = z.object({
+  locationId: z.string().min(1),
+  canSell: z.boolean().default(true),
+  canPurchase: z.boolean().default(false),
+  canManageInventory: z.boolean().default(false),
+  canTransfer: z.boolean().default(false),
+}).strict();
+
+export const staffLocationAssignmentsSchema = z.object({
+  locations: z.array(staffLocationAssignmentSchema).min(1, "Assign at least one store location").max(100),
+  ownerPin: z.string().regex(/^\d{4}$/, "Owner PIN must be exactly 4 digits").optional(),
+}).strict().superRefine((value, ctx) => {
+  const seen = new Set();
+  value.locations.forEach((location, index) => {
+    if (seen.has(location.locationId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Each store location can only be assigned once",
+        path: ["locations", index, "locationId"],
+      });
+    }
+    seen.add(location.locationId);
+  });
+});
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword:     z.string().min(6),

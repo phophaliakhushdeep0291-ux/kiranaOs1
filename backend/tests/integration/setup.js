@@ -177,6 +177,7 @@ export async function resetDatabase(db) {
     db.stockTransferItem.deleteMany(),
     db.stockTransfer.deleteMany(),
     db.locationStock.deleteMany(),
+    db.userLocationAccess.deleteMany(),
     db.storeLocation.deleteMany(),
     db.webhookDelivery.deleteMany(),
     db.webhookEndpoint.deleteMany(),
