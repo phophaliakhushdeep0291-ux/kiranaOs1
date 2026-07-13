@@ -37,18 +37,18 @@ router.post(
   ctrl.overrideRefreshDailyClosingSnapshot
 );
 router.get("/sales-summary", validateQuery(salesSummarySchema), ctrl.salesSummary);
-router.get("/payment-modes", validateQuery(paymentModesSchema), ctrl.paymentModes);
-router.get("/udhar-ageing", validateQuery(udharAgeingSchema), ctrl.udharAgeing);
+router.get("/payment-modes", requireFeature("payment_mode_reports"), validateQuery(paymentModesSchema), ctrl.paymentModes);
+router.get("/udhar-ageing", requireFeature("advanced_udhar_reports"), validateQuery(udharAgeingSchema), ctrl.udharAgeing);
 router.get("/top-products", requireRole("owner"), validateQuery(topProductsSchema), ctrl.topProducts);
-router.get("/inventory-health", validateQuery(inventoryHealthSchema), ctrl.inventoryHealth);
+router.get("/inventory-health", requireFeature("advanced_inventory"), validateQuery(inventoryHealthSchema), ctrl.inventoryHealth);
 
 // Staff-wise sales uses server-trusted Bill.createdByUserId and keeps legacy bills in an Unknown bucket.
-router.get("/staff-sales", requireRole("owner", "admin"), validateQuery(staffSalesSchema), ctrl.staffSales);
+router.get("/staff-sales", requireRole("owner", "admin"), requireFeature("staff_performance_report"), validateQuery(staffSalesSchema), ctrl.staffSales);
 
 // Profit/cost-sensitive reports remain owner-only.
-router.get("/gst", validateQuery(pnlQuerySchema), ctrl.gstReport);
+router.get("/gst", requireFeature("gst_reports"), validateQuery(pnlQuerySchema), ctrl.gstReport);
 router.get("/pnl", requireRole("owner"), requireFeature("profit_estimate"), validateQuery(pnlQuerySchema), ctrl.pnl);
-router.get("/monthly-breakdown", requireRole("owner"), validateQuery(monthlyBreakdownSchema), ctrl.monthlyBreakdown);
+router.get("/monthly-breakdown", requireRole("owner"), requireFeature("monthly_reports"), validateQuery(monthlyBreakdownSchema), ctrl.monthlyBreakdown);
 
 // Backward-compatible existing operational summary.
 router.get("/payment-summary", ctrl.paymentSummary);

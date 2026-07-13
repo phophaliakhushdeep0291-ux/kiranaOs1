@@ -6,6 +6,8 @@ import { ErrorBoundary, PageLoading } from "@/components/shared";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLandingRoute } from "@/features/settings/landing-page";
 import { stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
+import { FeatureGate } from "@/features/subscription";
+import type { FeatureName } from "@/features/subscription/plans";
 
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/auth/pages/RegisterPage"));
@@ -75,7 +77,7 @@ function LazyPage({ component: Component }: { component: ComponentType }) {
   );
 }
 
-function ProtectedRoute({ component: Component }: { component: ComponentType }) {
+function ProtectedRoute({ component: Component, featureName }: { component: ComponentType; featureName?: FeatureName }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) return <LoadingScreen />;
@@ -91,7 +93,7 @@ function ProtectedRoute({ component: Component }: { component: ComponentType }) 
   return (
     <Layout>
       <ErrorBoundary>
-        <LazyPage component={Component} />
+        {featureName ? <FeatureGate featureName={featureName}><LazyPage component={Component} /></FeatureGate> : <LazyPage component={Component} />}
       </ErrorBoundary>
     </Layout>
   );
@@ -177,7 +179,7 @@ export function AppRoutes() {
         <ProtectedRoute component={SalesOverviewPage} />
       </Route>
       <Route path="/products/:productId/pricing">
-        <ProtectedRoute component={ProductPricing} />
+        <ProtectedRoute component={ProductPricing} featureName="dynamic_customer_pricing" />
       </Route>
       <Route path="/products">
         <ProtectedRoute component={Products} />
@@ -201,7 +203,7 @@ export function AppRoutes() {
         <ProtectedRoute component={Adjustments} />
       </Route>
       <Route path="/inventory/stock-transfers">
-        <ProtectedRoute component={StockTransfers} />
+        <ProtectedRoute component={StockTransfers} featureName="multi_store" />
       </Route>
       <Route path="/inventory">
         <ProtectedRoute component={Inventory} />
@@ -216,7 +218,7 @@ export function AppRoutes() {
         <ProtectedRoute component={Expenses} />
       </Route>
       <Route path="/offers">
-        <ProtectedRoute component={Offers} />
+        <ProtectedRoute component={Offers} featureName="dynamic_customer_pricing" />
       </Route>
       <Route path="/reports">
         <ProtectedRoute component={Reports} />
@@ -240,7 +242,7 @@ export function AppRoutes() {
         <ProtectedRoute component={BillingSettings} />
       </Route>
       <Route path="/settings/staff">
-        <ProtectedRoute component={StaffSettings} />
+        <ProtectedRoute component={StaffSettings} featureName="staff_login" />
       </Route>
       <Route path="/settings/devices">
         <ProtectedRoute component={DevicesSettings} />
@@ -258,7 +260,7 @@ export function AppRoutes() {
         <ProtectedRoute component={NotificationsSettings} />
       </Route>
       <Route path="/settings/integrations">
-        <ProtectedRoute component={IntegrationsSettings} />
+        <ProtectedRoute component={IntegrationsSettings} featureName="api_webhook_later" />
       </Route>
       <Route path="/settings/advanced">
         <ProtectedRoute component={AdvancedSettings} />
@@ -273,10 +275,10 @@ export function AppRoutes() {
         <ProtectedRoute component={DevicesPage} />
       </Route>
       <Route path="/staff">
-        <ProtectedRoute component={StaffPage} />
+        <ProtectedRoute component={StaffPage} featureName="staff_login" />
       </Route>
       <Route path="/audit-logs">
-        <ProtectedRoute component={AuditLogsPage} />
+        <ProtectedRoute component={AuditLogsPage} featureName="audit_logs" />
       </Route>
       <Route path="/recycle-bin">
         <ProtectedRoute component={RecycleBinPage} />

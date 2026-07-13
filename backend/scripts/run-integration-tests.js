@@ -99,6 +99,17 @@ if (preflight.status !== 0) {
   process.exit(preflight.status || 1);
 }
 
+const regression = spawnSync(process.execPath, ["tests/backend-regression.examples.js"], {
+  cwd: process.cwd(),
+  env,
+  stdio: "inherit",
+});
+
+if (regression.status !== 0) {
+  console.error("DB-backed regression examples failed.");
+  process.exit(regression.status || 1);
+}
+
 const result = spawnSync(process.execPath, ["--test", "--test-concurrency=1", ...files], {
   cwd: process.cwd(),
   env,

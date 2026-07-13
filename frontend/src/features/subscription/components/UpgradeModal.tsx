@@ -178,13 +178,22 @@ export function UpgradeModal({
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<CouponValidationDto | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
+  const [selectedCycle, setSelectedCycle] = useState<BillingCycle>(billingCycle);
   const target = PLAN_DEFINITIONS[targetPlanCode ?? "growth"];
 
   useEffect(() => {
+    setSelectedCycle(billingCycle);
     setCouponCode("");
     setAppliedCoupon(null);
     setCouponError(null);
   }, [open, target.code, billingCycle]);
+
+  function chooseBillingCycle(cycle: BillingCycle) {
+    setSelectedCycle(cycle);
+    setCouponCode("");
+    setAppliedCoupon(null);
+    setCouponError(null);
+  }
 
   async function applyCoupon() {
     const code = couponCode.trim().toUpperCase();
@@ -195,7 +204,7 @@ export function UpgradeModal({
     setValidatingCoupon(true);
     setCouponError(null);
     try {
-      const result = await validateSubscriptionCoupon({ planCode: target.code, billingCycle, couponCode: code });
+      const result = await validateSubscriptionCoupon({ planCode: target.code, billingCycle: selectedCycle, couponCode: code });
       setCouponCode(result.couponCode);
       setAppliedCoupon(result);
     } catch (error) {
@@ -217,7 +226,7 @@ export function UpgradeModal({
     try {
       const checkout = await requestSubscriptionUpgrade({
         planCode: target.code,
-        billingCycle,
+        billingCycle: selectedCycle,
         ...(appliedCoupon ? { couponCode: appliedCoupon.couponCode } : {}),
       });
       const payment = await openRazorpayCheckout(checkout, target.name);
@@ -271,11 +280,16 @@ export function UpgradeModal({
         </DialogHeader>
 
         <div className="space-y-3 rounded-lg border bg-card p-4">
+          <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-1" aria-label="Choose billing cycle">
+            <Button type="button" size="sm" variant={selectedCycle === "monthly" ? "default" : "ghost"} onClick={() => chooseBillingCycle("monthly")} disabled={saving}>Monthly</Button>
+            <Button type="button" size="sm" variant={selectedCycle === "yearly" ? "default" : "ghost"} onClick={() => chooseBillingCycle("yearly")} disabled={saving}>Annual · save more</Button>
+          </div>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="font-semibold">
-                {billingCycle === "yearly" ? `Rs ${target.annualPrice}/year` : `Rs ${target.price}/month`}
+                {selectedCycle === "yearly" ? `Rs ${target.annualPrice}/year` : `Rs ${target.price}/month`}
               </p>
+              {selectedCycle === "yearly" && <p className="text-xs font-medium text-emerald-700">Rs {Math.round(target.annualPrice / 12)}/month, billed annually</p>}
               <p className="text-sm text-muted-foreground">{target.headline}</p>
             </div>
             <Badge variant="secondary">
