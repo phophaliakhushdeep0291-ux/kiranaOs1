@@ -20,7 +20,7 @@ function parseDate(value) {
 const detailInclude = {
   location: true,
   supplier: true,
-  items: { orderBy: { productName: "asc" } },
+  items: { orderBy: { productName: "asc" }, include: { product: { select: { batchTrackingEnabled: true } } } },
   receipts: { orderBy: { createdAt: "desc" }, include: { items: true } },
 };
 

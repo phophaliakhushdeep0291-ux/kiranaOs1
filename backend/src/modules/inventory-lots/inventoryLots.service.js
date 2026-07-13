@@ -37,6 +37,7 @@ export async function changeLotStatus(shopId, lotId, status, note) {
   const lot = await db.inventoryLot.findFirst({ where: { id: lotId, shopId } });
   if (!lot) throw new AppError("Inventory batch not found", 404, "INVENTORY_LOT_NOT_FOUND");
   if (!["active", "quarantined", "recalled"].includes(status)) throw new AppError("Invalid batch status", 422, "INVENTORY_LOT_STATUS_INVALID");
+  if (status === "active" && lot.expiresOn < new Date()) throw new AppError("An expired batch cannot be released for sale", 409, "BATCH_EXPIRED");
   return db.inventoryLot.update({ where: { id: lot.id }, data: { status: status === "active" && lot.availableBaseQty <= 0 ? "depleted" : status, note: note || lot.note } });
 }
 
@@ -47,6 +48,8 @@ export async function recordReceiptLot(tx, { shopId, locationId, product, receip
   if (!batchNumber || !expiresOn) throw new AppError(`${product.name} requires batch number and expiry date`, 422, "BATCH_DETAILS_REQUIRED");
   const expiry = parseDay(expiresOn, "Expiry date");
   const manufactured = parseDay(manufacturedOn, "Manufacturing date");
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  if (expiry < today) throw new AppError("Expired stock cannot be received into saleable inventory", 422, "BATCH_ALREADY_EXPIRED");
   if (manufactured && manufactured >= expiry) throw new AppError("Expiry date must be after manufacturing date", 422, "INVENTORY_LOT_DATE_INVALID");
   const quantity = round2(quantityBaseQty);
   const existing = await tx.inventoryLot.findFirst({ where: { shopId, locationId, productId: product.id, batchNumber, expiresOn: expiry } });

@@ -241,6 +241,7 @@ function rowToFormData(values: Record<string, string>): ProductFormData {
     wholesaleFromQuantity: 10,
     stockQuantity: numberValue("stockQuantity"),
     lowStockAlert: numberValue("lowStockAlert"),
+    batchTrackingEnabled: false,
     reorderLevel: numberValue("reorderLevel"),
     description: (values.description ?? "").trim() || undefined,
     imageUrl: "",

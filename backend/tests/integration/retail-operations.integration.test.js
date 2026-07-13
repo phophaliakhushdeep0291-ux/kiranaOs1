@@ -252,6 +252,16 @@ if (ctx.skip) {
       const restoredLots = await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } });
       assert.deepEqual(restoredLots.map((lot) => lot.availableBaseQty), [4, 6], "bill cancellation must restore exact lot balances");
 
+      const returnedLotSale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 2, ratePerRateUnit: 30, payments: [{ mode: "cash", amount: 60 }], actualAmount: 60, buyerPaidAmount: 60,
+      }), { token: auth.accessToken, headers: { "x-location-id": primary.id } }), 201);
+      assertSuccess(await ctx.post("/api/bills/returns", {
+        refundMode: "cash", returnOfBillId: returnedLotSale.id, reason: "One unit returned",
+        items: [{ productId: product.id, name: product.name, quantity: 1, enteredUnit: "piece", ratePerRateUnit: 30, gstRate: 0, damaged: false }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }), 201);
+      const afterLotReturn = await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } });
+      assert.deepEqual(afterLotReturn.map((lot) => lot.availableBaseQty), [3, 6], "a partial return must restore the exact FEFO lot used by its original sale");
+
       const cannotCancel = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/cancel`, { reason: "Too late" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
       assert.equal(cannotCancel.code, "PURCHASE_ORDER_NOT_CANCELLABLE");
     });

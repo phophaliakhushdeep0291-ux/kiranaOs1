@@ -882,6 +882,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         },
         include: { items: true, payments: true },
       });
+      await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill });
 
       // Restock resellable items; write off damaged ones (no restock, records the cost loss).
       for (const { product, qtyInBase, lineCost, damaged } of restockPlan) {
@@ -1111,7 +1112,6 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
         customerId: bill.customerId ?? null,
         restoreAt: restoredAt,
       });
-      await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill });
     }
 
     await reapplyGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill restored: ${reason}` });

@@ -11,6 +11,7 @@ export interface PurchaseOrderItem {
   receivedBaseQty: number;
   expectedRate: number;
   expectedAmount: number;
+  product?: { batchTrackingEnabled?: boolean };
 }
 export interface PurchaseOrder {
   id: string;
