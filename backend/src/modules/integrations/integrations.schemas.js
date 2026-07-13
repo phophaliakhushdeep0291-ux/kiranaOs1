@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const INTEGRATION_SCOPES = ["catalog:read", "customers:read", "bills:read"];
-export const WEBHOOK_EVENTS = ["bill.created", "payment.recorded", "customer.updated", "stock.low", "sync.failed", "integration.test"];
+export const WEBHOOK_EVENTS = ["bill.created", "payment.recorded", "customer.updated", "integration.test"];
 
 export const createApiKeySchema = z.object({
   name: z.string().trim().min(2).max(80),

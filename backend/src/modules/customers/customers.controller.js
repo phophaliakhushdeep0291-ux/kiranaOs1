@@ -1,4 +1,5 @@
 import * as svc from "./customers.service.js";
+import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 
 export async function list(req, res, next) {
   try {
@@ -17,6 +18,7 @@ export async function get(req, res, next) {
 export async function create(req, res, next) {
   try {
     const data = await svc.createCustomer(req.shopId, req.body);
+    void publishIntegrationEvent(req.shopId, "customer.updated", { id: data.id, name: data.name, mobile: data.mobile, type: data.type, customerGroup: data.customerGroup, udharAmount: data.udharAmount, operation: "created", updatedAt: data.updatedAt }).catch(() => {});
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -24,6 +26,7 @@ export async function create(req, res, next) {
 export async function update(req, res, next) {
   try {
     const data = await svc.updateCustomer(req.shopId, req.params.id, req.body);
+    void publishIntegrationEvent(req.shopId, "customer.updated", { id: data.id, name: data.name, mobile: data.mobile, type: data.type, customerGroup: data.customerGroup, udharAmount: data.udharAmount, operation: "updated", updatedAt: data.updatedAt }).catch(() => {});
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -50,6 +53,7 @@ export async function udharPayment(req, res, next) {
     const data = await svc.recordUdharPayment(req.shopId, req.params.id, req.body, {
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
     });
+    void publishIntegrationEvent(req.shopId, "payment.recorded", { customerId: req.params.id, amount: req.body.amount, paymentMode: req.body.paymentMode ?? null, referenceId: data.id ?? null, recordedAt: new Date().toISOString() }).catch(() => {});
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

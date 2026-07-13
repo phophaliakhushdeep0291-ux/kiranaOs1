@@ -75,7 +75,7 @@ export async function getOverview(shopId) {
     { id: "webhooks", name: "Signed webhooks", category: "Developer", status: activeWebhooks > 0 ? "ready" : "available", detail: `${activeWebhooks} active endpoint${activeWebhooks === 1 ? "" : "s"}; HMAC-SHA256 signatures and delivery logs` },
   ];
   const ready = providers.filter((provider) => provider.status === "ready").length;
-  return { maturityScore: Math.round((ready / providers.length) * 100), activeKeys, activeWebhooks, providers, recentDeliveries, supportedEvents: ["bill.created", "payment.recorded", "customer.updated", "stock.low", "sync.failed", "integration.test"] };
+  return { maturityScore: Math.round((ready / providers.length) * 100), activeKeys, activeWebhooks, providers, recentDeliveries, supportedEvents: ["bill.created", "payment.recorded", "customer.updated", "integration.test"] };
 }
 
 export async function listApiKeys(shopId) {
@@ -170,6 +170,17 @@ async function deliverWebhook(endpoint, eventType, payload, existingEventId = nu
     await db.webhookEndpoint.update({ where: { id: endpoint.id }, data: { lastFailureAt: now, lastError: message } });
     return updated;
   } finally { clearTimeout(timer); }
+}
+
+// Business writes call this only after their database transaction succeeds.
+// Delivery is isolated per endpoint: one slow or failing consumer cannot block
+// the POS response or another consumer's delivery evidence.
+export async function publishIntegrationEvent(shopId, eventType, payload) {
+  const endpoints = await db.webhookEndpoint.findMany({ where: { shopId, enabled: true } });
+  const matching = endpoints.filter((endpoint) => jsonArray(endpoint.eventsJson).includes(eventType));
+  if (!matching.length) return [];
+  const eventId = `evt_${crypto.randomUUID().replaceAll("-", "")}`;
+  return Promise.allSettled(matching.map((endpoint) => deliverWebhook(endpoint, eventType, payload, eventId)));
 }
 
 export async function listApiResource({ shopId, resource, scope, query }) {
