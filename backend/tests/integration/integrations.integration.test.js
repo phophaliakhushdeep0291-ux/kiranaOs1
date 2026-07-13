@@ -88,6 +88,9 @@ if (ctx.skip) {
         autoDevice: false,
       });
       assert.ok([402, 403].includes(downgraded.status), JSON.stringify(downgraded.body));
+      const overview = assertSuccess(await ctx.get("/api/integrations/overview", { token: auth.accessToken }));
+      assert.equal(overview.providers.find((provider) => provider.id === "api").status, "upgrade_required");
+      assert.equal(overview.providers.find((provider) => provider.id === "tally").status, "upgrade_required");
     });
 
     test("archiving an endpoint preserves delivery evidence and permits later URL reuse", async () => {
@@ -116,6 +119,11 @@ if (ctx.skip) {
           lastError: "Connection refused",
         },
       });
+      const history = assertSuccess(await ctx.get("/api/integrations/deliveries?limit=1", { token: auth.accessToken }));
+      assert.equal(history.items.length, 1);
+      assert.equal(history.items[0].id, delivery.id);
+      assert.equal(history.hasMore, false);
+      assert.equal(history.nextCursor, null);
       const archived = assertSuccess(await ctx.delete(`/api/integrations/webhooks/${endpoint.id}`, {
         token: auth.accessToken,
         ownerPin: tenant.ownerPin,

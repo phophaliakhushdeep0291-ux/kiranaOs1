@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, AlertTriangle, Check, CheckCircle2, Clock3, Cloud, Code2, Copy, Download, ExternalLink, KeyRound, Link2, Loader2, Plug, RefreshCcw, RotateCcw, Send, ShieldCheck, Trash2, Webhook } from "lucide-react";
 import { apiRequest } from "@/lib/api/http";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,10 @@ import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Badge, Card, CardHead, Fld, Kpi, type Tone } from "@/features/settings/ui";
 import type { ReactNode } from "react";
 
-type ProviderStatus = "ready" | "available" | "setup_required" | "adapter_required" | "development_only";
+type ProviderStatus = "ready" | "available" | "setup_required" | "adapter_required" | "development_only" | "upgrade_required";
 type Provider = { id: string; name: string; category: string; status: ProviderStatus; detail: string };
 type Delivery = { id: string; endpointId?: string; eventType: string; status: "pending" | "delivered" | "failed"; attemptCount?: number; httpStatus?: number | null; durationMs?: number | null; lastError?: string | null; createdAt: string; lastAttemptAt?: string | null };
+type DeliveryPage = { items: Delivery[]; hasMore: boolean; nextCursor: string | null };
 type Overview = { maturityScore: number; activeKeys: number; activeWebhooks: number; providers: Provider[]; recentDeliveries: Delivery[]; supportedEvents: string[] };
 type ApiKeyRow = { id: string; name: string; keyPrefix: string; scopes: string[]; lastUsedAt: string | null; expiresAt: string | null; revokedAt: string | null; createdAt: string };
 type WebhookRow = { id: string; name: string; url: string; events: string[]; enabled: boolean; lastSuccessAt: string | null; lastFailureAt: string | null; lastError: string | null; createdAt: string; _count: { deliveries: number } };
@@ -34,6 +35,7 @@ const STATUS: Record<ProviderStatus, { label: string; tone: Tone }> = {
   setup_required: { label: "Setup required", tone: "amber" },
   adapter_required: { label: "Adapter required", tone: "amber" },
   development_only: { label: "Development only", tone: "red" },
+  upgrade_required: { label: "Upgrade required", tone: "amber" },
 };
 
 function readableDate(value?: string | null) {
@@ -81,7 +83,13 @@ export default function IntegrationsSettingsPage() {
   const overviewQ = useQuery({ queryKey: ["integrations", "overview"], queryFn: () => apiRequest<Overview>("/integrations/overview"), retry: 1 });
   const keysQ = useQuery({ queryKey: ["integrations", "keys"], queryFn: () => apiRequest<ApiKeyRow[]>("/integrations/api-keys"), retry: 1 });
   const webhooksQ = useQuery({ queryKey: ["integrations", "webhooks"], queryFn: () => apiRequest<WebhookRow[]>("/integrations/webhooks"), retry: 1 });
-  const deliveriesQ = useQuery({ queryKey: ["integrations", "deliveries"], queryFn: () => apiRequest<Delivery[]>("/integrations/deliveries?limit=20"), retry: 1 });
+  const deliveriesQ = useInfiniteQuery({
+    queryKey: ["integrations", "deliveries"],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) => apiRequest<DeliveryPage>(`/integrations/deliveries?limit=20${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ""}`),
+    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextCursor : undefined,
+    retry: 1,
+  });
   const tallyM = useMutation({
     mutationFn: () => apiRequest<string>(`/integrations/exports/tally?from=${from}&to=${to}`),
     onSuccess: (xml) => { downloadText(`kiranaos-tally-${from}-${to}.xml`, xml, "application/xml;charset=utf-8"); toast({ title: "Tally export downloaded", description: "Import it from TallyPrime > Import Data > Vouchers." }); },
@@ -89,12 +97,15 @@ export default function IntegrationsSettingsPage() {
   });
 
   const overview = overviewQ.data;
+  const developerPlanEnabled = Boolean(overview) && overview?.providers.find((provider) => provider.id === "api")?.status !== "upgrade_required";
+  const tallyPlanEnabled = Boolean(overview) && overview?.providers.find((provider) => provider.id === "tally")?.status !== "upgrade_required";
   const activeKeys = (keysQ.data ?? []).filter((key) => !key.revokedAt && !isKeyExpired(key));
   const activeWebhooks = (webhooksQ.data ?? []).filter((endpoint) => endpoint.enabled);
-  const delivered = (deliveriesQ.data ?? []).filter((item) => item.status === "delivered").length;
-  const failed = (deliveriesQ.data ?? []).filter((item) => item.status === "failed").length;
+  const deliveries = useMemo(() => deliveriesQ.data?.pages.flatMap((page) => page.items) ?? [], [deliveriesQ.data]);
+  const delivered = deliveries.filter((item) => item.status === "delivered").length;
+  const failed = deliveries.filter((item) => item.status === "failed").length;
   const deliveryRate = delivered + failed ? Math.round((delivered / (delivered + failed)) * 100) : null;
-  const lastActivity = useMemo(() => (deliveriesQ.data ?? []).map((item) => item.lastAttemptAt || item.createdAt).sort().at(-1), [deliveriesQ.data]);
+  const lastActivity = useMemo(() => deliveries.map((item) => item.lastAttemptAt || item.createdAt).sort().at(-1), [deliveries]);
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ["integrations"] });
@@ -186,14 +197,14 @@ export default function IntegrationsSettingsPage() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
-          <CardHead icon={<KeyRound size={15} />} title="API credentials" sub="Least-privilege access for trusted systems" action={<Button size="sm" className="h-8 gap-1.5 rounded-lg text-xs font-bold" onClick={() => setKeyOpen(true)}><KeyRound size={13} /> Create key</Button>} />
+          <CardHead icon={<KeyRound size={15} />} title="API credentials" sub="Least-privilege access for trusted systems" action={<Button size="sm" className="h-8 gap-1.5 rounded-lg text-xs font-bold" disabled={!developerPlanEnabled} title={developerPlanEnabled ? undefined : "Upgrade to Pro to create API credentials"} onClick={() => setKeyOpen(true)}><KeyRound size={13} /> Create key</Button>} />
           <div className="space-y-2 px-5 pb-5">
             {keysQ.isLoading ? <LoadingRows /> : keysQ.isError ? <QueryFailure message={errorMessage(keysQ.error)} retry={() => void keysQ.refetch()} /> : (keysQ.data?.length ? keysQ.data.map((key) => { const expired = isKeyExpired(key); const inactive = Boolean(key.revokedAt) || expired; return <div key={key.id} className={`rounded-xl border p-3.5 ${inactive ? "border-[#edf0f5] bg-[#f8fafc] opacity-70" : "border-[#e4ebf6]"}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-bold text-[#102347]">{key.name}</p><Badge tone={key.revokedAt ? "gray" : expired ? "amber" : "green"}>{key.revokedAt ? "Revoked" : expired ? "Expired" : "Active"}</Badge></div><p className="mt-1 font-mono text-xs text-[#64748b]">{key.keyPrefix}••••••••</p></div>{!key.revokedAt && <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:bg-rose-50" aria-label={`Revoke ${key.name}`} onClick={() => protectedAction("revoke", key.id)}><Trash2 size={14} /></Button>}</div><div className="mt-3 flex flex-wrap gap-1.5">{key.scopes.map((scope) => <Badge key={scope} tone="blue">{scope}</Badge>)}</div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#94a3b8]"><span>Created {readableDate(key.createdAt)}</span><span>Expires {key.expiresAt ? readableDate(key.expiresAt) : "Never"}</span><span>Last used {readableDate(key.lastUsedAt)}</span></div></div>; }) : <Empty icon={<KeyRound size={18} />} title="No API keys" detail="Create a scoped credential for an ERP, marketplace or analytics system." />)}
           </div>
         </Card>
 
         <Card>
-          <CardHead icon={<Webhook size={15} />} title="Webhook endpoints" sub="Signed real-time events with delivery evidence" action={<Button size="sm" className="h-8 gap-1.5 rounded-lg text-xs font-bold" onClick={() => setWebhookOpen(true)}><Link2 size={13} /> Add endpoint</Button>} />
+          <CardHead icon={<Webhook size={15} />} title="Webhook endpoints" sub="Signed real-time events with delivery evidence" action={<Button size="sm" className="h-8 gap-1.5 rounded-lg text-xs font-bold" disabled={!developerPlanEnabled} title={developerPlanEnabled ? undefined : "Upgrade to Pro to add webhook endpoints"} onClick={() => setWebhookOpen(true)}><Link2 size={13} /> Add endpoint</Button>} />
           <div className="space-y-2 px-5 pb-5">
             {webhooksQ.isLoading ? <LoadingRows /> : webhooksQ.isError ? <QueryFailure message={errorMessage(webhooksQ.error)} retry={() => void webhooksQ.refetch()} /> : (webhooksQ.data?.length ? webhooksQ.data.map((endpoint) => <div key={endpoint.id} className="rounded-xl border border-[#e4ebf6] p-3.5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-bold text-[#102347]">{endpoint.name}</p><Badge tone={endpoint.enabled ? endpoint.lastError ? "amber" : "green" : "gray"}>{endpoint.enabled ? endpoint.lastError ? "Attention" : "Enabled" : "Paused"}</Badge></div><p className="mt-1 truncate font-mono text-xs text-[#64748b]" title={endpoint.url}>{endpoint.url}</p></div><div className="flex shrink-0 gap-1"><Button variant="ghost" size="icon" className="h-8 w-8 text-[#005dff]" aria-label={`Test ${endpoint.name}`} onClick={() => protectedAction("test", endpoint.id)}><Send size={14} /></Button><Button variant="ghost" size="icon" className="h-8 w-8 text-amber-600" aria-label={endpoint.enabled ? `Pause ${endpoint.name}` : `Enable ${endpoint.name}`} onClick={() => protectedAction("toggle", endpoint.id, endpoint.enabled)}>{endpoint.enabled ? <Clock3 size={14} /> : <CheckCircle2 size={14} />}</Button><Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500" aria-label={`Archive ${endpoint.name}`} onClick={() => protectedAction("delete", endpoint.id)}><Trash2 size={14} /></Button></div></div><div className="mt-3 flex flex-wrap gap-1.5">{endpoint.events.map((event) => <Badge key={event} tone="violet">{event}</Badge>)}</div><div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#94a3b8]"><span>{endpoint._count.deliveries} deliveries</span><span>Last success {readableDate(endpoint.lastSuccessAt)}</span></div>{endpoint.lastError && <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] text-amber-800">{endpoint.lastError}</p>}</div>) : <Empty icon={<Webhook size={18} />} title="No webhook endpoints" detail="Add an HTTPS endpoint to receive signed business events." />)}
           </div>
@@ -204,13 +215,13 @@ export default function IntegrationsSettingsPage() {
         <Card>
           <CardHead icon={<Activity size={15} />} title="Delivery activity" sub="HTTP status, latency and retry evidence" />
           <div className="px-5 pb-5">
-            {deliveriesQ.isLoading ? <LoadingRows /> : deliveriesQ.isError ? <QueryFailure message={errorMessage(deliveriesQ.error)} retry={() => void deliveriesQ.refetch()} /> : deliveriesQ.data?.length ? <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left"><thead><tr className="border-b border-[#e8edf5] text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]"><th className="pb-2">Event</th><th className="pb-2">Status</th><th className="pb-2">HTTP</th><th className="pb-2">Latency</th><th className="pb-2">Attempted</th><th className="pb-2 text-right">Action</th></tr></thead><tbody>{deliveriesQ.data.map((item) => <tr key={item.id} className="border-b border-[#f0f3f8] text-xs last:border-0"><td className="py-3"><p className="font-mono font-semibold text-[#344668]">{item.eventType}</p>{item.lastError && <p className="mt-1 max-w-[260px] truncate text-[10px] font-medium text-rose-600" title={item.lastError}>{item.lastError}</p>}</td><td className="py-3"><Badge tone={item.status === "delivered" ? "green" : item.status === "failed" ? "red" : "amber"}>{item.status}</Badge></td><td className="py-3 text-[#64748b]">{item.httpStatus ?? "—"}</td><td className="py-3 text-[#64748b]">{item.durationMs == null ? "—" : `${item.durationMs} ms`}</td><td className="py-3 text-[#64748b]">{readableDate(item.lastAttemptAt || item.createdAt)}</td><td className="py-3 text-right">{item.status === "failed" && <Button variant="ghost" size="sm" className="h-7 gap-1 text-[11px] font-bold text-[#005dff]" onClick={() => protectedAction("retry", item.id)}><RotateCcw size={12} /> Retry</Button>}</td></tr>)}</tbody></table></div> : <Empty icon={<Activity size={18} />} title="No delivery attempts" detail="Test an endpoint to verify connectivity and signature handling." />}
+            {deliveriesQ.isLoading ? <LoadingRows /> : deliveriesQ.isError ? <QueryFailure message={errorMessage(deliveriesQ.error)} retry={() => void deliveriesQ.refetch()} /> : deliveries.length ? <div><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left"><thead><tr className="border-b border-[#e8edf5] text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]"><th className="pb-2">Event</th><th className="pb-2">Status</th><th className="pb-2">HTTP</th><th className="pb-2">Latency</th><th className="pb-2">Attempted</th><th className="pb-2 text-right">Action</th></tr></thead><tbody>{deliveries.map((item) => <tr key={item.id} className="border-b border-[#f0f3f8] text-xs last:border-0"><td className="py-3"><p className="font-mono font-semibold text-[#344668]">{item.eventType}</p>{item.lastError && <p className="mt-1 max-w-[260px] truncate text-[10px] font-medium text-rose-600" title={item.lastError}>{item.lastError}</p>}</td><td className="py-3"><Badge tone={item.status === "delivered" ? "green" : item.status === "failed" ? "red" : "amber"}>{item.status}</Badge></td><td className="py-3 text-[#64748b]">{item.httpStatus ?? "—"}</td><td className="py-3 text-[#64748b]">{item.durationMs == null ? "—" : `${item.durationMs} ms`}</td><td className="py-3 text-[#64748b]">{readableDate(item.lastAttemptAt || item.createdAt)}</td><td className="py-3 text-right">{item.status === "failed" && <Button variant="ghost" size="sm" className="h-7 gap-1 text-[11px] font-bold text-[#005dff]" onClick={() => protectedAction("retry", item.id)}><RotateCcw size={12} /> Retry</Button>}</td></tr>)}</tbody></table></div>{deliveriesQ.hasNextPage && <div className="mt-3 flex justify-center"><Button variant="outline" size="sm" disabled={deliveriesQ.isFetchingNextPage} onClick={() => void deliveriesQ.fetchNextPage()}>{deliveriesQ.isFetchingNextPage ? <Loader2 size={13} className="animate-spin" /> : <Activity size={13} />} Load older deliveries</Button></div>}</div> : <Empty icon={<Activity size={18} />} title="No delivery attempts" detail="Test an endpoint to verify connectivity and signature handling." />}
           </div>
         </Card>
 
         <Card>
-          <CardHead icon={<Download size={15} />} title="TallyPrime export" sub="Accounting vouchers in import-ready XML" action={<Badge tone="green">Operational</Badge>} />
-          <div className="space-y-4 px-5 pb-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900"><div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>Generated from server-authoritative bills and scoped to this shop. Customer names and voucher totals are XML-escaped.</p></div></div><div className="grid grid-cols-2 gap-3"><Fld label="From"><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Fld><Fld label="To"><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Fld></div><Button className="w-full gap-2" disabled={tallyM.isPending || !from || !to || from > to} onClick={() => tallyM.mutate()}>{tallyM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} Download Tally XML</Button><a className="inline-flex items-center gap-1 text-xs font-bold text-[#005dff] hover:underline" href="https://help.tallysolutions.com/import-data-in-tallyprime/" target="_blank" rel="noreferrer">Tally import instructions <ExternalLink size={12} /></a></div>
+          <CardHead icon={<Download size={15} />} title="TallyPrime export" sub="Accounting vouchers in import-ready XML" action={<Badge tone={tallyPlanEnabled ? "green" : "amber"}>{tallyPlanEnabled ? "Operational" : "Pro plan"}</Badge>} />
+          <div className="space-y-4 px-5 pb-5"><div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-xs leading-5 text-emerald-900"><div className="flex items-start gap-2"><ShieldCheck size={15} className="mt-0.5 shrink-0" /><p>{tallyPlanEnabled ? "Generated from server-authoritative bills and scoped to this shop. Customer names and voucher totals are XML-escaped." : "TallyPrime export is available on the Pro plan. Existing integration history remains visible after a downgrade."}</p></div></div><div className="grid grid-cols-2 gap-3"><Fld label="From"><Input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></Fld><Fld label="To"><Input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></Fld></div><Button className="w-full gap-2" disabled={!tallyPlanEnabled || tallyM.isPending || !from || !to || from > to} onClick={() => tallyM.mutate()}>{tallyM.isPending ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} {tallyPlanEnabled ? "Download Tally XML" : "Upgrade to export"}</Button><a className="inline-flex items-center gap-1 text-xs font-bold text-[#005dff] hover:underline" href="https://help.tallysolutions.com/import-data-in-tallyprime/" target="_blank" rel="noreferrer">Tally import instructions <ExternalLink size={12} /></a></div>
         </Card>
       </div>
 

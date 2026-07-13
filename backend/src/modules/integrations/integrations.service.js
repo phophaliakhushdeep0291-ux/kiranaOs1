@@ -1,5 +1,7 @@
 import crypto from "crypto";
 import dns from "dns/promises";
+import http from "http";
+import https from "https";
 import net from "net";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
@@ -36,11 +38,12 @@ export function signWebhookPayload({ endpointId, timestamp, body }) {
 
 function isPrivateIp(address) {
   if (!address) return true;
-  if (address === "::1" || address === "::" || address.startsWith("fe80:") || address.startsWith("fc") || address.startsWith("fd")) return true;
-  const normalized = address.startsWith("::ffff:") ? address.slice(7) : address;
+  const lower = String(address).toLowerCase();
+  if (lower === "::1" || lower === "::" || /^fe[89ab]/.test(lower) || lower.startsWith("fc") || lower.startsWith("fd") || lower.startsWith("ff") || lower.startsWith("2001:db8:")) return true;
+  const normalized = lower.startsWith("::ffff:") ? lower.slice(7) : lower;
   if (!net.isIPv4(normalized)) return false;
-  const [a, b] = normalized.split(".").map(Number);
-  return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
+  const [a, b, c] = normalized.split(".").map(Number);
+  return a === 0 || a === 10 || (a === 100 && b >= 64 && b <= 127) || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 0 && c === 0) || (a === 192 && b === 0 && c === 2) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) || (a === 203 && b === 0 && c === 113) || a >= 224;
 }
 
 export function assertWebhookUrlSyntax(rawUrl) {
@@ -57,20 +60,71 @@ export function assertWebhookUrlSyntax(rawUrl) {
   return url;
 }
 
-async function assertPublicDestination(rawUrl) {
+async function resolvePublicDestination(rawUrl) {
   const url = assertWebhookUrlSyntax(rawUrl);
   const results = await dns.lookup(url.hostname, { all: true, verbatim: true });
   if (!results.length || results.some(({ address }) => isPrivateIp(address))) {
     throw new AppError("Webhook destination resolved to a private address", 400, "WEBHOOK_PRIVATE_DESTINATION");
   }
-  return url;
+  return { url, address: results[0].address, family: results[0].family };
+}
+
+export function createPinnedLookup({ address, family }) {
+  return (_hostname, _options, callback) => callback(null, address, family);
+}
+
+async function postWebhookRequest({ rawUrl, headers, body, signal, maxResponseBytes = 2048 }) {
+  const destination = await resolvePublicDestination(rawUrl);
+  const transport = destination.url.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener("abort", abort);
+      if (error) reject(error); else resolve(value);
+    };
+    const request = transport.request(destination.url, {
+      method: "POST",
+      headers: { ...headers, "content-length": Buffer.byteLength(body) },
+      lookup: createPinnedLookup(destination),
+      agent: false,
+    }, (response) => {
+      const chunks = [];
+      let total = 0;
+      response.on("data", (value) => {
+        if (total >= maxResponseBytes) return;
+        const chunk = Buffer.from(value);
+        const remaining = maxResponseBytes - total;
+        chunks.push(chunk.subarray(0, remaining));
+        total += Math.min(chunk.length, remaining);
+      });
+      response.on("end", () => finish(null, {
+        status: response.statusCode || 0,
+        ok: Number(response.statusCode) >= 200 && Number(response.statusCode) < 300,
+        responseSnippet: Buffer.concat(chunks).toString("utf8").slice(0, 500),
+      }));
+      response.on("error", (error) => finish(error));
+    });
+    const abort = () => {
+      const error = new Error("Webhook request timed out");
+      error.name = "AbortError";
+      request.destroy(error);
+    };
+    request.on("error", (error) => finish(error));
+    if (signal?.aborted) abort();
+    else signal?.addEventListener("abort", abort, { once: true });
+    request.end(body);
+  });
 }
 
 export async function getOverview(shopId) {
-  const [activeKeys, activeWebhooks, recentDeliveries] = await Promise.all([
+  const [activeKeys, activeWebhooks, recentDeliveries, developerAllowed, tallyAllowed] = await Promise.all([
     db.integrationApiKey.count({ where: { shopId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } }),
     db.webhookEndpoint.count({ where: { shopId, enabled: true, deletedAt: null } }),
     db.webhookDelivery.findMany({ where: { shopId }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, eventType: true, status: true, httpStatus: true, durationMs: true, createdAt: true, lastAttemptAt: true } }),
+    hasFeature(shopId, "api_webhook_later"),
+    hasFeature(shopId, "tally_export"),
   ]);
   const storage = getObjectStorageStatus();
   const whatsapp = getWhatsAppProviderStatus();
@@ -78,9 +132,9 @@ export async function getOverview(shopId) {
     { id: "razorpay", name: "Razorpay", category: "Payments", status: env.RAZORPAY_ENABLED && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET && env.RAZORPAY_WEBHOOK_SECRET ? "ready" : "setup_required", detail: "Hosted subscription checkout and verified payment webhooks" },
     { id: "whatsapp", name: "WhatsApp Business", category: "Messaging", status: whatsapp.implemented && whatsapp.configured ? "ready" : whatsapp.configured ? "adapter_required" : "setup_required", detail: whatsapp.implemented ? "Provider adapter configured" : "Reminder workflow exists; provider adapter is not yet certified" },
     { id: "storage", name: storage.provider === "local" ? "Local export storage" : `${storage.provider.toUpperCase()} object storage`, category: "Storage", status: storage.provider === "local" ? "development_only" : storage.bucketConfigured ? "ready" : "setup_required", detail: storage.provider === "local" ? "Use S3, R2, or MinIO before production" : "Encrypted export object storage" },
-    { id: "tally", name: "TallyPrime XML", category: "Accounting", status: "ready", detail: "Tenant-scoped voucher export with date filters" },
-    { id: "api", name: "KiranaOS API", category: "Developer", status: activeKeys > 0 ? "ready" : "available", detail: `${activeKeys} active scoped key${activeKeys === 1 ? "" : "s"}` },
-    { id: "webhooks", name: "Signed webhooks", category: "Developer", status: activeWebhooks > 0 ? "ready" : "available", detail: `${activeWebhooks} active endpoint${activeWebhooks === 1 ? "" : "s"}; HMAC-SHA256 signatures and delivery logs` },
+    { id: "tally", name: "TallyPrime XML", category: "Accounting", status: tallyAllowed ? "ready" : "upgrade_required", detail: tallyAllowed ? "Tenant-scoped voucher export with date filters" : "Available on the Pro plan" },
+    { id: "api", name: "KiranaOS API", category: "Developer", status: developerAllowed ? activeKeys > 0 ? "ready" : "available" : "upgrade_required", detail: developerAllowed ? `${activeKeys} active scoped key${activeKeys === 1 ? "" : "s"}` : "API credentials require the Pro plan" },
+    { id: "webhooks", name: "Signed webhooks", category: "Developer", status: developerAllowed ? activeWebhooks > 0 ? "ready" : "available" : "upgrade_required", detail: developerAllowed ? `${activeWebhooks} active endpoint${activeWebhooks === 1 ? "" : "s"}; HMAC-SHA256 signatures and delivery logs` : "Signed webhooks require the Pro plan" },
   ];
   const ready = providers.filter((provider) => provider.status === "ready").length;
   return { maturityScore: Math.round((ready / providers.length) * 100), activeKeys, activeWebhooks, providers, recentDeliveries, supportedEvents: ["bill.created", "payment.recorded", "customer.updated", "integration.test"] };
@@ -156,7 +210,10 @@ export async function deleteWebhookEndpoint(shopId, id) {
 }
 
 export async function listWebhookDeliveries(shopId, { limit, cursor }) {
-  return db.webhookDelivery.findMany({ where: { shopId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}), select: { id: true, endpointId: true, eventId: true, eventType: true, status: true, attemptCount: true, httpStatus: true, durationMs: true, responseSnippet: true, lastError: true, lastAttemptAt: true, deliveredAt: true, createdAt: true } });
+  const rows = await db.webhookDelivery.findMany({ where: { shopId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit + 1, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}), select: { id: true, endpointId: true, eventId: true, eventType: true, status: true, attemptCount: true, httpStatus: true, durationMs: true, responseSnippet: true, lastError: true, lastAttemptAt: true, deliveredAt: true, createdAt: true } });
+  const hasMore = rows.length > limit;
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  return { items, hasMore, nextCursor: hasMore ? items.at(-1)?.id ?? null : null };
 }
 
 export async function testWebhookEndpoint(shopId, endpointId) {
@@ -183,26 +240,46 @@ async function scheduleWebhookDelivery(delivery) {
   } catch {
     // Redis is an accelerator here, not a reason to lose a persisted event.
   }
-  setImmediate(() => {
-    void retryWebhookDelivery(delivery.shopId, delivery.id).catch(() => {});
-  });
+  scheduleLocalWebhookDelivery(delivery.shopId, delivery.id);
   return { deliveryId: delivery.id, queued: false };
 }
 
-export async function recoverWebhookDeliveries({ limit = 100 } = {}) {
+function scheduleLocalWebhookDelivery(shopId, deliveryId, delayMs = 0) {
+  const timer = setTimeout(async () => {
+    try {
+      const result = await retryWebhookDelivery(shopId, deliveryId);
+      if (result.status === "failed" && result.attemptCount < 3) {
+        scheduleLocalWebhookDelivery(shopId, deliveryId, result.attemptCount === 1 ? 30_000 : 120_000);
+      }
+    } catch { /* delivery evidence already contains actionable failure state */ }
+  }, delayMs);
+  timer.unref?.();
+}
+
+export async function recoverWebhookDeliveries({ limit = 5000 } = {}) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const deliveries = await db.webhookDelivery.findMany({
-    where: {
-      status: { in: ["pending", "failed"] },
-      attemptCount: { lt: 3 },
-      createdAt: { gte: since },
-      endpoint: { enabled: true, deletedAt: null },
-    },
-    orderBy: { createdAt: "asc" },
-    take: Math.min(Math.max(Number(limit) || 100, 1), 500),
-  });
-  await Promise.all(deliveries.map(scheduleWebhookDelivery));
-  return { recovered: deliveries.length };
+  const maximum = Math.min(Math.max(Number(limit) || 5000, 1), 10_000);
+  let cursor;
+  let recovered = 0;
+  while (recovered < maximum) {
+    const deliveries = await db.webhookDelivery.findMany({
+      where: {
+        OR: [
+          { status: "pending" },
+          { status: "failed", attemptCount: { lt: 3 }, createdAt: { gte: since } },
+        ],
+        endpoint: { enabled: true, deletedAt: null },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: Math.min(100, maximum - recovered),
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (!deliveries.length) break;
+    await Promise.all(deliveries.map(scheduleWebhookDelivery));
+    recovered += deliveries.length;
+    cursor = deliveries.at(-1).id;
+  }
+  return { recovered, truncated: recovered === maximum };
 }
 
 export async function readResponseSnippet(response, maxBytes = 2048) {
@@ -244,9 +321,8 @@ async function deliverWebhook(endpoint, eventType, payload, existingEventId = nu
   const timer = setTimeout(() => controller.abort(), env.INTEGRATION_WEBHOOK_TIMEOUT_MS);
   const startedAt = Date.now();
   try {
-    await assertPublicDestination(endpoint.url);
-    const response = await fetch(endpoint.url, { method: "POST", redirect: "error", signal: controller.signal, headers: { "content-type": "application/json", "user-agent": "KiranaOS-Webhooks/1.0", "x-kiranaos-event": eventType, "x-kiranaos-delivery": delivery.id, "x-kiranaos-timestamp": timestamp, "x-kiranaos-signature": `v1=${signature}` }, body });
-    const responseSnippet = await readResponseSnippet(response);
+    const response = await postWebhookRequest({ rawUrl: endpoint.url, signal: controller.signal, headers: { "content-type": "application/json", "user-agent": "KiranaOS-Webhooks/1.0", "x-kiranaos-event": eventType, "x-kiranaos-delivery": delivery.id, "x-kiranaos-timestamp": timestamp, "x-kiranaos-signature": `v1=${signature}` }, body });
+    const responseSnippet = response.responseSnippet;
     const delivered = response.ok;
     const now = new Date();
     const updated = await db.webhookDelivery.update({ where: { id: delivery.id }, data: { status: delivered ? "delivered" : "failed", attemptCount: { increment: 1 }, httpStatus: response.status, durationMs: Date.now() - startedAt, responseSnippet, lastError: delivered ? null : `HTTP ${response.status}`, lastAttemptAt: now, deliveredAt: delivered ? now : null } });
