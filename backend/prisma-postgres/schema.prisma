@@ -80,6 +80,7 @@ model Shop {
   loyaltyAccounts             LoyaltyAccount[]
   loyaltyTransactions         LoyaltyTransaction[]
   complianceDocuments         ComplianceDocument[]
+  stockCountSessions          StockCountSession[]
 }
 
 // ─────────────────────────────────────────────
@@ -398,6 +399,7 @@ model Product {
   transferItems   StockTransferItem[]
   purchaseOrderItems PurchaseOrderItem[]
   purchaseReceiptItems PurchaseReceiptItem[]
+  stockCountLines  StockCountLine[]
 
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
@@ -495,6 +497,7 @@ model Bill {
   udharLedger         UdharLedger[]
   stockLedger         StockLedger[]
   loyaltyTransactions LoyaltyTransaction[]
+  stockCountSessions StockCountSession[]
   complianceDocuments ComplianceDocument[]
 
   @@unique([shopId, billNo])
@@ -662,6 +665,51 @@ model LocationStock {
 
   @@unique([locationId, productId])
   @@index([shopId, productId])
+}
+
+model StockCountSession {
+  id              String    @id @default(cuid())
+  shopId          String
+  locationId      String
+  activeKey       String?   @unique
+  name            String
+  status          String    @default("counting")
+  blindCount      Boolean   @default(true)
+  createdByUserId String?
+  approvedByUserId String?
+  submittedAt     DateTime?
+  appliedAt       DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation  @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  lines    StockCountLine[]
+
+  @@index([shopId, locationId, status, createdAt])
+}
+
+model StockCountLine {
+  id                String    @id @default(cuid())
+  sessionId         String
+  productId         String
+  productName       String
+  baseUnit           String
+  expectedBaseQty   Float
+  countedBaseQty    Float?
+  varianceBaseQty   Float?
+  reason             String?
+  countedByUserId   String?
+  countedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  session StockCountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  product Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, productId])
+  @@index([productId])
 }
 
 model StockTransfer {

@@ -1,6 +1,6 @@
 # KiranaOS Hardware Bridge
 
-The bridge is a small, dependency-free companion service for a billing counter. It binds only to `127.0.0.1`, requires a per-device bearer token, allows only explicitly configured frontend origins, limits request size and time, deduplicates print jobs, and never accepts remote bridge URLs from the KiranaOS frontend.
+The bridge is a small, dependency-free companion service for a billing counter. It binds only to `127.0.0.1`, requires a per-device bearer token, allows only explicitly configured frontend origins, limits request size and time, durably journals print progress, and never accepts remote bridge URLs from the KiranaOS frontend.
 
 Supported adapters:
 
@@ -20,5 +20,7 @@ npm.cmd start
 ```
 
 For a LAN printer, set `KIRANA_BRIDGE_PRINTER_TRANSPORT=network`, `KIRANA_BRIDGE_PRINTER_HOST`, and optionally `KIRANA_BRIDGE_PRINTER_PORT` (default 9100). Pair the same token in KiranaOS Printer Settings and verify Health, Test print, Drawer, and Scale before production use.
+
+Print job ids and per-copy progress are persisted at `~/.kiranaos/hardware-bridge-print-jobs.json` by default; override with `KIRANA_BRIDGE_JOB_JOURNAL`. Concurrent retries share one in-flight job, restarts resume only unfinished copies, and reusing a job id with a different copy count is rejected. As with every raw printer protocol, a machine crash in the tiny interval after the printer accepts bytes but before the journal fsync can still require an operator to inspect the last receipt.
 
 Device certification is still operational work: each printer/scale model, paper width, code page, cutter, drawer wiring, driver, and failure/retry scenario must be tested on the actual counter hardware before it is marked approved for a rollout.

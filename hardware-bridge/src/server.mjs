@@ -2,6 +2,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { buildDrawerPulse, buildEscPosJob } from "./escpos.mjs";
 import { readScaleCommand, sendNetworkRaw, sendWindowsRaw } from "./adapters.mjs";
+import { PrintJobJournal } from "./job-journal.mjs";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.KIRANA_BRIDGE_PORT || 17873);
@@ -10,12 +11,15 @@ const TRANSPORT = String(process.env.KIRANA_BRIDGE_PRINTER_TRANSPORT || "").toLo
 const ALLOWED_ORIGINS = new Set(String(process.env.KIRANA_BRIDGE_ALLOWED_ORIGINS || "http://127.0.0.1:5173,http://localhost:5173")
   .split(",").map((value) => value.trim()).filter(Boolean));
 const MAX_BODY_BYTES = 1024 * 1024;
-const completedJobs = new Map();
+const printJournal = new PrintJobJournal();
+const inFlightPrintJobs = new Map();
 
 if (TOKEN.length < 16) {
   console.error("KIRANA_BRIDGE_TOKEN must be a random value of at least 16 characters.");
   process.exit(1);
 }
+
+await printJournal.load();
 
 function json(res, status, body, origin) {
   if (origin && ALLOWED_ORIGINS.has(origin)) {
@@ -83,12 +87,31 @@ const server = http.createServer(async (req, res) => {
       const jobId = String(body.jobId || "").trim();
       if (!/^[a-zA-Z0-9:_-]{8,160}$/.test(jobId)) return json(res, 400, { message: "A valid print job id is required" }, origin);
       if (typeof body.html !== "string" || !body.html.trim() || body.html.length > 900_000) return json(res, 400, { message: "Receipt HTML is required" }, origin);
-      if (completedJobs.has(jobId)) return json(res, 200, { ok: true, jobId, duplicate: true }, origin);
-      const copies = Math.min(5, Math.max(1, Number(body.copies) || 1));
-      for (let index = 0; index < copies; index += 1) await sendRaw(buildEscPosJob(body));
-      completedJobs.set(jobId, Date.now());
-      while (completedJobs.size > 500) completedJobs.delete(completedJobs.keys().next().value);
-      return json(res, 200, { ok: true, jobId }, origin);
+      const copies = Math.min(5, Math.max(1, Math.floor(Number(body.copies) || 1)));
+      const active = inFlightPrintJobs.get(jobId);
+      if (active) {
+        if (active.copies !== copies) return json(res, 409, { message: "Print job id is already active with a different copy count" }, origin);
+        await active.promise;
+        return json(res, 200, { ok: true, jobId, duplicate: true, completedCopies: copies }, origin);
+      }
+      const promise = (async () => {
+        const existing = await printJournal.begin(jobId, copies);
+        if (existing.completedCopies >= copies) return { completedCopies: copies, duplicate: true, resumed: false };
+        let completedCopies = existing.completedCopies;
+        while (completedCopies < copies) {
+          await sendRaw(buildEscPosJob(body));
+          const progress = await printJournal.recordCopy(jobId);
+          completedCopies = progress.completedCopies;
+        }
+        return { completedCopies, duplicate: false, resumed: existing.completedCopies > 0 };
+      })();
+      inFlightPrintJobs.set(jobId, { copies, promise });
+      try {
+        const outcome = await promise;
+        return json(res, 200, { ok: true, jobId, ...outcome }, origin);
+      } finally {
+        inFlightPrintJobs.delete(jobId);
+      }
     }
     if (req.method === "POST" && url.pathname === "/v1/cash-drawer/open") {
       await readJson(req);
