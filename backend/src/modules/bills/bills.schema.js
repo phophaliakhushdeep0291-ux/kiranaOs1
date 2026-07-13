@@ -23,8 +23,10 @@ const billItemSchema = z.object({
 });
 
 const paymentSchema = z.object({
-  mode: z.enum(["cash", "upi", "bank", "credit"]),
+  mode: z.enum(["cash", "upi", "bank", "credit", "gift_card"]),
   amount: moneyAmount({ positive: true }),
+  giftCardCode: z.string().trim().min(10).max(40).optional(),
+  gift_card_code: z.string().trim().min(10).max(40).optional(),
   clientPaymentId: z.string().min(1).optional(),
   client_payment_id: z.string().min(1).optional(),
   idempotencyKey: z.string().min(1).optional(),
@@ -73,6 +75,11 @@ export const confirmBillSchema = z.object({
   if (data.loyaltyPointsToRedeem && data.billType === "estimate") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loyaltyPointsToRedeem"], message: "Loyalty points cannot be redeemed on an estimate" });
   }
+  data.payments.forEach((payment, index) => {
+    if (payment.mode === "gift_card" && !(payment.giftCardCode || payment.gift_card_code)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["payments", index, "giftCardCode"], message: "Gift card code is required" });
+    }
+  });
 });
 
 export const cancelBillSchema = z.object({

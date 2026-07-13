@@ -9,6 +9,7 @@ describe("plan-protected application routes", () => {
     expect(source).toContain('component={StaffPage} featureName="staff_login"');
     expect(source).toContain('component={AuditLogsPage} featureName="audit_logs"');
     expect(source).toContain('component={StockTransfers} featureName="multi_store"');
+    expect(source).toContain('component={StockCounts} featureName="stock_adjustment"');
     expect(source).toContain('component={IntegrationsSettings} featureName="api_webhook_later"');
   });
 });

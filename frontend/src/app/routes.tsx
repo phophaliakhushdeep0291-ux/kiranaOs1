@@ -33,6 +33,7 @@ const StockIn = lazy(() => import("@/features/inventory/pages/StockInPage"));
 const StockOut = lazy(() => import("@/features/inventory/pages/StockOutPage"));
 const Adjustments = lazy(() => import("@/features/inventory/pages/AdjustmentsPage"));
 const StockTransfers = lazy(() => import("@/features/inventory/pages/StockTransfersPage"));
+const StockCounts = lazy(() => import("@/features/inventory/pages/StockCountsPage"));
 const Categories = lazy(() => import("@/features/inventory/pages/CategoriesPage"));
 const PurchaseBillsPage = lazy(() => import("@/features/purchases/pages/PurchaseBillsPage"));
 const Suppliers = lazy(() => import("@/features/suppliers/pages/SuppliersPage"));
@@ -258,6 +259,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/inventory/stock-transfers">
         <ProtectedRoute component={StockTransfers} featureName="multi_store" />
+      </Route>
+      <Route path="/inventory/stock-counts">
+        <ProtectedRoute component={StockCounts} featureName="stock_adjustment" />
       </Route>
       <Route path="/inventory">
         <ProtectedRoute component={Inventory} />

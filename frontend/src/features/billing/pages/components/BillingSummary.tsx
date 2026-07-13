@@ -78,6 +78,14 @@ interface BillingSummaryProps {
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
   onVerifyRetailPayment: () => void;
+  giftCardCode: string;
+  setGiftCardCode: (value: string) => void;
+  giftCardBalance: number | null;
+  giftCardAmount: number;
+  setGiftCardAmount: (value: number) => void;
+  giftCardLoading: boolean;
+  giftCardError: string | null;
+  onLookupGiftCard: () => void;
   lastBillNo: string | null;
   newBillingAllowed: boolean;
   newBillingReason?: string;
@@ -163,6 +171,14 @@ export function BillingSummary({
   retailPaymentVerified,
   retailPaymentLoading,
   onVerifyRetailPayment,
+  giftCardCode,
+  setGiftCardCode,
+  giftCardBalance,
+  giftCardAmount,
+  setGiftCardAmount,
+  giftCardLoading,
+  giftCardError,
+  onLookupGiftCard,
   lastBillNo,
   newBillingAllowed,
   newBillingReason,
@@ -575,6 +591,15 @@ export function BillingSummary({
             retailPaymentVerified={retailPaymentVerified}
             retailPaymentLoading={retailPaymentLoading}
             onVerifyRetailPayment={onVerifyRetailPayment}
+            isOnline={isOnline}
+            giftCardCode={giftCardCode}
+            setGiftCardCode={setGiftCardCode}
+            giftCardBalance={giftCardBalance}
+            giftCardAmount={giftCardAmount}
+            setGiftCardAmount={setGiftCardAmount}
+            giftCardLoading={giftCardLoading}
+            giftCardError={giftCardError}
+            onLookupGiftCard={onLookupGiftCard}
           />
 
           {/* Last bill saved */}

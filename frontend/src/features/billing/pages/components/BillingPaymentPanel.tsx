@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
-import { ArrowLeftRight, Banknote, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeftRight, Banknote, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/settings/payment-config";
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
@@ -32,6 +32,15 @@ interface BillingPaymentPanelProps {
   retailPaymentVerified: boolean;
   retailPaymentLoading: boolean;
   onVerifyRetailPayment: () => void;
+  isOnline: boolean;
+  giftCardCode: string;
+  setGiftCardCode: (value: string) => void;
+  giftCardBalance: number | null;
+  giftCardAmount: number;
+  setGiftCardAmount: (value: number) => void;
+  giftCardLoading: boolean;
+  giftCardError: string | null;
+  onLookupGiftCard: () => void;
 }
 
 function fmtRs(value: number) {
@@ -62,6 +71,15 @@ export function BillingPaymentPanel({
   retailPaymentVerified,
   retailPaymentLoading,
   onVerifyRetailPayment,
+  isOnline,
+  giftCardCode,
+  setGiftCardCode,
+  giftCardBalance,
+  giftCardAmount,
+  setGiftCardAmount,
+  giftCardLoading,
+  giftCardError,
+  onLookupGiftCard,
 }: BillingPaymentPanelProps) {
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
   const upiAmount = paymentMode === SPLIT_PAYMENT ? splitUpi : grandTotal;
@@ -78,7 +96,7 @@ export function BillingPaymentPanel({
       <p className="text-[12px] font-extrabold text-[#13274d]">Payment Method</p>
 
       {showPaymentMode ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.cash}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]"><Banknote size={17} /></span>}
@@ -119,6 +137,22 @@ export function BillingPaymentPanel({
             activeClass="border-[#fed7aa] bg-[#fff7ed] text-[#f97316]"
             onClick={() => setPaymentMode(BillPaymentMode.credit)}
           />
+          <PayModeBtn
+            testId={`button-payment-${BillPaymentMode.gift_card}`}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff1f8] text-[#db2777]"><Gift size={17} /></span>}
+            label="Gift card"
+            selected={paymentMode === BillPaymentMode.gift_card}
+            activeClass="border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]"
+            onClick={() => setPaymentMode(BillPaymentMode.gift_card)}
+          />
+        </div>
+      ) : null}
+
+      {showPaymentMode && paymentMode === BillPaymentMode.gift_card ? (
+        <div className="space-y-3 rounded-xl border border-pink-200 bg-pink-50/60 p-3">
+          <div><p className="text-xs font-black text-pink-950">Redeem protected store value</p><p className="mt-0.5 text-[11px] leading-4 text-pink-700">The card balance and bill are committed together online. The full code is never saved in bill history.</p></div>
+          <div className="flex gap-2"><Input value={giftCardCode} onChange={(event) => setGiftCardCode(event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 40))} placeholder="KOS-XXXX-XXXX-XXXX" className="h-9 bg-white font-mono text-xs" autoComplete="off" /><button type="button" onClick={onLookupGiftCard} disabled={!isOnline || giftCardCode.replace(/[^A-Z0-9]/g, "").length < 10 || giftCardLoading} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-pink-600 px-3 text-xs font-black text-white disabled:opacity-50">{giftCardLoading ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}Check</button></div>
+          {!isOnline ? <p className="text-[11px] font-bold text-amber-700">Connect to verify and redeem a gift card.</p> : giftCardError ? <p className="text-[11px] font-bold text-rose-700">{giftCardError}</p> : giftCardBalance !== null ? <div className="grid gap-2 sm:grid-cols-2"><div className="rounded-lg bg-white p-2.5"><p className="text-[10px] font-bold uppercase text-slate-500">Available</p><p className="mt-0.5 text-base font-black text-pink-700">{fmtRs(giftCardBalance)}</p></div><div><label className="mb-1 block text-[10px] font-bold uppercase text-slate-500">Use from card</label><Input type="number" min="0.01" max={Math.min(giftCardBalance, grandTotal)} step="0.01" value={giftCardAmount || ""} onChange={(event) => setGiftCardAmount(clampAmount(Number(event.target.value) || 0, 0, Math.min(giftCardBalance, grandTotal)))} className="h-9 bg-white font-bold" /></div><p className="text-[11px] font-semibold text-slate-600 sm:col-span-2">{giftCardAmount < grandTotal ? `${fmtRs(grandTotal - giftCardAmount)} will be collected in cash.` : "Gift card covers the full bill."}</p></div> : null}
         </div>
       ) : null}
 
@@ -139,13 +173,13 @@ export function BillingPaymentPanel({
       ) : null}
 
       {/* Amount received (cash/UPI mode) */}
-      {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && !(showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
+      {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && paymentMode !== BillPaymentMode.gift_card && !(showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
         <button type="button" onClick={() => setShowReceivedAmount(true)} className="w-full rounded-[8px] border border-dashed border-[#d7e2f1] py-2 text-[11px] font-semibold text-[#536383] transition-colors hover:border-[#b9cdf6] hover:bg-[#f8fbff] hover:text-[#075fff]">
           Enter partial or advance payment
         </button>
       ) : null}
 
-      {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && (showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
+      {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && paymentMode !== BillPaymentMode.gift_card && (showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
         <div>
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
             Amount Received

@@ -86,6 +86,8 @@ model Shop {
   loyaltyTransactions         LoyaltyTransaction[]
   complianceDocuments         ComplianceDocument[]
   stockCountSessions          StockCountSession[]
+  giftCards                   GiftCard[]
+  giftCardTransactions        GiftCardTransaction[]
 }
 
 // ─────────────────────────────────────────────
@@ -441,6 +443,7 @@ model Customer {
   udharLedger    UdharLedger[]
   reminderLogs   ReminderLog[]
   loyaltyAccount LoyaltyAccount?
+  giftCards      GiftCard[]
 
   @@unique([shopId, mobile])
   @@index([shopId, deletedAt])
@@ -470,6 +473,8 @@ model Bill {
   loyaltyPointsRedeemed Int      @default(0)
   loyaltyDiscount      Float     @default(0)
   loyaltyDiscountPaise BigInt?
+  giftCardAmount        Float     @default(0)
+  giftCardAmountPaise   BigInt?
   gst                  Float     @default(0)
   gstPaise             BigInt?
   gstMode              String    @default("inclusive") // inclusive | exclusive | none
@@ -507,6 +512,7 @@ model Bill {
   stockLedger         StockLedger[]
   loyaltyTransactions LoyaltyTransaction[]
   complianceDocuments ComplianceDocument[]
+  giftCardTransactions GiftCardTransaction[]
 
   @@unique([shopId, billNo])
   @@unique([shopId, idempotencyKey])
@@ -724,6 +730,55 @@ model StockCountLine {
 
   @@unique([sessionId, productId])
   @@index([productId])
+}
+
+model GiftCard {
+  id                    String    @id @default(cuid())
+  shopId                String
+  customerId            String?
+  codeHash              String
+  codeLast4             String
+  status                String    @default("active") // active | depleted | disabled | expired
+  initialBalancePaise   BigInt
+  balancePaise          BigInt
+  expiresAt             DateTime?
+  issuedAt              DateTime  @default(now())
+  disabledAt            DateTime?
+  note                  String?
+  createdByUserId       String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  shop         Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customer     Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  transactions GiftCardTransaction[]
+
+  @@unique([shopId, codeHash])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, customerId, createdAt])
+}
+
+model GiftCardTransaction {
+  id                String   @id @default(cuid())
+  shopId            String
+  giftCardId        String
+  billId            String?
+  locationId        String?
+  type              String // issue | redeem | redemption_reversal | return_credit | adjustment
+  amountPaise       BigInt
+  balanceAfterPaise BigInt
+  note              String?
+  createdByUserId   String?
+  createdAt         DateTime @default(now())
+
+  shop     Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  giftCard GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Restrict)
+  bill     Bill?    @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  @@unique([giftCardId, billId, type])
+  @@index([shopId, createdAt])
+  @@index([giftCardId, createdAt])
+  @@index([billId])
 }
 
 model StockTransfer {

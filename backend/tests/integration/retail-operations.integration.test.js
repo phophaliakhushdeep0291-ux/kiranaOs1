@@ -390,5 +390,54 @@ if (ctx.skip) {
       const disabled = assertFailure(await ctx.post(`/api/compliance/e-invoices/${bill.id}/sandbox`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 503);
       assert.equal(disabled.code, "GST_PROVIDER_NOT_CONFIGURED");
     });
+
+    test("issues and atomically redeems gift value across branches with cancellation recovery", async () => {
+      const { tenant, auth } = await ownerContext();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Gift Customer" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Gift Purchase", stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+
+      const issued = assertSuccess(await ctx.post("/api/gift-cards", {
+        amount: 250,
+        customerId: customer.id,
+        expiresOn: "2027-12-31",
+        note: "Festival store credit",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.match(issued.code, /^KOS-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+      assert.equal(issued.balance, 250);
+      assert.equal(issued.transactions[0].type, "issue");
+
+      const lookedUp = assertSuccess(await ctx.post("/api/gift-cards/lookup", { code: issued.code }, { token: auth.accessToken }));
+      assert.equal(lookedUp.balance, 250);
+      assert.equal(lookedUp.code, undefined, "lookup must never disclose the bearer code");
+
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        customerId: customer.id,
+        customerName: customer.name,
+        quantity: 1,
+        ratePerRateUnit: 100,
+        payments: [{ mode: "gift_card", amount: 75, giftCardCode: issued.code }, { mode: "cash", amount: 25 }],
+        actualAmount: 100,
+        buyerPaidAmount: 100,
+      }), { token: auth.accessToken }), 201);
+      assert.equal(bill.giftCardAmount, 75);
+      assert.equal(bill.payments.some((payment) => payment.mode === "gift_card" && payment.provider === "gift_card_ledger"), true);
+      assert.equal((await ctx.db.giftCard.findUnique({ where: { id: issued.id } })).balancePaise, 17500n);
+
+      const overspend = assertFailure(await ctx.post("/api/bills/confirm", billPayload(product, {
+        payments: [{ mode: "gift_card", amount: 200, giftCardCode: issued.code }],
+        quantity: 2,
+        ratePerRateUnit: 100,
+        actualAmount: 200,
+        buyerPaidAmount: 200,
+      }), { token: auth.accessToken }), 409);
+      assert.equal(overspend.code, "GIFT_CARD_INSUFFICIENT_BALANCE");
+      assert.equal((await ctx.db.giftCard.findUnique({ where: { id: issued.id } })).balancePaise, 17500n, "failed checkout must not consume value");
+
+      assertSuccess(await ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Gift purchase cancelled" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal((await ctx.db.giftCard.findUnique({ where: { id: issued.id } })).balancePaise, 25000n);
+      const ledger = await ctx.db.giftCardTransaction.findMany({ where: { giftCardId: issued.id, billId: bill.id } });
+      assert.equal(ledger.reduce((sum, row) => sum + row.amountPaise, 0n), 0n);
+    });
   });
 }

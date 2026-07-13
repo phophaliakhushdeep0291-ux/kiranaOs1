@@ -27,6 +27,8 @@ describe("POS workspace responsive design", () => {
     expect(billingPage).toContain('aria-label={mobileCheckoutOpen ? "Review and collect payment" : undefined}');
     expect(billingPage).toContain("pb-[var(--app-mobile-checkout-panel-clearance)]");
     expect(billingPage).toContain("cart.length > 0 && !mobileCheckoutOpen");
+    expect(billingSummary).toContain("relative flex h-full min-h-0");
+    expect(billingSummary).toContain('<ScrollArea className="min-h-0 flex-1">');
   });
 
   it("keeps mobile navigation unobstructed and removes redundant billing actions", () => {

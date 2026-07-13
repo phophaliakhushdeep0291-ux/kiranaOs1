@@ -372,6 +372,7 @@ export const BillPaymentMode = {
   upi: "upi",
   bank: "bank",
   credit: "credit",
+  gift_card: "gift_card",
 } as const;
 
 export const BillInputBillType = {
@@ -396,6 +397,7 @@ export interface BillPayment {
   mode: typeof BillPaymentMode[keyof typeof BillPaymentMode];
   amount: number;
   retailPaymentIntentId?: string;
+  giftCardCode?: string;
 }
 
 export interface BillInputItem {

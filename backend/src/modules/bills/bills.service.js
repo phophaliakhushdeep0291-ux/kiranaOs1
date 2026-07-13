@@ -13,6 +13,7 @@ import {
 } from "../stores/location-context.service.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
 import { recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
+import { reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -31,7 +32,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
   const [bills, total] = await Promise.all([
     db.bill.findMany({
       where,
-      include: { items: true, payments: true, location: true },
+      include: { items: true, payments: true, location: true, giftCardTransactions: true },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -48,7 +49,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
 export async function getBill(shopId, id) {
   const bill = await db.bill.findFirst({
     where: { id, shopId },
-    include: { items: true, payments: true, customer: true, location: true },
+    include: { items: true, payments: true, customer: true, location: true, giftCardTransactions: true },
   });
   if (!bill) throw new AppError("Bill not found", 404);
   return bill;
@@ -315,6 +316,7 @@ export async function confirmBill(shopId, body, actor = {}) {
 
     const grossProfit = subtractMoney(itemProfit, billDiscount, waivedAmount);
     const paidAmount = sumMoney(billPayments.filter((p) => p.mode !== "credit").map((p) => p.amount));
+    const giftCardAmount = sumMoney(billPayments.filter((p) => p.mode === "gift_card").map((p) => p.amount));
     const creditAmount = requestedCreditAmount;
     const actualAmount = round2(inputActualAmount ?? grandTotal);
     const buyerPaidAmount = round2(inputBuyerPaidAmount ?? paidAmount);
@@ -351,6 +353,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       }
     }
 
+    const giftCardReservations = await reserveGiftCardPayments(tx, { shopId, payments: billPayments });
     const retailIntents = await resolveRetailPaymentIntents(tx, { shopId, locationId: location.id, payments: billPayments });
     const paymentRows = billPayments
       .filter((payment) => payment.mode !== "credit")
@@ -365,7 +368,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `payment:${index}:${payment.mode}`),
         sourceDeviceId: billIdentity.sourceDeviceId,
         status: "confirmed",
-        provider: intent?.provider ?? "manual",
+        provider: payment.mode === "gift_card" ? "gift_card_ledger" : intent?.provider ?? "manual",
         providerReference: intent?.providerPaymentId ?? null,
         confirmationSource: intent?.confirmationSource ?? "manual",
         confirmedAt: intent?.confirmedAt ?? new Date(),
@@ -393,6 +396,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         discount: billDiscount,
         loyaltyPointsRedeemed: loyaltyRedemption?.points ?? 0,
         loyaltyDiscount,
+        giftCardAmount,
         gst: totalGst,
         gstMode,
         grandTotal,
@@ -402,7 +406,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         grossProfit,
         paidAmount,
         creditAmount,
-        ...moneyShadows({ subtotal, discount: billDiscount, loyaltyDiscount, gst: totalGst, grandTotal, actualAmount, buyerPaidAmount, waivedAmount, grossProfit, paidAmount, creditAmount }),
+        ...moneyShadows({ subtotal, discount: billDiscount, loyaltyDiscount, giftCardAmount, gst: totalGst, grandTotal, actualAmount, buyerPaidAmount, waivedAmount, grossProfit, paidAmount, creditAmount }),
         createdByUserId,
         deviceId,
         clientBillId: billIdentity.clientBillId,
@@ -421,6 +425,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       redemption: loyaltyRedemption,
     });
     await recordBillLoyaltyInTransaction(tx, shopId, bill);
+    await recordGiftCardRedemptions(tx, { shopId, bill, locationId: location.id, reservations: giftCardReservations, userId: createdByUserId });
     await consumeRetailPaymentIntents(tx, retailIntents);
 
     // ── 5. Deduct stock + create stock ledger entries ─────────
@@ -636,6 +641,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     // Loyalty earning and redemption are part of the same cancellation unit as
     // stock, udhar, and accounting. A crash can no longer leave points detached.
     await reverseBillLoyaltyInTransaction(tx, shopId, bill.id);
+    await reverseGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill cancelled: ${reason}` });
 
     return tx.bill.findFirst({ where: { id: billId, shopId } });
   });
@@ -1027,6 +1033,8 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       });
     }
 
+    await reapplyGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill restored: ${reason}` });
+
     return tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
   });
 }
@@ -1129,6 +1137,7 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
       err.code = code;
       throw err;
     }
+
     // The counter intentionally permits negative inventory so sales can continue
     // before a delayed stock-in is recorded. Keep the fallback atomic: a
     // read-then-absolute-write loses deductions when two bills arrive together.
