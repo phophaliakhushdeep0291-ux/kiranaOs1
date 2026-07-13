@@ -44,7 +44,7 @@ async function main() {
   const result = await addJob(QUEUE_NAMES.syncCleanupQueue, JOB_NAMES.WORKER_HEALTHCHECK, {
     shopId: "worker-verify",
     requestedAt: new Date().toISOString(),
-  }, { jobId: `worker-healthcheck:${Date.now()}`, removeOnComplete: true, removeOnFail: true });
+  }, { jobId: `worker-healthcheck-${Date.now()}`, removeOnComplete: true, removeOnFail: true });
 
   if (!result.success) {
     const error = new Error(`Worker verification enqueue failed: ${result.code}`);

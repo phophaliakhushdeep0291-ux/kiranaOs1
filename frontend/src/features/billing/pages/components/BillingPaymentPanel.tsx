@@ -1,9 +1,12 @@
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
 import { ArrowLeftRight, Banknote, Landmark, QrCode, UserRound } from "lucide-react";
+import { QrCodeView } from "@/lib/qr/QrCodeView";
+import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/settings/payment-config";
+import { getPrinterConfigSync } from "@/features/settings/printer-config";
 
 interface BillingPaymentPanelProps {
   billType: BillTypeSelection;
@@ -51,6 +54,10 @@ export function BillingPaymentPanel({
   advanceAmount,
 }: BillingPaymentPanelProps) {
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
+  const upiAmount = paymentMode === SPLIT_PAYMENT ? splitUpi : grandTotal;
+  const paymentConfig = getPaymentConfigSync();
+  const upiUri = useMemo(() => buildUpiPaymentUri({ ...paymentConfig, amount: upiAmount }), [paymentConfig.upiId, paymentConfig.payeeName, upiAmount]);
+  const showUpiQr = getPrinterConfigSync().printQr && (paymentMode === BillPaymentMode.upi || (paymentMode === SPLIT_PAYMENT && splitUpi > 0));
   // Estimates are full bills too — they get the same cash/UPI/split/udhar options as a Pakka bill
   // (they only differ by their EST- number + label), so this panel no longer special-cases them.
   const showPaymentMode = billType !== BillInputBillType.udhar_entry;
@@ -102,6 +109,12 @@ export function BillingPaymentPanel({
             activeClass="border-[#fed7aa] bg-[#fff7ed] text-[#f97316]"
             onClick={() => setPaymentMode(BillPaymentMode.credit)}
           />
+        </div>
+      ) : null}
+
+      {showPaymentMode && showUpiQr ? (
+        <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3">
+          {upiUri ? <div className="flex flex-col items-center gap-3 sm:flex-row"><QrCodeView value={upiUri} size={128} className="shrink-0 rounded-lg border border-purple-100 bg-white p-1" title={`Pay ₹${upiAmount.toFixed(2)} by UPI`} /><div><p className="text-sm font-black text-purple-950">Scan to pay {fmtRs(upiAmount)}</p><p className="mt-1 break-all text-xs font-semibold text-purple-700">{paymentConfig.upiId}</p><p className="mt-2 text-[11px] leading-4 text-purple-700">Dynamic amount is encoded. Confirm the payment in the merchant UPI app before finalising the bill.</p></div></div> : <div className="flex items-start gap-2 text-xs text-amber-800"><QrCode size={17} className="mt-0.5 shrink-0" /><p><strong>UPI ID not configured.</strong> Add a valid UPI ID in Settings → Store Profile to show a payment QR.</p></div>}
         </div>
       ) : null}
 

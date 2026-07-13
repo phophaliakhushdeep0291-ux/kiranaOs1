@@ -46,7 +46,7 @@ async function main() {
         date,
         requestedAt: new Date().toISOString(),
         source: "schedule",
-      }, { jobId: `daily-closing:${shop.id}:${date}` });
+      }, { jobId: `daily-closing-${shop.id}-${date}` });
       await createAuditLog({
         shopId: shop.id,
         action: "DAILY_CLOSING_SCHEDULED",

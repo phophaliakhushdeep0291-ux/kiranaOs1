@@ -126,7 +126,7 @@ export async function createAndEnqueueReportExportJob(shopId, userId, reportType
     userId,
     reportType: job.reportType,
     requestedAt: new Date().toISOString(),
-  }, { jobId: `report-export:${job.id}` });
+  }, { jobId: `report-export-${job.id}` });
 
   if (!queueResult.success) {
     await markReportExportFailed(job.id, queueResult.code || "JOB_QUEUE_UNAVAILABLE");

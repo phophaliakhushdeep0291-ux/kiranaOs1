@@ -585,7 +585,7 @@ function parsePrismaModelFields(schemaText) {
 function extractMigrationTableColumns(migrationText, tableName) {
   // Returns Set of column names found inside CREATE TABLE "TableName" (...)
   const blockMatch = migrationText.match(
-    new RegExp(`CREATE TABLE(?: IF NOT EXISTS)? "${tableName}"\s*\(([^;]+)\);`, "s")
+    new RegExp(`CREATE TABLE(?: IF NOT EXISTS)? "${tableName}"\\s*\\(([^;]+)\\);`, "s")
   );
   if (!blockMatch) return null;
   const cols = new Set();

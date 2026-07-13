@@ -89,5 +89,9 @@ ALTER TABLE "LoyaltyTransaction" ADD CONSTRAINT "LoyaltyTransaction_accountId_fk
 ALTER TABLE "LoyaltyTransaction" ADD CONSTRAINT "LoyaltyTransaction_billId_fkey" FOREIGN KEY ("billId") REFERENCES "Bill"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_billId_fkey" FOREIGN KEY ("billId") REFERENCES "Bill"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "Customer" ADD COLUMN "address" TEXT, ADD COLUMN "gstNumber" TEXT, ADD COLUMN "stateCode" TEXT;
-ALTER TABLE "Bill" ADD COLUMN "buyerGstin" TEXT, ADD COLUMN "buyerStateCode" TEXT, ADD COLUMN "buyerAddress" TEXT;
+ALTER TABLE "Customer" ADD COLUMN "address" TEXT;
+ALTER TABLE "Customer" ADD COLUMN "gstNumber" TEXT;
+ALTER TABLE "Customer" ADD COLUMN "stateCode" TEXT;
+ALTER TABLE "Bill" ADD COLUMN "buyerGstin" TEXT;
+ALTER TABLE "Bill" ADD COLUMN "buyerStateCode" TEXT;
+ALTER TABLE "Bill" ADD COLUMN "buyerAddress" TEXT;

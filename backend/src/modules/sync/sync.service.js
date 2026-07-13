@@ -15,6 +15,7 @@ import { createSupplierSchema, updateSupplierSchema } from "../suppliers/supplie
 import { createSupplier, restoreSupplier, softDeleteSupplier, updateSupplier } from "../suppliers/suppliers.service.js";
 import { doesBodyTouchProtectedFields } from "../../utils/permissionRules.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
 import {
   buildSyncResult,
   classifySyncError,
@@ -653,6 +654,7 @@ async function applyCreateBill(shopId, event, user, context) {
     // that row instead of posting the same udhar effect a second time locally.
     creditLedgerClientId,
   });
+  await recordBillLoyalty(shopId, bill).catch(() => null);
   return buildCreateBillSyncPayload(shopId, bill, payload, billBody);
 }
 
@@ -805,6 +807,7 @@ async function applyCancelBill(shopId, event, context) {
   if (!billId) throw new AppError("billId required for CANCEL_BILL sync event", 400);
 
   const bill = await cancelBill(shopId, billId, { reason: payload.reason, idempotentRaceOk: true });
+  await reverseBillLoyalty(shopId, bill.id).catch(() => null);
   return {
     type: event.type,
     billId: bill.id,

@@ -134,7 +134,7 @@ async function enqueueOrSkip(log, userId, req) {
     shopId: log.shopId,
     customerId: log.customerId,
     requestedAt: new Date().toISOString(),
-  }, { jobId: `whatsapp-reminder:${log.id}` });
+  }, { jobId: `whatsapp-reminder-${log.id}` });
   if (!queueResult.success) {
     const updated = await db.reminderLog.update({ where: { id: log.id }, data: { status: "failed", error: queueResult.code || "JOB_QUEUE_UNAVAILABLE" } });
     recordReminderMetric({ status: "failed", provider: updated.provider, channel: updated.channel });

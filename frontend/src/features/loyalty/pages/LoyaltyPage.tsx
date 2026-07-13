@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Award, CheckCircle2, Gift, ShieldCheck, Sparkles, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { apiRequest } from "@/lib/api/http";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,15 +37,19 @@ export default function LoyaltyPage() {
   });
   const totals = useMemo(() => (accountsQ.data ?? []).reduce((sum, row) => ({ members: sum.members + 1, balance: sum.balance + row.pointsBalance, earned: sum.earned + row.lifetimeEarned, redeemed: sum.redeemed + row.lifetimeRedeemed }), { members: 0, balance: 0, earned: 0, redeemed: 0 }), [accountsQ.data]);
   const discountPerPoint = Number(pointValue || 0) / 100;
+  const summaryCards: Array<{ label: string; value: number; Icon: LucideIcon }> = [
+    { label: "Members", value: totals.members, Icon: Users },
+    { label: "Points outstanding", value: totals.balance, Icon: Award },
+    { label: "Lifetime earned", value: totals.earned, Icon: Sparkles },
+    { label: "Lifetime redeemed", value: totals.redeemed, Icon: Gift },
+  ];
 
   return <div className="space-y-5 pb-10">
     <section className="overflow-hidden rounded-[24px] bg-[radial-gradient(circle_at_top_right,#f5d0fe_0,transparent_35%),linear-gradient(135deg,#2e1065,#6b21a8)] p-6 text-white shadow-[0_24px_60px_rgba(88,28,135,0.2)] sm:p-8">
       <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div className="max-w-2xl"><div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-bold text-purple-100"><Sparkles size={14} /> Retention, backed by a real ledger</div><h1 className="text-2xl font-black tracking-tight sm:text-3xl">Customer loyalty</h1><p className="mt-2 max-w-xl text-sm leading-6 text-purple-100/90">Automatically earn points on identified-customer bills, reverse them on cancellation, and keep an auditable lifetime balance. Coupons and points remain separate so discounts cannot be silently doubled.</p></div><div className={`inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-black ${programQ.data?.active ? "bg-emerald-400/20 text-emerald-100" : "bg-white/10 text-purple-100"}`}>{programQ.data?.active ? <CheckCircle2 size={18} /> : <ShieldCheck size={18} />}{programQ.data?.active ? "Program active" : "Program paused"}</div></div>
     </section>
 
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[
-      ["Members", totals.members, Users], ["Points outstanding", totals.balance, Award], ["Lifetime earned", totals.earned, Sparkles], ["Lifetime redeemed", totals.redeemed, Gift],
-    ].map(([label, value, Icon]) => <div key={String(label)} className={`${card} p-5`}><div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">{String(label)}</p><Icon size={18} className="text-purple-600" /></div><p className="mt-3 text-3xl font-black text-slate-900">{Number(value).toLocaleString("en-IN")}</p></div>)}</div>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{summaryCards.map(({ label, value, Icon }) => <div key={label} className={`${card} p-5`}><div className="flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><Icon size={18} className="text-purple-600" /></div><p className="mt-3 text-3xl font-black text-slate-900">{value.toLocaleString("en-IN")}</p></div>)}</div>
 
     <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
       <section className={`${card} p-5`}><div className="mb-5"><h2 className="text-base font-black text-slate-900">Program rules</h2><p className="mt-1 text-xs leading-5 text-slate-500">Changes affect future earning and redemption only.</p></div><div className="space-y-4"><div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-3"><div><p className="text-sm font-black text-slate-800">Enable automatic earning</p><p className="mt-0.5 text-xs text-slate-500">Only bills linked to a customer</p></div><Switch checked={active} onCheckedChange={setActive} /></div><div className="space-y-2"><Label>Points earned per ₹1</Label><Input type="number" min="0.01" step="0.01" value={earnRate} onChange={(event) => setEarnRate(event.target.value)} /></div><div className="space-y-2"><Label>Value of one point (paise)</Label><Input type="number" min="1" step="1" value={pointValue} onChange={(event) => setPointValue(event.target.value)} /><p className="text-xs text-slate-500">Current value: ₹{discountPerPoint.toFixed(2)} per point</p></div><div className="space-y-2"><Label>Minimum points to redeem</Label><Input type="number" min="1" step="1" value={minimum} onChange={(event) => setMinimum(event.target.value)} /></div><div className="space-y-2"><Label>Owner PIN to save</Label><Input type="password" inputMode="numeric" maxLength={4} value={ownerPin} onChange={(event) => setOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4 digits" /></div><Button className="w-full bg-purple-700 font-black hover:bg-purple-800" disabled={ownerPin.length !== 4 || save.isPending || Number(earnRate) <= 0 || Number(pointValue) < 1 || Number(minimum) < 1} onClick={() => save.mutate()}>{save.isPending ? "Saving…" : "Save loyalty rules"}</Button></div></section>
@@ -53,4 +58,3 @@ export default function LoyaltyPage() {
     </div>
   </div>;
 }
-

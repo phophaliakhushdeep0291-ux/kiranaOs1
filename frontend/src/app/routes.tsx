@@ -86,6 +86,7 @@ const ROUTE_LOADING_LABELS: Record<string, string> = {
   "money-statement": "Preparing cash and payment activity…",
   "daily-closing": "Preparing daily closing…",
   settings: "Opening store settings…",
+  "settings/setup": "Checking merchant setup...",
   plans: "Loading available plans…",
   subscription: "Checking your subscription…",
   devices: "Checking registered devices…",
@@ -104,8 +105,9 @@ const ROUTE_LOADING_LABELS: Record<string, string> = {
 
 function LoadingScreen() {
   const [location] = useLocation();
-  const section = location.split(/[/?#]/).filter(Boolean)[0] ?? "dashboard";
-  return <PageLoading label={ROUTE_LOADING_LABELS[section] ?? "Opening KiranaOS…"} />;
+  const path = location.split(/[?#]/)[0].replace(/^\/+/, "");
+  const section = path.split("/").filter(Boolean)[0] ?? "dashboard";
+  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? "Opening KiranaOS..."} />;
 }
 
 function LazyPage({ component: Component, featureName }: { component: ComponentType; featureName?: FeatureName }) {

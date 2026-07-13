@@ -6,6 +6,7 @@ import { getGetShopQueryKey } from "@/features/settings/queries";
 import { updateShop as updateShopOnServer } from "@/features/settings/api";
 import { DEFAULT_PRINTER_CONFIG, setPrinterConfigCache, type PrinterConfig } from "@/features/settings/printer-config";
 import type { Shop } from "@/types/api";
+import { setPaymentConfigCache } from "@/features/settings/payment-config";
 
 export const PREFS_KEY = "kirana:settings-prefs:v1";
 
@@ -78,6 +79,7 @@ export function useSettingsPrefs() {
         prefsRef.current = saved;
         setPrefs(saved);
         if (saved.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...saved.printer });
+        setPaymentConfigCache(saved.bank, shop.data?.name);
       }
       setHydrated(true);
     });
@@ -99,6 +101,7 @@ export function useSettingsPrefs() {
           return merged;
         });
         if (parsed.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...parsed.printer });
+        setPaymentConfigCache(parsed.bank, shop.data?.name);
       }
     } catch { /* ignore malformed */ }
   }, [shop.data?.settingsJson]);
@@ -120,6 +123,7 @@ export function useSettingsPrefs() {
     setPrefs(next);
     void offlineDB.setSetting(PREFS_KEY, next); // durable + instant; cheap IndexedDB put
     if ("printer" in partial && next.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...next.printer });
+    if ("bank" in partial) setPaymentConfigCache(next.bank, shop.data?.name);
     if (timer.current) clearTimeout(timer.current);
     if (options.immediate) return persistPrefsToServer(next);
     timer.current = setTimeout(() => { void persistPrefsToServer(next); }, 700);

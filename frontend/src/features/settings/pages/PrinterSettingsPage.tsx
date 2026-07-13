@@ -217,7 +217,7 @@ export default function PrinterSettingsPage() {
               <RowToggle label="Auto cut paper" desc="Supported thermal printers" pill={<Switch checked={cfg.autoCut} onCheckedChange={(v) => setP("autoCut", v)} />} />
               <RowToggle label="Cash drawer pulse" desc="Requires an ESC/POS printer bridge; browser printing alone cannot trigger it" pill={<Badge tone="amber">Bridge required</Badge>} />
               <RowToggle label="Print logo" pill={<Switch checked={cfg.printLogo} onCheckedChange={(v) => setP("printLogo", v)} />} />
-              <RowToggle label="Print payment QR code" pill={<Switch checked={cfg.printQr} onCheckedChange={(v) => setP("printQr", v)} />} last />
+              <RowToggle label="Show dynamic UPI QR at checkout" desc="Uses the verified UPI ID saved in Store Profile" pill={<Switch checked={cfg.printQr} onCheckedChange={(v) => setP("printQr", v)} />} last />
             </div>
           </Card>
         </div>
