@@ -466,7 +466,7 @@ function StorefrontHeader({
               <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-[#071432] sm:text-2xl">
                 {catalog.shop.name || "KiranaOS"}
               </h1>
-              <p className="truncate text-xs font-semibold text-[#66758f]">{catalog.shop.city || "Smart POS for Modern Stores"}</p>
+              <p className="truncate text-xs font-semibold text-[#66758f]">{catalog.shop.city || "Built for busy Indian stores"}</p>
             </div>
           </div>
         </div>
@@ -682,7 +682,7 @@ function CustomerSidebar({
         </div>
         <div>
           <p className="font-display text-2xl font-black tracking-[-0.03em]">Kirana<span className="text-[#0b77ff]">OS</span></p>
-          <p className="text-[11px] font-semibold text-[#b5c4df]">Smart POS for Modern Stores</p>
+          <p className="text-[11px] font-semibold text-[#b5c4df]">Built for busy Indian stores</p>
         </div>
       </div>
 

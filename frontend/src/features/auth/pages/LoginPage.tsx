@@ -208,28 +208,32 @@ export default function Login() {
   };
 
   return (
-    <div className="app-shell flex min-h-screen items-center justify-center bg-background px-4 py-8">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-lg border bg-card shadow-xl lg:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="hidden bg-sidebar p-8 text-sidebar-foreground lg:flex lg:flex-col lg:justify-between">
+    <div className="app-shell flex min-h-screen items-center justify-center bg-[#f4f7fc] px-4 py-8">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-[26px] border border-[#dce5f2] bg-card shadow-[0_28px_80px_rgba(16,35,71,0.16)] lg:grid-cols-[minmax(0,1fr)_420px]">
+        <section className="relative hidden overflow-hidden bg-[linear-gradient(145deg,#031126_0%,#06275f_58%,#075fff_135%)] p-10 text-white lg:flex lg:flex-col lg:justify-between">
+          <div className="pointer-events-none absolute -right-28 -top-28 h-80 w-80 rounded-full border border-white/10 bg-white/5" />
+          <div className="pointer-events-none absolute -bottom-36 -left-28 h-96 w-96 rounded-full border border-white/10 bg-[#075fff]/25" />
           <div>
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-md ring-1 ring-white/10">
+            <div className="relative inline-flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#075fff] text-white shadow-[0_14px_30px_rgba(0,74,255,0.35)] ring-1 ring-white/20">
               <Store size={24} aria-hidden="true" />
             </div>
-            <h1 className="mt-6 text-3xl font-black text-white">KiranaOS</h1>
-            <p className="mt-3 max-w-md text-sm leading-6 text-sidebar-foreground/75">
-              Fast counter billing, udhar tracking, inventory, and offline-safe shop operations in one focused workspace.
+            <p className="relative mt-8 text-[11px] font-black uppercase tracking-[0.2em] text-[#78a8ff]">Retail operating system</p>
+            <h1 className="relative mt-3 font-display text-4xl font-black tracking-tight text-white">Kirana<span className="text-[#4c8dff]">OS</span></h1>
+            <h2 className="relative mt-7 max-w-md font-display text-[30px] font-black leading-[1.08] tracking-tight text-white">Run the counter.<br />Know the business.</h2>
+            <p className="relative mt-4 max-w-md text-sm leading-6 text-white/70">
+              Fast billing, clear cash visibility, udhar, inventory, and reliable offline work—built around the way Indian stores operate.
             </p>
           </div>
-          <div className="grid gap-3 text-sm">
+          <div className="relative grid gap-3 text-sm">
             {["Works offline at the counter", "Keeps owner cash signals visible", "Syncs safely when network returns"].map((item) => (
-              <div key={item} className="rounded-lg bg-white/10 px-3 py-2 font-semibold ring-1 ring-white/10">
+              <div key={item} className="rounded-[12px] bg-white/[0.07] px-4 py-3 font-semibold text-white/88 ring-1 ring-white/10 backdrop-blur-sm">
                 {item}
               </div>
             ))}
           </div>
         </section>
 
-        <div className="w-full p-6 sm:p-8">
+        <div className="w-full p-6 sm:p-9">
         <div className="mb-8 text-center lg:text-left">
           <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-lg bg-primary text-primary-foreground lg:hidden">
             <Store className="text-primary-foreground" size={28} />
@@ -238,11 +242,11 @@ export default function Login() {
             <LockKeyhole size={16} aria-hidden="true" />
             Secure shop sign in
           </div>
-          <h1 className="text-3xl font-black text-foreground lg:mt-3">Welcome back</h1>
+          <h1 className="font-display text-3xl font-black tracking-tight text-foreground lg:mt-3">Welcome back</h1>
           <p className="mt-1 text-sm text-muted-foreground">Sign in to manage today&apos;s counter.</p>
         </div>
 
-        <div className="rounded-lg border bg-background/70 p-5 shadow-sm">
+        <div className="rounded-[18px] border border-[#dce5f2] bg-white p-5 shadow-[0_12px_36px_rgba(16,35,71,0.07)]">
           {shopChoices ? (
             <div className="space-y-4" data-testid="shop-selection-panel">
               <div>

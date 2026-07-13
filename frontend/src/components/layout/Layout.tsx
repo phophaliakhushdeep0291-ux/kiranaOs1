@@ -22,7 +22,6 @@ import {
   Menu,
   Package,
   PercentSquare,
-  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -63,8 +62,8 @@ const COLLAPSED_WIDTH = 76;
 // ── page title map ────────────────────────────────────────────────────────────
 
 const PAGE_SUBTITLES: Record<string, string> = {
-  "/billing": "Create fast bills and collect payments",
-  "/dashboard": "Live sales, cash, stock, and sync health",
+  "/billing": "Fast billing, clear totals, confident collections",
+  "/dashboard": "Today’s sales, cash, stock, and shop health",
   "/bills": "View, search, filter, and manage all bills and invoices",
   "/orders-received": "Review customer QR orders and load them into billing",
   "/products": "Manage your product catalog, pricing and stock",
@@ -600,7 +599,7 @@ export function Layout({ children }: { children: ReactNode }) {
               </DropdownMenu>
               <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Kirana<span className="text-[#075fff]">OS</span></span>
-                <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">Smart POS for Modern Stores</span>
+                <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">Built for busy Indian stores</span>
               </Link>
             </div>
             <div className="flex shrink-0 items-center gap-3">
@@ -644,11 +643,6 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* Mobile bottom nav */}
         <nav aria-label="Mobile navigation" className="fixed inset-x-3 bottom-3 z-50 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_34px_rgba(15,35,80,0.14)] backdrop-blur-xl lg:hidden">
-          {cleanPath(loc) !== "/billing" && (
-            <Link href="/billing" aria-label="Create new bill" className="absolute left-1/2 top-0 grid h-[62px] w-[62px] -translate-x-1/2 -translate-y-6 place-items-center rounded-full bg-[#075fff] text-white shadow-[0_15px_34px_rgba(7,95,255,0.36)] ring-8 ring-white transition-transform active:scale-95">
-              <Plus size={31} strokeWidth={2} aria-hidden="true" />
-            </Link>
-          )}
           <div className="grid grid-cols-5 items-center px-2.5">
             {MOBILE_NAV.slice(0, 2).map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);

@@ -943,12 +943,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
                 <ReceiptText size={14} />
               </span>
               <div>
-                <p className={cn("text-[10px] font-medium", DASH_MUTED)}>Total Bills</p>
+                <p className={cn("text-[10px] font-medium", DASH_MUTED)}>Bills today</p>
                 <p className="text-[15px] font-extrabold text-[#13223f] dark:text-card-foreground">{dashboard.billCount}</p>
               </div>
             </div>
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 sm:border-l sm:border-[#e8edf4]">
-              <p className={cn("text-[10px] font-medium", DASH_MUTED)}>Total Amount</p>
+              <p className={cn("text-[10px] font-medium", DASH_MUTED)}>Sales today</p>
               <p className="text-[15px] font-extrabold text-[#13223f] dark:text-card-foreground">{fmtRs(dashboard.revenue)}</p>
             </div>
           </div>
@@ -961,10 +961,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
           <div className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col p-4 2xl:min-h-0")}>
             <p className={cn(DASH_TITLE, "mb-3")}>Quick Insights</p>
             <div className="grid min-h-0 flex-1 grid-rows-4 gap-2">
-              <InsightRow tone="emerald" icon={<Package size={16} />} label="Best Selling Category" value={ownerReport?.topProducts[0]?.name ? "Sales leaders" : "No sales yet"} href="/reports" />
+              <InsightRow tone="emerald" icon={<Package size={16} />} label="Sales by Category" value={ownerReport?.topProducts[0]?.name ? "View breakdown" : "No sales yet"} href="/reports" />
               <InsightRow tone="blue" icon={<PackagePlus size={16} />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "No product yet"} href="/reports" />
               <InsightRow tone="violet" icon={<CreditCard size={16} />} label="Average Bill Value" value={avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0)} href="/bills" />
-              <InsightRow tone="orange" icon={<Users size={16} />} label="New Customers Today" value={String(ownerReport?.topCustomers.length ?? 0)} href="/customers" />
+              <InsightRow tone="orange" icon={<Users size={16} />} label="Active Customers" value={String(ownerReport?.topCustomers.length ?? 0)} href="/customers" />
             </div>
           </div>
 

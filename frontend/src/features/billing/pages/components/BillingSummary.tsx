@@ -540,7 +540,7 @@ export function BillingSummary({
           ) : (
             <>
               {isEstimateBill ? `Save Estimate · ${fmtRs(grandTotal)}` : `${paymentAction} · ${fmtRs(grandTotal)}`}
-              <span className="absolute right-2.5 top-1/2 inline-flex h-6 min-w-[34px] -translate-y-1/2 items-center justify-center rounded-[7px] bg-[rgba(0,35,140,0.35)] px-1.5 text-[11px] font-black text-white">
+              <span className="absolute right-2.5 top-1/2 hidden h-6 min-w-[34px] -translate-y-1/2 items-center justify-center rounded-[7px] bg-[rgba(0,35,140,0.35)] px-1.5 text-[11px] font-black text-white sm:inline-flex">
                 F12
               </span>
             </>
@@ -567,7 +567,7 @@ export function BillingSummary({
         )}
 
         {/* Keyboard shortcuts — 5 buttons */}
-        <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-[#edf1f6] pt-2.5 sm:grid-cols-5">
+        <div className="mt-2 hidden grid-cols-5 gap-1.5 border-t border-[#edf1f6] pt-2.5 sm:grid">
           {[
             { key: "F2", label: "Search" },
             { key: "F4", label: "Discount" },
@@ -612,7 +612,7 @@ function SecBtn({
     >
       {icon}
       <span>{label}</span>
-      {shortcut && <span className="text-[9px] text-[#536383]">{shortcut}</span>}
+      {shortcut && <span className="hidden text-[9px] text-[#536383] sm:inline">{shortcut}</span>}
     </button>
   );
 }
