@@ -63,11 +63,50 @@ const RecycleBinPage = lazy(() => import("@/features/recycle-bin/pages/RecycleBi
 const SmartToolsPage = lazy(() => import("@/features/innovation/pages/SmartToolsPage"));
 const RecoveryModePage = lazy(() => import("@/features/recovery/pages/RecoveryModePage"));
 
+const ROUTE_LOADING_LABELS: Record<string, string> = {
+  login: "Opening secure sign in…",
+  register: "Preparing shop registration…",
+  "forgot-password": "Opening account recovery…",
+  "reset-password": "Opening password reset…",
+  "verify-email": "Verifying your shop email…",
+  dashboard: "Preparing today’s dashboard…",
+  billing: "Opening a new bill…",
+  bills: "Loading bill history…",
+  products: "Loading your products…",
+  categories: "Loading product categories…",
+  customers: "Loading customers and udhar…",
+  inventory: "Checking current stock…",
+  "purchase-bills": "Loading purchases…",
+  suppliers: "Loading suppliers…",
+  expenses: "Loading expenses…",
+  offers: "Loading offers and coupons…",
+  reports: "Preparing business reports…",
+  "money-statement": "Preparing cash and payment activity…",
+  "daily-closing": "Preparing daily closing…",
+  settings: "Opening store settings…",
+  plans: "Loading available plans…",
+  subscription: "Checking your subscription…",
+  devices: "Checking registered devices…",
+  staff: "Loading staff access…",
+  "audit-logs": "Loading audit history…",
+  "recycle-bin": "Loading recoverable records…",
+  "smart-tools": "Opening smart tools…",
+  "recovery-mode": "Preparing recovery tools…",
+  "sync-status": "Checking backup status…",
+  returns: "Loading returns…",
+  "orders-received": "Loading customer orders…",
+  "sales-overview": "Preparing sales overview…",
+  "import-order": "Preparing customer order…",
+  order: "Loading this store…",
+};
+
 function LoadingScreen() {
-  return <PageLoading label="Loading counter..." />;
+  const [location] = useLocation();
+  const section = location.split(/[/?#]/).filter(Boolean)[0] ?? "dashboard";
+  return <PageLoading label={ROUTE_LOADING_LABELS[section] ?? "Opening KiranaOS…"} />;
 }
 
-function LazyPage({ component: Component }: { component: ComponentType }) {
+function LazyPage({ component: Component, featureName }: { component: ComponentType; featureName?: FeatureName }) {
   const [location] = useLocation();
   const routeKey = location.split(/[?#]/)[0] || "/";
 
@@ -81,7 +120,7 @@ function LazyPage({ component: Component }: { component: ComponentType }) {
     <div key={routeKey} className="app-route-frame min-w-0">
       <Suspense fallback={<LoadingScreen />}>
         <RouteTransition routeKey={routeKey}>
-          <Component />
+          {featureName ? <FeatureGate featureName={featureName}><Component /></FeatureGate> : <Component />}
         </RouteTransition>
       </Suspense>
     </div>
@@ -104,7 +143,7 @@ function ProtectedRoute({ component: Component, featureName }: { component: Comp
   return (
     <Layout>
       <ErrorBoundary>
-        {featureName ? <FeatureGate featureName={featureName}><LazyPage component={Component} /></FeatureGate> : <LazyPage component={Component} />}
+        <LazyPage component={Component} featureName={featureName} />
       </ErrorBoundary>
     </Layout>
   );

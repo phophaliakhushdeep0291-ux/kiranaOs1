@@ -8,7 +8,8 @@ interface RouteTransitionProps {
 export function RouteTransition({ children, routeKey }: RouteTransitionProps) {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const heading = document.querySelector<HTMLElement>("#main-content h1, .app-route-ready h1");
+      const headings = Array.from(document.querySelectorAll<HTMLElement>(".app-route-ready h1, header h1"));
+      const heading = headings.find((candidate) => candidate.textContent?.trim() && candidate.textContent.trim() !== "KiranaOS") ?? headings[0];
       const label = heading?.textContent?.trim();
       document.title = label ? `${label} · KiranaOS` : "KiranaOS";
     });

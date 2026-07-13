@@ -225,9 +225,9 @@ export function ProductFormPanel({
       <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
-          {def.primaryUnits.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+          {Array.from(new Set(def.primaryUnits)).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
           <div className="my-1 h-px bg-border" />
-          {UNITS.filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+          {Array.from(new Set(UNITS)).filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
         </SelectContent>
       </Select>
     </Field>
