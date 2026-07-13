@@ -8,13 +8,14 @@ import type { ReceiptPaperSize } from "@/features/receipts/receipt-print";
  * physical/per-device, so connection details are advisory; the browser print
  * path always works as a universal fallback for a PWA.
  */
-export type PrinterConnection = "browser" | "bluetooth" | "usb" | "network";
+export type PrinterConnection = "browser" | "bluetooth" | "usb" | "network" | "bridge";
 
 export interface PrinterConfig {
   connection: PrinterConnection;
   deviceName: string;
   model: string;
   networkAddress: string;
+  bridgeUrl: string;
   paperSize: ReceiptPaperSize;
   autoPrint: boolean;
   copies: number;
@@ -45,6 +46,7 @@ export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
   deviceName: "Browser / system printer",
   model: "",
   networkAddress: "",
+  bridgeUrl: "http://127.0.0.1:17873",
   paperSize: "80mm",
   autoPrint: true,
   copies: 1,
@@ -73,6 +75,7 @@ export const PRINTER_CONNECTION_LABELS: Record<PrinterConnection, string> = {
   bluetooth: "Bluetooth thermal",
   usb: "USB thermal",
   network: "Network (LAN/IP)",
+  bridge: "KiranaOS local hardware bridge",
 };
 
 const PREFS_KEY = "kirana:settings-prefs:v1";

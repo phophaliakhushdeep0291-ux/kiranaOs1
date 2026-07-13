@@ -28,10 +28,12 @@ import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, billingDraftFromHeldBill, heldBillFr
 import type { BillingDraft, HeldBill } from "@/features/billing/pages/billing-types";
 import { alertCustomerOnWhatsapp } from "../notify";
 import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "../api";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT } from "@/features/stores/location-context";
 
 const STATUS_TABS: Array<{ value: string; label: string }> = [
   { value: "new", label: "New" },
   { value: "accepted", label: "Accepted" },
+  { value: "ready", label: "Ready" },
   { value: "fulfilled", label: "Done" },
   { value: "all", label: "All" },
 ];
@@ -39,15 +41,19 @@ const STATUS_TABS: Array<{ value: string; label: string }> = [
 const STATUS_STYLE: Record<CustomerOrder["status"], string> = {
   new: "bg-[#eaf2ff] text-[#075fff]",
   accepted: "bg-[#fff7ed] text-[#c2410c]",
+  ready: "bg-[#f3efff] text-[#7c3aed]",
   fulfilled: "bg-[#e9fbf0] text-[#16a34a]",
   rejected: "bg-[#f1f5f9] text-[#64748b]",
+  cancelled: "bg-[#fff1f2] text-[#be123c]",
 };
 
 const STATUS_LABEL: Record<CustomerOrder["status"], string> = {
   new: "Received",
   accepted: "Preparing",
+  ready: "Ready",
   fulfilled: "Done",
   rejected: "Rejected",
+  cancelled: "Cancelled",
 };
 
 const fmtRs = (n: number) => `Rs ${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -113,11 +119,21 @@ export default function OrdersReceivedPage() {
   const [status, setStatus] = useState("new");
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [activeLocationId, setActiveLocationId] = useState(() => getActiveLocationId());
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setActiveLocationId(getActiveLocationId());
+      setSelectedId(null);
+    };
+    window.addEventListener(LOCATION_CHANGED_EVENT, handleLocationChange);
+    return () => window.removeEventListener(LOCATION_CHANGED_EVENT, handleLocationChange);
+  }, []);
 
   // Cursor-paginated so a busy shop's inbox no longer truncates silently at 200 orders.
   // Key is namespaced under "list" so it can't collide with the stats query below.
   const ordersQuery = useInfiniteQuery({
-    queryKey: ["customer-orders", "list", status],
+    queryKey: ["customer-orders", "list", activeLocationId, status],
     queryFn: ({ pageParam }) => listCustomerOrders(status, pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor ?? null,
@@ -127,7 +143,7 @@ export default function OrdersReceivedPage() {
   // Unfiltered list for the stats strip and for keeping the detail view live even when the
   // selected order moves out of the active tab (e.g. accepting it while on "New").
   const allOrdersQuery = useQuery({
-    queryKey: ["customer-orders", "all"],
+    queryKey: ["customer-orders", "all", activeLocationId],
     queryFn: () => listCustomerOrders("all"),
     refetchInterval: 20_000,
   });
@@ -379,6 +395,7 @@ export default function OrdersReceivedPage() {
           onBack={() => setSelectedId(null)}
           onAcceptBill={() => acceptAndBill(selectedOrder)}
           onMessage={() => messageCustomer(selectedOrder, selectedOrder.status === "accepted" ? "ready" : "received")}
+          onMarkReady={() => statusMutation.mutate({ id: selectedOrder.id, next: "ready" })}
           onMarkDone={() => statusMutation.mutate({ id: selectedOrder.id, next: "fulfilled" })}
           onReject={() => statusMutation.mutate({ id: selectedOrder.id, next: "rejected" })}
           onPrint={() => printOrderSlip(selectedOrder)}
@@ -449,7 +466,7 @@ export default function OrdersReceivedPage() {
                     <span className="ml-3 shrink-0 font-black text-[#0f1e3d]">{fmtRs(order.estimatedTotal)}</span>
                   </div>
 
-                  {order.status !== "rejected" && order.status !== "fulfilled" ? (
+                  {!(["rejected", "cancelled", "fulfilled"] as CustomerOrder["status"][]).includes(order.status) ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -469,10 +486,10 @@ export default function OrdersReceivedPage() {
                       <button
                         type="button"
                         disabled={statusMutation.isPending}
-                        onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: "fulfilled" }); }}
+                        onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: order.status === "accepted" ? "ready" : "fulfilled" }); }}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe3ee] bg-white px-3 py-2 text-[12px] font-bold text-[#405273]"
                       >
-                        <CheckCircle2 size={14} /> Mark done
+                        <CheckCircle2 size={14} /> {order.status === "accepted" ? "Mark ready" : "Mark done"}
                       </button>
                       <button
                         type="button"
@@ -551,6 +568,12 @@ const BANNER: Record<CustomerOrder["status"], { title: string; desc: string; ico
     icon: <ChefHat size={30} />,
     tint: "bg-[#eaf2ff] text-[#075fff]",
   },
+  ready: {
+    title: "Order Ready for Handover",
+    desc: "The customer can collect it now, or the delivery can leave the store.",
+    icon: <PackageCheck size={30} />,
+    tint: "bg-[#f3efff] text-[#7c3aed]",
+  },
   fulfilled: {
     title: "Order Completed",
     desc: "This order has been billed and handed over.",
@@ -563,6 +586,12 @@ const BANNER: Record<CustomerOrder["status"], { title: string; desc: string; ico
     icon: <XCircle size={30} />,
     tint: "bg-[#fff1f2] text-[#e11d48]",
   },
+  cancelled: {
+    title: "Order Cancelled",
+    desc: "This order is closed and cannot be moved back into preparation.",
+    icon: <XCircle size={30} />,
+    tint: "bg-[#fff1f2] text-[#be123c]",
+  },
 };
 
 function OrderDetail({
@@ -572,6 +601,7 @@ function OrderDetail({
   onBack,
   onAcceptBill,
   onMessage,
+  onMarkReady,
   onMarkDone,
   onReject,
   onPrint,
@@ -583,6 +613,7 @@ function OrderDetail({
   onBack: () => void;
   onAcceptBill: () => void;
   onMessage: () => void;
+  onMarkReady: () => void;
   onMarkDone: () => void;
   onReject: () => void;
   onPrint: () => void;
@@ -590,7 +621,7 @@ function OrderDetail({
 }) {
   const banner = BANNER[order.status];
   const totalQty = order.items.reduce((sum, it) => sum + it.qty, 0);
-  const active = order.status === "new" || order.status === "accepted";
+  const active = order.status === "new" || order.status === "accepted" || order.status === "ready";
   const initials = order.customerName
     .split(/\s+/)
     .map((w) => w.charAt(0))
@@ -680,7 +711,7 @@ function OrderDetail({
           </div>
 
           {/* Fulfillment progress */}
-          {order.status !== "rejected" && (
+          {order.status !== "rejected" && order.status !== "cancelled" && (
             <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
               <p className="mb-4 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><PackageCheck size={15} className="text-[#075fff]" /> Fulfillment Progress</p>
               <FulfillmentStepper order={order} />
@@ -707,10 +738,10 @@ function OrderDetail({
               <button
                 type="button"
                 disabled={mutationPending}
-                onClick={onMarkDone}
+                onClick={order.status === "accepted" ? onMarkReady : onMarkDone}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-4 py-2.5 text-[12.5px] font-bold text-[#405273]"
               >
-                <PackageCheck size={15} /> Mark Done
+                <PackageCheck size={15} /> {order.status === "accepted" ? "Mark Ready" : "Mark Done"}
               </button>
               <button
                 type="button"
@@ -753,6 +784,8 @@ function OrderDetail({
           <SideCard title="Payment & Fulfillment">
             <InfoRow label="Payment" chip="At billing" chipClass="bg-[#eaf2ff] text-[#075fff]" />
             <InfoRow label="Order Source" chip="QR Order" chipClass="bg-[#eaf2ff] text-[#075fff]" />
+            <InfoRow label="Fulfillment" value={order.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"} />
+            {order.promisedSlot ? <InfoRow label="Preferred Slot" value={order.promisedSlot} /> : null}
             <InfoRow label="Placed On" value={fullDateTime(order.createdAt)} />
             <InfoRow label="Status" chip={STATUS_LABEL[order.status]} chipClass={STATUS_STYLE[order.status]} />
             {order.billId ? <InfoRow label="Linked Bill" value={order.billId.length > 14 ? `…${order.billId.slice(-10)}` : order.billId} mono /> : null}
@@ -787,7 +820,7 @@ function OrderDetail({
               <QuickAction icon={<MessageCircle size={16} />} label="WhatsApp" onClick={onMessage} />
               <QuickAction icon={<Printer size={16} />} label="Print Slip" onClick={onPrint} />
               <QuickAction icon={<Copy size={16} />} label="Copy Details" onClick={onCopy} />
-              <QuickAction icon={<PackageCheck size={16} />} label="Mark Done" disabled={!active || mutationPending} onClick={onMarkDone} />
+              <QuickAction icon={<PackageCheck size={16} />} label={order.status === "accepted" ? "Mark Ready" : "Mark Done"} disabled={!active || mutationPending || order.status === "new"} onClick={order.status === "accepted" ? onMarkReady : onMarkDone} />
               <QuickAction icon={<XCircle size={16} />} label="Reject" tone="danger" disabled={!active || mutationPending} onClick={onReject} />
             </div>
           </SideCard>
@@ -809,13 +842,13 @@ function BannerField({ label, value }: { label: string; value: string }) {
 const STEPS = [
   { label: "Order Received", pendingSub: "" },
   { label: "Confirm by Store", pendingSub: "Next step" },
-  { label: "Prepare & Bill", pendingSub: "Pending" },
+  { label: "Ready", pendingSub: "Pending" },
   { label: "Completed", pendingSub: "Pending" },
 ] as const;
 
 function FulfillmentStepper({ order }: { order: CustomerOrder }) {
   // First step that is NOT done: new → confirm(1); accepted → bill(2); fulfilled → past the end.
-  const currentIndex = order.status === "new" ? 1 : order.status === "accepted" ? 2 : STEPS.length;
+  const currentIndex = order.status === "new" ? 1 : order.status === "accepted" ? 2 : order.status === "ready" ? 3 : STEPS.length;
 
   return (
     <div>

@@ -3,7 +3,7 @@ import {
   buildReceiptHtml,
   writeReceiptErrorWindow,
   writeReceiptPendingWindow,
-  writeReceiptWindow,
+  writeConfiguredReceiptWindow,
   type ReceiptPaymentLine,
   type ReceiptSnapshot,
   type ReceiptWindowOptions,
@@ -86,7 +86,7 @@ export function writeBillingReceiptWindow(popup: Window, bill: PrintableBill, op
   const printer = getPrinterConfigSync();
   // Saved printer config drives paper size + copies; the caller still decides
   // auto-print (the after-save flow already gates on the auto-print toggle).
-  writeReceiptWindow(popup, buildBillingReceiptSnapshot(bill), {
+  writeConfiguredReceiptWindow(popup, buildBillingReceiptSnapshot(bill), {
     paperSize: printer.paperSize,
     copies: printer.copies,
     ...options,

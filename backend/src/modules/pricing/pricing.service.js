@@ -147,6 +147,39 @@ export async function evaluate(shopId, body = {}) {
   };
 }
 
+/** Price a public catalog in one rules query so storefront prices stay identical to checkout. */
+export async function priceCatalogProducts(shopId, products, locationId, quantitiesByProductId = {}) {
+  if (!Array.isArray(products) || products.length === 0) return [];
+  const rows = await db.pricingRule.findMany({
+    where: {
+      shopId,
+      status: "ACTIVE",
+      AND: [{ OR: [{ locationId }, { locationId: null }] }],
+    },
+    orderBy: { priority: "asc" },
+  });
+  const settings = await getPricingSettings(shopId);
+  const now = new Date().toISOString();
+  return products.map((product) => {
+    const unitCode = product.rateUnit || product.displayUnit || "piece";
+    const result = evaluatePricing({
+      shopId,
+      locationId,
+      productId: product.id,
+      unitCode,
+      unitLabel: product.displayUnit || unitCode,
+      quantity: Number(quantitiesByProductId[product.id] ?? 1),
+      billDate: now,
+      productCost: Number(product.costPerRateUnit ?? 0),
+      defaultPrice: Number(product.defaultPricePerRateUnit ?? 0),
+      minimumSellingPrice: Number(product.minPricePerRateUnit ?? 0),
+      maximumRetailPrice: Number(product.mrp ?? 0),
+      source: "CUSTOMER_ORDER",
+    }, rows.filter((row) => !row.productId || row.productId === product.id).map(toEngineRule), settings);
+    return { ...product, storefrontPrice: result.recommendedUnitPrice };
+  });
+}
+
 // ── Rule CRUD ────────────────────────────────────────────────────────────────
 function validateRuleInput(input) {
   if (!input?.name || String(input.name).trim().length < 1) throw new AppError("Rule name is required", 400);

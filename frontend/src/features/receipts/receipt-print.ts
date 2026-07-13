@@ -1,3 +1,6 @@
+import { getPrinterConfigSync } from "@/features/settings/printer-config";
+import { printHtmlViaHardwareBridge } from "@/features/hardware/local-hardware-bridge";
+
 export interface ReceiptShopInfo {
   name?: string | null;
   address?: string | null;
@@ -553,5 +556,36 @@ export function openReceiptWindow(snapshot: ReceiptSnapshot, options: ReceiptWin
   const popup = window.open("", "_blank", "width=460,height=760");
   if (!popup) return false;
   writeReceiptWindow(popup, snapshot, options);
+  return true;
+}
+
+export function writeConfiguredReceiptWindow(popup: Window, snapshot: ReceiptSnapshot, options: ReceiptWindowOptions = {}) {
+  const printer = getPrinterConfigSync();
+  if (printer.connection !== "bridge") {
+    writeReceiptWindow(popup, snapshot, options);
+    return;
+  }
+
+  writeReceiptPendingWindow(popup, snapshot);
+  const renderOptions = { paperSize: options.paperSize ?? printer.paperSize, copies: options.copies ?? printer.copies };
+  const jobId = `receipt:${snapshot.billNo}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+  void printHtmlViaHardwareBridge(printer.bridgeUrl, {
+    html: buildReceiptHtml(snapshot, renderOptions),
+    jobId,
+    copies: renderOptions.copies ?? 1,
+    paperSize: renderOptions.paperSize ?? "80mm",
+    autoCut: printer.autoCut,
+    cashDrawer: printer.cashDrawer,
+  }).then(() => {
+    if (!popup.closed) popup.close();
+  }).catch(() => {
+    if (!popup.closed) writeReceiptWindow(popup, snapshot, options);
+  });
+}
+
+export function openConfiguredReceiptWindow(snapshot: ReceiptSnapshot, options: ReceiptWindowOptions = {}) {
+  const popup = window.open("", "_blank", "width=460,height=760");
+  if (!popup) return false;
+  writeConfiguredReceiptWindow(popup, snapshot, options);
   return true;
 }

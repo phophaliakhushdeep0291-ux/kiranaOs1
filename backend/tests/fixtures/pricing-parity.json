@@ -46,5 +46,15 @@
     "context": { "shopId": "s", "productId": "p", "unitCode": "packet", "quantity": 1, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 30, "minimumSellingPrice": 0, "source": "BILLING" },
     "rules": [{ "id": "pct", "ruleType": "PROMOTIONAL_PRICE", "adjustmentType": "PERCENTAGE_DISCOUNT", "adjustmentValue": 10 }],
     "expected": { "recommendedUnitPrice": 27, "appliedRuleType": "PROMOTIONAL_PRICE", "requiresApproval": false }
+  },
+  {
+    "name": "branch price overrides the matching company price only in that branch",
+    "context": { "shopId": "s", "locationId": "branch-b", "productId": "p", "unitCode": "packet", "quantity": 5, "billDate": "2026-07-11T10:00:00.000Z", "productCost": 20, "defaultPrice": 35, "minimumSellingPrice": 0, "source": "BILLING" },
+    "rules": [
+      { "id": "global", "ruleType": "PRODUCT_QUANTITY_PRICE", "productId": "p", "minQuantity": 1, "fixedUnitPrice": 30 },
+      { "id": "branch", "ruleType": "PRODUCT_QUANTITY_PRICE", "productId": "p", "locationId": "branch-b", "minQuantity": 1, "fixedUnitPrice": 28 },
+      { "id": "other", "ruleType": "PRODUCT_QUANTITY_PRICE", "productId": "p", "locationId": "branch-c", "minQuantity": 1, "fixedUnitPrice": 22 }
+    ],
+    "expected": { "recommendedUnitPrice": 28, "appliedRuleType": "PRODUCT_QUANTITY_PRICE", "requiresApproval": false }
   }
 ]

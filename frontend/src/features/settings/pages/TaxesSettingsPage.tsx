@@ -32,12 +32,19 @@ interface TaxConfig {
   hsnMappings: HsnRow[];
 }
 interface HsnRow {
+  category: string | null;
   cat: string;
   rate: string;
   hsn: string;
   count: number;
+  missingHsn: number;
+  invalidHsn: number;
+  consistent: boolean;
 }
-type HsnEditor = { mode: "single"; row: HsnRow } | { mode: "bulk" };
+type HsnEditor = { row: HsnRow };
+interface HsnSummary {
+  categories: Array<{ category: string | null; label: string; productCount: number; hsn: string | null; gstRate: number | null; missingHsn: number; invalidHsn: number; consistent: boolean }>;
+}
 interface GstReport {
   totalBills: number;
   gstBills: number;
@@ -75,12 +82,6 @@ const DEFAULT_TAX: TaxConfig = {
   hsnMappings: [],
 };
 const RATE_INFO: Record<string, string> = { "0": "Exempt / unbranded", "5": "Essentials", "12": "Processed foods", "18": "Standard", "28": "Luxury / sin" };
-const HSN_ROWS: HsnRow[] = [
-  { cat: "Packaged Food", rate: "5%", hsn: "1905", count: 124 },
-  { cat: "Personal Care", rate: "18%", hsn: "3304", count: 42 },
-  { cat: "Household", rate: "18%", hsn: "3402", count: 81 },
-  { cat: "Beverages", rate: "12%", hsn: "2202", count: 36 },
-];
 const EMPTY_EWAY: EWayDraft = { billId: "", transportMode: "road", transporterId: "", transporterName: "", vehicleNumber: "", vehicleType: "regular", distanceKm: "", transportDocumentNumber: "", transportDocumentDate: "", deliveryAddress: "" };
 
 function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8") {
@@ -108,12 +109,16 @@ export default function TaxesSettingsPage() {
   const [ewayDraft, setEwayDraft] = useState<EWayDraft>(EMPTY_EWAY);
   const [ewayError, setEwayError] = useState("");
   const [savingEway, setSavingEway] = useState(false);
+  const [hsnPinOpen, setHsnPinOpen] = useState(false);
+  const [pendingHsn, setPendingHsn] = useState<{ row: HsnRow; hsn: string; gstRate: number } | null>(null);
+  const [savingHsn, setSavingHsn] = useState(false);
   const hsnInputRef = useRef<HTMLInputElement>(null);
   const rateInputRef = useRef<HTMLInputElement>(null);
   const seeded = useRef(false);
   // Real numbers from stored bills (gst + gstMode persisted per bill).
   const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), retry: 1 });
   const readinessQ = useQuery({ queryKey: ["gst-compliance-readiness"], queryFn: () => apiRequest<ComplianceReadiness>("/compliance/readiness"), retry: 1 });
+  const hsnSummaryQ = useQuery({ queryKey: ["gst-hsn-summary"], queryFn: () => apiRequest<HsnSummary>("/compliance/hsn-summary"), retry: 1 });
   const recentBillsQ = useQuery({ queryKey: ["gst-compliance-recent-bills"], queryFn: () => apiRequest<BillListResult>("/bills?status=active&page=1&limit=50"), enabled: ewayOpen, retry: 1 });
   const inr = (n?: number) => (n == null ? "—" : `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
@@ -128,7 +133,16 @@ export default function TaxesSettingsPage() {
   const update = (partial: Partial<TaxConfig>) => commit({ ...tax, ...partial });
   const setText = (partial: Partial<TaxConfig>) => setTax((t) => ({ ...t, ...partial }));
   const flush = () => patch({ taxes: tax });
-  const hsnRows = tax.hsnMappings.length > 0 ? tax.hsnMappings : HSN_ROWS;
+  const hsnRows: HsnRow[] = (hsnSummaryQ.data?.categories ?? []).map((row) => ({
+    category: row.category,
+    cat: row.label,
+    rate: row.gstRate == null ? "Mixed" : `${row.gstRate}%`,
+    hsn: row.hsn ?? (row.missingHsn > 0 ? "Missing" : "Mixed"),
+    count: row.productCount,
+    missingHsn: row.missingHsn,
+    invalidHsn: row.invalidHsn,
+    consistent: row.consistent,
+  }));
   const eligibleBills = (recentBillsQ.data?.bills ?? []).filter((bill) => bill.billType === "gst_invoice");
 
   const requestEwayApproval = () => {
@@ -162,18 +176,11 @@ export default function TaxesSettingsPage() {
   };
   const hsnHasError = editorError.includes("HSN code");
   const rateHasError = editorError.includes("GST rate");
-  const saveHsnRows = (rows: HsnRow[]) => update({ hsnMappings: rows });
   function editHsn(row: HsnRow) {
-    setDraftHsn(row.hsn);
-    setDraftRate(row.rate.replace("%", ""));
+    setDraftHsn(/^\d+$/.test(row.hsn) ? row.hsn : "");
+    setDraftRate(/^\d/.test(row.rate) ? row.rate.replace("%", "") : tax.defaultRate);
     setEditorError("");
-    setHsnEditor({ mode: "single", row });
-  }
-  function bulkAssignHsn() {
-    setDraftHsn("");
-    setDraftRate(tax.defaultRate || "5");
-    setEditorError("");
-    setHsnEditor({ mode: "bulk" });
+    setHsnEditor({ row });
   }
   function saveHsnEditor() {
     if (!hsnEditor) return;
@@ -184,23 +191,31 @@ export default function TaxesSettingsPage() {
       return;
     }
     const normalizedRate = `${rateNumber}%`;
-    if (hsnEditor.mode === "single") {
-      const normalizedHsn = draftHsn.trim();
-      if (!/^\d{4}(?:\d{2})?(?:\d{2})?$/.test(normalizedHsn)) {
-        setEditorError("Enter a valid 4, 6 or 8 digit HSN code.");
-        window.requestAnimationFrame(() => hsnInputRef.current?.focus());
-        return;
-      }
-      saveHsnRows(hsnRows.map((row) => row.cat === hsnEditor.row.cat
-        ? { ...row, hsn: normalizedHsn, rate: normalizedRate }
-        : row));
-      toast({ title: "HSN mapping saved", description: `${hsnEditor.row.cat} now uses HSN ${normalizedHsn} at ${normalizedRate}.` });
-    } else {
-      saveHsnRows(hsnRows.map((row) => ({ ...row, rate: normalizedRate })));
-      toast({ title: "Bulk GST rate saved", description: `Applied ${normalizedRate} to ${hsnRows.length} category mappings.` });
+    const normalizedHsn = draftHsn.trim();
+    if (!/^\d{4}(?:\d{2})?(?:\d{2})?$/.test(normalizedHsn)) {
+      setEditorError("Enter a valid 4, 6 or 8 digit HSN code.");
+      window.requestAnimationFrame(() => hsnInputRef.current?.focus());
+      return;
     }
+    setPendingHsn({ row: hsnEditor.row, hsn: normalizedHsn, gstRate: rateNumber });
     setHsnEditor(null);
     setEditorError("");
+    setHsnPinOpen(true);
+  }
+  async function confirmHsnAssignment(ownerPin: string) {
+    if (!pendingHsn) return;
+    setSavingHsn(true);
+    try {
+      const result = await apiRequest<{ updatedProducts: number }>("/compliance/hsn-category", { method: "PUT", body: JSON.stringify({ category: pendingHsn.row.category, hsn: pendingHsn.hsn, gstRate: pendingHsn.gstRate, ownerPin }) });
+      setHsnPinOpen(false);
+      setPendingHsn(null);
+      await Promise.all([hsnSummaryQ.refetch(), readinessQ.refetch()]);
+      toast({ title: "HSN classification updated", description: `${result.updatedProducts} products now use HSN ${pendingHsn.hsn} at ${pendingHsn.gstRate}%.` });
+    } catch (error) {
+      setEditorError(error instanceof Error ? error.message : "Could not update the product category.");
+    } finally {
+      setSavingHsn(false);
+    }
   }
   async function exportGstReport() {
     try {
@@ -209,6 +224,15 @@ export default function TaxesSettingsPage() {
       toast({ title: "GST invoice register downloaded", description: "Line-level HSN and tax values are ready for accountant review." });
     } catch (error) {
       toast({ title: "Export unavailable", description: error instanceof Error ? error.message : "Could not export the GST register.", variant: "destructive" });
+    }
+  }
+  async function exportGstr1Working() {
+    try {
+      const csv = await apiRequest<string>("/compliance/gstr1-working?range=monthly&format=csv");
+      downloadText(`kiranaos-gstr1-working-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      toast({ title: "GSTR-1 working papers downloaded", description: "B2B, B2CS and HSN sections include place-of-supply tax treatment. Review with your accountant before filing." });
+    } catch (error) {
+      toast({ title: "Export unavailable", description: error instanceof Error ? error.message : "Could not export GSTR-1 working papers.", variant: "destructive" });
     }
   }
 
@@ -265,7 +289,7 @@ export default function TaxesSettingsPage() {
 
       {/* HSN / Product Mapping */}
       <Card>
-        <CardHead icon={<Boxes size={15} />} title="HSN / Product Mapping" sub="GST rate & HSN code by category" action={<button type="button" onClick={bulkAssignHsn} className="text-[12px] font-bold text-[#005dff] hover:underline">Bulk assign</button>} />
+        <CardHead icon={<Boxes size={15} />} title="HSN / Product Mapping" sub="Live classifications from the product catalogue" action={<button type="button" onClick={() => void hsnSummaryQ.refetch()} className="text-[12px] font-bold text-[#005dff] hover:underline">Refresh</button>} />
         <div className="px-5 pb-5">
           <div className="app-table-scroll overflow-x-auto rounded-[10px] border border-[#eef2f8]">
             <table className="min-w-[680px] w-full text-[12px]">
@@ -279,11 +303,13 @@ export default function TaxesSettingsPage() {
                 </tr>
               </thead>
               <tbody>
+                {hsnSummaryQ.isLoading ? <tr><td colSpan={5} className="px-3 py-8 text-center text-[#64748b]">Loading product classifications…</td></tr> : null}
+                {!hsnSummaryQ.isLoading && hsnRows.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-[#64748b]">Add products to build the HSN classification summary.</td></tr> : null}
                 {hsnRows.map((row, i) => (
                   <tr key={row.cat} className={i < hsnRows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
                     <td className="px-3 py-2.5 font-bold text-[#102347]">{row.cat}</td>
-                    <td className="px-3 py-2.5"><Badge tone="gray">{row.rate}</Badge></td>
-                    <td className="px-3 py-2.5 font-mono text-[#344668]">{row.hsn}</td>
+                    <td className="px-3 py-2.5"><Badge tone={row.rate === "Mixed" ? "amber" : "gray"}>{row.rate}</Badge></td>
+                    <td className="px-3 py-2.5 font-mono text-[#344668]"><span className="inline-flex items-center gap-2">{row.hsn}{!row.consistent ? <Badge tone="amber">Review</Badge> : <Badge tone="green">Valid</Badge>}</span></td>
                     <td className="px-3 py-2.5 text-[#64748b]">{row.count} products</td>
                     <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => editHsn(row)} aria-label={`Edit GST mapping for ${row.cat}`} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-bold text-[#005dff] hover:bg-[#eef4ff]"><Pencil size={12} aria-hidden="true" /> Edit</button></td>
                   </tr>
@@ -297,7 +323,7 @@ export default function TaxesSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* GST Reports */}
         <Card>
-          <CardHead icon={<BarChart3 size={15} />} title="GST Reports" sub="This month" action={<button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Export</button>} />
+          <CardHead icon={<BarChart3 size={15} />} title="GST Reports" sub="This month" action={<span className="flex items-center gap-3"><button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Register</button><button onClick={exportGstr1Working} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> GSTR-1 working</button></span>} />
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
             <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
             <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />
@@ -357,29 +383,25 @@ export default function TaxesSettingsPage() {
 
       <OwnerPinModal open={ewayPinOpen} title="Approve e-way transport record" description="This protected compliance record is linked to the selected GST invoice and retained for audit." confirmLabel="Prepare draft" loading={savingEway} error={ewayError} onCancel={() => { if (!savingEway) { setEwayPinOpen(false); setEwayOpen(true); } }} onConfirm={({ ownerPin }) => saveEwayDraft(ownerPin)} />
 
+      <OwnerPinModal open={hsnPinOpen} title="Approve HSN category update" description={pendingHsn ? `Apply HSN ${pendingHsn.hsn} and ${pendingHsn.gstRate}% GST to every active product in ${pendingHsn.row.cat}.` : "Approve the product tax classification update."} confirmLabel="Update products" loading={savingHsn} error={editorError || null} onCancel={() => { if (!savingHsn) { setHsnPinOpen(false); setPendingHsn(null); setEditorError(""); } }} onConfirm={({ ownerPin }) => confirmHsnAssignment(ownerPin)} />
+
       <Dialog open={Boolean(hsnEditor)} onOpenChange={(open) => { if (!open) { setHsnEditor(null); setEditorError(""); } }}>
         <DialogContent className="max-w-md">
           <form onSubmit={(event) => { event.preventDefault(); saveHsnEditor(); }}>
             <DialogHeader>
-              <DialogTitle>{hsnEditor?.mode === "single" ? `Edit ${hsnEditor.row.cat}` : "Bulk assign GST rate"}</DialogTitle>
-              <DialogDescription>
-                {hsnEditor?.mode === "single"
-                  ? "Update the tax classification used for products in this category."
-                  : `Apply one GST rate to all ${hsnRows.length} listed categories.`}
-              </DialogDescription>
+              <DialogTitle>{hsnEditor ? `Edit ${hsnEditor.row.cat}` : "Edit HSN classification"}</DialogTitle>
+              <DialogDescription>This updates every active product in the selected category and records an owner-approved audit event.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-5">
-              {hsnEditor?.mode === "single" && (
-                <div className="space-y-2">
-                  <Label htmlFor="hsn-code">HSN code</Label>
-                  <Input ref={hsnInputRef} id="hsn-code" value={draftHsn} onChange={(event) => { setDraftHsn(event.target.value.replace(/\D/g, "").slice(0, 8)); setEditorError(""); }} inputMode="numeric" autoComplete="off" aria-describedby={hsnHasError ? "hsn-editor-error" : "hsn-code-help"} aria-invalid={hsnHasError || undefined} autoFocus />
-                  <p id="hsn-code-help" className="text-xs text-muted-foreground">Use the 4, 6 or 8 digit code from your GST classification.</p>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="hsn-code">HSN code</Label>
+                <Input ref={hsnInputRef} id="hsn-code" value={draftHsn} onChange={(event) => { setDraftHsn(event.target.value.replace(/\D/g, "").slice(0, 8)); setEditorError(""); }} inputMode="numeric" autoComplete="off" aria-describedby={hsnHasError ? "hsn-editor-error" : "hsn-code-help"} aria-invalid={hsnHasError || undefined} autoFocus />
+                <p id="hsn-code-help" className="text-xs text-muted-foreground">Use the 4, 6 or 8 digit code confirmed by your accountant or GST classification.</p>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="gst-rate">GST rate</Label>
                 <div className="relative">
-                  <Input ref={rateInputRef} id="gst-rate" value={draftRate} onChange={(event) => { setDraftRate(event.target.value.replace(/[^\d.]/g, "").slice(0, 6)); setEditorError(""); }} inputMode="decimal" autoComplete="off" className="pr-10" aria-describedby={rateHasError ? "hsn-editor-error" : "gst-rate-help"} aria-invalid={rateHasError || undefined} autoFocus={hsnEditor?.mode === "bulk"} />
+                  <Input ref={rateInputRef} id="gst-rate" value={draftRate} onChange={(event) => { setDraftRate(event.target.value.replace(/[^\d.]/g, "").slice(0, 6)); setEditorError(""); }} inputMode="decimal" autoComplete="off" className="pr-10" aria-describedby={rateHasError ? "hsn-editor-error" : "gst-rate-help"} aria-invalid={rateHasError || undefined} />
                   <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-bold text-muted-foreground" aria-hidden="true">%</span>
                 </div>
                 <p id="gst-rate-help" className="text-xs text-muted-foreground">Enter a value from 0 to 100.</p>
@@ -388,7 +410,7 @@ export default function TaxesSettingsPage() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setHsnEditor(null)}>Cancel</Button>
-              <Button type="submit">{hsnEditor?.mode === "single" ? "Save mapping" : `Apply to ${hsnRows.length} categories`}</Button>
+              <Button type="submit">Review and approve</Button>
             </DialogFooter>
           </form>
         </DialogContent>

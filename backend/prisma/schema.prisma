@@ -218,6 +218,7 @@ model PricingDecisionEvent {
 model CustomerOrder {
   id              String   @id @default(cuid())
   shopId          String
+  locationId      String?
   customerName    String
   customerMobile  String
   customerAddress String?
@@ -225,15 +226,24 @@ model CustomerOrder {
   itemCount       Int      @default(0)
   estimatedTotal  Float    @default(0)
   note            String?
-  status          String   @default("new") // new | accepted | fulfilled | rejected
+  fulfillmentType String   @default("delivery") // delivery | pickup
+  promisedSlot    String?
+  status          String   @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
   billId          String?
   idempotencyKey  String?
+  acceptedAt      DateTime?
+  readyAt         DateTime?
+  fulfilledAt     DateTime?
+  rejectedAt      DateTime?
+  cancelledAt     DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  shop Shop @relation(fields: [shopId], references: [id])
+  shop     Shop           @relation(fields: [shopId], references: [id])
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@unique([shopId, idempotencyKey])
+  @@index([shopId, locationId, status, createdAt])
   @@index([shopId, status, createdAt])
 }
 
@@ -630,8 +640,9 @@ model StoreLocation {
   retailPaymentIntents RetailPaymentIntent[]
   purchaseOrders    PurchaseOrder[]
   purchaseReceipts  PurchaseReceipt[]
-    userAccess        UserLocationAccess[]
-    pricingRules      PricingRule[]
+  customerOrders    CustomerOrder[]
+  userAccess        UserLocationAccess[]
+  pricingRules      PricingRule[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])

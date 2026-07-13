@@ -3,13 +3,16 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireShop } from "../../middleware/permissions.js";
 import * as ctrl from "./orders.controller.js";
+import { requireLocationAccess } from "../stores/location-access.service.js";
+import { validate, validateQuery } from "../../middleware/validate.js";
+import { listCustomerOrdersSchema, updateCustomerOrderSchema } from "./orders.schema.js";
 
 // Owner-facing "Orders Received" inbox for customer QR self-orders. Shop-scoped and auth-gated
 // (the submit side is the only public route). Any shop member can view/triage incoming orders.
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
 
-router.get("/", ctrl.list);
-router.patch("/:id", ctrl.updateStatus);
+router.get("/", requireLocationAccess("view"), validateQuery(listCustomerOrdersSchema), ctrl.list);
+router.patch("/:id", requireLocationAccess("sell"), validate(updateCustomerOrderSchema), ctrl.updateStatus);
 
 export default router;

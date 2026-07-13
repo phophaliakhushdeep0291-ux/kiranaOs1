@@ -10,7 +10,8 @@ import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { DEFAULT_PRINTER_CONFIG, PRINTER_CONNECTION_LABELS, type PrinterConfig, type PrinterConnection } from "@/features/settings/printer-config";
-import { buildReceiptHtml, openReceiptWindow, type ReceiptPaperSize, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
+import { buildReceiptHtml, openConfiguredReceiptWindow, type ReceiptPaperSize, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
+import { checkHardwareBridge, getHardwareBridgeToken, openCashDrawerViaHardwareBridge, readScaleViaHardwareBridge, setHardwareBridgeToken, type HardwareBridgeHealth } from "@/features/hardware/local-hardware-bridge";
 
 function sampleSnapshot(shop: ReturnType<typeof useGetShop>["data"], cfg: PrinterConfig): ReceiptSnapshot {
   return {
@@ -72,6 +73,9 @@ export default function PrinterSettingsPage() {
   const [scanResult, setScanResult] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [jobs, setJobs] = useState<PrintJob[]>([]);
+  const [bridgeToken, setBridgeToken] = useState(() => getHardwareBridgeToken());
+  const [bridgeHealth, setBridgeHealth] = useState<HardwareBridgeHealth | null>(null);
+  const [scaleReading, setScaleReading] = useState("");
   useEffect(() => { const t = setTimeout(() => setPreviewCfg(cfg), 300); return () => clearTimeout(t); }, [cfg]);
   const previewHtml = useMemo(() => buildReceiptHtml(sampleSnapshot(shop.data, previewCfg), { paperSize: previewCfg.paperSize, copies: 1 }), [shop.data, previewCfg]);
   const hardwareCapabilities = useMemo(() => {
@@ -81,15 +85,16 @@ export default function PrinterSettingsPage() {
       { label: "Bluetooth device discovery", detail: "Supported browsers and secure connection", ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
       { label: "USB hardware access", detail: "Barcode/ESC-POS bridge capable browser", ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
       { label: "Serial weighing scale", detail: "Web Serial capable browser; device protocol still required", ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
+      { label: "Local hardware bridge", detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer and scale adapter", ready: Boolean(bridgeHealth?.ok), icon: Cable },
     ];
-  }, []);
+  }, [bridgeHealth]);
 
   function addJob(title: string, status: PrintJobStatus) {
     setJobs((current) => [{ id: `${Date.now()}-${Math.random()}`, title, status, time: nowTime() }, ...current].slice(0, 8));
   }
 
   function testPrint() {
-    const ok = openReceiptWindow(sampleSnapshot(shop.data, cfg), { paperSize: cfg.paperSize, copies: cfg.copies, autoPrint: true });
+    const ok = openConfiguredReceiptWindow(sampleSnapshot(shop.data, cfg), { paperSize: cfg.paperSize, copies: cfg.copies, autoPrint: true });
     addJob("Sample receipt", ok ? "printed" : "failed");
     if (!ok) toast({ title: "Allow pop-ups", description: "Enable pop-ups to print the sample.", variant: "destructive" });
   }
@@ -123,6 +128,19 @@ export default function PrinterSettingsPage() {
       toast({ title: "USB printer note", description: "Use Browser printing after the printer is installed." });
       return;
     }
+    if (cfg.connection === "bridge") {
+      try {
+        setHardwareBridgeToken(bridgeToken);
+        const health = await checkHardwareBridge(cfg.bridgeUrl);
+        setBridgeHealth(health);
+        setScanResult(`Connected to ${health.deviceName || "local hardware bridge"}${health.version ? ` · v${health.version}` : ""}.`);
+        toast({ title: "Hardware bridge ready", description: "Direct hardware capabilities were verified on this device." });
+      } catch (error) {
+        setBridgeHealth(null);
+        setScanResult(error instanceof Error ? error.message : "Hardware bridge could not be reached.");
+      }
+      return;
+    }
     setScanResult("Network printers cannot be scanned directly from the browser. Enter IP:port, for example 192.168.1.50:9100.");
     toast({ title: "Network printer", description: "Enter IP:port, then connect to validate the format." });
   }
@@ -133,6 +151,11 @@ export default function PrinterSettingsPage() {
       if (cfg.connection === "network" && !isValidNetworkAddress(cfg.networkAddress)) {
         toast({ title: "Network address needed", description: "Use format like 192.168.1.50:9100.", variant: "destructive" });
         return;
+      }
+      if (cfg.connection === "bridge") {
+        setHardwareBridgeToken(bridgeToken);
+        const health = await checkHardwareBridge(cfg.bridgeUrl);
+        setBridgeHealth(health);
       }
       await patch({ printer: cfg }, { immediate: true });
       setScanResult(`${PRINTER_CONNECTION_LABELS[cfg.connection]} saved as ${cfg.deviceName || "default printer"}.`);
@@ -145,6 +168,21 @@ export default function PrinterSettingsPage() {
   async function setAsDefault() {
     await patch({ printer: { ...cfg, deviceName: cfg.deviceName.trim() || DEFAULT_PRINTER_CONFIG.deviceName } }, { immediate: true });
     toast({ title: "Default printer saved", description: `${cfg.deviceName || DEFAULT_PRINTER_CONFIG.deviceName} is now the billing printer.` });
+  }
+
+  async function testCashDrawer() {
+    try {
+      await openCashDrawerViaHardwareBridge(cfg.bridgeUrl);
+      toast({ title: "Cash drawer opened", description: "The local bridge confirmed the drawer pulse." });
+    } catch (error) { toast({ title: "Drawer test failed", description: error instanceof Error ? error.message : "Check the bridge and printer cable.", variant: "destructive" }); }
+  }
+
+  async function readScale() {
+    try {
+      const reading = await readScaleViaHardwareBridge(cfg.bridgeUrl);
+      setScaleReading(`${reading.weight} ${reading.unit}`);
+      toast({ title: "Scale reading received", description: `${reading.weight} ${reading.unit}` });
+    } catch (error) { toast({ title: "Scale test failed", description: error instanceof Error ? error.message : "Check the bridge and scale protocol.", variant: "destructive" }); }
   }
 
   function downloadReceiptHtml() {
@@ -161,7 +199,7 @@ export default function PrinterSettingsPage() {
     addJob("Sample receipt downloaded", "saved");
     toast({ title: "Receipt downloaded", description: "Open it and choose Print / Save PDF." });
   }
-  const connectionStatus = cfg.connection === "browser" ? "ready" : cfg.networkAddress || cfg.model ? "configured" : "not_set";
+  const connectionStatus = cfg.connection === "browser" || (cfg.connection === "bridge" && bridgeHealth?.ok) ? "ready" : cfg.networkAddress || cfg.model || cfg.bridgeUrl ? "configured" : "not_set";
 
   return (
     <SettingsShell>
@@ -196,6 +234,7 @@ export default function PrinterSettingsPage() {
                 </Fld>
               </div>
               {cfg.connection === "network" && <Fld label="Network address (IP:port)"><Input className="h-10" placeholder="192.168.1.50:9100" value={cfg.networkAddress} onChange={(e) => setP("networkAddress", e.target.value)} /></Fld>}
+              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="Per-device pairing token" hint="Stored only in this browser, never synced to the cloud."><Input type="password" className="h-10" value={bridgeToken} onChange={(event) => setBridgeToken(event.target.value)} placeholder="Pairing token from the bridge" /></Fld>{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant="outline" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
               <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
@@ -215,7 +254,7 @@ export default function PrinterSettingsPage() {
               <RowToggle label="Print customer copy" pill={<Switch checked={cfg.customerCopy} onCheckedChange={(v) => setP("customerCopy", v)} />} />
               <RowToggle label="Print shop copy" pill={<Switch checked={cfg.shopCopy} onCheckedChange={(v) => setP("shopCopy", v)} />} />
               <RowToggle label="Auto cut paper" desc="Supported thermal printers" pill={<Switch checked={cfg.autoCut} onCheckedChange={(v) => setP("autoCut", v)} />} />
-              <RowToggle label="Cash drawer pulse" desc="Requires an ESC/POS printer bridge; browser printing alone cannot trigger it" pill={<Badge tone="amber">Bridge required</Badge>} />
+              <RowToggle label="Cash drawer pulse" desc="Open the connected drawer after a direct bridge print" pill={cfg.connection === "bridge" ? <Switch checked={cfg.cashDrawer} onCheckedChange={(v) => setP("cashDrawer", v)} /> : <Badge tone="amber">Bridge required</Badge>} />
               <RowToggle label="Print logo" pill={<Switch checked={cfg.printLogo} onCheckedChange={(v) => setP("printLogo", v)} />} />
               <RowToggle label="Show dynamic UPI QR at checkout" desc="Uses the verified UPI ID saved in Store Profile" pill={<Switch checked={cfg.printQr} onCheckedChange={(v) => setP("printQr", v)} />} last />
             </div>
@@ -282,7 +321,7 @@ export default function PrinterSettingsPage() {
 
       <Card>
         <CardHead icon={<ShieldCheck size={15} />} title="Hardware compatibility check" sub="Capabilities detected on this device—not marketing claims" />
-        <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-5">
           {hardwareCapabilities.map((capability) => {
             const Icon = capability.icon;
             return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[#075fff] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : "Unavailable"}</Badge></div><p className="mt-3 text-[12px] font-black text-[#102347]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;

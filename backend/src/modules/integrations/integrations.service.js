@@ -125,21 +125,25 @@ async function postWebhookRequest({ rawUrl, headers, body, signal, maxResponseBy
 }
 
 export async function getOverview(shopId) {
-  const [activeKeys, activeWebhooks, recentDeliveries, developerAllowed, tallyAllowed] = await Promise.all([
+  const [activeKeys, activeWebhooks, recentDeliveries, developerAllowed, tallyAllowed, shopSettings] = await Promise.all([
     db.integrationApiKey.count({ where: { shopId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] } }),
     db.webhookEndpoint.count({ where: { shopId, enabled: true, deletedAt: null } }),
     db.webhookDelivery.findMany({ where: { shopId }, orderBy: { createdAt: "desc" }, take: 8, select: { id: true, eventType: true, status: true, httpStatus: true, durationMs: true, createdAt: true, lastAttemptAt: true } }),
     hasFeature(shopId, "api_webhook_later"),
     hasFeature(shopId, "tally_export"),
+    db.shop.findUnique({ where: { id: shopId }, select: { settingsJson: true } }),
   ]);
   const storage = getObjectStorageStatus();
   const whatsapp = getWhatsAppProviderStatus();
   const retailPayment = retailPaymentReadiness();
   const gstProvider = env.GST_PROVIDER === "gsp_http" ? gspHttpReadiness() : { configured: env.GST_PROVIDER === "sandbox", legalSubmission: false, providerName: env.GST_PROVIDER === "sandbox" ? "Sandbox" : null };
+  let printerConnection = "browser";
+  try { printerConnection = JSON.parse(shopSettings?.settingsJson || "{}")?.printer?.connection || "browser"; } catch { printerConnection = "browser"; }
   const providers = [
     { id: "razorpay", name: "Razorpay subscriptions", category: "Payments", status: env.RAZORPAY_ENABLED && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET && env.RAZORPAY_WEBHOOK_SECRET ? "ready" : "setup_required", detail: "Hosted subscription checkout and verified payment webhooks" },
     { id: "retail_payments", name: "Verified retail payments", category: "Payments", status: retailPayment.configured ? "ready" : "setup_required", detail: retailPayment.configured ? `Server-verified ${retailPayment.provider} intents; confirmation ${retailPayment.confirmationRequired ? "required" : "optional"}` : "Cash and operator-confirmed UPI work; provider verification is not configured" },
     { id: "gstn", name: "GSTN e-invoice provider", category: "Compliance", status: gstProvider.legalSubmission ? "ready" : gstProvider.configured ? "sandbox_only" : "setup_required", detail: gstProvider.legalSubmission ? `${gstProvider.providerName} legal IRN submission enabled` : "GST register export works; legal IRN submission remains disabled" },
+    { id: "hardware_bridge", name: "Thermal printer & counter hardware", category: "Hardware", status: printerConnection === "bridge" ? "available" : "adapter_required", detail: printerConnection === "bridge" ? "Loopback-only hardware bridge selected; readiness is verified on each counter device" : "Browser/system printing works; select the local bridge for direct cutter, drawer and scale commands" },
     { id: "whatsapp", name: "WhatsApp Business", category: "Messaging", status: whatsapp.implemented && whatsapp.configured ? "ready" : whatsapp.configured ? "adapter_required" : "setup_required", detail: whatsapp.implemented ? "Provider adapter configured" : "Reminder workflow exists; provider adapter is not yet certified" },
     { id: "storage", name: storage.provider === "local" ? "Local export storage" : `${storage.provider.toUpperCase()} object storage`, category: "Storage", status: storage.provider === "local" ? "development_only" : storage.bucketConfigured ? "ready" : "setup_required", detail: storage.provider === "local" ? "Use S3, R2, or MinIO before production" : "Encrypted export object storage" },
     { id: "tally", name: "TallyPrime XML", category: "Accounting", status: tallyAllowed ? "ready" : "upgrade_required", detail: tallyAllowed ? "Tenant-scoped voucher export with date filters" : "Available on the Pro plan" },
@@ -147,7 +151,7 @@ export async function getOverview(shopId) {
     { id: "webhooks", name: "Signed webhooks", category: "Developer", status: developerAllowed ? activeWebhooks > 0 ? "ready" : "available" : "upgrade_required", detail: developerAllowed ? `${activeWebhooks} active endpoint${activeWebhooks === 1 ? "" : "s"}; HMAC-SHA256 signatures and delivery logs` : "Signed webhooks require the Pro plan" },
   ];
   const ready = providers.filter((provider) => provider.status === "ready").length;
-  return { maturityScore: Math.round((ready / providers.length) * 100), activeKeys, activeWebhooks, providers, recentDeliveries, supportedEvents: ["bill.created", "payment.recorded", "customer.updated", "purchase_order.created", "purchase_order.received", "integration.test"] };
+  return { maturityScore: Math.round((ready / providers.length) * 100), activeKeys, activeWebhooks, providers, recentDeliveries, supportedEvents: ["bill.created", "payment.recorded", "customer.updated", "customer_order.created", "customer_order.updated", "purchase_order.created", "purchase_order.received", "integration.test"] };
 }
 
 export async function listApiKeys(shopId) {

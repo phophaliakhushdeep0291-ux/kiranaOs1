@@ -7,6 +7,13 @@ export const complianceExportQuery = z.object({
   format: z.enum(["json", "csv"]).default("json"),
 });
 
+export const hsnCategoryAssignmentSchema = z.object({
+  category: z.string().trim().max(120).nullable(),
+  hsn: z.string().trim().regex(/^\d{4}(?:\d{2})?(?:\d{2})?$/, "HSN must contain 4, 6 or 8 digits"),
+  gstRate: z.coerce.number().min(0).max(100),
+  ownerPin: z.string().regex(/^\d{4}$/).optional(),
+}).strict();
+
 const optionalTrimmed = z.string().trim().max(120).optional().or(z.literal(""));
 
 export const eWayBillSchema = z.object({

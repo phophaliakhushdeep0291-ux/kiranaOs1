@@ -4,6 +4,7 @@ import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { getDateRange } from "../../utils/dates.js";
 import { gspHttpReadiness, submitEInvoiceToGsp, submitEWayBillToGsp } from "./gsp-http.provider.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -26,6 +27,54 @@ export function validateGstin(value) {
 export function validateHsn(value) {
   const hsn = String(value || "").trim();
   return { valid: /^\d{4}(?:\d{2})?(?:\d{2})?$/.test(hsn), normalized: hsn };
+}
+
+export async function getHsnCategorySummary(shopId) {
+  const products = await db.product.findMany({
+    where: { shopId, deletedAt: null },
+    select: { category: true, hsn: true, gstRate: true },
+    orderBy: { category: "asc" },
+  });
+  const groups = new Map();
+  for (const product of products) {
+    const key = product.category?.trim() || "__uncategorised__";
+    const group = groups.get(key) ?? { category: product.category?.trim() || null, productCount: 0, hsnCodes: new Set(), gstRates: new Set(), missingHsn: 0, invalidHsn: 0 };
+    group.productCount += 1;
+    if (!product.hsn) group.missingHsn += 1;
+    else if (!validateHsn(product.hsn).valid) group.invalidHsn += 1;
+    else group.hsnCodes.add(product.hsn);
+    group.gstRates.add(Number(product.gstRate ?? 0));
+    groups.set(key, group);
+  }
+  return {
+    categories: [...groups.values()].map((group) => ({
+      category: group.category,
+      label: group.category || "Uncategorised",
+      productCount: group.productCount,
+      hsn: group.hsnCodes.size === 1 ? [...group.hsnCodes][0] : null,
+      gstRate: group.gstRates.size === 1 ? [...group.gstRates][0] : null,
+      missingHsn: group.missingHsn,
+      invalidHsn: group.invalidHsn,
+      consistent: group.hsnCodes.size <= 1 && group.gstRates.size <= 1 && group.missingHsn === 0 && group.invalidHsn === 0,
+    })),
+  };
+}
+
+export async function assignHsnToCategory(shopId, input, actor = {}, req = null) {
+  if (!validateHsn(input.hsn).valid) throw new AppError("HSN must contain 4, 6 or 8 digits", 400, "INVALID_HSN");
+  const where = { shopId, deletedAt: null, category: input.category };
+  const result = await db.product.updateMany({ where, data: { hsn: input.hsn, gstRate: Number(input.gstRate) } });
+  if (result.count === 0) throw new AppError("No active products were found in that category", 404, "PRODUCT_CATEGORY_EMPTY");
+  await createAuditLog({
+    shopId,
+    userId: actor.userId,
+    action: "HSN_CATEGORY_ASSIGNED",
+    entityType: "ProductCategory",
+    entityId: input.category || "uncategorised",
+    metadata: { category: input.category, hsn: input.hsn, gstRate: Number(input.gstRate), productCount: result.count },
+    req,
+  });
+  return { updatedProducts: result.count, category: input.category, hsn: input.hsn, gstRate: Number(input.gstRate) };
 }
 
 export async function getReadiness(shopId) {
@@ -70,18 +119,74 @@ function taxableForLine(line, gstMode) {
   return gstMode === "exclusive" ? total : total / (1 + rate / 100);
 }
 
+export function calculateLineTaxBreakdown(line, gstMode, sellerStateCode = "", buyerStateCode = "") {
+  const taxableValue = taxableForLine(line, gstMode);
+  const rate = Number(line.gstRate) || 0;
+  const tax = gstMode === "exclusive"
+    ? taxableValue * rate / 100
+    : Math.max(0, Number(line.lineTotal) - taxableValue);
+  const normalizedBuyerState = String(buyerStateCode || "").padStart(2, "0");
+  const placeOfSupply = normalizedBuyerState !== "00" ? normalizedBuyerState : sellerStateCode;
+  const interstate = Boolean(placeOfSupply && sellerStateCode && placeOfSupply !== sellerStateCode);
+  return {
+    taxableValue: Number(taxableValue.toFixed(2)),
+    tax: Number(tax.toFixed(2)),
+    placeOfSupply,
+    supplyType: interstate ? "interstate" : "intrastate",
+    cgst: interstate ? 0 : Number((tax / 2).toFixed(2)),
+    sgst: interstate ? 0 : Number((tax / 2).toFixed(2)),
+    igst: interstate ? Number(tax.toFixed(2)) : 0,
+    lineTotal: Number((taxableValue + tax).toFixed(2)),
+  };
+}
+
+/**
+ * Reconcile invoice-level post-tax concessions across lines without changing the GST liability.
+ * The billing engine intentionally treats the counter's bill discount as a post-tax concession;
+ * exports must therefore show both gross value and the allocated concession so their net values
+ * reconcile exactly to Bill.grandTotal instead of silently overstating the invoice value.
+ */
+export function buildInvoiceTaxSnapshot(bill, sellerStateCode = "") {
+  const grossLines = bill.items.map((item) => ({
+    item,
+    tax: calculateLineTaxBreakdown(item, bill.gstMode, sellerStateCode, bill.buyerStateCode),
+  }));
+  const grossInvoiceValue = Number(grossLines.reduce((sum, row) => sum + row.tax.lineTotal, 0).toFixed(2));
+  let remainingDiscount = Math.min(Math.max(Number(bill.discount ?? 0), 0), grossInvoiceValue);
+  const lines = grossLines.map((row, index) => {
+    const allocatedDiscount = index === grossLines.length - 1
+      ? remainingDiscount
+      : Math.min(remainingDiscount, Number((Number(bill.discount ?? 0) * row.tax.lineTotal / Math.max(grossInvoiceValue, 0.01)).toFixed(2)));
+    remainingDiscount = Number((remainingDiscount - allocatedDiscount).toFixed(2));
+    return {
+      ...row,
+      grossLineTotal: row.tax.lineTotal,
+      discount: Number(allocatedDiscount.toFixed(2)),
+      netLineTotal: Number((row.tax.lineTotal - allocatedDiscount).toFixed(2)),
+    };
+  });
+  return {
+    lines,
+    taxableValue: Number(lines.reduce((sum, row) => sum + row.tax.taxableValue, 0).toFixed(2)),
+    tax: Number(lines.reduce((sum, row) => sum + row.tax.tax, 0).toFixed(2)),
+    discount: Number(lines.reduce((sum, row) => sum + row.discount, 0).toFixed(2)),
+    grossInvoiceValue,
+    netInvoiceValue: Number(lines.reduce((sum, row) => sum + row.netLineTotal, 0).toFixed(2)),
+  };
+}
+
 export async function getGstInvoiceRegister(shopId, query = {}) {
   const { start, end } = getDateRange(query.range === "custom" ? null : query.range, query.from, query.to, env.DAILY_CLOSING_TIMEZONE);
-  const bills = await db.bill.findMany({
+  const [shop, bills] = await Promise.all([db.shop.findUnique({ where: { id: shopId }, select: { gstNumber: true } }), db.bill.findMany({
     where: { shopId, ...(query.locationId && { locationId: query.locationId }), status: "active", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
     orderBy: { createdAt: "asc" },
     include: { items: { include: { product: { select: { hsn: true } } } }, payments: true },
-  });
+  })]);
+  const sellerStateCode = validateGstin(shop?.gstNumber).stateCode || "";
   const rows = [];
   for (const bill of bills) {
-    for (const item of bill.items) {
-      const taxableValue = taxableForLine(item, bill.gstMode);
-      const tax = Math.max(0, Number(item.lineTotal) - taxableValue);
+    const snapshot = buildInvoiceTaxSnapshot(bill, sellerStateCode);
+    for (const { item, tax, discount, grossLineTotal, netLineTotal } of snapshot.lines) {
       rows.push({
         invoiceNumber: bill.billNo,
         invoiceDate: bill.createdAt.toISOString().slice(0, 10),
@@ -89,16 +194,21 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
         customerName: bill.customerName,
         buyerGstin: bill.buyerGstin || "",
         buyerStateCode: bill.buyerStateCode || "",
+        sellerStateCode,
+        placeOfSupply: tax.placeOfSupply,
+        supplyType: tax.supplyType,
         hsn: item.product?.hsn || "",
         description: item.name,
         quantity: item.quantity,
         unit: item.enteredUnit,
         gstRate: item.gstRate,
-        taxableValue: Number(taxableValue.toFixed(2)),
-        cgst: Number((tax / 2).toFixed(2)),
-        sgst: Number((tax / 2).toFixed(2)),
-        igst: 0,
-        lineTotal: item.lineTotal,
+        taxableValue: tax.taxableValue,
+        cgst: tax.cgst,
+        sgst: tax.sgst,
+        igst: tax.igst,
+        grossLineTotal,
+        discount,
+        lineTotal: netLineTotal,
         paymentModes: [...new Set(bill.payments.map((payment) => payment.mode))].join("+"),
       });
     }
@@ -112,17 +222,54 @@ function csvCell(value) {
 }
 
 export function registerToCsv(register) {
-  const keys = ["invoiceNumber", "invoiceDate", "invoiceType", "customerName", "buyerGstin", "buyerStateCode", "hsn", "description", "quantity", "unit", "gstRate", "taxableValue", "cgst", "sgst", "igst", "lineTotal", "paymentModes"];
-  const labels = ["Invoice Number", "Invoice Date", "Invoice Type", "Customer", "Buyer GSTIN", "Buyer State Code", "HSN", "Description", "Quantity", "Unit", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Line Total", "Payment Modes"];
+  const keys = ["invoiceNumber", "invoiceDate", "invoiceType", "customerName", "buyerGstin", "sellerStateCode", "placeOfSupply", "supplyType", "hsn", "description", "quantity", "unit", "gstRate", "taxableValue", "cgst", "sgst", "igst", "grossLineTotal", "discount", "lineTotal", "paymentModes"];
+  const labels = ["Invoice Number", "Invoice Date", "Invoice Type", "Customer", "Buyer GSTIN", "Seller State", "Place of Supply", "Supply Type", "HSN", "Description", "Quantity", "Unit", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Gross Line Total", "Post-tax Discount", "Net Line Total", "Payment Modes"];
   return [labels.join(","), ...register.rows.map((row) => keys.map((key) => csvCell(row[key])).join(","))].join("\r\n");
 }
 
+export async function getGstr1WorkingPapers(shopId, query = {}) {
+  const register = await getGstInvoiceRegister(shopId, query);
+  const invoiceMap = new Map();
+  const b2csMap = new Map();
+  const hsnMap = new Map();
+  for (const row of register.rows) {
+    if (row.buyerGstin) {
+      const invoice = invoiceMap.get(row.invoiceNumber) ?? { invoiceNumber: row.invoiceNumber, invoiceDate: row.invoiceDate, buyerGstin: row.buyerGstin, customerName: row.customerName, placeOfSupply: row.placeOfSupply, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, invoiceValue: 0 };
+      for (const key of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "invoiceValue"]) invoice[key] = Number((invoice[key] + Number(key === "invoiceValue" ? row.lineTotal : key === "postTaxDiscount" ? row.discount : row[key])).toFixed(2));
+      invoiceMap.set(row.invoiceNumber, invoice);
+    } else {
+      const key = `${row.placeOfSupply}:${row.gstRate}`;
+      const summary = b2csMap.get(key) ?? { placeOfSupply: row.placeOfSupply, gstRate: row.gstRate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, invoiceValue: 0 };
+      for (const field of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "invoiceValue"]) summary[field] = Number((summary[field] + Number(field === "invoiceValue" ? row.lineTotal : field === "postTaxDiscount" ? row.discount : row[field])).toFixed(2));
+      b2csMap.set(key, summary);
+    }
+    const hsnKey = `${row.hsn}:${row.unit}:${row.gstRate}`;
+    const hsn = hsnMap.get(hsnKey) ?? { hsn: row.hsn, description: row.description, unit: row.unit, gstRate: row.gstRate, quantity: 0, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, totalValue: 0 };
+    hsn.quantity = Number((hsn.quantity + Number(row.quantity)).toFixed(3));
+    for (const field of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "totalValue"]) hsn[field] = Number((hsn[field] + Number(field === "totalValue" ? row.lineTotal : field === "postTaxDiscount" ? row.discount : row[field])).toFixed(2));
+    hsnMap.set(hsnKey, hsn);
+  }
+  return { schemaVersion: "kiranaos-gstr1-working-v1", filingWarning: "Accountant working papers only; review before filing on GSTN", from: register.from, to: register.to, b2b: [...invoiceMap.values()], b2cs: [...b2csMap.values()], hsn: [...hsnMap.values()] };
+}
+
+export function gstr1WorkingToCsv(working) {
+  const header = ["Section", "Invoice Number", "Invoice Date", "Buyer GSTIN", "Place of Supply", "HSN", "Description", "Unit", "GST Rate", "Quantity", "Taxable Value", "CGST", "SGST", "IGST", "Post-tax Discount", "Invoice/Total Value"];
+  const rows = [
+    ...working.b2b.map((row) => ["B2B", row.invoiceNumber, row.invoiceDate, row.buyerGstin, row.placeOfSupply, "", row.customerName, "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
+    ...working.b2cs.map((row) => ["B2CS", "", "", "", row.placeOfSupply, "", "", "", row.gstRate, "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
+    ...working.hsn.map((row) => ["HSN", "", "", "", "", row.hsn, row.description, row.unit, row.gstRate, row.quantity, row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.totalValue]),
+  ];
+  return [header.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\r\n");
+}
+
 function canonicalPayload(bill, shop) {
+  const sellerStateCode = validateGstin(shop.gstNumber).stateCode || "";
+  const snapshot = buildInvoiceTaxSnapshot(bill, sellerStateCode);
   return {
     schemaVersion: "kiranaos-gst-sandbox-v1",
     seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
-    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: bill.subtotal, tax: bill.gst, total: bill.grandTotal },
-    items: bill.items.map((item) => ({ name: item.name, hsn: item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, total: item.lineTotal })),
+    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
+    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
   };
 }
 
@@ -209,12 +356,14 @@ export async function submitEInvoice(shopId, billId) {
 }
 
 function canonicalEWayPayload(bill, shop, transport) {
+  const sellerStateCode = validateGstin(shop.gstNumber).stateCode || "";
+  const snapshot = buildInvoiceTaxSnapshot(bill, sellerStateCode);
   return {
     schemaVersion: "kiranaos-eway-provider-v1",
     supplyType: "outward",
     seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
     buyer: { name: bill.customerName, gstin: bill.buyerGstin, stateCode: bill.buyerStateCode, address: bill.buyerAddress },
-    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, taxableValue: bill.subtotal, tax: bill.gst, total: bill.grandTotal },
+    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
     transport: {
       mode: transport.transportMode,
       transporterId: transport.transporterId || null,
@@ -226,7 +375,7 @@ function canonicalEWayPayload(bill, shop, transport) {
       documentDate: transport.transportDocumentDate || null,
       deliveryAddress: transport.deliveryAddress,
     },
-    items: bill.items.map((item) => ({ name: item.name, hsn: item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, total: item.lineTotal })),
+    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
   };
 }
 

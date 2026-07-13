@@ -11,6 +11,7 @@ export interface CustomerOrderItem {
 export interface CustomerOrder {
   id: string;
   shopId: string;
+  locationId: string | null;
   customerName: string;
   customerMobile: string;
   customerAddress: string | null;
@@ -18,8 +19,15 @@ export interface CustomerOrder {
   items: CustomerOrderItem[];
   itemCount: number;
   estimatedTotal: number;
-  status: "new" | "accepted" | "fulfilled" | "rejected";
+  fulfillmentType: "delivery" | "pickup";
+  promisedSlot: string | null;
+  status: "new" | "accepted" | "ready" | "fulfilled" | "rejected" | "cancelled";
   billId: string | null;
+  acceptedAt: string | null;
+  readyAt: string | null;
+  fulfilledAt: string | null;
+  rejectedAt: string | null;
+  cancelledAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

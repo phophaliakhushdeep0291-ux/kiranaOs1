@@ -20,8 +20,20 @@ export interface CustomerCatalogProduct {
 
 export interface CustomerCatalog {
   shop: { id: string; name: string; city: string | null };
+  location: CustomerStoreLocation;
+  locations: CustomerStoreLocation[];
   products: CustomerCatalogProduct[];
   cachedAt: string;
+}
+
+export interface CustomerStoreLocation {
+  id: string;
+  code: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  isPrimary: boolean;
 }
 
 /** Thrown when the shop is unknown or not accepting online orders (a definitive 404, not offline). */
@@ -66,13 +78,18 @@ const localStorageCatalogStore: CatalogStorage = {
 };
 
 /** Read the cached catalog snapshot (if any) for an instant first paint before revalidating. */
-export function readCachedCatalog(shopCode: string): CustomerCatalog | null {
-  return localStorageCatalogStore.read(shopCode);
+function scopedCatalogKey(shopCode: string, locationId?: string) {
+  return locationId ? `${shopCode}:location:${locationId}` : shopCode;
+}
+
+export function readCachedCatalog(shopCode: string, locationId?: string): CustomerCatalog | null {
+  return localStorageCatalogStore.read(scopedCatalogKey(shopCode, locationId));
 }
 
 /** Fetch the live customer-safe catalog from the public endpoint. */
-export async function fetchCustomerCatalog(shopCode: string): Promise<CustomerCatalog> {
-  const url = `${getApiBaseUrl()}/public/shops/${encodeURIComponent(shopCode)}/catalog`;
+export async function fetchCustomerCatalog(shopCode: string, locationId?: string): Promise<CustomerCatalog> {
+  const query = locationId ? `?locationId=${encodeURIComponent(locationId)}` : "";
+  const url = `${getApiBaseUrl()}/public/shops/${encodeURIComponent(shopCode)}/catalog${query}`;
   let res: Response;
   try {
     res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -93,6 +110,9 @@ export interface CustomerOrderDetails {
   customerMobile: string;
   customerAddress?: string;
   note?: string;
+  locationId: string;
+  fulfillmentType: "delivery" | "pickup";
+  promisedSlot?: string;
 }
 
 export interface SubmitOrderResult {
@@ -100,6 +120,9 @@ export interface SubmitOrderResult {
   itemCount: number;
   estimatedTotal: number;
   shopName: string;
+  locationId: string | null;
+  fulfillmentType: "delivery" | "pickup";
+  status: "new";
   duplicate?: boolean;
 }
 
@@ -139,8 +162,11 @@ export type OrderStage = "received" | "preparing" | "ready" | "declined";
 
 export interface CustomerOrderStatus {
   orderId: string;
-  status: "new" | "accepted" | "fulfilled" | "rejected";
+  status: "new" | "accepted" | "ready" | "fulfilled" | "rejected" | "cancelled";
   stage: OrderStage;
+  fulfillmentType: "delivery" | "pickup";
+  promisedSlot: string | null;
+  location: Pick<CustomerStoreLocation, "id" | "name" | "address" | "city" | "phone"> | null;
   itemCount: number;
   estimatedTotal: number;
   items: Array<{ name: string; qty: number; price: number; unit: string }>;
@@ -221,20 +247,21 @@ export interface LoadCatalogResult {
 export async function loadCustomerCatalog(
   shopCode: string,
   deps: { fetcher?: typeof fetchCustomerCatalog; storage?: CatalogStorage } = {},
+  locationId?: string,
 ): Promise<LoadCatalogResult> {
   const fetcher = deps.fetcher ?? fetchCustomerCatalog;
   const storage = deps.storage ?? localStorageCatalogStore;
 
   try {
-    const catalog = await fetcher(shopCode);
-    storage.write(shopCode, catalog);
+    const catalog = await fetcher(shopCode, locationId);
+    storage.write(scopedCatalogKey(shopCode, locationId), catalog);
     return { catalog, source: "network" };
   } catch (err) {
     if (err instanceof CatalogUnavailableError) {
-      storage.remove(shopCode);
+      storage.remove(scopedCatalogKey(shopCode, locationId));
       throw err;
     }
-    const cached = storage.read(shopCode);
+    const cached = storage.read(scopedCatalogKey(shopCode, locationId));
     if (cached) return { catalog: cached, source: "cache" };
     throw err;
   }

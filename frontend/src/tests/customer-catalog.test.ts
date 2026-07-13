@@ -8,8 +8,11 @@ import {
 } from "@/features/customer-order/catalog";
 
 function makeCatalog(name = "Ramesh Kirana"): CustomerCatalog {
+  const location = { id: "loc1", code: "MAIN", name: "Main Store", address: "Market road", city: "Pune", phone: null, isPrimary: true };
   return {
     shop: { id: "shop1", name, city: "Pune" },
+    location,
+    locations: [location],
     products: [{ id: "p1", name: "Salt", category: null, unit: "packet", price: 28, mrp: 30, imageUrl: null }],
     cachedAt: new Date().toISOString(),
   };
@@ -62,6 +65,16 @@ describe("loadCustomerCatalog", () => {
     await expect(loadCustomerCatalog("shop1", { fetcher, storage })).rejects.toBeInstanceOf(CatalogUnavailableError);
     expect(storage.read("shop1")).toBeNull(); // stale storefront must not linger
   });
+
+  it("keeps branch catalogs isolated in the public offline cache", async () => {
+    const storage = memoryStorage();
+    const branch = { ...makeCatalog("Branch Shop"), location: { ...makeCatalog().location, id: "loc2", code: "B2", name: "Branch Two", isPrimary: false } };
+    const fetcher = vi.fn().mockResolvedValue(branch);
+    await loadCustomerCatalog("shop1", { fetcher, storage }, "loc2");
+    expect(storage.read("shop1")).toBeNull();
+    expect(storage.read("shop1:location:loc2")?.location.id).toBe("loc2");
+    expect(fetcher).toHaveBeenCalledWith("shop1", "loc2");
+  });
 });
 
 describe("submitCustomerOrder", () => {
@@ -82,7 +95,7 @@ describe("submitCustomerOrder", () => {
 
     const result = await submitCustomerOrder(
       "shop1",
-      { customerName: "Ramesh", customerMobile: "9876543210", customerAddress: "Market road" },
+      { customerName: "Ramesh", customerMobile: "9876543210", customerAddress: "Market road", locationId: "loc1", fulfillmentType: "delivery", promisedSlot: "Today evening" },
       [{ productId: "p1", qty: 2 }],
       "customer-order:shop1:test-key",
     );
@@ -93,6 +106,8 @@ describe("submitCustomerOrder", () => {
     expect((options.headers as Record<string, string>)["Idempotency-Key"]).toBe("customer-order:shop1:test-key");
     expect(JSON.parse(String(options.body))).toMatchObject({
       customerName: "Ramesh",
+      locationId: "loc1",
+      fulfillmentType: "delivery",
       idempotencyKey: "customer-order:shop1:test-key",
       items: [{ productId: "p1", qty: 2 }],
     });

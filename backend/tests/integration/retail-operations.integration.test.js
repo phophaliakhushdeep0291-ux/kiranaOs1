@@ -200,6 +200,7 @@ if (ctx.skip) {
     test("reports GST readiness, exports an HSN invoice register, and blocks fake legal submission", async () => {
       const { tenant, auth } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "GST Buyer" });
+      await ctx.db.customer.update({ where: { id: customer.id }, data: { stateCode: "29", gstin: "29ABCDE1234F1Z5" } });
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Taxed Goods", hsn: "1905", gstRate: 5, defaultPricePerRateUnit: 105 });
       const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, { billType: "gst_invoice", customerId: customer.id, customerName: customer.name, quantity: 1, ratePerRateUnit: 105, gstRate: 5 }), { token: auth.accessToken }), 201);
 
@@ -220,6 +221,32 @@ if (ctx.skip) {
       assert.match(csv.text, /Invoice Number/);
       assert.match(csv.text, /1905/);
       assert.match(csv.text, new RegExp(bill.billNo));
+
+      const register = assertSuccess(await ctx.get("/api/compliance/gst-register?range=yearly&format=json", { token: auth.accessToken }));
+      const invoiceLine = register.rows.find((row) => row.invoiceNumber === bill.billNo);
+      assert.equal(invoiceLine.supplyType, "interstate");
+      assert.equal(invoiceLine.placeOfSupply, "29");
+      assert.equal(invoiceLine.igst, 5);
+      assert.equal(invoiceLine.cgst, 0);
+      assert.equal(invoiceLine.sgst, 0);
+
+      const missingHsnProduct = await createProduct(ctx.db, tenant.shop.id, { name: "Unclassified Snack", category: "snacks", hsn: null, gstRate: 0 });
+      const hsnBefore = assertSuccess(await ctx.get("/api/compliance/hsn-summary", { token: auth.accessToken }));
+      assert.equal(hsnBefore.categories.find((row) => row.category === "snacks").missingHsn, 1);
+      const assigned = assertSuccess(await ctx.request("PUT", "/api/compliance/hsn-category", {
+        token: auth.accessToken,
+        ownerPin: tenant.ownerPin,
+        body: { category: "snacks", hsn: "2106", gstRate: 12 },
+      }));
+      assert.equal(assigned.updatedProducts, 1);
+      const classified = await ctx.db.product.findUnique({ where: { id: missingHsnProduct.id } });
+      assert.equal(classified.hsn, "2106");
+      assert.equal(classified.gstRate, 12);
+
+      const gstr1 = await ctx.get("/api/compliance/gstr1-working?range=yearly&format=csv", { token: auth.accessToken });
+      assert.equal(gstr1.status, 200);
+      assert.match(gstr1.text, /B2B/);
+      assert.match(gstr1.text, /HSN/);
 
       const ewayDraft = assertSuccess(await ctx.post(`/api/compliance/e-way-bills/${bill.id}/draft`, {
         transportMode: "road",

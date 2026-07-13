@@ -110,6 +110,7 @@ export default function CustomerOrderPage() {
   const [submitAttempt, setSubmitAttempt] = useState<{ key: string; fingerprint: string } | null>(null);
   const [trackedOrderId, setTrackedOrderId] = useState<string | null>(null);
   const [showTracker, setShowTracker] = useState(false);
+  const [switchingLocation, setSwitchingLocation] = useState(false);
 
   useEffect(() => {
     const mine = readMyOrder(shopCode);
@@ -187,13 +188,8 @@ export default function CustomerOrderPage() {
   const totals = useMemo(() => {
     const count = cartItems.reduce((sum, item) => sum + item.qty, 0);
     const subtotal = cartItems.reduce((sum, item) => sum + item.lineTotal, 0);
-    const promoDiscount = subtotal >= 500 ? 20 : 0;
-    const deliveryCharge = subtotal <= 0 || fulfillment === "pickup" ? 0 : 30;
-    const taxable = Math.max(0, subtotal - promoDiscount + deliveryCharge);
-    const gst = Math.round(taxable * 5) / 100;
-    const grandTotal = taxable + gst;
-    return { count, subtotal, promoDiscount, deliveryCharge, gst, grandTotal };
-  }, [cartItems, fulfillment]);
+    return { count, subtotal, promoDiscount: 0, deliveryCharge: 0, gst: 0, grandTotal: subtotal };
+  }, [cartItems]);
 
   const orderQrUrls = useMemo(() => {
     if (submitItems.length === 0) return [];
@@ -216,7 +212,7 @@ export default function CustomerOrderPage() {
   const canPlace =
     form.name.trim().length >= 2 &&
     mobileOk &&
-    form.address.trim().length >= 5 &&
+    (fulfillment === "pickup" || form.address.trim().length >= 5) &&
     submitItems.length > 0;
   const submitFingerprint = useMemo(
     () =>
@@ -227,9 +223,10 @@ export default function CustomerOrderPage() {
         note: form.note.trim(),
         fulfillment,
         timeSlot,
+        locationId: state.kind === "ready" ? state.catalog.location.id : null,
         items: submitItems,
       }),
-    [form.address, form.mobile, form.name, form.note, fulfillment, submitItems, timeSlot],
+    [form.address, form.mobile, form.name, form.note, fulfillment, state, submitItems, timeSlot],
   );
 
   async function placeOrder() {
@@ -240,18 +237,17 @@ export default function CustomerOrderPage() {
       submitAttempt?.fingerprint === submitFingerprint ? submitAttempt.key : newOrderIdempotencyKey(shopCode);
     if (submitAttempt?.key !== idempotencyKey) setSubmitAttempt({ key: idempotencyKey, fingerprint: submitFingerprint });
     try {
-      const noteParts = [
-        form.note.trim(),
-        `Order mode: ${fulfillment === "delivery" ? "Delivery" : "Self pickup"}`,
-        `Preferred slot: ${timeSlot}`,
-      ].filter(Boolean);
+      if (state.kind !== "ready") throw new Error("Store catalog is not ready.");
       const result = await submitCustomerOrder(
         shopCode,
         {
           customerName: form.name.trim(),
           customerMobile: normalizeMobile(form.mobile),
           customerAddress: form.address.trim(),
-          note: noteParts.join(" | "),
+          note: form.note.trim(),
+          locationId: state.catalog.location.id,
+          fulfillmentType: fulfillment,
+          promisedSlot: timeSlot,
         },
         submitItems,
         idempotencyKey,
@@ -314,7 +310,23 @@ export default function CustomerOrderPage() {
   }
 
   const { catalog, source } = state;
-  const shopLocation = catalog.shop.city ? `${catalog.shop.city}, India` : "Local store";
+  const shopLocation = catalog.location.city || catalog.shop.city || "Local store";
+
+  async function changeStoreLocation(locationId: string) {
+    if (locationId === catalog.location.id || switchingLocation) return;
+    setSwitchingLocation(true);
+    setSubmitError(null);
+    try {
+      const result = await loadCustomerCatalog(shopCode, {}, locationId);
+      setQty({});
+      setCategory("all");
+      setState({ kind: "ready", catalog: result.catalog, source: result.source });
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Could not switch stores.");
+    } finally {
+      setSwitchingLocation(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-white text-[#071432] lg:bg-[#f4f8ff]">
@@ -324,7 +336,7 @@ export default function CustomerOrderPage() {
           shopLocation={shopLocation}
           trackedOrderId={trackedOrderId}
           activeView={activeView}
-          onView={setActiveView}
+          onView={(view) => view === "orders" && trackedOrderId ? setShowTracker(true) : setActiveView(view)}
         />
 
         <div className="min-w-0 flex-1 lg:pl-[264px] xl:pl-[280px]">
@@ -335,8 +347,10 @@ export default function CustomerOrderPage() {
             onSearch={setSearch}
             fulfillment={fulfillment}
             onFulfillment={setFulfillment}
+            switchingLocation={switchingLocation}
+            onLocationChange={(locationId) => void changeStoreLocation(locationId)}
           />
-          <CustomerMobileNav activeView={activeView} onView={setActiveView} />
+          <CustomerMobileNav activeView={activeView} onView={(view) => view === "orders" && trackedOrderId ? setShowTracker(true) : setActiveView(view)} />
 
           <main className={`mx-auto w-full max-w-[1500px] px-3 pb-32 pt-4 sm:px-6 lg:px-8 lg:pb-8 ${activeView === "shop" ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
             {activeView === "shop" ? (
@@ -345,9 +359,9 @@ export default function CustomerOrderPage() {
                   <CategoryRail categories={categories} active={category} onSelect={setCategory} />
 
                   <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                    <PromoCard tone="green" title="Fresh store stock" body="Products are packed from the live shop counter" />
-                    <PromoCard tone="blue" title="Express delivery in 60 mins" body="Fresh items from the store to your doorstep" />
-                    <PromoCard tone="orange" title="Pickup in 20 mins" body="Order online and pick up from store" />
+                    <PromoCard tone="green" title="Live store catalog" body="Only products currently available at this location are shown" />
+                    <PromoCard tone="blue" title="Store-confirmed order" body="The shop reviews availability before preparing your order" />
+                    <PromoCard tone="orange" title="Pickup or delivery" body="Choose how you want to receive the order at checkout" />
                   </div>
 
                   <ShopProductsSection
@@ -440,6 +454,8 @@ function StorefrontHeader({
   onSearch,
   fulfillment,
   onFulfillment,
+  switchingLocation,
+  onLocationChange,
 }: {
   catalog: CustomerCatalog;
   source: "network" | "cache";
@@ -447,6 +463,8 @@ function StorefrontHeader({
   onSearch: (value: string) => void;
   fulfillment: FulfillmentMode;
   onFulfillment: (value: FulfillmentMode) => void;
+  switchingLocation: boolean;
+  onLocationChange: (locationId: string) => void;
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[#e4ecf7] bg-white/95 backdrop-blur-xl">
@@ -463,14 +481,20 @@ function StorefrontHeader({
               <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-[#071432] sm:text-2xl">
                 {catalog.shop.name || "KiranaOS"}
               </h1>
-              <p className="truncate text-xs font-semibold text-[#66758f]">{catalog.shop.city || "Built for busy Indian stores"}</p>
+              {catalog.locations.length > 1 ? (
+                <select
+                  aria-label="Order from store"
+                  value={catalog.location.id}
+                  disabled={switchingLocation}
+                  onChange={(event) => onLocationChange(event.target.value)}
+                  className="block max-w-[190px] truncate bg-transparent text-xs font-bold text-[#66758f] outline-none"
+                >
+                  {catalog.locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.city ? ` · ${location.city}` : ""}</option>)}
+                </select>
+              ) : <p className="truncate text-xs font-semibold text-[#66758f]">{catalog.location.name}{catalog.location.city ? ` · ${catalog.location.city}` : ""}</p>}
             </div>
           </div>
         </div>
-        <button type="button" className="relative grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dfe8f5] bg-white text-[#0d1a3a] shadow-[0_8px_24px_rgba(20,40,90,0.04)]">
-          <Bell size={19} />
-          <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[#075fff] text-[10px] font-black text-white">7</span>
-        </button>
       </div>
 
       <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
@@ -485,10 +509,24 @@ function StorefrontHeader({
             <div className="flex items-center gap-2">
               <h1 className="truncate font-display text-xl font-black tracking-[-0.02em] text-[#071432]">{catalog.shop.name}</h1>
               <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f9ee] px-2 py-1 text-[11px] font-black text-[#0f9f4a]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> Open
+                <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> Accepting orders
               </span>
             </div>
-            <p className="mt-0.5 truncate text-xs font-semibold text-[#66758f]">{catalog.shop.city || "Local store"} - 4.8 (512)</p>
+            {catalog.locations.length > 1 ? (
+              <label className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-[#66758f]">
+                <span className="sr-only">Order from store</span>
+                <select
+                  aria-label="Order from store"
+                  value={catalog.location.id}
+                  disabled={switchingLocation}
+                  onChange={(event) => onLocationChange(event.target.value)}
+                  className="max-w-52 bg-transparent font-bold text-[#52617a] outline-none"
+                >
+                  {catalog.locations.map((location) => <option key={location.id} value={location.id}>{location.name}{location.city ? ` · ${location.city}` : ""}</option>)}
+                </select>
+                {switchingLocation ? <Loader2 size={12} className="animate-spin" /> : <ChevronDown size={12} />}
+              </label>
+            ) : <p className="mt-0.5 truncate text-xs font-semibold text-[#66758f]">{catalog.location.name}{catalog.location.city ? ` · ${catalog.location.city}` : ""}</p>}
           </div>
         </div>
 
@@ -531,10 +569,6 @@ function StorefrontHeader({
           <ChevronDown size={15} className="text-[#73819a]" />
         </div>
 
-        <button type="button" className="relative hidden h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dfe8f5] bg-white text-[#0d1a3a] shadow-[0_8px_24px_rgba(20,40,90,0.04)] lg:grid">
-          <Bell size={19} />
-          <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-[#075fff] text-[10px] font-black text-white">7</span>
-        </button>
         {source === "cache" && (
           <span className="hidden items-center gap-1 rounded-full bg-[#fff7ed] px-2 py-1 text-[10px] font-bold text-[#c2410c] sm:inline-flex">
             <WifiOff size={11} /> Offline
@@ -613,11 +647,6 @@ function ShopProductsSection({
         </div>
       )}
 
-      {filtered.length > 8 && (
-        <button type="button" className="mx-auto mt-5 flex items-center gap-2 rounded-xl border border-[#dbe6f5] bg-white px-6 py-3 text-sm font-black text-[#075fff]">
-          View More Products <ChevronRight size={16} />
-        </button>
-      )}
     </section>
   );
 }
@@ -625,13 +654,6 @@ function ShopProductsSection({
 const CUSTOMER_NAV: Array<{ view: CustomerStorefrontView; label: string; icon: typeof Home; badge?: string; sub?: string }> = [
   { view: "shop", label: "Shop Now", icon: Home },
   { view: "orders", label: "My Orders", icon: ShoppingBag },
-  { view: "lists", label: "My Lists", icon: Heart, badge: "3" },
-  { view: "offers", label: "Offers & Deals", icon: Gift },
-  { view: "wallet", label: "Wallet & Credits", icon: WalletCards, sub: "Rs 250.00" },
-  { view: "addresses", label: "Addresses", icon: MapPin },
-  { view: "payments", label: "Payments", icon: CreditCard },
-  { view: "settings", label: "Settings", icon: Settings },
-  { view: "support", label: "Help & Support", icon: Bell },
 ];
 
 function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefrontView; onView: (view: CustomerStorefrontView) => void }) {
@@ -705,17 +727,15 @@ function CustomerSidebar({
 
       <div className="mt-auto space-y-4 pt-8">
         <div className="rounded-2xl bg-white p-4 text-[#071432] shadow-[0_16px_50px_rgba(0,0,0,0.24)]">
-          <p className="text-sm font-black">Order online</p>
-          <p className="mt-1 font-display text-3xl font-black text-[#075fff]">20 min</p>
-          <p className="mt-2 text-xs font-semibold text-[#5f6e88]">Pickup or delivery from the live shop catalog.</p>
+          <p className="text-sm font-black">Order with confidence</p>
+          <p className="mt-2 text-xs font-semibold text-[#5f6e88]">Live branch catalog, server-verified prices, and order tracking.</p>
         </div>
         <div className="rounded-2xl border border-white/12 bg-white/8 p-4">
           <p className="text-sm font-black">{shopName}</p>
           <p className="mt-1 text-xs text-[#b5c4df]">{shopLocation}</p>
           <p className="mt-3 inline-flex items-center gap-1 text-xs font-black text-[#2be07e]">
-            <span className="h-2 w-2 rounded-full bg-[#2be07e]" /> Open
+            <span className="h-2 w-2 rounded-full bg-[#2be07e]" /> Accepting online orders
           </p>
-          <p className="mt-3 text-xs text-[#b5c4df]">Mon - Sun: 7:00 AM - 10:00 PM</p>
         </div>
         <p className="text-center text-[11px] text-[#8092b3]">Powered by KiranaOS</p>
       </div>
@@ -801,9 +821,6 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
             <span className="font-display text-lg font-black text-[#b9c6dc]">{product.name.charAt(0).toUpperCase()}</span>
           </div>
         )}
-        <button type="button" aria-label={`Save ${product.name}`} className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-white text-[#7b8aa5] shadow-sm sm:right-2 sm:top-2 sm:h-8 sm:w-8">
-          <Heart size={16} />
-        </button>
       </div>
       <div className="mt-2 min-h-[82px] sm:mt-3 sm:min-h-[86px]">
         <h3 className="line-clamp-2 text-[13px] font-black leading-snug text-[#0b1735] sm:text-sm">{product.name}</h3>
@@ -932,11 +949,6 @@ function OrderSummaryPanel({
         )}
       </div>
 
-      <div className="mt-4 flex gap-2">
-        <input placeholder="Apply Promo Code" className="min-w-0 flex-1 rounded-xl border border-[#dce6f4] px-3 py-2.5 text-sm font-semibold outline-none placeholder:text-[#8b98ad]" />
-        <button type="button" className="rounded-xl border border-[#dce6f4] px-4 text-sm font-black text-[#075fff]">Apply</button>
-      </div>
-
       <PriceBreakdown totals={totals} />
 
       <div className="mt-4 rounded-2xl border border-[#e3ebf7] bg-[#fbfdff] p-3">
@@ -1013,13 +1025,11 @@ function PriceBreakdown({ totals }: { totals: ReturnType<typeof useOrderTotalsSh
   return (
     <div className="mt-4 space-y-2 border-t border-[#edf2f8] pt-4 text-sm">
       <Row label="Subtotal" value={formatRs(totals.subtotal)} />
-      <Row label="Discount" value={`- ${formatRs(totals.promoDiscount)}`} valueClass="text-[#0f9f4a]" />
-      <Row label="Delivery Charge" value={formatRs(totals.deliveryCharge)} />
-      <Row label="GST (5%)" value={formatRs(totals.gst)} />
       <div className="mt-3 flex items-center justify-between border-t border-[#edf2f8] pt-3">
-        <span className="text-base font-black">Grand Total</span>
+        <span className="text-base font-black">Estimated item total</span>
         <span className="font-display text-2xl font-black text-[#075fff]">{formatRs(totals.grandTotal)}</span>
       </div>
+      <p className="text-[11px] font-semibold leading-4 text-[#71809a]">The store confirms taxes, delivery charges, discounts, and the final payable amount before billing.</p>
     </div>
   );
 }
@@ -1052,7 +1062,7 @@ function CustomerDetailsFields({
         <input value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile number" className={input} />
         {form.mobile && !mobileOk ? <p className="mt-1 text-[11px] font-bold text-[#e11d48]">Enter a valid 10-digit mobile number.</p> : null}
       </div>
-      <textarea value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={compact ? 2 : 3} placeholder="Delivery address / landmark" className={`${input} resize-none`} />
+      <textarea value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={compact ? 2 : 3} placeholder="Delivery address / landmark (not required for pickup)" className={`${input} resize-none`} />
       <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="Order notes (optional)" className={input} />
     </div>
   );
@@ -1254,7 +1264,18 @@ function ProductThumb({ product, size = "h-12 w-12" }: { product?: CustomerCatal
   );
 }
 
-function OrdersPortalPage({ products, onView }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void }) {
+function OrdersPortalPage({ onView }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void }) {
+  return (
+    <div className="mx-auto max-w-xl py-16 text-center">
+      <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#eaf2ff] text-[#075fff]"><ShoppingBag size={28} /></span>
+      <h1 className="mt-5 font-display text-2xl font-black text-[#071432]">No order to track yet</h1>
+      <p className="mt-2 text-sm font-semibold text-[#66758f]">Your latest order will appear here after you place it. Tracking is stored only on this device for privacy.</p>
+      <button type="button" onClick={() => onView("shop")} className="mt-6 rounded-xl bg-[#075fff] px-6 py-3 text-sm font-black text-white">Start an order</button>
+    </div>
+  );
+}
+
+function LegacyOrdersPortalPage({ products, onView }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void }) {
   const orderItems = products.slice(0, 4);
   const orders = [
     { id: "KOS12345678", date: "Today, 10:32 AM", total: 847.3, status: "Out for Delivery", method: "Delivery" },
@@ -1898,7 +1919,7 @@ function OrderTracker({
                   </div>
                   <div className={i === STAGE_STEPS.length - 1 ? "pb-0" : "pb-6"}>
                     <p className={`text-[14px] font-black ${active || done ? "text-[#102347]" : "text-[#9aa7bd]"}`}>{step.label}</p>
-                    <p className="mt-0.5 text-[12px] font-medium text-[#6b7a93]">{step.sub}</p>
+                    <p className="mt-0.5 text-[12px] font-medium text-[#6b7a93]">{step.key === "ready" && status?.fulfillmentType === "delivery" ? "Your order is ready for delivery handover" : step.sub}</p>
                     {active && (
                       <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#eaf2ff] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#075fff]">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#075fff]" /> Now
@@ -1924,6 +1945,11 @@ function OrderTracker({
                   <span className="shrink-0 font-semibold text-[#64748b]">{formatRs(it.qty * it.price)}</span>
                 </div>
               ))}
+            </div>
+            <div className="mt-3 grid gap-2 rounded-xl bg-[#f7faff] p-3 text-[12px] text-[#52617a] sm:grid-cols-2">
+              <p><span className="font-black text-[#102347]">Method:</span> {status.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"}</p>
+              {status.promisedSlot ? <p><span className="font-black text-[#102347]">Preferred:</span> {status.promisedSlot}</p> : null}
+              {status.location ? <p className="sm:col-span-2"><span className="font-black text-[#102347]">Store:</span> {status.location.name}{status.location.city ? ` · ${status.location.city}` : ""}</p> : null}
             </div>
             <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2 text-[14px] font-black text-[#0f1e3d]">
               <span>Estimated total</span><span>{formatRs(status.estimatedTotal)}</span>

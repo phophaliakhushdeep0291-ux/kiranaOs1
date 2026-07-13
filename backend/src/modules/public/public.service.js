@@ -1,6 +1,9 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { listProducts } from "../products/products.service.js";
+import { priceCatalogProducts } from "../pricing/pricing.service.js";
+import { resolveOperationalLocation } from "../stores/location-context.service.js";
+import { toBaseQty } from "../../utils/units.js";
 
 /**
  * Public, unauthenticated read of a shop's catalog for the QR customer self-order page.
@@ -29,13 +32,13 @@ export function toCustomerSafeProduct(p) {
     name: p.name,
     category: p.category ?? null,
     unit: p.displayUnit || p.rateUnit || p.unit || "piece",
-    price: Number(p.defaultPricePerRateUnit ?? 0),
+    price: Number(p.storefrontPrice ?? p.defaultPricePerRateUnit ?? 0),
     mrp: p.mrp != null ? Number(p.mrp) : null,
     imageUrl: p.imageUrl ?? null,
   };
 }
 
-export async function getPublicCatalog(shopId) {
+export async function getPublicCatalog(shopId, requestedLocationId = null) {
   const shop = await db.shop.findUnique({ where: { id: shopId } });
   // One 404 for both "no such shop" and "ordering disabled" so we never leak which shop ids
   // exist or whether a real shop has the feature turned off.
@@ -43,13 +46,24 @@ export async function getPublicCatalog(shopId) {
     throw new AppError("This shop is not accepting online orders.", 404);
   }
 
-  const products = await listProducts(shopId);
-  const safe = products
-    .filter((p) => p.status !== "inactive" && p.isActive !== false)
+  const location = await resolveOperationalLocation(shopId, requestedLocationId);
+  const [products, locations] = await Promise.all([
+    listProducts(shopId, { locationId: location.id }),
+    db.storeLocation.findMany({
+      where: { shopId, active: true },
+      orderBy: [{ isPrimary: "desc" }, { name: "asc" }],
+      select: { id: true, code: true, name: true, address: true, city: true, phone: true, isPrimary: true },
+    }),
+  ]);
+  const priced = await priceCatalogProducts(shopId, products, location.id);
+  const safe = priced
+    .filter((p) => p.status !== "inactive" && p.isActive !== false && Number(p.stockBaseQty ?? 0) > 0)
     .map(toCustomerSafeProduct);
 
   return {
     shop: { id: shop.id, name: shop.name, city: shop.city ?? null },
+    location: locations.find((row) => row.id === location.id),
+    locations,
     products: safe,
   };
 }
@@ -58,7 +72,7 @@ const MAX_ORDER_LINES = 100;
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 // Customer-facing stage for each internal status, so the tracker reads like a real online order.
-const ORDER_STAGE = { new: "received", accepted: "preparing", fulfilled: "ready", rejected: "declined" };
+const ORDER_STAGE = { new: "received", accepted: "preparing", ready: "ready", fulfilled: "ready", rejected: "declined", cancelled: "declined" };
 
 function parseOrderLines(json) {
   try {
@@ -83,13 +97,16 @@ export async function getPublicOrderStatus(shopId, orderId) {
   }
   const order = await db.customerOrder.findFirst({
     where: { id: String(orderId ?? ""), shopId },
-    select: { id: true, status: true, itemCount: true, estimatedTotal: true, itemsJson: true, createdAt: true, updatedAt: true },
+    select: { id: true, status: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
   return {
     orderId: order.id,
     status: order.status,
     stage: ORDER_STAGE[order.status] ?? order.status,
+    fulfillmentType: order.fulfillmentType,
+    promisedSlot: order.promisedSlot,
+    location: order.location,
     itemCount: order.itemCount,
     estimatedTotal: order.estimatedTotal,
     items: parseOrderLines(order.itemsJson),
@@ -111,6 +128,9 @@ function shapeOrderSubmitResponse(order, shopName, duplicate = false) {
     itemCount: order.itemCount,
     estimatedTotal: order.estimatedTotal,
     shopName,
+    locationId: order.locationId ?? null,
+    fulfillmentType: order.fulfillmentType ?? "delivery",
+    status: order.status ?? "new",
     duplicate,
   };
 }
@@ -130,7 +150,7 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   if (idempotencyKey) {
     const existing = await db.customerOrder.findFirst({
       where: { shopId, idempotencyKey },
-      select: { id: true, itemCount: true, estimatedTotal: true, createdAt: true },
+      select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, createdAt: true },
     });
     if (existing) return shapeOrderSubmitResponse(existing, shop.name, true);
   }
@@ -139,9 +159,15 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   const customerMobile = String(body.customerMobile ?? "").trim();
   const customerAddress = String(body.customerAddress ?? "").trim();
   const note = String(body.note ?? "").trim();
+  const fulfillmentType = body.fulfillmentType === "pickup" ? "pickup" : "delivery";
+  const promisedSlot = String(body.promisedSlot ?? "").trim().slice(0, 120) || null;
+  const location = await resolveOperationalLocation(shopId, body.locationId || null);
   if (customerName.length < 2) throw new AppError("Please enter your name.", 400);
   if (!/^[6-9]\d{9}$/.test(customerMobile.replace(/[\s-]/g, ""))) {
     throw new AppError("Please enter a valid 10-digit mobile number.", 400);
+  }
+  if (fulfillmentType === "delivery" && customerAddress.length < 5) {
+    throw new AppError("Please enter a delivery address.", 400);
   }
 
   const rawItems = Array.isArray(body.items) ? body.items : [];
@@ -149,14 +175,24 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   if (rawItems.length > MAX_ORDER_LINES) throw new AppError("Too many items in one order.", 400);
 
   // Authoritative catalog re-price: the customer only sends productId + qty.
-  const products = await listProducts(shopId);
+  const normalizedItems = new Map();
+  for (const item of rawItems) {
+    const productId = String(item.productId ?? "");
+    const qty = round2(item.qty ?? item.quantity ?? 0);
+    if (productId && qty > 0) normalizedItems.set(productId, round2((normalizedItems.get(productId) ?? 0) + qty));
+  }
+  const quantitiesByProductId = Object.fromEntries(normalizedItems);
+  const products = await priceCatalogProducts(shopId, await listProducts(shopId, { locationId: location.id }), location.id, quantitiesByProductId);
   const byId = new Map(products.map((p) => [p.id, p]));
   const lines = [];
-  for (const raw of rawItems) {
-    const product = byId.get(String(raw.productId ?? ""));
-    const qty = round2(raw.qty ?? raw.quantity ?? 0);
+  for (const [productId, qty] of normalizedItems) {
+    const product = byId.get(productId);
     if (!product || qty <= 0) continue;
-    if (product.status === "inactive" || product.isActive === false) continue;
+    if (product.status === "inactive" || product.isActive === false || Number(product.stockBaseQty ?? 0) <= 0) continue;
+    const requestedBaseQty = toBaseQty(qty, product.rateUnit || product.baseUnit, product.baseUnit);
+    if (requestedBaseQty > Number(product.stockBaseQty ?? 0) + 0.000001) {
+      throw new AppError(`${product.name} has only ${product.stockBaseQty} ${product.baseUnit} available at this store.`, 409, "ORDER_QUANTITY_UNAVAILABLE");
+    }
     const safe = toCustomerSafeProduct(product);
     lines.push({ productId: safe.id, name: safe.name, unit: safe.unit, price: safe.price, qty });
   }
@@ -169,17 +205,20 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
     const order = await db.customerOrder.create({
       data: {
         shopId,
+        locationId: location.id,
         customerName: customerName.slice(0, 120),
         customerMobile: customerMobile.replace(/[\s-]/g, "").slice(0, 15),
         customerAddress: customerAddress ? customerAddress.slice(0, 400) : null,
         note: note ? note.slice(0, 400) : null,
+        fulfillmentType,
+        promisedSlot,
         itemsJson: JSON.stringify(lines),
         itemCount,
         estimatedTotal,
         status: "new",
         idempotencyKey,
       },
-      select: { id: true, itemCount: true, estimatedTotal: true, createdAt: true },
+      select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, createdAt: true },
     });
 
     return shapeOrderSubmitResponse(order, shop.name);
@@ -187,7 +226,7 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
     if (idempotencyKey && error?.code === "P2002") {
       const existing = await db.customerOrder.findFirst({
         where: { shopId, idempotencyKey },
-        select: { id: true, itemCount: true, estimatedTotal: true, createdAt: true },
+        select: { id: true, locationId: true, fulfillmentType: true, status: true, itemCount: true, estimatedTotal: true, createdAt: true },
       });
       if (existing) return shapeOrderSubmitResponse(existing, shop.name, true);
     }

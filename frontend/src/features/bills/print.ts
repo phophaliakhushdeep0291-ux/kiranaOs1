@@ -1,5 +1,5 @@
 import type { Bill } from "@/types/api";
-import { buildReceiptHtml, openReceiptWindow, type ReceiptPaymentLine, type ReceiptShopInfo, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
+import { buildReceiptHtml, openConfiguredReceiptWindow, type ReceiptPaymentLine, type ReceiptShopInfo, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
 import { dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
 
@@ -140,5 +140,5 @@ export function buildBillPrintHtml(snapshot: PrintableBillSnapshot) {
 }
 
 export function openPrintableBill(snapshot: PrintableBillSnapshot) {
-  return openReceiptWindow(toReceiptSnapshot(snapshot), { autoPrint: true, printDelayMs: 300 });
+  return openConfiguredReceiptWindow(toReceiptSnapshot(snapshot), { autoPrint: true, printDelayMs: 300 });
 }
