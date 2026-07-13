@@ -1,6 +1,12 @@
 import { offlineDB } from "@/lib/offline/db";
 import { ownerPinRequiredActionSchema, productCreationSchema } from "@/lib/validation";
-import { createLocalId, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
+import {
+  createLocalId,
+  emitLocalDataChanged,
+  removeCachedListItem,
+  upsertCachedListItem,
+  writeInstantCache,
+} from "@/lib/offline/instant-cache";
 import { buildOutboxOperation, type EnqueueOutboxOperationInput } from "@/features/sync/outbox";
 import { normaliseProductInput } from "@/features/products/api";
 import { makeLocalEntity, parseOrThrow, touchLocalEntity } from "@/lib/offline/actions/utils";
@@ -16,6 +22,48 @@ const PRODUCT_WRITE_TRANSACTION_TABLES = [
   "local_audit_logs",
   "sync_outbox",
 ];
+
+const PRODUCT_IMPORT_TRANSACTION_TABLES = [
+  ...PRODUCT_WRITE_TRANSACTION_TABLES,
+  "settings",
+];
+
+export interface ProductImportOperation {
+  action: "create" | "update";
+  rowNumber: number;
+  input: ProductInput;
+  existingProductId?: string;
+}
+
+export interface ProductImportMetadata {
+  fingerprint: string;
+  fileName: string;
+  source: string;
+  totalRows: number;
+  skippedRows: number;
+  errorRows: number;
+}
+
+export interface ProductImportSession {
+  id: string;
+  fingerprint: string;
+  fileName: string;
+  source: string;
+  status: "completed";
+  startedAt: string;
+  completedAt: string;
+  totalRows: number;
+  createdRows: number;
+  updatedRows: number;
+  skippedRows: number;
+  errorRows: number;
+}
+
+export const LAST_PRODUCT_IMPORT_SETTING_KEY = "migration:products:last";
+
+export function productImportSessionSettingKey(fingerprint: string): string {
+  return `migration:products:${fingerprint}`;
+}
 
 function hasPriceBelowMinimum(product: Product | ProductInput): boolean {
   const min = Number(product.minPricePerRateUnit ?? product.minimumSellingPrice ?? 0);
@@ -187,6 +235,148 @@ export async function updateProductLocalFirst(id: string, data: ProductInput): P
   upsertCachedListItem<Product>(CACHE_KEY, product, 1000);
   upsertCachedListItem<Product>(INVENTORY_CACHE_KEY, product, 1000);
   return product;
+}
+
+/**
+ * Commit a reviewed product migration as one IndexedDB transaction. Either every accepted
+ * row, audit entry, and sync operation is stored, or none is. Re-selecting the same file is
+ * safe because the dry-run reconciler will match the products created by the first import.
+ */
+export async function importProductsLocalFirst(
+  operations: ProductImportOperation[],
+  metadata: ProductImportMetadata,
+): Promise<ProductImportSession> {
+  const startedAt = new Date().toISOString();
+  const existingProducts = await offlineDB.getAll<Product>("products");
+  const existingById = new Map(existingProducts.map((product) => [product.id, product]));
+  const seenUpdateIds = new Set<string>();
+  const products: Product[] = [];
+  const auditLogs: AuditLogRow[] = [];
+  const productOutboxInputs: EnqueueOutboxOperationInput[] = [];
+
+  for (const operation of operations) {
+    const validated = parseOrThrow(productCreationSchema, operation.input) as unknown as ProductInput;
+    const existing = operation.action === "update" && operation.existingProductId
+      ? existingById.get(operation.existingProductId)
+      : undefined;
+
+    if (operation.action === "update") {
+      if (!operation.existingProductId || !existing) {
+        throw new Error(`Import row ${operation.rowNumber} no longer matches an existing product. Run the dry-run again.`);
+      }
+      if (seenUpdateIds.has(operation.existingProductId)) {
+        throw new Error(`More than one import row targets ${existing.name}. Resolve the duplicate rows before importing.`);
+      }
+      seenUpdateIds.add(operation.existingProductId);
+    }
+
+    const product = operation.action === "create"
+      ? makeLocalEntity(toProduct(validated), "product", "pending_sync")
+      : touchLocalEntity(toProduct(validated, existing!.id, existing), "pending_sync");
+    products.push(product);
+
+    const auditLog = buildAuditLogRow({
+      action: operation.action === "create" ? "product_import_created" : "product_import_updated",
+      entityType: "product",
+      entityId: product.id,
+      entityLabel: product.name,
+      oldValue: existing ?? null,
+      newValue: product,
+      reason: `Product migration from ${metadata.fileName}, row ${operation.rowNumber}`,
+      ownerPinProvided: Boolean(validated.ownerPin),
+      summary: `${operation.action === "create" ? "Created" : "Updated"} ${product.name} from product migration`,
+    });
+    auditLogs.push(auditLog);
+
+    const priceAudit = buildPriceBelowMinimumAudit(product, existing, validated.ownerPin, validated.ownerPinReason);
+    if (priceAudit) auditLogs.push(priceAudit);
+
+    productOutboxInputs.push(operation.action === "create"
+      ? {
+          entity_type: "product",
+          entity_id: product.id,
+          operation_type: "CREATE_PRODUCT",
+          payload: {
+            localProductId: product.id,
+            product: validated,
+            importFingerprint: metadata.fingerprint,
+            importRowNumber: operation.rowNumber,
+            ownerPin: validated.ownerPin,
+            reason: validated.ownerPinReason,
+            ownerPinProvided: Boolean(validated.ownerPin),
+          },
+        }
+      : {
+          entity_type: "product",
+          entity_id: product.id,
+          operation_type: "UPDATE_PRODUCT",
+          payload: {
+            productId: product.id,
+            product: validated,
+            importFingerprint: metadata.fingerprint,
+            importRowNumber: operation.rowNumber,
+            ownerPin: validated.ownerPin,
+            reason: validated.ownerPinReason,
+            ownerPinProvided: Boolean(validated.ownerPin),
+          },
+        });
+  }
+
+  const completedAt = new Date().toISOString();
+  const session: ProductImportSession = {
+    id: `product-import-${metadata.fingerprint}`,
+    fingerprint: metadata.fingerprint,
+    fileName: metadata.fileName,
+    source: metadata.source,
+    status: "completed",
+    startedAt,
+    completedAt,
+    totalRows: metadata.totalRows,
+    createdRows: operations.filter((operation) => operation.action === "create").length,
+    updatedRows: operations.filter((operation) => operation.action === "update").length,
+    skippedRows: metadata.skippedRows,
+    errorRows: metadata.errorRows,
+  };
+
+  const summaryAudit = buildAuditLogRow({
+    action: "product_import_completed",
+    entityType: "product_import",
+    entityId: session.id,
+    entityLabel: metadata.fileName,
+    newValue: session,
+    reason: `Imported ${session.createdRows} new and ${session.updatedRows} existing products`,
+    summary: `Product migration completed from ${metadata.fileName}`,
+  });
+  auditLogs.push(summaryAudit);
+
+  const outboxRows = [
+    ...productOutboxInputs.map((input) => buildOutboxOperation(input)),
+    ...auditLogs.map((auditLog) => buildOutboxOperation(buildAuditLogOutboxInput(auditLog))),
+  ];
+
+  await offlineDB.transaction(PRODUCT_IMPORT_TRANSACTION_TABLES, async (tx) => {
+    await tx.putMany("products", products);
+    await tx.putMany("local_audit_logs", auditLogs);
+    await tx.putMany("sync_outbox", outboxRows);
+    await tx.setSetting(productImportSessionSettingKey(metadata.fingerprint), session);
+    await tx.setSetting(LAST_PRODUCT_IMPORT_SETTING_KEY, session);
+  });
+
+  const refreshedProducts = await offlineDB.getAll<Product>("products");
+  writeInstantCache(CACHE_KEY, refreshedProducts, 3650);
+  writeInstantCache(INVENTORY_CACHE_KEY, refreshedProducts, 3650);
+  emitLocalDataChanged({
+    entityType: "product",
+    action: "bulk_imported",
+    count: products.length,
+    importFingerprint: metadata.fingerprint,
+  });
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated", {
+      detail: { action: "bulk_enqueued", count: outboxRows.length },
+    }));
+  }
+  return session;
 }
 
 export async function deleteProductLocalFirst(id: string, ownerPin: string, reason?: string): Promise<Product> {
