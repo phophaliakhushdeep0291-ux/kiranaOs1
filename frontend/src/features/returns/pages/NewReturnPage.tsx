@@ -12,17 +12,13 @@ import {
   CreditCard,
   Eye,
   Filter,
-  Landmark,
   PackageCheck,
   Plus,
-  ReceiptText,
   RotateCcw,
   Search,
   ShoppingBag,
-  Smartphone,
   Trash2,
   Undo2,
-  Wallet,
 } from "lucide-react";
 import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -71,12 +67,12 @@ interface ReturnRow {
 
 const PANEL = "overflow-hidden rounded-[9px] border border-[#e2e9f3] bg-white shadow-[0_5px_18px_rgba(31,60,110,0.045)]";
 const MODE_META = {
-  cash: { label: "Cash", color: "#24b75a", icon: Wallet },
-  upi: { label: "UPI", color: "#1768f5", icon: Smartphone },
-  bank: { label: "Bank", color: "#6366f1", icon: Landmark },
-  udhar: { label: "Credit (Udhar)", color: "#7c4df1", icon: CreditCard },
-  gift_card: { label: "Store Credit", color: "#0f9f78", icon: CreditCard },
-  credit_note: { label: "Credit Note", color: "#f5a30a", icon: ReceiptText },
+  cash: { label: "Cash", color: "#24b75a" },
+  upi: { label: "UPI", color: "#1768f5" },
+  bank: { label: "Bank", color: "#6366f1" },
+  udhar: { label: "Credit (Udhar)", color: "#7c4df1" },
+  gift_card: { label: "Store Credit", color: "#0f9f78" },
+  credit_note: { label: "Credit Note", color: "#f5a30a" },
 } as const;
 
 function sellPrice(product: Product & RecordLike): number {

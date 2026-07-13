@@ -50,6 +50,9 @@ export default defineConfig({
   },
   root: projectRoot,
   build: {
+    // KiranaOS is an installed/evergreen-browser POS; avoid shipping legacy
+    // transforms that add weight without helping the supported runtime.
+    target: "es2022",
     outDir: path.resolve(projectRoot, "dist/public"),
     emptyOutDir: true,
     chunkSizeWarningLimit: 900,
