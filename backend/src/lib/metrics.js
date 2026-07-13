@@ -22,6 +22,7 @@ const KNOWN_METRICS = [
   "integration_api_auth_total",
   "webhook_deliveries_total",
   "webhook_delivery_duration_ms",
+  "webhook_queue_dispatch_total",
   "queue_jobs_waiting",
   "queue_jobs_failed",
   "db_ready_status",
@@ -139,6 +140,10 @@ export function recordIntegrationApiAuth(status) {
 export function recordWebhookDelivery({ eventType, status, durationMs }) {
   incrementMetric("webhook_deliveries_total", { eventType, status });
   observeMetric("webhook_delivery_duration_ms", { eventType, status }, durationMs || 0);
+}
+
+export function recordWebhookQueueDispatch(status) {
+  incrementMetric("webhook_queue_dispatch_total", { status });
 }
 
 export function getMetricsSnapshot() {

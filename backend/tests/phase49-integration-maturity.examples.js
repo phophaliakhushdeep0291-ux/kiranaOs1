@@ -72,6 +72,7 @@ assert.match(frontend, /useInfiniteQuery/, "delivery history must expose paginat
 assert.match(frontend, /upgrade_required/, "provider readiness must explain plan-locked capabilities");
 assert.match(metrics, /integration_api_auth_total/, "API authentication must be observable");
 assert.match(metrics, /webhook_delivery_duration_ms/, "webhook delivery latency must be observable");
+assert.match(metrics, /webhook_queue_dispatch_total/, "durable-queue fallback behavior must be observable");
 assert.match(queueNames, /webhooksQueue:\s*"kiranaos:webhooks"/, "webhooks must have a dedicated queue");
 assert.match(workerRegistry, /webhooksQueue[\s\S]*handleWebhookJob/, "the webhook worker must be registered");
 assert.match(server, /recoverWebhookDeliveries/, "startup must recover persisted webhook deliveries");

@@ -119,11 +119,26 @@ if (ctx.skip) {
           lastError: "Connection refused",
         },
       });
+      const olderDelivery = await ctx.db.webhookDelivery.create({
+        data: {
+          shopId: tenant.shop.id,
+          endpointId: endpoint.id,
+          eventId: "evt_older_history",
+          eventType: "bill.created",
+          payloadJson: JSON.stringify({ billNo: "B-0" }),
+          status: "delivered",
+          deliveredAt: new Date(),
+          createdAt: new Date(Date.now() - 60_000),
+        },
+      });
       const history = assertSuccess(await ctx.get("/api/integrations/deliveries?limit=1", { token: auth.accessToken }));
       assert.equal(history.items.length, 1);
       assert.equal(history.items[0].id, delivery.id);
-      assert.equal(history.hasMore, false);
-      assert.equal(history.nextCursor, null);
+      assert.equal(history.hasMore, true);
+      assert.ok(history.nextCursor);
+      const olderHistory = assertSuccess(await ctx.get(`/api/integrations/deliveries?limit=1&cursor=${encodeURIComponent(history.nextCursor)}`, { token: auth.accessToken }));
+      assert.equal(olderHistory.items[0].id, olderDelivery.id);
+      assert.equal(olderHistory.hasMore, false);
       const archived = assertSuccess(await ctx.delete(`/api/integrations/webhooks/${endpoint.id}`, {
         token: auth.accessToken,
         ownerPin: tenant.ownerPin,

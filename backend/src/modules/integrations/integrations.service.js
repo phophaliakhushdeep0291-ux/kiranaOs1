@@ -7,7 +7,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { getObjectStorageStatus } from "../../lib/objectStorage.js";
-import { recordIntegrationApiAuth, recordWebhookDelivery } from "../../lib/metrics.js";
+import { recordIntegrationApiAuth, recordWebhookDelivery, recordWebhookQueueDispatch } from "../../lib/metrics.js";
 import { dateRangeForDateOnly, daysBetweenInclusive, formatDateInTimeZone } from "../../utils/dates.js";
 import { getWhatsAppProviderStatus } from "../reminders/whatsapp.provider.js";
 import { hasFeature, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
@@ -236,11 +236,15 @@ async function scheduleWebhookDelivery(delivery) {
       { shopId: delivery.shopId, deliveryId: delivery.id },
       { jobId: `webhook_${delivery.id}` },
     );
-    if (queued.queued) return { deliveryId: delivery.id, queued: true };
+    if (queued.queued) {
+      recordWebhookQueueDispatch("queued");
+      return { deliveryId: delivery.id, queued: true };
+    }
   } catch {
     // Redis is an accelerator here, not a reason to lose a persisted event.
   }
   scheduleLocalWebhookDelivery(delivery.shopId, delivery.id);
+  recordWebhookQueueDispatch("local_fallback");
   return { deliveryId: delivery.id, queued: false };
 }
 
