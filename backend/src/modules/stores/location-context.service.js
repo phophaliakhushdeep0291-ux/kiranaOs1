@@ -94,10 +94,17 @@ export async function decrementLocationInventory(client, { shopId, location, pro
   const freshProduct = await client.product.findFirst({ where: { id: product.id, shopId }, select: { stockBaseQty: true } });
   const newLocationStock = location.isPrimary
     ? await getLocationQuantity(client, shopId, location, { ...product, stockBaseQty: freshProduct?.stockBaseQty ?? product.stockBaseQty - quantity })
-    : round2(oldLocationStock - quantity);
+    : Number((await client.locationStock.findUnique({
+      where: { locationId_productId: { locationId: location.id, productId: product.id } },
+      select: { stockBaseQty: true },
+    }))?.stockBaseQty ?? 0);
+  // The pre-update read may be stale when concurrent sales overlap. Reconstruct
+  // the movement's own starting value from its committed result so ledger rows
+  // always satisfy old + change = new without absorbing another sale's change.
+  const movementOldStock = round2(newLocationStock + quantity);
   return {
-    oldStock: oldLocationStock,
-    newStock: newLocationStock,
+    oldStock: movementOldStock,
+    newStock: round2(newLocationStock),
     shortfallBaseQty: round2(Math.max(0, -newLocationStock)),
     globalStockBaseQty: round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - quantity),
   };
