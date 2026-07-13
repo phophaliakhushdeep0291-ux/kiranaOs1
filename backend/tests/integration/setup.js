@@ -168,6 +168,8 @@ export async function resetDatabase(db) {
     db.pricingDecisionEvent.deleteMany(),
     db.billItemLotAllocation.deleteMany(),
     db.inventoryLot.deleteMany(),
+    db.purchaseReturnItem.deleteMany(),
+    db.purchaseReturn.deleteMany(),
     db.customerOrder.deleteMany(),
     db.giftCardTransaction.deleteMany(),
     db.giftCard.deleteMany(),

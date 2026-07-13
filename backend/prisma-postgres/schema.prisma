@@ -44,6 +44,7 @@ model Shop {
   purchaseHistory             PurchaseHistory[]
   purchaseOrders              PurchaseOrder[]
   purchaseReceipts            PurchaseReceipt[]
+  purchaseReturns             PurchaseReturn[]
   userLocationAccess          UserLocationAccess[]
   aiActionLogs                AiActionLog[]
   auditLogs                   AuditLog[]
@@ -403,6 +404,7 @@ model Product {
   transferItems   StockTransferItem[]
   purchaseOrderItems PurchaseOrderItem[]
   purchaseReceiptItems PurchaseReceiptItem[]
+  purchaseReturnItems PurchaseReturnItem[]
   stockCountLines  StockCountLine[]
   inventoryLots    InventoryLot[]
 
@@ -650,6 +652,7 @@ model StoreLocation {
   retailPaymentIntents RetailPaymentIntent[]
   purchaseOrders    PurchaseOrder[]
   purchaseReceipts  PurchaseReceipt[]
+  purchaseReturns   PurchaseReturn[]
   customerOrders    CustomerOrder[]
   userAccess        UserLocationAccess[]
   pricingRules      PricingRule[]
@@ -999,6 +1002,7 @@ model Supplier {
   purchaseHistory PurchaseHistory[]
   purchaseOrders  PurchaseOrder[]
   purchaseReceipts PurchaseReceipt[]
+  purchaseReturns  PurchaseReturn[]
 
   @@index([shopId])
   @@index([shopId, deletedAt])
@@ -1202,6 +1206,7 @@ model PurchaseReceipt {
   supplier      Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   items         PurchaseReceiptItem[]
   history       PurchaseHistory[]
+  returns       PurchaseReturn[]
 
   @@unique([shopId, receiptNumber])
   @@unique([shopId, idempotencyKey])
@@ -1226,8 +1231,60 @@ model PurchaseReceiptItem {
   purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
   product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
   inventoryLots     InventoryLot[]
+  returnItems       PurchaseReturnItem[]
 
   @@unique([receiptId, purchaseOrderItemId])
+  @@index([productId])
+}
+
+model PurchaseReturn {
+  id                    String   @id @default(cuid())
+  shopId                String
+  locationId            String
+  supplierId            String?
+  purchaseReceiptId     String
+  returnNumber          String
+  refundMode            String   @default("supplier_credit")
+  totalAmount           Float
+  totalAmountPaise      BigInt?
+  supplierCreditAmount  Float    @default(0)
+  supplierCreditAmountPaise BigInt?
+  refundAmount          Float    @default(0)
+  refundAmountPaise     BigInt?
+  reason                String
+  supplierReference     String?
+  createdByUserId       String?
+  createdAt             DateTime @default(now())
+
+  shop            Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location        StoreLocation    @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  supplier        Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseReceipt PurchaseReceipt  @relation(fields: [purchaseReceiptId], references: [id], onDelete: Restrict)
+  items           PurchaseReturnItem[]
+
+  @@unique([shopId, returnNumber])
+  @@index([shopId, locationId, createdAt])
+  @@index([shopId, supplierId, createdAt])
+  @@index([shopId, purchaseReceiptId, createdAt])
+}
+
+model PurchaseReturnItem {
+  id                    String @id @default(cuid())
+  purchaseReturnId      String
+  purchaseReceiptItemId String
+  productId             String
+  quantityBaseQty       Float
+  actualRate            Float
+  actualRatePaise       BigInt?
+  lineAmount            Float
+  lineAmountPaise       BigInt?
+  lotAllocationsJson    String @default("[]")
+
+  purchaseReturn      PurchaseReturn      @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  purchaseReceiptItem PurchaseReceiptItem @relation(fields: [purchaseReceiptItemId], references: [id], onDelete: Restrict)
+  product             Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseReturnId, purchaseReceiptItemId])
   @@index([productId])
 }
 

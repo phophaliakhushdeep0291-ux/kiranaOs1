@@ -999,7 +999,29 @@
       "feature": "supplier_entry",
       "ownerPinRequired": true,
       "purpose": "restore soft-deleted supplier"
-    }
+    },
+    { "method": "POST", "path": "/api/bills/returns", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "basic_billing", "purpose": "create a guarded cross-channel sale return" },
+    { "method": "GET", "path": "/api/gift-cards", "authRequired": true, "deviceRequired": true, "feature": "loyalty_program", "purpose": "list protected gift and store-credit balances" },
+    { "method": "POST", "path": "/api/gift-cards/lookup", "authRequired": true, "deviceRequired": true, "feature": "loyalty_program", "purpose": "look up a bearer code without disclosing it" },
+    { "method": "POST", "path": "/api/gift-cards", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "loyalty_program", "purpose": "issue store value with one-time code disclosure" },
+    { "method": "POST", "path": "/api/gift-cards/:id/disable", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "loyalty_program", "purpose": "disable store value" },
+    { "method": "GET", "path": "/api/purchase-orders/suggestions", "authRequired": true, "deviceRequired": true, "feature": "purchase_entry", "purpose": "branch-aware reorder suggestions" },
+    { "method": "GET", "path": "/api/purchase-orders", "authRequired": true, "deviceRequired": true, "feature": "purchase_entry", "purpose": "list purchase orders" },
+    { "method": "GET", "path": "/api/purchase-orders/:id", "authRequired": true, "deviceRequired": true, "feature": "purchase_entry", "purpose": "purchase-order document and receiving detail" },
+    { "method": "POST", "path": "/api/purchase-orders", "authRequired": true, "deviceRequired": true, "feature": "purchase_entry", "purpose": "create supplier purchase order" },
+    { "method": "POST", "path": "/api/purchase-orders/:id/send", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "approve and mark purchase order sent" },
+    { "method": "POST", "path": "/api/purchase-orders/:id/receive", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "atomically receive partial or complete supplier stock" },
+    { "method": "POST", "path": "/api/purchase-orders/:id/cancel", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "cancel unreceived purchase-order balance" },
+    { "method": "GET", "path": "/api/inventory/counts", "authRequired": true, "deviceRequired": true, "purpose": "list branch stock-count sessions" },
+    { "method": "POST", "path": "/api/inventory/counts", "authRequired": true, "deviceRequired": true, "feature": "stock_adjustment", "purpose": "start a blind or visible stock count" },
+    { "method": "GET", "path": "/api/inventory/counts/:id", "authRequired": true, "deviceRequired": true, "purpose": "stock-count detail" },
+    { "method": "PATCH", "path": "/api/inventory/counts/:id/lines", "authRequired": true, "deviceRequired": true, "feature": "stock_adjustment", "purpose": "save stock-count observations" },
+    { "method": "POST", "path": "/api/inventory/counts/:id/submit", "authRequired": true, "deviceRequired": true, "feature": "stock_adjustment", "purpose": "submit stock count for review" },
+    { "method": "POST", "path": "/api/inventory/counts/:id/apply", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "stock_adjustment", "purpose": "apply reviewed inventory variance" },
+    { "method": "POST", "path": "/api/inventory/counts/:id/cancel", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "stock_adjustment", "purpose": "cancel stock-count session" },
+    { "method": "GET", "path": "/api/inventory-lots", "authRequired": true, "deviceRequired": true, "feature": "batch_expiry", "purpose": "list FEFO batch and expiry ledger" },
+    { "method": "PATCH", "path": "/api/inventory-lots/products/:productId/tracking", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "batch_expiry", "purpose": "enable product batch tracking" },
+    { "method": "POST", "path": "/api/inventory-lots/:id/status", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "batch_expiry", "purpose": "quarantine, recall, or release an inventory lot" }
   ],
-  "latestPatch": "phase48 owner-pin hardening, udhar reversal, timezone reports, unit validation"
+  "latestPatch": "retail parity: purchase orders, stock counts, store value, returns, and FEFO batch-expiry control"
 }

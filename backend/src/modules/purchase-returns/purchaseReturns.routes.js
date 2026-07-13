@@ -1,0 +1,13 @@
+import { Router } from "express";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
+import { requireDeviceActivated } from "../devices/device.middleware.js";
+import { requireFeature } from "../feature-gates/featureGate.middleware.js";
+import { requireLocationAccess } from "../stores/location-access.service.js";
+import { validate, validateQuery } from "../../middleware/validate.js";
+import { createPurchaseReturnSchema, listPurchaseReturnsSchema } from "./purchaseReturns.schema.js";
+import * as controller from "./purchaseReturns.controller.js";
+const router = Router(); router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("purchase_entry"));
+router.get("/", requireLocationAccess("view"), validateQuery(listPurchaseReturnsSchema), controller.list);
+router.post("/", requireRole("owner", "admin"), requireLocationAccess("purchase"), requireOwnerPin, validate(createPurchaseReturnSchema), controller.create);
+export default router;
