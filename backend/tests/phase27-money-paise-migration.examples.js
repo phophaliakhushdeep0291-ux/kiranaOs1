@@ -83,7 +83,7 @@ for (const snippet of [
   "ALLOW_MONEY_PAISE_BACKFILL",
   "--write",
   "information_schema.columns",
-  "ROUND((COALESCE",
+  "IS DISTINCT FROM",
   "Run npm run prisma:deploy:postgres before reconciliation",
 ]) {
   assert.ok(reconciliation.includes(snippet), `reconciliation script must include ${snippet}`);

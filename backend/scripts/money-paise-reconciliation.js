@@ -48,7 +48,7 @@ function q(identifier) {
 }
 
 function expectedPaiseExpression(floatColumn) {
-  return `ROUND((COALESCE(${q(floatColumn)}, 0)::numeric * 100))::bigint`;
+  return `ROUND((${q(floatColumn)}::numeric * 100))::bigint`;
 }
 
 async function ensureColumnsExist(prisma) {
@@ -76,15 +76,15 @@ async function reconcileColumn(prisma, column, { write }) {
     await prisma.$executeRawUnsafe(`
       UPDATE ${table}
       SET ${paiseCol} = ${expected}
-      WHERE ${paiseCol} IS NULL OR ${paiseCol} <> ${expected}
+      WHERE ${paiseCol} IS DISTINCT FROM ${expected}
     `);
   }
 
   const [stats] = await prisma.$queryRawUnsafe(`
     SELECT
       COUNT(*)::bigint AS total,
-      COUNT(*) FILTER (WHERE ${paiseCol} IS NULL)::bigint AS missing,
-      COUNT(*) FILTER (WHERE ${paiseCol} IS NOT NULL AND ${paiseCol} <> ${expected})::bigint AS mismatched
+      COUNT(*) FILTER (WHERE ${floatCol} IS NOT NULL AND ${paiseCol} IS NULL)::bigint AS missing,
+      COUNT(*) FILTER (WHERE ${paiseCol} IS NOT NULL AND ${paiseCol} IS DISTINCT FROM ${expected})::bigint AS mismatched
     FROM ${table}
   `);
 

@@ -276,6 +276,9 @@ runStep({
   label: "Frontend typecheck, tests, build, and security checks",
   args: ["run", "prod:check"],
   cwd: frontendDir,
+  // The workflow-level NODE_ENV is "test" for backend suites. Vite respects
+  // an existing NODE_ENV and otherwise emits an unminified test build.
+  env: { NODE_ENV: "production" },
 });
 runStep({
   id: "local-storage-proof",
