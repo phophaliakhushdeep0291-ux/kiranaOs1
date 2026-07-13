@@ -7,6 +7,7 @@ export const createPurchaseReturnSchema = z.object({
   refundMode: z.enum(["supplier_credit", "cash", "bank"]).default("supplier_credit"),
   reason: z.string().trim().min(3).max(500),
   supplierReference: z.string().trim().max(100).optional(),
+  idempotencyKey: z.string().trim().min(8).max(160).optional(),
   items: z.array(z.object({ purchaseReceiptItemId: z.string().min(1), quantityBaseQty: quantityAmount({ positive: true }) })).min(1).max(100),
 }).superRefine((value, context) => {
   const ids = new Set(); value.items.forEach((item, index) => { if (ids.has(item.purchaseReceiptItemId)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["items", index], message: "A receipt line can appear only once" }); ids.add(item.purchaseReceiptItemId); });

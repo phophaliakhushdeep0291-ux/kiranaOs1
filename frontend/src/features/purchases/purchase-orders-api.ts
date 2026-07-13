@@ -29,10 +29,13 @@ export interface PurchaseOrder {
   note?: string | null;
   createdAt: string;
   items: PurchaseOrderItem[];
-  receipts: Array<{ id: string; receiptNumber: string; totalAmount: number; createdAt: string }>;
+  receipts: PurchaseReceipt[];
   location: { id: string; name: string; code: string };
   supplier?: { id: string; name: string; mobile?: string | null; address?: string | null } | null;
 }
+export interface PurchaseReceiptItem { id: string; purchaseOrderItemId: string; productId: string; quantityBaseQty: number; actualRate: number; lineAmount: number }
+export interface PurchaseReceipt { id: string; receiptNumber: string; supplierInvoiceNumber?: string | null; totalAmount: number; dueAmount?: number; createdAt: string; items: PurchaseReceiptItem[] }
+export interface PurchaseReturn { id: string; returnNumber: string; totalAmount: number; supplierCreditAmount: number; refundAmount: number; refundMode: string }
 export interface ReorderSuggestion {
   productId: string;
   productName: string;
@@ -52,3 +55,4 @@ export const createPurchaseOrder = (data: unknown) => apiRequest<PurchaseOrder>(
 export const sendPurchaseOrder = (id: string, ownerPin: string) => apiRequest<PurchaseOrder>(`/purchase-orders/${id}/send`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: "{}" });
 export const receivePurchaseOrder = (id: string, data: unknown, ownerPin: string) => apiRequest<{ purchaseOrder: PurchaseOrder; receipt: { id: string; receiptNumber: string; totalAmount: number }; idempotentReplay: boolean }>(`/purchase-orders/${id}/receive`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 export const cancelPurchaseOrder = (id: string, reason: string, ownerPin: string) => apiRequest<PurchaseOrder>(`/purchase-orders/${id}/cancel`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
+export const createPurchaseReturn = (data: unknown, ownerPin: string) => apiRequest<PurchaseReturn>("/purchase-returns", { method: "POST", ownerPin, body: JSON.stringify(data) });

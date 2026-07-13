@@ -14,6 +14,7 @@ CREATE TABLE "PurchaseReturn" (
   "refundAmountPaise" BIGINT,
   "reason" TEXT NOT NULL,
   "supplierReference" TEXT,
+  "idempotencyKey" TEXT,
   "createdByUserId" TEXT,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "PurchaseReturn_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
@@ -37,6 +38,7 @@ CREATE TABLE "PurchaseReturnItem" (
   CONSTRAINT "PurchaseReturnItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 CREATE UNIQUE INDEX "PurchaseReturn_shopId_returnNumber_key" ON "PurchaseReturn"("shopId", "returnNumber");
+CREATE UNIQUE INDEX "PurchaseReturn_shopId_idempotencyKey_key" ON "PurchaseReturn"("shopId", "idempotencyKey");
 CREATE INDEX "PurchaseReturn_shopId_locationId_createdAt_idx" ON "PurchaseReturn"("shopId", "locationId", "createdAt");
 CREATE INDEX "PurchaseReturn_shopId_supplierId_createdAt_idx" ON "PurchaseReturn"("shopId", "supplierId", "createdAt");
 CREATE INDEX "PurchaseReturn_shopId_purchaseReceiptId_createdAt_idx" ON "PurchaseReturn"("shopId", "purchaseReceiptId", "createdAt");

@@ -3,7 +3,7 @@ CREATE TABLE "PurchaseReturn" (
   "returnNumber" TEXT NOT NULL, "refundMode" TEXT NOT NULL DEFAULT 'supplier_credit', "totalAmount" DOUBLE PRECISION NOT NULL,
   "totalAmountPaise" BIGINT, "supplierCreditAmount" DOUBLE PRECISION NOT NULL DEFAULT 0, "supplierCreditAmountPaise" BIGINT,
   "refundAmount" DOUBLE PRECISION NOT NULL DEFAULT 0, "refundAmountPaise" BIGINT, "reason" TEXT NOT NULL, "supplierReference" TEXT,
-  "createdByUserId" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "PurchaseReturn_pkey" PRIMARY KEY ("id")
+  "idempotencyKey" TEXT, "createdByUserId" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "PurchaseReturn_pkey" PRIMARY KEY ("id")
 );
 CREATE TABLE "PurchaseReturnItem" (
   "id" TEXT NOT NULL, "purchaseReturnId" TEXT NOT NULL, "purchaseReceiptItemId" TEXT NOT NULL, "productId" TEXT NOT NULL,
@@ -11,6 +11,7 @@ CREATE TABLE "PurchaseReturnItem" (
   "lineAmount" DOUBLE PRECISION NOT NULL, "lineAmountPaise" BIGINT, "lotAllocationsJson" TEXT NOT NULL DEFAULT '[]', CONSTRAINT "PurchaseReturnItem_pkey" PRIMARY KEY ("id")
 );
 CREATE UNIQUE INDEX "PurchaseReturn_shopId_returnNumber_key" ON "PurchaseReturn"("shopId", "returnNumber");
+CREATE UNIQUE INDEX "PurchaseReturn_shopId_idempotencyKey_key" ON "PurchaseReturn"("shopId", "idempotencyKey");
 CREATE INDEX "PurchaseReturn_shopId_locationId_createdAt_idx" ON "PurchaseReturn"("shopId", "locationId", "createdAt");
 CREATE INDEX "PurchaseReturn_shopId_supplierId_createdAt_idx" ON "PurchaseReturn"("shopId", "supplierId", "createdAt");
 CREATE INDEX "PurchaseReturn_shopId_purchaseReceiptId_createdAt_idx" ON "PurchaseReturn"("shopId", "purchaseReceiptId", "createdAt");

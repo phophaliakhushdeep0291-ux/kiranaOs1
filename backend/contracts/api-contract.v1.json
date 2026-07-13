@@ -1021,7 +1021,9 @@
     { "method": "POST", "path": "/api/inventory/counts/:id/cancel", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "stock_adjustment", "purpose": "cancel stock-count session" },
     { "method": "GET", "path": "/api/inventory-lots", "authRequired": true, "deviceRequired": true, "feature": "batch_expiry", "purpose": "list FEFO batch and expiry ledger" },
     { "method": "PATCH", "path": "/api/inventory-lots/products/:productId/tracking", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "batch_expiry", "purpose": "enable product batch tracking" },
-    { "method": "POST", "path": "/api/inventory-lots/:id/status", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "batch_expiry", "purpose": "quarantine, recall, or release an inventory lot" }
+    { "method": "POST", "path": "/api/inventory-lots/:id/status", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "batch_expiry", "purpose": "quarantine, recall, or release an inventory lot" },
+    { "method": "GET", "path": "/api/purchase-returns", "authRequired": true, "deviceRequired": true, "feature": "purchase_entry", "purpose": "list branch supplier returns and credits" },
+    { "method": "POST", "path": "/api/purchase-returns", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "return received stock and settle supplier due or refund" }
   ],
   "latestPatch": "retail parity: purchase orders, stock counts, store value, returns, and FEFO batch-expiry control"
 }

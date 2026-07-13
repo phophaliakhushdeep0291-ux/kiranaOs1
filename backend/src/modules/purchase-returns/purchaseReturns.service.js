@@ -32,7 +32,13 @@ async function removeReturnedLots(tx, { shopId, locationId, product, receiptItem
 }
 
 export async function createPurchaseReturn(shopId, data, userId) {
-  return db.$transaction(async (tx) => {
+  const replay = async () => data.idempotencyKey
+    ? db.purchaseReturn.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include })
+    : null;
+  const existing = await replay();
+  if (existing) return { ...existing, idempotentReplay: true };
+  try {
+    const created = await db.$transaction(async (tx) => {
     const receipt = await tx.purchaseReceipt.findFirst({ where: { id: data.purchaseReceiptId, shopId }, include: { location: true, supplier: true, items: { include: { product: true, purchaseOrderItem: true, returnItems: true } } } });
     if (!receipt) throw new AppError("Purchase receipt not found", 404, "PURCHASE_RECEIPT_NOT_FOUND");
     if (!receipt.location.active) throw new AppError("Receipt branch is inactive", 409, "STORE_LOCATION_UNAVAILABLE");
@@ -50,7 +56,7 @@ export async function createPurchaseReturn(shopId, data, userId) {
     const supplierCreditAmount = round2(Math.min(Number(receipt.dueAmount || 0), totalAmount));
     const refundAmount = round2(totalAmount - supplierCreditAmount);
     const purchaseReturn = await tx.purchaseReturn.create({
-      data: { shopId, locationId: receipt.locationId, supplierId: receipt.supplierId, purchaseReceiptId: receipt.id, returnNumber: ref(), refundMode: data.refundMode, totalAmount, supplierCreditAmount, refundAmount, ...moneyShadows({ totalAmount, supplierCreditAmount, refundAmount }), reason: data.reason, supplierReference: data.supplierReference || null, createdByUserId: userId || null },
+      data: { shopId, locationId: receipt.locationId, supplierId: receipt.supplierId, purchaseReceiptId: receipt.id, returnNumber: ref(), refundMode: data.refundMode, totalAmount, supplierCreditAmount, refundAmount, ...moneyShadows({ totalAmount, supplierCreditAmount, refundAmount }), reason: data.reason, supplierReference: data.supplierReference || null, idempotencyKey: data.idempotencyKey || null, createdByUserId: userId || null },
     });
     for (const line of lines) {
       const quantity = round2(line.input.quantityBaseQty);
@@ -62,5 +68,13 @@ export async function createPurchaseReturn(shopId, data, userId) {
     const dueAmount = round2(Math.max(0, Number(receipt.dueAmount || 0) - supplierCreditAmount));
     await tx.purchaseReceipt.update({ where: { id: receipt.id }, data: { dueAmount, ...moneyShadows({ dueAmount }) } });
     return tx.purchaseReturn.findUnique({ where: { id: purchaseReturn.id }, include });
-  });
+    });
+    return { ...created, idempotentReplay: false };
+  } catch (error) {
+    if (error?.code === "P2002" && data.idempotencyKey) {
+      const concurrentReplay = await replay();
+      if (concurrentReplay) return { ...concurrentReplay, idempotentReplay: true };
+    }
+    throw error;
+  }
 }

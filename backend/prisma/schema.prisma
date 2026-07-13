@@ -1269,6 +1269,7 @@ model PurchaseReturn {
   refundAmountPaise     BigInt?
   reason                String
   supplierReference     String?
+  idempotencyKey        String?
   createdByUserId       String?
   createdAt             DateTime @default(now())
 
@@ -1279,6 +1280,7 @@ model PurchaseReturn {
   items           PurchaseReturnItem[]
 
   @@unique([shopId, returnNumber])
+  @@unique([shopId, idempotencyKey])
   @@index([shopId, locationId, createdAt])
   @@index([shopId, supplierId, createdAt])
   @@index([shopId, purchaseReceiptId, createdAt])
