@@ -20,6 +20,67 @@ if (ctx.skip) {
   }
 
   describe("owner PIN and RBAC integration", () => {
+    test("owner assignments enforce deny-by-default store and action boundaries", async () => {
+      const { tenant, staff, ownerAuth, staffAuth } = await authPair();
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Scoped Product", stockBaseQty: 20 });
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: ownerAuth.accessToken })).locations[0];
+      const branch = assertSuccess(await ctx.post("/api/stores", { name: "Scoped Branch", code: "SCOPE02" }, { token: ownerAuth.accessToken }), 201);
+      assertSuccess(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        items: [{ productId: product.id, quantityBaseQty: 5 }],
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
+
+      const assignment = assertSuccess(await ctx.request("PUT", `/api/auth/staff/${staff.staff.id}/locations`, {
+        token: ownerAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+        body: {
+          locations: [{
+            locationId: branch.id,
+            canSell: true,
+            canPurchase: false,
+            canManageInventory: false,
+            canTransfer: false,
+          }],
+        },
+      }));
+      assert.equal(assignment.assignedLocationCount, 1);
+      assert.equal(assignment.assignments.explicitScope, true);
+
+      const staffStores = assertSuccess(await ctx.get("/api/stores", { token: staffAuth.accessToken }));
+      assert.equal(staffStores.accessScoped, true);
+      assert.deepEqual(staffStores.locations.map((row) => row.id), [branch.id]);
+
+      const primaryCatalog = assertFailure(await ctx.get("/api/products", {
+        token: staffAuth.accessToken,
+        headers: { "x-location-id": primary.id },
+      }), 403);
+      assert.equal(primaryCatalog.code, "LOCATION_ACCESS_DENIED");
+
+      const purchaseDenied = assertFailure(await ctx.post("/api/inventory/purchase", {
+        productId: product.id,
+        supplierName: "Blocked Supplier",
+        quantity: 1,
+        enteredUnit: "piece",
+        billAmount: 10,
+        updateCost: false,
+      }, { token: staffAuth.accessToken, headers: { "x-location-id": branch.id } }), 403);
+      assert.equal(purchaseDenied.code, "LOCATION_ACCESS_DENIED");
+
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, { quantity: 1 }), {
+        token: staffAuth.accessToken,
+        headers: { "x-location-id": branch.id },
+      }), 201);
+      assert.equal(bill.locationId, branch.id);
+
+      const branchInventory = assertFailure(await ctx.post("/api/inventory/correction", {
+        productId: product.id,
+        newStockBaseQty: 9,
+        reason: "unauthorized test",
+      }, { token: staffAuth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": branch.id } }), 403);
+      assert.equal(branchInventory.code, "LOCATION_ACCESS_DENIED");
+    });
+
     test("customer DELETE without owner PIN fails for staff", async () => {
       const { tenant, staffAuth } = await authPair();
       const customer = await createCustomer(ctx.db, tenant.shop.id);

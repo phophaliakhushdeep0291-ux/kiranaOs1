@@ -30,6 +30,7 @@ function effectivePriority(rule: PricingRule): number {
 /** How specific a rule is — used only to break priority ties deterministically. */
 function specificity(rule: PricingRule): number {
   let score = 0;
+  if (rule.locationId) score += 16;
   if (rule.customerId) score += 8;
   if (rule.customerGroup) score += 4;
   if (rule.sellingUnitId) score += 3;
@@ -64,6 +65,7 @@ function resolveRulePrice(rule: PricingRule, ctx: PricingContext): number | null
 
 /** Returns [matched, reason] for the trace. */
 function matchRule(rule: PricingRule, ctx: PricingContext): [boolean, string] {
+  if (rule.locationId && rule.locationId !== ctx.locationId) return [false, "Different store location"];
   if (rule.productId && rule.productId !== ctx.productId) return [false, "Different product"];
   if (rule.sellingUnitId && rule.sellingUnitId !== ctx.sellingUnitId) return [false, "Different selling unit or pack size"];
   if (rule.unitCode && rule.unitCode !== ctx.unitCode) return [false, `Applies to unit ${rule.unitCode}`];

@@ -38,6 +38,7 @@ export function contextFromProduct(
   product: Product,
   opts: {
     shopId: string;
+    locationId?: string;
     quantity: number;
     billDate: string;
     unitCode?: string;
@@ -59,6 +60,7 @@ export function contextFromProduct(
   const defaultPrice = num(opts.defaultPrice ?? p.sellingPrice ?? p.defaultPricePerRateUnit);
   return {
     shopId: opts.shopId,
+    locationId: opts.locationId,
     productId: product.id,
     sellingUnitId: opts.sellingUnitId,
     unitCode: opts.unitCode ?? product.rateUnit ?? product.displayUnit ?? "piece",

@@ -26,6 +26,7 @@ const ruleBody = z.object({
   status: z.enum(["DRAFT", "ACTIVE", "PAUSED", "EXPIRED", "ARCHIVED"]).optional(),
   priority: z.coerce.number().int().optional(),
   productId: z.string().optional().nullable(),
+  locationId: z.string().optional().nullable(),
   sellingUnitId: z.string().optional().nullable(),
   unitCode: z.string().optional().nullable(),
   customerId: z.string().optional().nullable(),

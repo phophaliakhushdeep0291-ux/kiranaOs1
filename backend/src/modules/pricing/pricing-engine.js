@@ -37,6 +37,7 @@ function effectivePriority(rule) {
 
 function specificity(rule) {
   let s = 0;
+  if (rule.locationId) s += 16;
   if (rule.customerId) s += 8;
   if (rule.customerGroup) s += 4;
   if (rule.sellingUnitId) s += 3;
@@ -69,6 +70,7 @@ function resolveRulePrice(rule, ctx) {
 }
 
 function matchRule(rule, ctx) {
+  if (rule.locationId && rule.locationId !== ctx.locationId) return [false, "Different store location"];
   if (rule.productId && rule.productId !== ctx.productId) return [false, "Different product"];
   if (rule.sellingUnitId && rule.sellingUnitId !== ctx.sellingUnitId) return [false, "Different selling unit or pack size"];
   if (rule.unitCode && rule.unitCode !== ctx.unitCode) return [false, `Applies to unit ${rule.unitCode}`];

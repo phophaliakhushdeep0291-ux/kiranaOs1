@@ -8,6 +8,7 @@ import type { Product } from "@/lib/api/client";
 import { evaluatePricing } from "./engine/engine";
 import { contextFromProduct, rulesFromProduct } from "./engine/product-rules";
 import { PricingRuleType, type PricingResult, type PricingRule } from "./engine/types";
+import { getActiveLocationId } from "@/features/stores/location-context";
 
 /** A PricingRule row as returned by GET /api/pricing/rules. */
 export interface ApiPricingRule {
@@ -16,6 +17,7 @@ export interface ApiPricingRule {
   status?: string;
   priority?: number | null;
   productId?: string | null;
+  locationId?: string | null;
   sellingUnitId?: string | null;
   unitCode?: string | null;
   customerId?: string | null;
@@ -44,6 +46,7 @@ export function normalizeApiRule(row: ApiPricingRule): PricingRule | null {
     ruleType: row.ruleType as PricingRuleType,
     priority: row.priority ?? undefined,
     productId: row.productId ?? undefined,
+    locationId: row.locationId ?? undefined,
     sellingUnitId: row.sellingUnitId ?? undefined,
     unitCode: row.unitCode ?? undefined,
     customerId: row.customerId ?? undefined,
@@ -65,6 +68,7 @@ export function normalizeApiRule(row: ApiPricingRule): PricingRule | null {
 
 export interface ResolveLinePriceInput {
   shopId?: string;
+  locationId?: string;
   quantity: number;
   billDate?: string;
   unitCode?: string;
@@ -90,6 +94,7 @@ export function resolveLinePrice(product: Product, input: ResolveLinePriceInput)
   const rules = [...(input.useLegacyProductRules === false ? [] : rulesFromProduct(product)), ...ownerRules];
   const ctx = contextFromProduct(product, {
     shopId: input.shopId ?? "",
+    locationId: input.locationId ?? getActiveLocationId() ?? undefined,
     quantity: input.quantity,
     billDate: input.billDate ?? new Date().toISOString(),
     unitCode: input.unitCode,

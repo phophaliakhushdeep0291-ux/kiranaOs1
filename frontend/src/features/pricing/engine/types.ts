@@ -81,6 +81,7 @@ export interface PricingRule {
 
   // Match predicates — undefined means "matches anything".
   productId?: string;
+  locationId?: string;
   sellingUnitId?: string;
   unitCode?: string;
   customerId?: string;
@@ -113,6 +114,7 @@ export type PricingSource = "BILLING" | "ESTIMATE" | "ORDER" | "OFFLINE_BILLING"
 
 export interface PricingContext {
   shopId: string;
+  locationId?: string;
   productId: string;
   /** Durable product selling-unit identity (packet 500 g, packet 1 kg, box, etc.). */
   sellingUnitId?: string;

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, Box, Layers, Package, Plus, Trash2, Users, UserSquare } from "lucide-react";
+import { ArrowLeft, Box, Building2, Layers, MapPin, Package, Plus, Trash2, Users, UserSquare } from "lucide-react";
 import { getListProductsQueryKey, useListCustomers, useListProducts, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 import { usePricingRules, partitionProductRules } from "@/features/pricing/use-pricing-rules";
@@ -9,6 +9,7 @@ import type { ApiPricingRule } from "@/features/pricing/api";
 import { createProductSellingUnit, deleteProductSellingUnit, listProductSellingUnits } from "@/features/pricing/api";
 import { baseUnitFor, sellingUnitCode, sellingUnitConversion, sellingUnitName } from "@/features/products/pages/product-pricing";
 import { LoadingSkeleton } from "@/components/shared";
+import { getActiveLocationId } from "@/features/stores/location-context";
 
 const GROUPS = ["Retail", "Regular", "VIP", "Reseller", "Wholesale", "Institutional", "Staff"];
 const rs = (n: unknown) => `₹${Number(n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -48,7 +49,13 @@ export default function ProductPricingPage() {
   });
   const { query, create, remove } = usePricingRules();
   const rules = query.data ?? [];
-  const partitioned = useMemo(() => partitionProductRules(rules, productId), [rules, productId]);
+  const activeLocationId = getActiveLocationId();
+  const [pricingScope, setPricingScope] = useState<"store" | "all">(() => activeLocationId ? "store" : "all");
+  const scopedRules = useMemo(
+    () => rules.filter((rule) => pricingScope === "store" ? rule.locationId === activeLocationId : !rule.locationId),
+    [rules, pricingScope, activeLocationId],
+  );
+  const partitioned = useMemo(() => partitionProductRules(scopedRules, productId), [scopedRules, productId]);
   const units = unitsQuery.data ?? product?.sellingUnits ?? [];
   const [selectedUnitKey, setSelectedUnitKey] = useState("");
   const selectedUnit = units.find((unit) => (unit.id ?? unit.unitCode) === selectedUnitKey)
@@ -76,6 +83,7 @@ export default function ProductPricingPage() {
       await create.mutateAsync({
         ...body,
         productId,
+        locationId: pricingScope === "store" ? activeLocationId : null,
         sellingUnitId: selectedUnit?.id,
         unitCode: selectedUnit?.unitCode,
       });
@@ -102,6 +110,21 @@ export default function ProductPricingPage() {
       <button onClick={() => navigate("/products")} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[#075fff]"><ArrowLeft size={14} /> Products</button>
       <h1 className="font-display text-xl font-black text-[#0f1e3d]">{product.name} — Pricing</h1>
       <p className="mt-0.5 text-[12px] text-[#6d7c98]">Set quantity slabs, group prices, and customer exceptions. The billing engine uses these automatically.</p>
+
+      <div className="mt-4 rounded-2xl border border-[#dce7f7] bg-[#f8fbff] p-3">
+        <p className="text-[10.5px] font-black uppercase tracking-wide text-[#6d7c98]">Price rule scope</p>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button type="button" disabled={!activeLocationId} onClick={() => setPricingScope("store")} className={`rounded-xl border p-3 text-left transition ${pricingScope === "store" ? "border-[#075fff] bg-white shadow-sm" : "border-transparent bg-transparent"} disabled:opacity-50`}>
+            <span className="flex items-center gap-2 text-[12px] font-black text-[#13254a]"><MapPin size={14} className="text-[#075fff]" />Current store</span>
+            <span className="mt-1 block text-[10.5px] text-[#6d7c98]">Overrides company prices only at this location.</span>
+          </button>
+          <button type="button" onClick={() => setPricingScope("all")} className={`rounded-xl border p-3 text-left transition ${pricingScope === "all" ? "border-[#075fff] bg-white shadow-sm" : "border-transparent bg-transparent"}`}>
+            <span className="flex items-center gap-2 text-[12px] font-black text-[#13254a]"><Building2 size={14} className="text-[#075fff]" />All stores</span>
+            <span className="mt-1 block text-[10.5px] text-[#6d7c98]">A company-wide default inherited by every location.</span>
+          </button>
+        </div>
+        <p className="mt-2 text-[10.5px] font-semibold text-[#31527e]">Store rules win over an all-store rule when both match the same sale.</p>
+      </div>
 
       {/* Default pricing summary */}
       <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-[#e6ecf4] bg-white p-4 sm:grid-cols-4">

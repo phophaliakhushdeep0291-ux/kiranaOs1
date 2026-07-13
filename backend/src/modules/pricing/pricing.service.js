@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { evaluatePricing, RULE_TYPE_PRIORITY } from "./pricing-engine.js";
 import { moneyShadows } from "../../utils/money.js";
+import { assertLocationCapability } from "../stores/location-access.service.js";
 
 const RULE_TYPES = [
   "CUSTOMER_FIXED_PRICE", "CUSTOMER_QUANTITY_PRICE", "CUSTOMER_GROUP_PRICE",
@@ -47,6 +48,7 @@ function toEngineRule(row) {
     ruleType: row.ruleType,
     priority: row.priority,
     productId: row.productId ?? undefined,
+    locationId: row.locationId ?? undefined,
     sellingUnitId: row.sellingUnitId ?? undefined,
     unitCode: row.unitCode ?? undefined,
     customerId: row.customerId ?? undefined,
@@ -100,13 +102,17 @@ export async function evaluate(shopId, body = {}) {
     where: {
       shopId,
       status: "ACTIVE",
-      OR: [{ productId: product.id }, { productId: null }],
+      AND: [
+        { OR: [{ productId: product.id }, { productId: null }] },
+        { OR: [{ locationId: body.locationId ?? null }, { locationId: null }] },
+      ],
     },
     orderBy: { priority: "asc" },
   });
 
   const ctx = {
     shopId,
+    locationId: body.locationId,
     productId: product.id,
     sellingUnitId: sellingUnit?.id,
     unitCode,
@@ -153,6 +159,10 @@ function validateRuleInput(input) {
 }
 
 async function assertRuleReferences(shopId, input, excludeRuleId = null) {
+  if (input.locationId) {
+    const location = await db.storeLocation.findFirst({ where: { id: input.locationId, shopId, active: true }, select: { id: true } });
+    if (!location) throw new AppError("Store location not found for this shop", 400, "INVALID_STORE_LOCATION");
+  }
   if (input.productId) {
     const product = await db.product.findFirst({ where: { id: input.productId, shopId, deletedAt: null }, select: { id: true } });
     if (!product) throw new AppError("Product not found for this shop", 400);
@@ -177,6 +187,7 @@ async function assertRuleReferences(shopId, input, excludeRuleId = null) {
       shopId,
       ruleType: input.ruleType,
       status: "ACTIVE",
+      locationId: input.locationId ?? null,
       productId: input.productId ?? null,
       sellingUnitId: input.sellingUnitId ?? null,
       customerId: input.customerId ?? null,
@@ -193,17 +204,19 @@ async function assertRuleReferences(shopId, input, excludeRuleId = null) {
   if (overlap) throw new AppError("Quantity ranges cannot overlap for the same product, unit, and customer scope", 409);
 }
 
-export async function listRules(shopId, { status, productId, customerId } = {}) {
+export async function listRules(shopId, { status, productId, customerId, locationId } = {}) {
   const where = { shopId, status: { not: "ARCHIVED" } };
   if (status && RULE_STATUSES.includes(status)) where.status = status;
   if (productId) where.productId = productId;
   if (customerId) where.customerId = customerId;
+  if (locationId) where.AND = [{ OR: [{ locationId }, { locationId: null }] }];
   const rules = await db.pricingRule.findMany({ where, orderBy: [{ priority: "asc" }, { createdAt: "desc" }], take: 500 });
   return { rules };
 }
 
 export async function createRule(shopId, input, actor = {}) {
   validateRuleInput(input);
+  if (input.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: input.locationId, capability: "inventory" });
   await assertRuleReferences(shopId, input);
   const priority = input.priority ?? RULE_TYPE_PRIORITY[input.ruleType] ?? 0;
   const rule = await db.pricingRule.create({
@@ -215,6 +228,7 @@ export async function createRule(shopId, input, actor = {}) {
       status: RULE_STATUSES.includes(input.status) ? input.status : "ACTIVE",
       priority,
       productId: input.productId ?? null,
+      locationId: input.locationId ?? null,
       sellingUnitId: input.sellingUnitId ?? null,
       unitCode: input.unitCode ?? null,
       customerId: input.customerId ?? null,
@@ -242,9 +256,10 @@ export async function updateRule(shopId, ruleId, input, actor = {}) {
   if (!existing) throw new AppError("Pricing rule not found", 404);
   const merged = { ...existing, ...input, ruleType: input.ruleType ?? existing.ruleType };
   validateRuleInput(merged);
+  if (merged.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: merged.locationId, capability: "inventory" });
   await assertRuleReferences(shopId, merged, ruleId);
   const data = {};
-  for (const key of ["name", "description", "ruleType", "status", "priority", "productId", "sellingUnitId", "unitCode", "customerId", "customerGroup", "minQuantity", "maxQuantity", "fixedUnitPrice", "adjustmentType", "adjustmentValue", "minimumMarginPercent", "paymentMethod", "combinePolicy", "requiresOwnerApproval"]) {
+  for (const key of ["name", "description", "ruleType", "status", "priority", "productId", "locationId", "sellingUnitId", "unitCode", "customerId", "customerGroup", "minQuantity", "maxQuantity", "fixedUnitPrice", "adjustmentType", "adjustmentValue", "minimumMarginPercent", "paymentMethod", "combinePolicy", "requiresOwnerApproval"]) {
     if (input[key] !== undefined) data[key] = input[key];
   }
   if (input.validFrom !== undefined) data.validFrom = input.validFrom ? new Date(input.validFrom) : null;
@@ -258,17 +273,25 @@ export async function updateRule(shopId, ruleId, input, actor = {}) {
 export async function archiveRule(shopId, ruleId, actor = {}) {
   const existing = await db.pricingRule.findFirst({ where: { id: ruleId, shopId } });
   if (!existing) throw new AppError("Pricing rule not found", 404);
+  if (existing.locationId) await assertLocationCapability({ shopId, userId: actor.userId, role: actor.role, locationId: existing.locationId, capability: "inventory" });
   const rule = await db.pricingRule.update({ where: { id: ruleId }, data: { status: "ARCHIVED" } });
   await createAuditLog({ shopId, userId: actor.userId, action: "PRICING_RULE_DELETED", entityType: "PricingRule", entityId: rule.id, metadata: { name: rule.name } });
   return { id: rule.id, status: rule.status };
 }
 
 /** Product pricing configuration (default triple + the rules that touch it). */
-export async function getProductPricing(shopId, productId) {
+export async function getProductPricing(shopId, productId, locationId = null) {
   const product = await db.product.findFirst({ where: { id: productId, shopId } });
   if (!product) throw new AppError("Product not found", 404);
   const rules = await db.pricingRule.findMany({
-    where: { shopId, status: { not: "ARCHIVED" }, OR: [{ productId }, { productId: null }] },
+    where: {
+      shopId,
+      status: { not: "ARCHIVED" },
+      AND: [
+        { OR: [{ productId }, { productId: null }] },
+        ...(locationId ? [{ OR: [{ locationId }, { locationId: null }] }] : [{ locationId: null }]),
+      ],
+    },
     orderBy: { priority: "asc" },
   });
   const sellingUnits = await db.productSellingUnit.findMany({

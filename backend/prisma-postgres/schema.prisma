@@ -99,6 +99,7 @@ model PricingRule {
   priority    Int     @default(0)
 
   productId     String?
+  locationId    String?
   unitCode      String?
   sellingUnitId String?
   customerId    String?
@@ -123,10 +124,12 @@ model PricingRule {
   updatedAt             DateTime @updatedAt
 
   shop        Shop                @relation(fields: [shopId], references: [id])
+  location    StoreLocation?      @relation(fields: [locationId], references: [id], onDelete: SetNull)
   sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
 
   @@index([shopId, status, priority])
   @@index([shopId, productId])
+  @@index([shopId, locationId, status, priority])
   @@index([shopId, sellingUnitId])
   @@index([shopId, customerId])
   @@index([shopId, customerGroup])
@@ -621,7 +624,8 @@ model StoreLocation {
   retailPaymentIntents RetailPaymentIntent[]
   purchaseOrders    PurchaseOrder[]
   purchaseReceipts  PurchaseReceipt[]
-  userAccess        UserLocationAccess[]
+    userAccess        UserLocationAccess[]
+    pricingRules      PricingRule[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])

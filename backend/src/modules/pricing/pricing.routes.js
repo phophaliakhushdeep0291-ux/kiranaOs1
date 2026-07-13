@@ -6,15 +6,16 @@ import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import { validate } from "../../middleware/validate.js";
 import { evaluateSchema, createRuleSchema, updateRuleSchema, pricingSettingsSchema, sellingUnitSchema, updateSellingUnitSchema } from "./pricing.schema.js";
 import * as ctrl from "./pricing.controller.js";
+import { requireLocationAccess } from "../stores/location-access.service.js";
 
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
 
 // Read + evaluate — any authenticated shop user (cashiers price bills).
-router.post("/evaluate", validate(evaluateSchema), ctrl.evaluate);
-router.get("/rules", ctrl.listRules);
+router.post("/evaluate", requireLocationAccess("view"), validate(evaluateSchema), ctrl.evaluate);
+router.get("/rules", requireLocationAccess("view"), ctrl.listRules);
 router.get("/settings", ctrl.getSettings);
-router.get("/products/:productId", ctrl.productPricing);
+router.get("/products/:productId", requireLocationAccess("view"), ctrl.productPricing);
 router.get("/products/:productId/units", ctrl.listSellingUnits);
 
 // Mutations — owner/admin only (managing permanent prices + smart-pricing config).

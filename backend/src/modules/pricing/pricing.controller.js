@@ -1,16 +1,17 @@
 import * as svc from "./pricing.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
 
 function actor(req) {
   return { userId: req.user?.userId ?? req.user?.id ?? null, role: req.user?.role, deviceId: req.get("x-device-id") || null };
 }
 
 export async function evaluate(req, res, next) {
-  try { res.json({ success: true, data: await svc.evaluate(req.shopId, req.body) }); }
+  try { res.json({ success: true, data: await svc.evaluate(req.shopId, { ...req.body, locationId: req.operationalLocation?.id ?? requestLocationId(req) }) }); }
   catch (err) { next(err); }
 }
 
 export async function listRules(req, res, next) {
-  try { res.json({ success: true, data: await svc.listRules(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.listRules(req.shopId, { ...req.query, locationId: req.operationalLocation?.id ?? requestLocationId(req) }) }); }
   catch (err) { next(err); }
 }
 
@@ -30,7 +31,7 @@ export async function deleteRule(req, res, next) {
 }
 
 export async function productPricing(req, res, next) {
-  try { res.json({ success: true, data: await svc.getProductPricing(req.shopId, req.params.productId) }); }
+  try { res.json({ success: true, data: await svc.getProductPricing(req.shopId, req.params.productId, req.operationalLocation?.id ?? requestLocationId(req)) }); }
   catch (err) { next(err); }
 }
 
