@@ -1,5 +1,10 @@
 export const PLAN_CODES = ["starter", "standard", "growth", "pro"];
 
+// Standard remains a valid code for existing subscriptions and signed device
+// licenses, but it is no longer sold to new customers. Public checkout surfaces
+// offer Starter, Growth and Business (stored as `pro` for DB compatibility).
+export const PUBLIC_PLAN_CODES = ["starter", "growth", "pro"];
+
 export const PLAN_ORDER = {
   starter: 1,
   standard: 2,
@@ -74,16 +79,16 @@ export const PLAN_CONFIGS = {
   starter: {
     code: "starter",
     name: "Starter",
-    priceMonthlyPaise: 29900,
-    priceYearlyPaise: 29900 * 12,
+    priceMonthlyPaise: 34900,
+    priceYearlyPaise: 299900,
     maxDevices: 2,
     maxStores: 1,
     maxStaff: 0,
-    features: starterFeatures,
+    features: [...starterFeatures, ...standardOnlyFeatures],
   },
   standard: {
     code: "standard",
-    name: "Standard",
+    name: "Legacy Standard",
     priceMonthlyPaise: 39900,
     priceYearlyPaise: 39900 * 12,
     maxDevices: 2,
@@ -94,21 +99,21 @@ export const PLAN_CONFIGS = {
   growth: {
     code: "growth",
     name: "Growth",
-    priceMonthlyPaise: 49900,
-    priceYearlyPaise: 49900 * 12,
-    maxDevices: 3,
+    priceMonthlyPaise: 59900,
+    priceYearlyPaise: 499900,
+    maxDevices: 5,
     maxStores: 1,
     maxStaff: 5,
     features: [...starterFeatures, ...standardOnlyFeatures, ...growthOnlyFeatures],
   },
   pro: {
     code: "pro",
-    name: "Pro",
-    priceMonthlyPaise: 69900,
-    priceYearlyPaise: 69900 * 12,
-    maxDevices: 5,
+    name: "Business",
+    priceMonthlyPaise: 99900,
+    priceYearlyPaise: 899900,
+    maxDevices: 10,
     maxStores: 2,
-    maxStaff: 15,
+    maxStaff: 20,
     features: [...starterFeatures, ...standardOnlyFeatures, ...growthOnlyFeatures, ...proOnlyFeatures],
   },
 };

@@ -11,7 +11,7 @@ const preflight = readFileSync("scripts/production-preflight.js", "utf8");
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 
 for (const schema of [sqliteSchema, pgSchema]) {
-  assert.ok(schema.includes("disabledAt   DateTime?"), "User must support soft staff deactivation");
+  assert.match(schema, /\bdisabledAt\s+DateTime\?/, "User must support soft staff deactivation");
   assert.ok(schema.includes("revokedReason"), "Session must record revocation reason");
 }
 

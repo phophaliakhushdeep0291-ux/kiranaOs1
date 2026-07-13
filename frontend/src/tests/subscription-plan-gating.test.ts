@@ -43,7 +43,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { decideFeature, getCurrentSubscriptionSnapshot, type SubscriptionSnapshot } from "@/features/subscription/access";
-import { getPlan } from "@/features/subscription/plans";
+import { getPlan, PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER } from "@/features/subscription/plans";
 
 function snapshot(planCode: PlanCode, overrides: Partial<SubscriptionSnapshot> = {}): SubscriptionSnapshot {
   const plan = getPlan(planCode);
@@ -110,6 +110,14 @@ describe("subscription and plan gating", () => {
     mockState.subscriptionRows = [];
   });
 
+  it("publishes three annual-first plans while retaining Legacy Standard internally", () => {
+    expect(PUBLIC_PLAN_ORDER).toEqual(["starter", "growth", "pro"]);
+    expect(PLAN_DEFINITIONS.starter).toMatchObject({ price: 349, annualPrice: 2999, maxDevices: 2 });
+    expect(PLAN_DEFINITIONS.growth).toMatchObject({ price: 599, annualPrice: 4999, maxDevices: 5, maxStaff: 5 });
+    expect(PLAN_DEFINITIONS.pro).toMatchObject({ name: "Business", price: 999, annualPrice: 8999, maxDevices: 10, maxStaff: 20 });
+    expect(PLAN_DEFINITIONS.standard.legacy).toBe(true);
+  });
+
   it("Starter unlocks visible core inventory workflows", () => {
     const decision = decideFeature(snapshot("starter"), "stock_adjustment");
 
@@ -118,13 +126,13 @@ describe("subscription and plan gating", () => {
     expect(decision.requiredPlan.code).toBe("starter");
   });
 
-  it("Starter does not unlock Pro features", () => {
+  it("Starter does not unlock Business features", () => {
     const decision = decideFeature(snapshot("starter"), "whatsapp_reminders");
 
     expect(decision.allowed).toBe(false);
     expect(decision.upgradeRequired).toBe(true);
     expect(decision.requiredPlan.code).toBe("pro");
-    expect(decision.reason).toMatch(/requires Pro/i);
+    expect(decision.reason).toMatch(/requires Business/i);
   });
 
   it("Staff login locked below Growth", () => {
@@ -135,7 +143,7 @@ describe("subscription and plan gating", () => {
     expect(decision.requiredPlan.code).toBe("growth");
   });
 
-  it("WhatsApp reminders locked below Pro", () => {
+  it("WhatsApp reminders locked below Business", () => {
     const decision = decideFeature(snapshot("growth"), "whatsapp_reminders");
 
     expect(decision.allowed).toBe(false);

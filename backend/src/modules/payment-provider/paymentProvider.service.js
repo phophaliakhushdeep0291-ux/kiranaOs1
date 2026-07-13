@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import db from "../../db.js";
+import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { activateManualPayment } from "./manual.provider.js";
@@ -46,7 +47,7 @@ export async function activateManualProviderPayment(shopId, input) {
 }
 
 // createRazorpayOrder/assertRazorpayConfigured throws RAZORPAY_NOT_CONFIGURED when Razorpay is disabled.
-export async function createSubscriptionCheckout({ shopId, userId, planCode, billingCycle = "monthly", provider = "razorpay", req = null }) {
+export async function createSubscriptionCheckout({ shopId, userId, planCode, billingCycle = "monthly", couponCode = null, provider = "razorpay", req = null }) {
   if (provider !== "razorpay") {
     const err = new AppError("Unsupported payment provider", 400);
     err.code = "UNSUPPORTED_PAYMENT_PROVIDER";
@@ -61,7 +62,9 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
     throw err;
   }
 
-  const amountPaise = billingCycle === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise;
+  const baseAmountPaise = billingCycle === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise;
+  const coupon = applySubscriptionCoupon({ couponCode, planCode, billingCycle, baseAmountPaise });
+  const amountPaise = coupon.finalAmountPaise;
   const currency = "INR";
 
   const transaction = await db.paymentTransaction.create({
@@ -71,7 +74,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
       amountPaise,
       currency,
       status: "created",
-      rawPayloadJson: JSON.stringify({ source: "checkout_requested", planCode, billingCycle }),
+      rawPayloadJson: JSON.stringify({ source: "checkout_requested", planCode, billingCycle, ...coupon }),
     },
   });
 
@@ -85,6 +88,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
         shopId,
         planCode,
         billingCycle,
+        couponCode: coupon.couponCode,
         transactionId: transaction.id,
         product: "kiranaos_subscription",
       },
@@ -105,6 +109,9 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
         source: "checkout_created",
         planCode,
         billingCycle,
+        couponCode: coupon.couponCode,
+        baseAmountPaise,
+        discountPaise: coupon.discountPaise,
         razorpayOrderId: order.id,
         order: safeOrder,
       }),
@@ -116,7 +123,7 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
     userId,
     action: "SUBSCRIPTION_CHECKOUT_CREATED",
     entityId: transaction.id,
-    metadata: { provider: "razorpay", planCode, billingCycle, amountPaise, razorpayOrderId: order.id },
+    metadata: { provider: "razorpay", planCode, billingCycle, couponCode: coupon.couponCode, baseAmountPaise, discountPaise: coupon.discountPaise, amountPaise, razorpayOrderId: order.id },
     req,
   });
 
@@ -125,11 +132,73 @@ export async function createSubscriptionCheckout({ shopId, userId, planCode, bil
     razorpayKeyId: getRazorpayCheckoutKeyId(),
     orderId: order.id,
     amountPaise,
+    baseAmountPaise,
+    discountPaise: coupon.discountPaise,
+    couponCode: coupon.couponCode,
     currency,
     planCode,
     billingCycle,
     transactionId: transaction.id,
   };
+}
+
+export function applySubscriptionCoupon({ couponCode, planCode, billingCycle, baseAmountPaise, now = new Date() }) {
+  const normalizedCode = String(couponCode || "").trim().toUpperCase();
+  if (!normalizedCode) return { couponCode: null, discountPaise: 0, finalAmountPaise: baseAmountPaise };
+
+  let catalog;
+  try {
+    catalog = JSON.parse(env.SUBSCRIPTION_COUPONS_JSON || "{}");
+  } catch {
+    const err = new AppError("Subscription coupon configuration is invalid", 500);
+    err.code = "COUPON_CONFIG_INVALID";
+    throw err;
+  }
+  const definition = catalog && typeof catalog === "object" ? catalog[normalizedCode] : null;
+  if (!definition || definition.active === false) throw couponError("Coupon code is invalid", "COUPON_INVALID");
+  if (Array.isArray(definition.plans) && !definition.plans.includes(planCode)) throw couponError("Coupon is not valid for this plan", "COUPON_PLAN_NOT_ELIGIBLE");
+  if (Array.isArray(definition.billingCycles) && !definition.billingCycles.includes(billingCycle)) throw couponError("Coupon is not valid for this billing cycle", "COUPON_BILLING_CYCLE_NOT_ELIGIBLE");
+
+  const nowMs = now.getTime();
+  const startsMs = definition.startsAt ? Date.parse(definition.startsAt) : null;
+  const expiresMs = definition.expiresAt ? Date.parse(definition.expiresAt) : null;
+  if (startsMs !== null && (!Number.isFinite(startsMs) || nowMs < startsMs)) throw couponError("Coupon is not active yet", "COUPON_NOT_STARTED");
+  if (expiresMs !== null && (!Number.isFinite(expiresMs) || nowMs > expiresMs)) throw couponError("Coupon has expired", "COUPON_EXPIRED");
+
+  const percentOff = Number(definition.percentOff || 0);
+  const fixedOffPaise = Number(definition.fixedOffPaise || 0);
+  if ((!Number.isFinite(percentOff) || percentOff < 0 || percentOff > 90)
+    || (!Number.isSafeInteger(fixedOffPaise) || fixedOffPaise < 0)
+    || (percentOff <= 0 && fixedOffPaise <= 0)
+    || (percentOff > 0 && fixedOffPaise > 0)) {
+    const err = new AppError("Subscription coupon configuration is invalid", 500);
+    err.code = "COUPON_CONFIG_INVALID";
+    throw err;
+  }
+  const discountPaise = Math.min(
+    baseAmountPaise - 100,
+    percentOff > 0 ? Math.round(baseAmountPaise * percentOff / 100) : fixedOffPaise,
+  );
+  return { couponCode: normalizedCode, discountPaise, finalAmountPaise: baseAmountPaise - discountPaise };
+}
+
+export async function validateSubscriptionCoupon({ couponCode, planCode, billingCycle }) {
+  await ensurePlansSeeded();
+  const plan = await getPlanByCode(planCode);
+  if (!plan?.isActive) {
+    const err = new AppError("Plan is not active", 400);
+    err.code = "PLAN_NOT_ACTIVE";
+    throw err;
+  }
+  const baseAmountPaise = billingCycle === "yearly" ? plan.priceYearlyPaise : plan.priceMonthlyPaise;
+  const result = applySubscriptionCoupon({ couponCode, planCode, billingCycle, baseAmountPaise });
+  return { valid: true, planCode, billingCycle, baseAmountPaise, ...result };
+}
+
+function couponError(message, code) {
+  const err = new AppError(message, 400);
+  err.code = code;
+  return err;
 }
 
 export async function verifySubscriptionPayment({ shopId, userId, input, req = null }) {

@@ -18,10 +18,10 @@ if (ctx.skip) {
   }
 
   describe("subscription and device integration", () => {
-    test("plans endpoint seeds and returns four paid plans", async () => {
+    test("plans endpoint returns the three public plans and hides Legacy Standard", async () => {
       const plans = assertSuccess(await ctx.get("/api/plans"));
-      assert.deepEqual(plans.map((p) => p.code), ["starter", "standard", "growth", "pro"]);
-      assert.deepEqual(plans.map((p) => p.priceMonthlyPaise), [29900, 39900, 49900, 69900]);
+      assert.deepEqual(plans.map((p) => p.code), ["starter", "growth", "pro"]);
+      assert.deepEqual(plans.map((p) => p.priceMonthlyPaise), [34900, 59900, 99900]);
     });
 
     test("current subscription returns fallback/trial for shop without subscription", async () => {

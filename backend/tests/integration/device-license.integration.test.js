@@ -70,7 +70,7 @@ if (ctx.skip) {
       assertSuccess(await ctx.post("/api/subscription/manual-activate", { planCode: "pro", period: "monthly" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 201);
       const license = assertSuccess(await ctx.get("/api/devices/license?deviceId=plan-device", { token: ownerAuth.accessToken, headers: { "x-device-id": "plan-device" } }));
       assert.equal(license.payload.planCode, "pro");
-      assert.equal(license.payload.maxDevices, 5);
+      assert.equal(license.payload.maxDevices, 10);
       assert.ok(license.payload.features.includes("whatsapp_reminders"));
     });
   });

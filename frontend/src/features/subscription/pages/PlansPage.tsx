@@ -2,7 +2,7 @@ import { CheckCircle2, Crown, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PLAN_DEFINITIONS, PLAN_ORDER, type PlanCode } from "@/features/subscription/plans";
+import { PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER, type BillingCycle, type PlanCode } from "@/features/subscription/plans";
 import { useSubscriptionSnapshot } from "@/features/subscription/access";
 import { PlanBadge, UpgradeModal } from "@/features/subscription/components";
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { PageHeader, PageShell } from "@/components/shared";
 export default function PlansPage() {
   const { snapshot } = useSubscriptionSnapshot();
   const [targetPlan, setTargetPlan] = useState<PlanCode | null>(null);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
 
   return (
     <PageShell className="space-y-5">
@@ -20,8 +21,15 @@ export default function PlansPage() {
         actions={snapshot ? <PlanBadge planCode={snapshot.planCode} status={snapshot.status} /> : null}
       />
 
-      <div className="grid gap-4 lg:grid-cols-4">
-        {PLAN_ORDER.map((code) => {
+      <div className="flex justify-center">
+        <div className="inline-flex rounded-lg border bg-muted/40 p-1" aria-label="Billing cycle">
+          <Button size="sm" variant={billingCycle === "monthly" ? "default" : "ghost"} onClick={() => setBillingCycle("monthly")}>Monthly</Button>
+          <Button size="sm" variant={billingCycle === "yearly" ? "default" : "ghost"} onClick={() => setBillingCycle("yearly")}>Annual · save up to 28%</Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        {PUBLIC_PLAN_ORDER.map((code) => {
           const plan = PLAN_DEFINITIONS[code];
           const isCurrent = snapshot?.planCode === code;
           return (
@@ -32,13 +40,18 @@ export default function PlansPage() {
                   {isCurrent ? <Badge>Current</Badge> : plan.highlight ? <Badge variant="secondary">Popular</Badge> : null}
                 </div>
                 <CardDescription>{plan.headline}</CardDescription>
-                <div className="pt-2"><span className="text-3xl font-bold">Rs {plan.price}</span><span className="text-sm text-muted-foreground">/month</span></div>
+                <div className="pt-2">
+                  <span className="text-3xl font-bold">Rs {billingCycle === "yearly" ? plan.annualPrice : plan.price}</span>
+                  <span className="text-sm text-muted-foreground">/{billingCycle === "yearly" ? "year" : "month"}</span>
+                  {billingCycle === "yearly" && <p className="mt-1 text-xs text-emerald-700">Rs {Math.round(plan.annualPrice / 12)}/month, billed annually</p>}
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="rounded-lg bg-muted p-2"><p className="font-medium">{plan.maxStores}</p><p className="text-xs text-muted-foreground">store{plan.maxStores > 1 ? "s" : ""}</p></div>
                   <div className="rounded-lg bg-muted p-2"><p className="font-medium">{plan.maxDevices}</p><p className="text-xs text-muted-foreground">device{plan.maxDevices > 1 ? "s" : ""}</p></div>
                 </div>
+                <p className="text-xs text-muted-foreground">{plan.maxStaff > 0 ? `Includes ${plan.maxStaff} staff accounts` : "Owner account only"}</p>
                 <ul className="space-y-2 text-sm">
                   {plan.bullets.slice(0, 4).map((bullet) => (
                     <li key={bullet} className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span>{bullet}</span></li>
@@ -64,7 +77,7 @@ export default function PlansPage() {
         </CardContent>
       </Card>
 
-      <UpgradeModal open={targetPlan !== null} onOpenChange={(open) => !open && setTargetPlan(null)} targetPlanCode={targetPlan ?? undefined} />
+      <UpgradeModal open={targetPlan !== null} onOpenChange={(open) => !open && setTargetPlan(null)} targetPlanCode={targetPlan ?? undefined} billingCycle={billingCycle} />
     </PageShell>
   );
 }

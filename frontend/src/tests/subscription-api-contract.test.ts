@@ -10,6 +10,7 @@ import {
   getSubscriptionStatus,
   listSubscriptionPlans,
   requestSubscriptionUpgrade,
+  validateSubscriptionCoupon,
   verifySubscriptionPayment,
 } from "@/features/subscription/api";
 
@@ -43,6 +44,33 @@ describe("subscription api contract", () => {
           provider: "razorpay",
           planCode: "growth",
         }),
+      }),
+    );
+  });
+
+  it("sends an optional coupon to server-side checkout pricing", async () => {
+    apiRequestMock.mockResolvedValueOnce({ orderId: "order_2", transactionId: "txn_2", discountPaise: 124975 });
+
+    await requestSubscriptionUpgrade({ planCode: "growth", billingCycle: "yearly", couponCode: "LAUNCH25" });
+
+    expect(apiRequestMock).toHaveBeenCalledWith(
+      "/subscription/checkout",
+      expect.objectContaining({
+        body: JSON.stringify({ billingCycle: "yearly", provider: "razorpay", planCode: "growth", couponCode: "LAUNCH25" }),
+      }),
+    );
+  });
+
+  it("validates a coupon before opening payment checkout", async () => {
+    apiRequestMock.mockResolvedValueOnce({ valid: true, couponCode: "LAUNCH25", discountPaise: 124975 });
+
+    await validateSubscriptionCoupon({ planCode: "growth", billingCycle: "yearly", couponCode: "LAUNCH25" });
+
+    expect(apiRequestMock).toHaveBeenCalledWith(
+      "/subscription/validate-coupon",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ planCode: "growth", billingCycle: "yearly", couponCode: "LAUNCH25" }),
       }),
     );
   });

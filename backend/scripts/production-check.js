@@ -422,7 +422,10 @@ if (exists(".env.example")) {
 
 if (exists("prisma-postgres/schema.prisma")) {
   const pgSchema = read("prisma-postgres/schema.prisma");
-  if (!pgSchema.includes('provider = "postgresql"')) errors.push("prisma-postgres/schema.prisma must use PostgreSQL provider");
+  const pgDatasource = pgSchema.match(/\bdatasource\s+\w+\s*\{[\s\S]*?\}/)?.[0] ?? "";
+  if (!/\bprovider\s*=\s*["']postgresql["']/.test(pgDatasource)) {
+    errors.push("prisma-postgres/schema.prisma must use PostgreSQL provider");
+  }
   for (const table of requiredPostgresTables) {
     if (!pgSchema.includes(`model ${table}`)) errors.push(`prisma-postgres/schema.prisma missing model: ${table}`);
   }
@@ -1832,7 +1835,7 @@ if (exists("src/middleware/auth.js") && exists("src/modules/auth/auth.service.js
   const migrations = migrationFiles.map((file) => read(path.join("prisma-postgres", "migrations", file))).join("\n");
 
   for (const [sourceName, source] of [["SQLite schema", sqliteSchema], ["PostgreSQL schema", pgSchema]]) {
-    if (!source.includes("disabledAt   DateTime?")) errors.push(`${sourceName} missing User.disabledAt for staff deactivation`);
+    if (!/\bdisabledAt\s+DateTime\?/.test(source)) errors.push(`${sourceName} missing User.disabledAt for staff deactivation`);
     if (!source.includes("revokedReason")) errors.push(`${sourceName} missing Session.revokedReason for session revocation auditability`);
   }
   if (!migrations.includes('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "disabledAt"')) {

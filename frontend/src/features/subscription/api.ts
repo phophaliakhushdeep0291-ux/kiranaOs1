@@ -39,6 +39,7 @@ export interface SubscriptionStatusDto {
 export interface UpgradeRequestDto {
   planCode: PlanCode;
   billingCycle?: BillingCycle;
+  couponCode?: string;
   provider?: "razorpay";
 }
 
@@ -47,10 +48,23 @@ export interface SubscriptionCheckoutDto {
   razorpayKeyId: string;
   orderId: string;
   amountPaise: number;
+  baseAmountPaise?: number;
+  discountPaise?: number;
+  couponCode?: string | null;
   currency: string;
   planCode: PlanCode | string;
   billingCycle: BillingCycle;
   transactionId: string;
+}
+
+export interface CouponValidationDto {
+  valid: true;
+  couponCode: string;
+  planCode: PlanCode | string;
+  billingCycle: BillingCycle;
+  baseAmountPaise: number;
+  discountPaise: number;
+  finalAmountPaise: number;
 }
 
 export interface VerifySubscriptionPaymentDto {
@@ -94,6 +108,13 @@ export function requestSubscriptionUpgrade(data: UpgradeRequestDto) {
       provider: "razorpay",
       ...data,
     }),
+  });
+}
+
+export function validateSubscriptionCoupon(data: { planCode: PlanCode; billingCycle: BillingCycle; couponCode: string }) {
+  return apiRequest<CouponValidationDto>("/subscription/validate-coupon", {
+    method: "POST",
+    body: JSON.stringify(data),
   });
 }
 

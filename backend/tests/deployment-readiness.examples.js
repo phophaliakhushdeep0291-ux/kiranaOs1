@@ -5,6 +5,11 @@ function read(file) {
   return fs.readFileSync(file, "utf8");
 }
 
+function hasDatasourceProvider(schema, provider) {
+  const datasource = schema.match(/\bdatasource\s+\w+\s*\{[\s\S]*?\}/)?.[0] ?? "";
+  return new RegExp(`\\bprovider\\s*=\\s*["']${provider}["']`).test(datasource);
+}
+
 assert.ok(fs.existsSync("Dockerfile"), "Dockerfile must exist");
 assert.ok(fs.existsSync("docker-compose.yml"), "docker-compose.yml must exist");
 assert.ok(fs.existsSync(".dockerignore"), ".dockerignore must exist");
@@ -54,7 +59,7 @@ assert.ok(compose.includes("postgres:16-alpine"), "docker-compose must include P
 assert.ok(compose.includes("DATABASE_URL"), "docker-compose must configure DATABASE_URL");
 
 const pgSchema = read("prisma-postgres/schema.prisma");
-assert.ok(pgSchema.includes('provider = "postgresql"'), "PostgreSQL schema must use postgresql provider");
+assert.ok(hasDatasourceProvider(pgSchema, "postgresql"), "PostgreSQL schema must use postgresql provider");
 const pgMigration = read("prisma-postgres/migrations/000001_init/migration.sql");
 assert.ok(pgMigration.includes('CREATE TABLE "Shop"'), "PostgreSQL migration must create Shop table");
 assert.ok(pgMigration.includes('CREATE TABLE "OfflineSyncEvent"'), "PostgreSQL migration must include sync idempotency table");

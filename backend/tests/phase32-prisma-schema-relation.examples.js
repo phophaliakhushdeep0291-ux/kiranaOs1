@@ -22,11 +22,11 @@ for (const schemaPath of ["prisma/schema.prisma", "prisma-postgres/schema.prisma
   const snapshotModel = extractModel(schema, "DailyClosingSnapshot");
 
   assert(
-    shopModel.includes("dailyClosingSnapshots DailyClosingSnapshot[]"),
+    /\bdailyClosingSnapshots\s+DailyClosingSnapshot\[\]/.test(shopModel),
     `${schemaPath}: Shop must expose opposite relation dailyClosingSnapshots DailyClosingSnapshot[]`
   );
   assert(
-    snapshotModel.includes("shop Shop @relation(fields: [shopId], references: [id])"),
+    /\bshop\s+Shop\s+@relation\(fields:\s*\[shopId\],\s*references:\s*\[id\]\)/.test(snapshotModel),
     `${schemaPath}: DailyClosingSnapshot.shop relation must stay defined`
   );
 }

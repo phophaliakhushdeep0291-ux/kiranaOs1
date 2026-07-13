@@ -32,7 +32,7 @@ async function main() {
         maxStores: plan.maxStores,
         maxStaff: plan.maxStaff,
         featuresJson: JSON.stringify(plan.features),
-        isActive: true,
+        isActive: code !== "standard",
       },
       create: {
         code,
@@ -43,7 +43,7 @@ async function main() {
         maxStores: plan.maxStores,
         maxStaff: plan.maxStaff,
         featuresJson: JSON.stringify(plan.features),
-        isActive: true,
+        isActive: code !== "standard",
       },
     });
   }

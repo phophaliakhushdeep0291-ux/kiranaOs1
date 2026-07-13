@@ -3,6 +3,7 @@ import { PLAN_CODES } from "./planConfig.js";
 
 const planCode = z.enum(PLAN_CODES);
 const billingCycle = z.enum(["monthly", "yearly"]);
+const couponCode = z.string().trim().toUpperCase().min(3).max(32).regex(/^[A-Z0-9_-]+$/);
 
 export const manualActivateSchema = z.object({
   planCode,
@@ -25,7 +26,10 @@ export const checkoutSchema = z.object({
   planCode,
   billingCycle: billingCycle.default("monthly"),
   provider: z.enum(["razorpay"]).default("razorpay"),
+  couponCode: couponCode.optional(),
 });
+
+export const validateCouponSchema = z.object({ planCode, billingCycle, couponCode });
 
 export const verifyPaymentSchema = z.object({
   razorpay_order_id: z.string().min(1),

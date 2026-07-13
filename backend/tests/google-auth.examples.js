@@ -44,7 +44,7 @@ assert.match(envConfig, /GOOGLE_CLIENT_ID: z\.string\(\)\.optional\(\)/, "GOOGLE
 
 // Schema: googleSub on User in BOTH database schemas
 for (const [name, schema] of [["sqlite", read("../prisma/schema.prisma")], ["postgres", read("../prisma-postgres/schema.prisma")]]) {
-  assert.ok(schema.includes("googleSub    String?"), `${name} User must store googleSub`);
+  assert.match(schema, /\bgoogleSub\s+String\?(?:\s|$)/, `${name} User must store googleSub`);
   assert.ok(schema.includes("@@index([googleSub])"), `${name} User must index googleSub`);
 }
 

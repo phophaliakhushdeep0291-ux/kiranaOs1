@@ -36,8 +36,8 @@ const productionCheck = read("scripts/production-check.js");
 const packageJson = JSON.parse(read("package.json"));
 
 for (const schema of [sqliteSchema, pgSchema]) {
-  assert(schema.includes("createdByUserId  String?"), "Bill must have nullable createdByUserId");
-  assert(schema.includes("deviceId         String?"), "Bill should store optional deviceId when available");
+  assert.match(schema, /\bcreatedByUserId\s+String\?(?:\s|$)/, "Bill must have nullable createdByUserId");
+  assert.match(schema, /\bdeviceId\s+String\?(?:\s|$)/, "Bill should store optional deviceId when available");
   assert(schema.includes("@@index([shopId, createdByUserId, createdAt])"), "Bill must have cashier report index");
   assert(schema.includes("model DailyClosingSnapshot"), "DailyClosingSnapshot model must exist");
   assert(schema.includes("topProductsJson") && schema.includes("lowStockJson"), "Snapshot must persist JSON report summaries");

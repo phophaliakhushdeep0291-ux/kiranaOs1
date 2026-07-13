@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, CloudOff, CreditCard, Database, RefreshCcw
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PLAN_DEFINITIONS, PLAN_ORDER, type PlanCode } from "@/features/subscription/plans";
+import { PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER, type PlanCode } from "@/features/subscription/plans";
 import { useSubscriptionSnapshot } from "@/features/subscription/access";
 import { CancelSubscriptionDialog, PlanBadge, UpgradeModal } from "@/features/subscription/components";
 import { subscriptionRefreshLocalFirst } from "@/features/subscription/local-actions";
@@ -43,8 +43,11 @@ export default function SubscriptionPage() {
 
   // Only a paid, active plan can be cancelled (trials/expired/grace have nothing to cancel).
   const canCancel = snapshot.status === "active";
-  const currentIndex = PLAN_ORDER.indexOf(snapshot.planCode);
-  const nextPlan = currentIndex >= 0 && currentIndex < PLAN_ORDER.length - 1 ? PLAN_ORDER[currentIndex + 1] : null;
+  const publicCurrentIndex = PUBLIC_PLAN_ORDER.indexOf(snapshot.planCode as (typeof PUBLIC_PLAN_ORDER)[number]);
+  const currentIndex = snapshot.planCode === "standard" ? 0 : Math.max(0, publicCurrentIndex);
+  const nextPlan = snapshot.planCode === "standard"
+    ? "growth"
+    : currentIndex < PUBLIC_PLAN_ORDER.length - 1 ? PUBLIC_PLAN_ORDER[currentIndex + 1] : null;
   const periodEndLabel = snapshot.currentPeriodEnd ? new Date(snapshot.currentPeriodEnd).toLocaleDateString("en-IN") : null;
 
   return (
@@ -95,8 +98,8 @@ export default function SubscriptionPage() {
           <CardTitle>Plan limits</CardTitle>
           <CardDescription>Current and higher plans at a glance.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          {PLAN_ORDER.map((code, index) => {
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          {PUBLIC_PLAN_ORDER.map((code, index) => {
             const plan = PLAN_DEFINITIONS[code];
             const isCurrent = snapshot.planCode === plan.code;
             const isHigher = index > currentIndex;
@@ -110,7 +113,7 @@ export default function SubscriptionPage() {
               <button key={plan.code} onClick={handleClick} className={`rounded-lg border p-4 text-left hover:bg-muted ${isCurrent ? "border-primary" : ""}`}>
                 <div className="flex items-center justify-between"><p className="font-semibold">{plan.name}</p>{isCurrent && <Badge>Current</Badge>}</div>
                 <p className="mt-1 text-sm text-muted-foreground">Rs {plan.price}/month</p>
-                <p className="mt-2 text-xs text-muted-foreground">{plan.maxStores} store - {plan.maxDevices} devices</p>
+                <p className="mt-2 text-xs text-muted-foreground">{plan.maxStores} store - {plan.maxDevices} devices - {plan.maxStaff || "no"} staff</p>
                 <p className={`mt-2 text-xs font-medium ${isCurrent ? "text-primary" : "text-muted-foreground"}`}>{hint}</p>
               </button>
             );

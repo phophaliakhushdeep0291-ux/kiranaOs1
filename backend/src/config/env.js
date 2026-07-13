@@ -39,6 +39,9 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  // JSON object keyed by coupon code. Example:
+  // {"LAUNCH25":{"percentOff":25,"plans":["growth","pro"],"billingCycles":["yearly"],"expiresAt":"2026-12-31T23:59:59.999Z"}}
+  SUBSCRIPTION_COUPONS_JSON: z.string().default("{}"),
   ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   REDIS_URL: z.string().optional(),
   QUEUES_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),

@@ -31,10 +31,10 @@ function createMockTx() {
 async function run() {
   const schema = readFileSync("prisma/schema.prisma", "utf8");
   assert(schema.includes("model BillCounter"), "Prisma schema must include BillCounter model");
-  assert(schema.includes("shopId     String   @unique"), "BillCounter.shopId must be unique");
-  assert(schema.includes("lastNumber Int"), "BillCounter must track lastNumber");
-  assert(schema.includes("estimateLastNumber Int"), "BillCounter must track estimateLastNumber separately");
-  assert(schema.includes("billCounter      BillCounter?"), "Shop must expose optional billCounter relation");
+  assert.match(schema, /\bshopId\s+String\s+@unique\b/, "BillCounter.shopId must be unique");
+  assert.match(schema, /\blastNumber\s+Int\b/, "BillCounter must track lastNumber");
+  assert.match(schema, /\bestimateLastNumber\s+Int\b/, "BillCounter must track estimateLastNumber separately");
+  assert.match(schema, /\bbillCounter\s+BillCounter\?(?:\s|$)/, "Shop must expose optional billCounter relation");
 
   const billNumberSource = readFileSync("src/utils/billNumber.js", "utf8");
   assert(billNumberSource.includes("billCounter.upsert"), "generateBillNo must use BillCounter upsert");

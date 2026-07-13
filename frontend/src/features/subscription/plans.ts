@@ -1,5 +1,7 @@
 export const PLAN_ORDER = ["starter", "standard", "growth", "pro"] as const;
 export type PlanCode = typeof PLAN_ORDER[number];
+export const PUBLIC_PLAN_ORDER = ["starter", "growth", "pro"] as const satisfies readonly PlanCode[];
+export type BillingCycle = "monthly" | "yearly";
 
 export type SubscriptionState =
   | "trial"
@@ -74,12 +76,15 @@ export interface PlanDefinition {
   code: PlanCode;
   name: string;
   price: number;
+  annualPrice: number;
   maxStores: number;
   maxDevices: number;
+  maxStaff: number;
   headline: string;
   features: FeatureName[];
   bullets: string[];
   highlight?: boolean;
+  legacy?: boolean;
 }
 
 const starterFeatures: FeatureName[] = [
@@ -157,28 +162,31 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
   starter: {
     code: "starter",
     name: "Starter",
-    price: 299,
+    price: 349,
+    annualPrice: 2999,
     maxStores: 1,
     maxDevices: 2,
-    headline: "For one shopkeeper using up to two devices.",
-    features: starterFeatures,
+    maxStaff: 0,
+    headline: "Billing, inventory and udhar for an owner-run shop.",
+    features: [...starterFeatures, ...standardExtra],
     bullets: [
-      "1 store, 2 devices, owner account only",
-      "Basic billing, rough bill, paid/udhar bill",
-      "Customer ledger and payment recording",
-      "Basic products, offline billing and 7-day offline grace",
-      "Supplier entry, purchase entry and stock adjustment",
-      "7-day local reports, cloud backup, automatic two-way sync, basic recycle bin",
-      "Basic support",
+      "1 store, 2 registered devices and 1 billing counter",
+      "Cash, UPI, split and udhar billing—even offline",
+      "Products, stock, purchases, suppliers and low-stock alerts",
+      "Customer ledger, payment history and PDF bill sharing",
+      "Owner dashboard, daily summary and 30-day reports",
+      "Cloud backup, two-way sync and recovery tools",
     ],
   },
   standard: {
     code: "standard",
-    name: "Standard",
+    name: "Legacy Standard",
     price: 399,
+    annualPrice: 4788,
     maxStores: 1,
     maxDevices: 2,
-    headline: "For shops that need safer backup and two devices.",
+    maxStaff: 0,
+    headline: "Retained for existing subscribers; no longer sold.",
     features: [...starterFeatures, ...standardExtra],
     bullets: [
       "Everything in Starter",
@@ -188,41 +196,46 @@ export const PLAN_DEFINITIONS: Record<PlanCode, PlanDefinition> = {
       "PDF bill share, owner dashboard and PIN-protected delete",
       "Better backup",
     ],
-    highlight: true,
+    legacy: true,
   },
   growth: {
     code: "growth",
     name: "Growth",
-    price: 499,
+    price: 599,
+    annualPrice: 4999,
     maxStores: 1,
-    maxDevices: 3,
-    headline: "For growing shops with staff, stock and deeper reports.",
+    maxDevices: 5,
+    maxStaff: 5,
+    headline: "Staff control, advanced pricing and deeper reports.",
     features: [...starterFeatures, ...standardExtra, ...growthExtra],
     bullets: [
-      "Everything in Standard",
-      "3 devices, staff login and role-based access",
+      "Everything in Starter",
+      "1 store, 5 devices, 2 billing counters and 5 staff",
       "Advanced udhar reports, profit/loss estimate",
       "Dynamic customer pricing and quantity-based pricing",
       "Payment mode reports, monthly reports, CSV import/export",
       "Advanced recycle bin, audit logs and priority support",
     ],
+    highlight: true,
   },
   pro: {
     code: "pro",
-    name: "Pro",
-    price: 699,
+    name: "Business",
+    price: 999,
+    annualPrice: 8999,
     maxStores: 2,
-    maxDevices: 5,
-    headline: "For multi-counter shops that need advanced automation.",
+    maxDevices: 10,
+    maxStaff: 20,
+    headline: "Multi-counter and multi-store retail operations.",
     features: [...starterFeatures, ...standardExtra, ...growthExtra, ...proExtra],
     bullets: [
       "Everything in Growth",
-      "5 devices, multi-counter billing and up to 2 stores",
+      "2 stores, 10 devices, 5 counters and 20 staff",
       "Advanced inventory with batch/expiry support",
       "GST reports, Tally export and cloud bill archive",
       "Automated WhatsApp reminders and owner mobile dashboard",
       "Yearly reports, staff performance and advanced analytics",
-      "API/webhook support later and premium support",
+      "Premium support and integration-ready operations",
     ],
   },
 };
@@ -291,10 +304,10 @@ export const FEATURE_LABELS: Record<FeatureName, string> = {
 
 export function getPlan(code: string | null | undefined): PlanDefinition {
   const normalized = String(code ?? "starter").toLowerCase();
-  if (normalized === "299") return PLAN_DEFINITIONS.starter;
+  if (normalized === "299" || normalized === "349") return PLAN_DEFINITIONS.starter;
   if (normalized === "399") return PLAN_DEFINITIONS.standard;
-  if (normalized === "499") return PLAN_DEFINITIONS.growth;
-  if (normalized === "699") return PLAN_DEFINITIONS.pro;
+  if (normalized === "499" || normalized === "599") return PLAN_DEFINITIONS.growth;
+  if (normalized === "699" || normalized === "999" || normalized === "business") return PLAN_DEFINITIONS.pro;
   return PLAN_DEFINITIONS[(PLAN_ORDER as readonly string[]).includes(normalized) ? normalized as PlanCode : "starter"];
 }
 

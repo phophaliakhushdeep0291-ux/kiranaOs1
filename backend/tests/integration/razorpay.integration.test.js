@@ -38,7 +38,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
         id: paymentId,
         entity: "payment",
         order_id: "order_test_1",
-        amount: 49900,
+        amount: 59900,
         currency: "INR",
         status: "captured",
         captured: true,
@@ -47,7 +47,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     }
     if (target.includes("https://api.razorpay.com/v1/orders/")) {
       const orderId = target.split("/").pop();
-      return jsonResponse({ id: orderId, entity: "order", status: "paid", amount: 49900, currency: "INR" });
+      return jsonResponse({ id: orderId, entity: "order", status: "paid", amount: 59900, currency: "INR" });
     }
     return originalFetch(url, options);
   };
@@ -69,7 +69,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     const checkout = assertSuccess(checkoutRes);
     assert.equal(checkout.provider, "razorpay");
     assert.equal(checkout.razorpayKeyId, "rzp_test_kiranaos");
-    assert.equal(checkout.amountPaise, 49900);
+    assert.equal(checkout.amountPaise, 59900);
     assert.ok(checkout.orderId);
     assert.ok(checkout.transactionId);
     assert.equal(JSON.stringify(checkout).includes(RAZORPAY_SECRET), false);
@@ -122,7 +122,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
           entity: {
             id: "pay_webhook_1",
             order_id: checkout.orderId,
-            amount: 49900,
+            amount: 59900,
             currency: "INR",
             status: "captured",
             created_at: Math.floor(Date.now() / 1000),
@@ -160,7 +160,7 @@ test("Razorpay checkout, verify, webhook, idempotency, and manual activation flo
     const failure = assertSuccess(failureRes);
     assert.equal(failure.activated, false);
 
-    const manualRes = await ctx.post("/api/subscription/manual-activate", { planCode: "pro", period: "monthly", amountPaise: 69900 }, { token, ownerPin: tenant.ownerPin });
+    const manualRes = await ctx.post("/api/subscription/manual-activate", { planCode: "pro", period: "monthly", amountPaise: 99900 }, { token, ownerPin: tenant.ownerPin });
     assertSuccess(manualRes, 201);
 
     const auditCount = await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: { in: ["SUBSCRIPTION_CHECKOUT_CREATED", "PAYMENT_VERIFIED", "SUBSCRIPTION_ACTIVATED", "PAYMENT_WEBHOOK_RECEIVED"] } } });

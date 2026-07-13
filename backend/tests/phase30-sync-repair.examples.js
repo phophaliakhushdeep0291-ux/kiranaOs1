@@ -29,7 +29,7 @@ function run() {
   for (const schema of [pgSchema, sqliteSchema]) {
     assert.ok(schema.includes('model SyncIdMapping'), 'schema must define SyncIdMapping');
     assert.ok(schema.includes('@@unique([shopId, entityType, localId])'), 'SyncIdMapping must be unique by shop/entity/localId');
-    assert.ok(schema.includes('syncIdMappings   SyncIdMapping[]'), 'Shop must relate to SyncIdMapping');
+    assert.match(schema, /\bsyncIdMappings\s+SyncIdMapping\[\]/, 'Shop must relate to SyncIdMapping');
   }
 
   assert.ok(migration.includes('CREATE TABLE IF NOT EXISTS "SyncIdMapping"'), 'PostgreSQL migration must create SyncIdMapping');

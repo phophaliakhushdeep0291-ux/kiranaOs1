@@ -35,12 +35,12 @@ for (const table of ["Plan", "Subscription", "PaymentTransaction", "PaymentProvi
 assert(migration.includes("PaymentProviderEvent_provider_eventId_key"), "Provider event unique index must exist");
 assert(migration.includes("Device_shopId_deviceId_key"), "Device unique index must exist");
 
-for (const [code, price] of Object.entries({ starter: 29900, standard: 39900, growth: 49900, pro: 69900 })) {
+for (const [code, price] of Object.entries({ starter: 34900, standard: 39900, growth: 59900, pro: 99900 })) {
   assert(planConfig.includes(code), `Plan config must include ${code}`);
   assert(planConfig.includes(String(price)), `Plan config must price ${code} in paise`);
 }
-assert(planConfig.includes("maxDevices: 2") && planConfig.includes("maxDevices: 5"), "Plan device limits must be configured with at least 2 devices and Pro at 5");
-assert(planConfig.includes("maxStaff: 0") && planConfig.includes("maxStaff: 15"), "Plan staff limits must be configured");
+assert(planConfig.includes("maxDevices: 2") && planConfig.includes("maxDevices: 10"), "Plan device limits must include Starter at 2 and Business at 10");
+assert(planConfig.includes("maxStaff: 0") && planConfig.includes("maxStaff: 20"), "Plan staff limits must be configured");
 assert(planConfig.includes("staff_login"), "Growth must include staff_login");
 assert(planConfig.includes("whatsapp_reminders"), "Pro must include whatsapp_reminders");
 

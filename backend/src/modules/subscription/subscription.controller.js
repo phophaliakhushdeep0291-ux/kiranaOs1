@@ -1,7 +1,7 @@
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import * as service from "./subscription.service.js";
-import { createSubscriptionCheckout, verifySubscriptionPayment } from "../payment-provider/paymentProvider.service.js";
+import { createSubscriptionCheckout, validateSubscriptionCoupon, verifySubscriptionPayment } from "../payment-provider/paymentProvider.service.js";
 
 export async function plans(_req, res, next) {
   try {
@@ -53,9 +53,17 @@ export async function checkout(req, res, next) {
       userId: req.user?.userId ?? req.user?.id ?? null,
       planCode: req.body.planCode,
       billingCycle: req.body.billingCycle,
+      couponCode: req.body.couponCode,
       provider: req.body.provider,
       req,
     });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function validateCoupon(req, res, next) {
+  try {
+    const data = await validateSubscriptionCoupon(req.body);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

@@ -26,7 +26,7 @@ export async function seedPlans(tx = db) {
           maxStores: plan.maxStores,
           maxStaff: plan.maxStaff,
           featuresJson: JSON.stringify(plan.features),
-          isActive: true,
+          isActive: code !== "standard",
         },
         create: {
           code,
@@ -37,7 +37,7 @@ export async function seedPlans(tx = db) {
           maxStores: plan.maxStores,
           maxStaff: plan.maxStaff,
           featuresJson: JSON.stringify(plan.features),
-          isActive: true,
+          isActive: code !== "standard",
         },
       })
     );
@@ -52,8 +52,24 @@ export async function listPlans() {
 }
 
 export async function ensurePlansSeeded(client = db) {
-  const count = await client.plan.count();
-  if (count < PLAN_CODES.length) await seedPlans(client);
+  const existing = await client.plan.findMany({
+    select: { code: true, name: true, priceMonthlyPaise: true, priceYearlyPaise: true, maxDevices: true, maxStores: true, maxStaff: true, featuresJson: true, isActive: true },
+  });
+  const byCode = new Map(existing.map((plan) => [plan.code, plan]));
+  const catalogChanged = PLAN_CODES.some((code) => {
+    const stored = byCode.get(code);
+    const expected = PLAN_CONFIGS[code];
+    return !stored
+      || stored.name !== expected.name
+      || stored.priceMonthlyPaise !== expected.priceMonthlyPaise
+      || stored.priceYearlyPaise !== expected.priceYearlyPaise
+      || stored.maxDevices !== expected.maxDevices
+      || stored.maxStores !== expected.maxStores
+      || stored.maxStaff !== expected.maxStaff
+      || stored.featuresJson !== JSON.stringify(expected.features)
+      || stored.isActive !== (code !== "standard");
+  });
+  if (catalogChanged) await seedPlans(client);
 }
 
 export async function getCurrentSubscription(shopId, client = db) {
