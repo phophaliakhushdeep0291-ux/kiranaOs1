@@ -738,7 +738,7 @@ model LoyaltyTransaction {
   accountId String
   billId    String?
   locationId String?
-  type      String
+  type      String // earn | redeem | adjustment | expire
   points    Int
   source    String   @default("pos")
   note      String?

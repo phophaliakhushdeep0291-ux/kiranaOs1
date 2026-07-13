@@ -9,6 +9,14 @@ generator client {
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
+// Integration tests use a separate generated client so a running Windows
+// development server cannot lock the production client's query-engine DLL.
+generator integrationClient {
+  provider      = "prisma-client-js"
+  output        = "../generated/integration-prisma-client"
+  binaryTargets = ["native"]
+}
+
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
@@ -744,7 +752,7 @@ model LoyaltyTransaction {
   accountId String
   billId    String?
   locationId String?
-  type      String // earn | redeem | adjustment
+  type      String // earn | redeem | adjustment | expire
   points    Int
   source    String   @default("pos") // pos | customer_order | admin | system
   note      String?

@@ -16,6 +16,7 @@ const prismaCli = path.join(process.cwd(), "node_modules", "prisma", "build", "i
 const isPostgres = isPostgresTestDatabaseUrl(getTestDatabaseUrl());
 const schemaArgs = isPostgres ? ["--schema", "prisma-postgres/schema.prisma"] : [];
 const skipGenerate = process.env.SKIP_PRISMA_GENERATE === "true";
+const useIsolatedClient = !isPostgres && process.env.PRISMA_CLIENT_VARIANT === "integration";
 
 function assertCompatibleGeneratedClient() {
   const generatedSchemaPath = path.join(process.cwd(), "node_modules", ".prisma", "client", "schema.prisma");
@@ -88,7 +89,7 @@ if (isPostgres) {
   runPrisma(["migrate", "reset", "--force", "--skip-seed", ...(skipGenerate ? ["--skip-generate"] : []), ...schemaArgs]);
 } else {
   ensureSqliteDatabaseFile();
-  if (!skipGenerate) runPrisma(["generate"]);
+  if (!skipGenerate) runPrisma(["generate", ...(useIsolatedClient ? ["--generator", "integrationClient"] : [])]);
   runPrisma(["db", "push", "--force-reset", "--accept-data-loss", ...(skipGenerate ? ["--skip-generate"] : [])]);
 }
 

@@ -1,8 +1,8 @@
 import * as service from "./loyalty.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 export async function program(req, res, next) { try { res.json({ success: true, data: await service.getProgram(req.shopId) }); } catch (error) { next(error); } }
-export async function updateProgram(req, res, next) { try { res.json({ success: true, data: await service.updateProgram(req.shopId, req.body) }); } catch (error) { next(error); } }
+export async function updateProgram(req, res, next) { try { const data = await service.updateProgram(req.shopId, req.body); await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "LOYALTY_PROGRAM_UPDATED", entityType: "LoyaltyProgram", entityId: data.id ?? req.shopId, metadata: { active: data.active, pointsExpireDays: data.pointsExpireDays, tiers: data.tiers }, req }); res.json({ success: true, data }); } catch (error) { next(error); } }
 export async function accounts(req, res, next) { try { res.json({ success: true, data: await service.listAccounts(req.shopId, req.query.limit) }); } catch (error) { next(error); } }
 export async function account(req, res, next) { try { res.json({ success: true, data: await service.getAccount(req.shopId, req.params.customerId) }); } catch (error) { next(error); } }
-export async function redeem(req, res, next) { try { res.status(201).json({ success: true, data: await service.redeemPoints(req.shopId, req.params.customerId, req.body) }); } catch (error) { next(error); } }
-
+export async function redeem(req, res, next) { try { const data = await service.redeemPoints(req.shopId, req.params.customerId, { ...req.body, locationId: req.operationalLocation?.id }); await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "LOYALTY_POINTS_REDEEMED", entityType: "LoyaltyAccount", entityId: data.transaction.accountId, metadata: { points: -data.transaction.points, discountValuePaise: data.discountValuePaise, locationId: req.operationalLocation?.id }, req }); res.status(201).json({ success: true, data }); } catch (error) { next(error); } }
