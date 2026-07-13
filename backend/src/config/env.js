@@ -74,6 +74,8 @@ const envSchema = z.object({
   WHATSAPP_API_SECRET: z.string().optional(),
   WHATSAPP_SENDER_ID: z.string().optional(),
   WHATSAPP_BASE_URL: z.string().optional(),
+  INTEGRATION_SIGNING_SECRET: z.string().optional(),
+  INTEGRATION_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
   REMINDER_COOLDOWN_HOURS: z.coerce.number().int().min(1).max(168).default(6),
 });
 
@@ -239,6 +241,11 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.WHATSAPP_PROVIDER !== "
     console.error(`❌ ${missing.join(", ")} required in production when WHATSAPP_PROVIDER=${parsed.data.WHATSAPP_PROVIDER}`);
     process.exit(1);
   }
+}
+
+if (parsed.data.NODE_ENV === "production" && (!parsed.data.INTEGRATION_SIGNING_SECRET || parsed.data.INTEGRATION_SIGNING_SECRET.length < 32)) {
+  console.error("❌ INTEGRATION_SIGNING_SECRET must be at least 32 characters in production");
+  process.exit(1);
 }
 
 export const env = parsed.data;

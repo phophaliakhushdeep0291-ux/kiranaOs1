@@ -63,6 +63,9 @@ model Shop {
   pricingRules                PricingRule[]
   productSellingUnits         ProductSellingUnit[]
   pricingDecisionEvents       PricingDecisionEvent[]
+  integrationApiKeys          IntegrationApiKey[]
+  webhookEndpoints            WebhookEndpoint[]
+  webhookDeliveries           WebhookDelivery[]
 }
 
 // ─────────────────────────────────────────────
@@ -1086,6 +1089,73 @@ model PaymentProviderEvent {
   @@index([shopId, createdAt])
   @@index([provider, eventType, createdAt])
   @@index([processingStatus, createdAt])
+}
+
+// External integration credentials are stored as irreversible hashes. The
+// plaintext token is shown exactly once when it is created.
+model IntegrationApiKey {
+  id              String    @id @default(cuid())
+  shopId          String
+  name            String
+  keyPrefix       String
+  keyHash         String    @unique
+  scopesJson      String    @default("[]")
+  createdByUserId String?
+  lastUsedAt      DateTime?
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, revokedAt, createdAt])
+}
+
+// Webhook secrets are derived server-side from the endpoint id and the
+// deployment signing secret, so no recoverable secret is stored in the DB.
+model WebhookEndpoint {
+  id              String    @id @default(cuid())
+  shopId          String
+  name            String
+  url             String
+  eventsJson      String    @default("[]")
+  enabled         Boolean   @default(true)
+  createdByUserId String?
+  lastSuccessAt   DateTime?
+  lastFailureAt   DateTime?
+  lastError       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop       Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([shopId, enabled, createdAt])
+}
+
+model WebhookDelivery {
+  id              String    @id @default(cuid())
+  shopId          String
+  endpointId      String
+  eventId         String
+  eventType       String
+  payloadJson     String
+  status          String    @default("pending") // pending | delivered | failed
+  attemptCount    Int       @default(0)
+  httpStatus      Int?
+  durationMs      Int?
+  responseSnippet String?
+  lastError       String?
+  lastAttemptAt   DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  shop     Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@unique([endpointId, eventId])
+  @@index([shopId, createdAt])
+  @@index([endpointId, status, createdAt])
 }
 
 // ─────────────────────────────────────────────
