@@ -262,6 +262,7 @@ runStep({
     NODE_ENV: "test",
     DATABASE_URL: sqliteTestUrl,
     TEST_DATABASE_URL: sqliteTestUrl,
+    POSTGRES_TEST_DATABASE_URL: "",
     FORCE_DB_TESTS: "true",
     SKIP_PRISMA_GENERATE: mode === "local" ? "true" : "false",
     LOG_LEVEL: "silent",

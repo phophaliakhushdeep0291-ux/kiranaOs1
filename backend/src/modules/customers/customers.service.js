@@ -229,7 +229,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
     if (currentBalance.balance < paymentAmount) {
       const err = new AppError(
         `Payment ₹${paymentAmount} exceeds outstanding udhar ₹${currentBalance.balance}`,
-        400
+        409
       );
       err.code = "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING";
       err.meta = { outstanding: currentBalance.balance, attemptedPayment: paymentAmount, rawBalance: currentBalance.rawBalance };
