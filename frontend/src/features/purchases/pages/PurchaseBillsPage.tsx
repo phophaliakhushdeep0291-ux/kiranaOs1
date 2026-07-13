@@ -28,6 +28,7 @@ import { CHIP_TONES } from "@/lib/chip-tones";
 import { cn } from "@/lib/utils";
 import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/product-pricing";
 import type { Product, Supplier } from "@/types/api";
+import { PurchaseOrdersPanel } from "@/features/purchases/components/PurchaseOrdersPanel";
 
 function money(value: unknown) {
   const num = Number(value);
@@ -530,6 +531,8 @@ export default function PurchaseBillsPage() {
           <Insight icon={<RotateCcw size={15} />} iconBg="bg-[#fdebeb] text-[#ef4444]" label="Purchase Return Value"
             value={fmt(0)} sub="No returns recorded" />
         </div>
+
+        <PurchaseOrdersPanel />
 
         {/* Purchase Bills table */}
         <div id="purchase-table" className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">

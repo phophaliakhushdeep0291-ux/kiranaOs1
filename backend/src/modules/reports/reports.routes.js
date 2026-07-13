@@ -20,9 +20,11 @@ import {
   udharAgeingSchema,
 } from "./reports.schema.js";
 import * as ctrl from "./reports.controller.js";
+import { requireLocationAccess } from "../stores/location-access.service.js";
 
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
+router.use(requireLocationAccess("view"));
 
 // Shopkeeper operational dashboard reports. They are shop-scoped and exclude cancelled
 // bills; estimates (kacha bills) count as sales everywhere except the GST report.

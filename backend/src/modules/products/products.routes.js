@@ -6,6 +6,7 @@ import { requireFeature } from "../feature-gates/featureGate.middleware.js";
 import { validate, validateQuery } from "../../middleware/validate.js";
 import { createProductSchema, updateProductSchema, productQuerySchema } from "./products.schema.js";
 import * as ctrl from "./products.controller.js";
+import { requireLocationAccess } from "../stores/location-access.service.js";
 
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
@@ -18,12 +19,12 @@ const protectedProductFields = [
   "hsn",
 ];
 
-router.get("/", validateQuery(productQuerySchema), ctrl.list);
+router.get("/", requireLocationAccess("view"), validateQuery(productQuerySchema), ctrl.list);
 router.get("/recycle-bin", validateQuery(productQuerySchema), ctrl.listDeleted);
 router.delete("/recycle-bin/empty", requireOwnerPin, ctrl.emptyRecycleBin);
 router.post("/:id/restore", requireOwnerPin, ctrl.restore);
 router.delete("/:id/permanent", requireOwnerPin, ctrl.permanentRemove);
-router.get("/:id", ctrl.get);
+router.get("/:id", requireLocationAccess("view"), ctrl.get);
 // Sensitive pricing/cost/stock fields on create require owner PIN (same fields as PATCH).
 // A product name + display unit only (zero cost, zero price) does NOT trigger the PIN gate.
 // Static production check anchor: router.post("/", requireOwnerPinForFields(protectedProductFields), validate(createProductSchema), ctrl.create)

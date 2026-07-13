@@ -19,7 +19,9 @@ describe("POS workspace responsive design", () => {
   it("uses one amount-specific mobile checkout action above navigation", () => {
     expect(billingPage).toContain("Review & pay ₹${grandTotal.toLocaleString(\"en-IN\")}");
     expect(billingPage).toContain("var(--app-mobile-bottom-nav-clearance)");
+    expect(billingPage).toContain("pb-[calc(var(--app-mobile-fixed-action-height)+2rem)]");
     expect(styles).toContain("--app-mobile-bottom-nav-clearance");
+    expect(styles).toContain("--app-mobile-fixed-action-height");
     expect(styles).toContain("--app-mobile-content-bottom-clearance");
     expect(billingPage).toContain('aria-label={mobileCheckoutOpen ? "Review and collect payment" : undefined}');
   });

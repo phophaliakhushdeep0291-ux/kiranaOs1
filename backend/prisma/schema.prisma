@@ -41,6 +41,7 @@ model Shop {
   purchaseHistory             PurchaseHistory[]
   purchaseOrders              PurchaseOrder[]
   purchaseReceipts            PurchaseReceipt[]
+  userLocationAccess          UserLocationAccess[]
   aiActionLogs                AiActionLog[]
   auditLogs                   AuditLog[]
   sessions                    Session[]
@@ -272,6 +273,7 @@ model User {
   devices                     Device[]
   deviceReplacementChallenges DeviceReplacementChallenge[]
   reportExportJobs            ReportExportJob[]
+  locationAccess              UserLocationAccess[]
 
   @@unique([shopId, mobile])
   @@unique([shopId, email])
@@ -625,6 +627,7 @@ model StoreLocation {
   retailPaymentIntents RetailPaymentIntent[]
   purchaseOrders    PurchaseOrder[]
   purchaseReceipts  PurchaseReceipt[]
+  userAccess        UserLocationAccess[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -1093,6 +1096,28 @@ model PurchaseReceiptItem {
 
   @@unique([receiptId, purchaseOrderItemId])
   @@index([productId])
+}
+
+model UserLocationAccess {
+  id                 String   @id @default(cuid())
+  shopId             String
+  userId             String
+  locationId         String
+  canSell            Boolean  @default(true)
+  canPurchase        Boolean  @default(false)
+  canManageInventory Boolean  @default(false)
+  canTransfer        Boolean  @default(false)
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  shop     Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  location StoreLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, locationId])
+  @@index([shopId, locationId, active])
+  @@index([shopId, userId, active])
 }
 
 // ─────────────────────────────────────────────

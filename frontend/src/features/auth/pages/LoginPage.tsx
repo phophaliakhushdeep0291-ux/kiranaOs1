@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
-import { ApiClientError, useLogin, type AuthResponse } from "@/lib/api/client";
+import { useLogin, type AuthResponse } from "@/lib/api/client";
 import { googleLogin as googleLoginRequest } from "@/features/auth/api";
 import { GoogleSignInButton, isGoogleSignInConfigured } from "@/features/auth/GoogleSignInButton";
 import { stashGoogleSignupPrefill } from "@/features/auth/google-signup";
@@ -37,8 +37,30 @@ interface ShopChoice {
   city?: string | null;
 }
 
-function getShopChoices(error: ApiClientError): ShopChoice[] {
-  const shops = error.data.shops;
+function getErrorData(error: unknown): Record<string, unknown> {
+  if (!error || typeof error !== "object") return {};
+  const data = (error as { data?: unknown }).data;
+  if (data && typeof data === "object" && !Array.isArray(data)) return data as Record<string, unknown>;
+  return {};
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  const data = getErrorData(error);
+  return typeof data.code === "string" ? data.code : undefined;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  const data = getErrorData(error);
+  if (typeof data.message === "string") return data.message;
+  if (typeof data.error === "string") return data.error;
+  if (error && typeof error === "object" && typeof (error as { message?: unknown }).message === "string") {
+    return (error as { message: string }).message;
+  }
+  return fallback;
+}
+
+function getShopChoices(error: unknown): ShopChoice[] {
+  const shops = getErrorData(error).shops;
   if (!Array.isArray(shops)) return [];
 
   return shops.filter((shop): shop is ShopChoice => {
@@ -81,33 +103,36 @@ export default function Login() {
   };
 
   const handleAuthError = (err: unknown) => {
-    if (err instanceof ApiClientError && err.data?.code === "SHOP_SELECTION_REQUIRED") {
-      const shops = getShopChoices(err);
-      if (shops.length > 0) {
-        setShopChoices(shops);
-        setLoginShopId(null);
-        setDeviceLimit(null);
-        setServerError(null);
+    const errorCode = getErrorCode(err);
+    const shops = getShopChoices(err);
+    if (errorCode === "SHOP_SELECTION_REQUIRED" || shops.length > 0) {
+      if (shops.length === 0) {
+        setServerError("Select your shop to continue, but the shop list was not included. Please try again.");
         return;
       }
+      setShopChoices(shops);
+      setLoginShopId(null);
+      setDeviceLimit(null);
+      setServerError(null);
+      return;
     }
-    if (err instanceof ApiClientError && err.data?.code === "DEVICE_LIMIT_EXCEEDED") {
-      const activeDevices = Array.isArray(err.data.activeDevices) ? err.data.activeDevices as ActiveDeviceDto[] : [];
-      const token = typeof err.data.deviceLimitToken === "string" ? err.data.deviceLimitToken : "";
+    if (errorCode === "DEVICE_LIMIT_EXCEEDED") {
+      const errorData = getErrorData(err);
+      const activeDevices = Array.isArray(errorData.activeDevices) ? errorData.activeDevices as ActiveDeviceDto[] : [];
+      const token = typeof errorData.deviceLimitToken === "string" ? errorData.deviceLimitToken : "";
       setShopChoices(null);
       setDeviceLimit({
-        message: err.message,
+        message: getErrorMessage(err, "Device limit reached"),
         activeDevices,
         deviceLimitToken: token,
-        plan: typeof err.data.plan === "object" && err.data.plan ? err.data.plan as DeviceLimitState["plan"] : undefined,
+        plan: typeof errorData.plan === "object" && errorData.plan ? errorData.plan as DeviceLimitState["plan"] : undefined,
       });
       setSelectedReplacementDeviceId(null);
       setReplacementOwnerPin("");
       setServerError(null);
       return;
     }
-    const msg = (err as { data?: { message?: string }; message?: string })?.data?.message ?? (err as { message?: string })?.message ?? "Login failed";
-    setServerError(msg);
+    setServerError(getErrorMessage(err, "Login failed"));
   };
 
   const loginMutation = useLogin({
@@ -124,9 +149,10 @@ export default function Login() {
       // First Google sign-in with no account yet: take them to registration with the
       // verified Google identity prefilled. They set a password there (offline-first
       // accounts need one); the next Google sign-in links automatically by email.
-      if (err instanceof ApiClientError && err.data?.code === "GOOGLE_ACCOUNT_NOT_REGISTERED") {
-        const email = typeof err.data.email === "string" ? err.data.email : "";
-        const name = typeof err.data.name === "string" ? err.data.name : null;
+      if (getErrorCode(err) === "GOOGLE_ACCOUNT_NOT_REGISTERED") {
+        const errorData = getErrorData(err);
+        const email = typeof errorData.email === "string" ? errorData.email : "";
+        const name = typeof errorData.name === "string" ? errorData.name : null;
         if (email) stashGoogleSignupPrefill({ email, name });
         setLocation("/register");
         return;
@@ -200,8 +226,7 @@ export default function Login() {
       });
       handleAuthSuccess(result);
     } catch (error) {
-      const msg = error instanceof ApiClientError ? error.message : "Could not replace that device";
-      setServerError(msg);
+      setServerError(getErrorMessage(error, "Could not replace that device"));
     } finally {
       setRevokingDeviceId(null);
     }

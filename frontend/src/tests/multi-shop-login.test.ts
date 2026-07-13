@@ -5,7 +5,9 @@ describe("multi-shop login", () => {
   it("turns SHOP_SELECTION_REQUIRED into an interactive shop chooser", () => {
     const source = readFileSync("src/features/auth/pages/LoginPage.tsx", "utf8");
 
-    expect(source).toContain('err.data?.code === "SHOP_SELECTION_REQUIRED"');
+    expect(source).toContain('getErrorCode(err)');
+    expect(source).toContain('errorCode === "SHOP_SELECTION_REQUIRED" || shops.length > 0');
+    expect(source).not.toContain("err instanceof ApiClientError");
     expect(source).toContain('data-testid="shop-selection-panel"');
     expect(source).toContain("selectShop(shop.id)");
     expect(source).toContain("setLoginShopId(shopId)");

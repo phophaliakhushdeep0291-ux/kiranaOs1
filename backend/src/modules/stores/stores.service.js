@@ -2,6 +2,7 @@ import crypto from "crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { getPlanLimits } from "../feature-gates/featureGate.service.js";
+import { accessibleLocationIds, assertLocationCapability } from "./location-access.service.js";
 
 function transferRef() {
   const day = new Date().toISOString().slice(0, 10).replaceAll("-", "");
@@ -32,17 +33,18 @@ export async function ensurePrimaryLocation(shopId, client = db) {
   }
 }
 
-export async function listLocations(shopId) {
+export async function listLocations(shopId, user = null) {
   await ensurePrimaryLocation(shopId);
+  const accessibleIds = user ? await accessibleLocationIds(shopId, user.userId, user.role) : null;
   const [locations, limits] = await Promise.all([
     db.storeLocation.findMany({
-      where: { shopId },
+      where: { shopId, ...(accessibleIds && { id: { in: accessibleIds } }) },
       orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
       include: { _count: { select: { stocks: true, outgoingTransfers: true, incomingTransfers: true } } },
     }),
     getPlanLimits(shopId),
   ]);
-  return { locations, usage: { current: locations.filter((row) => row.active).length, maximum: limits.maxStores } };
+  return { locations, usage: { current: locations.filter((row) => row.active).length, maximum: limits.maxStores }, accessScoped: Boolean(accessibleIds) };
 }
 
 export async function createLocation(shopId, data) {
@@ -110,12 +112,14 @@ function normalizeItems(items) {
   return [...totals].map(([productId, quantityBaseQty]) => ({ productId, quantityBaseQty }));
 }
 
-export async function createTransfer(shopId, data, userId) {
+export async function createTransfer(shopId, data, userId, userRole = "staff") {
   if (data.fromLocationId === data.toLocationId) {
     throw new AppError("Source and destination locations must be different", 400, "SAME_TRANSFER_LOCATION");
   }
   const items = normalizeItems(data.items);
   return db.$transaction(async (tx) => {
+    await assertLocationCapability({ shopId, userId, role: userRole, locationId: data.fromLocationId, capability: "transfer", client: tx });
+    await assertLocationCapability({ shopId, userId, role: userRole, locationId: data.toLocationId, capability: "transfer", client: tx });
     const locations = await tx.storeLocation.findMany({
       where: { shopId, id: { in: [data.fromLocationId, data.toLocationId] }, active: true },
     });
@@ -183,4 +187,3 @@ export async function listTransfers(shopId, { limit = 50 } = {}) {
     include: { fromLocation: true, toLocation: true, items: true },
   });
 }
-
