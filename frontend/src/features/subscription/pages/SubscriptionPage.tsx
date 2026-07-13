@@ -122,6 +122,13 @@ export default function SubscriptionPage() {
       </Card>
 
       <UpgradeModal open={targetPlan !== null} onOpenChange={(open) => !open && setTargetPlan(null)} targetPlanCode={targetPlan ?? undefined} />
+      <CancelSubscriptionDialog
+        open={cancelOpen}
+        onOpenChange={setCancelOpen}
+        planName={snapshot.plan.name}
+        periodEndLabel={periodEndLabel}
+        onCancelled={refresh}
+      />
     </PageShell>
   );
 }

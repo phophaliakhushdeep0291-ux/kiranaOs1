@@ -7,11 +7,13 @@ import { useSubscriptionSnapshot } from "@/features/subscription/access";
 import { PlanBadge, UpgradeModal } from "@/features/subscription/components";
 import { useState } from "react";
 import { PageHeader, PageShell } from "@/components/shared";
+import { useLocation } from "wouter";
 
 export default function PlansPage() {
   const { snapshot } = useSubscriptionSnapshot();
   const [targetPlan, setTargetPlan] = useState<PlanCode | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("yearly");
+  const [, navigate] = useLocation();
 
   return (
     <PageShell className="space-y-5">
@@ -60,7 +62,7 @@ export default function PlansPage() {
                 {plan.bullets.length > 4 && (
                   <p className="text-xs text-muted-foreground">+{plan.bullets.length - 4} more included</p>
                 )}
-                <Button className="w-full" variant={isCurrent ? "outline" : "default"} onClick={() => setTargetPlan(plan.code)}>{isCurrent ? "Manage current plan" : `Upgrade to ${plan.name}`}</Button>
+                <Button className="w-full" variant={isCurrent ? "outline" : "default"} onClick={() => isCurrent ? navigate("/subscription") : setTargetPlan(plan.code)}>{isCurrent ? "Manage current plan" : `Upgrade to ${plan.name}`}</Button>
               </CardContent>
             </Card>
           );

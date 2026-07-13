@@ -38,6 +38,42 @@ export interface SubscriptionSnapshot {
   source: "license-cache" | "local-cache" | "default-trial";
 }
 
+// Subscription state is consumed by the layout, banner, pages and feature gates.
+// Keep one in-memory snapshot and one shared read so frequent sync events do not
+// make each consumer independently drop back to a loading state.
+let subscriptionSnapshotMemory: SubscriptionSnapshot | null = null;
+let subscriptionSnapshotMemoryScope: string | null = null;
+let subscriptionSnapshotRead: Promise<SubscriptionSnapshot> | null = null;
+let subscriptionSnapshotReadScope: string | null = null;
+
+function currentSubscriptionScopeKey() {
+  const scope = getOfflineScope();
+  return `${scope.tenant_id}:${scope.store_id}:${scope.device_id}`;
+}
+
+function readSubscriptionSnapshotShared() {
+  const scopeKey = currentSubscriptionScopeKey();
+  if (subscriptionSnapshotMemoryScope !== scopeKey) subscriptionSnapshotMemory = null;
+  if (!subscriptionSnapshotRead || subscriptionSnapshotReadScope !== scopeKey) {
+    subscriptionSnapshotReadScope = scopeKey;
+    subscriptionSnapshotRead = getCurrentSubscriptionSnapshot()
+      .then((next) => {
+        if (currentSubscriptionScopeKey() === scopeKey) {
+          subscriptionSnapshotMemory = next;
+          subscriptionSnapshotMemoryScope = scopeKey;
+        }
+        return next;
+      })
+      .finally(() => {
+        if (subscriptionSnapshotReadScope === scopeKey) {
+          subscriptionSnapshotRead = null;
+          subscriptionSnapshotReadScope = null;
+        }
+      });
+  }
+  return subscriptionSnapshotRead;
+}
+
 export interface FeatureDecision {
   featureName: FeatureName;
   label: string;
@@ -417,13 +453,18 @@ export function decideFeature(
 }
 
 export function useSubscriptionSnapshot() {
-  const [snapshot, setSnapshot] = useState<SubscriptionSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
+  const sameScopeSnapshot = subscriptionSnapshotMemoryScope === currentSubscriptionScopeKey() ? subscriptionSnapshotMemory : null;
+  const [snapshot, setSnapshot] = useState<SubscriptionSnapshot | null>(() => sameScopeSnapshot);
+  const [loading, setLoading] = useState(() => sameScopeSnapshot === null);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    const scopeKey = currentSubscriptionScopeKey();
+    // Background refreshes retain the last trustworthy snapshot. This avoids
+    // flashing loading screens and temporarily locking feature-gated content.
+    if (!subscriptionSnapshotMemory) setLoading(true);
     try {
-      setSnapshot(await getCurrentSubscriptionSnapshot());
+      const next = await readSubscriptionSnapshotShared();
+      if (currentSubscriptionScopeKey() === scopeKey) setSnapshot(next);
     } finally {
       setLoading(false);
     }
