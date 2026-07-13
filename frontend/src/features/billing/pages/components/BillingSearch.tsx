@@ -307,6 +307,7 @@ export function BillingSearch({
                 <button
                   type="button"
                   title="Scan barcode"
+                  aria-label="Scan barcode"
                   onClick={openBarcodeScanner}
                   className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff]"
                 >
@@ -315,6 +316,7 @@ export function BillingSearch({
                 <button
                   type="button"
                   title="Voice billing"
+                  aria-label="Open voice billing"
                   onClick={onToggleVoice}
                   className={`grid h-9 w-9 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] ${voiceVisible ? "border-[#bcd0ff] bg-[#eef5ff] text-[#0057ff]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
                 >

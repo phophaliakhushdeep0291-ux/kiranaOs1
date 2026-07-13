@@ -923,7 +923,7 @@ export default function BillsPage() {
               <span className="text-[11px] font-medium text-[#60708e]">Showing {(safePage - 1) * perPage + 1} to {Math.min(safePage * perPage, filtered.length)} of {filtered.length} entries</span>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1">
-                  <PageBtn disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={14} /></PageBtn>
+                  <PageBtn ariaLabel="Previous page" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={14} aria-hidden="true" /></PageBtn>
                   {Array.from({ length: pageCount }, (_, idx) => idx + 1)
                     .filter((p) => p === 1 || p === pageCount || Math.abs(p - safePage) <= 1)
                     .reduce<(number | "...")[]>((acc, p, idx, arr) => {
@@ -934,10 +934,10 @@ export default function BillsPage() {
                     .map((p, idx) => p === "..."
                       ? <span key={`gap-${idx}`} className="px-1 text-[12px] text-[#94a3b8]">...</span>
                       : <PageBtn key={p} active={p === safePage} onClick={() => setPage(p as number)}>{p}</PageBtn>)}
-                  <PageBtn disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}><ChevronRight size={14} /></PageBtn>
+                  <PageBtn ariaLabel="Next page" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}><ChevronRight size={14} aria-hidden="true" /></PageBtn>
                 </div>
                 <Select value={String(perPage)} onValueChange={(value) => setPerPage(Number(value))}>
-                  <SelectTrigger className="h-8 w-[70px] rounded-[7px] border-[#dfe7f2] text-[11px] font-bold"><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Bills per page" className="h-8 w-[70px] rounded-[7px] border-[#dfe7f2] text-[11px] font-bold"><SelectValue /></SelectTrigger>
                   <SelectContent>{[10, 20, 50].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -1034,15 +1034,18 @@ function SyncBadgeMini({ sync }: { sync: string }) {
 
 function ActionIcon({ title, children, onClick }: { title: string; children: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" title={title} onClick={onClick} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[#075fff] transition-colors hover:border-[#c7d8ef] hover:bg-[#edf4ff]">
+    <button type="button" title={title} aria-label={title} onClick={onClick} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[#075fff] transition-colors hover:border-[#c7d8ef] hover:bg-[#edf4ff]">
       {children}
     </button>
   );
 }
 
-function PageBtn({ children, active, disabled, onClick }: { children: ReactNode; active?: boolean; disabled?: boolean; onClick: () => void }) {
+function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children: ReactNode; active?: boolean; disabled?: boolean; ariaLabel?: string; onClick: () => void }) {
   return (
     <button
+      type="button"
+      aria-label={ariaLabel}
+      aria-current={active ? "page" : undefined}
       onClick={onClick}
       disabled={disabled}
       className={cn(

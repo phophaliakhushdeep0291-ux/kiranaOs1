@@ -194,6 +194,7 @@ function CartRow({
           data-testid={`qty-${item.product.id}`}
           type="number"
           inputMode="decimal"
+          aria-label={`Quantity for ${item.product.name}`}
           value={item.quantity}
           onChange={(e) => onUpdateQty(lineKey, Number(e.target.value) || 0)}
           className="border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"

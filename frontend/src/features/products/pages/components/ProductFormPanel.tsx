@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import type { Product } from "@/lib/api/client";
@@ -544,7 +544,7 @@ export function ProductFormPanel({
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           {!editing && (
             <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
-              <input type="checkbox" checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[#0057ff]" />
+              <input type="checkbox" aria-label="Keep panel open to add another product" checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[#0057ff]" />
               Keep panel open to add another product
             </label>
           )}
@@ -590,13 +590,27 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function Field({ label, required, error, children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) {
+  const id = useId().replace(/:/g, "");
+  const labelId = `product-field-label-${id}`;
+  const errorId = `product-field-error-${id}`;
+  const fieldRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const control = fieldRef.current?.querySelector<HTMLElement>("input, textarea, select, button, [role='combobox'], [role='switch']");
+    if (!control) return;
+    if (!control.hasAttribute("aria-label") && !control.hasAttribute("aria-labelledby")) control.setAttribute("aria-labelledby", labelId);
+    if (error) control.setAttribute("aria-describedby", errorId);
+    else if (control.getAttribute("aria-describedby") === errorId) control.removeAttribute("aria-describedby");
+    control.setAttribute("aria-invalid", error ? "true" : "false");
+  }, [error, errorId, labelId]);
+
   return (
-    <div>
-      <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">
-        {label}{required && <span className="ml-0.5 text-rose-500">*</span>}
+    <div ref={fieldRef} role="group" aria-labelledby={labelId}>
+      <Label id={labelId} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">
+        {label}{required && <span className="ml-0.5 text-rose-500" aria-hidden="true">*</span>}
       </Label>
       {children}
-      {error && <p className="mt-1 text-[11px] text-rose-600">{error}</p>}
+      {error && <p id={errorId} role="alert" aria-live="polite" className="mt-1 text-[11px] text-rose-600">{error}</p>}
     </div>
   );
 }

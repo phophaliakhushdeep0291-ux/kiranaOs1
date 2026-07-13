@@ -915,7 +915,7 @@ export default function Billing() {
     setLastPrintableBill(printable);
     pendingAutoPrintRef.current = null;
 
-    if (printerConfig.autoPrint) {
+    if (getPrinterConfigSync().autoPrint) {
       if (printDecision !== false) {
         const popup = window.open("", "_blank", "width=460,height=760");
         if (popup) {

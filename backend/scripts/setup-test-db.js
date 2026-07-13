@@ -35,6 +35,19 @@ function assertCompatibleGeneratedClient() {
   }
 }
 
+function ensureSqliteDatabaseFile() {
+  const databaseUrl = getTestDatabaseUrl();
+  const rawPath = decodeURIComponent(databaseUrl.slice("file:".length).split("?")[0]);
+  const databasePath = path.isAbsolute(rawPath) || /^[A-Za-z]:[\\/]/.test(rawPath)
+    ? path.normalize(rawPath)
+    : path.resolve(process.cwd(), "prisma", rawPath);
+
+  fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+  if (!fs.existsSync(databasePath)) {
+    fs.closeSync(fs.openSync(databasePath, "a"));
+  }
+}
+
 function runPrisma(args) {
   const result = spawnSync(process.execPath, [prismaCli, ...args], {
     cwd: process.cwd(),
@@ -74,6 +87,7 @@ if (isPostgres) {
   // and requires ALLOW_POSTGRES_TEST_DB=true before this path can run.
   runPrisma(["migrate", "reset", "--force", "--skip-seed", ...(skipGenerate ? ["--skip-generate"] : []), ...schemaArgs]);
 } else {
+  ensureSqliteDatabaseFile();
   if (!skipGenerate) runPrisma(["generate"]);
   runPrisma(["db", "push", "--force-reset", "--accept-data-loss", ...(skipGenerate ? ["--skip-generate"] : [])]);
 }

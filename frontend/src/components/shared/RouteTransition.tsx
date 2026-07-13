@@ -9,15 +9,11 @@ export function RouteTransition({ children, routeKey }: RouteTransitionProps) {
   const [announcement, setAnnouncement] = useState("");
 
   useEffect(() => {
-    setAnnouncement("");
-    const frame = window.requestAnimationFrame(() => {
-      const headings = Array.from(document.querySelectorAll<HTMLElement>(".app-route-ready h1, header h1"));
-      const heading = headings.find((candidate) => candidate.textContent?.trim() && candidate.textContent.trim() !== "KiranaOS") ?? headings[0];
-      const label = heading?.textContent?.trim();
-      document.title = label ? `${label} · KiranaOS` : "KiranaOS";
-      setAnnouncement(label ? `${label} page loaded` : "Page loaded");
-    });
-    return () => window.cancelAnimationFrame(frame);
+    const headings = Array.from(document.querySelectorAll<HTMLElement>(".app-route-ready h1, header h1"));
+    const heading = headings.find((candidate) => candidate.textContent?.trim() && candidate.textContent.trim() !== "KiranaOS") ?? headings[0];
+    const label = heading?.textContent?.trim();
+    document.title = label ? `${label} · KiranaOS` : "KiranaOS";
+    setAnnouncement(label ? `${label} page loaded` : "Page loaded");
   }, [routeKey]);
 
   return (

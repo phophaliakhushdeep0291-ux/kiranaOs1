@@ -201,7 +201,7 @@ export default function TaxesSettingsPage() {
                   <p className="text-[11px] text-[#64748b]">{tax.defaultRate === r ? "Default rate" : "Tap to use on products"}</p>
                 </div>
                 {tax.defaultRate === r && <Badge tone="blue">Default</Badge>}
-                <Switch checked={tax.rates[r] ?? false} onCheckedChange={(v) => update({ rates: { ...tax.rates, [r]: v } })} />
+                <Switch aria-label={`Enable ${r}% GST rate`} checked={tax.rates[r] ?? false} onCheckedChange={(v) => update({ rates: { ...tax.rates, [r]: v } })} />
               </div>
             ))}
           </div>

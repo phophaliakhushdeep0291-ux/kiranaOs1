@@ -23,7 +23,7 @@ const logDir = path.join(artifactDir, "logs", runId);
 fs.mkdirSync(logDir, { recursive: true });
 
 const sqliteTestPath = path.join(backendDir, "prisma", "release-certification.db");
-const sqliteTestUrl = `file:${sqliteTestPath.replace(/\\/g, "/")}`;
+const sqliteTestUrl = "file:./release-certification.db";
 const sqliteTestExisted = fs.existsSync(sqliteTestPath);
 const results = [];
 

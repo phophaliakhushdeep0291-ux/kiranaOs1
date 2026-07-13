@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useRef, type ReactElement, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -27,6 +27,15 @@ const KPI_TONES: Record<Tone, { ring: string; value: string }> = {
   gray: { ring: "bg-[#eef2f8] text-[#64748b]", value: "text-[#102347]" },
   violet: { ring: "bg-violet-50 text-violet-600", value: "text-[#102347]" },
 };
+
+function labelControl(node: ReactNode, label: string, descriptionId?: string) {
+  if (!isValidElement(node)) return node;
+  const element = node as ReactElement<Record<string, unknown>>;
+  return cloneElement(element, {
+    "aria-label": element.props["aria-label"] ?? label,
+    "aria-describedby": element.props["aria-describedby"] ?? descriptionId,
+  });
+}
 
 export function Card({ id, className, children }: { id?: string; className?: string; children: ReactNode }) {
   return (
@@ -79,24 +88,38 @@ export function Info({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function RowToggle({ label, desc, pill, last }: { label: string; desc?: string; pill: ReactNode; last?: boolean }) {
+  const id = useId().replace(/:/g, "");
+  const descriptionId = desc ? `setting-description-${id}` : undefined;
   return (
     <div className={cn("flex min-w-0 flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:gap-3", !last && "border-b border-[#eef2f8]")}>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-bold text-[#102347]">{label}</p>
-        {desc && <p className="truncate text-[11px] text-[#64748b]">{desc}</p>}
+        {desc && <p id={descriptionId} className="truncate text-[11px] text-[#64748b]">{desc}</p>}
       </div>
-      <div className="flex min-w-0 shrink-0 justify-start sm:justify-end">{pill}</div>
+      <div className="flex min-w-0 shrink-0 justify-start sm:justify-end">{labelControl(pill, label, descriptionId)}</div>
     </div>
   );
 }
 
 export function Fld({ label, err, hint, children }: { label: string; err?: string; hint?: string; children: ReactNode }) {
+  const id = useId().replace(/:/g, "");
+  const labelId = `setting-label-${id}`;
+  const descriptionId = err ? `setting-error-${id}` : hint ? `setting-hint-${id}` : undefined;
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const control = groupRef.current?.querySelector<HTMLElement>("input, textarea, select, button, [role='combobox'], [role='switch']");
+    if (!control) return;
+    if (!control.hasAttribute("aria-label") && !control.hasAttribute("aria-labelledby")) control.setAttribute("aria-labelledby", labelId);
+    if (descriptionId && !control.hasAttribute("aria-describedby")) control.setAttribute("aria-describedby", descriptionId);
+  }, [descriptionId, labelId]);
+
   return (
-    <div className="min-w-0">
-      <label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</label>
-      {children}
-      {hint && !err && <p className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}
-      {err && <p className="mt-1 text-[11px] text-rose-600">{err}</p>}
+    <div ref={groupRef} className="min-w-0" role="group" aria-labelledby={labelId} aria-describedby={descriptionId}>
+      <span id={labelId} className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">{label}</span>
+      {labelControl(children, label, descriptionId)}
+      {hint && !err && <p id={descriptionId} className="mt-1 text-[11px] text-[#9aa6bb]">{hint}</p>}
+      {err && <p id={descriptionId} role="alert" aria-live="polite" className="mt-1 text-[11px] text-rose-600">{err}</p>}
     </div>
   );
 }
