@@ -29,7 +29,7 @@
     "prod:check": "node scripts/production-check.js",
     "prisma:generate:postgres": "node node_modules/prisma/build/index.js generate --schema prisma-postgres/schema.prisma",
     "prisma:migrate:postgres": "node node_modules/prisma/build/index.js migrate dev --schema prisma-postgres/schema.prisma",
-    "prisma:deploy:postgres": "node node_modules/prisma/build/index.js migrate deploy --schema prisma-postgres/schema.prisma",
+    "prisma:deploy:postgres": "node scripts/deploy-postgres-migrations.js",
     "verify:product-schema": "node scripts/verify-product-schema.js",
     "deploy:migrate": "npx prisma migrate deploy && npx prisma generate && node scripts/verify-product-schema.js",
     "deploy:migrate:postgres": "npx prisma migrate deploy --schema prisma-postgres/schema.prisma && npx prisma generate --schema prisma-postgres/schema.prisma && node scripts/verify-product-schema.js",
