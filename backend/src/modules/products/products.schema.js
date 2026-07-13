@@ -40,6 +40,7 @@ export const createProductSchema = z.object({
   imageUrl: z.string().optional(),
   isLooseItem: z.boolean().default(false),
   lowStockThreshold: quantityAmount().default(0),
+  batchTrackingEnabled: z.boolean().default(false),
   sellingUnits: z.array(sellingUnitSchema).max(30).optional(),
   // Optimistic-concurrency guard: the server updatedAt the client based this edit on.
   baseUpdatedAt: z.string().optional(),

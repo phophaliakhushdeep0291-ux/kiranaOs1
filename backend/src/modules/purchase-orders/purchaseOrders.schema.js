@@ -44,6 +44,9 @@ export const receivePurchaseOrderSchema = z.object({
     purchaseOrderItemId: z.string().trim().min(1),
     quantityBaseQty: quantityAmount({ positive: true }),
     actualRate: moneyAmount({ positive: true }),
+    batchNumber: z.string().trim().min(1).max(100).optional(),
+    manufacturedOn: date,
+    expiresOn: date,
   })).min(1).max(100),
 }).superRefine((value, context) => {
   const ids = new Set();

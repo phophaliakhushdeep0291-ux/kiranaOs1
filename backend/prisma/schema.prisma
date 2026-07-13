@@ -74,6 +74,7 @@ model Shop {
   customerOrders              CustomerOrder[]
   pricingRules                PricingRule[]
   productSellingUnits         ProductSellingUnit[]
+  inventoryLots              InventoryLot[]
   pricingDecisionEvents       PricingDecisionEvent[]
   integrationApiKeys          IntegrationApiKey[]
   webhookEndpoints            WebhookEndpoint[]
@@ -392,6 +393,7 @@ model Product {
   imageUrl                     String? // optional product image (data URL or hosted URL)
   isLooseItem                  Boolean   @default(false) // sold loose by weight (no fixed package)
   lowStockThreshold            Float     @default(0) // alert when stock <= this
+  batchTrackingEnabled         Boolean   @default(false)
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)
   sourceDeviceId               String? // device that created the product offline
@@ -409,6 +411,7 @@ model Product {
   purchaseOrderItems PurchaseOrderItem[]
   purchaseReceiptItems PurchaseReceiptItem[]
   stockCountLines  StockCountLine[]
+  inventoryLots    InventoryLot[]
 
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
@@ -568,6 +571,7 @@ model BillItem {
   bill        Bill                @relation(fields: [billId], references: [id])
   product     Product?            @relation(fields: [productId], references: [id])
   sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
+  lotAllocations BillItemLotAllocation[]
 
   @@index([billId])
 }
@@ -665,6 +669,7 @@ model StoreLocation {
   pricingRules      PricingRule[]
   loyaltyTransactions LoyaltyTransaction[]
   stockCountSessions StockCountSession[]
+  inventoryLots InventoryLot[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -1236,9 +1241,53 @@ model PurchaseReceiptItem {
   receipt           PurchaseReceipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
   purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
   product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  inventoryLots     InventoryLot[]
 
   @@unique([receiptId, purchaseOrderItemId])
   @@index([productId])
+}
+
+model InventoryLot {
+  id                    String   @id @default(cuid())
+  shopId                String
+  locationId            String
+  productId             String
+  purchaseReceiptItemId String?
+  batchNumber           String
+  manufacturedOn        DateTime?
+  expiresOn             DateTime
+  receivedBaseQty       Float
+  availableBaseQty      Float
+  costPerRateUnit       Float
+  costPerRateUnitPaise  BigInt?
+  status                String   @default("active") // active | depleted | quarantined | recalled
+  note                  String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  shop                Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location            StoreLocation        @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  product             Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
+  purchaseReceiptItem PurchaseReceiptItem? @relation(fields: [purchaseReceiptItemId], references: [id], onDelete: SetNull)
+  allocations         BillItemLotAllocation[]
+
+  @@unique([shopId, locationId, productId, batchNumber, expiresOn])
+  @@index([shopId, locationId, status, expiresOn])
+  @@index([shopId, productId, expiresOn])
+}
+
+model BillItemLotAllocation {
+  id              String   @id @default(cuid())
+  billItemId      String
+  inventoryLotId  String
+  quantityBaseQty Float
+  createdAt       DateTime @default(now())
+
+  billItem     BillItem     @relation(fields: [billItemId], references: [id], onDelete: Cascade)
+  inventoryLot InventoryLot @relation(fields: [inventoryLotId], references: [id], onDelete: Restrict)
+
+  @@unique([billItemId, inventoryLotId])
+  @@index([inventoryLotId])
 }
 
 model UserLocationAccess {

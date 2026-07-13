@@ -14,6 +14,7 @@ import {
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
 import { recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
+import { allocateLotsForBill, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -417,6 +418,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       },
       include: { items: true, payments: true, loyaltyTransactions: true },
     });
+    await allocateLotsForBill(tx, { shopId, locationId: location.id, bill });
     await recordBillLoyaltyRedemption(tx, {
       shopId,
       billId: bill.id,
@@ -655,6 +657,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     // stock, udhar, and accounting. A crash can no longer leave points detached.
     await reverseBillLoyaltyInTransaction(tx, shopId, bill.id);
     await reverseGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill cancelled: ${reason}` });
+    await restoreBillLotAllocations(tx, bill.id);
 
     return tx.bill.findFirst({ where: { id: billId, shopId } });
   });
@@ -1108,9 +1111,11 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
         customerId: bill.customerId ?? null,
         restoreAt: restoredAt,
       });
+      await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill });
     }
 
     await reapplyGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill restored: ${reason}` });
+    await reapplyBillLotAllocations(tx, bill.id);
 
     return tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });
   });

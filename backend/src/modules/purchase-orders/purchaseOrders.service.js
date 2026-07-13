@@ -4,6 +4,7 @@ import { AppError } from "../../middleware/error.js";
 import { moneyShadows, multiplyMoney, round2, weightedAvgCost } from "../../utils/money.js";
 import { rateUnitToBase } from "../../utils/units.js";
 import { getLocationQuantity, incrementLocationInventory, resolveOperationalLocation } from "../stores/location-context.service.js";
+import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
 
 function reference(prefix) {
   const day = new Date().toISOString().slice(0, 10).replaceAll("-", "");
@@ -261,7 +262,7 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
             note: data.note || `Received against ${order.orderNumber}`,
           },
         });
-        await tx.purchaseReceiptItem.create({
+        const receiptItem = await tx.purchaseReceiptItem.create({
           data: {
             receiptId: receipt.id,
             purchaseOrderItemId: item.id,
@@ -273,6 +274,18 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
             stockLedgerId: stockLedger.id,
             purchaseHistoryId: history.id,
           },
+        });
+        await recordReceiptLot(tx, {
+          shopId,
+          locationId: order.locationId,
+          product,
+          receiptItemId: receiptItem.id,
+          quantityBaseQty: input.quantityBaseQty,
+          actualRate: input.actualRate,
+          batchNumber: input.batchNumber,
+          manufacturedOn: input.manufacturedOn,
+          expiresOn: input.expiresOn,
+          note: data.note,
         });
         const updated = await tx.purchaseOrderItem.updateMany({
           where: { id: item.id, receivedBaseQty: item.receivedBaseQty },

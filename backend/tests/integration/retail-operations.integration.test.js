@@ -202,6 +202,9 @@ if (ctx.skip) {
       assert.equal(order.deliveryAddress, "Primary receiving bay, Pune");
       assert.equal(order.termsAndConditions, "Quote this PO on the supplier invoice.");
 
+      const tracked = assertSuccess(await ctx.patch(`/api/inventory-lots/products/${product.id}/tracking`, { enabled: true }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(tracked.batchTrackingEnabled, true);
+
       const sent = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/send`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal(sent.status, "sent");
       const orderItemId = sent.items[0].id;
@@ -211,7 +214,7 @@ if (ctx.skip) {
         supplierInvoiceNumber: "SUP-1001",
         paidAmount: 68,
         paymentMode: "cash",
-        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 4, actualRate: 17 }],
+        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 4, actualRate: 17, batchNumber: "OIL-EARLY", manufacturedOn: "2026-05-01", expiresOn: "2026-08-01" }],
       };
       const partial = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.equal(partial.purchaseOrder.status, "partially_received");
@@ -230,13 +233,24 @@ if (ctx.skip) {
 
       const completed = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, {
         idempotencyKey: `po-receipt-${order.id}-2`, supplierInvoiceNumber: "SUP-1001", paidAmount: 114, paymentMode: "bank",
-        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 6, actualRate: 19 }],
+        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 6, actualRate: 19, batchNumber: "OIL-LATE", manufacturedOn: "2026-06-01", expiresOn: "2026-12-01" }],
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.equal(completed.purchaseOrder.status, "received");
       assert.equal(completed.purchaseOrder.items[0].receivedBaseQty, 10);
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 13);
       assert.equal(await ctx.db.purchaseReceipt.count({ where: { purchaseOrderId: order.id } }), 2);
       assert.equal(await ctx.db.purchaseHistory.count({ where: { purchaseOrderId: order.id } }), 2);
+
+      const lots = assertSuccess(await ctx.get("/api/inventory-lots?status=all", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
+      assert.deepEqual(lots.map((lot) => lot.batchNumber), ["OIL-EARLY", "OIL-LATE"]);
+      const lotSale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 5, ratePerRateUnit: 30, payments: [{ mode: "cash", amount: 150 }], actualAmount: 150, buyerPaidAmount: 150,
+      }), { token: auth.accessToken, headers: { "x-location-id": primary.id } }), 201);
+      const allocations = await ctx.db.billItemLotAllocation.findMany({ where: { billItem: { billId: lotSale.id } }, include: { inventoryLot: true }, orderBy: { inventoryLot: { expiresOn: "asc" } } });
+      assert.deepEqual(allocations.map((row) => [row.inventoryLot.batchNumber, row.quantityBaseQty]), [["OIL-EARLY", 4], ["OIL-LATE", 1]], "checkout must consume the earliest-expiring saleable lot first");
+      assertSuccess(await ctx.post(`/api/bills/${lotSale.id}/cancel`, { reason: "Batch sale cancelled" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      const restoredLots = await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } });
+      assert.deepEqual(restoredLots.map((lot) => lot.availableBaseQty), [4, 6], "bill cancellation must restore exact lot balances");
 
       const cannotCancel = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/cancel`, { reason: "Too late" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
       assert.equal(cannotCancel.code, "PURCHASE_ORDER_NOT_CANCELLABLE");

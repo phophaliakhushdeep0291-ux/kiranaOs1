@@ -35,11 +35,16 @@ describe("POS workspace responsive design", () => {
 
   it("uses the local-first product catalogue inside billing", () => {
     expect(billingPage).toContain('import { useListProducts } from "@/features/products/queries";');
+    expect(billingPage).toContain('window.addEventListener("kirana:local-data-changed", loadLocalProducts)');
+    expect(billingPage).toContain("mergeProductRows(products.data ?? [], localProductRows)");
     expect(billingPage).not.toContain("useListProducts, type Bill");
+    expect(productQueries).toContain("cached.length > 0 ? cached : undefined");
   });
 
   it("keeps mobile navigation unobstructed and removes redundant billing actions", () => {
     expect(layout.match(/cleanPath\(loc\) !== \"\/billing\"/g)).toHaveLength(1);
+    expect(layout).toContain('data-app-mobile-bottom-nav="true"');
+    expect(layout).toContain('data-app-mobile-topbar="true"');
     expect(layout).not.toContain('aria-label="Create new bill"');
     expect(billingSummary).toContain("hidden grid-cols-5 gap-1.5 border-t");
   });
@@ -55,6 +60,10 @@ describe("POS workspace responsive design", () => {
     expect(products).not.toContain("button-add-product-mobile");
     expect(products).toContain('className="app-table-scroll hidden overflow-x-auto lg:block"');
     expect(products).toContain("space-y-2.5 p-2.5 lg:hidden");
+    expect(productFormPanel).toContain('data-mobile-task-panel="product-form"');
+    expect(productFormPanel).toContain('document.body.dataset.appMobileTaskOpen = "true"');
+    expect(styles).toContain('body[data-app-mobile-task-open="true"] [data-app-mobile-bottom-nav="true"]');
+    expect(styles).toContain('body[data-app-mobile-task-open="true"] [data-voice-assistant="true"]');
   });
 
   it("describes the exact payment action and amount at confirmation", () => {

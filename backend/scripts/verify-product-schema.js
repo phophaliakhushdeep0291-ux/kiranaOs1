@@ -41,6 +41,9 @@ const REQUIRED_BILL_COLUMNS = [
   "idempotencyKey",
   "sourceDeviceId",
   "returnOfBillId",
+  "refundMode",
+  "giftCardAmount",
+  "giftCardAmountPaise",
   "createdAt",
   "updatedAt",
 ];

@@ -41,6 +41,7 @@ import complianceRoutes from "./modules/compliance/compliance.routes.js";
 import loyaltyRoutes from "./modules/loyalty/loyalty.routes.js";
 import purchaseOrderRoutes from "./modules/purchase-orders/purchaseOrders.routes.js";
 import giftCardRoutes from "./modules/gift-cards/giftCards.routes.js";
+import inventoryLotsRoutes from "./modules/inventory-lots/inventoryLots.routes.js";
 
 const app = express();
 
@@ -215,6 +216,7 @@ app.use("/api/compliance", complianceRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/purchase-orders", purchaseOrderRoutes);
 app.use("/api/gift-cards", giftCardRoutes);
+app.use("/api/inventory-lots", inventoryLotsRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/ai", aiRoutes);

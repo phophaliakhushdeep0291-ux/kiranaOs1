@@ -42,6 +42,7 @@ export const productFormSchema = z.object({
   wholesaleFromQuantity: z.coerce.number().min(0).default(10),
   stockQuantity: z.coerce.number().min(0).default(0),
   lowStockAlert: z.coerce.number().min(0).default(0),
+  batchTrackingEnabled: z.boolean().default(false),
   reorderLevel: z.coerce.number().min(0).default(0),
   description: z.string().trim().max(500).optional(),
   imageUrl: z.string().optional(),
@@ -157,6 +158,7 @@ export function productToForm(product?: Product): ProductFormData {
     lowStockAlert: defaultUnit?.conversionToBase
       ? round2(Number(product?.lowStockThreshold ?? 0) / defaultUnit.conversionToBase)
       : fromBaseQty(product?.lowStockThreshold, unit),
+    batchTrackingEnabled: product?.batchTrackingEnabled ?? false,
     reorderLevel: product?.reorderLevel ?? 0,
     description: product?.description ?? "",
     imageUrl: product?.imageUrl ?? "",
@@ -246,6 +248,7 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     imageUrl: values.imageUrl || undefined,
     isLooseItem: values.isLooseItem,
     lowStockThreshold: round2(values.lowStockAlert * conversionToBase),
+    batchTrackingEnabled: values.batchTrackingEnabled,
     lowStockAlert: values.lowStockAlert,
     isActive: values.isActive,
     status: values.isActive ? "active" : "inactive",

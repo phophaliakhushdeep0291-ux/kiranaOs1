@@ -1,5 +1,6 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { requireFeatureAccess } from "../feature-gates/featureGate.service.js";
 import {
   getProductPermanentDeleteBlockReason,
   hasActiveDuplicateProductName,
@@ -83,6 +84,7 @@ export async function getProduct(shopId, id, { locationId } = {}) {
 }
 
 export async function createProduct(shopId, data, { identity = null } = {}) {
+  if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const productIdentity = normalizeProductIdentity(shopId, identity);
 
   // Idempotency must win before the name-conflict check: a retried offline create
@@ -191,6 +193,7 @@ async function findExistingProductByIdentity(client, shopId, identity) {
 }
 
 export async function updateProduct(shopId, id, data) {
+  if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const existing = await getProduct(shopId, id); // ensures it exists and belongs to shop
   if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id);
 

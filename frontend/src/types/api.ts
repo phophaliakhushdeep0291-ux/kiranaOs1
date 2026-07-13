@@ -108,6 +108,7 @@ export interface Product {
   imageUrl?: string | null;
   isLooseItem?: boolean;
   lowStockThreshold?: number;
+  batchTrackingEnabled?: boolean;
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;
@@ -159,6 +160,7 @@ export interface ProductInput {
   imageUrl?: string;
   isLooseItem?: boolean;
   lowStockThreshold?: number;
+  batchTrackingEnabled?: boolean;
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;
