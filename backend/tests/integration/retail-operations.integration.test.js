@@ -114,6 +114,72 @@ if (ctx.skip) {
       assert.equal(snapshot.snapshot.storeId, branch.id);
     });
 
+    test("runs a branch-aware purchase order through partial and complete atomic receiving", async () => {
+      const { tenant, auth } = await ownerContext();
+      const product = await createProduct(ctx.db, tenant.shop.id, {
+        name: "Reorder Oil",
+        stockBaseQty: 3,
+        lowStockThreshold: 5,
+        reorderLevel: 10,
+        costPerRateUnit: 20,
+        baseUnit: "piece",
+        rateUnit: "piece",
+      });
+      const supplier = await ctx.db.supplier.create({ data: { shopId: tenant.shop.id, name: "Reliable Wholesale" } });
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+
+      const suggestions = assertSuccess(await ctx.get("/api/purchase-orders/suggestions", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
+      assert.equal(suggestions.find((row) => row.productId === product.id).recommendedOrderBaseQty, 10);
+
+      const order = assertSuccess(await ctx.post("/api/purchase-orders", {
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        expectedOn: "2026-07-20",
+        items: [{ productId: product.id, orderedBaseQty: 10, expectedRate: 18 }],
+      }, { token: auth.accessToken, headers: { "x-location-id": primary.id } }), 201);
+      assert.equal(order.status, "draft");
+      assert.equal(order.expectedTotal, 180);
+
+      const sent = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/send`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(sent.status, "sent");
+      const orderItemId = sent.items[0].id;
+
+      const firstReceiptPayload = {
+        idempotencyKey: `po-receipt-${order.id}-1`,
+        supplierInvoiceNumber: "SUP-1001",
+        paidAmount: 68,
+        paymentMode: "cash",
+        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 4, actualRate: 17 }],
+      };
+      const partial = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(partial.purchaseOrder.status, "partially_received");
+      assert.equal(partial.purchaseOrder.items[0].receivedBaseQty, 4);
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 7);
+
+      const replay = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(replay.idempotentReplay, true);
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 7, "receipt retry must not add stock twice");
+
+      const overReceipt = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receive`, {
+        idempotencyKey: `po-receipt-${order.id}-over`, paidAmount: 133, paymentMode: "cash",
+        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 7, actualRate: 19 }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(overReceipt.code, "PURCHASE_ORDER_OVER_RECEIPT");
+
+      const completed = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, {
+        idempotencyKey: `po-receipt-${order.id}-2`, supplierInvoiceNumber: "SUP-1001", paidAmount: 114, paymentMode: "bank",
+        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 6, actualRate: 19 }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(completed.purchaseOrder.status, "received");
+      assert.equal(completed.purchaseOrder.items[0].receivedBaseQty, 10);
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 13);
+      assert.equal(await ctx.db.purchaseReceipt.count({ where: { purchaseOrderId: order.id } }), 2);
+      assert.equal(await ctx.db.purchaseHistory.count({ where: { purchaseOrderId: order.id } }), 2);
+
+      const cannotCancel = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/cancel`, { reason: "Too late" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(cannotCancel.code, "PURCHASE_ORDER_NOT_CANCELLABLE");
+    });
+
     test("earns loyalty points once and reverses available points on bill cancellation", async () => {
       const { tenant, auth } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Loyal Buyer" });

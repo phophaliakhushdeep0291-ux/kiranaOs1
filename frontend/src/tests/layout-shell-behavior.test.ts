@@ -34,7 +34,7 @@ describe("desktop app shell behavior", () => {
   });
 
   it("keeps mobile bottom navigation in its own row so it cannot cover page actions", () => {
-    expect(layout).toContain("pb-3 lg:pb-0");
+    expect(layout).toContain("pb-[var(--app-mobile-content-bottom-clearance)] lg:pb-0");
     expect(layout).toContain("mx-3 mb-3 mt-2 shrink-0");
     expect(layout).not.toContain("fixed inset-x-3 bottom-3");
     expect(layout).toContain("min-h-[var(--app-mobile-nav-height)]");

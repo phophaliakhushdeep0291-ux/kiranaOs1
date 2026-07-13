@@ -39,6 +39,7 @@ import integrationRoutes from "./modules/integrations/integrations.routes.js";
 import storeRoutes from "./modules/stores/stores.routes.js";
 import complianceRoutes from "./modules/compliance/compliance.routes.js";
 import loyaltyRoutes from "./modules/loyalty/loyalty.routes.js";
+import purchaseOrderRoutes from "./modules/purchase-orders/purchaseOrders.routes.js";
 
 const app = express();
 
@@ -211,6 +212,7 @@ app.use("/api/integrations", integrationRoutes);
 app.use("/api/stores", storeRoutes);
 app.use("/api/compliance", complianceRoutes);
 app.use("/api/loyalty", loyaltyRoutes);
+app.use("/api/purchase-orders", purchaseOrderRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/ai", aiRoutes);

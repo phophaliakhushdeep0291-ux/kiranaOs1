@@ -1191,7 +1191,7 @@ export default function Billing() {
 
   return (
     <div className="min-h-[calc(100dvh-var(--app-mobile-topbar-height)-var(--app-mobile-nav-height))] bg-white lg:h-[calc(100dvh-var(--app-desktop-topbar-height))] lg:min-h-0 lg:overflow-hidden">
-      <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 pb-24 sm:px-3 sm:py-3 sm:pb-24 lg:h-full lg:flex-row lg:gap-4 lg:px-4 lg:pb-3">
+      <div className="flex min-h-full flex-col gap-3 px-2.5 py-2.5 pb-[calc(var(--app-mobile-fixed-action-height)+2rem)] sm:px-3 sm:py-3 sm:pb-[calc(var(--app-mobile-fixed-action-height)+2rem)] lg:h-full lg:flex-row lg:gap-4 lg:px-4 lg:pb-3">
       {/* ── LEFT PANEL: product search + grid ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-visible lg:min-h-0 lg:overflow-hidden">
         {(heldBills.length > 0 || cart.length > 0) && (
@@ -1346,7 +1346,7 @@ export default function Billing() {
       {cart.length > 0 && (
         <div
           className="fixed inset-x-0 z-40 border-t border-[#e6ecf4] bg-white px-3 py-2.5 shadow-[0_-6px_22px_rgba(15,35,80,0.10)] lg:hidden"
-          style={{ bottom: "calc(var(--app-mobile-nav-height, 0px) + 1.5rem + env(safe-area-inset-bottom))" }}
+          style={{ bottom: "var(--app-mobile-bottom-nav-clearance)" }}
         >
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">

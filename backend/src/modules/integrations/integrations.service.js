@@ -147,7 +147,7 @@ export async function getOverview(shopId) {
     { id: "webhooks", name: "Signed webhooks", category: "Developer", status: developerAllowed ? activeWebhooks > 0 ? "ready" : "available" : "upgrade_required", detail: developerAllowed ? `${activeWebhooks} active endpoint${activeWebhooks === 1 ? "" : "s"}; HMAC-SHA256 signatures and delivery logs` : "Signed webhooks require the Pro plan" },
   ];
   const ready = providers.filter((provider) => provider.status === "ready").length;
-  return { maturityScore: Math.round((ready / providers.length) * 100), activeKeys, activeWebhooks, providers, recentDeliveries, supportedEvents: ["bill.created", "payment.recorded", "customer.updated", "integration.test"] };
+  return { maturityScore: Math.round((ready / providers.length) * 100), activeKeys, activeWebhooks, providers, recentDeliveries, supportedEvents: ["bill.created", "payment.recorded", "customer.updated", "purchase_order.created", "purchase_order.received", "integration.test"] };
 }
 
 export async function listApiKeys(shopId) {

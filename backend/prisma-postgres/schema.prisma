@@ -42,6 +42,8 @@ model Shop {
   udharLedger                 UdharLedger[]
   suppliers                   Supplier[]
   purchaseHistory             PurchaseHistory[]
+  purchaseOrders              PurchaseOrder[]
+  purchaseReceipts            PurchaseReceipt[]
   aiActionLogs                AiActionLog[]
   auditLogs                   AuditLog[]
   sessions                    Session[]
@@ -379,6 +381,8 @@ model Product {
   sellingUnits    ProductSellingUnit[]
   locationStocks  LocationStock[]
   transferItems   StockTransferItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+  purchaseReceiptItems PurchaseReceiptItem[]
 
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
@@ -613,6 +617,8 @@ model StoreLocation {
   expenses          Expense[]
   dailyClosings     DailyClosingSnapshot[]
   retailPaymentIntents RetailPaymentIntent[]
+  purchaseOrders    PurchaseOrder[]
+  purchaseReceipts  PurchaseReceipt[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -853,6 +859,8 @@ model Supplier {
 
   shop            Shop              @relation(fields: [shopId], references: [id])
   purchaseHistory PurchaseHistory[]
+  purchaseOrders  PurchaseOrder[]
+  purchaseReceipts PurchaseReceipt[]
 
   @@index([shopId])
   @@index([shopId, deletedAt])
@@ -932,6 +940,9 @@ model PurchaseHistory {
   locationId              String?
   productId               String
   supplierId              String?
+  purchaseOrderId         String?
+  purchaseOrderItemId     String?
+  purchaseReceiptId       String?
   supplierName            String
   qtyBase                 Float // quantity in baseUnit
   pricePerRateUnit        Float // computed: totalCost / (qtyBase / conversionFactor)
@@ -956,10 +967,124 @@ model PurchaseHistory {
   location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   product  Product        @relation(fields: [productId], references: [id])
   supplier Supplier?      @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
+  purchaseReceipt PurchaseReceipt? @relation(fields: [purchaseReceiptId], references: [id], onDelete: SetNull)
 
   @@index([shopId, productId, createdAt])
   @@index([shopId, locationId, createdAt])
+  @@index([shopId, purchaseOrderId, createdAt])
+  @@index([shopId, purchaseReceiptId])
   @@index([shopId, updatedAt, id])
+}
+
+model PurchaseOrder {
+  id                 String    @id @default(cuid())
+  shopId             String
+  locationId         String
+  supplierId         String?
+  orderNumber        String
+  supplierName       String
+  status             String    @default("draft")
+  expectedOn         DateTime?
+  expectedTotal      Float     @default(0)
+  expectedTotalPaise BigInt?
+  note               String?
+  createdByUserId    String?
+  sentAt             DateTime?
+  receivedAt         DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  shop      Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location  StoreLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  supplier  Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items     PurchaseOrderItem[]
+  receipts  PurchaseReceipt[]
+  history   PurchaseHistory[]
+
+  @@unique([shopId, orderNumber])
+  @@index([shopId, locationId, status, createdAt])
+  @@index([shopId, supplierId, createdAt])
+}
+
+model PurchaseOrderItem {
+  id                    String  @id @default(cuid())
+  purchaseOrderId       String
+  productId             String
+  productName           String
+  baseUnit              String
+  rateUnit              String
+  orderedBaseQty        Float
+  receivedBaseQty       Float   @default(0)
+  expectedRate          Float
+  expectedRatePaise     BigInt?
+  expectedAmount        Float
+  expectedAmountPaise   BigInt?
+
+  purchaseOrder PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  receiptItems  PurchaseReceiptItem[]
+  history       PurchaseHistory[]
+
+  @@unique([purchaseOrderId, productId])
+  @@index([productId])
+}
+
+model PurchaseReceipt {
+  id                    String   @id @default(cuid())
+  shopId                String
+  locationId            String
+  purchaseOrderId       String
+  supplierId            String?
+  receiptNumber         String
+  supplierInvoiceNumber String?
+  idempotencyKey        String?
+  totalAmount           Float
+  totalAmountPaise      BigInt?
+  paidAmount            Float    @default(0)
+  paidAmountPaise       BigInt?
+  dueAmount             Float    @default(0)
+  dueAmountPaise        BigInt?
+  paymentMode           String?
+  dueDate               DateTime?
+  note                  String?
+  receivedByUserId      String?
+  createdAt             DateTime @default(now())
+
+  shop          Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location      StoreLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  supplier      Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items         PurchaseReceiptItem[]
+  history       PurchaseHistory[]
+
+  @@unique([shopId, receiptNumber])
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, locationId, createdAt])
+  @@index([shopId, purchaseOrderId, createdAt])
+}
+
+model PurchaseReceiptItem {
+  id                  String @id @default(cuid())
+  receiptId           String
+  purchaseOrderItemId String
+  productId           String
+  quantityBaseQty     Float
+  actualRate          Float
+  actualRatePaise     BigInt?
+  lineAmount          Float
+  lineAmountPaise     BigInt?
+  stockLedgerId       String?
+  purchaseHistoryId   String?
+
+  receipt           PurchaseReceipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
+  product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([receiptId, purchaseOrderItemId])
+  @@index([productId])
 }
 
 // ─────────────────────────────────────────────

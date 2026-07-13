@@ -130,6 +130,9 @@
   --app-desktop-topbar-height: 76px;
   --app-mobile-topbar-height: 88px;
   --app-mobile-nav-height: 84px;
+  --app-mobile-bottom-nav-clearance: calc(var(--app-mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom));
+  --app-mobile-fixed-action-height: 76px;
+  --app-mobile-content-bottom-clearance: calc(var(--app-mobile-fixed-action-height) + 1.25rem + env(safe-area-inset-bottom));
   --app-page-max: 1600px;
   --app-page-gutter: clamp(0.875rem, 0.65rem + 0.7vw, 1.5rem);
 
@@ -644,13 +647,14 @@
 
     .app-main-scroll {
       background: #ffffff;
-      scroll-padding-block: calc(var(--app-mobile-topbar-height) + 0.75rem) calc(1rem + env(safe-area-inset-bottom));
+      padding-bottom: var(--app-mobile-content-bottom-clearance);
+      scroll-padding-block: calc(var(--app-mobile-topbar-height) + 0.75rem) var(--app-mobile-content-bottom-clearance);
       -webkit-overflow-scrolling: touch;
     }
 
     .app-page-shell {
       max-width: 520px;
-      padding: 0.875rem 0.875rem calc(1.25rem + env(safe-area-inset-bottom));
+      padding: 0.875rem 0.875rem var(--app-mobile-content-bottom-clearance);
     }
 
     .premium-panel,
@@ -673,14 +677,15 @@
   }
 
   .app-main-scroll {
-    scroll-padding-block: calc(var(--app-mobile-topbar-height) + 0.75rem) calc(1rem + env(safe-area-inset-bottom));
+    padding-bottom: var(--app-mobile-content-bottom-clearance);
+    scroll-padding-block: calc(var(--app-mobile-topbar-height) + 0.75rem) var(--app-mobile-content-bottom-clearance);
   }
 
   .app-page-shell,
   .app-docked-page {
     background: #ffffff;
     padding: 1rem;
-    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+    padding-bottom: var(--app-mobile-content-bottom-clearance);
   }
 
   .premium-panel,

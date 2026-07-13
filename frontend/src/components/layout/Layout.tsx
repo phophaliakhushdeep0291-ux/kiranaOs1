@@ -735,7 +735,7 @@ export function Layout({ children }: { children: ReactNode }) {
           id="main-content"
           tabIndex={-1}
           className={cn(
-            "app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain pb-3 lg:pb-0",
+            "app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain pb-[var(--app-mobile-content-bottom-clearance)] lg:pb-0",
             pageHasOwnTopbarActions ? "bg-[#ffffff]" : "bg-white",
           )}
         >
