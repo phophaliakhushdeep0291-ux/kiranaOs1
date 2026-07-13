@@ -9,7 +9,7 @@ import { CancelSubscriptionDialog, PlanBadge, UpgradeModal } from "@/features/su
 import { subscriptionRefreshLocalFirst } from "@/features/subscription/local-actions";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { PageHeader, PageShell } from "@/components/shared";
+import { LoadingSkeleton, PageHeader, PageShell } from "@/components/shared";
 
 function formatDate(value: string | null) {
   if (!value) return "Not available";
@@ -36,7 +36,12 @@ export default function SubscriptionPage() {
     }
   }
 
-  if (loading || !snapshot) return <PageShell><div className="text-sm text-muted-foreground">Loading subscription...</div></PageShell>;
+  if (loading || !snapshot) return (
+    <PageShell className="space-y-5">
+      <PageHeader title="Subscription" description="Your plan, billing cycle, and store protection in one place." />
+      <LoadingSkeleton variant="detail" rows={2} className="rounded-[18px] border border-[#e2eaf5] bg-white p-5" />
+    </PageShell>
+  );
 
   const stateIcon = snapshot.isPaymentFailed ? CreditCard : snapshot.isExpired ? CloudOff : snapshot.isTrial || snapshot.graceActive ? AlertTriangle : CheckCircle2;
   const StateIcon = stateIcon;
@@ -54,7 +59,7 @@ export default function SubscriptionPage() {
     : snapshot.message;
 
   return (
-    <PageShell className="space-y-5">
+    <PageShell className="app-data-reveal space-y-5">
       <PageHeader
         title="Subscription"
         description="Your plan, billing cycle, and store protection in one place."

@@ -19,6 +19,7 @@ import { calculateLedgerBalance, dedupeLedgerEntries, type CustomerLedgerEntry }
 import { dedupeBillItemsForDisplay, dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import { useAuth } from "@/features/auth/useAuth";
 import { billRecordToShareInput, resolveBillCustomerMobile, shareBillOnWhatsapp } from "@/features/bills/share";
+import { LoadingSkeleton } from "@/components/shared";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 type AnyRow = Record<string, unknown>;
@@ -240,7 +241,7 @@ export default function BillDetailPage() {
   }
 
   if (isLoading) {
-    return <div className="p-6 text-muted-foreground">Loading bill from local records...</div>;
+    return <LoadingSkeleton variant="detail" rows={4} className="mx-auto max-w-5xl p-5" />;
   }
 
   if (!bill) {

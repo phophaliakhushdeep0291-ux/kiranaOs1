@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader, PageShell, StatCard, StatsGrid } from "@/components/shared";
+import { LoadingSkeleton, PageHeader, PageShell, StatCard, StatsGrid } from "@/components/shared";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionSnapshot, PlanBadge } from "@/features/subscription";
 import { blockDevice, getCurrentDevice, listDevices, logoutDevice, reactivateDevice, removeDevice, renameDevice, type DeviceDto, type DeviceManagementSnapshot } from "@/features/devices/api";
@@ -258,7 +258,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
 
         <div className="divide-y divide-[#edf1f6]">
           {loading ? (
-            <div className="p-8 text-center text-sm text-[#60708e]">Loading registered devices...</div>
+            <LoadingSkeleton variant="list" rows={3} className="p-4" />
           ) : devices.length === 0 ? (
             <div className="p-8 text-center text-sm text-[#60708e]">No registered devices were returned by the shop account.</div>
           ) : devices.map((device) => {

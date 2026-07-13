@@ -8,6 +8,7 @@ import { usePricingRules, partitionProductRules } from "@/features/pricing/use-p
 import type { ApiPricingRule } from "@/features/pricing/api";
 import { createProductSellingUnit, deleteProductSellingUnit, listProductSellingUnits } from "@/features/pricing/api";
 import { baseUnitFor, sellingUnitCode, sellingUnitConversion, sellingUnitName } from "@/features/products/pages/product-pricing";
+import { LoadingSkeleton } from "@/components/shared";
 
 const GROUPS = ["Retail", "Regular", "VIP", "Reseller", "Wholesale", "Institutional", "Staff"];
 const rs = (n: unknown) => `₹${Number(n ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -88,7 +89,7 @@ export default function ProductPricingPage() {
     catch (e) { toast({ title: "Could not remove", description: e instanceof Error ? e.message : "Try again", variant: "destructive" }); }
   };
 
-  if (productsQuery.isLoading) return <p className="p-6 text-sm text-[#8290a8]">Loading…</p>;
+  if (productsQuery.isLoading) return <LoadingSkeleton variant="detail" rows={3} className="mx-auto max-w-6xl p-5" />;
   if (!product) return (
     <div className="p-6">
       <button onClick={() => navigate("/products")} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273]"><ArrowLeft size={14} /> Products</button>

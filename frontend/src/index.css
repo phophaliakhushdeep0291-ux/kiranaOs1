@@ -326,6 +326,10 @@
     animation: app-loading-reveal 180ms ease-out 70ms both;
   }
 
+  .app-data-reveal {
+    animation: app-data-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
   .app-skeleton-shimmer {
     background: linear-gradient(105deg, #edf3fb 18%, #f8fbff 42%, #e8f0fa 64%);
     background-size: 240% 100%;
@@ -719,6 +723,17 @@
 @keyframes app-loading-reveal {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes app-data-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 @keyframes app-skeleton-shimmer {
