@@ -1194,10 +1194,8 @@ function HowOrderingWorks() {
 
 function CustomerPortalPage({
   view,
-  catalog,
   products,
   onView,
-  onAddProduct,
 }: {
   view: CustomerStorefrontView;
   catalog: CustomerCatalog;
@@ -1205,15 +1203,9 @@ function CustomerPortalPage({
   onView: (view: CustomerStorefrontView) => void;
   onAddProduct: (productId: string) => void;
 }) {
-  const featured = products.slice(0, 6);
-  if (view === "orders") return <OrdersPortalPage products={featured} onView={onView} />;
-  if (view === "lists") return <ListsPortalPage products={featured} onView={onView} onAddProduct={onAddProduct} />;
-  if (view === "offers") return <OffersPortalPage products={featured} onView={onView} onAddProduct={onAddProduct} />;
-  if (view === "wallet") return <WalletPortalPage onView={onView} />;
-  if (view === "addresses") return <AddressesPortalPage catalog={catalog} onView={onView} />;
-  if (view === "payments") return <PaymentsPortalPage onView={onView} />;
-  if (view === "settings") return <CustomerSettingsPortalPage catalog={catalog} onView={onView} />;
-  return <SupportPortalPage catalog={catalog} onView={onView} />;
+  // Only real, server-backed customer views are exposed. Historical visual mockups for wallet,
+  // saved payments, offers and support are intentionally not routed until matching APIs exist.
+  return <OrdersPortalPage products={products.slice(0, 6)} onView={onView} />;
 }
 
 function PortalHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {

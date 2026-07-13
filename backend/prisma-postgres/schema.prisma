@@ -637,6 +637,7 @@ model StoreLocation {
   customerOrders    CustomerOrder[]
   userAccess        UserLocationAccess[]
   pricingRules      PricingRule[]
+  loyaltyTransactions LoyaltyTransaction[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -705,6 +706,8 @@ model LoyaltyProgram {
   pointsPerRupee          Float    @default(1)
   redemptionPaisePerPoint Int      @default(25)
   minimumRedeemPoints     Int      @default(100)
+  pointsExpireDays        Int      @default(365)
+  tierRulesJson           String   @default("[{\"name\":\"Bronze\",\"minLifetimePoints\":0},{\"name\":\"Silver\",\"minLifetimePoints\":1000},{\"name\":\"Gold\",\"minLifetimePoints\":5000}]")
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -718,6 +721,7 @@ model LoyaltyAccount {
   pointsBalance    Int      @default(0)
   lifetimeEarned   Int      @default(0)
   lifetimeRedeemed Int      @default(0)
+  lastEarnedAt     DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -733,18 +737,22 @@ model LoyaltyTransaction {
   shopId    String
   accountId String
   billId    String?
+  locationId String?
   type      String
   points    Int
+  source    String   @default("pos")
   note      String?
   createdAt DateTime @default(now())
 
   shop    Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
   account LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   bill    Bill?          @relation(fields: [billId], references: [id], onDelete: SetNull)
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@unique([billId, type])
   @@index([shopId, createdAt])
   @@index([accountId, createdAt])
+  @@index([shopId, locationId, createdAt])
 }
 
 model ComplianceDocument {

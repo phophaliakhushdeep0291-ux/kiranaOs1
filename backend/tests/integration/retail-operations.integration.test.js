@@ -62,6 +62,60 @@ if (ctx.skip) {
       assert.equal(blocked.code, "STORE_LIMIT_REACHED");
     });
 
+    test("routes public customer orders to one branch with live stock, pricing, and guarded fulfillment", async () => {
+      const { tenant, auth } = await ownerContext();
+      await ctx.db.shop.update({
+        where: { id: tenant.shop.id },
+        data: { settingsJson: JSON.stringify({ customerOrdering: { enabled: true } }) },
+      });
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Online Branch Rice", stockBaseQty: 20, defaultPricePerRateUnit: 50 });
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+      const branch = assertSuccess(await ctx.post("/api/stores", { name: "Online Branch", code: "ONL02", city: "Pune" }, { token: auth.accessToken }), 201);
+      assertSuccess(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        items: [{ productId: product.id, quantityBaseQty: 4 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      await ctx.db.pricingRule.create({ data: {
+        shopId: tenant.shop.id,
+        locationId: branch.id,
+        name: "Online branch price",
+        ruleType: "PROMOTIONAL_PRICE",
+        status: "ACTIVE",
+        priority: 7,
+        productId: product.id,
+        fixedUnitPrice: 45,
+      } });
+
+      const catalog = assertSuccess(await ctx.get(`/api/public/shops/${tenant.shop.id}/catalog?locationId=${branch.id}`));
+      assert.equal(catalog.location.id, branch.id);
+      assert.equal(catalog.products.find((row) => row.id === product.id).price, 45);
+
+      const submitted = assertSuccess(await ctx.post(`/api/public/shops/${tenant.shop.id}/orders`, {
+        locationId: branch.id,
+        fulfillmentType: "pickup",
+        promisedSlot: "Tomorrow morning",
+        customerName: "Online Customer",
+        customerMobile: "9876543210",
+        items: [{ productId: product.id, qty: 2 }],
+      }, { headers: { "Idempotency-Key": "branch-order-integration-1" } }), 201);
+      assert.equal(submitted.locationId, branch.id);
+      assert.equal(submitted.estimatedTotal, 90);
+
+      const branchOrders = assertSuccess(await ctx.get("/api/orders", { token: auth.accessToken, headers: { "x-location-id": branch.id } }));
+      const primaryOrders = assertSuccess(await ctx.get("/api/orders", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
+      assert.equal(branchOrders.orders.length, 1);
+      assert.equal(primaryOrders.orders.length, 0);
+      const accepted = assertSuccess(await ctx.patch(`/api/orders/${submitted.orderId}`, { status: "accepted" }, { token: auth.accessToken, headers: { "x-location-id": branch.id } }));
+      assert.equal(accepted.status, "accepted");
+      assert.ok(accepted.acceptedAt);
+      const ready = assertSuccess(await ctx.patch(`/api/orders/${submitted.orderId}`, { status: "ready" }, { token: auth.accessToken, headers: { "x-location-id": branch.id } }));
+      assert.equal(ready.status, "ready");
+      const invalid = assertFailure(await ctx.patch(`/api/orders/${submitted.orderId}`, { status: "accepted" }, { token: auth.accessToken, headers: { "x-location-id": branch.id } }), 409);
+      assert.equal(invalid.code, "INVALID_ORDER_TRANSITION");
+    });
+
     test("keeps branch billing, purchasing, stock ledger, reports, and closing isolated", async () => {
       const { tenant, auth } = await ownerContext();
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Branch-owned Flour", stockBaseQty: 20, defaultPricePerRateUnit: 25 });
