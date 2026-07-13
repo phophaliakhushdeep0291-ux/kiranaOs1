@@ -36,6 +36,9 @@ import reminderRoutes from "./modules/reminders/reminders.routes.js";
 import expenseRoutes from "./modules/expenses/expenses.routes.js";
 import offerRoutes from "./modules/offers/offers.routes.js";
 import integrationRoutes from "./modules/integrations/integrations.routes.js";
+import storeRoutes from "./modules/stores/stores.routes.js";
+import complianceRoutes from "./modules/compliance/compliance.routes.js";
+import loyaltyRoutes from "./modules/loyalty/loyalty.routes.js";
 
 const app = express();
 
@@ -205,6 +208,9 @@ app.use("/api/suppliers", supplierRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/offers", offerRoutes);
 app.use("/api/integrations", integrationRoutes);
+app.use("/api/stores", storeRoutes);
+app.use("/api/compliance", complianceRoutes);
+app.use("/api/loyalty", loyaltyRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/ai", aiRoutes);

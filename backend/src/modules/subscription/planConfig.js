@@ -61,6 +61,7 @@ const growthOnlyFeatures = [
 const proOnlyFeatures = [
   "multi_counter_billing",
   "multi_store",
+  "loyalty_program",
   "advanced_inventory",
   "batch_expiry",
   "gst_reports",

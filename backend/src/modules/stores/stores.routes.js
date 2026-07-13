@@ -1,0 +1,19 @@
+import { Router } from "express";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
+import { validate } from "../../middleware/validate.js";
+import { requireDeviceActivated } from "../devices/device.middleware.js";
+import { requireFeature } from "../feature-gates/featureGate.middleware.js";
+import { createLocationSchema, createTransferSchema, updateLocationSchema } from "./stores.schema.js";
+import * as controller from "./stores.controller.js";
+
+const router = Router();
+router.use(requireAuth, requireShop, requireDeviceActivated());
+router.get("/", controller.listLocations);
+router.get("/transfers", requireFeature("multi_store"), controller.transfers);
+router.get("/:id/inventory", controller.inventory);
+router.post("/", requireRole("owner", "admin"), requireFeature("multi_store"), validate(createLocationSchema), controller.createLocation);
+router.patch("/:id", requireRole("owner", "admin"), requireFeature("multi_store"), validate(updateLocationSchema), controller.updateLocation);
+router.post("/transfers", requireRole("owner", "admin"), requireFeature("multi_store"), requireOwnerPin, validate(createTransferSchema), controller.createTransfer);
+
+export default router;

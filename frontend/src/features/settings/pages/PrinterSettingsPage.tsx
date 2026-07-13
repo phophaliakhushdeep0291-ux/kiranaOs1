@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useGetShop } from "@/lib/api/client";
-import { CheckCircle2, Cable, Download, FileText, Printer, RefreshCcw, Search, XCircle } from "lucide-react";
+import { Bluetooth, CheckCircle2, Cable, Download, FileText, Printer, RefreshCcw, Scale, Search, ShieldCheck, Usb, XCircle } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
@@ -74,6 +74,15 @@ export default function PrinterSettingsPage() {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   useEffect(() => { const t = setTimeout(() => setPreviewCfg(cfg), 300); return () => clearTimeout(t); }, [cfg]);
   const previewHtml = useMemo(() => buildReceiptHtml(sampleSnapshot(shop.data, previewCfg), { paperSize: previewCfg.paperSize, copies: 1 }), [shop.data, previewCfg]);
+  const hardwareCapabilities = useMemo(() => {
+    const browserNavigator = navigator as Navigator & { bluetooth?: unknown; usb?: unknown; serial?: unknown };
+    return [
+      { label: "System receipt printing", detail: "Print dialog and installed drivers", ready: typeof window.print === "function", icon: Printer },
+      { label: "Bluetooth device discovery", detail: "Supported browsers and secure connection", ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
+      { label: "USB hardware access", detail: "Barcode/ESC-POS bridge capable browser", ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
+      { label: "Serial weighing scale", detail: "Web Serial capable browser; device protocol still required", ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
+    ];
+  }, []);
 
   function addJob(title: string, status: PrintJobStatus) {
     setJobs((current) => [{ id: `${Date.now()}-${Math.random()}`, title, status, time: nowTime() }, ...current].slice(0, 8));
@@ -206,7 +215,7 @@ export default function PrinterSettingsPage() {
               <RowToggle label="Print customer copy" pill={<Switch checked={cfg.customerCopy} onCheckedChange={(v) => setP("customerCopy", v)} />} />
               <RowToggle label="Print shop copy" pill={<Switch checked={cfg.shopCopy} onCheckedChange={(v) => setP("shopCopy", v)} />} />
               <RowToggle label="Auto cut paper" desc="Supported thermal printers" pill={<Switch checked={cfg.autoCut} onCheckedChange={(v) => setP("autoCut", v)} />} />
-              <RowToggle label="Open cash drawer after bill" pill={<Switch checked={cfg.cashDrawer} onCheckedChange={(v) => setP("cashDrawer", v)} />} />
+              <RowToggle label="Cash drawer pulse" desc="Requires an ESC/POS printer bridge; browser printing alone cannot trigger it" pill={<Badge tone="amber">Bridge required</Badge>} />
               <RowToggle label="Print logo" pill={<Switch checked={cfg.printLogo} onCheckedChange={(v) => setP("printLogo", v)} />} />
               <RowToggle label="Print payment QR code" pill={<Switch checked={cfg.printQr} onCheckedChange={(v) => setP("printQr", v)} />} last />
             </div>
@@ -270,6 +279,16 @@ export default function PrinterSettingsPage() {
           </div>
         </Card>
       </div>
+
+      <Card>
+        <CardHead icon={<ShieldCheck size={15} />} title="Hardware compatibility check" sub="Capabilities detected on this device—not marketing claims" />
+        <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
+          {hardwareCapabilities.map((capability) => {
+            const Icon = capability.icon;
+            return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[#075fff] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : "Unavailable"}</Badge></div><p className="mt-3 text-[12px] font-black text-[#102347]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;
+          })}
+        </div>
+      </Card>
     </SettingsShell>
   );
 }

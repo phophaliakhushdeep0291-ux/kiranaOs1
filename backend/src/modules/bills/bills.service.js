@@ -104,6 +104,11 @@ export async function confirmBill(shopId, body, actor = {}) {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
     if (existingBill) return existingBill;
 
+    const invoiceCustomer = customerId
+      ? await tx.customer.findFirst({ where: { id: customerId, shopId, deletedAt: null } })
+      : null;
+    if (customerId && !invoiceCustomer) throw new AppError("Customer not found", 404);
+
     // ── 1. Load and validate all products ─────────────────────
     const productIds = items.filter((i) => i.productId).map((i) => i.productId);
     const dbProducts = await tx.product.findMany({
@@ -340,6 +345,9 @@ export async function confirmBill(shopId, body, actor = {}) {
         billType,
         customerId: customerId ?? null,
         customerName,
+        buyerGstin: invoiceCustomer?.gstNumber ?? null,
+        buyerStateCode: invoiceCustomer?.stateCode ?? null,
+        buyerAddress: invoiceCustomer?.address ?? null,
         subtotal,
         discount: billDiscount,
         gst: totalGst,

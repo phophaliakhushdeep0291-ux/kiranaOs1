@@ -52,6 +52,7 @@ export type FeatureName =
   | "priority_support"
   | "multi_counter_billing"
   | "multi_store"
+  | "loyalty_program"
   | "advanced_inventory"
   | "batch_expiry"
   | "gst_reports"
@@ -143,6 +144,7 @@ const growthExtra: FeatureName[] = [
 const proExtra: FeatureName[] = [
   "multi_counter_billing",
   "multi_store",
+  "loyalty_program",
   "advanced_inventory",
   "batch_expiry",
   "gst_reports",
@@ -281,6 +283,7 @@ export const FEATURE_LABELS: Record<FeatureName, string> = {
   priority_support: "Priority support",
   multi_counter_billing: "Multi-counter billing",
   multi_store: "Multi-store support",
+  loyalty_program: "Loyalty points and rewards ledger",
   advanced_inventory: "Advanced inventory",
   batch_expiry: "Batch/expiry support",
   gst_reports: "GST reports",

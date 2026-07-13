@@ -35,6 +35,7 @@ export const FEATURE_REGISTRY = {
   priority_support: { minimumPlan: "growth", description: "Priority support" },
   multi_counter_billing: { minimumPlan: "pro", description: "Multi counter billing" },
   multi_store: { minimumPlan: "pro", description: "Multi store" },
+  loyalty_program: { minimumPlan: "pro", description: "Loyalty points and rewards ledger" },
   advanced_inventory: { minimumPlan: "pro", description: "Advanced inventory" },
   batch_expiry: { minimumPlan: "pro", description: "Batch/expiry" },
   gst_reports: { minimumPlan: "pro", description: "GST reports" },

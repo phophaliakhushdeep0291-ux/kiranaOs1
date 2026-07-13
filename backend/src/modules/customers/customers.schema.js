@@ -4,6 +4,9 @@ import { moneyAmount } from "../../utils/validationSchemas.js";
 export const createCustomerSchema = z.object({
   name: z.string().min(1),
   mobile: z.string().regex(/^[6-9]\d{9}$/, "Valid Indian mobile required").optional().nullable(),
+  address: z.string().trim().max(300).optional().nullable(),
+  gstNumber: z.string().trim().toUpperCase().regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, "Valid 15-character GSTIN required").optional().nullable(),
+  stateCode: z.string().regex(/^\d{2}$/, "Two-digit GST state code required").optional().nullable(),
   type: z.enum(["regular", "udhar"]).default("regular"),
   udharAmount: moneyAmount().default(0).optional(),
 });

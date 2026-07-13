@@ -76,6 +76,10 @@ const envSchema = z.object({
   WHATSAPP_BASE_URL: z.string().optional(),
   INTEGRATION_SIGNING_SECRET: z.string().optional(),
   INTEGRATION_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
+  // GST compliance submission is disabled until a certified provider adapter is
+  // configured. Sandbox documents are visibly non-legal and cannot be mistaken
+  // for a GSTN acknowledgement.
+  GST_PROVIDER: z.enum(["disabled", "sandbox"]).default("disabled"),
   REMINDER_COOLDOWN_HOURS: z.coerce.number().int().min(1).max(168).default(6),
 });
 

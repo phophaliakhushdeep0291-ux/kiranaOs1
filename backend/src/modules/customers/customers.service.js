@@ -10,6 +10,15 @@ import {
 } from "../udhar/udharBalance.service.js";
 import { postUdharPaymentLedger } from "../finance/financial-ledger.service.js";
 
+async function lockCustomerUdharBalance(tx, shopId, customerId) {
+  if (!/^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL || "")) return;
+  await tx.$queryRawUnsafe(
+    'SELECT "id" FROM "Customer" WHERE "id" = $1 AND "shopId" = $2 FOR UPDATE',
+    customerId,
+    shopId
+  );
+}
+
 export async function listCustomers(shopId, { search } = {}) {
   const customers = await db.customer.findMany({
     where: {
@@ -199,18 +208,22 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
 
   try {
     return await db.$transaction(async (tx) => {
-    await ensureLegacyUdharOpeningLedger(tx, shopId, customerId);
-    const existingLedger = await findExistingUdharPaymentByIdentity(tx, shopId, customerId, identity);
-    if (existingLedger) {
-      const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customerId);
-      return {
-        customerId,
-        ledgerEntryId: existingLedger.id,
-        newBalance: currentBalance.balance,
-        amountPaid: existingLedger.amount,
-        idempotentReplay: true,
-      };
-    }
+      // Serialize balance checks for this customer across application instances.
+      // Without the row lock, concurrent payments can both validate the same
+      // balance and over-credit the ledger.
+      await lockCustomerUdharBalance(tx, shopId, customerId);
+      await ensureLegacyUdharOpeningLedger(tx, shopId, customerId);
+      const existingLedger = await findExistingUdharPaymentByIdentity(tx, shopId, customerId, identity);
+      if (existingLedger) {
+        const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customerId);
+        return {
+          customerId,
+          ledgerEntryId: existingLedger.id,
+          newBalance: currentBalance.balance,
+          amountPaid: existingLedger.amount,
+          idempotentReplay: true,
+        };
+      }
 
     const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customerId);
     if (currentBalance.balance < paymentAmount) {

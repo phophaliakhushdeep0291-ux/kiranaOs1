@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { BarChart3, Boxes, Download, Pencil, Receipt, ShieldCheck } from "lucide-react";
+import { AlertTriangle, BarChart3, Boxes, CheckCircle2, Download, Pencil, Receipt, ShieldCheck } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle, Kpi } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
@@ -43,6 +43,13 @@ interface GstReport {
   gstCollected: number;
   cgst: number;
   sgst: number;
+}
+interface ComplianceReadiness {
+  score: number;
+  legallyReady: boolean;
+  provider: { mode: string; configured: boolean; legalSubmission: boolean };
+  checks: Array<{ key: string; label: string; ready: boolean; detail: string }>;
+  gaps: { missingHsn: Array<{ id: string; name: string }>; invalidHsn: Array<{ id: string; name: string }> };
 }
 
 const DEFAULT_TAX: TaxConfig = {
@@ -86,6 +93,7 @@ export default function TaxesSettingsPage() {
   const seeded = useRef(false);
   // Real numbers from stored bills (gst + gstMode persisted per bill).
   const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), retry: 1 });
+  const readinessQ = useQuery({ queryKey: ["gst-compliance-readiness"], queryFn: () => apiRequest<ComplianceReadiness>("/compliance/readiness"), retry: 1 });
   const inr = (n?: number) => (n == null ? "—" : `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
   useEffect(() => {
@@ -126,8 +134,8 @@ export default function TaxesSettingsPage() {
     const normalizedRate = `${rateNumber}%`;
     if (hsnEditor.mode === "single") {
       const normalizedHsn = draftHsn.trim();
-      if (!/^\d{2,8}$/.test(normalizedHsn)) {
-        setEditorError("Enter a valid 2 to 8 digit HSN code.");
+      if (!/^\d{4}(?:\d{2})?(?:\d{2})?$/.test(normalizedHsn)) {
+        setEditorError("Enter a valid 4, 6 or 8 digit HSN code.");
         window.requestAnimationFrame(() => hsnInputRef.current?.focus());
         return;
       }
@@ -142,19 +150,14 @@ export default function TaxesSettingsPage() {
     setHsnEditor(null);
     setEditorError("");
   }
-  function exportGstReport() {
-    const report = gstQ.data;
-    const rows = [
-      ["Metric", "Value"],
-      ["GST Collected", String(report?.gstCollected ?? 0)],
-      ["Taxable Sales", String(report?.taxableSales ?? 0)],
-      ["CGST", String(report?.cgst ?? 0)],
-      ["SGST", String(report?.sgst ?? 0)],
-      ["GST Bills", String(report?.gstBills ?? 0)],
-      ["Total Bills", String(report?.totalBills ?? 0)],
-    ];
-    downloadText(`kiranaos-gst-report-${new Date().toISOString().slice(0, 10)}.csv`, rows.map((row) => row.join(",")).join("\n"));
-    toast({ title: "GST report downloaded" });
+  async function exportGstReport() {
+    try {
+      const csv = await apiRequest<string>("/compliance/gst-register?range=monthly&format=csv");
+      downloadText(`kiranaos-gst-invoice-register-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      toast({ title: "GST invoice register downloaded", description: "Line-level HSN and tax values are ready for accountant review." });
+    } catch (error) {
+      toast({ title: "Export unavailable", description: error instanceof Error ? error.message : "Could not export the GST register.", variant: "destructive" });
+    }
   }
 
   return (
@@ -183,7 +186,7 @@ export default function TaxesSettingsPage() {
               </Fld>
               <Fld label="Invoice Prefix"><Input className="h-10" value={tax.invoicePrefix} onChange={(e) => setText({ invoicePrefix: e.target.value })} onBlur={flush} /></Fld>
             </div>
-            <Fld label="Business GSTIN"><Input className="h-10" value={tax.gstin} onChange={(e) => setText({ gstin: e.target.value })} onBlur={flush} placeholder="22ABCDE1234F1Z5" /></Fld>
+            <Fld label="Legal Business GSTIN" hint="Legal identity is managed in Business Profile and validated by the server."><Input className="h-10 bg-slate-50" value={shop?.gstNumber ?? ""} readOnly placeholder="Add GSTIN in Business Profile" /></Fld>
             <RowToggle label="Enable tax invoice" desc="Print GST invoices with breakup" pill={<Switch checked={tax.taxInvoice} onCheckedChange={(v) => update({ taxInvoice: v })} />} />
             <RowToggle label="Composition scheme" desc="Flat-rate dealers (no input credit)" pill={<Switch checked={tax.composition} onCheckedChange={(v) => update({ composition: v })} />} last />
           </div>
@@ -256,8 +259,22 @@ export default function TaxesSettingsPage() {
         <Card>
           <CardHead icon={<ShieldCheck size={15} />} title="Compliance Settings" sub="Accuracy & legal safeguards" />
           <div className="px-5 pb-4">
-            <RowToggle label="E-Invoice" desc="Generate IRN for B2B invoices" pill={<Switch checked={tax.eInvoice} onCheckedChange={(v) => update({ eInvoice: v })} />} />
-            <RowToggle label="E-Way Bill" desc="For goods movement" pill={<Switch checked={tax.eWayBill} onCheckedChange={(v) => update({ eWayBill: v })} />} />
+            <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div><p className="text-[13px] font-black text-[#102347]">Compliance readiness</p><p className="mt-0.5 text-[11px] text-[#64748b]">Server-validated—not a local preference</p></div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-black ${readinessQ.data?.legallyReady ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{readinessQ.isLoading ? "Checking…" : `${readinessQ.data?.score ?? 0}%`}</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {(readinessQ.data?.checks ?? []).map((check) => (
+                  <div key={check.key} className="flex items-start gap-2">
+                    {check.ready ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-600" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />}
+                    <div><p className="text-[12px] font-bold text-[#102347]">{check.label}</p><p className="text-[11px] leading-4 text-[#64748b]">{check.detail}</p></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <RowToggle label="E-Invoice / IRN" desc="Blocked until a certified GSTN/GSP provider is connected" pill={<Badge tone="amber">Not connected</Badge>} />
+            <RowToggle label="E-Way Bill" desc="Blocked until transporter, vehicle and distance fields are captured" pill={<Badge tone="amber">Setup needed</Badge>} />
             <RowToggle label="Show GST breakup on bill" pill={<Switch checked={tax.showBreakup} onCheckedChange={(v) => update({ showBreakup: v })} />} />
             <RowToggle label="Round off tax amount" pill={<Switch checked={tax.roundOff} onCheckedChange={(v) => update({ roundOff: v })} />} />
             <RowToggle label="Lock tax after bill creation" pill={<Switch checked={tax.lockAfterBill} onCheckedChange={(v) => update({ lockAfterBill: v })} />} />
@@ -282,7 +299,7 @@ export default function TaxesSettingsPage() {
                 <div className="space-y-2">
                   <Label htmlFor="hsn-code">HSN code</Label>
                   <Input ref={hsnInputRef} id="hsn-code" value={draftHsn} onChange={(event) => { setDraftHsn(event.target.value.replace(/\D/g, "").slice(0, 8)); setEditorError(""); }} inputMode="numeric" autoComplete="off" aria-describedby={hsnHasError ? "hsn-editor-error" : "hsn-code-help"} aria-invalid={hsnHasError || undefined} autoFocus />
-                  <p id="hsn-code-help" className="text-xs text-muted-foreground">Use the 2 to 8 digit code from your GST classification.</p>
+                  <p id="hsn-code-help" className="text-xs text-muted-foreground">Use the 4, 6 or 8 digit code from your GST classification.</p>
                 </div>
               )}
               <div className="space-y-2">

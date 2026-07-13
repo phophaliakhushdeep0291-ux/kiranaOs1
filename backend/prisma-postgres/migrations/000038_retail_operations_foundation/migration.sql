@@ -1,0 +1,93 @@
+CREATE TABLE "StoreLocation" (
+  "id" TEXT NOT NULL, "shopId" TEXT NOT NULL, "code" TEXT NOT NULL, "name" TEXT NOT NULL,
+  "address" TEXT, "city" TEXT, "gstNumber" TEXT, "phone" TEXT,
+  "isPrimary" BOOLEAN NOT NULL DEFAULT false, "active" BOOLEAN NOT NULL DEFAULT true,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "StoreLocation_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "StoreLocation_shopId_code_key" ON "StoreLocation"("shopId", "code");
+CREATE INDEX "StoreLocation_shopId_active_createdAt_idx" ON "StoreLocation"("shopId", "active", "createdAt");
+CREATE INDEX "StoreLocation_shopId_isPrimary_idx" ON "StoreLocation"("shopId", "isPrimary");
+
+CREATE TABLE "LocationStock" (
+  "id" TEXT NOT NULL, "shopId" TEXT NOT NULL, "locationId" TEXT NOT NULL, "productId" TEXT NOT NULL,
+  "stockBaseQty" DOUBLE PRECISION NOT NULL DEFAULT 0, "lowStockThreshold" DOUBLE PRECISION, "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "LocationStock_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "LocationStock_locationId_productId_key" ON "LocationStock"("locationId", "productId");
+CREATE INDEX "LocationStock_shopId_productId_idx" ON "LocationStock"("shopId", "productId");
+
+CREATE TABLE "StockTransfer" (
+  "id" TEXT NOT NULL, "shopId" TEXT NOT NULL, "referenceNo" TEXT NOT NULL,
+  "fromLocationId" TEXT NOT NULL, "toLocationId" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT 'completed',
+  "note" TEXT, "createdByUserId" TEXT, "completedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "StockTransfer_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "StockTransfer_shopId_referenceNo_key" ON "StockTransfer"("shopId", "referenceNo");
+CREATE INDEX "StockTransfer_shopId_createdAt_idx" ON "StockTransfer"("shopId", "createdAt");
+CREATE INDEX "StockTransfer_shopId_status_createdAt_idx" ON "StockTransfer"("shopId", "status", "createdAt");
+
+CREATE TABLE "StockTransferItem" (
+  "id" TEXT NOT NULL, "transferId" TEXT NOT NULL, "productId" TEXT NOT NULL, "productName" TEXT NOT NULL,
+  "quantityBaseQty" DOUBLE PRECISION NOT NULL, "baseUnit" TEXT NOT NULL,
+  CONSTRAINT "StockTransferItem_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "StockTransferItem_transferId_productId_key" ON "StockTransferItem"("transferId", "productId");
+CREATE INDEX "StockTransferItem_productId_idx" ON "StockTransferItem"("productId");
+
+CREATE TABLE "LoyaltyProgram" (
+  "id" TEXT NOT NULL, "shopId" TEXT NOT NULL, "active" BOOLEAN NOT NULL DEFAULT false,
+  "pointsPerRupee" DOUBLE PRECISION NOT NULL DEFAULT 1, "redemptionPaisePerPoint" INTEGER NOT NULL DEFAULT 25,
+  "minimumRedeemPoints" INTEGER NOT NULL DEFAULT 100, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "LoyaltyProgram_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "LoyaltyProgram_shopId_key" ON "LoyaltyProgram"("shopId");
+
+CREATE TABLE "LoyaltyAccount" (
+  "id" TEXT NOT NULL, "shopId" TEXT NOT NULL, "customerId" TEXT NOT NULL,
+  "pointsBalance" INTEGER NOT NULL DEFAULT 0, "lifetimeEarned" INTEGER NOT NULL DEFAULT 0,
+  "lifetimeRedeemed" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "LoyaltyAccount_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "LoyaltyAccount_customerId_key" ON "LoyaltyAccount"("customerId");
+CREATE INDEX "LoyaltyAccount_shopId_pointsBalance_idx" ON "LoyaltyAccount"("shopId", "pointsBalance");
+
+CREATE TABLE "LoyaltyTransaction" (
+  "id" TEXT NOT NULL, "shopId" TEXT NOT NULL, "accountId" TEXT NOT NULL, "billId" TEXT,
+  "type" TEXT NOT NULL, "points" INTEGER NOT NULL, "note" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "LoyaltyTransaction_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "LoyaltyTransaction_billId_type_key" ON "LoyaltyTransaction"("billId", "type");
+CREATE INDEX "LoyaltyTransaction_shopId_createdAt_idx" ON "LoyaltyTransaction"("shopId", "createdAt");
+CREATE INDEX "LoyaltyTransaction_accountId_createdAt_idx" ON "LoyaltyTransaction"("accountId", "createdAt");
+
+CREATE TABLE "ComplianceDocument" (
+  "id" TEXT NOT NULL, "shopId" TEXT NOT NULL, "billId" TEXT NOT NULL, "documentType" TEXT NOT NULL,
+  "provider" TEXT NOT NULL, "status" TEXT NOT NULL, "externalReference" TEXT, "acknowledgementNo" TEXT,
+  "payloadHash" TEXT NOT NULL, "payloadJson" TEXT NOT NULL, "responseJson" TEXT, "errorMessage" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "ComplianceDocument_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "ComplianceDocument_billId_documentType_key" ON "ComplianceDocument"("billId", "documentType");
+CREATE INDEX "ComplianceDocument_shopId_documentType_status_createdAt_idx" ON "ComplianceDocument"("shopId", "documentType", "status", "createdAt");
+
+ALTER TABLE "StoreLocation" ADD CONSTRAINT "StoreLocation_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "LocationStock" ADD CONSTRAINT "LocationStock_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "LocationStock" ADD CONSTRAINT "LocationStock_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "StoreLocation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "LocationStock" ADD CONSTRAINT "LocationStock_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "StockTransfer" ADD CONSTRAINT "StockTransfer_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "StockTransfer" ADD CONSTRAINT "StockTransfer_fromLocationId_fkey" FOREIGN KEY ("fromLocationId") REFERENCES "StoreLocation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "StockTransfer" ADD CONSTRAINT "StockTransfer_toLocationId_fkey" FOREIGN KEY ("toLocationId") REFERENCES "StoreLocation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "StockTransferItem" ADD CONSTRAINT "StockTransferItem_transferId_fkey" FOREIGN KEY ("transferId") REFERENCES "StockTransfer"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "StockTransferItem" ADD CONSTRAINT "StockTransferItem_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "LoyaltyProgram" ADD CONSTRAINT "LoyaltyProgram_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "LoyaltyAccount" ADD CONSTRAINT "LoyaltyAccount_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "LoyaltyAccount" ADD CONSTRAINT "LoyaltyAccount_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "LoyaltyTransaction" ADD CONSTRAINT "LoyaltyTransaction_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "LoyaltyTransaction" ADD CONSTRAINT "LoyaltyTransaction_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "LoyaltyAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "LoyaltyTransaction" ADD CONSTRAINT "LoyaltyTransaction_billId_fkey" FOREIGN KEY ("billId") REFERENCES "Bill"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ComplianceDocument" ADD CONSTRAINT "ComplianceDocument_billId_fkey" FOREIGN KEY ("billId") REFERENCES "Bill"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Customer" ADD COLUMN "address" TEXT, ADD COLUMN "gstNumber" TEXT, ADD COLUMN "stateCode" TEXT;
+ALTER TABLE "Bill" ADD COLUMN "buyerGstin" TEXT, ADD COLUMN "buyerStateCode" TEXT, ADD COLUMN "buyerAddress" TEXT;

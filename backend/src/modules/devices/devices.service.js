@@ -57,7 +57,9 @@ function cleanText(value, maxLength) {
 
 async function acquireShopRegistrationLock(tx, shopId) {
   if (/^postgres(?:ql)?:\/\//i.test(env.DATABASE_URL || "")) {
-    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", shopId);
+    // PostgreSQL reports pg_advisory_xact_lock as `void`. Cast it so Prisma can
+    // deserialize the result instead of failing every device lifecycle request.
+    await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))::text AS lock_result", shopId);
   }
 }
 

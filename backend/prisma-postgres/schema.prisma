@@ -69,6 +69,13 @@ model Shop {
   integrationApiKeys          IntegrationApiKey[]
   webhookEndpoints            WebhookEndpoint[]
   webhookDeliveries           WebhookDelivery[]
+  storeLocations              StoreLocation[]
+  locationStocks              LocationStock[]
+  stockTransfers              StockTransfer[]
+  loyaltyPrograms             LoyaltyProgram[]
+  loyaltyAccounts             LoyaltyAccount[]
+  loyaltyTransactions         LoyaltyTransaction[]
+  complianceDocuments         ComplianceDocument[]
 }
 
 // ─────────────────────────────────────────────
@@ -369,6 +376,8 @@ model Product {
   stockLedger     StockLedger[]
   purchaseHistory PurchaseHistory[]
   sellingUnits    ProductSellingUnit[]
+  locationStocks  LocationStock[]
+  transferItems   StockTransferItem[]
 
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
@@ -385,6 +394,9 @@ model Customer {
   shopId                String
   name                  String
   mobile                String?
+  address               String?
+  gstNumber             String?
+  stateCode             String?
   type                  String    @default("regular") // regular | udhar
   customerGroup         String? // owner-defined pricing group (Wholesale/VIP/…)
   udharAmount           Float     @default(0) // current outstanding
@@ -394,10 +406,11 @@ model Customer {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  shop         Shop          @relation(fields: [shopId], references: [id])
-  bills        Bill[]
-  udharLedger  UdharLedger[]
-  reminderLogs ReminderLog[]
+  shop           Shop            @relation(fields: [shopId], references: [id])
+  bills          Bill[]
+  udharLedger    UdharLedger[]
+  reminderLogs   ReminderLog[]
+  loyaltyAccount LoyaltyAccount?
 
   @@unique([shopId, mobile])
   @@index([shopId, deletedAt])
@@ -415,6 +428,9 @@ model Bill {
   status               String    @default("active") // active | cancelled
   customerId           String?
   customerName         String    @default("Walk-in")
+  buyerGstin           String?
+  buyerStateCode       String?
+  buyerAddress         String?
   subtotal             Float     @default(0)
   subtotalPaise        BigInt?
   discount             Float     @default(0)
@@ -447,12 +463,14 @@ model Bill {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  shop        Shop          @relation(fields: [shopId], references: [id])
-  customer    Customer?     @relation(fields: [customerId], references: [id])
-  items       BillItem[]
-  payments    Payment[]
-  udharLedger UdharLedger[]
-  stockLedger StockLedger[]
+  shop                Shop                 @relation(fields: [shopId], references: [id])
+  customer            Customer?            @relation(fields: [customerId], references: [id])
+  items               BillItem[]
+  payments            Payment[]
+  udharLedger         UdharLedger[]
+  stockLedger         StockLedger[]
+  loyaltyTransactions LoyaltyTransaction[]
+  complianceDocuments ComplianceDocument[]
 
   @@unique([shopId, billNo])
   @@unique([shopId, idempotencyKey])
@@ -530,6 +548,157 @@ model Payment {
   @@unique([shopId, idempotencyKey])
   @@index([billId])
   @@index([shopId, createdAt])
+}
+
+model StoreLocation {
+  id        String   @id @default(cuid())
+  shopId    String
+  code      String
+  name      String
+  address   String?
+  city      String?
+  gstNumber String?
+  phone     String?
+  isPrimary Boolean  @default(false)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop              Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  stocks            LocationStock[]
+  outgoingTransfers StockTransfer[] @relation("TransferFrom")
+  incomingTransfers StockTransfer[] @relation("TransferTo")
+
+  @@unique([shopId, code])
+  @@index([shopId, active, createdAt])
+  @@index([shopId, isPrimary])
+}
+
+model LocationStock {
+  id                String   @id @default(cuid())
+  shopId            String
+  locationId        String
+  productId         String
+  stockBaseQty      Float    @default(0)
+  lowStockThreshold Float?
+  updatedAt         DateTime @updatedAt
+
+  shop     Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product  Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, productId])
+  @@index([shopId, productId])
+}
+
+model StockTransfer {
+  id              String    @id @default(cuid())
+  shopId          String
+  referenceNo     String
+  fromLocationId  String
+  toLocationId    String
+  status          String    @default("completed")
+  note            String?
+  createdByUserId String?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop         Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  fromLocation StoreLocation       @relation("TransferFrom", fields: [fromLocationId], references: [id])
+  toLocation   StoreLocation       @relation("TransferTo", fields: [toLocationId], references: [id])
+  items        StockTransferItem[]
+
+  @@unique([shopId, referenceNo])
+  @@index([shopId, createdAt])
+  @@index([shopId, status, createdAt])
+}
+
+model StockTransferItem {
+  id              String @id @default(cuid())
+  transferId      String
+  productId       String
+  productName     String
+  quantityBaseQty Float
+  baseUnit        String
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product  Product       @relation(fields: [productId], references: [id])
+
+  @@unique([transferId, productId])
+  @@index([productId])
+}
+
+model LoyaltyProgram {
+  id                      String   @id @default(cuid())
+  shopId                  String   @unique
+  active                  Boolean  @default(false)
+  pointsPerRupee          Float    @default(1)
+  redemptionPaisePerPoint Int      @default(25)
+  minimumRedeemPoints     Int      @default(100)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+model LoyaltyAccount {
+  id               String   @id @default(cuid())
+  shopId           String
+  customerId       String   @unique
+  pointsBalance    Int      @default(0)
+  lifetimeEarned   Int      @default(0)
+  lifetimeRedeemed Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  shop         Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  customer     Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  transactions LoyaltyTransaction[]
+
+  @@index([shopId, pointsBalance])
+}
+
+model LoyaltyTransaction {
+  id        String   @id @default(cuid())
+  shopId    String
+  accountId String
+  billId    String?
+  type      String
+  points    Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  shop    Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  account LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bill    Bill?          @relation(fields: [billId], references: [id], onDelete: SetNull)
+
+  @@unique([billId, type])
+  @@index([shopId, createdAt])
+  @@index([accountId, createdAt])
+}
+
+model ComplianceDocument {
+  id                String   @id @default(cuid())
+  shopId            String
+  billId            String
+  documentType      String
+  provider          String
+  status            String
+  externalReference String?
+  acknowledgementNo String?
+  payloadHash       String
+  payloadJson       String
+  responseJson      String?
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  bill Bill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@unique([billId, documentType])
+  @@index([shopId, documentType, status, createdAt])
 }
 
 // ─────────────────────────────────────────────

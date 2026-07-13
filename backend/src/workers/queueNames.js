@@ -1,10 +1,10 @@
 export const QUEUE_NAMES = Object.freeze({
-  reminderQueue: "kiranaos:reminders",
-  reportsQueue: "kiranaos:reports",
-  exportsQueue: "kiranaos:exports",
-  backupQueue: "kiranaos:backups",
-  syncCleanupQueue: "kiranaos:sync-cleanup",
-  webhooksQueue: "kiranaos:webhooks",
+  reminderQueue: "kiranaos-reminders",
+  reportsQueue: "kiranaos-reports",
+  exportsQueue: "kiranaos-exports",
+  backupQueue: "kiranaos-backups",
+  syncCleanupQueue: "kiranaos-sync-cleanup",
+  webhooksQueue: "kiranaos-webhooks",
 });
 
 export const JOB_NAMES = Object.freeze({

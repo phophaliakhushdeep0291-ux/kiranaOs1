@@ -73,7 +73,8 @@ assert.match(frontend, /upgrade_required/, "provider readiness must explain plan
 assert.match(metrics, /integration_api_auth_total/, "API authentication must be observable");
 assert.match(metrics, /webhook_delivery_duration_ms/, "webhook delivery latency must be observable");
 assert.match(metrics, /webhook_queue_dispatch_total/, "durable-queue fallback behavior must be observable");
-assert.match(queueNames, /webhooksQueue:\s*"kiranaos:webhooks"/, "webhooks must have a dedicated queue");
+assert.match(queueNames, /webhooksQueue:\s*"kiranaos-webhooks"/, "webhooks must have a dedicated BullMQ-safe queue");
+assert.doesNotMatch(queueNames, /:\s*"[^"]*:[^"]*"/, "BullMQ queue names must not contain its reserved colon separator");
 assert.match(workerRegistry, /webhooksQueue[\s\S]*handleWebhookJob/, "the webhook worker must be registered");
 assert.match(server, /recoverWebhookDeliveries/, "startup must recover persisted webhook deliveries");
 

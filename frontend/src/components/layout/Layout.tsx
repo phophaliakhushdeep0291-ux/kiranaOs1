@@ -18,6 +18,7 @@ import {
   ChevronRight,
   LayoutDashboard,
   Landmark,
+  Gift,
   LogOut,
   Menu,
   Package,
@@ -66,6 +67,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/dashboard": "Today’s sales, cash, stock, and shop health",
   "/bills": "View, search, filter, and manage all bills and invoices",
   "/orders-received": "Review customer QR orders and load them into billing",
+  "/loyalty": "Reward repeat customers with an auditable points ledger",
   "/products": "Manage your product catalog, pricing and stock",
   "/categories": "Organise products into categories",
   "/inventory": "Manage stock, movements, and purchase flow",
@@ -100,6 +102,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/inventory/stock-out": "Stock Out",
   "/inventory/adjustments": "Adjustments",
   "/inventory/stock-transfers": "Stock Transfers",
+  "/loyalty": "Customer Loyalty",
   "/purchase-bills": "Purchases",
   "/suppliers": "Suppliers",
   "/sales-overview": "Sales Overview",
@@ -204,6 +207,7 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
   { kind: "link", href: "/expenses", label: "Expenses", Icon: Wallet },
   { kind: "link", href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
+  { kind: "link", href: "/loyalty", label: "Loyalty", Icon: Gift },
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
 ];
 
@@ -255,6 +259,7 @@ const MOBILE_MENU: MobileMenuItem[] = [
   { href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
   { href: "/expenses", label: "Expenses", Icon: Wallet },
   { href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
+  { href: "/loyalty", label: "Loyalty", Icon: Gift },
   { href: "/settings", label: "Settings", Icon: Settings },
 ];
 
