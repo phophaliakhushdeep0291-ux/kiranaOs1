@@ -29,6 +29,8 @@ const paymentSchema = z.object({
   client_payment_id: z.string().min(1).optional(),
   idempotencyKey: z.string().min(1).optional(),
   idempotency_key: z.string().min(1).optional(),
+  retailPaymentIntentId: z.string().min(1).optional(),
+  retail_payment_intent_id: z.string().min(1).optional(),
   ownerPin: z.string().optional(),
   reason: z.string().optional(),
   sensitiveActions: z.array(z.string()).optional(),

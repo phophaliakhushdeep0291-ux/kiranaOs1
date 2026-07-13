@@ -5,6 +5,8 @@ import https from "https";
 import net from "net";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
+import { retailPaymentReadiness } from "../payment-provider/retailPayment.service.js";
+import { gspHttpReadiness } from "../compliance/gsp-http.provider.js";
 import { AppError } from "../../middleware/error.js";
 import { getObjectStorageStatus } from "../../lib/objectStorage.js";
 import { recordIntegrationApiAuth, recordWebhookDelivery, recordWebhookQueueDispatch } from "../../lib/metrics.js";
@@ -132,8 +134,12 @@ export async function getOverview(shopId) {
   ]);
   const storage = getObjectStorageStatus();
   const whatsapp = getWhatsAppProviderStatus();
+  const retailPayment = retailPaymentReadiness();
+  const gstProvider = env.GST_PROVIDER === "gsp_http" ? gspHttpReadiness() : { configured: env.GST_PROVIDER === "sandbox", legalSubmission: false, providerName: env.GST_PROVIDER === "sandbox" ? "Sandbox" : null };
   const providers = [
-    { id: "razorpay", name: "Razorpay", category: "Payments", status: env.RAZORPAY_ENABLED && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET && env.RAZORPAY_WEBHOOK_SECRET ? "ready" : "setup_required", detail: "Hosted subscription checkout and verified payment webhooks" },
+    { id: "razorpay", name: "Razorpay subscriptions", category: "Payments", status: env.RAZORPAY_ENABLED && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET && env.RAZORPAY_WEBHOOK_SECRET ? "ready" : "setup_required", detail: "Hosted subscription checkout and verified payment webhooks" },
+    { id: "retail_payments", name: "Verified retail payments", category: "Payments", status: retailPayment.configured ? "ready" : "setup_required", detail: retailPayment.configured ? `Server-verified ${retailPayment.provider} intents; confirmation ${retailPayment.confirmationRequired ? "required" : "optional"}` : "Cash and operator-confirmed UPI work; provider verification is not configured" },
+    { id: "gstn", name: "GSTN e-invoice provider", category: "Compliance", status: gstProvider.legalSubmission ? "ready" : gstProvider.configured ? "sandbox_only" : "setup_required", detail: gstProvider.legalSubmission ? `${gstProvider.providerName} legal IRN submission enabled` : "GST register export works; legal IRN submission remains disabled" },
     { id: "whatsapp", name: "WhatsApp Business", category: "Messaging", status: whatsapp.implemented && whatsapp.configured ? "ready" : whatsapp.configured ? "adapter_required" : "setup_required", detail: whatsapp.implemented ? "Provider adapter configured" : "Reminder workflow exists; provider adapter is not yet certified" },
     { id: "storage", name: storage.provider === "local" ? "Local export storage" : `${storage.provider.toUpperCase()} object storage`, category: "Storage", status: storage.provider === "local" ? "development_only" : storage.bucketConfigured ? "ready" : "setup_required", detail: storage.provider === "local" ? "Use S3, R2, or MinIO before production" : "Encrypted export object storage" },
     { id: "tally", name: "TallyPrime XML", category: "Accounting", status: tallyAllowed ? "ready" : "upgrade_required", detail: tallyAllowed ? "Tenant-scoped voucher export with date filters" : "Available on the Pro plan" },

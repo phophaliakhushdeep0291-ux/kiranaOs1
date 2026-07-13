@@ -68,6 +68,13 @@ if (env.RAZORPAY_ENABLED) {
   }
 }
 
+if (env.RETAIL_PAYMENT_CONFIRMATION_REQUIRED && env.RETAIL_PAYMENT_PROVIDER !== "razorpay") {
+  fail("RETAIL_PAYMENT_PROVIDER must be razorpay when retail UPI confirmation is required");
+}
+if (!env.RETAIL_PAYMENT_CONFIRMATION_REQUIRED) {
+  warn("Retail UPI tenders are operator-confirmed; enable provider confirmation where payment assurance is required");
+}
+
 if (env.GST_PROVIDER === "gsp_http") {
   for (const key of ["GST_PROVIDER_BASE_URL", "GST_PROVIDER_API_KEY", "GST_PROVIDER_LEGAL_NAME"]) {
     const value = env[key];

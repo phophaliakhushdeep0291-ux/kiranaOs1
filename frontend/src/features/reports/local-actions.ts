@@ -13,7 +13,7 @@ export interface DataExportApprovalInput {
 }
 
 export async function recordDataExportLocalFirst(input: DataExportApprovalInput) {
-  const approval = parseOrThrow(ownerPinRequiredActionSchema, {
+  parseOrThrow(ownerPinRequiredActionSchema, {
     action: "data_export",
     ownerPin: input.ownerPin,
     reason: input.reason,

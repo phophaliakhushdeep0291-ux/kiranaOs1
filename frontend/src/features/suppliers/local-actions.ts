@@ -59,7 +59,7 @@ export interface DeleteSupplierLocalFirstInput {
 }
 
 export async function deleteSupplierLocalFirst(input: DeleteSupplierLocalFirstInput): Promise<{ success: true; pendingSync: true }> {
-  const approval = parseOrThrow(ownerPinRequiredActionSchema, { action: "delete_supplier", ownerPin: input.ownerPin, reason: input.reason, entityId: input.id });
+  parseOrThrow(ownerPinRequiredActionSchema, { action: "delete_supplier", ownerPin: input.ownerPin, reason: input.reason, entityId: input.id });
   const id = input.id;
   const now = new Date().toISOString();
   const existing = await offlineDB.getAll<Supplier>("suppliers").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);

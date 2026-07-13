@@ -519,13 +519,15 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   // Carry the durable clientPaymentId into the sync payload so the server stores + echoes it.
   // That lets sync reconciliation match a payment to its own server echo by identity instead of
   // a fuzzy amount/time guess (which could collapse two distinct same-amount tenders).
-  const tenderPayments = billPayments.map((payment) => ({
+  const tenderSources = billData.payments.filter((payment) => payment.mode !== BillPaymentMode.credit);
+  const tenderPayments = billPayments.map((payment, index) => ({
     mode: payment.mode,
     amount: payment.amount,
     clientPaymentId: payment.id,
     client_payment_id: payment.id,
     idempotencyKey: payment.idempotencyKey,
     idempotency_key: payment.idempotency_key,
+    ...(tenderSources[index]?.retailPaymentIntentId ? { retailPaymentIntentId: tenderSources[index].retailPaymentIntentId } : {}),
   }));
   const creditPayments = billData.payments.filter((payment) => payment.mode === BillPaymentMode.credit);
   const dueAmount = roundMoney(Math.max(0, total - paid));

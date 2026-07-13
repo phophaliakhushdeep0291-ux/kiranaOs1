@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, useListProducts, type Bill, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
@@ -18,7 +18,7 @@ import { BillingOrderQrButton } from "@/features/customer-order/BillingOrderQrBu
 import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./open-bills";
 import { updateCustomerOrder } from "@/features/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { billNeedsCustomer, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, productSellingPrice, roundMoney } from "./billing-calculations";
+import { billNeedsCustomer, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney } from "./billing-calculations";
 import { resolveLinePrice } from "@/features/pricing/resolve-line-price";
 import { useShopPricingRules } from "@/features/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -30,9 +30,10 @@ import { redeemOffer } from "@/features/offers/api";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, cartItemKey, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
+import { getRetailPaymentReadiness, verifyRetailPayment } from "../retail-payment";
+import { getActiveLocationId } from "@/features/stores/location-context";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
-const FAVORITE_PRODUCTS_KEY = "kirana-os:billing-favorite-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
 const MIN_SUMMARY_WIDTH = 320;
 const MAX_SUMMARY_WIDTH = 600;
@@ -138,7 +139,6 @@ export default function Billing() {
   const [splitCashAmount, setSplitCashAmount] = useState<number | "">(() => readBillingDraft().splitCashAmount ?? "");
   const [splitUpiAmount, setSplitUpiAmount] = useState<number | "">(() => readBillingDraft().splitUpiAmount ?? "");
   const [allowAdvancePayment, setAllowAdvancePayment] = useState(() => readBillingDraft().allowAdvancePayment ?? false);
-  const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
   const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [activeBillId, setActiveBillId] = useState<string>(() => readBillingDraft().activeBillId ?? newBillId());
@@ -164,6 +164,8 @@ export default function Billing() {
   const [voiceListening, setVoiceListening] = useState(false);
   const [voiceMicMessage, setVoiceMicMessage] = useState("Click mic and speak slowly. You can also type the same command.");
   const [voiceVisible, setVoiceVisible] = useState(false);
+  const [verifiedRetailPayment, setVerifiedRetailPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
+  const [retailPaymentLoading, setRetailPaymentLoading] = useState(false);
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const requestedBillType = useMemo<BillTypeSelection | null>(() => {
@@ -180,14 +182,13 @@ export default function Billing() {
 
   const debouncedSearch = useDebounce(search.trim(), 90);
   const deferredSearch = useDeferredValue(debouncedSearch);
-  const shouldSearchProducts = deferredSearch.length >= 1;
-
   const products = useListProducts({ limit: 350 }, {
     query: { staleTime: 2 * 60_000, placeholderData: (previousData: Product[] | undefined) => previousData ?? [] },
   });
   const customers = useListCustomers();
   // Smart Adaptive Pricing — the shop's owner-defined rules (cached, offline-safe).
   const { rules: shopPricingRules } = useShopPricingRules();
+  const retailPaymentReadiness = useQuery({ queryKey: ["retail-payment-readiness"], queryFn: getRetailPaymentReadiness, staleTime: 5 * 60_000, retry: false });
 
   const subtotal = useMemo(() => roundMoney(cart.reduce((sum, item) => sum + item.quantity * item.rate, 0)), [cart]);
   // GST: one engine for UI, local record and server. Inclusive (kirana MRP
@@ -224,6 +225,33 @@ export default function Billing() {
       : plainPaidAmount;
   const advanceAmount = allowAdvancePayment && paymentMode !== SPLIT_PAYMENT ? roundMoney(Math.max(0, effectivePaidAmount - grandTotal)) : 0;
   const creditAmount = billType === BillInputBillType.udhar_entry ? grandTotal : roundMoney(Math.max(0, grandTotal - Math.min(effectivePaidAmount, grandTotal)));
+  const upiTenderAmount = paymentMode === SPLIT_PAYMENT ? splitUpi : paymentMode === BillPaymentMode.upi ? Math.min(effectivePaidAmount, grandTotal) : 0;
+  const upiTenderPaise = Math.round(upiTenderAmount * 100);
+  const retailPaymentVerified = Boolean(verifiedRetailPayment
+    && verifiedRetailPayment.amountPaise === upiTenderPaise
+    && verifiedRetailPayment.locationId === getActiveLocationId());
+
+  useEffect(() => {
+    if (verifiedRetailPayment && !retailPaymentVerified) setVerifiedRetailPayment(null);
+  }, [retailPaymentVerified, verifiedRetailPayment]);
+
+  async function handleVerifyRetailPayment() {
+    if (!isOnline) {
+      toast({ title: "Internet required", description: "Provider verification cannot run offline.", variant: "destructive" });
+      return;
+    }
+    if (upiTenderPaise <= 0) return;
+    setRetailPaymentLoading(true);
+    try {
+      const verified = await verifyRetailPayment(upiTenderPaise);
+      setVerifiedRetailPayment(verified);
+      toast({ title: "UPI payment verified", description: "The provider confirmation is locked to this branch and bill amount." });
+    } catch (error) {
+      toast({ title: "Payment not verified", description: error instanceof Error ? error.message : "Provider verification failed.", variant: "destructive" });
+    } finally {
+      setRetailPaymentLoading(false);
+    }
+  }
 
   // Demo "sample" products (id starts with "demo_") are example data for the dashboard tour
   // only — they don't exist on the server, so a real bill that referenced them would land in
@@ -388,6 +416,7 @@ export default function Billing() {
     mutation: {
       onSuccess: (data: Bill) => {
         const billNo = data.billNumber ?? data.billNo ?? `PENDING-${Date.now()}`;
+        setVerifiedRetailPayment(null);
         // Count the coupon redemption (usage + discount impact) — fire-and-forget;
         // offline redemptions are skipped rather than queued.
         if (appliedOfferRef.current) {
@@ -725,14 +754,6 @@ export default function Billing() {
     return () => window.removeEventListener("kirana:voice-billing-command", handler);
   }, [products.data, productSearchIndex]);
 
-  function toggleFavoriteProduct(productId: string) {
-    setFavoriteProductIds((previous) => {
-      const next = previous.includes(productId) ? previous.filter((id) => id !== productId) : [productId, ...previous].slice(0, 40);
-      saveSettingList(FAVORITE_PRODUCTS_KEY, next);
-      return next;
-    });
-  }
-
   function updateQty(lineKey: string, nextQuantity: number) {
     setCart((previous) => previous
       .map((item) => {
@@ -871,6 +892,10 @@ export default function Billing() {
     const isUdharEntry = nextBillType === BillInputBillType.udhar_entry;
 
     if (!validateBeforeConfirm(nextBillType)) return;
+    if (upiTenderPaise > 0 && retailPaymentReadiness.data?.confirmationRequired && !retailPaymentVerified) {
+      toast({ title: "Verify UPI payment", description: "This store requires provider confirmation before the bill can be saved.", variant: "destructive" });
+      return;
+    }
 
     if (negativeStockWarnings.length > 0) {
       const first = negativeStockWarnings[0];
@@ -901,13 +926,13 @@ export default function Billing() {
     const payments = paymentMode === SPLIT_PAYMENT
       ? [
           ...(splitCash > 0 ? [{ mode: BillPaymentMode.cash, amount: splitCash }] : []),
-          ...(splitUpi > 0 ? [{ mode: BillPaymentMode.upi, amount: splitUpi }] : []),
+          ...(splitUpi > 0 ? [{ mode: BillPaymentMode.upi, amount: splitUpi, ...(retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}) }] : []),
           ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
         ]
       : paymentMode === BillPaymentMode.credit || isUdharEntry
         ? [{ mode: BillPaymentMode.credit, amount: grandTotal }]
         : [
-            ...(paid > 0 ? [{ mode: paymentMode, amount: paid }] : []),
+            ...(paid > 0 ? [{ mode: paymentMode, amount: paid, ...(paymentMode === BillPaymentMode.upi && retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}) }] : []),
             ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
           ];
 
@@ -1287,6 +1312,11 @@ export default function Billing() {
         splitUdharAmount={splitUdharAmount}
         effectivePaidAmount={effectivePaidAmount}
         advanceAmount={advanceAmount}
+        retailPaymentConfigured={retailPaymentReadiness.data?.configured ?? false}
+        retailPaymentRequired={retailPaymentReadiness.data?.confirmationRequired ?? false}
+        retailPaymentVerified={retailPaymentVerified}
+        retailPaymentLoading={retailPaymentLoading}
+        onVerifyRetailPayment={() => void handleVerifyRetailPayment()}
         lastBillNo={lastBillNo}
         newBillingAllowed={newBillingFeature.allowed}
         newBillingReason={newBillingFeature.reason}

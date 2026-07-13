@@ -12,7 +12,7 @@ import { cacheProducts } from "@/features/products/queries";
 import { cacheCustomers } from "@/features/customers/queries";
 import { cacheBills, withBillAliases } from "@/features/bills/queries";
 import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
-import type { Bill, Customer, InventoryItem, MonthlyBreakdownRow, PaymentSummary, PnLReport, Product, QueryParams, TopProductRow } from "@/types/api";
+import type { Bill, Customer, MonthlyBreakdownRow, PaymentSummary, PnLReport, Product, QueryParams, TopProductRow } from "@/types/api";
 import { BillPaymentMode } from "@/types/api";
 import { calculateLedgerBalance, dedupeLedgerEntries, getLedgerCustomerId, type CustomerLedgerEntry } from "@/features/ledger/accounting";
 

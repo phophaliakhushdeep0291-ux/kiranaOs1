@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
 import { CheckCircle2, Clock, Cloud, CloudOff, Database, RefreshCcw, ShieldCheck, Upload } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
-import { Card, CardHead, Fld, Badge, Kpi, RowToggle } from "@/features/settings/ui";
+import { Card, CardHead, Badge, Kpi, RowToggle } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 
 interface BackupConfig {

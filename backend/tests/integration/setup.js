@@ -166,6 +166,7 @@ function jsonReplacer(_key, value) {
 export async function resetDatabase(db) {
   await db.$transaction([
     db.complianceDocument.deleteMany(),
+    db.retailPaymentIntent.deleteMany(),
     db.loyaltyTransaction.deleteMany(),
     db.loyaltyAccount.deleteMany(),
     db.loyaltyProgram.deleteMany(),

@@ -37,6 +37,7 @@ model Shop {
   customers                   Customer[]
   bills                       Bill[]
   payments                    Payment[]
+  retailPaymentIntents        RetailPaymentIntent[]
   stockLedger                 StockLedger[]
   udharLedger                 UdharLedger[]
   suppliers                   Supplier[]
@@ -543,14 +544,48 @@ model Payment {
   clientPaymentId String?
   idempotencyKey  String?
   sourceDeviceId  String?
+  status          String   @default("confirmed") // pending | confirmed | failed | refunded
+  provider        String? // manual | razorpay | terminal
+  providerReference String?
+  confirmationSource String @default("manual") // manual | provider_api | signed_webhook
+  confirmedAt     DateTime?
+  retailPaymentIntentId String? @unique
   createdAt       DateTime @default(now())
 
   bill Bill  @relation(fields: [billId], references: [id])
   shop Shop? @relation(fields: [shopId], references: [id])
+  retailPaymentIntent RetailPaymentIntent? @relation(fields: [retailPaymentIntentId], references: [id])
 
   @@unique([shopId, idempotencyKey])
   @@index([billId])
   @@index([shopId, createdAt])
+}
+
+model RetailPaymentIntent {
+  id                String    @id @default(cuid())
+  shopId            String
+  locationId        String
+  provider          String    @default("razorpay")
+  providerOrderId   String?   @unique
+  providerPaymentId String?   @unique
+  amountPaise       Int
+  currency          String    @default("INR")
+  status            String    @default("creating") // creating | pending | confirmed | failed | expired | refunded
+  createdByUserId   String?
+  expiresAt         DateTime
+  confirmedAt       DateTime?
+  confirmationSource String?
+  consumedAt        DateTime?
+  failureReason     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  shop     Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  payment  Payment?
+
+  @@index([shopId, locationId, status, createdAt])
+  @@index([status, expiresAt])
 }
 
 model StoreLocation {
@@ -577,6 +612,7 @@ model StoreLocation {
   purchaseHistory   PurchaseHistory[]
   expenses          Expense[]
   dailyClosings     DailyClosingSnapshot[]
+  retailPaymentIntents RetailPaymentIntent[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])

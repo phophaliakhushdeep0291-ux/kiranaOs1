@@ -9,3 +9,14 @@ export const manualPaymentSchema = z.object({
   amountPaise: paiseAmount({ positive: true }).optional(),
   note: z.string().max(500).optional(),
 });
+
+export const retailIntentSchema = z.object({
+  amountPaise: paiseAmount({ positive: true }),
+  locationId: z.string().min(1).optional(),
+});
+
+export const verifyRetailIntentSchema = z.object({
+  razorpay_order_id: z.string().min(1),
+  razorpay_payment_id: z.string().min(1),
+  razorpay_signature: z.string().min(1),
+});

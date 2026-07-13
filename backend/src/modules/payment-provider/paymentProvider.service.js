@@ -20,6 +20,7 @@ import {
   ensurePlansSeeded,
   getPlanByCode,
 } from "../subscription/subscription.service.js";
+import { confirmRetailIntentFromWebhook } from "./retailPayment.service.js";
 
 const SENSITIVE_KEYS = new Set([
   "card",
@@ -530,10 +531,16 @@ async function processVerifiedRazorpayWebhook(payload, event) {
 
 async function processPaymentSuccessWebhook(payload, event) {
   const payment = extractPaymentEntity(payload);
-  const orderId = payment?.order_id || extractOrderEntity(payload)?.id;
+  const order = extractOrderEntity(payload);
+  const orderId = payment?.order_id || order?.id;
   const paymentId = payment?.id;
-  const notes = payment?.notes || extractOrderEntity(payload)?.notes || {};
-  const transactionId = notes.transactionId || extractOrderEntity(payload)?.receipt;
+  const notes = payment?.notes || order?.notes || {};
+  const retailResult = await confirmRetailIntentFromWebhook({ notes, payment, order });
+  if (retailResult) {
+    await db.paymentProviderEvent.update({ where: { id: event.id }, data: { shopId: retailResult.shopId ?? event.shopId, processedAt: new Date() } });
+    return retailResult;
+  }
+  const transactionId = notes.transactionId || order?.receipt;
   const shopId = notes.shopId;
   const planCode = notes.planCode;
   const billingCycle = notes.billingCycle || "monthly";

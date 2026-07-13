@@ -11,7 +11,7 @@ import {
   Wifi, Cloud, MonitorSmartphone,
 } from "lucide-react";
 import {
-  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts";
 import { useAuth } from "@/features/auth/useAuth";
@@ -319,7 +319,6 @@ interface LayoutProps {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { t } = useAppLanguage();
   const { def: btDef } = useBusinessType();
   const { toast } = useToast();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -476,7 +475,7 @@ export default function Dashboard() {
 
 type PaymentSlice = { label: string; value: number; color: string; dot: string };
 
-function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
+function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
   const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
   const [, navigate] = useLocation();
   const [period, setPeriod] = useState<DashboardPeriod>("week");

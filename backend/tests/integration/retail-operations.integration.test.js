@@ -57,6 +57,58 @@ if (ctx.skip) {
       assert.equal(blocked.code, "STORE_LIMIT_REACHED");
     });
 
+    test("keeps branch billing, purchasing, stock ledger, reports, and closing isolated", async () => {
+      const { tenant, auth } = await ownerContext();
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Branch-owned Flour", stockBaseQty: 20, defaultPricePerRateUnit: 25 });
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+      const branch = assertSuccess(await ctx.post("/api/stores", { name: "Billing Branch", code: "BILL02" }, { token: auth.accessToken }), 201);
+      await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        items: [{ productId: product.id, quantityBaseQty: 8 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+
+      const branchHeaders = { "x-location-id": branch.id };
+      const bill = assertSuccess(await ctx.post(
+        "/api/bills/confirm",
+        billPayload(product, { quantity: 3, ratePerRateUnit: 25 }),
+        { token: auth.accessToken, headers: branchHeaders },
+      ), 201);
+      assert.equal(bill.locationId, branch.id);
+
+      assertSuccess(await ctx.post("/api/inventory/purchase", {
+        productId: product.id,
+        supplierName: "Branch Supplier",
+        quantity: 2,
+        enteredUnit: "piece",
+        billAmount: 20,
+        updateCost: false,
+      }, { token: auth.accessToken, headers: branchHeaders }), 201);
+
+      const [mainInventory, branchInventory, storedBill, branchLedger] = await Promise.all([
+        ctx.get(`/api/stores/${primary.id}/inventory`, { token: auth.accessToken }),
+        ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }),
+        ctx.db.bill.findUnique({ where: { id: bill.id } }),
+        ctx.db.stockLedger.findMany({ where: { shopId: tenant.shop.id, locationId: branch.id } }),
+      ]);
+      assert.equal(assertSuccess(mainInventory).products.find((row) => row.id === product.id).stockBaseQty, 12);
+      assert.equal(assertSuccess(branchInventory).products.find((row) => row.id === product.id).stockBaseQty, 7);
+      assert.equal(storedBill.locationId, branch.id);
+      assert.equal(branchLedger.some((row) => row.action === "sale"), true);
+      assert.equal(branchLedger.some((row) => row.action === "purchase"), true);
+
+      const branchClosing = assertSuccess(await ctx.get("/api/reports/daily-closing?source=live", { token: auth.accessToken, headers: branchHeaders }));
+      const mainClosing = assertSuccess(await ctx.get("/api/reports/daily-closing?source=live", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
+      assert.equal(branchClosing.location.id, branch.id);
+      assert.equal(branchClosing.totalBills, 1);
+      assert.equal(mainClosing.totalBills, 0);
+
+      const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      const snapshot = assertSuccess(await ctx.post("/api/reports/daily-closing/snapshot", { date }, { token: auth.accessToken, headers: branchHeaders }), 201);
+      assert.equal(snapshot.snapshot.storeId, branch.id);
+    });
+
     test("earns loyalty points once and reverses available points on bill cancellation", async () => {
       const { tenant, auth } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Loyal Buyer" });
@@ -85,6 +137,12 @@ if (ctx.skip) {
       assert.equal(readiness.checks.find((row) => row.key === "hsn").ready, true);
       assert.equal(readiness.provider.legalSubmission, false);
 
+      const retailPayment = assertSuccess(await ctx.get("/api/payment-provider/retail/readiness", { token: auth.accessToken }));
+      assert.equal(retailPayment.configured, false);
+      assert.equal(retailPayment.confirmationRequired, false);
+      const unconfiguredPayment = assertFailure(await ctx.post("/api/payment-provider/retail/intents", { amountPaise: 10500 }, { token: auth.accessToken }), 503);
+      assert.equal(unconfiguredPayment.code, "RETAIL_PAYMENT_PROVIDER_NOT_CONFIGURED");
+
       const csv = await ctx.get("/api/compliance/gst-register?range=yearly&format=csv", { token: auth.accessToken });
       assert.equal(csv.status, 200);
       assert.match(csv.text, /Invoice Number/);
@@ -96,4 +154,3 @@ if (ctx.skip) {
     });
   });
 }
-

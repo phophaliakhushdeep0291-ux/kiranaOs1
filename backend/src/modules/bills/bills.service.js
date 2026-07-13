@@ -11,6 +11,7 @@ import {
   incrementLocationInventory,
   resolveOperationalLocation,
 } from "../stores/location-context.service.js";
+import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -337,17 +338,28 @@ export async function confirmBill(shopId, body, actor = {}) {
       }
     }
 
+    const retailIntents = await resolveRetailPaymentIntents(tx, { shopId, locationId: location.id, payments: billPayments });
     const paymentRows = billPayments
       .filter((payment) => payment.mode !== "credit")
-      .map((payment, index) => ({
+      .map((payment, index) => {
+        const intentId = payment.retailPaymentIntentId ?? payment.retail_payment_intent_id ?? null;
+        const intent = intentId ? retailIntents.get(intentId) : null;
+        return {
         shopId,
         mode: payment.mode,
         amount: payment.amount,
         clientPaymentId: pickString(payment.clientPaymentId, payment.client_payment_id),
         idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `payment:${index}:${payment.mode}`),
         sourceDeviceId: billIdentity.sourceDeviceId,
+        status: "confirmed",
+        provider: intent?.provider ?? "manual",
+        providerReference: intent?.providerPaymentId ?? null,
+        confirmationSource: intent?.confirmationSource ?? "manual",
+        confirmedAt: intent?.confirmedAt ?? new Date(),
+        retailPaymentIntentId: intent?.id ?? null,
         ...moneyShadows({ amount: payment.amount }),
-      }));
+        };
+      });
 
     // ── 3. Generate bill number ───────────────────────────────
     const billNo = await generateBillNo(shopId, tx, { billType });
@@ -386,6 +398,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       },
       include: { items: true, payments: true },
     });
+    await consumeRetailPaymentIntents(tx, retailIntents);
 
     // ── 5. Deduct stock + create stock ledger entries ─────────
     for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
@@ -502,7 +515,6 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
   if (bill.status === "cancelled") return bill;
 
   return db.$transaction(async (tx) => {
-    const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
     // Atomic claim: only one concurrent request can transition active -> cancelled, so two
     // simultaneous cancels can't both restore stock / reverse udhar. The conditional update
     // locks the row until commit; a read-then-act status check (the outer guard above) does not.
@@ -525,6 +537,8 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     // ── 1. Restore stock for every item ───────────────────────
     // Only bills that actually deducted stock (they have "sale" stock-ledger rows) restore it.
     // Guards legacy quote-era estimates, which never moved stock at creation.
+    const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
+
     const saleLedgerRows = await tx.stockLedger.count({
       where: { shopId, billId: bill.id, action: "sale" },
     });

@@ -39,10 +39,6 @@ function asSaleBillType(value: unknown): BillInput["billType"] {
     : BillInputBillType.normal_sale;
 }
 
-function billNoOf(bill: AnyRow): string {
-  return str(bill.billNumber ?? bill.billNo ?? bill.id) || "bill";
-}
-
 /** Map persisted bill_item rows (snake or camel) back into BillInput items. */
 export function billItemsToInput(itemRows: AnyRow[]): BillInputItem[] {
   return itemRows

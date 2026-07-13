@@ -374,7 +374,6 @@ export default function OrdersReceivedPage() {
       {selectedOrder ? (
         <OrderDetail
           order={selectedOrder}
-          shopName={shopName}
           opening={openingOrderId === selectedOrder.id}
           mutationPending={statusMutation.isPending}
           onBack={() => setSelectedId(null)}
@@ -568,7 +567,6 @@ const BANNER: Record<CustomerOrder["status"], { title: string; desc: string; ico
 
 function OrderDetail({
   order,
-  shopName,
   opening,
   mutationPending,
   onBack,
@@ -580,7 +578,6 @@ function OrderDetail({
   onCopy,
 }: {
   order: CustomerOrder;
-  shopName: string;
   opening: boolean;
   mutationPending: boolean;
   onBack: () => void;

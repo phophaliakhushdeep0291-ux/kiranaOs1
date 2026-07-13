@@ -61,6 +61,11 @@ interface BillingSummaryProps {
   splitUdharAmount: number;
   effectivePaidAmount: number;
   advanceAmount: number;
+  retailPaymentConfigured: boolean;
+  retailPaymentRequired: boolean;
+  retailPaymentVerified: boolean;
+  retailPaymentLoading: boolean;
+  onVerifyRetailPayment: () => void;
   lastBillNo: string | null;
   newBillingAllowed: boolean;
   newBillingReason?: string;
@@ -130,6 +135,11 @@ export function BillingSummary({
   splitUdharAmount,
   effectivePaidAmount,
   advanceAmount,
+  retailPaymentConfigured,
+  retailPaymentRequired,
+  retailPaymentVerified,
+  retailPaymentLoading,
+  onVerifyRetailPayment,
   lastBillNo,
   newBillingAllowed,
   newBillingReason,
@@ -504,6 +514,11 @@ export function BillingSummary({
             effectivePaidAmount={effectivePaidAmount}
             creditAmount={creditAmount}
             advanceAmount={advanceAmount}
+            retailPaymentConfigured={retailPaymentConfigured}
+            retailPaymentRequired={retailPaymentRequired}
+            retailPaymentVerified={retailPaymentVerified}
+            retailPaymentLoading={retailPaymentLoading}
+            onVerifyRetailPayment={onVerifyRetailPayment}
           />
 
           {/* Last bill saved */}

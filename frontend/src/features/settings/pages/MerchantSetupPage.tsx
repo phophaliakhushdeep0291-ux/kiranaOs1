@@ -11,7 +11,6 @@ import {
   Settings,
   Store,
   Truck,
-  UserRoundPlus,
   UsersRound,
 } from "lucide-react";
 import { offlineDB } from "@/lib/offline/db";

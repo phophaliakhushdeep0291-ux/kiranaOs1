@@ -395,6 +395,7 @@ export const UdharPaymentInputMode = {
 export interface BillPayment {
   mode: typeof BillPaymentMode[keyof typeof BillPaymentMode];
   amount: number;
+  retailPaymentIntentId?: string;
 }
 
 export interface BillInputItem {

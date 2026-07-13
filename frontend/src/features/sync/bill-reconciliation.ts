@@ -177,15 +177,6 @@ export function withBillSyncFlag<T extends object>(bill: T): T & { isSynced: boo
   };
 }
 
-function normalizeBillSyncStatus(row: MutableRow, synced: boolean): MutableRow {
-  return {
-    ...row,
-    sync_status: synced ? "synced" : String(row.sync_status ?? "pending_sync"),
-    isSynced: synced,
-    is_synced: synced,
-  };
-}
-
 function normalizeBillSignatureText(value: unknown): string {
   return String(value ?? "")
     .trim()

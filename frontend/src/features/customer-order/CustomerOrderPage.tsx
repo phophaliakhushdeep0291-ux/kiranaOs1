@@ -3,7 +3,6 @@ import { useParams } from "wouter";
 import {
   ArrowLeft,
   Bell,
-  CalendarDays,
   CheckCircle2,
   ChefHat,
   ChevronDown,
@@ -11,9 +10,7 @@ import {
   ChevronRight,
   Clock,
   CreditCard,
-  Download,
   Edit3,
-  FileText,
   Gift,
   Heart,
   Home,

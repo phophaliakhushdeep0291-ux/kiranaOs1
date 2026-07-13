@@ -151,6 +151,7 @@ export const billPaymentSchema = z.object({
   amount: money,
   referenceNo: optionalText,
   note: optionalText,
+  retailPaymentIntentId: optionalText,
 });
 
 export const billCreationSchema = z

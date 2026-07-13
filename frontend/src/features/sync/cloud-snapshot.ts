@@ -3,7 +3,6 @@ import {
   dexieDB,
   offlineDB,
   rowMatchesCurrentScope,
-  type OfflineRow,
 } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
 import { emitLocalDataChanged, writeInstantCache } from "@/lib/offline/instant-cache";

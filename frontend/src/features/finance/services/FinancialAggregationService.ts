@@ -198,10 +198,6 @@ function getDateValue(row: RecordLike): string {
   ]);
 }
 
-function isWithinDate(row: RecordLike, date: string): boolean {
-  return isWithinDateRange(row, { from: date, to: date });
-}
-
 function dateFromInput(value: string, endOfDay = false): Date {
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(year, (month || 1) - 1, day || 1);
@@ -451,81 +447,6 @@ function buildSaleBillIdSets(bills: LocalBill[], todayBills: LocalBill[]) {
     for (const id of billIdentityKeys(bill)) todaySaleBillIds.add(id);
   }
   return { saleBillIds, todaySaleBillIds };
-}
-
-interface TodayTenderSignature {
-  customerId: string | null;
-  mode: string;
-  amount: number;
-  timeMs: number;
-}
-
-function rowTimeMs(row: RecordLike): number {
-  const raw = getDateValue(row);
-  if (!raw) return NaN;
-  return new Date(raw).getTime();
-}
-
-function paymentTimeMs(row: RecordLike): number {
-  const raw = readString(row, ["paidAt", "paid_at", "createdAt", "created_at", "entry_at", "updatedAt", "updated_at"]);
-  if (!raw) return NaN;
-  return new Date(raw).getTime();
-}
-
-function pushTenderSignature(
-  signatures: TodayTenderSignature[],
-  customerId: string | null,
-  mode: string,
-  amount: number,
-  timeMs: number,
-) {
-  if ((mode !== "cash" && mode !== "upi" && mode !== "bank") || amount <= 0 || !Number.isFinite(timeMs)) return;
-  signatures.push({ customerId, mode, amount: roundMoney(amount), timeMs });
-}
-
-function buildTodayTenderSignatures(todayBills: LocalBill[]): TodayTenderSignature[] {
-  const signatures: TodayTenderSignature[] = [];
-  for (const bill of todayBills) {
-    const billCustomerId = getCustomerId(bill);
-    const billTimeMs = rowTimeMs(bill);
-    const embeddedPayments = normalizeEmbeddedPayments(bill).filter(isActivePayment);
-
-    if (embeddedPayments.length > 0) {
-      for (const payment of embeddedPayments) {
-        pushTenderSignature(
-          signatures,
-          getCustomerId(payment) ?? billCustomerId,
-          paymentMode(payment),
-          paymentAmount(payment),
-          paymentTimeMs(payment) || billTimeMs,
-        );
-      }
-      continue;
-    }
-
-    const explicitTender = billEmbeddedTender(bill);
-    pushTenderSignature(signatures, billCustomerId, "cash", explicitTender.cash, billTimeMs);
-    pushTenderSignature(signatures, billCustomerId, "upi", explicitTender.upi, billTimeMs);
-    pushTenderSignature(signatures, billCustomerId, "bank", explicitTender.bank, billTimeMs);
-  }
-  return signatures;
-}
-
-function paymentLooksLikeTodayBillTender(payment: LocalPayment, todayTenderSignatures: TodayTenderSignature[]): boolean {
-  const mode = paymentMode(payment);
-  if (mode !== "cash" && mode !== "upi" && mode !== "bank") return false;
-  const amount = paymentAmount(payment);
-  if (amount <= 0) return false;
-  const customerId = getCustomerId(payment);
-  const paidTimeMs = paymentTimeMs(payment);
-  if (!Number.isFinite(paidTimeMs)) return false;
-
-  return todayTenderSignatures.some((signature) => {
-    if (signature.mode !== mode) return false;
-    if (Math.abs(signature.amount - amount) > 0.004) return false;
-    if (customerId && signature.customerId && customerId !== signature.customerId) return false;
-    return Math.abs(signature.timeMs - paidTimeMs) <= 15 * 60 * 1000;
-  });
 }
 
 function addRecoveryTender(total: TenderTotals, mode: string, amount: number) {

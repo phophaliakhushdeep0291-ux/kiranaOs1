@@ -23,14 +23,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   AlertTriangle,
   BarChart3,
-  Boxes,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
@@ -40,10 +38,8 @@ import {
   Ellipsis,
   History,
   IndianRupee,
-  Layers3,
   Loader2,
   Package,
-  PackageCheck,
   PackagePlus,
   PackageX,
   Search,
@@ -438,8 +434,6 @@ export default function InventoryPage() {
     minMarginPercent: Number(form.minMarginPercent || 0) || undefined,
     sellingMarginPercent: Number(form.sellingMarginPercent || 0) || undefined,
   });
-  const purchaseBaseQty = priceSuggestions.purchaseBaseQty;
-  const purchaseQtyInProductUnit = priceSuggestions.purchaseQtyInRateUnit || purchaseQuantity;
   const purchaseUnitCost = priceSuggestions.purchaseUnitCost;
   const projectedAverageCost = form.movementType === "purchase" && selectedProduct ? priceSuggestions.projectedAverageCost : currentAverageCost;
   const minMarginSuggestion = priceSuggestions.minPriceSuggestion;

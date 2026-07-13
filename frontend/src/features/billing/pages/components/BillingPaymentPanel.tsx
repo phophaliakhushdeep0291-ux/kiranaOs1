@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
-import { ArrowLeftRight, Banknote, Landmark, QrCode, UserRound } from "lucide-react";
+import { ArrowLeftRight, Banknote, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/settings/payment-config";
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
@@ -27,6 +27,11 @@ interface BillingPaymentPanelProps {
   effectivePaidAmount: number;
   creditAmount: number;
   advanceAmount: number;
+  retailPaymentConfigured: boolean;
+  retailPaymentRequired: boolean;
+  retailPaymentVerified: boolean;
+  retailPaymentLoading: boolean;
+  onVerifyRetailPayment: () => void;
 }
 
 function fmtRs(value: number) {
@@ -52,6 +57,11 @@ export function BillingPaymentPanel({
   effectivePaidAmount,
   creditAmount,
   advanceAmount,
+  retailPaymentConfigured,
+  retailPaymentRequired,
+  retailPaymentVerified,
+  retailPaymentLoading,
+  onVerifyRetailPayment,
 }: BillingPaymentPanelProps) {
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
   const upiAmount = paymentMode === SPLIT_PAYMENT ? splitUpi : grandTotal;
@@ -115,6 +125,16 @@ export function BillingPaymentPanel({
       {showPaymentMode && showUpiQr ? (
         <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-3">
           {upiUri ? <div className="flex flex-col items-center gap-3 sm:flex-row"><QrCodeView value={upiUri} size={128} className="shrink-0 rounded-lg border border-purple-100 bg-white p-1" title={`Pay ₹${upiAmount.toFixed(2)} by UPI`} /><div><p className="text-sm font-black text-purple-950">Scan to pay {fmtRs(upiAmount)}</p><p className="mt-1 break-all text-xs font-semibold text-purple-700">{paymentConfig.upiId}</p><p className="mt-2 text-[11px] leading-4 text-purple-700">Dynamic amount is encoded. Confirm the payment in the merchant UPI app before finalising the bill.</p></div></div> : <div className="flex items-start gap-2 text-xs text-amber-800"><QrCode size={17} className="mt-0.5 shrink-0" /><p><strong>UPI ID not configured.</strong> Add a valid UPI ID in Settings → Store Profile to show a payment QR.</p></div>}
+        </div>
+      ) : null}
+
+      {showPaymentMode && (paymentMode === BillPaymentMode.upi || (paymentMode === SPLIT_PAYMENT && splitUpi > 0)) ? (
+        <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${retailPaymentVerified ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
+          <div className="min-w-0">
+            <p className={`flex items-center gap-1.5 text-xs font-black ${retailPaymentVerified ? "text-emerald-800" : "text-slate-800"}`}><ShieldCheck size={15} />{retailPaymentVerified ? "Payment verified by provider" : retailPaymentConfigured ? "Provider verification available" : "Operator-confirmed UPI"}</p>
+            <p className="mt-0.5 text-[11px] text-slate-600">{retailPaymentVerified ? "This confirmation can be consumed by this bill only once." : retailPaymentRequired ? "Verification is required before this bill can be saved." : retailPaymentConfigured ? "Optional, but recommended for payment assurance." : "Check the merchant app before finalising; no provider is connected."}</p>
+          </div>
+          {retailPaymentConfigured && !retailPaymentVerified ? <button type="button" onClick={onVerifyRetailPayment} disabled={retailPaymentLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0753df] disabled:opacity-60">{retailPaymentLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}Verify</button> : null}
         </div>
       ) : null}
 

@@ -26,12 +26,10 @@ import {
   BarChart3,
   Box,
   CalendarDays,
-  CheckCircle2,
   ChevronDown,
   CircleDollarSign,
   Download,
   Filter,
-  IndianRupee,
   Info,
   Landmark,
   PackagePlus,
@@ -40,7 +38,6 @@ import {
   ShoppingBag,
   Sparkles,
   TrendingUp,
-  Users,
   WalletCards,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -55,7 +52,6 @@ import {
   buildLocalReportSnapshot,
   toDateInputValue,
   type LocalReportSnapshot,
-  type ReportDailyPoint,
 } from "@/features/reports/local-reporting";
 import { recordDataExportLocalFirst } from "@/features/reports/local-actions";
 import { useToast } from "@/hooks/use-toast";

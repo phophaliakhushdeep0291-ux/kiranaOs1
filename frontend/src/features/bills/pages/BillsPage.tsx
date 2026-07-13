@@ -34,7 +34,6 @@ import {
   Search,
   Share2,
   ShieldCheck,
-  ShoppingCart,
   SlidersHorizontal,
   Trash2,
   User,

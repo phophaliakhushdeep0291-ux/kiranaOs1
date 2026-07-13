@@ -39,6 +39,9 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RETAIL_PAYMENT_PROVIDER: z.enum(["manual", "razorpay"]).default("manual"),
+  RETAIL_PAYMENT_CONFIRMATION_REQUIRED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  RETAIL_PAYMENT_INTENT_TTL_MINUTES: z.coerce.number().int().min(3).max(60).default(15),
   // JSON object keyed by coupon code. Example:
   // {"LAUNCH25":{"percentOff":25,"plans":["growth","pro"],"billingCycles":["yearly"],"expiresAt":"2026-12-31T23:59:59.999Z"}}
   SUBSCRIPTION_COUPONS_JSON: z.string().default("{}"),
@@ -254,6 +257,16 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.WHATSAPP_PROVIDER !== "
     console.error(`❌ ${missing.join(", ")} required in production when WHATSAPP_PROVIDER=${parsed.data.WHATSAPP_PROVIDER}`);
     process.exit(1);
   }
+}
+
+if (parsed.data.RETAIL_PAYMENT_CONFIRMATION_REQUIRED && parsed.data.RETAIL_PAYMENT_PROVIDER !== "razorpay") {
+  console.error("âŒ RETAIL_PAYMENT_PROVIDER=razorpay is required when retail payment confirmation is mandatory");
+  process.exit(1);
+}
+
+if (parsed.data.RETAIL_PAYMENT_PROVIDER === "razorpay" && !parsed.data.RAZORPAY_ENABLED) {
+  console.error("âŒ RAZORPAY_ENABLED=true is required when RETAIL_PAYMENT_PROVIDER=razorpay");
+  process.exit(1);
 }
 
 if (parsed.data.NODE_ENV === "production" && (!parsed.data.INTEGRATION_SIGNING_SECRET || parsed.data.INTEGRATION_SIGNING_SECRET.length < 32)) {

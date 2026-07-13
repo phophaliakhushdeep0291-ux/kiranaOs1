@@ -21,12 +21,12 @@ SELECT 'loc_' || md5(random()::text || clock_timestamp()::text || shop."id"), sh
 FROM "Shop" shop
 WHERE NOT EXISTS (SELECT 1 FROM "StoreLocation" location WHERE location."shopId" = shop."id");
 
-UPDATE "Bill" row SET "locationId" = location."id" FROM "StoreLocation" location WHERE row."shopId" = location."shopId" AND location."isPrimary" = TRUE AND row."locationId" IS NULL;
-UPDATE "StockLedger" row SET "locationId" = location."id" FROM "StoreLocation" location WHERE row."shopId" = location."shopId" AND location."isPrimary" = TRUE AND row."locationId" IS NULL;
-UPDATE "PurchaseHistory" row SET "locationId" = location."id" FROM "StoreLocation" location WHERE row."shopId" = location."shopId" AND location."isPrimary" = TRUE AND row."locationId" IS NULL;
-UPDATE "Expense" row SET "locationId" = location."id" FROM "StoreLocation" location WHERE row."shopId" = location."shopId" AND location."isPrimary" = TRUE AND row."locationId" IS NULL;
-UPDATE "UdharLedger" row SET "locationId" = location."id" FROM "StoreLocation" location WHERE row."shopId" = location."shopId" AND location."isPrimary" = TRUE AND row."locationId" IS NULL;
-UPDATE "DailyClosingSnapshot" row SET "storeId" = location."id" FROM "StoreLocation" location WHERE row."shopId" = location."shopId" AND location."isPrimary" = TRUE;
+UPDATE "Bill" AS target SET "locationId" = location."id" FROM "StoreLocation" location WHERE target."shopId" = location."shopId" AND location."isPrimary" = TRUE AND target."locationId" IS NULL;
+UPDATE "StockLedger" AS target SET "locationId" = location."id" FROM "StoreLocation" location WHERE target."shopId" = location."shopId" AND location."isPrimary" = TRUE AND target."locationId" IS NULL;
+UPDATE "PurchaseHistory" AS target SET "locationId" = location."id" FROM "StoreLocation" location WHERE target."shopId" = location."shopId" AND location."isPrimary" = TRUE AND target."locationId" IS NULL;
+UPDATE "Expense" AS target SET "locationId" = location."id" FROM "StoreLocation" location WHERE target."shopId" = location."shopId" AND location."isPrimary" = TRUE AND target."locationId" IS NULL;
+UPDATE "UdharLedger" AS target SET "locationId" = location."id" FROM "StoreLocation" location WHERE target."shopId" = location."shopId" AND location."isPrimary" = TRUE AND target."locationId" IS NULL;
+UPDATE "DailyClosingSnapshot" AS target SET "storeId" = location."id" FROM "StoreLocation" location WHERE target."shopId" = location."shopId" AND location."isPrimary" = TRUE;
 
 ALTER TABLE "Bill" ADD CONSTRAINT "Bill_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "StoreLocation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "StockLedger" ADD CONSTRAINT "StockLedger_locationId_fkey" FOREIGN KEY ("locationId") REFERENCES "StoreLocation"("id") ON DELETE SET NULL ON UPDATE CASCADE;

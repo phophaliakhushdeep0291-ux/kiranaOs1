@@ -21,19 +21,14 @@ import {
   CalendarDays,
   ChevronDown,
   CircleDollarSign,
-  CreditCard,
   Download,
   Filter,
   IndianRupee,
-  Package,
   Percent,
   Plus,
-  ReceiptText,
   RefreshCw,
   ShoppingCart,
-  Store,
   Tag,
-  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +36,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageShell, SyncBadge } from "@/components/shared";
-import { buildLocalReportSnapshot, toDateInputValue, type DateRange, type LocalReportSnapshot } from "@/features/reports/local-reporting";
+import { buildLocalReportSnapshot, toDateInputValue, type DateRange } from "@/features/reports/local-reporting";
 import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { useToast } from "@/hooks/use-toast";
@@ -59,8 +54,6 @@ const GREEN = "#18b85a";
 const ORANGE = "#ff9d0a";
 const PURPLE = "#7c3ff2";
 const PINK = "#ff3b8d";
-const RED = "#ff314f";
-
 const PERIOD_LABELS: Record<SalesPeriod, string> = {
   today: "Today",
   week: "This Week",
@@ -202,10 +195,6 @@ function billNo(bill: LocalBill) {
 
 function customerName(bill: LocalBill) {
   return String(bill.customerName ?? bill.customer_name ?? "Walk-in Customer");
-}
-
-function itemCount(bill: LocalBill) {
-  return Array.isArray(bill.items) ? bill.items.length : readNumber(bill.itemCount ?? bill.itemsCount, 0);
 }
 
 function paymentMode(bill: LocalBill) {

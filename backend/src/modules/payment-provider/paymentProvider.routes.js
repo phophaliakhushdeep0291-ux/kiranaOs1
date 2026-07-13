@@ -3,12 +3,15 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { validate } from "../../middleware/validate.js";
-import { manualPaymentSchema } from "./paymentProvider.schemas.js";
+import { manualPaymentSchema, retailIntentSchema, verifyRetailIntentSchema } from "./paymentProvider.schemas.js";
 import * as ctrl from "./paymentProvider.controller.js";
 
 const router = Router();
 
 router.post("/razorpay/webhook", ctrl.razorpayWebhook);
+router.get("/retail/readiness", requireAuth, requireShop, requireDeviceActivated(), ctrl.retailReadiness);
+router.post("/retail/intents", requireAuth, requireShop, requireDeviceActivated(), validate(retailIntentSchema), ctrl.createRetailIntent);
+router.post("/retail/intents/:id/verify", requireAuth, requireShop, requireDeviceActivated(), validate(verifyRetailIntentSchema), ctrl.verifyRetailIntent);
 router.get("/events", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), ctrl.listEvents);
 router.post("/events/:id/retry", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), requireOwnerPin, ctrl.retryEvent);
 router.post("/manual/activate", requireAuth, requireShop, requireDeviceActivated(), requireRole("owner", "admin"), requireOwnerPin, validate(manualPaymentSchema), ctrl.manualActivate);

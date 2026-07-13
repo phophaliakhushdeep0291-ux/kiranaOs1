@@ -1,6 +1,8 @@
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import * as service from "./paymentProvider.service.js";
+import * as retailService from "./retailPayment.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
 
 export async function manualActivate(req, res, next) {
   try {
@@ -40,4 +42,19 @@ export async function retryEvent(req, res, next) {
     const result = await service.retryProviderEvent({ shopId: req.shopId, id: req.params.id, req });
     res.json({ success: true, data: result });
   } catch (err) { next(err); }
+}
+
+export async function retailReadiness(req, res, next) {
+  try { res.json({ success: true, data: retailService.retailPaymentReadiness() }); } catch (err) { next(err); }
+}
+
+export async function createRetailIntent(req, res, next) {
+  try {
+    const data = await retailService.createRetailPaymentIntent({ shopId: req.shopId, requestedLocationId: requestLocationId(req), userId: req.user?.userId, amountPaise: req.body.amountPaise });
+    res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function verifyRetailIntent(req, res, next) {
+  try { res.json({ success: true, data: await retailService.verifyRetailPaymentIntent({ shopId: req.shopId, intentId: req.params.id, input: req.body }) }); } catch (err) { next(err); }
 }

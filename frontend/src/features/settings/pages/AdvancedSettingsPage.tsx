@@ -6,10 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  AlertTriangle, Database, Download, FlaskConical, HardDrive, Loader2, Palette, RotateCcw, Settings2, Upload, Wrench,
+  AlertTriangle, Database, Download, FlaskConical, HardDrive, Palette, RotateCcw, Upload, Wrench,
 } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
-import { Card, CardHead, Fld, RowToggle, Badge } from "@/features/settings/ui";
+import { Card, CardHead, Fld, RowToggle } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/settings/theme";
 import { useAppLanguage, type AppLanguage } from "@/features/settings/i18n";
