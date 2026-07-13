@@ -81,6 +81,23 @@ export async function issueGiftCard(shopId, data, actor = {}) {
   return publicCard(card, { code });
 }
 
+export async function issueReturnCreditInTransaction(tx, { shopId, customerId, billId, locationId, amount, userId, note }) {
+  const code = generateCode();
+  const amountPaise = BigInt(toPaise(amount));
+  const card = await tx.giftCard.create({ data: {
+    shopId,
+    customerId: customerId ?? null,
+    codeHash: hashCode(shopId, code),
+    codeLast4: normalizeCode(code).slice(-4),
+    initialBalancePaise: amountPaise,
+    balancePaise: amountPaise,
+    note: note ?? "Issued for sale return",
+    createdByUserId: userId ?? null,
+  } });
+  await tx.giftCardTransaction.create({ data: { shopId, giftCardId: card.id, billId, locationId, type: "return_credit", amountPaise, balanceAfterPaise: amountPaise, note: note ?? "Sale return issued as gift value", createdByUserId: userId ?? null } });
+  return publicCard(card, { code });
+}
+
 export async function lookupGiftCard(shopId, code) {
   const card = await db.giftCard.findUnique({ where: { shopId_codeHash: { shopId, codeHash: hashCode(shopId, code) } }, include: { customer: { select: { id: true, name: true, mobile: true } } } });
   if (!card) throw new AppError("Gift card not found", 404, "GIFT_CARD_NOT_FOUND");

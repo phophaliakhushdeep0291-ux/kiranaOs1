@@ -13,7 +13,7 @@ import {
 } from "../stores/location-context.service.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
 import { recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
-import { reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
+import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -668,7 +668,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
     reason,
   } = body;
 
-  const normalizedRefundMode = ["cash", "upi", "bank", "udhar"].includes(String(refundMode)) ? String(refundMode) : "cash";
+  const normalizedRefundMode = ["cash", "upi", "bank", "udhar", "gift_card"].includes(String(refundMode)) ? String(refundMode) : "cash";
   if (!Array.isArray(items) || items.length === 0) {
     throw new AppError("A return needs at least one item", 400);
   }
@@ -789,6 +789,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         grossProfit: -itemProfit,
         paidAmount: isCashLike ? -refundAmount : 0,
         creditAmount: normalizedRefundMode === "udhar" ? -refundAmount : 0,
+        giftCardAmount: normalizedRefundMode === "gift_card" ? -refundAmount : 0,
       };
 
       const returnBill = await tx.bill.create({
@@ -809,6 +810,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           idempotencyKey: billIdentity.idempotencyKey,
           sourceDeviceId: billIdentity.sourceDeviceId,
           returnOfBillId: returnOfBillId ?? null,
+          refundMode: normalizedRefundMode,
           items: { create: billItems },
           payments: { create: paymentRows },
         },
@@ -892,12 +894,24 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         });
       }
 
+      const issuedGiftCard = normalizedRefundMode === "gift_card"
+        ? await issueReturnCreditInTransaction(tx, {
+            shopId,
+            customerId: resolvedCustomerId,
+            billId: returnBill.id,
+            locationId: location.id,
+            amount: refundAmount,
+            userId: actor?.userId ?? null,
+            note: `Return credit for ${returnBill.billNo}`,
+          })
+        : null;
+
       // NOTE: FinancialLedger is intentionally not posted for returns. It is append-only
       // and not read by any report/dashboard — all user-facing KPIs derive from
       // bill / udharLedger / stockLedger, which this return already reverses. Revisit
       // if the FinancialLedger is ever wired into reporting.
 
-      return returnBill;
+      return issuedGiftCard ? { ...returnBill, issuedGiftCard } : returnBill;
     });
   } catch (error) {
     if (isUniqueConstraintError(error) && hasBillIdentity(billIdentity)) {

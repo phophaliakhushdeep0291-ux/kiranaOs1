@@ -119,6 +119,7 @@ function fmtRs(value: number) {
 export function BillingSummary({
   summaryWidth,
   onStartSummaryResize,
+  isOnline,
   billType,
   setBillType,
   customers,

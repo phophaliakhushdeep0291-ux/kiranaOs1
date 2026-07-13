@@ -491,6 +491,7 @@ model Bill {
   cancelledAt          DateTime?
   cancelledReason      String?
   returnOfBillId       String? // set on billType "sales_return": the original sale this return reverses
+  refundMode           String? // cash | upi | bank | udhar | gift_card
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 

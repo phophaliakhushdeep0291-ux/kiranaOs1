@@ -71,6 +71,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/bills": "View, search, filter, and manage all bills and invoices",
   "/orders-received": "Review customer QR orders and load them into billing",
   "/loyalty": "Reward repeat customers with an auditable points ledger",
+  "/gift-cards": "Issue and reconcile secure stored value",
   "/products": "Manage your product catalog, pricing and stock",
   "/categories": "Organise products into categories",
   "/inventory": "Manage stock, movements, and purchase flow",
@@ -108,6 +109,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/inventory/stock-transfers": "Stock Transfers",
   "/inventory/stock-counts": "Stock Counts",
   "/loyalty": "Customer Loyalty",
+  "/gift-cards": "Gift Cards",
   "/purchase-bills": "Purchases",
   "/suppliers": "Suppliers",
   "/sales-overview": "Sales Overview",
@@ -216,6 +218,7 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/expenses", label: "Expenses", Icon: Wallet },
   { kind: "link", href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
   { kind: "link", href: "/loyalty", label: "Loyalty", Icon: Gift },
+  { kind: "link", href: "/gift-cards", label: "Gift Cards", Icon: Gift },
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
 ];
 
@@ -269,6 +272,7 @@ const MOBILE_MENU: MobileMenuItem[] = [
   { href: "/expenses", label: "Expenses", Icon: Wallet },
   { href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
   { href: "/loyalty", label: "Loyalty", Icon: Gift },
+  { href: "/gift-cards", label: "Gift Cards", Icon: Gift },
   { href: "/settings", label: "Settings", Icon: Settings },
 ];
 

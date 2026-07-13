@@ -33,6 +33,7 @@ import { SPLIT_PAYMENT, cartItemKey, type BillingDraft, type BillingSensitiveAct
 import { getRetailPaymentReadiness, verifyRetailPayment } from "../retail-payment";
 import { getActiveLocationId } from "@/features/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/loyalty/api";
+import { lookupGiftCard } from "@/features/gift-cards/api";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
@@ -168,6 +169,11 @@ export default function Billing() {
   const [verifiedRetailPayment, setVerifiedRetailPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
   const [retailPaymentLoading, setRetailPaymentLoading] = useState(false);
   const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0);
+  const [giftCardCode, setGiftCardCodeState] = useState("");
+  const [giftCardBalance, setGiftCardBalance] = useState<number | null>(null);
+  const [giftCardAmount, setGiftCardAmount] = useState(0);
+  const [giftCardLoading, setGiftCardLoading] = useState(false);
+  const [giftCardError, setGiftCardError] = useState<string | null>(null);
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const requestedBillType = useMemo<BillTypeSelection | null>(() => {
@@ -236,6 +242,7 @@ export default function Billing() {
   const loyaltyDiscount = roundMoney((effectiveLoyaltyPoints * redemptionPaisePerPoint) / 100);
   const totalDiscount = roundMoney(safeDiscount + loyaltyDiscount);
   const grandTotal = roundMoney(Math.max(0, payableBase - totalDiscount));
+  const effectiveGiftCardAmount = roundMoney(Math.min(Math.max(0, giftCardAmount), giftCardBalance ?? 0, grandTotal));
   const totalGst = gstBreakdown.gst;
   const splitCash = typeof splitCashAmount === "number" ? clampAmount(splitCashAmount, 0, grandTotal) : 0;
   const splitUpi = typeof splitUpiAmount === "number" ? clampAmount(splitUpiAmount, 0, Math.max(0, grandTotal - splitCash)) : 0;
@@ -248,7 +255,9 @@ export default function Billing() {
     ? splitPaidAmount
     : paymentMode === BillPaymentMode.credit || billType === BillInputBillType.udhar_entry
       ? 0
-      : plainPaidAmount;
+      : paymentMode === BillPaymentMode.gift_card
+        ? grandTotal
+        : plainPaidAmount;
   const advanceAmount = allowAdvancePayment && paymentMode !== SPLIT_PAYMENT ? roundMoney(Math.max(0, effectivePaidAmount - grandTotal)) : 0;
   const creditAmount = billType === BillInputBillType.udhar_entry ? grandTotal : roundMoney(Math.max(0, grandTotal - Math.min(effectivePaidAmount, grandTotal)));
   const upiTenderAmount = paymentMode === SPLIT_PAYMENT ? splitUpi : paymentMode === BillPaymentMode.upi ? Math.min(effectivePaidAmount, grandTotal) : 0;
@@ -276,6 +285,31 @@ export default function Billing() {
       toast({ title: "Payment not verified", description: error instanceof Error ? error.message : "Provider verification failed.", variant: "destructive" });
     } finally {
       setRetailPaymentLoading(false);
+    }
+  }
+
+  function setGiftCardCode(value: string) {
+    setGiftCardCodeState(value);
+    setGiftCardBalance(null);
+    setGiftCardAmount(0);
+    setGiftCardError(null);
+  }
+
+  async function handleLookupGiftCard() {
+    if (!isOnline) return;
+    setGiftCardLoading(true);
+    setGiftCardError(null);
+    try {
+      const card = await lookupGiftCard(giftCardCode);
+      if (card.status !== "active") throw new Error(`This gift card is ${card.status}.`);
+      setGiftCardBalance(card.balance);
+      setGiftCardAmount(roundMoney(Math.min(card.balance, grandTotal)));
+    } catch (error) {
+      setGiftCardBalance(null);
+      setGiftCardAmount(0);
+      setGiftCardError(error instanceof Error ? error.message : "Gift card could not be verified.");
+    } finally {
+      setGiftCardLoading(false);
     }
   }
 
@@ -429,6 +463,7 @@ export default function Billing() {
 
   useEffect(() => {
     setLoyaltyPointsToRedeem(0);
+    setGiftCardCode("");
   }, [resolvedCustomerId]);
 
   useEffect(() => {
@@ -855,6 +890,16 @@ export default function Billing() {
       toast({ title: "Connect to redeem points", description: "The points balance and bill must be committed together online.", variant: "destructive" });
       return false;
     }
+    if (paymentMode === BillPaymentMode.gift_card) {
+      if (!isOnline) {
+        toast({ title: "Connect to redeem gift value", description: "The gift-card balance and bill must commit together online.", variant: "destructive" });
+        return false;
+      }
+      if (!giftCardCode || giftCardBalance === null || effectiveGiftCardAmount <= 0) {
+        toast({ title: "Verify the gift card", description: "Enter the card code, check its live balance, and choose an amount.", variant: "destructive" });
+        return false;
+      }
+    }
     if (effectiveLoyaltyPoints > 0 && effectiveLoyaltyPoints < Number(loyaltyProgram.data?.minimumRedeemPoints || 0)) {
       toast({ title: "More points required", description: `Minimum redemption is ${loyaltyProgram.data?.minimumRedeemPoints} points.`, variant: "destructive" });
       return false;
@@ -981,6 +1026,11 @@ export default function Billing() {
         ]
       : paymentMode === BillPaymentMode.credit || isUdharEntry
         ? [{ mode: BillPaymentMode.credit, amount: grandTotal }]
+        : paymentMode === BillPaymentMode.gift_card
+          ? [
+              { mode: BillPaymentMode.gift_card, amount: effectiveGiftCardAmount, giftCardCode },
+              ...(grandTotal - effectiveGiftCardAmount > 0 ? [{ mode: BillPaymentMode.cash, amount: roundMoney(grandTotal - effectiveGiftCardAmount) }] : []),
+            ]
         : [
             ...(paid > 0 ? [{ mode: paymentMode, amount: paid, ...(paymentMode === BillPaymentMode.upi && retailPaymentVerified ? { retailPaymentIntentId: verifiedRetailPayment?.intentId } : {}) }] : []),
             ...(remainingCredit > 0 ? [{ mode: BillPaymentMode.credit, amount: remainingCredit }] : []),
@@ -1379,6 +1429,14 @@ export default function Billing() {
         retailPaymentVerified={retailPaymentVerified}
         retailPaymentLoading={retailPaymentLoading}
         onVerifyRetailPayment={() => void handleVerifyRetailPayment()}
+        giftCardCode={giftCardCode}
+        setGiftCardCode={setGiftCardCode}
+        giftCardBalance={giftCardBalance}
+        giftCardAmount={effectiveGiftCardAmount}
+        setGiftCardAmount={setGiftCardAmount}
+        giftCardLoading={giftCardLoading}
+        giftCardError={giftCardError}
+        onLookupGiftCard={() => void handleLookupGiftCard()}
         lastBillNo={lastBillNo}
         newBillingAllowed={newBillingFeature.allowed}
         newBillingReason={newBillingFeature.reason}

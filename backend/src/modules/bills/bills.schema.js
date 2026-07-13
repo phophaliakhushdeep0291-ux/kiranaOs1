@@ -86,6 +86,24 @@ export const cancelBillSchema = z.object({
   reason: z.string().min(3, "Cancellation reason required"),
 });
 
+export const saleReturnSchema = z.object({
+  locationId: z.string().min(1).optional(),
+  refundMode: z.enum(["cash", "upi", "bank", "udhar", "gift_card"]).default("cash"),
+  gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),
+  customerId: z.string().min(1).optional(),
+  customerName: z.string().trim().min(1).max(160).optional(),
+  returnOfBillId: z.string().min(1).optional(),
+  reason: z.string().trim().min(3).max(500),
+  items: z.array(billItemSchema.extend({ damaged: z.boolean().default(false) })).min(1, "At least one item required"),
+  localBillId: z.string().min(1).optional(),
+  clientBillId: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(1).optional(),
+}).superRefine((data, ctx) => {
+  if (data.refundMode === "udhar" && !data.customerId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["customerId"], message: "Choose a customer to refund to udhar" });
+  }
+});
+
 export const billQuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),

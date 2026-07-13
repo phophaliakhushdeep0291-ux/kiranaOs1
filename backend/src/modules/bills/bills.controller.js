@@ -61,6 +61,40 @@ export async function confirm(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function saleReturn(req, res, next) {
+  try {
+    const data = await svc.createSaleReturn(req.shopId, { ...req.body, locationId: requestLocationId(req) }, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+      locationId: requestLocationId(req),
+    });
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "SALE_RETURN_CREATED",
+      entityType: "Bill",
+      entityId: data.id,
+      after: { billNo: data.billNo, grandTotal: data.grandTotal, refundMode: data.refundMode },
+      metadata: {
+        returnOfBillId: data.returnOfBillId ?? null,
+        locationId: data.locationId,
+        giftCardIssued: Boolean(data.issuedGiftCard),
+        reason: req.body?.reason ?? null,
+      },
+      req,
+    });
+    await publishIntegrationEvent(req.shopId, "sale.return_created", {
+      id: data.id,
+      billNo: data.billNo,
+      returnOfBillId: data.returnOfBillId,
+      grandTotal: data.grandTotal,
+      refundMode: data.refundMode,
+      locationId: data.locationId,
+    }).catch(() => []);
+    res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function cancel(req, res, next) {
   try {
     const existing = await svc.getBill(req.shopId, req.params.id);
