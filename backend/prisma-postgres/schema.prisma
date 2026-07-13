@@ -456,6 +456,9 @@ model Bill {
   subtotalPaise        BigInt?
   discount             Float     @default(0)
   discountPaise        BigInt?
+  loyaltyPointsRedeemed Int      @default(0)
+  loyaltyDiscount      Float     @default(0)
+  loyaltyDiscountPaise BigInt?
   gst                  Float     @default(0)
   gstPaise             BigInt?
   gstMode              String    @default("inclusive") // inclusive | exclusive | none
@@ -738,7 +741,7 @@ model LoyaltyTransaction {
   accountId String
   billId    String?
   locationId String?
-  type      String // earn | redeem | adjustment | expire
+  type      String // earn | redeem | adjustment | expire | redeem_reversal
   points    Int
   source    String   @default("pos")
   note      String?

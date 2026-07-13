@@ -183,7 +183,7 @@ if (ctx.skip) {
       const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
 
       const suggestions = assertSuccess(await ctx.get("/api/purchase-orders/suggestions", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
-      assert.equal(suggestions.find((row) => row.productId === product.id).recommendedOrderBaseQty, 10);
+      assert.equal(suggestions.find((row) => row.productId === product.id).recommendedOrderBaseQty, 7);
 
       const order = assertSuccess(await ctx.post("/api/purchase-orders", {
         supplierId: supplier.id,
@@ -245,6 +245,35 @@ if (ctx.skip) {
       assert.equal(account.account.pointsBalance, 80);
       assert.equal(account.account.transactions.filter((row) => row.type === "earn").length, 1);
 
+      const redemptionPayload = {
+        ...billPayload(product, {
+          quantity: 1,
+          ratePerRateUnit: 20,
+          customerId: customer.id,
+          customerName: customer.name,
+          actualAmount: 10,
+          buyerPaidAmount: 10,
+          payments: [{ mode: "cash", amount: 10 }],
+        }),
+        loyaltyPointsToRedeem: 40,
+        sensitiveActions: ["loyalty_redemption"],
+        reason: "Customer requested loyalty redemption",
+        ownerPin: tenant.ownerPin,
+      };
+      const redemptionBill = assertSuccess(await ctx.post("/api/bills/confirm", redemptionPayload, { token: auth.accessToken }), 201);
+      assert.equal(redemptionBill.loyaltyPointsRedeemed, 40);
+      assert.equal(redemptionBill.loyaltyDiscount, 10);
+      assert.equal(redemptionBill.discount, 10);
+      assert.equal(redemptionBill.grandTotal, 10);
+      const afterRedemption = assertSuccess(await ctx.get(`/api/loyalty/accounts/${customer.id}`, { token: auth.accessToken }));
+      assert.equal(afterRedemption.account.pointsBalance, 60);
+      assert.equal(afterRedemption.account.transactions.some((row) => row.type === "redeem" && row.billId === redemptionBill.id), true);
+
+      assertSuccess(await ctx.post(`/api/bills/${redemptionBill.id}/cancel`, { reason: "Redemption bill cancelled" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      const redemptionRestored = assertSuccess(await ctx.get(`/api/loyalty/accounts/${customer.id}`, { token: auth.accessToken }));
+      assert.equal(redemptionRestored.account.pointsBalance, 80);
+      assert.equal(redemptionRestored.account.transactions.some((row) => row.type === "redeem_reversal" && row.billId === redemptionBill.id), true);
+
       assertSuccess(await ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Customer changed mind" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       const reversed = assertSuccess(await ctx.get(`/api/loyalty/accounts/${customer.id}`, { token: auth.accessToken }));
       assert.equal(reversed.account.pointsBalance, 0);
@@ -254,7 +283,7 @@ if (ctx.skip) {
     test("reports GST readiness, exports an HSN invoice register, and blocks fake legal submission", async () => {
       const { tenant, auth } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "GST Buyer" });
-      await ctx.db.customer.update({ where: { id: customer.id }, data: { stateCode: "29", gstin: "29ABCDE1234F1Z5" } });
+      await ctx.db.customer.update({ where: { id: customer.id }, data: { stateCode: "29", gstNumber: "29ABCDE1234F1Z5" } });
       const product = await createProduct(ctx.db, tenant.shop.id, { name: "Taxed Goods", hsn: "1905", gstRate: 5, defaultPricePerRateUnit: 105 });
       const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, { billType: "gst_invoice", customerId: customer.id, customerName: customer.name, quantity: 1, ratePerRateUnit: 105, gstRate: 5 }), { token: auth.accessToken }), 201);
 

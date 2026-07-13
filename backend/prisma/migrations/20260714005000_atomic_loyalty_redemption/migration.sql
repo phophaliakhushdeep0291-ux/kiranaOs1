@@ -1,0 +1,3 @@
+ALTER TABLE "Bill" ADD COLUMN "loyaltyPointsRedeemed" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Bill" ADD COLUMN "loyaltyDiscount" REAL NOT NULL DEFAULT 0;
+ALTER TABLE "Bill" ADD COLUMN "loyaltyDiscountPaise" BIGINT;

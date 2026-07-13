@@ -32,6 +32,7 @@ import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, cartItemKey, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 import { getRetailPaymentReadiness, verifyRetailPayment } from "../retail-payment";
 import { getActiveLocationId } from "@/features/stores/location-context";
+import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/loyalty/api";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
@@ -166,6 +167,7 @@ export default function Billing() {
   const [voiceVisible, setVoiceVisible] = useState(false);
   const [verifiedRetailPayment, setVerifiedRetailPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
   const [retailPaymentLoading, setRetailPaymentLoading] = useState(false);
+  const [loyaltyPointsToRedeem, setLoyaltyPointsToRedeem] = useState(0);
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const requestedBillType = useMemo<BillTypeSelection | null>(() => {
@@ -190,6 +192,30 @@ export default function Billing() {
   const { rules: shopPricingRules } = useShopPricingRules();
   const retailPaymentReadiness = useQuery({ queryKey: ["retail-payment-readiness"], queryFn: getRetailPaymentReadiness, staleTime: 5 * 60_000, retry: false });
 
+  const typedCustomerName = customerName.trim();
+  const typedCustomerMobile = customerMobile.replace(/\D/g, "").trim();
+  const selectedCustomerBackendId = selectedCustomerId === "walk_in" ? "" : selectedCustomerId;
+  const selectedCustomer = selectedCustomerBackendId ? customers.data?.find((customer: Customer) => customer.id === selectedCustomerBackendId) : undefined;
+  const matchingMobileCustomer = typedCustomerMobile ? customers.data?.find((customer: Customer) => customer.mobile?.replace(/\D/g, "") === typedCustomerMobile) : undefined;
+  const resolvedCustomerId = selectedCustomerBackendId || matchingMobileCustomer?.id || "";
+  const resolvedCustomerName = selectedCustomer?.name || matchingMobileCustomer?.name || typedCustomerName;
+  const resolvedCustomerMobile = selectedCustomer?.mobile || matchingMobileCustomer?.mobile || typedCustomerMobile;
+  const hasCreditCustomerIdentity = Boolean(resolvedCustomerId || (typedCustomerName && typedCustomerMobile));
+  const loyaltyProgram = useQuery({
+    queryKey: ["loyalty-program"],
+    queryFn: getLoyaltyProgram,
+    enabled: isOnline,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const loyaltyAccount = useQuery({
+    queryKey: ["loyalty-account", resolvedCustomerId],
+    queryFn: () => getLoyaltyAccount(resolvedCustomerId),
+    enabled: isOnline && Boolean(resolvedCustomerId) && loyaltyProgram.data?.active === true,
+    staleTime: 30_000,
+    retry: false,
+  });
+
   const subtotal = useMemo(() => roundMoney(cart.reduce((sum, item) => sum + item.quantity * item.rate, 0)), [cart]);
   // GST: one engine for UI, local record and server. Inclusive (kirana MRP
   // default) extracts tax from the entered prices without changing the payable;
@@ -200,17 +226,17 @@ export default function Billing() {
   );
   const payableBase = roundMoney(subtotal + gstBreakdown.gstToAdd);
   const safeDiscount = Math.min(Math.max(Number(discount) || 0, 0), payableBase);
-  const grandTotal = roundMoney(Math.max(0, payableBase - safeDiscount));
+  const redemptionPaisePerPoint = Number(loyaltyProgram.data?.redemptionPaisePerPoint || 0);
+  const loyaltyBalance = Number(loyaltyAccount.data?.account.pointsBalance || 0);
+  const loyaltyMaxByBill = redemptionPaisePerPoint > 0
+    ? Math.floor((Math.max(0, payableBase - safeDiscount) * 100) / redemptionPaisePerPoint)
+    : 0;
+  const loyaltyMaxPoints = Math.max(0, Math.min(loyaltyBalance, loyaltyMaxByBill));
+  const effectiveLoyaltyPoints = Math.min(Math.max(0, Math.floor(loyaltyPointsToRedeem)), loyaltyMaxPoints);
+  const loyaltyDiscount = roundMoney((effectiveLoyaltyPoints * redemptionPaisePerPoint) / 100);
+  const totalDiscount = roundMoney(safeDiscount + loyaltyDiscount);
+  const grandTotal = roundMoney(Math.max(0, payableBase - totalDiscount));
   const totalGst = gstBreakdown.gst;
-  const typedCustomerName = customerName.trim();
-  const typedCustomerMobile = customerMobile.replace(/\D/g, "").trim();
-  const selectedCustomerBackendId = selectedCustomerId === "walk_in" ? "" : selectedCustomerId;
-  const selectedCustomer = selectedCustomerBackendId ? customers.data?.find((customer: Customer) => customer.id === selectedCustomerBackendId) : undefined;
-  const matchingMobileCustomer = typedCustomerMobile ? customers.data?.find((customer: Customer) => customer.mobile?.replace(/\D/g, "") === typedCustomerMobile) : undefined;
-  const resolvedCustomerId = selectedCustomerBackendId || matchingMobileCustomer?.id || "";
-  const resolvedCustomerName = selectedCustomer?.name || matchingMobileCustomer?.name || typedCustomerName;
-  const resolvedCustomerMobile = selectedCustomer?.mobile || matchingMobileCustomer?.mobile || typedCustomerMobile;
-  const hasCreditCustomerIdentity = Boolean(resolvedCustomerId || (typedCustomerName && typedCustomerMobile));
   const splitCash = typeof splitCashAmount === "number" ? clampAmount(splitCashAmount, 0, grandTotal) : 0;
   const splitUpi = typeof splitUpiAmount === "number" ? clampAmount(splitUpiAmount, 0, Math.max(0, grandTotal - splitCash)) : 0;
   const splitPaidAmount = roundMoney(Math.min(grandTotal, splitCash + splitUpi));
@@ -399,7 +425,15 @@ export default function Billing() {
 
   useEffect(() => {
     setSensitiveApproval(null);
-  }, [safeDiscount, subtotal, cart]);
+  }, [safeDiscount, subtotal, cart, effectiveLoyaltyPoints]);
+
+  useEffect(() => {
+    setLoyaltyPointsToRedeem(0);
+  }, [resolvedCustomerId]);
+
+  useEffect(() => {
+    if (loyaltyPointsToRedeem !== effectiveLoyaltyPoints) setLoyaltyPointsToRedeem(effectiveLoyaltyPoints);
+  }, [effectiveLoyaltyPoints, loyaltyPointsToRedeem]);
 
   useEffect(() => {
     if (!allowAdvancePayment && typeof paidAmount === "number" && paidAmount > grandTotal) setPaidAmount(grandTotal);
@@ -460,6 +494,8 @@ export default function Billing() {
         queryClient.invalidateQueries({ queryKey: ["customers-ledger-list"] });
         queryClient.invalidateQueries({ queryKey: ["udhar-dashboard"] });
         queryClient.invalidateQueries({ queryKey: ["udhar"] });
+        queryClient.invalidateQueries({ queryKey: ["loyalty-account"] });
+        queryClient.invalidateQueries({ queryKey: ["loyalty-accounts"] });
         toast({ title: `Bill ${billNo} saved`, description: isOnline ? "Bill saved. Cloud backup will run automatically." : "Data safe locally. Cloud backup pending." });
       },
       onError: (err: unknown) => {
@@ -482,6 +518,7 @@ export default function Billing() {
     setSourceOrderId(undefined);
     setCart([]);
     setDiscount(0);
+    setLoyaltyPointsToRedeem(0);
     setPaidAmount("");
     setSplitCashAmount("");
     setSplitUpiAmount("");

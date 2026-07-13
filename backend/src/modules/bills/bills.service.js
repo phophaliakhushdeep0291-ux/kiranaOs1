@@ -12,6 +12,7 @@ import {
   resolveOperationalLocation,
 } from "../stores/location-context.service.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
+import { recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption } from "../loyalty/loyalty.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -123,6 +124,12 @@ export async function confirmBill(shopId, body, actor = {}) {
       ? await tx.customer.findFirst({ where: { id: customerId, shopId, deletedAt: null } })
       : null;
     if (customerId && !invoiceCustomer) throw new AppError("Customer not found", 404);
+    const loyaltyRedemption = await reserveBillLoyaltyRedemption(tx, {
+      shopId,
+      customerId,
+      points: body.loyaltyPointsToRedeem,
+      isEstimate,
+    });
 
     // ── 1. Load and validate all products ─────────────────────
     const productIds = items.filter((i) => i.productId).map((i) => i.productId);
@@ -271,7 +278,8 @@ export async function confirmBill(shopId, body, actor = {}) {
     subtotal = round2(subtotal);
     totalGst = round2(totalGst);
     itemProfit = round2(itemProfit);
-    const billDiscount = round2(discount);
+    const loyaltyDiscount = round2((loyaltyRedemption?.discountValuePaise ?? 0) / 100);
+    const billDiscount = addMoney(discount, loyaltyDiscount);
     // Inclusive: tax already lives inside subtotal, so the payable is simply
     // subtotal − discount (matches what the counter UI shows and collects).
     // Exclusive: tax is added on top before the discount.
@@ -383,6 +391,8 @@ export async function confirmBill(shopId, body, actor = {}) {
         buyerAddress: invoiceCustomer?.address ?? null,
         subtotal,
         discount: billDiscount,
+        loyaltyPointsRedeemed: loyaltyRedemption?.points ?? 0,
+        loyaltyDiscount,
         gst: totalGst,
         gstMode,
         grandTotal,
@@ -392,7 +402,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         grossProfit,
         paidAmount,
         creditAmount,
-        ...moneyShadows({ subtotal, discount: billDiscount, gst: totalGst, grandTotal, actualAmount, buyerPaidAmount, waivedAmount, grossProfit, paidAmount, creditAmount }),
+        ...moneyShadows({ subtotal, discount: billDiscount, loyaltyDiscount, gst: totalGst, grandTotal, actualAmount, buyerPaidAmount, waivedAmount, grossProfit, paidAmount, creditAmount }),
         createdByUserId,
         deviceId,
         clientBillId: billIdentity.clientBillId,
@@ -401,7 +411,14 @@ export async function confirmBill(shopId, body, actor = {}) {
         items: { create: billItems },
         payments: { create: paymentRows },
       },
-      include: { items: true, payments: true },
+      include: { items: true, payments: true, loyaltyTransactions: true },
+    });
+    await recordBillLoyaltyRedemption(tx, {
+      shopId,
+      billId: bill.id,
+      billNo: bill.billNo,
+      locationId: location.id,
+      redemption: loyaltyRedemption,
     });
     await consumeRetailPaymentIntents(tx, retailIntents);
 

@@ -36,7 +36,7 @@ export interface LinePricingMeta {
 export const SPLIT_PAYMENT = "split" as const;
 export type PaymentSelection = typeof BillPaymentMode[keyof typeof BillPaymentMode] | typeof SPLIT_PAYMENT;
 export type BillTypeSelection = typeof BillInputBillType[keyof typeof BillInputBillType];
-export type BillingSensitiveAction = "large_discount" | "selling_below_minimum_price";
+export type BillingSensitiveAction = "large_discount" | "selling_below_minimum_price" | "loyalty_redemption";
 
 export interface BillingDraft {
   /** Stable id of the bill currently in the workspace (for the open-bills switcher). */

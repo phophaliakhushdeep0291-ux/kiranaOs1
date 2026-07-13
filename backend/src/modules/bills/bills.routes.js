@@ -12,8 +12,9 @@ const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated());
 
 function requireSensitiveBillApproval(req, res, next) {
-  const actions = Array.isArray(req.body?.sensitiveActions) ? req.body.sensitiveActions : [];
-  if (!actions.some((action) => ["large_discount", "selling_below_minimum_price"].includes(action))) return next();
+  const actions = Array.isArray(req.body?.sensitiveActions) ? [...req.body.sensitiveActions] : [];
+  if (Number(req.body?.loyaltyPointsToRedeem || 0) > 0) actions.push("loyalty_redemption");
+  if (!actions.some((action) => ["large_discount", "selling_below_minimum_price", "loyalty_redemption"].includes(action))) return next();
   return requireOwnerPin(req, res, next);
 }
 

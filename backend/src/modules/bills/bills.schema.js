@@ -31,9 +31,6 @@ const paymentSchema = z.object({
   idempotency_key: z.string().min(1).optional(),
   retailPaymentIntentId: z.string().min(1).optional(),
   retail_payment_intent_id: z.string().min(1).optional(),
-  ownerPin: z.string().optional(),
-  reason: z.string().optional(),
-  sensitiveActions: z.array(z.string()).optional(),
 });
 
 export const confirmBillSchema = z.object({
@@ -47,11 +44,15 @@ export const confirmBillSchema = z.object({
   customerName: z.string().default("Walk-in"),
   items: z.array(billItemSchema).min(1, "At least one item required"),
   discount: moneyAmount().default(0),
+  loyaltyPointsToRedeem: z.coerce.number().int().min(1).max(100000000).optional(),
   actualAmount: moneyAmount().optional(),
   buyerPaidAmount: moneyAmount().optional(),
   waivedAmount: moneyAmount().default(0),
   creditAmount: moneyAmount().default(0).optional(),
   payments: z.array(paymentSchema).default([]),
+  ownerPin: z.string().regex(/^\d{4}$/, "Owner PIN must be exactly 4 digits").optional(),
+  reason: z.string().trim().min(3).max(500).optional(),
+  sensitiveActions: z.array(z.enum(["large_discount", "selling_below_minimum_price", "loyalty_redemption"])).max(3).default([]),
   localBillId: z.string().min(1).optional(),
   local_bill_id: z.string().min(1).optional(),
   clientBillId: z.string().min(1).optional(),
@@ -65,6 +66,12 @@ export const confirmBillSchema = z.object({
       path: ["payments"],
       message: "At least one real payment or credit amount required",
     });
+  }
+  if (data.loyaltyPointsToRedeem && !data.customerId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["customerId"], message: "Choose a customer before redeeming loyalty points" });
+  }
+  if (data.loyaltyPointsToRedeem && data.billType === "estimate") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loyaltyPointsToRedeem"], message: "Loyalty points cannot be redeemed on an estimate" });
   }
 });
 

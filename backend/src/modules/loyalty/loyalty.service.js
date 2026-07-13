@@ -121,18 +121,76 @@ export async function recordBillLoyalty(shopId, bill) {
   }
 }
 
+export async function reserveBillLoyaltyRedemption(client, { shopId, customerId, points, isEstimate }) {
+  const requestedPoints = Number(points || 0);
+  if (requestedPoints <= 0) return null;
+  if (isEstimate) throw new AppError("Loyalty points cannot be redeemed on an estimate", 422, "LOYALTY_ESTIMATE_NOT_ALLOWED");
+  if (!customerId) throw new AppError("Choose a customer before redeeming loyalty points", 422, "LOYALTY_CUSTOMER_REQUIRED");
+
+  const program = await client.loyaltyProgram.findUnique({ where: { shopId } });
+  if (!program?.active) throw new AppError("Loyalty program is not active", 409, "LOYALTY_PROGRAM_INACTIVE");
+  if (requestedPoints < program.minimumRedeemPoints) {
+    throw new AppError(`Minimum redemption is ${program.minimumRedeemPoints} points`, 422, "LOYALTY_MINIMUM_NOT_MET");
+  }
+
+  let account = await client.loyaltyAccount.findFirst({ where: { shopId, customerId } });
+  if (!account) throw new AppError("Loyalty account not found", 404, "LOYALTY_ACCOUNT_NOT_FOUND");
+  account = await expireOne(client, shopId, program, account);
+  const updated = await client.loyaltyAccount.updateMany({
+    where: { id: account.id, shopId, pointsBalance: { gte: requestedPoints } },
+    data: { pointsBalance: { decrement: requestedPoints }, lifetimeRedeemed: { increment: requestedPoints } },
+  });
+  if (updated.count !== 1) throw new AppError("Not enough loyalty points", 409, "INSUFFICIENT_LOYALTY_POINTS");
+
+  return {
+    accountId: account.id,
+    points: requestedPoints,
+    discountValuePaise: requestedPoints * program.redemptionPaisePerPoint,
+  };
+}
+
+export async function recordBillLoyaltyRedemption(client, { shopId, billId, billNo, locationId, redemption }) {
+  if (!redemption) return null;
+  return client.loyaltyTransaction.create({
+    data: {
+      shopId,
+      accountId: redemption.accountId,
+      billId,
+      locationId: locationId ?? null,
+      type: "redeem",
+      points: -redemption.points,
+      source: "pos",
+      note: `Redeemed on ${billNo}`,
+    },
+  });
+}
+
 export async function reverseBillLoyalty(shopId, billId) {
-  const earned = await db.loyaltyTransaction.findFirst({ where: { shopId, billId, type: "earn" } });
-  if (!earned) return null;
-  const prior = await db.loyaltyTransaction.findFirst({ where: { shopId, billId, type: "adjustment" } });
-  if (prior) return prior;
   return db.$transaction(async (tx) => {
-    const account = await tx.loyaltyAccount.findFirst({ where: { id: earned.accountId, shopId } });
-    if (!account) return null;
-    const deduction = Math.min(account.pointsBalance, earned.points);
-    const transaction = await tx.loyaltyTransaction.create({ data: { shopId, accountId: account.id, billId, locationId: earned.locationId ?? null, type: "adjustment", points: -deduction, source: "system", note: "Points reversed after bill cancellation" } });
-    await tx.loyaltyAccount.update({ where: { id: account.id }, data: { pointsBalance: { decrement: deduction } } });
-    return transaction;
+    const transactions = await tx.loyaltyTransaction.findMany({ where: { shopId, billId } });
+    const earned = transactions.find((row) => row.type === "earn");
+    const redeemed = transactions.find((row) => row.type === "redeem");
+    const results = [];
+
+    if (earned && !transactions.some((row) => row.type === "adjustment")) {
+      const account = await tx.loyaltyAccount.findFirst({ where: { id: earned.accountId, shopId } });
+      if (account) {
+        const deduction = Math.min(account.pointsBalance, earned.points);
+        results.push(await tx.loyaltyTransaction.create({ data: { shopId, accountId: account.id, billId, locationId: earned.locationId ?? null, type: "adjustment", points: -deduction, source: "system", note: "Earned points reversed after bill cancellation" } }));
+        await tx.loyaltyAccount.update({ where: { id: account.id }, data: { pointsBalance: { decrement: deduction } } });
+      }
+    }
+
+    if (redeemed && !transactions.some((row) => row.type === "redeem_reversal")) {
+      const restoredPoints = Math.abs(redeemed.points);
+      results.push(await tx.loyaltyTransaction.create({ data: { shopId, accountId: redeemed.accountId, billId, locationId: redeemed.locationId ?? null, type: "redeem_reversal", points: restoredPoints, source: "system", note: "Redeemed points restored after bill cancellation" } }));
+      await tx.loyaltyAccount.update({
+        where: { id: redeemed.accountId },
+        data: { pointsBalance: { increment: restoredPoints }, lifetimeRedeemed: { decrement: restoredPoints } },
+      });
+    }
+
+    return results;
   });
 }
 

@@ -90,7 +90,10 @@ if (isPostgres) {
 } else {
   ensureSqliteDatabaseFile();
   if (!skipGenerate) runPrisma(["generate", ...(useIsolatedClient ? ["--generator", "integrationClient"] : [])]);
-  runPrisma(["db", "push", "--force-reset", "--accept-data-loss", ...(skipGenerate ? ["--skip-generate"] : [])]);
+  // Generation is handled explicitly above. Never let db push regenerate every
+  // declared client, because a live Windows dev server can hold the canonical
+  // engine DLL open while the isolated integration client remains available.
+  runPrisma(["db", "push", "--force-reset", "--accept-data-loss", "--skip-generate"]);
 }
 
 console.log("Test database is ready.");

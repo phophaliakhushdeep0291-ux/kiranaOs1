@@ -34,6 +34,28 @@ if (ctx.skip) {
       assert.equal(stockLedger.length, 1);
     });
 
+    test("sensitive bill actions survive validation and require the owner PIN", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+      const payload = {
+        ...billPayload(product, {
+        discount: 20,
+        actualAmount: 180,
+        buyerPaidAmount: 180,
+        payments: [{ mode: "cash", amount: 180 }],
+        }),
+        sensitiveActions: ["large_discount"],
+        reason: "Manager-approved promotion",
+      };
+
+      const blocked = await ctx.post("/api/bills/confirm", payload, { token: ownerAuth.accessToken });
+      assertFailure(blocked, 403);
+
+      const approved = assertSuccess(await ctx.post("/api/bills/confirm", { ...payload, ownerPin: tenant.ownerPin }, { token: ownerAuth.accessToken }), 201);
+      assert.equal(approved.discount, 20);
+      assert.equal(approved.grandTotal, 180);
+    });
+
     test("partial bill creates paid payment + udhar impact", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const customer = await createCustomer(ctx.db, tenant.shop.id);
