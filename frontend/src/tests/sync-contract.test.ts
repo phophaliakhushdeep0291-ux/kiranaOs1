@@ -943,13 +943,119 @@ describe("sync backend contract", () => {
     const result = await pullServerChanges();
 
     expect(result).toEqual(expect.objectContaining({ pulled: 1, conflicts: 0 }));
-    expect(syncPullMock).toHaveBeenCalledWith(expect.objectContaining({ since: "1970-01-01T00:00:00.000Z", limit: 500, cursor: null, cursors: expect.any(Object) }));
+    expect(syncPullMock).toHaveBeenCalledWith(expect.objectContaining({ since: "1970-01-01T00:00:00.000Z", limit: 500, cursor: null, afterSeq: "0" }));
     expect(scopedRows("products")).toEqual([
       expect.objectContaining({
         id: "server_product_pull_1",
         server_id: "server_product_pull_1",
         name: "Pulled Rice",
         sync_status: "synced",
+      }),
+    ]);
+  });
+
+  it("persists the monotonic server sequence and resumes the next pull from it", async () => {
+    syncPullMock
+      .mockResolvedValueOnce({
+        changes: [],
+        sync: {
+          protocol: "server_sequence_v2",
+          nextServerSeq: "42",
+          serverVersion: "42",
+          hasMore: false,
+        },
+      })
+      .mockResolvedValueOnce({
+        changes: [],
+        sync: {
+          protocol: "server_sequence_v2",
+          nextServerSeq: "45",
+          serverVersion: "45",
+          hasMore: false,
+        },
+      });
+
+    await pullServerChanges();
+
+    expect(scopedRows("sync_cursor")).toContainEqual(
+      expect.objectContaining({
+        id: "server-sequence-v2",
+        entity_type: "server_sequence",
+        cursor: "42",
+      }),
+    );
+
+    await pullServerChanges();
+
+    expect(syncPullMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ afterSeq: "42", cursor: null }),
+    );
+    expect(scopedRows("sync_cursor")).toContainEqual(
+      expect.objectContaining({ id: "server-sequence-v2", cursor: "45" }),
+    );
+  });
+
+  it("applies server tombstones while preserving unsynced local work as a conflict", async () => {
+    dbState.putInto("products", {
+      id: "server_product_delete_synced",
+      server_id: "server_product_delete_synced",
+      name: "Synced product",
+      sync_status: "synced",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+    });
+    dbState.putInto("products", {
+      id: "server_product_delete_pending",
+      server_id: "server_product_delete_pending",
+      name: "Locally edited product",
+      sync_status: "pending_sync",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+    });
+    syncPullMock.mockResolvedValueOnce({
+      changes: [
+        {
+          change_id: "51",
+          entity_type: "product",
+          entity_id: "server_product_delete_synced",
+          operation_type: "delete",
+          entity: null,
+          server_version: "51",
+          deleted_at: "2026-07-14T00:00:00.000Z",
+        },
+        {
+          change_id: "52",
+          entity_type: "product",
+          entity_id: "server_product_delete_pending",
+          operation_type: "delete",
+          entity: null,
+          server_version: "52",
+          deleted_at: "2026-07-14T00:00:01.000Z",
+        },
+      ],
+      sync: {
+        protocol: "server_sequence_v2",
+        nextServerSeq: "52",
+        serverVersion: "52",
+        hasMore: false,
+      },
+    });
+
+    const result = await pullServerChanges();
+
+    expect(result).toEqual(expect.objectContaining({ pulled: 1, conflicts: 1 }));
+    expect(scopedRows("products")).toEqual([
+      expect.objectContaining({
+        id: "server_product_delete_pending",
+        name: "Locally edited product",
+        sync_status: "conflict",
+      }),
+    ]);
+    expect(scopedRows("sync_conflicts")).toEqual([
+      expect.objectContaining({
+        entity_type: "product",
+        entity_id: "server_product_delete_pending",
+        server_snapshot: null,
       }),
     ]);
   });
