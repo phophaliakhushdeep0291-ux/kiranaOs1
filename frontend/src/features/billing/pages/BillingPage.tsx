@@ -1322,7 +1322,7 @@ export default function Billing() {
             Back
           </button>
         </div>
-        <div className="min-h-0 flex-1 p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:p-0">
+        <div className="flex min-h-0 flex-1 overflow-y-auto p-2 pb-[var(--app-mobile-checkout-panel-clearance)] overscroll-contain lg:overflow-visible lg:p-0">
       <BillingSummary
         summaryWidth={summaryWidth}
         onStartSummaryResize={startSummaryResize}
@@ -1405,7 +1405,7 @@ export default function Billing() {
           action reachable one-thumb without competing with the product browser.
           without scrolling to the bottom of the summary. Desktop shows the full
           summary panel always, so this is mobile-only. Sits above the bottom nav. */}
-      {cart.length > 0 && (
+      {cart.length > 0 && !mobileCheckoutOpen && (
         <div
           className="fixed inset-x-0 z-40 border-t border-[#e6ecf4] bg-white px-3 py-2.5 shadow-[0_-6px_22px_rgba(15,35,80,0.10)] lg:hidden"
           style={{ bottom: "var(--app-mobile-bottom-nav-clearance)" }}

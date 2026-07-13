@@ -245,7 +245,7 @@ export function BillingSummary({
 
   return (
     <div
-      className="relative flex h-full w-full shrink-0 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.055)] lg:w-[var(--bill-summary-width)]"
+      className="relative flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-[15px] border border-[#e6ecf4] bg-white shadow-[0_10px_28px_rgba(15,23,42,0.055)] lg:w-[var(--bill-summary-width)]"
       style={{ "--bill-summary-width": `${summaryWidth}px` } as CSSProperties}
       data-testid="bill-summary-panel"
     >
@@ -258,7 +258,7 @@ export function BillingSummary({
       />
 
       {/* ── Scrollable body ── */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-3 p-4">
 
           {/* Customer selector — 52px */}

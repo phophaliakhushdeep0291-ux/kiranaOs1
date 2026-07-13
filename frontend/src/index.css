@@ -133,6 +133,7 @@
   --app-mobile-bottom-nav-clearance: calc(var(--app-mobile-nav-height) + 1.5rem + env(safe-area-inset-bottom));
   --app-mobile-fixed-action-height: 76px;
   --app-mobile-content-bottom-clearance: calc(var(--app-mobile-fixed-action-height) + 1.25rem + env(safe-area-inset-bottom));
+  --app-mobile-checkout-panel-clearance: calc(var(--app-mobile-nav-height) + var(--app-mobile-fixed-action-height) + 2rem + env(safe-area-inset-bottom));
   --app-page-max: 1600px;
   --app-page-gutter: clamp(0.875rem, 0.65rem + 0.7vw, 1.5rem);
 

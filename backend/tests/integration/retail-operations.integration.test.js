@@ -234,6 +234,40 @@ if (ctx.skip) {
       assert.equal(cannotCancel.code, "PURCHASE_ORDER_NOT_CANCELLABLE");
     });
 
+    test("runs a blind stock count through review and guarded variance posting", async () => {
+      const { tenant, auth } = await ownerContext();
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Counted Rice", stockBaseQty: 10, baseUnit: "kg", rateUnit: "kg" });
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+      const headers = { "x-location-id": primary.id };
+
+      const count = assertSuccess(await ctx.post("/api/inventory/counts", { name: "Month-end count", blindCount: true, productIds: [product.id] }, { token: auth.accessToken, headers }), 201);
+      assert.equal(count.status, "counting");
+      assert.equal(count.lines[0].expectedBaseQty, null);
+      assert.equal(count.summary.remainingLines, 1);
+
+      const counted = assertSuccess(await ctx.request("PATCH", `/api/inventory/counts/${count.id}/lines`, { token: auth.accessToken, headers, body: { lines: [{ productId: product.id, countedBaseQty: 8, reason: "Two kilograms damaged" }] } }));
+      assert.equal(counted.summary.remainingLines, 0);
+      assert.equal(counted.lines[0].varianceBaseQty, null);
+
+      const review = assertSuccess(await ctx.post(`/api/inventory/counts/${count.id}/submit`, {}, { token: auth.accessToken, headers }));
+      assert.equal(review.status, "review");
+      assert.equal(review.lines[0].expectedBaseQty, 10);
+      assert.equal(review.lines[0].varianceBaseQty, -2);
+
+      const applied = assertSuccess(await ctx.post(`/api/inventory/counts/${count.id}/apply`, { note: "Approved physical count" }, { token: auth.accessToken, headers, ownerPin: tenant.ownerPin }));
+      assert.equal(applied.status, "applied");
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 8);
+      const varianceLedger = await ctx.db.stockLedger.findFirst({ where: { sourceType: "stock_count", sourceId: count.id, productId: product.id } });
+      assert.equal(varianceLedger.changeBaseQty, -2);
+
+      const stale = assertSuccess(await ctx.post("/api/inventory/counts", { name: "Stale count proof", blindCount: false, productIds: [product.id] }, { token: auth.accessToken, headers }), 201);
+      assertSuccess(await ctx.request("PATCH", `/api/inventory/counts/${stale.id}/lines`, { token: auth.accessToken, headers, body: { lines: [{ productId: product.id, countedBaseQty: 8 }] } }));
+      assertSuccess(await ctx.post(`/api/inventory/counts/${stale.id}/submit`, {}, { token: auth.accessToken, headers }));
+      await ctx.db.stockLedger.create({ data: { shopId: tenant.shop.id, locationId: primary.id, productId: product.id, productName: product.name, action: "sale", changeBaseQty: -1, oldStockBaseQty: 8, newStockBaseQty: 7 } });
+      const blocked = assertFailure(await ctx.post(`/api/inventory/counts/${stale.id}/apply`, { note: "Should be rejected" }, { token: auth.accessToken, headers, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(blocked.code, "STOCK_COUNT_STALE");
+    });
+
     test("earns loyalty points once and reverses available points on bill cancellation", async () => {
       const { tenant, auth } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Loyal Buyer" });
