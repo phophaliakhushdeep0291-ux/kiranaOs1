@@ -287,6 +287,7 @@ export function VoiceAssistant() {
 
   return (
     <div
+      data-voice-assistant="true"
       ref={containerRef}
       className={`fixed z-40 print:hidden transition-[opacity,transform] duration-200 ${assistantIsIdle ? "opacity-75 hover:opacity-100 focus-within:opacity-100" : "z-[60] opacity-100"} ${dragging ? "select-none" : ""}`}
       style={floatingStyle}

@@ -709,13 +709,19 @@
     min-width: 680px;
   }
 
-  .app-slide-panel {
-    width: 100vw !important;
-    max-width: 100vw;
-  }
+    .app-slide-panel {
+      width: 100vw !important;
+      max-width: 100vw;
+    }
 
-  .responsive-action-row {
-    grid-template-columns: 1fr;
+    body[data-app-mobile-task-open="true"] [data-app-mobile-topbar="true"],
+    body[data-app-mobile-task-open="true"] [data-app-mobile-bottom-nav="true"],
+    body[data-app-mobile-task-open="true"] [data-voice-assistant="true"] {
+      display: none !important;
+    }
+
+    .responsive-action-row {
+      grid-template-columns: 1fr;
   }
 }
 

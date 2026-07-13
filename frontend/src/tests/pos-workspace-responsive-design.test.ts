@@ -6,6 +6,8 @@ const billingSearch = readFileSync(new URL("../features/billing/pages/components
 const layout = readFileSync(new URL("../components/layout/Layout.tsx", import.meta.url), "utf8");
 const dashboard = readFileSync(new URL("../features/dashboard/pages/DashboardPage.tsx", import.meta.url), "utf8");
 const products = readFileSync(new URL("../features/products/pages/ProductsPage.tsx", import.meta.url), "utf8");
+const productFormPanel = readFileSync(new URL("../features/products/pages/components/ProductFormPanel.tsx", import.meta.url), "utf8");
+const productQueries = readFileSync(new URL("../features/products/queries.ts", import.meta.url), "utf8");
 const billingSummary = readFileSync(new URL("../features/billing/pages/components/BillingSummary.tsx", import.meta.url), "utf8");
 const pageLoading = readFileSync(new URL("../components/shared/PageLoading.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../index.css", import.meta.url), "utf8");
@@ -29,6 +31,11 @@ describe("POS workspace responsive design", () => {
     expect(billingPage).toContain("cart.length > 0 && !mobileCheckoutOpen");
     expect(billingSummary).toContain("relative flex h-full min-h-0");
     expect(billingSummary).toContain('<ScrollArea className="min-h-0 flex-1">');
+  });
+
+  it("uses the local-first product catalogue inside billing", () => {
+    expect(billingPage).toContain('import { useListProducts } from "@/features/products/queries";');
+    expect(billingPage).not.toContain("useListProducts, type Bill");
   });
 
   it("keeps mobile navigation unobstructed and removes redundant billing actions", () => {

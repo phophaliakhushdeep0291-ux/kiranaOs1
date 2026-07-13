@@ -199,6 +199,7 @@ export async function createProductLocalFirst(data: ProductInput): Promise<Produ
   });
   upsertCachedListItem<Product>(CACHE_KEY, product, 1000);
   upsertCachedListItem<Product>(INVENTORY_CACHE_KEY, product, 1000);
+  emitLocalDataChanged({ entityType: "product", action: "created", entityId: product.id });
   return product;
 }
 
@@ -234,6 +235,7 @@ export async function updateProductLocalFirst(id: string, data: ProductInput): P
   });
   upsertCachedListItem<Product>(CACHE_KEY, product, 1000);
   upsertCachedListItem<Product>(INVENTORY_CACHE_KEY, product, 1000);
+  emitLocalDataChanged({ entityType: "product", action: "updated", entityId: product.id });
   return product;
 }
 
@@ -417,6 +419,7 @@ export async function deleteProductLocalFirst(id: string, ownerPin: string, reas
   });
   removeCachedListItem<Product>(CACHE_KEY, id);
   removeCachedListItem<Product>(INVENTORY_CACHE_KEY, id);
+  emitLocalDataChanged({ entityType: "product", action: "deleted", entityId: id });
   return deleted;
 }
 
@@ -485,5 +488,6 @@ export async function patchProductLocalFirst(id: string, data: Partial<ProductIn
   });
   upsertCachedListItem<Product>(CACHE_KEY, product, 1000);
   upsertCachedListItem<Product>(INVENTORY_CACHE_KEY, product, 1000);
+  emitLocalDataChanged({ entityType: "product", action: "updated", entityId: product.id });
   return product;
 }

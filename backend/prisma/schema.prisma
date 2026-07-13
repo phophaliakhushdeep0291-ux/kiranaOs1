@@ -1138,6 +1138,10 @@ model PurchaseOrder {
   expectedOn         DateTime?
   expectedTotal      Float     @default(0)
   expectedTotalPaise BigInt?
+  vendorReference    String?
+  paymentTerms       String?
+  deliveryAddress    String?
+  termsAndConditions String?
   note               String?
   createdByUserId    String?
   sentAt             DateTime?
@@ -1156,6 +1160,7 @@ model PurchaseOrder {
   @@unique([shopId, orderNumber])
   @@index([shopId, locationId, status, createdAt])
   @@index([shopId, supplierId, createdAt])
+  @@index([shopId, supplierId, vendorReference])
 }
 
 model PurchaseOrderItem {

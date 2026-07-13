@@ -1,7 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, useListProducts, type Bill, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
+import { BillInputBillType, BillPaymentMode, getListBillsQueryKey, useConfirmBill, useListCustomers, type Bill, type Customer, type Product, type ProductSellingUnit } from "@/lib/api/client";
+import { useListProducts } from "@/features/products/queries";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { useAuth } from "@/features/auth/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +62,44 @@ function productStockQty(product: Product) {
 
 function productStockUnit(product: Product) {
   return product.baseUnit ?? product.stockUnit ?? product.unit ?? product.displayUnit ?? "unit";
+}
+
+function productIdentityKeys(product: Product): string[] {
+  return [
+    product.id,
+    (product as Product & { productId?: string }).productId,
+    (product as Product & { local_id?: string }).local_id,
+    (product as Product & { server_id?: string }).server_id,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function mergeProductRows(queryRows: Product[], localRows: Product[]): Product[] {
+  const merged: Product[] = [];
+  const keyToIndex = new Map<string, number>();
+
+  const upsert = (product: Product) => {
+    const keys = productIdentityKeys(product);
+    const existingIndex = keys.map((key) => keyToIndex.get(key)).find((index): index is number => index !== undefined);
+    if (existingIndex === undefined) {
+      const index = merged.push(product) - 1;
+      keys.forEach((key) => keyToIndex.set(key, index));
+      return;
+    }
+    merged[existingIndex] = { ...merged[existingIndex], ...product };
+    productIdentityKeys(merged[existingIndex]).forEach((key) => keyToIndex.set(key, existingIndex));
+  };
+
+  localRows.forEach(upsert);
+  queryRows.forEach(upsert);
+  return merged;
+}
+
+function productBelongsToActiveLocation(product: Product) {
+  const activeLocationId = getActiveLocationId();
+  if (!activeLocationId) return true;
+  const productLocationId = (product as Product & { inventoryLocationId?: string; locationId?: string }).inventoryLocationId
+    ?? (product as Product & { inventoryLocationId?: string; locationId?: string }).locationId;
+  return !productLocationId || productLocationId === activeLocationId;
 }
 
 function isStockTracked(product: Product) {
@@ -174,6 +213,7 @@ export default function Billing() {
   const [giftCardAmount, setGiftCardAmount] = useState(0);
   const [giftCardLoading, setGiftCardLoading] = useState(false);
   const [giftCardError, setGiftCardError] = useState<string | null>(null);
+  const [localProductRows, setLocalProductRows] = useState<Product[]>([]);
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const requestedBillType = useMemo<BillTypeSelection | null>(() => {
@@ -316,7 +356,25 @@ export default function Billing() {
   // Demo "sample" products (id starts with "demo_") are example data for the dashboard tour
   // only — they don't exist on the server, so a real bill that referenced them would land in
   // permanent sync CONFLICT ("Product not found: demo_product_…"). Keep them out of billing.
-  const allProducts = useMemo(() => (products.data ?? []).filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null && !String(product.id ?? "").startsWith("demo_")), [products.data]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadLocalProducts = async () => {
+      const rows = await offlineDB.getAll<Product>("products").catch(() => []);
+      if (!cancelled) setLocalProductRows(rows.filter(productBelongsToActiveLocation));
+    };
+    void loadLocalProducts();
+    window.addEventListener("kirana:local-data-changed", loadLocalProducts);
+    window.addEventListener("kirana:sync-queue-updated", loadLocalProducts);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("kirana:local-data-changed", loadLocalProducts);
+      window.removeEventListener("kirana:sync-queue-updated", loadLocalProducts);
+    };
+  }, []);
+
+  const productRows = useMemo(() => mergeProductRows(products.data ?? [], localProductRows), [products.data, localProductRows]);
+
+  const allProducts = useMemo(() => productRows.filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null && !String(product.id ?? "").startsWith("demo_")), [productRows]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();

@@ -689,7 +689,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Mobile topbar */}
-        <header className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b border-[#edf2f8] bg-white/98 px-4 pb-2 pt-[max(0.65rem,env(safe-area-inset-top))] shadow-[0_8px_22px_rgba(15,35,80,0.035)] backdrop-blur-xl lg:hidden">
+        <header data-app-mobile-topbar="true" className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b border-[#edf2f8] bg-white/98 px-4 pb-2 pt-[max(0.65rem,env(safe-area-inset-top))] shadow-[0_8px_22px_rgba(15,35,80,0.035)] backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-4">
               <DropdownMenu>
@@ -753,7 +753,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
 
         {/* Mobile bottom nav */}
-        <nav aria-label="Mobile navigation" className="mx-3 mb-3 mt-2 shrink-0 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_34px_rgba(15,35,80,0.14)] backdrop-blur-xl lg:hidden">
+        <nav data-app-mobile-bottom-nav="true" aria-label="Mobile navigation" className="mx-3 mb-3 mt-2 shrink-0 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_34px_rgba(15,35,80,0.14)] backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-5 items-center px-2.5">
             {MOBILE_NAV.slice(0, 2).map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);

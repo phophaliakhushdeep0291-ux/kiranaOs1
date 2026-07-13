@@ -78,7 +78,7 @@ export function useListProducts(
   return useQuery<ListProductsResponse, ApiClientError, ListProductsResponse, ListProductsQueryKey>({
     ...extra,
     queryKey: getListProductsQueryKey(params),
-    initialData: extra.initialData ?? cached,
+    initialData: extra.initialData ?? (cached.length > 0 ? cached : undefined),
     queryFn: async () => {
       const liveCached = readCachedProducts(params);
       if (liveCached.length === 0) {

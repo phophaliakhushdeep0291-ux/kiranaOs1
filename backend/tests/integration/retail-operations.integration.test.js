@@ -189,10 +189,18 @@ if (ctx.skip) {
         supplierId: supplier.id,
         supplierName: supplier.name,
         expectedOn: "2026-07-20",
+        vendorReference: "QUOTE-RW-42",
+        paymentTerms: "Net 15 days",
+        deliveryAddress: "Primary receiving bay, Pune",
+        termsAndConditions: "Quote this PO on the supplier invoice.",
         items: [{ productId: product.id, orderedBaseQty: 10, expectedRate: 18 }],
       }, { token: auth.accessToken, headers: { "x-location-id": primary.id } }), 201);
       assert.equal(order.status, "draft");
       assert.equal(order.expectedTotal, 180);
+      assert.equal(order.vendorReference, "QUOTE-RW-42");
+      assert.equal(order.paymentTerms, "Net 15 days");
+      assert.equal(order.deliveryAddress, "Primary receiving bay, Pune");
+      assert.equal(order.termsAndConditions, "Quote this PO on the supplier invoice.");
 
       const sent = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/send`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal(sent.status, "sent");

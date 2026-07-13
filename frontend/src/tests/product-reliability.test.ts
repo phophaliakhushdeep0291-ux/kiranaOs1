@@ -55,13 +55,14 @@ vi.mock("@/lib/offline/db", () => ({
 
 vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_reliability_${++mockState.idCounter}`),
+  emitLocalDataChanged: vi.fn(),
   removeCachedListItem: vi.fn(),
   upsertCachedListItem: vi.fn(),
   readInstantCache: vi.fn(() => []),
 }));
 
 import { offlineDB } from "@/lib/offline/db";
-import { removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
+import { emitLocalDataChanged, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { createProductLocalFirst, deleteProductLocalFirst, updateProductLocalFirst } from "@/features/products/local-actions";
 import {
   findDuplicateProductWarnings,
@@ -70,6 +71,7 @@ import {
 } from "@/features/products/product-reliability";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
+const mockedEmitLocalDataChanged = vi.mocked(emitLocalDataChanged);
 const mockedRemoveCachedListItem = vi.mocked(removeCachedListItem);
 const mockedUpsertCachedListItem = vi.mocked(upsertCachedListItem);
 
@@ -149,6 +151,7 @@ describe("product reliability", () => {
       expect.objectContaining({ operation_type: "CREATE_PRODUCT", entity_type: "product", entity_id: created.id }),
     ]));
     expect(mockedUpsertCachedListItem).toHaveBeenCalledWith("products", expect.objectContaining({ id: created.id }), 1000);
+    expect(mockedEmitLocalDataChanged).toHaveBeenCalledWith({ entityType: "product", action: "created", entityId: created.id });
   });
 
   it("product update works offline", async () => {
@@ -169,6 +172,7 @@ describe("product reliability", () => {
     expect(mockState.committed.sync_outbox).toEqual(expect.arrayContaining([
       expect.objectContaining({ operation_type: "UPDATE_PRODUCT", entity_id: "product_sugar" }),
     ]));
+    expect(mockedEmitLocalDataChanged).toHaveBeenCalledWith({ entityType: "product", action: "updated", entityId: "product_sugar" });
   });
 
   it("product delete is soft delete", async () => {
@@ -186,6 +190,7 @@ describe("product reliability", () => {
     expect(mockState.committed.sync_outbox).toEqual(expect.arrayContaining([
       expect.objectContaining({ operation_type: "DELETE_PRODUCT_PENDING", entity_id: "product_sugar" }),
     ]));
+    expect(mockedEmitLocalDataChanged).toHaveBeenCalledWith({ entityType: "product", action: "deleted", entityId: "product_sugar" });
   });
 
   it("alias suggestions merge without duplicates", () => {

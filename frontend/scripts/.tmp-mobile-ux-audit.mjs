@@ -304,9 +304,41 @@ async function main() {
       toastText: [...document.querySelectorAll('[role="status"], [data-radix-toast-title]')].map((node) => node.textContent?.trim()).filter(Boolean).join(' | '),
       runtimeErrors: window.__kiranaQaErrors || [],
     }))()`);
+    const productsDebugAfterCreate = await client.evaluate(`(async () => {
+      const { offlineDB } = await import('/src/lib/offline/db.ts');
+      const { getActiveLocationId } = await import('/src/features/stores/location-context.ts');
+      const { readInstantCache } = await import('/src/lib/offline/instant-cache.ts');
+      const locationId = getActiveLocationId();
+      const rows = await offlineDB.getAll('products');
+      return {
+        locationId,
+        dbCount: rows.length,
+        dbMatches: rows.filter((row) => String(row.name || '').includes(${JSON.stringify(productName)})).map((row) => ({ id: row.id, name: row.name, locationId: row.inventoryLocationId, sync: row.sync_status })),
+        plainCacheCount: readInstantCache('products', []).length,
+        scopedCacheCount: readInstantCache('products:' + (locationId || 'company'), []).length,
+        plainCacheMatches: readInstantCache('products', []).filter((row) => String(row.name || '').includes(${JSON.stringify(productName)})).map((row) => row.name),
+        scopedCacheMatches: readInstantCache('products:' + (locationId || 'company'), []).filter((row) => String(row.name || '').includes(${JSON.stringify(productName)})).map((row) => row.name),
+      };
+    })()`);
 
     await navigate(client, `${FRONTEND_URL}/billing`);
     await waitForPage(client, "Boolean(document.querySelector('[data-testid=\"input-product-search\"]'))");
+    const productsDebugOnBilling = await client.evaluate(`(async () => {
+      const { offlineDB } = await import('/src/lib/offline/db.ts');
+      const { getActiveLocationId } = await import('/src/features/stores/location-context.ts');
+      const { readInstantCache } = await import('/src/lib/offline/instant-cache.ts');
+      const locationId = getActiveLocationId();
+      const rows = await offlineDB.getAll('products');
+      return {
+        locationId,
+        dbCount: rows.length,
+        dbMatches: rows.filter((row) => String(row.name || '').includes(${JSON.stringify(productName)})).map((row) => ({ id: row.id, name: row.name, locationId: row.inventoryLocationId, sync: row.sync_status })),
+        plainCacheCount: readInstantCache('products', []).length,
+        scopedCacheCount: readInstantCache('products:' + (locationId || 'company'), []).length,
+        plainCacheMatches: readInstantCache('products', []).filter((row) => String(row.name || '').includes(${JSON.stringify(productName)})).map((row) => row.name),
+        scopedCacheMatches: readInstantCache('products:' + (locationId || 'company'), []).filter((row) => String(row.name || '').includes(${JSON.stringify(productName)})).map((row) => row.name),
+      };
+    })()`);
     await client.evaluate(`(() => {
       const input = document.querySelector('[data-testid="input-product-search"]');
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
@@ -334,6 +366,8 @@ async function main() {
       productPanelBottom,
       ownerPinOpen,
       productCreated,
+      productsDebugAfterCreate,
+      productsDebugOnBilling,
       billingSearch,
       clickedBillingCard,
       billingAfterAdd,

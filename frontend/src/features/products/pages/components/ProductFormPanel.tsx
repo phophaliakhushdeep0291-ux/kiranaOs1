@@ -107,6 +107,17 @@ export function ProductFormPanel({
     setExtraPack(EMPTY_EXTRA_PACK);
   }, [editing?.id, open]);
 
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.dataset.appMobileTaskOpen = "true";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      delete document.body.dataset.appMobileTaskOpen;
+    };
+  }, [open]);
+
   function addAlternatePack() {
     const size = Number(extraPack.packSizeValue);
     const price = Number(extraPack.price);
@@ -235,8 +246,9 @@ export function ProductFormPanel({
 
   return (
     <aside
+      data-mobile-task-panel="product-form"
       style={{ width }}
-      className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
+      className={`app-slide-panel fixed inset-y-0 right-0 top-0 z-[90] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l-0 border-[#e6ecf4] bg-white shadow-none transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:z-[80] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] lg:border-l lg:shadow-[-12px_0_40px_rgba(15,23,42,0.10)] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
       aria-label={editing ? "Edit product" : "Add new product"}
       aria-hidden={!open}

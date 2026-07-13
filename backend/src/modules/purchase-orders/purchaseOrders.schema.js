@@ -14,6 +14,10 @@ export const createPurchaseOrderSchema = z.object({
   supplierId: z.string().trim().min(1).optional(),
   supplierName: z.string().trim().min(2).max(120),
   expectedOn: date,
+  vendorReference: z.string().trim().max(100).optional(),
+  paymentTerms: z.string().trim().max(200).optional(),
+  deliveryAddress: z.string().trim().max(500).optional(),
+  termsAndConditions: z.string().trim().max(1000).optional(),
   note: z.string().trim().max(500).optional(),
   items: z.array(z.object({
     productId: z.string().trim().min(1),

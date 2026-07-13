@@ -21,10 +21,16 @@ export interface PurchaseOrder {
   status: PurchaseOrderStatus;
   expectedOn?: string | null;
   expectedTotal: number;
+  vendorReference?: string | null;
+  paymentTerms?: string | null;
+  deliveryAddress?: string | null;
+  termsAndConditions?: string | null;
+  note?: string | null;
   createdAt: string;
   items: PurchaseOrderItem[];
   receipts: Array<{ id: string; receiptNumber: string; totalAmount: number; createdAt: string }>;
   location: { id: string; name: string; code: string };
+  supplier?: { id: string; name: string; mobile?: string | null; address?: string | null } | null;
 }
 export interface ReorderSuggestion {
   productId: string;
