@@ -1254,6 +1254,10 @@ model PurchaseReturn {
   reason                String
   supplierReference     String?
   idempotencyKey        String?
+  status                String   @default("active")
+  cancelledAt           DateTime?
+  cancelledByUserId     String?
+  cancellationReason    String?
   createdByUserId       String?
   createdAt             DateTime @default(now())
 
@@ -1268,6 +1272,7 @@ model PurchaseReturn {
   @@index([shopId, locationId, createdAt])
   @@index([shopId, supplierId, createdAt])
   @@index([shopId, purchaseReceiptId, createdAt])
+  @@index([shopId, status, createdAt])
 }
 
 model PurchaseReturnItem {

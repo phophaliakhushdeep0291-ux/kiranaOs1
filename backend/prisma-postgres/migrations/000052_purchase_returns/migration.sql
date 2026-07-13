@@ -3,7 +3,8 @@ CREATE TABLE "PurchaseReturn" (
   "returnNumber" TEXT NOT NULL, "refundMode" TEXT NOT NULL DEFAULT 'supplier_credit', "totalAmount" DOUBLE PRECISION NOT NULL,
   "totalAmountPaise" BIGINT, "supplierCreditAmount" DOUBLE PRECISION NOT NULL DEFAULT 0, "supplierCreditAmountPaise" BIGINT,
   "refundAmount" DOUBLE PRECISION NOT NULL DEFAULT 0, "refundAmountPaise" BIGINT, "reason" TEXT NOT NULL, "supplierReference" TEXT,
-  "idempotencyKey" TEXT, "createdByUserId" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "PurchaseReturn_pkey" PRIMARY KEY ("id")
+  "idempotencyKey" TEXT, "status" TEXT NOT NULL DEFAULT 'active', "cancelledAt" TIMESTAMP(3), "cancelledByUserId" TEXT,
+  "cancellationReason" TEXT, "createdByUserId" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "PurchaseReturn_pkey" PRIMARY KEY ("id")
 );
 CREATE TABLE "PurchaseReturnItem" (
   "id" TEXT NOT NULL, "purchaseReturnId" TEXT NOT NULL, "purchaseReceiptItemId" TEXT NOT NULL, "productId" TEXT NOT NULL,
@@ -15,6 +16,7 @@ CREATE UNIQUE INDEX "PurchaseReturn_shopId_idempotencyKey_key" ON "PurchaseRetur
 CREATE INDEX "PurchaseReturn_shopId_locationId_createdAt_idx" ON "PurchaseReturn"("shopId", "locationId", "createdAt");
 CREATE INDEX "PurchaseReturn_shopId_supplierId_createdAt_idx" ON "PurchaseReturn"("shopId", "supplierId", "createdAt");
 CREATE INDEX "PurchaseReturn_shopId_purchaseReceiptId_createdAt_idx" ON "PurchaseReturn"("shopId", "purchaseReceiptId", "createdAt");
+CREATE INDEX "PurchaseReturn_shopId_status_createdAt_idx" ON "PurchaseReturn"("shopId", "status", "createdAt");
 CREATE UNIQUE INDEX "PurchaseReturnItem_purchaseReturnId_purchaseReceiptItemId_key" ON "PurchaseReturnItem"("purchaseReturnId", "purchaseReceiptItemId");
 CREATE INDEX "PurchaseReturnItem_productId_idx" ON "PurchaseReturnItem"("productId");
 ALTER TABLE "PurchaseReturn" ADD CONSTRAINT "PurchaseReturn_shopId_fkey" FOREIGN KEY ("shopId") REFERENCES "Shop"("id") ON DELETE CASCADE ON UPDATE CASCADE;

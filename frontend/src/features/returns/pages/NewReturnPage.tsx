@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { format } from "date-fns";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import {
   ArrowDownRight,
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Area, AreaChart, Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
+import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,17 +31,18 @@ import { PageShell, SyncBadge } from "@/components/shared";
 import { useListBills } from "@/features/bills/queries";
 import { useListCustomers } from "@/features/customers/queries";
 import { useListProducts } from "@/features/products/queries";
-import { listPurchaseReturns, type PurchaseReturn } from "@/features/purchases/purchase-orders-api";
+import { cancelPurchaseReturn, listPurchaseReturns, type PurchaseReturn } from "@/features/purchases/purchase-orders-api";
 import { ReturnDialog, type ReturnLineInput } from "@/features/returns/components/ReturnDialog";
 import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
 import { useOfflineStatus } from "@/features/sync";
 import { offlineDB } from "@/lib/offline/db";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import type { Bill, Product } from "@/types/api";
 
 type RecordLike = Record<string, unknown>;
 type ReturnTab = "sales" | "purchase";
-type ReturnStatus = "all" | "completed" | "pending";
+type ReturnStatus = "all" | "completed" | "pending" | "cancelled";
 type ReturnModeFilter = "all" | "cash" | "upi" | "bank" | "udhar" | "gift_card";
 
 interface ReturnRegisterData {
@@ -61,8 +63,9 @@ interface ReturnRow {
   quantity: number;
   amount: number;
   mode: "cash" | "upi" | "bank" | "udhar" | "gift_card" | "credit_note";
-  status: "completed" | "pending";
+  status: "completed" | "pending" | "cancelled";
   items: RecordLike[];
+  purchaseReturn?: PurchaseReturn;
 }
 
 const PANEL = "overflow-hidden rounded-[9px] border border-[#e2e9f3] bg-white shadow-[0_5px_18px_rgba(31,60,110,0.045)]";
@@ -73,6 +76,11 @@ const MODE_META = {
   udhar: { label: "Credit (Udhar)", color: "#7c4df1" },
   gift_card: { label: "Store Credit", color: "#0f9f78" },
   credit_note: { label: "Credit Note", color: "#f5a30a" },
+} as const;
+const RETURN_STATUS_META = {
+  completed: { label: "Completed", cls: "border-[#c9efd5] bg-[#eaf9ef] text-[#169447]" },
+  pending: { label: "Pending", cls: "border-[#ffdda8] bg-[#fff3e1] text-[#d77c00]" },
+  cancelled: { label: "Voided", cls: "border-[#d8dee8] bg-[#f1f4f8] text-[#64748b]" },
 } as const;
 
 function sellPrice(product: Product & RecordLike): number {
@@ -179,6 +187,8 @@ function previousRange(from: string, to: string) {
 }
 
 export default function NewReturnPage() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [location, navigate] = useLocation();
   const { pendingCount, failedCount } = useOfflineStatus();
   const billsQuery = useListBills({ limit: 1000 }, { query: { staleTime: 60_000 } });
@@ -197,6 +207,18 @@ export default function NewReturnPage() {
   const [lines, setLines] = useState<ReturnLineInput[]>([]);
   const [productId, setProductId] = useState("");
   const [customerId, setCustomerId] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<PurchaseReturn | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const cancelMutation = useMutation({
+    mutationFn: ({ ownerPin, reason }: { ownerPin: string; reason: string }) => cancelPurchaseReturn(cancelTarget!.id, reason, ownerPin),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["purchase-returns"] });
+      setCancelTarget(null);
+      setCancelError(null);
+      toast({ title: `${result.returnNumber} voided`, description: "Stock, batch quantities and supplier credit were restored with an audit trail." });
+    },
+    onError: (cause) => setCancelError(cause instanceof Error ? cause.message : "Could not void supplier return."),
+  });
 
   useEffect(() => {
     const refresh = () => void registerQuery.refetch();
@@ -263,8 +285,9 @@ export default function NewReturnPage() {
       quantity: entry.items.reduce((sum, item) => sum + money(item.quantityBaseQty), 0),
       amount: money(entry.totalAmount),
       mode: supplierRefundMode(entry.refundMode),
-      status: "completed",
+      status: entry.status === "cancelled" ? "cancelled" : "completed",
       items: entry.items.map((item) => ({ ...item, name: item.product?.name || "Returned item", category: item.product?.category || "General" })),
+      purchaseReturn: entry,
     }));
     return [...salesRows, ...supplierRows].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [allBills, purchaseReturnsQuery.data, registerQuery.data?.items]);
@@ -286,12 +309,13 @@ export default function NewReturnPage() {
   const metrics = useMemo(() => calculateMetrics(selectedRows), [selectedRows]);
   const previousMetrics = useMemo(() => calculateMetrics(previousRows), [previousRows]);
   const spark = useMemo(() => buildSparkRows(selectedRows, from, to), [selectedRows, from, to]);
-  const topItems = useMemo(() => buildTopItems(selectedRows), [selectedRows]);
+  const activeRows = useMemo(() => selectedRows.filter((row) => row.status !== "cancelled"), [selectedRows]);
+  const topItems = useMemo(() => buildTopItems(activeRows), [activeRows]);
   const modeSummary = useMemo(() => {
     return (["cash", "udhar", "gift_card", "upi", "bank", "credit_note"] as const)
-      .map((mode) => ({ mode, value: selectedRows.filter((row) => row.mode === mode).reduce((sum, row) => sum + row.amount, 0), ...MODE_META[mode] }))
+      .map((mode) => ({ mode, value: activeRows.filter((row) => row.mode === mode).reduce((sum, row) => sum + row.amount, 0), ...MODE_META[mode] }))
       .filter((item) => item.value > 0);
-  }, [selectedRows]);
+  }, [activeRows]);
 
   function applyPreset(days: number) {
     setFrom(daysAgo(days));
@@ -351,7 +375,7 @@ export default function NewReturnPage() {
           <Popover>
             <PopoverTrigger asChild><Button variant="outline" className="h-10 gap-2 rounded-[8px] border-[#dfe7f2] px-4 text-[12px] font-semibold"><Filter size={14} />Filters</Button></PopoverTrigger>
             <PopoverContent align="end" className="w-56 space-y-3 rounded-[8px] p-3">
-              <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">Status</Label><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as ReturnStatus)} className="mt-1 h-9 w-full rounded-[6px] border border-[#dfe7f2] bg-white px-2 text-xs"><option value="all">All status</option><option value="completed">Completed</option><option value="pending">Pending sync</option></select></div>
+              <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">Status</Label><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as ReturnStatus)} className="mt-1 h-9 w-full rounded-[6px] border border-[#dfe7f2] bg-white px-2 text-xs"><option value="all">All status</option><option value="completed">Completed</option><option value="pending">Pending sync</option><option value="cancelled">Voided</option></select></div>
               <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">Refund mode</Label><select value={modeFilter} onChange={(event) => setModeFilter(event.target.value as ReturnModeFilter)} className="mt-1 h-9 w-full rounded-[6px] border border-[#dfe7f2] bg-white px-2 text-xs"><option value="all">All modes</option><option value="cash">Cash</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="udhar">Credit (Udhar)</option><option value="gift_card">Store Credit</option></select></div>
             </PopoverContent>
           </Popover>
@@ -375,7 +399,7 @@ export default function NewReturnPage() {
         <div className="relative w-full lg:w-[320px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tab === "purchase" ? "Search return, GRN or supplier..." : "Search invoice, customer or mobile..."} className="h-10 rounded-[8px] border-[#dfe7f2] pl-9 text-xs" /></div>
       </section>
 
-      <ReturnOrdersTable rows={filteredRows} loading={registerQuery.isLoading || billsQuery.isLoading || (tab === "purchase" && purchaseReturnsQuery.isLoading)} />
+      <ReturnOrdersTable rows={filteredRows} loading={registerQuery.isLoading || billsQuery.isLoading || (tab === "purchase" && purchaseReturnsQuery.isLoading)} onCancelPurchaseReturn={(entry) => { setCancelError(null); setCancelTarget(entry); }} />
 
       <section className="grid gap-4 xl:grid-cols-[0.82fr_1fr]">
         <TopReturnedItems rows={topItems} />
@@ -400,17 +424,19 @@ export default function NewReturnPage() {
       </Dialog>
 
       <ReturnDialog open={refundOpen} onOpenChange={setRefundOpen} lines={lines} customerId={selectedCustomer?.id} customerName={selectedCustomer?.name} gstMode="inclusive" onDone={() => { setLines([]); setCustomerId(""); void registerQuery.refetch(); }} />
+      <OwnerPinModal open={Boolean(cancelTarget)} title={`Void ${cancelTarget?.returnNumber ?? "supplier return"}`} description="This restores the exact branch stock and batches, reverses the supplier credit effect, and retains both entries in the audit trail." confirmLabel="Void supplier return" reasonRequired reasonLabel="Reason for void" loading={cancelMutation.isPending} error={cancelError} onCancel={() => { if (!cancelMutation.isPending) { setCancelTarget(null); setCancelError(null); } }} onConfirm={(payload) => cancelMutation.mutate(payload)} />
     </PageShell>
   );
 }
 
 function calculateMetrics(rows: ReturnRow[]) {
+  const active = rows.filter((row) => row.status !== "cancelled");
   return {
-    total: rows.reduce((sum, row) => sum + row.amount, 0),
-    orders: rows.length,
-    items: rows.reduce((sum, row) => sum + row.quantity, 0),
-    refund: rows.filter((row) => row.mode === "cash" || row.mode === "upi" || row.mode === "bank").reduce((sum, row) => sum + row.amount, 0),
-    credit: rows.filter((row) => row.mode === "udhar").reduce((sum, row) => sum + row.amount, 0),
+    total: active.reduce((sum, row) => sum + row.amount, 0),
+    orders: active.length,
+    items: active.reduce((sum, row) => sum + row.quantity, 0),
+    refund: active.filter((row) => row.mode === "cash" || row.mode === "upi" || row.mode === "bank").reduce((sum, row) => sum + row.amount, 0),
+    credit: active.filter((row) => row.mode === "udhar" || row.mode === "credit_note").reduce((sum, row) => sum + row.amount, 0),
   };
 }
 
@@ -456,8 +482,8 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
   return <button type="button" onClick={onClick} className={cn("inline-flex h-10 min-w-[160px] items-center justify-center gap-2 rounded-[8px] border px-4 text-[11px] font-bold transition-colors", active ? "border-[#075fff] bg-[#f4f7ff] text-[#075fff] shadow-[0_4px_12px_rgba(7,95,255,0.06)]" : "border-[#dfe7f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{icon}{children}</button>;
 }
 
-function ReturnOrdersTable({ rows, loading }: { rows: ReturnRow[]; loading: boolean }) {
-  return <section className={PANEL}><header className="flex h-12 items-center px-4"><h2 className="text-[14px] font-extrabold text-[#13254a]">Return Orders</h2></header><div className="divide-y divide-[#e8edf4] md:hidden">{loading ? <div className="py-12 text-center text-[#8290a8]">Loading returns...</div> : rows.length === 0 ? <div className="px-4 py-12 text-center"><RotateCcw className="mx-auto mb-2 text-[#9aa8bc]" size={22} /><p className="font-bold text-[#314563]">No returns in this period</p><p className="mt-1 text-[#8290a8]">Record a new return or adjust the filters.</p></div> : rows.slice(0, 8).map((row) => { const mode = MODE_META[row.mode]; return <Link key={row.bill.id} href={returnHref(row)} className="grid grid-cols-[38px_1fr_auto] items-center gap-3 px-4 py-4"><span className={cn("grid h-9 w-9 place-items-center rounded-[10px]", row.type === "sales" ? "bg-[#edf4ff] text-[#1768f5]" : "bg-[#f5efff] text-[#8043e9]")}><RotateCcw size={16} /></span><span className="min-w-0"><span className="block truncate text-[13px] font-extrabold text-[#13254a]">{row.id}</span><span className="mt-1 block truncate text-[11px] text-[#52617c]">{row.customer} • {row.createdAt ? format(new Date(row.createdAt), "dd MMM, hh:mm a") : "No date"}</span><span className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#405273]"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} />{mode.label}</span></span><span className="text-right"><span className="block text-[14px] font-black text-[#102347]">{inr(row.amount)}</span><span className={cn("mt-1 inline-block rounded-[7px] border px-2 py-1 text-[10px] font-bold", row.status === "completed" ? "border-[#c9efd5] bg-[#eaf9ef] text-[#169447]" : "border-[#ffdda8] bg-[#fff3e1] text-[#d77c00]")}>{row.status === "completed" ? "Completed" : "Pending"}</span></span></Link>; })}</div><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[1040px] border-collapse text-[10px]"><thead><tr className="border-y border-[#e5ebf3] bg-[#f7f9fc] text-[#52617c]">{["Return ID", "Order Type", "Reference", "Customer", "Date", "Items", "Return Amount", "Payment Mode", "Status", "Action"].map((header) => <th key={header} className="px-4 py-2.5 text-left font-bold">{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{loading ? <tr><td colSpan={10} className="h-32 text-center text-[#8290a8]">Loading returns...</td></tr> : rows.length === 0 ? <tr><td colSpan={10} className="h-36 text-center"><RotateCcw className="mx-auto mb-2 text-[#9aa8bc]" size={22} /><p className="font-bold text-[#314563]">No returns in this period</p><p className="mt-1 text-[#8290a8]">Record a new return or adjust the filters.</p></td></tr> : rows.slice(0, 10).map((row) => { const mode = MODE_META[row.mode]; return <tr key={row.bill.id} className="text-[#24385f] hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-4 py-2.5 font-bold">{row.id}</td><td className="px-4 py-2.5"><span className={cn("rounded-[5px] border px-2 py-1 font-bold", row.type === "sales" ? "border-[#cadcff] bg-[#edf4ff] text-[#1768f5]" : "border-[#dfcffd] bg-[#f5efff] text-[#8043e9]")}>{row.type === "sales" ? "Sales Return" : "Purchase Return"}</span></td><td className="px-4 py-2.5 font-semibold">{row.reference}</td><td className="px-4 py-2.5"><p className="font-bold">{row.customer}</p>{row.mobile && <p className="mt-0.5 text-[#73829a]">{row.mobile}</p>}</td><td className="whitespace-nowrap px-4 py-2.5"><p className="font-semibold">{row.createdAt ? format(new Date(row.createdAt), "dd MMM yyyy") : "—"}</p>{row.createdAt && <p className="mt-0.5 text-[#73829a]">{format(new Date(row.createdAt), "hh:mm a")}</p>}</td><td className="px-4 py-2.5 font-semibold">{row.quantity || row.itemCount}</td><td className="px-4 py-2.5 font-black text-[#102347]">{inr(row.amount)}</td><td className="whitespace-nowrap px-4 py-2.5"><span className="inline-flex items-center gap-2 font-semibold"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} />{mode.label}</span></td><td className="px-4 py-2.5"><span className={cn("rounded-[5px] border px-2 py-1 font-bold", row.status === "completed" ? "border-[#c9efd5] bg-[#eaf9ef] text-[#169447]" : "border-[#ffdda8] bg-[#fff3e1] text-[#d77c00]")}>{row.status === "completed" ? "Completed" : "Pending"}</span></td><td className="px-4 py-2.5"><Link href={returnHref(row)} title="View return"><span className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] text-[#075fff] hover:bg-[#edf4ff]"><Eye size={14} /></span></Link></td></tr>; })}</tbody></table></div>{rows.length > 0 && <Link href={rows[0]?.type === "purchase" ? "/purchase-bills" : "/bills"} className="flex h-10 items-center justify-center border-t border-[#e8edf4] text-[10px] font-bold text-[#075fff] hover:bg-[#f7faff]">View all returns</Link>}</section>;
+function ReturnOrdersTable({ rows, loading, onCancelPurchaseReturn }: { rows: ReturnRow[]; loading: boolean; onCancelPurchaseReturn: (entry: PurchaseReturn) => void }) {
+  return <section className={PANEL}><header className="flex h-12 items-center px-4"><h2 className="text-[14px] font-extrabold text-[#13254a]">Return Orders</h2></header><div className="divide-y divide-[#e8edf4] md:hidden">{loading ? <div className="py-12 text-center text-[#8290a8]">Loading returns...</div> : rows.length === 0 ? <div className="px-4 py-12 text-center"><RotateCcw className="mx-auto mb-2 text-[#9aa8bc]" size={22} /><p className="font-bold text-[#314563]">No returns in this period</p><p className="mt-1 text-[#8290a8]">Record a new return or adjust the filters.</p></div> : rows.slice(0, 8).map((row) => { const mode = MODE_META[row.mode]; const status = RETURN_STATUS_META[row.status]; return <Link key={row.bill.id} href={returnHref(row)} className="grid grid-cols-[38px_1fr_auto] items-center gap-3 px-4 py-4"><span className={cn("grid h-9 w-9 place-items-center rounded-[10px]", row.type === "sales" ? "bg-[#edf4ff] text-[#1768f5]" : "bg-[#f5efff] text-[#8043e9]")}><RotateCcw size={16} /></span><span className="min-w-0"><span className="block truncate text-[13px] font-extrabold text-[#13254a]">{row.id}</span><span className="mt-1 block truncate text-[11px] text-[#52617c]">{row.customer} • {row.createdAt ? format(new Date(row.createdAt), "dd MMM, hh:mm a") : "No date"}</span><span className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#405273]"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} />{mode.label}</span></span><span className="text-right"><span className="block text-[14px] font-black text-[#102347]">{inr(row.amount)}</span><span className={cn("mt-1 inline-block rounded-[7px] border px-2 py-1 text-[10px] font-bold", status.cls)}>{status.label}</span></span></Link>; })}</div><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[1040px] border-collapse text-[10px]"><thead><tr className="border-y border-[#e5ebf3] bg-[#f7f9fc] text-[#52617c]">{["Return ID", "Order Type", "Reference", "Customer", "Date", "Items", "Return Amount", "Payment Mode", "Status", "Action"].map((header) => <th key={header} className="px-4 py-2.5 text-left font-bold">{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{loading ? <tr><td colSpan={10} className="h-32 text-center text-[#8290a8]">Loading returns...</td></tr> : rows.length === 0 ? <tr><td colSpan={10} className="h-36 text-center"><RotateCcw className="mx-auto mb-2 text-[#9aa8bc]" size={22} /><p className="font-bold text-[#314563]">No returns in this period</p><p className="mt-1 text-[#8290a8]">Record a new return or adjust the filters.</p></td></tr> : rows.slice(0, 10).map((row) => { const mode = MODE_META[row.mode]; const status = RETURN_STATUS_META[row.status]; return <tr key={row.bill.id} className={cn("text-[#24385f] hover:bg-[#fbfcfe]", row.status === "cancelled" && "opacity-70")}><td className="whitespace-nowrap px-4 py-2.5 font-bold">{row.id}</td><td className="px-4 py-2.5"><span className={cn("rounded-[5px] border px-2 py-1 font-bold", row.type === "sales" ? "border-[#cadcff] bg-[#edf4ff] text-[#1768f5]" : "border-[#dfcffd] bg-[#f5efff] text-[#8043e9]")}>{row.type === "sales" ? "Sales Return" : "Purchase Return"}</span></td><td className="px-4 py-2.5 font-semibold">{row.reference}</td><td className="px-4 py-2.5"><p className="font-bold">{row.customer}</p>{row.mobile && <p className="mt-0.5 text-[#73829a]">{row.mobile}</p>}</td><td className="whitespace-nowrap px-4 py-2.5"><p className="font-semibold">{row.createdAt ? format(new Date(row.createdAt), "dd MMM yyyy") : "—"}</p>{row.createdAt && <p className="mt-0.5 text-[#73829a]">{format(new Date(row.createdAt), "hh:mm a")}</p>}</td><td className="px-4 py-2.5 font-semibold">{row.quantity || row.itemCount}</td><td className="px-4 py-2.5 font-black text-[#102347]">{inr(row.amount)}</td><td className="whitespace-nowrap px-4 py-2.5"><span className="inline-flex items-center gap-2 font-semibold"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} />{mode.label}</span></td><td className="px-4 py-2.5"><span className={cn("rounded-[5px] border px-2 py-1 font-bold", status.cls)}>{status.label}</span></td><td className="px-4 py-2.5"><span className="flex gap-1"><Link href={returnHref(row)} title="View return"><span className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] text-[#075fff] hover:bg-[#edf4ff]"><Eye size={14} /></span></Link>{row.type === "purchase" && row.status === "completed" && row.purchaseReturn ? <button type="button" title="Void supplier return" onClick={() => onCancelPurchaseReturn(row.purchaseReturn!)} className="grid h-8 w-8 place-items-center rounded-[7px] border border-rose-200 text-rose-600 hover:bg-rose-50"><Trash2 size={14} /></button> : null}</span></td></tr>; })}</tbody></table></div>{rows.length > 0 && <Link href={rows[0]?.type === "purchase" ? "/purchase-bills" : "/bills"} className="flex h-10 items-center justify-center border-t border-[#e8edf4] text-[10px] font-bold text-[#075fff] hover:bg-[#f7faff]">View all returns</Link>}</section>;
 }
 
 function TopReturnedItems({ rows }: { rows: Array<{ name: string; category: string; quantity: number; amount: number }> }) {

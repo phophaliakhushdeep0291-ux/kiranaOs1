@@ -2,6 +2,7 @@ import { z } from "zod";
 import { quantityAmount } from "../../utils/validationSchemas.js";
 
 export const listPurchaseReturnsSchema = z.object({ limit: z.coerce.number().int().min(1).max(200).default(100), locationId: z.string().min(1).optional() });
+export const cancelPurchaseReturnSchema = z.object({ reason: z.string().trim().min(3).max(500) });
 export const createPurchaseReturnSchema = z.object({
   purchaseReceiptId: z.string().min(1),
   refundMode: z.enum(["supplier_credit", "cash", "bank"]).default("supplier_credit"),

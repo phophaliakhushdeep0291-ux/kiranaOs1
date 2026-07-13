@@ -287,6 +287,18 @@ if (ctx.skip) {
         items: [{ purchaseReceiptItemId: completed.receipt.items[0].id, quantityBaseQty: 5 }],
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }), 409);
       assert.equal(duplicateSupplierReturn.code, "PURCHASE_RETURN_EXCEEDS_RECEIPT");
+      const cancelledSupplierReturn = assertSuccess(await ctx.post(`/api/purchase-returns/${supplierReturn.id}/cancel`, {
+        reason: "Wrong supplier shipment selected",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }));
+      assert.equal(cancelledSupplierReturn.status, "cancelled");
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 12, "void must restore branch and global stock");
+      const afterSupplierReturnVoidLots = await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } });
+      assert.deepEqual(afterSupplierReturnVoidLots.map((lot) => lot.availableBaseQty), [3, 6], "void must restore the exact supplier-return batch allocation");
+      const replayedVoid = assertSuccess(await ctx.post(`/api/purchase-returns/${supplierReturn.id}/cancel`, {
+        reason: "Wrong supplier shipment selected",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }));
+      assert.equal(replayedVoid.idempotentReplay, true);
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 12, "void retry must not restore stock twice");
 
       const cannotCancel = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/cancel`, { reason: "Too late" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
       assert.equal(cannotCancel.code, "PURCHASE_ORDER_NOT_CANCELLABLE");

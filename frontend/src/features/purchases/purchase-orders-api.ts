@@ -50,6 +50,9 @@ export interface PurchaseReturn {
   supplierCreditAmount: number;
   refundAmount: number;
   refundMode: string;
+  status: "active" | "cancelled";
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
   reason: string;
   supplierReference?: string | null;
   createdAt: string;
@@ -80,3 +83,4 @@ export const receivePurchaseOrder = (id: string, data: unknown, ownerPin: string
 export const cancelPurchaseOrder = (id: string, reason: string, ownerPin: string) => apiRequest<PurchaseOrder>(`/purchase-orders/${id}/cancel`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
 export const listPurchaseReturns = () => apiRequest<PurchaseReturn[]>("/purchase-returns?limit=200");
 export const createPurchaseReturn = (data: unknown, ownerPin: string) => apiRequest<PurchaseReturn>("/purchase-returns", { method: "POST", ownerPin, body: JSON.stringify(data) });
+export const cancelPurchaseReturn = (id: string, reason: string, ownerPin: string) => apiRequest<PurchaseReturn>(`/purchase-returns/${id}/cancel`, { method: "POST", ownerPin, body: JSON.stringify({ reason }) });

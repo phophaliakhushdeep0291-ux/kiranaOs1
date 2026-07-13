@@ -1023,7 +1023,8 @@
     { "method": "PATCH", "path": "/api/inventory-lots/products/:productId/tracking", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "batch_expiry", "purpose": "enable product batch tracking" },
     { "method": "POST", "path": "/api/inventory-lots/:id/status", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "batch_expiry", "purpose": "quarantine, recall, or release an inventory lot" },
     { "method": "GET", "path": "/api/purchase-returns", "authRequired": true, "deviceRequired": true, "feature": "purchase_entry", "purpose": "list branch supplier returns and credits" },
-    { "method": "POST", "path": "/api/purchase-returns", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "return received stock and settle supplier due or refund" }
+    { "method": "POST", "path": "/api/purchase-returns", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "return received stock and settle supplier due or refund" },
+    { "method": "POST", "path": "/api/purchase-returns/:id/cancel", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "void supplier return and restore exact stock, batches, and supplier due" }
   ],
   "latestPatch": "retail parity: purchase orders, stock counts, store value, returns, and FEFO batch-expiry control"
 }

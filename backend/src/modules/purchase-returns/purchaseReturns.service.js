@@ -3,7 +3,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, multiplyMoney, round2 } from "../../utils/money.js";
 import { rateUnitToBase } from "../../utils/units.js";
-import { decrementLocationInventory } from "../stores/location-context.service.js";
+import { decrementLocationInventory, incrementLocationInventory } from "../stores/location-context.service.js";
 
 const include = { location: true, supplier: true, purchaseReceipt: true, items: { include: { product: true, purchaseReceiptItem: true } } };
 const ref = () => `PR-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
@@ -26,12 +26,12 @@ async function removeReturnedLots(tx, { shopId, locationId, product, receiptItem
     if (changed.count !== 1) throw new AppError("Batch stock changed while returning; retry", 409, "CONCURRENT_BATCH_STOCK_CHANGE");
     const updated = await tx.inventoryLot.findUnique({ where: { id: lot.id } });
     if (updated.availableBaseQty <= 0.000001) await tx.inventoryLot.update({ where: { id: lot.id }, data: { availableBaseQty: 0, status: "depleted" } });
-    allocations.push({ inventoryLotId: lot.id, batchNumber: lot.batchNumber, quantityBaseQty: taken }); remaining = round2(remaining - taken);
+    allocations.push({ inventoryLotId: lot.id, batchNumber: lot.batchNumber, quantityBaseQty: taken, statusBefore: lot.status }); remaining = round2(remaining - taken);
   }
   return allocations;
 }
 
-export async function createPurchaseReturn(shopId, data, userId) {
+export async function createPurchaseReturn(shopId, data, userId, requestedLocationId) {
   const replay = async () => data.idempotencyKey
     ? db.purchaseReturn.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include })
     : null;
@@ -39,14 +39,15 @@ export async function createPurchaseReturn(shopId, data, userId) {
   if (existing) return { ...existing, idempotentReplay: true };
   try {
     const created = await db.$transaction(async (tx) => {
-    const receipt = await tx.purchaseReceipt.findFirst({ where: { id: data.purchaseReceiptId, shopId }, include: { location: true, supplier: true, items: { include: { product: true, purchaseOrderItem: true, returnItems: true } } } });
+    const receipt = await tx.purchaseReceipt.findFirst({ where: { id: data.purchaseReceiptId, shopId }, include: { location: true, supplier: true, items: { include: { product: true, purchaseOrderItem: true, returnItems: { include: { purchaseReturn: true } } } } } });
     if (!receipt) throw new AppError("Purchase receipt not found", 404, "PURCHASE_RECEIPT_NOT_FOUND");
+    if (requestedLocationId && receipt.locationId !== requestedLocationId) throw new AppError("Purchase receipt belongs to another branch", 403, "LOCATION_ACCESS_DENIED");
     if (!receipt.location.active) throw new AppError("Receipt branch is inactive", 409, "STORE_LOCATION_UNAVAILABLE");
     const byId = new Map(receipt.items.map((item) => [item.id, item]));
     const lines = data.items.map((input) => {
       const item = byId.get(input.purchaseReceiptItemId);
       if (!item) throw new AppError("Return line is not part of this receipt", 422, "PURCHASE_RETURN_ITEM_INVALID");
-      const alreadyReturned = round2(item.returnItems.reduce((sum, row) => sum + row.quantityBaseQty, 0));
+      const alreadyReturned = round2(item.returnItems.filter((row) => row.purchaseReturn.status !== "cancelled").reduce((sum, row) => sum + row.quantityBaseQty, 0));
       const remaining = round2(item.quantityBaseQty - alreadyReturned);
       if (input.quantityBaseQty > remaining + 0.000001) throw new AppError(`${item.product.name} has only ${remaining} ${item.product.baseUnit} returnable`, 409, "PURCHASE_RETURN_EXCEEDS_RECEIPT");
       const factor = rateUnitToBase(item.purchaseOrderItem.rateUnit, item.purchaseOrderItem.baseUnit);
@@ -77,4 +78,57 @@ export async function createPurchaseReturn(shopId, data, userId) {
     }
     throw error;
   }
+}
+
+export async function cancelPurchaseReturn(shopId, id, reason, userId, requestedLocationId) {
+  return db.$transaction(async (tx) => {
+    const purchaseReturn = await tx.purchaseReturn.findFirst({
+      where: { id, shopId },
+      include: { location: true, supplier: true, purchaseReceipt: true, items: { include: { product: true, purchaseReceiptItem: true } } },
+    });
+    if (!purchaseReturn) throw new AppError("Purchase return not found", 404, "PURCHASE_RETURN_NOT_FOUND");
+    if (requestedLocationId && purchaseReturn.locationId !== requestedLocationId) throw new AppError("Purchase return belongs to another branch", 403, "LOCATION_ACCESS_DENIED");
+    if (purchaseReturn.status === "cancelled") return { ...purchaseReturn, idempotentReplay: true };
+
+    for (const item of purchaseReturn.items) {
+      const stock = await incrementLocationInventory(tx, {
+        shopId,
+        location: purchaseReturn.location,
+        product: item.product,
+        quantityBase: item.quantityBaseQty,
+      });
+      const allocations = JSON.parse(item.lotAllocationsJson || "[]");
+      for (const allocation of allocations) {
+        const lot = await tx.inventoryLot.findFirst({ where: { id: allocation.inventoryLotId, shopId, locationId: purchaseReturn.locationId, productId: item.productId } });
+        if (!lot) throw new AppError("The original inventory batch no longer exists", 409, "PURCHASE_RETURN_LOT_MISSING");
+        await tx.inventoryLot.update({
+          where: { id: lot.id },
+          data: { availableBaseQty: { increment: Number(allocation.quantityBaseQty) }, status: lot.status === "depleted" ? (allocation.statusBefore || "active") : lot.status },
+        });
+      }
+      await tx.stockLedger.create({
+        data: {
+          shopId,
+          locationId: purchaseReturn.locationId,
+          productId: item.productId,
+          productName: item.product.name,
+          action: "purchase_return_cancel",
+          changeBaseQty: item.quantityBaseQty,
+          oldStockBaseQty: stock.oldStock,
+          newStockBaseQty: stock.newStock,
+          purchaseBillAmount: item.lineAmount,
+          ...moneyShadows({ purchaseBillAmount: item.lineAmount }),
+          invoiceNumber: purchaseReturn.purchaseReceipt.supplierInvoiceNumber || purchaseReturn.purchaseReceipt.receiptNumber,
+          supplierName: purchaseReturn.supplier?.name || null,
+          sourceType: "purchase_return_cancel",
+          sourceId: purchaseReturn.id,
+          note: `Cancelled purchase return ${purchaseReturn.returnNumber}: ${reason}`,
+        },
+      });
+    }
+    const restoredDue = round2(Math.min(Number(purchaseReturn.purchaseReceipt.totalAmount), Number(purchaseReturn.purchaseReceipt.dueAmount || 0) + Number(purchaseReturn.supplierCreditAmount || 0)));
+    await tx.purchaseReceipt.update({ where: { id: purchaseReturn.purchaseReceiptId }, data: { dueAmount: restoredDue, ...moneyShadows({ dueAmount: restoredDue }) } });
+    const cancelled = await tx.purchaseReturn.update({ where: { id: purchaseReturn.id }, data: { status: "cancelled", cancelledAt: new Date(), cancelledByUserId: userId || null, cancellationReason: reason } });
+    return { ...cancelled, location: purchaseReturn.location, supplier: purchaseReturn.supplier, purchaseReceipt: purchaseReturn.purchaseReceipt, items: purchaseReturn.items, idempotentReplay: false };
+  });
 }
