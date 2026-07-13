@@ -20,6 +20,17 @@ function log(payload) {
   console.log(JSON.stringify(redactSensitive(payload)));
 }
 
+function isMissingObjectError(error) {
+  const statusCode = error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status;
+  return (
+    error?.code === "ENOENT" ||
+    error?.code === "NoSuchKey" ||
+    error?.name === "NoSuchKey" ||
+    error?.name === "NotFound" ||
+    statusCode === 404
+  );
+}
+
 async function main() {
   if (env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_STORAGE_VERIFY !== "true") {
     throw new Error("Refusing production storage verification unless ALLOW_PRODUCTION_STORAGE_VERIFY=true");
@@ -72,6 +83,12 @@ async function main() {
     throw new Error("Object still readable after delete");
   } catch (error) {
     if (error.message === "Object still readable after delete") throw error;
+    if (!isMissingObjectError(error)) {
+      const verificationError = new Error(`Could not verify object deletion: ${error.message}`);
+      verificationError.code = "STORAGE_DELETE_VERIFICATION_FAILED";
+      verificationError.cause = error;
+      throw verificationError;
+    }
     log({ type: "storage_verify_cleanup_confirmed", key, deleted: true, missingAfterDelete: true });
   }
 

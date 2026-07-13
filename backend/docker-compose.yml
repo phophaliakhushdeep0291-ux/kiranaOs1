@@ -44,6 +44,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-kiranaos}:${POSTGRES_PASSWORD:-change_me_strong_password}@postgres:5432/${POSTGRES_DB:-kiranaos_prod}?schema=public
       REDIS_URL: redis://redis:6379
+      QUEUES_ENABLED: "true"
     ports:
       - "3000:3000"
     healthcheck:

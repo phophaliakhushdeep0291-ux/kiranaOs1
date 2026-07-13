@@ -1276,13 +1276,14 @@ export default function Billing() {
       />
       </div>
 
-      {/* Sticky mobile pay bar — keeps the running total + Save reachable one-thumb
+      {/* Sticky mobile checkout bar — keeps the running total and the single next
+          action reachable one-thumb without competing with the product browser.
           without scrolling to the bottom of the summary. Desktop shows the full
           summary panel always, so this is mobile-only. Sits above the bottom nav. */}
       {cart.length > 0 && (
         <div
           className="fixed inset-x-0 z-40 border-t border-[#e6ecf4] bg-white px-3 py-2.5 shadow-[0_-6px_22px_rgba(15,35,80,0.10)] lg:hidden"
-          style={{ bottom: "var(--app-mobile-nav-height, 0px)" }}
+          style={{ bottom: "calc(var(--app-mobile-nav-height, 0px) + 1.5rem + env(safe-area-inset-bottom))" }}
         >
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
@@ -1304,8 +1305,8 @@ export default function Billing() {
               {confirmBill.isPending
                 ? "Saving…"
                 : billType === BillInputBillType.estimate
-                  ? "Save Estimate"
-                  : "Save Bill"}
+                  ? `Review estimate · ₹${grandTotal.toLocaleString("en-IN")}`
+                  : `Collect ₹${grandTotal.toLocaleString("en-IN")}`}
             </button>
           </div>
         </div>

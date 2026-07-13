@@ -644,9 +644,11 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* Mobile bottom nav */}
         <nav aria-label="Mobile navigation" className="fixed inset-x-3 bottom-3 z-50 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_34px_rgba(15,35,80,0.14)] backdrop-blur-xl lg:hidden">
-          <Link href="/billing" aria-label="Create new bill" className="absolute left-1/2 top-0 grid h-[62px] w-[62px] -translate-x-1/2 -translate-y-6 place-items-center rounded-full bg-[#075fff] text-white shadow-[0_15px_34px_rgba(7,95,255,0.36)] ring-8 ring-white transition-transform active:scale-95">
-            <Plus size={31} strokeWidth={2} aria-hidden="true" />
-          </Link>
+          {cleanPath(loc) !== "/billing" && (
+            <Link href="/billing" aria-label="Create new bill" className="absolute left-1/2 top-0 grid h-[62px] w-[62px] -translate-x-1/2 -translate-y-6 place-items-center rounded-full bg-[#075fff] text-white shadow-[0_15px_34px_rgba(7,95,255,0.36)] ring-8 ring-white transition-transform active:scale-95">
+              <Plus size={31} strokeWidth={2} aria-hidden="true" />
+            </Link>
+          )}
           <div className="grid grid-cols-5 items-center px-2.5">
             {MOBILE_NAV.slice(0, 2).map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);
@@ -706,7 +708,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </nav>
       </div>
 
-      <VoiceAssistant />
+      {cleanPath(loc) !== "/billing" && <VoiceAssistant />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );

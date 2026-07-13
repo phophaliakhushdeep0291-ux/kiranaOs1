@@ -57,9 +57,29 @@ if (pkg?.scripts) {
     "contract:smoke",
     "worker:health",
     "money:paise:reconcile",
+    "release:certify",
+    "release:certify:ci",
+    "release:certify:local",
   ];
   for (const script of requiredScripts) {
     if (!pkg.scripts[script]) fail(`package.json missing release-critical script: ${script}`);
+  }
+}
+
+const rootReleaseWorkflow = "../.github/workflows/release-certification.yml";
+if (!exists(rootReleaseWorkflow)) {
+  fail("Repository-root .github/workflows/release-certification.yml is required so GitHub can discover CI");
+} else {
+  const ci = read(rootReleaseWorkflow);
+  for (const snippet of [
+    "working-directory: backend",
+    "working-directory: frontend",
+    "npm run release:certify:ci",
+    "postgres:16-alpine",
+    "redis:7-alpine",
+    "actions/upload-artifact@v4",
+  ]) {
+    if (!ci.includes(snippet)) fail(`Root release CI must include: ${snippet}`);
   }
 }
 

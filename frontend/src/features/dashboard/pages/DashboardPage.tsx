@@ -691,7 +691,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       <div className="hidden w-full min-w-0 space-y-4 overflow-x-hidden bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
 
       {/* Counter focus */}
-      <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-7">
+      <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         <KpiCard
           label="Today's Sales"
           value={fmtRs(dashboard.revenue)}

@@ -209,7 +209,7 @@ export async function deleteObject({ key, filePath }) {
         error.code = "PATH_TRAVERSAL_BLOCKED";
         throw error;
       }
-      await fsp.rm(target, { force: true }).catch(() => null);
+      await fsp.rm(target, { force: true });
       return { provider: "local", deleted: true, missingOk: true };
     }
 

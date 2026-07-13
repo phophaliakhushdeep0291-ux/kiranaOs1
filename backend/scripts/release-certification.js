@@ -86,7 +86,7 @@ function runStep({
     cwd,
     env: { ...process.env, ...env },
     encoding: "utf8",
-    shell: false,
+    shell: process.platform === "win32" && /\.(?:cmd|bat)$/i.test(command),
     maxBuffer: 64 * 1024 * 1024,
   });
   const durationMs = Date.now() - startedAt;
@@ -200,7 +200,7 @@ const storageProvider = String(process.env.STORAGE_PROVIDER || "local").toLowerC
 const hasCloudStorage = storageProvider !== "local" && Boolean(process.env.STORAGE_BUCKET && process.env.STORAGE_ACCESS_KEY_ID && process.env.STORAGE_SECRET_ACCESS_KEY);
 const hasRestore = Boolean(process.env.RESTORE_TEST_DATABASE_URL) && boolEnv("ALLOW_RESTORE_TEST_DB");
 const hasDocker = commandAvailable("docker", ["version", "--format", "{{.Server.Version}}"]) || commandAvailable("docker", ["--version"]);
-const releaseMetadataReady = boolEnv("RELEASE_APPROVED") && Boolean(process.env.RELEASE_VERSION && process.env.RELEASE_APPROVER && process.env.ROLLBACK_IMAGE);
+const releaseMetadataReady = boolEnv("RELEASE_APPROVED") && Boolean(process.env.RELEASE_VERSION && process.env.RELEASE_APPROVER && process.env.RELEASE_ROLLBACK_IMAGE);
 
 const metadata = {
   startedAt,
@@ -225,7 +225,7 @@ addSyntheticResult({
   id: "release-metadata",
   label: "Release approval and rollback metadata",
   status: releaseMetadataReady ? "passed" : mode === "strict" ? "blocked" : "skipped",
-  reason: releaseMetadataReady ? "" : "set RELEASE_VERSION, RELEASE_APPROVER, RELEASE_APPROVED=true, and ROLLBACK_IMAGE",
+  reason: releaseMetadataReady ? "" : "set RELEASE_VERSION, RELEASE_APPROVER, RELEASE_APPROVED=true, and RELEASE_ROLLBACK_IMAGE",
   requiredFor: ["strict"],
 });
 

@@ -452,8 +452,8 @@ export function BillingSearch({
                 </p>
               )}
 
-              {/* 5-column grid */}
-              <div className="grid grid-cols-2 gap-3 min-[520px]:grid-cols-3 xl:grid-cols-5">
+              {/* Keep cards comfortably scannable at counter-sized laptop widths. */}
+              <div className="grid grid-cols-2 gap-3 min-[520px]:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                 {displayedProducts.map((product) => (
                   <ProductCard
                     key={product.id}
@@ -481,9 +481,11 @@ export function BillingSearch({
         </div>
       </div>
 
-      {/* ── 2. Bottom 3-column info section — Recent Bills widest, Quick Actions narrowest, Billing Tips medium ── */}
+      {/* Secondary context belongs below the selling workflow and only appears on
+          genuinely wide counters. At common 1280px laptop widths these panels
+          compressed into unreadable, overlapping columns. */}
       {!search && (
-        <div className="hidden shrink-0 grid-cols-[1.45fr_0.95fr_1.15fr] gap-3 xl:grid" style={{ height: "260px" }}>
+        <div className="hidden shrink-0 grid-cols-[1.45fr_1fr_1.15fr] gap-3 2xl:grid" style={{ height: "236px" }}>
           <RecentBillsPanel />
           <QuickActionsPanel onHoldBill={onHoldBill} onApplyDiscount={onApplyDiscount} onApplyCoupon={onApplyCoupon} onChooseCustomer={onChooseCustomer} />
           <BillingTipsPanel />
@@ -492,7 +494,7 @@ export function BillingSearch({
 
       {/* ── 3. Order Summary Card ── */}
       {cartItemCount > 0 && (
-        <div className="flex shrink-0 flex-col gap-3 rounded-[13px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:px-[22px]">
+        <div className="flex shrink-0 flex-col gap-3 rounded-[13px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:px-[22px] lg:hidden">
           <div className="min-w-0 flex-1">
             <p className="mb-2 text-[12px] font-bold text-[#5b6b89]">Order Summary</p>
             <div className="flex flex-wrap items-center gap-3 sm:gap-[30px]">
