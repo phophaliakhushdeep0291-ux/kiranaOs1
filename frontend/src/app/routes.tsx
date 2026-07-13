@@ -1,8 +1,8 @@
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { Redirect, Route, Switch, useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import NotFound from "@/components/shared/NotFound";
-import { ErrorBoundary, PageLoading } from "@/components/shared";
+import { ErrorBoundary, PageLoading, RouteTransition } from "@/components/shared";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLandingRoute } from "@/features/settings/landing-page";
 import { stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
@@ -68,12 +68,23 @@ function LoadingScreen() {
 }
 
 function LazyPage({ component: Component }: { component: ComponentType }) {
+  const [location] = useLocation();
+  const routeKey = location.split(/[?#]/)[0] || "/";
+
+  useEffect(() => {
+    const main = document.getElementById("main-content");
+    if (main) main.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    else window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [routeKey]);
+
   return (
-    <Suspense fallback={<LoadingScreen />}>
-      <div className="min-w-0">
-        <Component />
-      </div>
-    </Suspense>
+    <div key={routeKey} className="app-route-frame min-w-0">
+      <Suspense fallback={<LoadingScreen />}>
+        <RouteTransition routeKey={routeKey}>
+          <Component />
+        </RouteTransition>
+      </Suspense>
+    </div>
   );
 }
 

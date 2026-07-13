@@ -843,8 +843,11 @@ if (exists("package.json")) {
   if (!scripts["setup:test-db"]?.includes("setup-test-db")) {
     errors.push("package.json setup:test-db must prepare an isolated test SQLite database");
   }
-  if (!scripts["test:billing"]?.includes("backend-regression.examples.js")) {
-    errors.push("Existing static regression tests must remain wired in npm test");
+  const integrationRunner = exists("scripts/run-integration-tests.js")
+    ? read("scripts/run-integration-tests.js")
+    : "";
+  if (!scripts["test:integration"]?.includes("run-integration-tests") || !integrationRunner.includes("backend-regression.examples.js")) {
+    errors.push("Database regression tests must remain wired into the isolated integration-test runner");
   }
 }
 
@@ -882,7 +885,7 @@ if (exists("prisma/schema.prisma") && exists("prisma-postgres/schema.prisma")) {
 
 if (exists("src/modules/subscription/planConfig.js")) {
   const planConfig = read("src/modules/subscription/planConfig.js");
-  for (const snippet of ["starter", "standard", "growth", "pro", "29900", "39900", "49900", "69900", "staff_login", "whatsapp_reminders"]) {
+  for (const snippet of ["starter", "standard", "growth", "pro", "34900", "39900", "59900", "99900", "staff_login", "whatsapp_reminders"]) {
     if (!planConfig.includes(snippet)) errors.push(`planConfig.js missing plan/feature snippet: ${snippet}`);
   }
 }

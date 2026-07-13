@@ -15,6 +15,25 @@ const env = buildTestEnv();
 const prismaCli = path.join(process.cwd(), "node_modules", "prisma", "build", "index.js");
 const isPostgres = isPostgresTestDatabaseUrl(getTestDatabaseUrl());
 const schemaArgs = isPostgres ? ["--schema", "prisma-postgres/schema.prisma"] : [];
+const skipGenerate = process.env.SKIP_PRISMA_GENERATE === "true";
+
+function assertCompatibleGeneratedClient() {
+  const generatedSchemaPath = path.join(process.cwd(), "node_modules", ".prisma", "client", "schema.prisma");
+  if (!fs.existsSync(generatedSchemaPath)) {
+    throw new Error(
+      "SKIP_PRISMA_GENERATE=true requires an existing generated Prisma client. Run npm run prisma:generate first."
+    );
+  }
+
+  const generatedSchema = fs.readFileSync(generatedSchemaPath, "utf8");
+  const expectedProvider = isPostgres ? "postgresql" : "sqlite";
+  const providerPattern = new RegExp(`datasource\\s+db\\s*\\{[\\s\\S]*?provider\\s*=\\s*[\"']${expectedProvider}[\"']`);
+  if (!providerPattern.test(generatedSchema)) {
+    throw new Error(
+      `SKIP_PRISMA_GENERATE=true found an incompatible Prisma client; expected ${expectedProvider}. Regenerate the client first.`
+    );
+  }
+}
 
 function runPrisma(args) {
   const result = spawnSync(process.execPath, [prismaCli, ...args], {
@@ -43,15 +62,20 @@ function runPrisma(args) {
 fs.mkdirSync(path.join(process.cwd(), "prisma"), { recursive: true });
 console.log(`Using isolated TEST_DATABASE_URL=${maskDatabaseUrl(getTestDatabaseUrl())}`);
 
+if (skipGenerate) {
+  assertCompatibleGeneratedClient();
+  console.log("Reusing the existing compatible Prisma client (generation explicitly skipped).");
+}
+
 if (isPostgres) {
   console.log("Preparing PostgreSQL integration test database with prisma-postgres/schema.prisma");
-  runPrisma(["generate", ...schemaArgs]);
+  if (!skipGenerate) runPrisma(["generate", ...schemaArgs]);
   // migrate reset is destructive, so test-db-utils only allows clear test/CI DB names
   // and requires ALLOW_POSTGRES_TEST_DB=true before this path can run.
-  runPrisma(["migrate", "reset", "--force", "--skip-seed", ...schemaArgs]);
+  runPrisma(["migrate", "reset", "--force", "--skip-seed", ...(skipGenerate ? ["--skip-generate"] : []), ...schemaArgs]);
 } else {
-  runPrisma(["generate"]);
-  runPrisma(["db", "push", "--force-reset", "--accept-data-loss"]);
+  if (!skipGenerate) runPrisma(["generate"]);
+  runPrisma(["db", "push", "--force-reset", "--accept-data-loss", ...(skipGenerate ? ["--skip-generate"] : [])]);
 }
 
 console.log("Test database is ready.");

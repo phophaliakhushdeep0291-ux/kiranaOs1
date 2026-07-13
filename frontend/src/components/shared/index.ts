@@ -1,5 +1,6 @@
 export { ErrorBoundary } from "./ErrorBoundary";
 export { PageLoading } from "./PageLoading";
+export { RouteTransition } from "./RouteTransition";
 export { ShortcutHint } from "./ShortcutHint";
 export { StatusBadge } from "./StatusBadge";
 export { default as NotFound } from "./NotFound";

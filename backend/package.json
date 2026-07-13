@@ -62,7 +62,7 @@
     "release:certify:local": "node scripts/release-certification.js --mode=local",
     "release:certify:ci": "node scripts/release-certification.js --mode=ci",
     "release:certify": "node scripts/release-certification.js --mode=strict",
-    "proof:release": "npm run release:certify",
+    "proof:release": "npm run migration:safety && npm run release:gate && npm run proof:ops && npm run release:certify",
     "test:phase46": "node tests/phase46-multidevice-smoothness.examples.js",
     "test:bill-return-migration": "node tests/bill-return-reference-migration.examples.js",
     "loadtest": "node loadtest/loadtest.js",

@@ -632,7 +632,7 @@ export function Layout({ children }: { children: ReactNode }) {
         <main
           id="main-content"
           className={cn(
-            "app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto scroll-smooth overscroll-contain pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0",
+            "app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0",
             pageHasOwnTopbarActions ? "bg-[#ffffff]" : "bg-white",
           )}
         >

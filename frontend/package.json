@@ -12,7 +12,7 @@
                     "build":  "vite build --config vite.config.ts",
                     "serve":  "vite preview --config vite.config.ts --host 0.0.0.0",
                     "typecheck":  "tsc -p tsconfig.json --noEmit",
-                    "test":  "vitest run",
+                    "test":  "vitest run --configLoader runner",
                     "bundle:check":  "node scripts/check-bundle-size.mjs",
                     "app:check":  "node scripts/check-production-app.mjs",
                     "security:check":  "npm run bundle:check && npm run app:check",
