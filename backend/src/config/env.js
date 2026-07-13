@@ -85,6 +85,7 @@ const envSchema = z.object({
   GST_PROVIDER: z.enum(["disabled", "sandbox", "gsp_http"]).default("disabled"),
   GST_PROVIDER_BASE_URL: z.string().url().optional(),
   GST_PROVIDER_EINVOICE_PATH: z.string().default("/e-invoices"),
+  GST_PROVIDER_EWAY_PATH: z.string().default("/e-way-bills"),
   GST_PROVIDER_API_KEY: z.string().optional(),
   GST_PROVIDER_API_SECRET: z.string().optional(),
   GST_PROVIDER_LEGAL_NAME: z.string().optional(),

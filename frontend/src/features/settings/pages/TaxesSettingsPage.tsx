@@ -8,10 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, BarChart3, Boxes, CheckCircle2, Download, Pencil, Receipt, ShieldCheck } from "lucide-react";
+import { AlertTriangle, BarChart3, Boxes, CheckCircle2, Download, Pencil, Receipt, ShieldCheck, Truck } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle, Kpi } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
+import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import type { BillListResult } from "@/types/api";
 
 interface TaxConfig {
   mode: "exclusive" | "inclusive" | "none";
@@ -51,6 +53,18 @@ interface ComplianceReadiness {
   checks: Array<{ key: string; label: string; ready: boolean; detail: string }>;
   gaps: { missingHsn: Array<{ id: string; name: string }>; invalidHsn: Array<{ id: string; name: string }> };
 }
+interface EWayDraft {
+  billId: string;
+  transportMode: "road" | "rail" | "air" | "ship";
+  transporterId: string;
+  transporterName: string;
+  vehicleNumber: string;
+  vehicleType: "regular" | "over_dimensional";
+  distanceKm: string;
+  transportDocumentNumber: string;
+  transportDocumentDate: string;
+  deliveryAddress: string;
+}
 
 const DEFAULT_TAX: TaxConfig = {
   // Kirana MRP prices include GST — inclusive is the safe default.
@@ -67,6 +81,7 @@ const HSN_ROWS: HsnRow[] = [
   { cat: "Household", rate: "18%", hsn: "3402", count: 81 },
   { cat: "Beverages", rate: "12%", hsn: "2202", count: 36 },
 ];
+const EMPTY_EWAY: EWayDraft = { billId: "", transportMode: "road", transporterId: "", transporterName: "", vehicleNumber: "", vehicleType: "regular", distanceKm: "", transportDocumentNumber: "", transportDocumentDate: "", deliveryAddress: "" };
 
 function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8") {
   const blob = new Blob([text], { type });
@@ -88,12 +103,18 @@ export default function TaxesSettingsPage() {
   const [draftHsn, setDraftHsn] = useState("");
   const [draftRate, setDraftRate] = useState("");
   const [editorError, setEditorError] = useState("");
+  const [ewayOpen, setEwayOpen] = useState(false);
+  const [ewayPinOpen, setEwayPinOpen] = useState(false);
+  const [ewayDraft, setEwayDraft] = useState<EWayDraft>(EMPTY_EWAY);
+  const [ewayError, setEwayError] = useState("");
+  const [savingEway, setSavingEway] = useState(false);
   const hsnInputRef = useRef<HTMLInputElement>(null);
   const rateInputRef = useRef<HTMLInputElement>(null);
   const seeded = useRef(false);
   // Real numbers from stored bills (gst + gstMode persisted per bill).
   const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), retry: 1 });
   const readinessQ = useQuery({ queryKey: ["gst-compliance-readiness"], queryFn: () => apiRequest<ComplianceReadiness>("/compliance/readiness"), retry: 1 });
+  const recentBillsQ = useQuery({ queryKey: ["gst-compliance-recent-bills"], queryFn: () => apiRequest<BillListResult>("/bills?status=active&page=1&limit=50"), enabled: ewayOpen, retry: 1 });
   const inr = (n?: number) => (n == null ? "—" : `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
   useEffect(() => {
@@ -108,6 +129,37 @@ export default function TaxesSettingsPage() {
   const setText = (partial: Partial<TaxConfig>) => setTax((t) => ({ ...t, ...partial }));
   const flush = () => patch({ taxes: tax });
   const hsnRows = tax.hsnMappings.length > 0 ? tax.hsnMappings : HSN_ROWS;
+  const eligibleBills = (recentBillsQ.data?.bills ?? []).filter((bill) => bill.billType === "gst_invoice");
+
+  const requestEwayApproval = () => {
+    if (!ewayDraft.billId || !ewayDraft.distanceKm || !ewayDraft.deliveryAddress.trim() || (!ewayDraft.transporterId.trim() && !ewayDraft.transporterName.trim()) || (ewayDraft.transportMode === "road" && !ewayDraft.vehicleNumber.trim())) {
+      setEwayError("Choose a GST invoice and complete transporter, distance, delivery and vehicle details.");
+      return;
+    }
+    setEwayError("");
+    setEwayOpen(false);
+    setEwayPinOpen(true);
+  };
+
+  const saveEwayDraft = async (ownerPin: string) => {
+    setSavingEway(true);
+    setEwayError("");
+    try {
+      await apiRequest(`/compliance/e-way-bills/${ewayDraft.billId}/draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...ewayDraft, distanceKm: Number(ewayDraft.distanceKm), ownerPin, billId: undefined }),
+      });
+      setEwayPinOpen(false);
+      setEwayDraft(EMPTY_EWAY);
+      void readinessQ.refetch();
+      toast({ title: "E-way transport record prepared", description: "Saved as a clearly marked draft. Connect a certified GSP to request a legal e-way bill number." });
+    } catch (error) {
+      setEwayError(error instanceof Error ? error.message : "Could not prepare the transport record.");
+    } finally {
+      setSavingEway(false);
+    }
+  };
   const hsnHasError = editorError.includes("HSN code");
   const rateHasError = editorError.includes("GST rate");
   const saveHsnRows = (rows: HsnRow[]) => update({ hsnMappings: rows });
@@ -274,7 +326,7 @@ export default function TaxesSettingsPage() {
               </div>
             </div>
             <RowToggle label="E-Invoice / IRN" desc="Blocked until a certified GSTN/GSP provider is connected" pill={<Badge tone="amber">Not connected</Badge>} />
-            <RowToggle label="E-Way Bill" desc="Blocked until transporter, vehicle and distance fields are captured" pill={<Badge tone="amber">Setup needed</Badge>} />
+            <RowToggle label="E-Way Bill" desc="Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP" pill={<Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> Prepare</Button>} />
             <RowToggle label="Show GST breakup on bill" pill={<Switch checked={tax.showBreakup} onCheckedChange={(v) => update({ showBreakup: v })} />} />
             <RowToggle label="Round off tax amount" pill={<Switch checked={tax.roundOff} onCheckedChange={(v) => update({ roundOff: v })} />} />
             <RowToggle label="Lock tax after bill creation" pill={<Switch checked={tax.lockAfterBill} onCheckedChange={(v) => update({ lockAfterBill: v })} />} />
@@ -282,6 +334,28 @@ export default function TaxesSettingsPage() {
           </div>
         </Card>
       </div>
+
+      <Dialog open={ewayOpen} onOpenChange={setEwayOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Prepare e-way bill transport data</DialogTitle><DialogDescription>This creates an auditable draft against a GST invoice. It does not claim a legal e-way bill number unless a certified GSP is connected and submitted.</DialogDescription></DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Fld label="GST invoice"><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={ewayDraft.billId} onChange={(event) => setEwayDraft((value) => ({ ...value, billId: event.target.value }))}><option value="">Select recent GST invoice</option>{eligibleBills.map((bill) => <option key={bill.id} value={bill.id}>{bill.billNo} · {bill.customerName || "Walk-in"} · ₹{Number(bill.grandTotal || 0).toLocaleString("en-IN")}</option>)}</select>{recentBillsQ.isSuccess && eligibleBills.length === 0 && <p className="mt-1 text-[11px] text-amber-700">No active GST invoices found at this location.</p>}</Fld>
+            <Fld label="Transport mode"><Select value={ewayDraft.transportMode} onValueChange={(value: EWayDraft["transportMode"]) => setEwayDraft((draft) => ({ ...draft, transportMode: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="road">Road</SelectItem><SelectItem value="rail">Rail</SelectItem><SelectItem value="air">Air</SelectItem><SelectItem value="ship">Ship</SelectItem></SelectContent></Select></Fld>
+            <Fld label="Transporter ID"><Input value={ewayDraft.transporterId} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transporterId: event.target.value.toUpperCase() }))} placeholder="GSTIN / TRANSIN" /></Fld>
+            <Fld label="Transporter name"><Input value={ewayDraft.transporterName} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transporterName: event.target.value }))} placeholder="Carrier name" /></Fld>
+            <Fld label="Vehicle number"><Input value={ewayDraft.vehicleNumber} onChange={(event) => setEwayDraft((draft) => ({ ...draft, vehicleNumber: event.target.value.toUpperCase() }))} placeholder="MH12AB1234" /></Fld>
+            <Fld label="Vehicle type"><Select value={ewayDraft.vehicleType} onValueChange={(value: EWayDraft["vehicleType"]) => setEwayDraft((draft) => ({ ...draft, vehicleType: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">Regular</SelectItem><SelectItem value="over_dimensional">Over-dimensional</SelectItem></SelectContent></Select></Fld>
+            <Fld label="Distance (km)"><Input type="number" min={1} max={4000} value={ewayDraft.distanceKm} onChange={(event) => setEwayDraft((draft) => ({ ...draft, distanceKm: event.target.value }))} /></Fld>
+            <Fld label="Transport document"><Input value={ewayDraft.transportDocumentNumber} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transportDocumentNumber: event.target.value }))} placeholder="LR / RR / airway bill number" /></Fld>
+            <Fld label="Document date"><Input type="date" value={ewayDraft.transportDocumentDate} onChange={(event) => setEwayDraft((draft) => ({ ...draft, transportDocumentDate: event.target.value }))} /></Fld>
+            <Fld label="Delivery address"><Input value={ewayDraft.deliveryAddress} onChange={(event) => setEwayDraft((draft) => ({ ...draft, deliveryAddress: event.target.value }))} placeholder="Destination address" /></Fld>
+          </div>
+          {ewayError && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{ewayError}</p>}
+          <DialogFooter><Button variant="outline" onClick={() => setEwayOpen(false)}>Cancel</Button><Button onClick={requestEwayApproval}>Review and approve</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <OwnerPinModal open={ewayPinOpen} title="Approve e-way transport record" description="This protected compliance record is linked to the selected GST invoice and retained for audit." confirmLabel="Prepare draft" loading={savingEway} error={ewayError} onCancel={() => { if (!savingEway) { setEwayPinOpen(false); setEwayOpen(true); } }} onConfirm={({ ownerPin }) => saveEwayDraft(ownerPin)} />
 
       <Dialog open={Boolean(hsnEditor)} onOpenChange={(open) => { if (!open) { setHsnEditor(null); setEditorError(""); } }}>
         <DialogContent className="max-w-md">

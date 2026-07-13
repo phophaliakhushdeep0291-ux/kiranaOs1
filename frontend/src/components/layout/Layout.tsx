@@ -735,7 +735,7 @@ export function Layout({ children }: { children: ReactNode }) {
           id="main-content"
           tabIndex={-1}
           className={cn(
-            "app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0",
+            "app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain pb-3 lg:pb-0",
             pageHasOwnTopbarActions ? "bg-[#ffffff]" : "bg-white",
           )}
         >
@@ -745,7 +745,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
 
         {/* Mobile bottom nav */}
-        <nav aria-label="Mobile navigation" className="fixed inset-x-3 bottom-3 z-50 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_34px_rgba(15,35,80,0.14)] backdrop-blur-xl lg:hidden">
+        <nav aria-label="Mobile navigation" className="mx-3 mb-3 mt-2 shrink-0 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_34px_rgba(15,35,80,0.14)] backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-5 items-center px-2.5">
             {MOBILE_NAV.slice(0, 2).map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);

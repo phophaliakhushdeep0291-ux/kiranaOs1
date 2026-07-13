@@ -3,7 +3,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { getDateRange } from "../../utils/dates.js";
-import { gspHttpReadiness, submitEInvoiceToGsp } from "./gsp-http.provider.js";
+import { gspHttpReadiness, submitEInvoiceToGsp, submitEWayBillToGsp } from "./gsp-http.provider.js";
 
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -51,7 +51,7 @@ export async function getReadiness(shopId) {
     { key: "hsn", label: "HSN coverage on taxable products", ready: missingHsn.length === 0 && invalidHsn.length === 0, detail: `${taxableProducts.length - missingHsn.length - invalidHsn.length}/${taxableProducts.length} taxable products valid` },
     { key: "invoice_register", label: "Auditable GST invoice register", ready: true, detail: `${gstInvoiceCount} GST invoices available for export` },
     { key: "provider", label: "Certified GSTN/GSP submission", ready: liveProvider.legalSubmission, detail: liveProvider.legalSubmission ? `${liveProvider.providerName} is configured for legal IRN submission` : liveProvider.configured ? "A non-legal sandbox is enabled, or provider certification is not attested" : "No certified GSP is connected; filing remains blocked by design" },
-    { key: "eway", label: "E-way bill transport data", ready: false, detail: "Vehicle, transporter and distance fields are not yet captured" },
+    { key: "eway", label: "E-way bill transport data", ready: true, detail: "Transporter, vehicle, document, distance and delivery fields are captured with audited draft and GSP submission paths" },
   ];
   return {
     score: Math.round((checks.filter((row) => row.ready).length / checks.length) * 100),
@@ -197,7 +197,81 @@ export async function submitEInvoice(shopId, billId) {
     const result = await submitEInvoiceToGsp(payload, { idempotencyKey: `e-invoice:${shopId}:${billId}` });
     return await db.complianceDocument.update({
       where: { id: document.id },
-      data: { status: "accepted", externalReference: result.irn, acknowledgementNo: result.acknowledgementNo, responseJson: JSON.stringify(result.response), errorMessage: null },
+      data: { status: "accepted", externalReference: result.externalReference, acknowledgementNo: result.acknowledgementNo, responseJson: JSON.stringify(result.response), errorMessage: null },
+    });
+  } catch (error) {
+    await db.complianceDocument.update({
+      where: { id: document.id },
+      data: { status: "failed", responseJson: error?.providerResponse ? JSON.stringify(error.providerResponse) : null, errorMessage: String(error?.message || "GSP submission failed").slice(0, 1000) },
+    }).catch(() => {});
+    throw error;
+  }
+}
+
+function canonicalEWayPayload(bill, shop, transport) {
+  return {
+    schemaVersion: "kiranaos-eway-provider-v1",
+    supplyType: "outward",
+    seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
+    buyer: { name: bill.customerName, gstin: bill.buyerGstin, stateCode: bill.buyerStateCode, address: bill.buyerAddress },
+    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, taxableValue: bill.subtotal, tax: bill.gst, total: bill.grandTotal },
+    transport: {
+      mode: transport.transportMode,
+      transporterId: transport.transporterId || null,
+      transporterName: transport.transporterName || null,
+      vehicleNumber: transport.vehicleNumber ? transport.vehicleNumber.toUpperCase().replaceAll(" ", "") : null,
+      vehicleType: transport.vehicleType,
+      distanceKm: transport.distanceKm,
+      documentNumber: transport.transportDocumentNumber || null,
+      documentDate: transport.transportDocumentDate || null,
+      deliveryAddress: transport.deliveryAddress,
+    },
+    items: bill.items.map((item) => ({ name: item.name, hsn: item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, total: item.lineTotal })),
+  };
+}
+
+async function buildEWayPayload(shopId, billId, transport) {
+  const { shop, bill } = await loadValidatedInvoice(shopId, billId);
+  return canonicalEWayPayload(bill, shop, transport);
+}
+
+export async function createEWayBillDraft(shopId, billId, transport) {
+  const payload = await buildEWayPayload(shopId, billId, transport);
+  const payloadJson = JSON.stringify(payload);
+  const payloadHash = crypto.createHash("sha256").update(payloadJson).digest("hex");
+  const externalReference = `DRAFT-${crypto.randomUUID()}`;
+  const existing = await db.complianceDocument.findUnique({ where: { billId_documentType: { billId, documentType: "e_way_bill" } } });
+  if (["submitting", "submitted"].includes(existing?.status)) {
+    throw new AppError("This e-way bill submission is already in progress", 409, "GST_SUBMISSION_IN_PROGRESS");
+  }
+  if (existing?.status === "accepted" && existing.externalReference && !existing.externalReference.startsWith("DRAFT-")) {
+    throw new AppError("A legal e-way bill already exists for this invoice", 409, "EWAY_BILL_ALREADY_ACCEPTED");
+  }
+  return db.complianceDocument.upsert({
+    where: { billId_documentType: { billId, documentType: "e_way_bill" } },
+    create: { shopId, billId, documentType: "e_way_bill", provider: "kiranaos_draft", status: "sandbox_only", externalReference, payloadHash, payloadJson, responseJson: JSON.stringify({ warning: "Transport record only; no legal e-way bill number was created" }) },
+    update: { provider: "kiranaos_draft", status: "sandbox_only", externalReference, acknowledgementNo: null, payloadHash, payloadJson, responseJson: JSON.stringify({ warning: "Transport record only; no legal e-way bill number was created" }), errorMessage: null },
+  });
+}
+
+export async function submitEWayBill(shopId, billId, transport) {
+  if (env.GST_PROVIDER !== "gsp_http") throw new AppError("Certified GSP submission is not configured", 503, "GST_LEGAL_PROVIDER_NOT_READY");
+  const payload = await buildEWayPayload(shopId, billId, transport);
+  const payloadJson = JSON.stringify(payload);
+  const payloadHash = crypto.createHash("sha256").update(payloadJson).digest("hex");
+  const existing = await db.complianceDocument.findUnique({ where: { billId_documentType: { billId, documentType: "e_way_bill" } } });
+  if (existing?.status === "accepted" && existing.externalReference && !existing.externalReference.startsWith("DRAFT-")) return existing;
+  if (["submitting", "submitted"].includes(existing?.status)) throw new AppError("This e-way bill submission is already in progress", 409, "GST_SUBMISSION_IN_PROGRESS");
+  const document = await db.complianceDocument.upsert({
+    where: { billId_documentType: { billId, documentType: "e_way_bill" } },
+    create: { shopId, billId, documentType: "e_way_bill", provider: env.GST_PROVIDER_LEGAL_NAME, status: "submitting", payloadHash, payloadJson },
+    update: { provider: env.GST_PROVIDER_LEGAL_NAME, status: "submitting", payloadHash, payloadJson, errorMessage: null },
+  });
+  try {
+    const result = await submitEWayBillToGsp(payload, { idempotencyKey: `e-way-bill:${shopId}:${billId}` });
+    return await db.complianceDocument.update({
+      where: { id: document.id },
+      data: { status: "accepted", externalReference: result.externalReference, acknowledgementNo: result.acknowledgementNo, responseJson: JSON.stringify(result.response), errorMessage: null },
     });
   } catch (error) {
     await db.complianceDocument.update({

@@ -6,8 +6,42 @@ import {
   normalizeProductName,
 } from "../../utils/productRecycleRules.js";
 import { moneyShadows } from "../../utils/money.js";
+import { resolveOperationalLocation } from "../stores/location-context.service.js";
 
-export async function listProducts(shopId, { category, search, lowStock } = {}) {
+async function applyLocationInventory(shopId, products, locationId) {
+  if (!locationId || products.length === 0) return products;
+  const location = await resolveOperationalLocation(shopId, locationId);
+  const productIds = products.map((product) => product.id);
+  const rows = await db.locationStock.findMany({
+    where: { shopId, productId: { in: productIds } },
+    select: { locationId: true, productId: true, stockBaseQty: true, lowStockThreshold: true },
+  });
+  const selected = new Map(
+    rows.filter((row) => row.locationId === location.id).map((row) => [row.productId, row]),
+  );
+  const allocated = new Map();
+  if (location.isPrimary) {
+    for (const row of rows) {
+      allocated.set(row.productId, (allocated.get(row.productId) ?? 0) + Number(row.stockBaseQty || 0));
+    }
+  }
+  return products.map((product) => {
+    const row = selected.get(product.id);
+    const stockBaseQty = location.isPrimary
+      ? Number(product.stockBaseQty || 0) - (allocated.get(product.id) ?? 0)
+      : Number(row?.stockBaseQty || 0);
+    return {
+      ...product,
+      stockBaseQty: Number(stockBaseQty.toFixed(2)),
+      lowStockThreshold: row?.lowStockThreshold ?? product.lowStockThreshold,
+      inventoryLocationId: location.id,
+      inventoryLocationName: location.name,
+      inventoryLocationCode: location.code,
+    };
+  });
+}
+
+export async function listProducts(shopId, { category, search, lowStock, locationId } = {}) {
   const where = {
     shopId,
     deletedAt: null,
@@ -27,7 +61,7 @@ export async function listProducts(shopId, { category, search, lowStock } = {}) 
   });
 
   // Parse aliasesJson back to array for response
-  const parsed = products.map(deserializeProduct);
+  const parsed = await applyLocationInventory(shopId, products.map(deserializeProduct), locationId);
 
   if (lowStock) {
     return parsed.filter(
@@ -38,13 +72,14 @@ export async function listProducts(shopId, { category, search, lowStock } = {}) 
   return parsed;
 }
 
-export async function getProduct(shopId, id) {
+export async function getProduct(shopId, id, { locationId } = {}) {
   const product = await db.product.findFirst({
     where: { id, shopId, deletedAt: null },
     include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
   });
   if (!product) throw new AppError("Product not found", 404);
-  return deserializeProduct(product);
+  const [scoped] = await applyLocationInventory(shopId, [deserializeProduct(product)], locationId);
+  return scoped;
 }
 
 export async function createProduct(shopId, data, { identity = null } = {}) {

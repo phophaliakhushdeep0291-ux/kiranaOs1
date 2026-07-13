@@ -39,6 +39,11 @@ if (ctx.skip) {
       const branchInventory = assertSuccess(await ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }));
       assert.equal(mainInventory.products.find((row) => row.id === product.id).stockBaseQty, 13);
       assert.equal(branchInventory.products.find((row) => row.id === product.id).stockBaseQty, 7);
+      const mainCatalog = assertSuccess(await ctx.get("/api/products", { token: auth.accessToken, headers: { "x-location-id": locations.locations[0].id } }));
+      const branchCatalog = assertSuccess(await ctx.get("/api/products", { token: auth.accessToken, headers: { "x-location-id": branch.id } }));
+      assert.equal(mainCatalog.find((row) => row.id === product.id).stockBaseQty, 13, "primary catalog must show residual branch stock");
+      assert.equal(branchCatalog.find((row) => row.id === product.id).stockBaseQty, 7, "branch catalog must show branch stock instead of company stock");
+      assert.equal(branchCatalog.find((row) => row.id === product.id).inventoryLocationId, branch.id);
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 20, "a transfer must not change company-wide stock");
 
       const overdraw = assertFailure(await ctx.post("/api/stores/transfers", {
@@ -135,6 +140,7 @@ if (ctx.skip) {
       const readiness = assertSuccess(await ctx.get("/api/compliance/readiness", { token: auth.accessToken }));
       assert.equal(readiness.checks.find((row) => row.key === "gstin").ready, true);
       assert.equal(readiness.checks.find((row) => row.key === "hsn").ready, true);
+      assert.equal(readiness.checks.find((row) => row.key === "eway").ready, true);
       assert.equal(readiness.provider.legalSubmission, false);
 
       const retailPayment = assertSuccess(await ctx.get("/api/payment-provider/retail/readiness", { token: auth.accessToken }));
@@ -148,6 +154,28 @@ if (ctx.skip) {
       assert.match(csv.text, /Invoice Number/);
       assert.match(csv.text, /1905/);
       assert.match(csv.text, new RegExp(bill.billNo));
+
+      const ewayDraft = assertSuccess(await ctx.post(`/api/compliance/e-way-bills/${bill.id}/draft`, {
+        transportMode: "road",
+        transporterName: "Reliable Roadways",
+        vehicleNumber: "MH12AB1234",
+        vehicleType: "regular",
+        distanceKm: 85,
+        transportDocumentNumber: "LR-1001",
+        transportDocumentDate: "2026-07-13",
+        deliveryAddress: "12 Market Road, Pune, Maharashtra",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(ewayDraft.documentType, "e_way_bill");
+      assert.equal(ewayDraft.status, "sandbox_only");
+      assert.match(ewayDraft.externalReference, /^DRAFT-/);
+      const storedTransport = JSON.parse(ewayDraft.payloadJson).transport;
+      assert.equal(storedTransport.vehicleNumber, "MH12AB1234");
+      assert.equal(storedTransport.distanceKm, 85);
+
+      const disabledEway = assertFailure(await ctx.post(`/api/compliance/e-way-bills/${bill.id}/submit`, {
+        transportMode: "road", transporterName: "Reliable Roadways", vehicleNumber: "MH12AB1234", distanceKm: 85, deliveryAddress: "12 Market Road, Pune, Maharashtra",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 503);
+      assert.equal(disabledEway.code, "GST_LEGAL_PROVIDER_NOT_READY");
 
       const disabled = assertFailure(await ctx.post(`/api/compliance/e-invoices/${bill.id}/sandbox`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 503);
       assert.equal(disabled.code, "GST_PROVIDER_NOT_CONFIGURED");

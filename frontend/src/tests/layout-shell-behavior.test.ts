@@ -33,8 +33,10 @@ describe("desktop app shell behavior", () => {
     expect(layout).toContain("Expand sidebar");
   });
 
-  it("reserves mobile safe-area space for bottom navigation and floating controls", () => {
-    expect(layout).toContain("pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))]");
+  it("keeps mobile bottom navigation in its own row so it cannot cover page actions", () => {
+    expect(layout).toContain("pb-3 lg:pb-0");
+    expect(layout).toContain("mx-3 mb-3 mt-2 shrink-0");
+    expect(layout).not.toContain("fixed inset-x-3 bottom-3");
     expect(layout).toContain("min-h-[var(--app-mobile-nav-height)]");
     expect(layout).toContain("pb-[env(safe-area-inset-bottom)]");
     expect(layout).toContain("overscroll-contain");

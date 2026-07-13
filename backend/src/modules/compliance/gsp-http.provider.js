@@ -21,6 +21,14 @@ export function gspHttpReadiness() {
 }
 
 export async function submitEInvoiceToGsp(payload, { idempotencyKey }) {
+  return submitDocumentToGsp(payload, { idempotencyKey, path: env.GST_PROVIDER_EINVOICE_PATH, referenceNames: ["irn", "Irn", "IRN"], referenceLabel: "GSTN IRN" });
+}
+
+export async function submitEWayBillToGsp(payload, { idempotencyKey }) {
+  return submitDocumentToGsp(payload, { idempotencyKey, path: env.GST_PROVIDER_EWAY_PATH, referenceNames: ["ewayBillNo", "ewbNo", "EwbNo", "EWayBillNo"], referenceLabel: "e-way bill number" });
+}
+
+async function submitDocumentToGsp(payload, { idempotencyKey, path, referenceNames, referenceLabel }) {
   const readiness = gspHttpReadiness();
   if (!readiness.legalSubmission) {
     throw new AppError(
@@ -33,7 +41,7 @@ export async function submitEInvoiceToGsp(payload, { idempotencyKey }) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), env.GST_PROVIDER_TIMEOUT_MS);
   try {
-    const response = await fetch(providerUrl(env.GST_PROVIDER_EINVOICE_PATH), {
+    const response = await fetch(providerUrl(path), {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -56,14 +64,14 @@ export async function submitEInvoiceToGsp(payload, { idempotencyKey }) {
     }
 
     const data = body?.data ?? body?.result ?? body;
-    const irn = data?.irn ?? data?.Irn ?? data?.IRN ?? null;
-    const acknowledgementNo = data?.acknowledgementNo ?? data?.ackNo ?? data?.AckNo ?? data?.ack_no ?? irn;
-    if (!irn) {
-      const error = new AppError("GSP response did not contain a GSTN IRN", 502, "GST_PROVIDER_INVALID_RESPONSE");
+    const externalReference = referenceNames.map((name) => data?.[name]).find(Boolean) ?? null;
+    const acknowledgementNo = data?.acknowledgementNo ?? data?.ackNo ?? data?.AckNo ?? data?.ack_no ?? externalReference;
+    if (!externalReference) {
+      const error = new AppError(`GSP response did not contain a ${referenceLabel}`, 502, "GST_PROVIDER_INVALID_RESPONSE");
       error.providerResponse = body;
       throw error;
     }
-    return { irn: String(irn), acknowledgementNo: String(acknowledgementNo), response: body };
+    return { externalReference: String(externalReference), acknowledgementNo: String(acknowledgementNo), response: body };
   } catch (error) {
     if (error?.name === "AbortError") throw new AppError("GSP request timed out", 504, "GST_PROVIDER_TIMEOUT");
     if (error instanceof AppError) throw error;

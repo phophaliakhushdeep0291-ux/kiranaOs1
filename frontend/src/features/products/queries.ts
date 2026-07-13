@@ -6,6 +6,7 @@ import { getMutationOptions, getQueryOptions, type MutationHookOptions, type Que
 import * as productsApi from "@/features/products/api";
 import { createProductLocalFirst, deleteProductLocalFirst, updateProductLocalFirst } from "@/features/products/local-actions";
 import type { Product, ProductInput, QueryParams } from "@/types/api";
+import { getActiveLocationId } from "@/features/stores/location-context";
 
 const PRODUCTS_CACHE_KEY = "products";
 
@@ -16,7 +17,7 @@ export interface UpdateProductVariables { id: string; data: ProductInput }
 export interface DeleteProductVariables { id: string; ownerPin: string; reason?: string }
 export type ProductWithProductId = Product & { productId: string };
 
-export const getListProductsQueryKey = (params?: ListProductsParams) => ["products", params ?? {}] as const;
+export const getListProductsQueryKey = (params?: ListProductsParams) => ["products", getActiveLocationId() ?? "company", params ?? {}] as const;
 
 type ListProductsQueryKey = ReturnType<typeof getListProductsQueryKey>;
 
@@ -43,7 +44,7 @@ function filterCachedProducts(products: Product[], params?: ListProductsParams):
 }
 
 export async function cacheProducts(products: Product[]) {
-  writeInstantCache(PRODUCTS_CACHE_KEY, products);
+  writeInstantCache(`${PRODUCTS_CACHE_KEY}:${getActiveLocationId() ?? "company"}`, products);
   try {
     await offlineDB.putMany("products", products);
   } catch {
@@ -52,13 +53,17 @@ export async function cacheProducts(products: Product[]) {
 }
 
 function readCachedProducts(params?: ListProductsParams): ProductWithProductId[] {
-  return filterCachedProducts(readInstantCache<Product[]>(PRODUCTS_CACHE_KEY, []), params).map(withProductId);
+  return filterCachedProducts(readInstantCache<Product[]>(`${PRODUCTS_CACHE_KEY}:${getActiveLocationId() ?? "company"}`, []), params).map(withProductId);
 }
 
 async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<ProductWithProductId[]> {
   try {
     const rows = await offlineDB.getAll<Product>("products");
-    return filterCachedProducts(rows, params).map(withProductId);
+    const locationId = getActiveLocationId();
+    const locationAwareRows = locationId && rows.some((row) => Boolean((row as Product & { inventoryLocationId?: string }).inventoryLocationId))
+      ? rows.filter((row) => (row as Product & { inventoryLocationId?: string }).inventoryLocationId === locationId)
+      : rows;
+    return filterCachedProducts(locationAwareRows, params).map(withProductId);
   } catch {
     return [];
   }

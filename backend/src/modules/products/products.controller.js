@@ -1,16 +1,17 @@
 import * as svc from "./products.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
 
 export async function list(req, res, next) {
   try {
-    const products = await svc.listProducts(req.shopId, req.query);
+    const products = await svc.listProducts(req.shopId, { ...req.query, locationId: requestLocationId(req) });
     res.json({ success: true, data: products });
   } catch (err) { next(err); }
 }
 
 export async function get(req, res, next) {
   try {
-    const product = await svc.getProduct(req.shopId, req.params.id);
+    const product = await svc.getProduct(req.shopId, req.params.id, { locationId: requestLocationId(req) });
     res.json({ success: true, data: product });
   } catch (err) { next(err); }
 }

@@ -24,3 +24,11 @@ export async function sandboxEInvoice(req, res, next) {
 export async function submitEInvoice(req, res, next) {
   try { res.status(201).json({ success: true, data: await service.submitEInvoice(req.shopId, req.params.billId) }); } catch (error) { next(error); }
 }
+
+export async function draftEWayBill(req, res, next) {
+  try { res.status(201).json({ success: true, data: await service.createEWayBillDraft(req.shopId, req.params.billId, req.body), warning: "Transport record saved. No legal e-way bill number was created." }); } catch (error) { next(error); }
+}
+
+export async function submitEWayBill(req, res, next) {
+  try { res.status(201).json({ success: true, data: await service.submitEWayBill(req.shopId, req.params.billId, req.body) }); } catch (error) { next(error); }
+}

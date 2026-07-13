@@ -13,7 +13,7 @@ import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Badge, Card, CardHead, Fld, Kpi, type Tone } from "@/features/settings/ui";
 import type { ReactNode } from "react";
 
-type ProviderStatus = "ready" | "available" | "setup_required" | "adapter_required" | "development_only" | "upgrade_required";
+type ProviderStatus = "ready" | "available" | "setup_required" | "sandbox_only" | "adapter_required" | "development_only" | "upgrade_required";
 type Provider = { id: string; name: string; category: string; status: ProviderStatus; detail: string };
 type Delivery = { id: string; endpointId?: string; eventType: string; status: "pending" | "delivered" | "failed"; attemptCount?: number; httpStatus?: number | null; durationMs?: number | null; lastError?: string | null; createdAt: string; lastAttemptAt?: string | null };
 type DeliveryPage = { items: Delivery[]; hasMore: boolean; nextCursor: string | null };
@@ -33,6 +33,7 @@ const STATUS: Record<ProviderStatus, { label: string; tone: Tone }> = {
   ready: { label: "Operational", tone: "green" },
   available: { label: "Ready to configure", tone: "blue" },
   setup_required: { label: "Setup required", tone: "amber" },
+  sandbox_only: { label: "Sandbox only", tone: "violet" },
   adapter_required: { label: "Adapter required", tone: "amber" },
   development_only: { label: "Development only", tone: "red" },
   upgrade_required: { label: "Upgrade required", tone: "amber" },
