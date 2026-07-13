@@ -206,10 +206,13 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
   const customer = await getCustomer(shopId, customerId);
   const paymentAmount = round2(amount);
   const identity = normalizeLedgerIdentity(input, actor, "udhar-payment");
+  // Resolve lazy primary-location creation outside the balance transaction so
+  // a concurrent uniqueness race cannot abort PostgreSQL's transaction state.
+  const operationalLocation = await resolveOperationalLocation(shopId, input.locationId ?? actor.locationId ?? null);
 
   try {
     return await db.$transaction(async (tx) => {
-      const location = await resolveOperationalLocation(shopId, input.locationId ?? actor.locationId ?? null, tx);
+      const location = await resolveOperationalLocation(shopId, operationalLocation.id, tx);
       // Serialize balance checks for this customer across application instances.
       // Without the row lock, concurrent payments can both validate the same
       // balance and over-credit the ledger.

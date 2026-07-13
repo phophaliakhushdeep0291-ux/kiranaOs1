@@ -107,12 +107,17 @@ export async function confirmBill(shopId, body, actor = {}) {
     throw new AppError("Customer is required for credit/udhar bills", 400);
   }
 
+  // Create/resolve the primary location before opening the sale transaction.
+  // Recovering from a concurrent unique-key race inside a PostgreSQL transaction
+  // leaves that transaction aborted, and SQLite cannot safely run both creates.
+  const operationalLocation = await resolveOperationalLocation(shopId, requestedLocationId);
+
   let bill;
   try {
     bill = await db.$transaction(async (tx) => {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
     if (existingBill) return existingBill;
-    const location = await resolveOperationalLocation(shopId, requestedLocationId, tx);
+    const location = await resolveOperationalLocation(shopId, operationalLocation.id, tx);
 
     const invoiceCustomer = customerId
       ? await tx.customer.findFirst({ where: { id: customerId, shopId, deletedAt: null } })
@@ -921,13 +926,21 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
         throw new AppError(`Cannot restore bill because product is deleted or missing: ${item.name}`, 409);
       }
 
-      const stockResult = await decrementLocationInventory(tx, {
-        shopId,
-        location,
-        product,
-        quantityBase: item.quantityInBaseUnit,
-        allowShortfall: false,
-      });
+      let stockResult;
+      try {
+        stockResult = await decrementLocationInventory(tx, {
+          shopId,
+          location,
+          product,
+          quantityBase: item.quantityInBaseUnit,
+          allowShortfall: false,
+        });
+      } catch (error) {
+        if (["INSUFFICIENT_LOCATION_STOCK", "PRODUCT_NOT_AVAILABLE"].includes(error?.code)) {
+          error.code = "RESTORE_INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
+        }
+        throw error;
+      }
 
       await tx.stockLedger.create({
         data: {
