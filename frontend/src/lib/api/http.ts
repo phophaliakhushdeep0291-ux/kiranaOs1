@@ -327,6 +327,15 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     }
   }
   if (ownerPin) headers.set("x-owner-pin", ownerPin);
+  if (!headers.has("x-location-id")) {
+    try {
+      const { getActiveLocationId } = await import("@/features/stores/location-context");
+      const locationId = getActiveLocationId();
+      if (locationId) headers.set("x-location-id", locationId);
+    } catch {
+      // The server safely defaults legacy clients to the primary location.
+    }
+  }
 
   const method = getMethod(fetchOptions);
   assertNoBackgroundCooldown(path, method, background);

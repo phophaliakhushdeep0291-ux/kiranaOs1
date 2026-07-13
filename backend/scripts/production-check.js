@@ -1281,7 +1281,7 @@ if (exists("prisma/schema.prisma") && exists("prisma-postgres/schema.prisma")) {
   for (const schemaText of [sqliteSchema, pgSchema]) {
     if (!schemaText.includes("createdByUserId")) errors.push("Bill must have nullable createdByUserId cashier attribution");
     if (!schemaText.includes("model DailyClosingSnapshot")) errors.push("DailyClosingSnapshot model must exist");
-    if (!schemaText.includes("@@unique([shopId, date])")) errors.push("DailyClosingSnapshot must have unique shop/date constraint");
+    if (!schemaText.includes("@@unique([shopId, storeId, date])")) errors.push("DailyClosingSnapshot must have unique shop/location/date constraint");
     if (!schemaText.includes("@@index([shopId, createdByUserId, createdAt])")) errors.push("Bill must have shopId + createdByUserId + createdAt index");
   }
 }
@@ -1309,7 +1309,7 @@ if (exists("src/modules/sync/sync.service.js")) {
 
 if (exists("src/modules/reports/dailyClosingSnapshot.service.js")) {
   const snapshotService = read("src/modules/reports/dailyClosingSnapshot.service.js");
-  for (const snippet of ["generateDailyClosingSnapshot", "getDailyClosingSnapshot", "refreshDailyClosingSnapshot", "lockDailyClosingSnapshot", "upsert", "shopId_date", "SNAPSHOT_LOCKED", "lockedAt"]) {
+  for (const snippet of ["generateDailyClosingSnapshot", "getDailyClosingSnapshot", "refreshDailyClosingSnapshot", "lockDailyClosingSnapshot", "upsert", "shopId_storeId_date", "SNAPSHOT_LOCKED", "lockedAt"]) {
     if (!snapshotService.includes(snippet)) errors.push(`dailyClosingSnapshot.service.js missing Phase 12 snippet: ${snippet}`);
   }
 }

@@ -5,15 +5,22 @@ import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
 import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import { postBillCancelledLedger, postBillCreatedLedger, postBillRestoredLedger } from "../finance/financial-ledger.service.js";
+import {
+  decrementLocationInventory,
+  getLocationQuantity,
+  incrementLocationInventory,
+  resolveOperationalLocation,
+} from "../stores/location-context.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
 // ─────────────────────────────────────────────────────────────
-export async function listBills(shopId, { from, to, status, customerId, page, limit }) {
+export async function listBills(shopId, { from, to, status, customerId, locationId, page, limit }) {
   const where = {
     shopId,
     ...(status !== "all" && { status }),
     ...(customerId && { customerId }),
+    ...(locationId && { locationId }),
     ...(from && to && {
       createdAt: { gte: new Date(from), lte: new Date(to) },
     }),
@@ -22,7 +29,7 @@ export async function listBills(shopId, { from, to, status, customerId, page, li
   const [bills, total] = await Promise.all([
     db.bill.findMany({
       where,
-      include: { items: true, payments: true },
+      include: { items: true, payments: true, location: true },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
@@ -39,7 +46,7 @@ export async function listBills(shopId, { from, to, status, customerId, page, li
 export async function getBill(shopId, id) {
   const bill = await db.bill.findFirst({
     where: { id, shopId },
-    include: { items: true, payments: true, customer: true },
+    include: { items: true, payments: true, customer: true, location: true },
   });
   if (!bill) throw new AppError("Bill not found", 404);
   return bill;
@@ -65,6 +72,7 @@ export async function confirmBill(shopId, body, actor = {}) {
     waivedAmount: inputWaivedAmount = 0,
   } = body;
   const billIdentity = normalizeBillIdentity(shopId, body, actor);
+  const requestedLocationId = body.locationId ?? body.location_id ?? actor?.locationId ?? null;
 
   const isEstimate = billType === "estimate";
   // Phase 12: cashier attribution is taken only from authenticated server context,
@@ -103,6 +111,7 @@ export async function confirmBill(shopId, body, actor = {}) {
     bill = await db.$transaction(async (tx) => {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
     if (existingBill) return existingBill;
+    const location = await resolveOperationalLocation(shopId, requestedLocationId, tx);
 
     const invoiceCustomer = customerId
       ? await tx.customer.findFirst({ where: { id: customerId, shopId, deletedAt: null } })
@@ -115,6 +124,10 @@ export async function confirmBill(shopId, body, actor = {}) {
       where: { id: { in: productIds }, shopId, deletedAt: null },
     });
     const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
+    const locationStockByProduct = new Map(await Promise.all(dbProducts.map(async (product) => [
+      product.id,
+      await getLocationQuantity(tx, shopId, location, product),
+    ])));
     const dbSellingUnits = productIds.length > 0
       ? await tx.productSellingUnit.findMany({ where: { shopId, productId: { in: productIds }, isActive: true } })
       : [];
@@ -171,9 +184,10 @@ export async function confirmBill(shopId, body, actor = {}) {
       // deficit for reconciliation (see decrementProductStockOrThrow). This hard rejection only
       // fires for internal callers that opt out of shortfall (allowStockShortfall === false).
       if (product && !allowStockShortfall) {
-        if (product.stockBaseQty < qtyInBase) {
+        const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
+        if (availableAtLocation < qtyInBase) {
           throw new AppError(
-            `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
+            `Insufficient stock for "${product.name}" at ${location.name}. Available: ${availableAtLocation} ${product.baseUnit}, needed: ${qtyInBase}`,
             400
           );
         }
@@ -311,9 +325,10 @@ export async function confirmBill(shopId, body, actor = {}) {
     const stockUpdatesByProduct = aggregateStockUpdates(stockUpdates);
     if (!allowStockShortfall) {
       for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
-        if (product.stockBaseQty < qtyInBase) {
+        const availableAtLocation = locationStockByProduct.get(product.id) ?? 0;
+        if (availableAtLocation < qtyInBase) {
           const err = new AppError(
-            `Insufficient stock for "${product.name}". Available: ${product.stockBaseQty} ${product.baseUnit}, needed: ${qtyInBase}`,
+            `Insufficient stock for "${product.name}" at ${location.name}. Available: ${availableAtLocation} ${product.baseUnit}, needed: ${qtyInBase}`,
             400
           );
           err.code = "INSUFFICIENT_STOCK";
@@ -341,6 +356,7 @@ export async function confirmBill(shopId, body, actor = {}) {
     const bill = await tx.bill.create({
       data: {
         shopId,
+        locationId: location.id,
         billNo,
         billType,
         customerId: customerId ?? null,
@@ -373,13 +389,11 @@ export async function confirmBill(shopId, body, actor = {}) {
 
     // ── 5. Deduct stock + create stock ledger entries ─────────
     for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
-      const stockResult = await decrementProductStockOrThrow(tx, {
+      const stockResult = await decrementLocationInventory(tx, {
         shopId,
+        location,
         product,
-        qtyInBase,
-        statusCode: 409,
-        code: "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION",
-        message: `Insufficient stock for "${product.name}". Another bill may have used this stock first.`,
+        quantityBase: qtyInBase,
         allowShortfall: allowStockShortfall,
       });
 
@@ -389,6 +403,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       await tx.stockLedger.create({
         data: {
           shopId,
+          locationId: location.id,
           productId: product.id,
           productName: product.name,
           action: "sale",
@@ -417,6 +432,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       const udharLedgerEntry = await tx.udharLedger.create({
         data: {
           shopId,
+          locationId: location.id,
           customerId,
           customerName: customer.name,
           type: "debit",
@@ -486,6 +502,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
   if (bill.status === "cancelled") return bill;
 
   return db.$transaction(async (tx) => {
+    const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
     // Atomic claim: only one concurrent request can transition active -> cancelled, so two
     // simultaneous cancels can't both restore stock / reverse udhar. The conditional update
     // locks the row until commit; a read-then-act status check (the outer guard above) does not.
@@ -514,27 +531,20 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     for (const item of saleLedgerRows > 0 ? bill.items : []) {
       if (!item.productId) continue;
 
-      const updated = await tx.product.updateMany({
-        where: { id: item.productId, shopId },
-        data: { stockBaseQty: { increment: item.quantityInBaseUnit } },
-      });
-      if (updated.count !== 1) continue;
-
       const product = await tx.product.findFirst({ where: { id: item.productId, shopId } });
       if (!product) continue;
-
-      const newStock = product.stockBaseQty;
-      const oldStock = round2(newStock - item.quantityInBaseUnit);
+      const stockResult = await incrementLocationInventory(tx, { shopId, location, product, quantityBase: item.quantityInBaseUnit });
 
       await tx.stockLedger.create({
         data: {
           shopId,
+          locationId: location.id,
           productId: item.productId,
           productName: item.name,
           action: "cancel_reversal",
           changeBaseQty: item.quantityInBaseUnit,
-          oldStockBaseQty: oldStock,
-          newStockBaseQty: newStock,
+          oldStockBaseQty: stockResult.oldStock,
+          newStockBaseQty: stockResult.newStock,
           billId: bill.id,
           note: `Reversal: ${reason}`,
         },
@@ -548,6 +558,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
         await tx.udharLedger.create({
           data: {
             shopId,
+            locationId: location.id,
             customerId: bill.customerId,
             customerName: customer.name,
             type: "payment",
@@ -632,6 +643,12 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       const original = returnOfBillId
         ? await tx.bill.findFirst({ where: { id: returnOfBillId, shopId } })
         : null;
+      const location = await resolveOperationalLocation(
+        shopId,
+        body.locationId ?? body.location_id ?? original?.locationId ?? actor?.locationId ?? null,
+        tx,
+        { allowInactive: Boolean(original?.locationId) },
+      );
 
       // A return against an estimate must not post GST: the original kacha bill never entered
       // the GST report, so its reversal can't either — otherwise the report would show negative
@@ -730,6 +747,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       const returnBill = await tx.bill.create({
         data: {
           shopId,
+          locationId: location.id,
           billNo,
           billType: "sales_return",
           status: "active",
@@ -756,12 +774,13 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           await tx.stockLedger.create({
             data: {
               shopId,
+              locationId: location.id,
               productId: product.id,
               productName: product.name,
               action: "damage",
               changeBaseQty: 0,
-              oldStockBaseQty: product.stockBaseQty,
-              newStockBaseQty: product.stockBaseQty,
+              oldStockBaseQty: await getLocationQuantity(tx, shopId, location, product),
+              newStockBaseQty: await getLocationQuantity(tx, shopId, location, product),
               damageLossValue: lineCost,
               billId: returnBill.id,
               clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `damage:${product.id}`),
@@ -774,22 +793,17 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           });
           continue;
         }
-        const updated = await tx.product.updateMany({
-          where: { id: product.id, shopId },
-          data: { stockBaseQty: { increment: qtyInBase } },
-        });
-        if (updated.count !== 1) continue;
-        const fresh = await tx.product.findFirst({ where: { id: product.id, shopId } });
-        const newStock = fresh?.stockBaseQty ?? round2(product.stockBaseQty + qtyInBase);
+        const stockResult = await incrementLocationInventory(tx, { shopId, location, product, quantityBase: qtyInBase });
         await tx.stockLedger.create({
           data: {
             shopId,
+            locationId: location.id,
             productId: product.id,
             productName: product.name,
             action: "return",
             changeBaseQty: qtyInBase,
-            oldStockBaseQty: round2(newStock - qtyInBase),
-            newStockBaseQty: newStock,
+            oldStockBaseQty: stockResult.oldStock,
+            newStockBaseQty: stockResult.newStock,
             billId: returnBill.id,
             clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `return:${product.id}`),
             idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `return:${product.id}`),
@@ -808,6 +822,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         await tx.udharLedger.create({
           data: {
             shopId,
+            locationId: location.id,
             customerId: resolvedCustomerId,
             customerName: customer.name,
             type: "payment",
@@ -864,6 +879,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
   if (bill.status !== "cancelled") throw new AppError("Bill is already restored or not cancelled", 409);
 
   return db.$transaction(async (tx) => {
+    const location = await resolveOperationalLocation(shopId, bill.locationId, tx, { allowInactive: true });
     // Atomic claim: cancelled -> active, so only one concurrent restore wins (mirrors cancel).
     const restoredAt = new Date();
     const claimed = await tx.bill.updateMany({
@@ -891,18 +907,18 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
         throw new AppError(`Cannot restore bill because product is deleted or missing: ${item.name}`, 409);
       }
 
-      const stockResult = await decrementProductStockOrThrow(tx, {
+      const stockResult = await decrementLocationInventory(tx, {
         shopId,
+        location,
         product,
-        qtyInBase: item.quantityInBaseUnit,
-        statusCode: 409,
-        code: "RESTORE_INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION",
-        message: `Insufficient stock to restore bill for "${item.name}". Available stock may have changed.`,
+        quantityBase: item.quantityInBaseUnit,
+        allowShortfall: false,
       });
 
       await tx.stockLedger.create({
         data: {
           shopId,
+          locationId: location.id,
           productId: product.id,
           productName: item.name,
           action: "restore_reversal",
@@ -927,6 +943,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       await tx.udharLedger.create({
         data: {
           shopId,
+          locationId: location.id,
           customerId: bill.customerId,
           customerName: customer.name,
           type: "debit",

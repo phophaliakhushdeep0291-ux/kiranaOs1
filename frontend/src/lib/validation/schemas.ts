@@ -155,6 +155,7 @@ export const billPaymentSchema = z.object({
 
 export const billCreationSchema = z
   .object({
+    locationId: optionalText,
     billType: z.enum(["normal_sale", "udhar_entry", "gst_invoice", "estimate"]),
     gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),
     customerId: optionalText,

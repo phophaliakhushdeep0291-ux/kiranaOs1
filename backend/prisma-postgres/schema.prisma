@@ -423,6 +423,7 @@ model Customer {
 model Bill {
   id                   String    @id @default(cuid())
   shopId               String
+  locationId           String?
   billNo               String // e.g. KOS-2026-0001
   billType             String    @default("normal_sale") // estimate | normal_sale | gst_invoice | udhar_entry
   status               String    @default("active") // active | cancelled
@@ -464,6 +465,7 @@ model Bill {
   updatedAt            DateTime  @updatedAt
 
   shop                Shop                 @relation(fields: [shopId], references: [id])
+  location            StoreLocation?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
   customer            Customer?            @relation(fields: [customerId], references: [id])
   items               BillItem[]
   payments            Payment[]
@@ -477,6 +479,7 @@ model Bill {
   @@unique([shopId, sourceDeviceId, clientBillId])
   @@index([shopId, createdByUserId, createdAt])
   @@index([shopId, status, createdAt])
+  @@index([shopId, locationId, status, createdAt])
   @@index([shopId, returnOfBillId])
   @@index([shopId, updatedAt, id])
 }
@@ -568,6 +571,12 @@ model StoreLocation {
   stocks            LocationStock[]
   outgoingTransfers StockTransfer[] @relation("TransferFrom")
   incomingTransfers StockTransfer[] @relation("TransferTo")
+  bills             Bill[]
+  stockLedger       StockLedger[]
+  udharLedger       UdharLedger[]
+  purchaseHistory   PurchaseHistory[]
+  expenses          Expense[]
+  dailyClosings     DailyClosingSnapshot[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -707,6 +716,7 @@ model ComplianceDocument {
 model StockLedger {
   id                      String    @id @default(cuid())
   shopId                  String
+  locationId              String?
   productId               String
   productName             String
   action                  String // sale | purchase | damage | correction | cancel_reversal
@@ -738,12 +748,14 @@ model StockLedger {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
-  shop    Shop    @relation(fields: [shopId], references: [id])
-  product Product @relation(fields: [productId], references: [id])
-  bill    Bill?   @relation(fields: [billId], references: [id])
+  shop     Shop           @relation(fields: [shopId], references: [id])
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  product  Product        @relation(fields: [productId], references: [id])
+  bill     Bill?          @relation(fields: [billId], references: [id])
 
   @@unique([shopId, idempotencyKey])
   @@index([shopId, createdAt])
+  @@index([shopId, locationId, createdAt])
   @@index([shopId, sourceType, sourceId])
   @@index([productId])
   @@index([shopId, updatedAt, id])
@@ -755,6 +767,7 @@ model StockLedger {
 model UdharLedger {
   id                 String    @id @default(cuid())
   shopId             String
+  locationId         String?
   customerId         String
   customerName       String
   type               String // debit | payment
@@ -776,12 +789,14 @@ model UdharLedger {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  shop     Shop     @relation(fields: [shopId], references: [id])
-  customer Customer @relation(fields: [customerId], references: [id])
-  bill     Bill?    @relation(fields: [billId], references: [id])
+  shop     Shop           @relation(fields: [shopId], references: [id])
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  customer Customer       @relation(fields: [customerId], references: [id])
+  bill     Bill?          @relation(fields: [billId], references: [id])
 
   @@unique([shopId, idempotencyKey])
   @@index([shopId, customerId, createdAt])
+  @@index([shopId, locationId, createdAt])
   @@index([shopId, reversalOfLedgerId])
   @@index([shopId, sourceType, sourceId])
   @@index([shopId, updatedAt, id])
@@ -814,6 +829,7 @@ model Supplier {
 model Expense {
   id                String    @id @default(cuid())
   shopId            String
+  locationId        String?
   title             String
   amount            Float     @default(0)
   category          String    @default("general")
@@ -829,11 +845,13 @@ model Expense {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  shop Shop @relation(fields: [shopId], references: [id])
+  shop     Shop           @relation(fields: [shopId], references: [id])
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@index([shopId])
   @@index([shopId, deletedAt])
   @@index([shopId, spentAt])
+  @@index([shopId, locationId, spentAt])
   @@index([shopId, updatedAt, id])
 }
 
@@ -875,6 +893,7 @@ model Offer {
 model PurchaseHistory {
   id                      String    @id @default(cuid())
   shopId                  String
+  locationId              String?
   productId               String
   supplierId              String?
   supplierName            String
@@ -897,11 +916,13 @@ model PurchaseHistory {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
-  shop     Shop      @relation(fields: [shopId], references: [id])
-  product  Product   @relation(fields: [productId], references: [id])
-  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  shop     Shop           @relation(fields: [shopId], references: [id])
+  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  product  Product        @relation(fields: [productId], references: [id])
+  supplier Supplier?      @relation(fields: [supplierId], references: [id])
 
   @@index([shopId, productId, createdAt])
+  @@index([shopId, locationId, createdAt])
   @@index([shopId, updatedAt, id])
 }
 
@@ -978,10 +999,12 @@ model DailyClosingSnapshot {
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
-  shop Shop @relation(fields: [shopId], references: [id])
+  shop  Shop           @relation(fields: [shopId], references: [id])
+  store StoreLocation? @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
-  @@unique([shopId, date])
+  @@unique([shopId, storeId, date])
   @@index([shopId, date])
+  @@index([shopId, storeId, date])
   @@index([shopId, lockedAt])
 }
 

@@ -1,30 +1,31 @@
 import * as svc from "./inventory.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
 
 export async function getInventory(req, res, next) {
   try {
-    const data = await svc.getInventory(req.shopId);
+    const data = await svc.getInventory(req.shopId, requestLocationId(req));
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
 
 export async function getLowStock(req, res, next) {
   try {
-    const data = await svc.getLowStock(req.shopId);
+    const data = await svc.getLowStock(req.shopId, requestLocationId(req));
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
 
 export async function purchase(req, res, next) {
   try {
-    const data = await svc.recordPurchase(req.shopId, req.body);
+    const data = await svc.recordPurchase(req.shopId, { ...req.body, locationId: requestLocationId(req) });
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
 }
 
 export async function damage(req, res, next) {
   try {
-    const data = await svc.recordDamage(req.shopId, req.body);
+    const data = await svc.recordDamage(req.shopId, { ...req.body, locationId: requestLocationId(req) });
     await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,
@@ -52,7 +53,7 @@ export async function damage(req, res, next) {
 
 export async function correction(req, res, next) {
   try {
-    const data = await svc.correctStock(req.shopId, req.body);
+    const data = await svc.correctStock(req.shopId, { ...req.body, locationId: requestLocationId(req) });
     await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,
@@ -76,7 +77,7 @@ export async function correction(req, res, next) {
 
 export async function getLedger(req, res, next) {
   try {
-    const data = await svc.getLedger(req.shopId, req.query);
+    const data = await svc.getLedger(req.shopId, { ...req.query, locationId: requestLocationId(req) });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

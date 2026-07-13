@@ -1,4 +1,5 @@
 import * as svc from "./customers.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
 import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 
 export async function list(req, res, next) {
@@ -52,6 +53,7 @@ export async function udharPayment(req, res, next) {
   try {
     const data = await svc.recordUdharPayment(req.shopId, req.params.id, req.body, {
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+      locationId: requestLocationId(req),
     });
     await publishIntegrationEvent(req.shopId, "payment.recorded", { customerId: req.params.id, amount: req.body.amount, paymentMode: req.body.paymentMode ?? null, referenceId: data.id ?? null, recordedAt: new Date().toISOString() }).catch(() => []);
     res.json({ success: true, data });

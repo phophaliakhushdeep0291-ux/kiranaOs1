@@ -4,6 +4,7 @@ import { addMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js"
 import { AppError } from "../../middleware/error.js";
 import { env } from "../../config/env.js";
 import { getReportRangeLimit } from "../feature-gates/featureGate.service.js";
+import { getLocationQuantity, resolveOperationalLocation } from "../stores/location-context.service.js";
 
 // Estimates (kacha bills) are full sales — stock, tender, udhar — so they count in every
 // sales/cash/P&L report. The one exception is GST: an estimate is not a tax document, so the
@@ -88,9 +89,10 @@ async function enforceReportRangeLimit(shopId, { start, end }, requestedLabel = 
   return { days, limit };
 }
 
-function activeSalesWhere(shopId, start, end) {
+function activeSalesWhere(shopId, start, end, locationId = null) {
   return {
     shopId,
+    ...(locationId && { locationId }),
     ...REAL_SALE_BILL_FILTER,
     createdAt: { gte: start, lte: end },
   };
@@ -145,7 +147,7 @@ async function countPendingSync(shopId) {
 // ─────────────────────────────────────────────────────────────
 // DAILY CLOSING — shopkeeper dashboard report
 // ─────────────────────────────────────────────────────────────
-export async function getDailyClosing(shopId, { date } = {}) {
+export async function getDailyClosing(shopId, { date, locationId } = {}) {
   const day = date ? parseDateOnly(date) : new Date();
   const start = startOfDay(day);
   const end = endOfDay(day);
@@ -153,16 +155,16 @@ export async function getDailyClosing(shopId, { date } = {}) {
 
   const [activeBills, cancelledBills, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts] = await Promise.all([
     db.bill.findMany({
-      where: activeSalesWhere(shopId, start, end),
+      where: activeSalesWhere(shopId, start, end, locationId),
       include: { payments: true },
     }),
     db.bill.findMany({
-      where: { shopId, status: "cancelled", createdAt: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), status: "cancelled", createdAt: { gte: start, lte: end } },
       select: { id: true, grandTotal: true },
     }),
-    db.bill.count({ where: { shopId, billType: "estimate", createdAt: { gte: start, lte: end } } }),
+    db.bill.count({ where: { shopId, ...(locationId && { locationId }), billType: "estimate", createdAt: { gte: start, lte: end } } }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
     countPendingSync(shopId),
@@ -172,8 +174,14 @@ export async function getDailyClosing(shopId, { date } = {}) {
       orderBy: { stockBaseQty: "asc" },
       take: 20,
     }),
-    getTopProducts(shopId, { from: dateKey, to: dateKey, limit: 5, includeProfit: false }),
+    getTopProducts(shopId, { from: dateKey, to: dateKey, limit: 5, includeProfit: false, locationId }),
   ]);
+
+  const reportLocation = await resolveOperationalLocation(shopId, locationId);
+  const lowStockAtLocation = await Promise.all(lowStockProducts.map(async (product) => ({
+    ...product,
+    stockBaseQty: await getLocationQuantity(db, shopId, reportLocation, product),
+  })));
 
   const activePayments = activeBills.flatMap((b) => b.payments);
   const billCash = sumPaymentsByMode(activePayments, "cash");
@@ -199,7 +207,8 @@ export async function getDailyClosing(shopId, { date } = {}) {
     cancelledBills: cancelledBills.length,
     roughBills: roughBillsCount,
     topProducts,
-    lowStock: lowStockProducts
+    location: { id: reportLocation.id, code: reportLocation.code, name: reportLocation.name },
+    lowStock: lowStockAtLocation
       .filter((p) => Number(p.stockBaseQty) <= Number(p.lowStockThreshold))
       .map((p) => ({
         productId: p.id,
@@ -217,19 +226,19 @@ export async function getDailyClosing(shopId, { date } = {}) {
 // ─────────────────────────────────────────────────────────────
 // SALES SUMMARY — today/7d/30d/custom with plan range limits
 // ─────────────────────────────────────────────────────────────
-export async function getSalesSummary(shopId, { range, from, to, includeProfit = false } = {}) {
+export async function getSalesSummary(shopId, { range, from, to, locationId, includeProfit = false } = {}) {
   const normalized = normalizeDateRange({ range, from, to });
   await enforceReportRangeLimit(shopId, normalized, normalized.label);
   const { start, end } = normalized;
 
   const [bills, cancelledBills] = await Promise.all([
     db.bill.findMany({
-      where: activeSalesWhere(shopId, start, end),
+      where: activeSalesWhere(shopId, start, end, locationId),
       include: { payments: true },
       orderBy: { createdAt: "asc" },
     }),
     db.bill.findMany({
-      where: { shopId, status: "cancelled", createdAt: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), status: "cancelled", createdAt: { gte: start, lte: end } },
       select: { grandTotal: true, createdAt: true },
     }),
   ]);
@@ -274,18 +283,18 @@ export async function getSalesSummary(shopId, { range, from, to, includeProfit =
 // ─────────────────────────────────────────────────────────────
 // PAYMENT MODE REPORT
 // ─────────────────────────────────────────────────────────────
-export async function getPaymentModeReport(shopId, { from, to } = {}) {
+export async function getPaymentModeReport(shopId, { from, to, locationId } = {}) {
   const { start, end } = normalizeDateRange({ from, to });
   await enforceReportRangeLimit(shopId, { start, end }, "custom");
 
   const [bills, oldUdharRecovered] = await Promise.all([
     db.bill.findMany({
-      where: activeSalesWhere(shopId, start, end),
+      where: activeSalesWhere(shopId, start, end, locationId),
       include: { payments: true },
       orderBy: { createdAt: "desc" },
     }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
   ]);
@@ -401,7 +410,7 @@ export async function getUdharAgeing(shopId) {
 //   inventoryLoss = sum of stockLedger.damageLossValue
 //   netProfit     = grossProfit - inventoryLoss
 // ─────────────────────────────────────────────────────────────
-export async function getPnL(shopId, { range, from, to }) {
+export async function getPnL(shopId, { range, from, to, locationId }) {
   const { start, end } = getDateRange(range, from, to, env.DAILY_CLOSING_TIMEZONE);
 
   // These six reads are independent, so run them in parallel (one batch of round-trips
@@ -410,6 +419,7 @@ export async function getPnL(shopId, { range, from, to }) {
     db.bill.findMany({
       where: {
         shopId,
+        ...(locationId && { locationId }),
         status: "active",
         createdAt: { gte: start, lte: end },
       },
@@ -418,6 +428,7 @@ export async function getPnL(shopId, { range, from, to }) {
     db.bill.findMany({
       where: {
         shopId,
+        ...(locationId && { locationId }),
         status: "cancelled",
         createdAt: { gte: start, lte: end },
       },
@@ -426,6 +437,7 @@ export async function getPnL(shopId, { range, from, to }) {
     db.stockLedger.findMany({
       where: {
         shopId,
+        ...(locationId && { locationId }),
         action: "damage",
         createdAt: { gte: start, lte: end },
       },
@@ -434,6 +446,7 @@ export async function getPnL(shopId, { range, from, to }) {
     db.udharLedger.findMany({
       where: {
         shopId,
+        ...(locationId && { locationId }),
         type: "debit",
         // "Udhar given this period" = credit genuinely extended to customers: bill credit
         // (mode "credit") and manual credit adjustments. Exclude system-generated debits —
@@ -447,6 +460,7 @@ export async function getPnL(shopId, { range, from, to }) {
     db.udharLedger.findMany({
       where: {
         shopId,
+        ...(locationId && { locationId }),
         type: "payment",
         mode: { not: "reversal" },
         reversedAt: null,
@@ -455,7 +469,7 @@ export async function getPnL(shopId, { range, from, to }) {
       select: { amount: true },
     }),
     db.expense.findMany({
-      where: { shopId, deletedAt: null, spentAt: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), deletedAt: null, spentAt: { gte: start, lte: end } },
       select: { amount: true },
     }),
   ]);
@@ -501,11 +515,11 @@ export async function getPnL(shopId, { range, from, to }) {
 // Taxable value depends on the bill's gstMode: exclusive bills carry tax on
 // top of the subtotal; inclusive bills carry it inside (taxable = subtotal − gst).
 // ─────────────────────────────────────────────────────────────
-export async function getGstReport(shopId, { range, from, to } = {}) {
+export async function getGstReport(shopId, { range, from, to, locationId } = {}) {
   const { start, end } = getDateRange(range, from, to, env.DAILY_CLOSING_TIMEZONE);
 
   const bills = await db.bill.findMany({
-    where: { shopId, ...GST_BILL_FILTER, createdAt: { gte: start, lte: end } },
+    where: { shopId, ...(locationId && { locationId }), ...GST_BILL_FILTER, createdAt: { gte: start, lte: end } },
     select: { subtotal: true, gst: true, gstMode: true },
   });
 
@@ -539,18 +553,18 @@ export async function getGstReport(shopId, { range, from, to } = {}) {
 // ─────────────────────────────────────────────────────────────
 // MONTHLY BREAKDOWN — grouped query pattern avoids obvious N+1 bill fetching
 // ─────────────────────────────────────────────────────────────
-export async function getMonthlyBreakdown(shopId, { year, untilMonth }) {
+export async function getMonthlyBreakdown(shopId, { year, untilMonth, locationId }) {
   const tz = env.DAILY_CLOSING_TIMEZONE;
   const daysInUntilMonth = new Date(Date.UTC(year, untilMonth, 0)).getUTCDate();
   const start = dateRangeForDateOnly(`${year}-01-01`, tz).start;
   const end = dateRangeForDateOnly(`${year}-${String(untilMonth).padStart(2, "0")}-${String(daysInUntilMonth).padStart(2, "0")}`, tz).end;
   const [bills, damageRows] = await Promise.all([
     db.bill.findMany({
-      where: { shopId, status: "active", createdAt: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), status: "active", createdAt: { gte: start, lte: end } },
       select: { grandTotal: true, grossProfit: true, createdAt: true },
     }),
     db.stockLedger.findMany({
-      where: { shopId, action: "damage", createdAt: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), action: "damage", createdAt: { gte: start, lte: end } },
       select: { damageLossValue: true, createdAt: true },
     }),
   ]);
@@ -580,10 +594,10 @@ export async function getMonthlyBreakdown(shopId, { year, untilMonth }) {
 // ─────────────────────────────────────────────────────────────
 // TOP PRODUCTS by revenue/quantity
 // ─────────────────────────────────────────────────────────────
-export async function getTopProducts(shopId, { from, to, limit = DEFAULT_TOP_LIMIT, includeProfit = false } = {}) {
+export async function getTopProducts(shopId, { from, to, locationId, limit = DEFAULT_TOP_LIMIT, includeProfit = false } = {}) {
   const safeLimit = Math.min(Math.max(Number(limit) || DEFAULT_TOP_LIMIT, 1), MAX_TOP_LIMIT);
   const range = normalizeDateRange({ from, to });
-  const billFilter = activeSalesWhere(shopId, range.start, range.end);
+  const billFilter = activeSalesWhere(shopId, range.start, range.end, locationId);
 
   const items = await db.billItem.findMany({
     where: { bill: billFilter },
@@ -622,12 +636,12 @@ export async function getTopProducts(shopId, { from, to, limit = DEFAULT_TOP_LIM
 // ─────────────────────────────────────────────────────────────
 // INVENTORY HEALTH
 // ─────────────────────────────────────────────────────────────
-export async function getInventoryHealth(shopId, { includeCost = false, windowDays = 30 } = {}) {
+export async function getInventoryHealth(shopId, { includeCost = false, windowDays = 30, locationId } = {}) {
   const since = zonedDayStartDaysAgo(new Date(), Number(windowDays || 30));
   const [products, soldItems] = await Promise.all([
     db.product.findMany({ where: { shopId }, orderBy: { name: "asc" } }),
     db.billItem.findMany({
-      where: { bill: { shopId, status: "active", createdAt: { gte: since } } },
+      where: { bill: { shopId, ...(locationId && { locationId }), status: "active", createdAt: { gte: since } } },
       select: { productId: true, name: true, quantityInBaseUnit: true, lineTotal: true },
     }),
   ]);
@@ -642,15 +656,16 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
   }
 
   const activeProducts = products.filter((p) => !p.deletedAt);
-  const movementRows = activeProducts.map((p) => ({
+  const reportLocation = await resolveOperationalLocation(shopId, locationId);
+  const movementRows = await Promise.all(activeProducts.map(async (p) => ({
     productId: p.id,
     productName: p.name,
-    stockBaseQty: p.stockBaseQty,
+    stockBaseQty: await getLocationQuantity(db, shopId, reportLocation, p),
     baseUnit: p.baseUnit,
     lowStockThreshold: p.lowStockThreshold,
     quantitySoldBase: round2(soldByProduct.get(p.id)?.quantitySoldBase ?? 0),
     revenuePaise: toPaise(soldByProduct.get(p.id)?.revenue ?? 0),
-  }));
+  })));
 
   const result = {
     lowStock: movementRows.filter((p) => p.lowStockThreshold > 0 && p.stockBaseQty <= p.lowStockThreshold),
@@ -665,10 +680,11 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
   };
 
   if (includeCost) {
+    const branchStockByProduct = new Map(movementRows.map((row) => [row.productId, row.stockBaseQty]));
     result.totalInventoryCostPaise = toPaise(sumMoney(activeProducts.map((p) => {
       // costPerRateUnit is rate-unit based. Without conversion factors in report context,
       // this is an estimate and intentionally marked as such.
-      return Number(p.stockBaseQty || 0) * Number(p.costPerRateUnit || 0);
+      return Number(branchStockByProduct.get(p.id) || 0) * Number(p.costPerRateUnit || 0);
     })));
     result.inventoryCostEstimate = true;
   }
@@ -681,12 +697,12 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
 // Phase 12: group by server-trusted Bill.createdByUserId. Legacy/null bills
 // are kept in an Unknown/Legacy bucket instead of inventing cashier data.
 // ─────────────────────────────────────────────────────────────
-export async function getStaffSales(shopId, { from, to } = {}) {
+export async function getStaffSales(shopId, { from, to, locationId } = {}) {
   const { start, end } = normalizeDateRange({ from, to });
   await enforceReportRangeLimit(shopId, { start, end }, "custom");
 
   const bills = await db.bill.findMany({
-    where: { shopId, createdAt: { gte: start, lte: end } },
+    where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end } },
     include: { payments: true },
   });
 
@@ -757,26 +773,26 @@ export async function getStaffSales(shopId, { from, to } = {}) {
 // ─────────────────────────────────────────────────────────────
 // PAYMENT SUMMARY — backward-compatible existing endpoint
 // ─────────────────────────────────────────────────────────────
-export async function getPaymentSummary(shopId, { from, to }) {
+export async function getPaymentSummary(shopId, { from, to, locationId }) {
   const { start, end } = getDateRange(null, from, to, env.DAILY_CLOSING_TIMEZONE);
 
   const [payments, bills, oldUdharRecovered, purchases] = await Promise.all([
     db.payment.findMany({
       where: {
-        bill: { shopId, status: "active", createdAt: { gte: start, lte: end } },
+        bill: { shopId, ...(locationId && { locationId }), status: "active", createdAt: { gte: start, lte: end } },
       },
       select: { mode: true, amount: true },
     }),
     db.bill.findMany({
-      where: activeSalesWhere(shopId, start, end),
+      where: activeSalesWhere(shopId, start, end, locationId),
       select: { creditAmount: true },
     }),
     db.udharLedger.findMany({
-      where: { shopId, type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
       select: { mode: true, amount: true },
     }),
     db.stockLedger.findMany({
-      where: { shopId, action: "purchase", createdAt: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), action: "purchase", createdAt: { gte: start, lte: end } },
       select: { purchasePaymentMode: true, purchasePaidAmount: true, purchaseDueAmount: true },
     }),
   ]);
@@ -841,8 +857,9 @@ export async function generateDailyClosingSnapshot(shopId, storeIdOrDate, maybeD
 
 export async function getDailyClosingSnapshot(shopId, storeIdOrDate, maybeDate) {
   const date = maybeDate ?? storeIdOrDate;
+  const storeId = maybeDate ? storeIdOrDate : null;
   const mod = await import("./dailyClosingSnapshot.service.js");
-  return mod.getDailyClosingSnapshot(shopId, date);
+  return mod.getDailyClosingSnapshot(shopId, date, storeId);
 }
 
 export async function refreshDailyClosingSnapshot(shopId, storeIdOrDate, maybeDate, options = {}) {
@@ -855,9 +872,10 @@ export async function refreshDailyClosingSnapshot(shopId, storeIdOrDate, maybeDa
 // ─────────────────────────────────────────────────────────────
 // EXPORT — raw data for CSV / Excel download
 // ─────────────────────────────────────────────────────────────
-export async function exportBillsData(shopId, { from, to, status }) {
+export async function exportBillsData(shopId, { from, to, status, locationId }) {
   const where = {
     shopId,
+    ...(locationId && { locationId }),
     ...(status && status !== "all" ? { status } : {}),
     ...(from && to ? { createdAt: { gte: new Date(from), lte: new Date(to) } } : {}),
   };
@@ -921,9 +939,10 @@ export async function exportBillsData(shopId, { from, to, status }) {
   return { rows, count: bills.length };
 }
 
-export async function exportStockLedgerData(shopId, { from, to, productId }) {
+export async function exportStockLedgerData(shopId, { from, to, productId, locationId }) {
   const where = {
     shopId,
+    ...(locationId && { locationId }),
     ...(productId ? { productId } : {}),
     ...(from && to ? { createdAt: { gte: new Date(from), lte: new Date(to) } } : {}),
   };

@@ -3,6 +3,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { getDateRange } from "../../utils/dates.js";
+import { gspHttpReadiness, submitEInvoiceToGsp } from "./gsp-http.provider.js";
 
 const GST_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -38,18 +39,24 @@ export async function getReadiness(shopId) {
   const gstin = validateGstin(shop.gstNumber);
   const missingHsn = taxableProducts.filter((row) => !row.hsn);
   const invalidHsn = taxableProducts.filter((row) => row.hsn && !validateHsn(row.hsn).valid);
-  const providerConfigured = env.GST_PROVIDER !== "disabled";
+  const liveProvider = env.GST_PROVIDER === "gsp_http" ? gspHttpReadiness() : {
+    mode: env.GST_PROVIDER,
+    providerName: env.GST_PROVIDER === "sandbox" ? "KiranaOS sandbox" : null,
+    configured: env.GST_PROVIDER === "sandbox",
+    certified: false,
+    legalSubmission: false,
+  };
   const checks = [
     { key: "gstin", label: "Valid shop GSTIN", ready: gstin.valid, detail: gstin.valid ? `State code ${gstin.stateCode}` : gstin.reason },
     { key: "hsn", label: "HSN coverage on taxable products", ready: missingHsn.length === 0 && invalidHsn.length === 0, detail: `${taxableProducts.length - missingHsn.length - invalidHsn.length}/${taxableProducts.length} taxable products valid` },
     { key: "invoice_register", label: "Auditable GST invoice register", ready: true, detail: `${gstInvoiceCount} GST invoices available for export` },
-    { key: "provider", label: "Certified GSTN/GSP submission", ready: false, detail: providerConfigured ? "Sandbox is enabled; it never creates a legal IRN" : "No certified GSP is connected; filing remains blocked by design" },
+    { key: "provider", label: "Certified GSTN/GSP submission", ready: liveProvider.legalSubmission, detail: liveProvider.legalSubmission ? `${liveProvider.providerName} is configured for legal IRN submission` : liveProvider.configured ? "A non-legal sandbox is enabled, or provider certification is not attested" : "No certified GSP is connected; filing remains blocked by design" },
     { key: "eway", label: "E-way bill transport data", ready: false, detail: "Vehicle, transporter and distance fields are not yet captured" },
   ];
   return {
     score: Math.round((checks.filter((row) => row.ready).length / checks.length) * 100),
     legallyReady: checks.every((row) => row.ready),
-    provider: { mode: env.GST_PROVIDER, configured: providerConfigured, legalSubmission: false },
+    provider: liveProvider,
     checks,
     gaps: { missingHsn: missingHsn.slice(0, 25), invalidHsn: invalidHsn.slice(0, 25) },
     stats: { taxableProducts: taxableProducts.length, gstInvoices: gstInvoiceCount, complianceDocuments: documentCount },
@@ -66,7 +73,7 @@ function taxableForLine(line, gstMode) {
 export async function getGstInvoiceRegister(shopId, query = {}) {
   const { start, end } = getDateRange(query.range === "custom" ? null : query.range, query.from, query.to, env.DAILY_CLOSING_TIMEZONE);
   const bills = await db.bill.findMany({
-    where: { shopId, status: "active", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
+    where: { shopId, ...(query.locationId && { locationId: query.locationId }), status: "active", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
     orderBy: { createdAt: "asc" },
     include: { items: { include: { product: { select: { hsn: true } } } }, payments: true },
   });
@@ -120,7 +127,7 @@ function canonicalPayload(bill, shop) {
 }
 
 export async function createSandboxEInvoice(shopId, billId) {
-  if (env.GST_PROVIDER === "disabled") throw new AppError("GST submission provider is not configured", 503, "GST_PROVIDER_NOT_CONFIGURED");
+  if (env.GST_PROVIDER !== "sandbox") throw new AppError("GST sandbox provider is not enabled", 503, "GST_PROVIDER_NOT_CONFIGURED");
   const [shop, bill] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId } }),
     db.bill.findFirst({ where: { id: billId, shopId, status: "active" }, include: { items: { include: { product: { select: { hsn: true } } } } } }),
@@ -140,4 +147,63 @@ export async function createSandboxEInvoice(shopId, billId) {
     create: { shopId, billId, documentType: "e_invoice", provider: "sandbox", status: "sandbox_only", externalReference, payloadHash, payloadJson, responseJson: JSON.stringify({ warning: "Not submitted to GSTN; not a legal IRN" }) },
     update: { provider: "sandbox", status: "sandbox_only", externalReference, payloadHash, payloadJson, responseJson: JSON.stringify({ warning: "Not submitted to GSTN; not a legal IRN" }), errorMessage: null },
   });
+}
+
+async function loadValidatedInvoice(shopId, billId) {
+  const [shop, bill] = await Promise.all([
+    db.shop.findUnique({ where: { id: shopId } }),
+    db.bill.findFirst({ where: { id: billId, shopId, status: "active" }, include: { items: { include: { product: { select: { hsn: true } } } } } }),
+  ]);
+  if (!bill) throw new AppError("Bill not found", 404, "BILL_NOT_FOUND");
+  if (bill.billType !== "gst_invoice") throw new AppError("Only GST invoices can be submitted", 409, "GST_INVOICE_REQUIRED");
+  const gstin = validateGstin(shop?.gstNumber);
+  if (!gstin.valid) throw new AppError(gstin.reason, 422, "INVALID_SHOP_GSTIN");
+  const missing = bill.items.filter((item) => Number(item.gstRate) > 0 && !validateHsn(item.product?.hsn).valid);
+  if (missing.length) throw new AppError("Every taxable invoice item needs a valid 4, 6 or 8 digit HSN", 422, "INVOICE_HSN_INCOMPLETE");
+  return { shop, bill };
+}
+
+export async function submitEInvoice(shopId, billId) {
+  if (env.GST_PROVIDER !== "gsp_http") throw new AppError("Certified GSP submission is not configured", 503, "GST_LEGAL_PROVIDER_NOT_READY");
+  const { shop, bill } = await loadValidatedInvoice(shopId, billId);
+  const payload = canonicalPayload(bill, shop);
+  payload.schemaVersion = "kiranaos-gst-provider-v1";
+  const payloadJson = JSON.stringify(payload);
+  const payloadHash = crypto.createHash("sha256").update(payloadJson).digest("hex");
+  const existing = await db.complianceDocument.findUnique({ where: { billId_documentType: { billId, documentType: "e_invoice" } } });
+  if (existing?.status === "accepted" && existing.externalReference) return existing;
+  if (["submitting", "submitted"].includes(existing?.status)) throw new AppError("This invoice submission is already in progress", 409, "GST_SUBMISSION_IN_PROGRESS");
+
+  let document;
+  if (existing) {
+    const claimed = await db.complianceDocument.updateMany({
+      where: { id: existing.id, status: existing.status },
+      data: { provider: env.GST_PROVIDER_LEGAL_NAME, status: "submitting", payloadHash, payloadJson, errorMessage: null },
+    });
+    if (claimed.count !== 1) throw new AppError("This invoice submission is already in progress", 409, "GST_SUBMISSION_IN_PROGRESS");
+    document = await db.complianceDocument.findUnique({ where: { id: existing.id } });
+  } else {
+    try {
+      document = await db.complianceDocument.create({
+        data: { shopId, billId, documentType: "e_invoice", provider: env.GST_PROVIDER_LEGAL_NAME, status: "submitting", payloadHash, payloadJson },
+      });
+    } catch (error) {
+      if (error?.code === "P2002") throw new AppError("This invoice submission is already in progress", 409, "GST_SUBMISSION_IN_PROGRESS");
+      throw error;
+    }
+  }
+
+  try {
+    const result = await submitEInvoiceToGsp(payload, { idempotencyKey: `e-invoice:${shopId}:${billId}` });
+    return await db.complianceDocument.update({
+      where: { id: document.id },
+      data: { status: "accepted", externalReference: result.irn, acknowledgementNo: result.acknowledgementNo, responseJson: JSON.stringify(result.response), errorMessage: null },
+    });
+  } catch (error) {
+    await db.complianceDocument.update({
+      where: { id: document.id },
+      data: { status: "failed", responseJson: error?.providerResponse ? JSON.stringify(error.providerResponse) : null, errorMessage: String(error?.message || "GSP submission failed").slice(0, 1000) },
+    }).catch(() => {});
+    throw error;
+  }
 }

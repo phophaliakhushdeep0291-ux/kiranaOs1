@@ -79,7 +79,16 @@ const envSchema = z.object({
   // GST compliance submission is disabled until a certified provider adapter is
   // configured. Sandbox documents are visibly non-legal and cannot be mistaken
   // for a GSTN acknowledgement.
-  GST_PROVIDER: z.enum(["disabled", "sandbox"]).default("disabled"),
+  GST_PROVIDER: z.enum(["disabled", "sandbox", "gsp_http"]).default("disabled"),
+  GST_PROVIDER_BASE_URL: z.string().url().optional(),
+  GST_PROVIDER_EINVOICE_PATH: z.string().default("/e-invoices"),
+  GST_PROVIDER_API_KEY: z.string().optional(),
+  GST_PROVIDER_API_SECRET: z.string().optional(),
+  GST_PROVIDER_LEGAL_NAME: z.string().optional(),
+  // This is an operator attestation: enable it only after the configured GSP
+  // confirms that the production account is authorized to create GSTN IRNs.
+  GST_PROVIDER_CERTIFIED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  GST_PROVIDER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(15000),
   REMINDER_COOLDOWN_HOURS: z.coerce.number().int().min(1).max(168).default(6),
 });
 
@@ -250,6 +259,26 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.WHATSAPP_PROVIDER !== "
 if (parsed.data.NODE_ENV === "production" && (!parsed.data.INTEGRATION_SIGNING_SECRET || parsed.data.INTEGRATION_SIGNING_SECRET.length < 32)) {
   console.error("❌ INTEGRATION_SIGNING_SECRET must be at least 32 characters in production");
   process.exit(1);
+}
+
+if (parsed.data.GST_PROVIDER === "gsp_http") {
+  const missing = [
+    ["GST_PROVIDER_BASE_URL", parsed.data.GST_PROVIDER_BASE_URL],
+    ["GST_PROVIDER_API_KEY", parsed.data.GST_PROVIDER_API_KEY],
+    ["GST_PROVIDER_LEGAL_NAME", parsed.data.GST_PROVIDER_LEGAL_NAME],
+  ].filter(([, value]) => !value).map(([key]) => key);
+  if (missing.length) {
+    console.error(`âŒ ${missing.join(", ")} required when GST_PROVIDER=gsp_http`);
+    process.exit(1);
+  }
+  if (parsed.data.NODE_ENV === "production" && !/^https:\/\//i.test(parsed.data.GST_PROVIDER_BASE_URL)) {
+    console.error("âŒ GST_PROVIDER_BASE_URL must use HTTPS in production");
+    process.exit(1);
+  }
+  if (parsed.data.NODE_ENV === "production" && !parsed.data.GST_PROVIDER_CERTIFIED) {
+    console.error("âŒ GST_PROVIDER_CERTIFIED=true is required for production GSP submission");
+    process.exit(1);
+  }
 }
 
 export const env = parsed.data;

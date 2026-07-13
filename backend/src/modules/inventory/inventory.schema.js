@@ -8,6 +8,7 @@ const purchaseDueDate = z.string()
   .optional();
 
 export const purchaseSchema = z.object({
+  locationId: z.string().min(1).optional(),
   productId: z.string(),
   supplierId: z.string().optional(),
   supplierName: z.string().default("Unknown Supplier"),
@@ -56,6 +57,7 @@ export const purchaseSchema = z.object({
 });
 
 export const damageSchema = z.object({
+  locationId: z.string().min(1).optional(),
   productId: z.string(),
   quantity: quantityAmount({ positive: true }),
   enteredUnit: z.string(),
@@ -63,12 +65,14 @@ export const damageSchema = z.object({
 });
 
 export const correctionSchema = z.object({
+  locationId: z.string().min(1).optional(),
   productId: z.string(),
   newStockBaseQty: quantityAmount(),
   note: z.string().optional(),
 });
 
 export const ledgerQuerySchema = z.object({
+  locationId: z.string().optional(),
   productId: z.string().optional(),
   action: z.string().optional(),
   from: z.string().optional(),

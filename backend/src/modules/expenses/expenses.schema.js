@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const createExpenseSchema = z.object({
+  locationId: z.string().min(1).optional(),
   title: z.string().min(1).max(160),
   amount: z.coerce.number().finite().nonnegative(),
   category: z.string().min(1).max(60).default("general"),
@@ -16,6 +17,7 @@ export const createExpenseSchema = z.object({
 export const updateExpenseSchema = createExpenseSchema.partial();
 
 export const expenseQuerySchema = z.object({
+  locationId: z.string().optional(),
   category: z.string().optional(),
   status: z.string().optional(),
   from: z.string().optional(),

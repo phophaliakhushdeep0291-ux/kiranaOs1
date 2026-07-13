@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
+import { resolveOperationalLocation } from "../stores/location-context.service.js";
 
 function normalize(data) {
   const out = { ...data };
@@ -18,10 +19,11 @@ function dateRangeWhere(from, to) {
   return { spentAt: { ...(from && { gte: new Date(from) }), ...(to && { lte: new Date(to) }) } };
 }
 
-export async function listExpenses(shopId, { category, status, from, to, search } = {}) {
+export async function listExpenses(shopId, { category, status, locationId, from, to, search } = {}) {
   const where = {
     shopId,
     deletedAt: null,
+    ...(locationId && { locationId }),
     ...(category && { category }),
     ...(status && { status }),
     ...(search && { OR: [{ title: { contains: search } }, { notes: { contains: search } }, { vendor: { contains: search } }] }),
@@ -38,7 +40,8 @@ export async function getExpense(shopId, id) {
 
 export async function createExpense(shopId, data) {
   const payload = normalize(data);
-  return db.expense.create({ data: { ...payload, shopId, spentAt: payload.spentAt ?? new Date() } });
+  const location = await resolveOperationalLocation(shopId, payload.locationId);
+  return db.expense.create({ data: { ...payload, locationId: location.id, shopId, spentAt: payload.spentAt ?? new Date() } });
 }
 
 export async function updateExpense(shopId, id, data) {
@@ -57,8 +60,8 @@ export async function restoreExpense(shopId, id) {
   return db.expense.update({ where: { id: expense.id }, data: { deletedAt: null } });
 }
 
-export async function getExpenseSummary(shopId, { from, to } = {}) {
-  const where = { shopId, deletedAt: null, ...dateRangeWhere(from, to) };
+export async function getExpenseSummary(shopId, { from, to, locationId } = {}) {
+  const where = { shopId, deletedAt: null, ...(locationId && { locationId }), ...dateRangeWhere(from, to) };
   const expenses = await db.expense.findMany({ where, select: { amount: true, category: true, paymentMode: true, status: true } });
   const total = round2(expenses.reduce((sum, e) => sum + (e.amount || 0), 0));
   const byCategory = {};
@@ -79,7 +82,7 @@ export async function getExpenseSummary(shopId, { from, to } = {}) {
  * and a monthly trend for the last `months` months. JS grouping keeps it
  * portable across sqlite + postgres at kirana-shop data volumes.
  */
-export async function getExpenseOverview(shopId, { months = 6 } = {}) {
+export async function getExpenseOverview(shopId, { months = 6, locationId } = {}) {
   // All day/month boundaries and trend buckets are computed in the shop timezone, not the
   // server's local clock — otherwise an expense near a day/month boundary lands in the wrong
   // bucket by the UTC offset (5.5h for IST) on a UTC production server.
@@ -98,7 +101,7 @@ export async function getExpenseOverview(shopId, { months = 6 } = {}) {
   const trendStart = dateRangeForDateOnly(dayKeyOf(y, m - 1 - (months - 1), 1), tz).start;
 
   const rows = await db.expense.findMany({
-    where: { shopId, deletedAt: null, spentAt: { gte: trendStart } },
+    where: { shopId, deletedAt: null, ...(locationId && { locationId }), spentAt: { gte: trendStart } },
     select: { amount: true, category: true, status: true, spentAt: true },
   });
 

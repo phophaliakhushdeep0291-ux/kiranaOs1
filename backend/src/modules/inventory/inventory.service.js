@@ -1,7 +1,14 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { moneyShadows, multiplyMoney, round2, subtractMoney, weightedAvgCost } from "../../utils/money.js";
+import { moneyShadows, multiplyMoney, round2, weightedAvgCost } from "../../utils/money.js";
 import { toBaseQty, rateUnitToBase } from "../../utils/units.js";
+import {
+  decrementLocationInventory,
+  getLocationQuantity,
+  incrementLocationInventory,
+  resolveOperationalLocation,
+  setLocationInventory,
+} from "../stores/location-context.service.js";
 
 // Operation-level idempotency for replayed offline stock adjustments. The StockLedger row
 // carries a durable idempotencyKey (unique per shop), so a retried/replayed ADJUST_STOCK
@@ -52,27 +59,33 @@ async function purchaseReplay(client, shopId, existing) {
   };
 }
 
-export async function getInventory(shopId) {
+export async function getInventory(shopId, requestedLocationId = null) {
+  const location = await resolveOperationalLocation(shopId, requestedLocationId);
   const products = await db.product.findMany({
     where: { shopId, deletedAt: null },
     orderBy: { name: "asc" },
   });
-  return products.map((p) => ({
-    id: p.id,
-    name: p.name,
-    category: p.category,
-    stockBaseQty: p.stockBaseQty,
-    baseUnit: p.baseUnit,
-    displayUnit: p.displayUnit,
-    costPerRateUnit: p.costPerRateUnit,
-    defaultPricePerRateUnit: p.defaultPricePerRateUnit,
-    lowStockThreshold: p.lowStockThreshold,
-    isLowStock: p.lowStockThreshold > 0 && p.stockBaseQty <= p.lowStockThreshold,
+  return Promise.all(products.map(async (p) => {
+    const stockBaseQty = await getLocationQuantity(db, shopId, location, p);
+    return {
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      stockBaseQty,
+      locationId: location.id,
+      locationName: location.name,
+      baseUnit: p.baseUnit,
+      displayUnit: p.displayUnit,
+      costPerRateUnit: p.costPerRateUnit,
+      defaultPricePerRateUnit: p.defaultPricePerRateUnit,
+      lowStockThreshold: p.lowStockThreshold,
+      isLowStock: p.lowStockThreshold > 0 && stockBaseQty <= p.lowStockThreshold,
+    };
   }));
 }
 
-export async function getLowStock(shopId) {
-  const all = await getInventory(shopId);
+export async function getLowStock(shopId, requestedLocationId = null) {
+  const all = await getInventory(shopId, requestedLocationId);
   return all.filter((p) => p.isLowStock);
 }
 
@@ -132,6 +145,7 @@ export async function recordPurchase(shopId, data, identity = {}) {
 
   try {
     return await db.$transaction(async (tx) => {
+    const location = await resolveOperationalLocation(shopId, data.locationId ?? identity.locationId ?? null, tx);
     if (idempotencyKey) {
       const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
       if (existing) return purchaseReplay(tx, shopId, existing);
@@ -157,31 +171,26 @@ export async function recordPurchase(shopId, data, identity = {}) {
       qtyInBase, pricePerRateUnit
     );
 
-    const oldStock = product.stockBaseQty;
-    const newStock = round2(oldStock + qtyInBase);
-
-    const updated = await tx.product.updateMany({
-      where: { id: productId, shopId, deletedAt: null, stockBaseQty: oldStock },
-      data: {
-        stockBaseQty: { increment: qtyInBase },
+    const stockResult = await incrementLocationInventory(tx, {
+      shopId,
+      location,
+      product,
+      quantityBase: qtyInBase,
+      expectedGlobalStockBaseQty: product.stockBaseQty,
+      productData: {
         ...(updateCost && { costPerRateUnit: newCost, ...moneyShadows({ costPerRateUnit: newCost }) }),
         ...(updateMinPrice && { minPricePerRateUnit: pricePerRateUnit, ...moneyShadows({ minPricePerRateUnit: pricePerRateUnit }) }),
       },
     });
-    if (updated.count !== 1) {
-      const err = new AppError("Stock changed while recording purchase. Please retry.", 409);
-      err.code = "CONCURRENT_STOCK_MODIFICATION_RETRY";
-      throw err;
-    }
 
     const stockLedger = await tx.stockLedger.create({
       data: {
-        shopId, productId,
+        shopId, locationId: location.id, productId,
         productName: product.name,
         action: "purchase",
         changeBaseQty: qtyInBase,
-        oldStockBaseQty: oldStock,
-        newStockBaseQty: newStock,
+        oldStockBaseQty: stockResult.oldStock,
+        newStockBaseQty: stockResult.newStock,
         purchaseBillAmount: billAmount,
         calculatedBuyRate: pricePerRateUnit,
         ...purchasePayment,
@@ -199,7 +208,7 @@ export async function recordPurchase(shopId, data, identity = {}) {
 
     const purchaseHistory = await tx.purchaseHistory.create({
       data: {
-        shopId, productId,
+        shopId, locationId: location.id, productId,
         supplierId: supplierId ?? null,
         supplierName,
         qtyBase: qtyInBase,
@@ -216,7 +225,8 @@ export async function recordPurchase(shopId, data, identity = {}) {
     return {
       productId,
       qtyAdded: qtyInBase,
-      newStock,
+      newStock: stockResult.newStock,
+      locationId: location.id,
       newCost,
       pricePerRateUnit,
       stockLedgerId: stockLedger.id,
@@ -240,10 +250,11 @@ export async function recordPurchase(shopId, data, identity = {}) {
   }
 }
 
-export async function recordDamage(shopId, { productId, quantity, enteredUnit, note }, identity = {}) {
+export async function recordDamage(shopId, { productId, quantity, enteredUnit, note, locationId }, identity = {}) {
   const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
   try {
     return await db.$transaction(async (tx) => {
+      const location = await resolveOperationalLocation(shopId, locationId ?? identity.locationId ?? null, tx);
       if (idempotencyKey) {
         const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
         if (existing) return stockAdjustmentReplay(existing);
@@ -259,28 +270,16 @@ export async function recordDamage(shopId, { productId, quantity, enteredUnit, n
       const qtyInRateUnit = qtyInBase / factor;
       const damageLossValue = multiplyMoney(product.costPerRateUnit, qtyInRateUnit);
 
-      const updated = await tx.product.updateMany({
-        where: { id: productId, shopId, deletedAt: null, stockBaseQty: { gte: qtyInBase } },
-        data: { stockBaseQty: { decrement: qtyInBase } },
-      });
-      if (updated.count !== 1) {
-        const err = new AppError("Damage quantity exceeds current stock", 409);
-        err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
-        throw err;
-      }
-
-      const freshProduct = await tx.product.findFirst({ where: { id: productId, shopId } });
-      const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
-      const oldStock = round2(newStock + qtyInBase);
+      const stockResult = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: qtyInBase, allowShortfall: false });
 
       await tx.stockLedger.create({
         data: {
-          shopId, productId,
+          shopId, locationId: location.id, productId,
           productName: product.name,
           action: "damage",
           changeBaseQty: -qtyInBase,
-          oldStockBaseQty: oldStock,
-          newStockBaseQty: newStock,
+          oldStockBaseQty: stockResult.oldStock,
+          newStockBaseQty: stockResult.newStock,
           damageLossValue,
           ...moneyShadows({ damageLossValue }),
           note: note ?? "Damage/loss",
@@ -299,10 +298,11 @@ export async function recordDamage(shopId, { productId, quantity, enteredUnit, n
         enteredUnit,
         qtyRemoved: qtyInBase,
         changeBaseQty: -qtyInBase,
-        oldStock,
-        newStock,
-        oldStockBaseQty: oldStock,
-        newStockBaseQty: newStock,
+        locationId: location.id,
+        oldStock: stockResult.oldStock,
+        newStock: stockResult.newStock,
+        oldStockBaseQty: stockResult.oldStock,
+        newStockBaseQty: stockResult.newStock,
         damageLossValue,
         note: note ?? "Damage/loss",
       };
@@ -316,10 +316,11 @@ export async function recordDamage(shopId, { productId, quantity, enteredUnit, n
   }
 }
 
-export async function correctStock(shopId, { productId, newStockBaseQty, note }, identity = {}) {
+export async function correctStock(shopId, { productId, newStockBaseQty, note, locationId }, identity = {}) {
   const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
   try {
     return await db.$transaction(async (tx) => {
+      const location = await resolveOperationalLocation(shopId, locationId ?? identity.locationId ?? null, tx);
       if (idempotencyKey) {
         const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
         if (existing) return stockAdjustmentReplay(existing);
@@ -330,26 +331,17 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note },
       });
       if (!product) throw new AppError("Product not found", 404);
 
-      const diff = subtractMoney(newStockBaseQty, product.stockBaseQty);
-
-      const updated = await tx.product.updateMany({
-        where: { id: productId, shopId, deletedAt: null, stockBaseQty: product.stockBaseQty },
-        data: { stockBaseQty: newStockBaseQty },
-      });
-      if (updated.count !== 1) {
-        const err = new AppError("Stock changed while applying correction. Please retry.", 409);
-        err.code = "CONCURRENT_STOCK_MODIFICATION_RETRY";
-        throw err;
-      }
+      const stockResult = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty });
+      const diff = stockResult.difference;
 
       await tx.stockLedger.create({
         data: {
-          shopId, productId,
+          shopId, locationId: location.id, productId,
           productName: product.name,
           action: "correction",
           changeBaseQty: diff,
-          oldStockBaseQty: product.stockBaseQty,
-          newStockBaseQty,
+          oldStockBaseQty: stockResult.oldStock,
+          newStockBaseQty: stockResult.newStock,
           note: note ?? "Manual stock correction",
           idempotencyKey,
           clientMovementId,
@@ -362,10 +354,11 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note },
       return {
         productId,
         productName: product.name,
-        oldStock: product.stockBaseQty,
-        newStock: newStockBaseQty,
-        oldStockBaseQty: product.stockBaseQty,
-        newStockBaseQty,
+        locationId: location.id,
+        oldStock: stockResult.oldStock,
+        newStock: stockResult.newStock,
+        oldStockBaseQty: stockResult.oldStock,
+        newStockBaseQty: stockResult.newStock,
         changeBaseQty: diff,
         diff,
         note: note ?? "Manual stock correction",
@@ -380,11 +373,12 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note },
   }
 }
 
-export async function getLedger(shopId, { productId, action, from, to, page, limit }) {
+export async function getLedger(shopId, { productId, action, locationId, from, to, page, limit }) {
   const where = {
     shopId,
     ...(productId && { productId }),
     ...(action && { action }),
+    ...(locationId && { locationId }),
     ...(from && to && {
       createdAt: { gte: new Date(from), lte: new Date(to) },
     }),

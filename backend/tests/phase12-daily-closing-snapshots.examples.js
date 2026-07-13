@@ -41,7 +41,7 @@ for (const schema of [sqliteSchema, pgSchema]) {
   assert(schema.includes("@@index([shopId, createdByUserId, createdAt])"), "Bill must have cashier report index");
   assert(schema.includes("model DailyClosingSnapshot"), "DailyClosingSnapshot model must exist");
   assert(schema.includes("topProductsJson") && schema.includes("lowStockJson"), "Snapshot must persist JSON report summaries");
-  assert(schema.includes("@@unique([shopId, date])"), "Snapshot must be idempotent per shop/date");
+  assert(schema.includes("@@unique([shopId, storeId, date])"), "Snapshot must be idempotent per shop/location/date");
   assert(schema.includes("lockedAt") && schema.includes("lockedByUserId"), "Snapshot must support locking");
   assert(schema.includes("bankReceivedPaise"), "Snapshot must persist bank tender (bank is a first-class payment mode)");
 }
@@ -69,7 +69,7 @@ for (const fn of [
   assert(snapshotService.includes(`export async function ${fn}`), `snapshot service missing ${fn}`);
 }
 assert(snapshotService.includes("upsert"), "Snapshot generation must upsert idempotently");
-assert(snapshotService.includes("shopId_date"), "Snapshot service must use unique shop/date key");
+assert(snapshotService.includes("shopId_storeId_date"), "Snapshot service must use unique shop/location/date key");
 assert(snapshotService.includes("SNAPSHOT_LOCKED"), "Locked snapshots must not be silently overwritten");
 assert(snapshotService.includes("getDailyClosing"), "Snapshot generation must reuse live Phase 11 computation");
 assert(snapshotService.includes("bankReceivedPaise: dailyClosing.bankReceivedPaise"), "Snapshot writer must persist bank tender");

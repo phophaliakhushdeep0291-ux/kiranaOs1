@@ -68,6 +68,17 @@ if (env.RAZORPAY_ENABLED) {
   }
 }
 
+if (env.GST_PROVIDER === "gsp_http") {
+  for (const key of ["GST_PROVIDER_BASE_URL", "GST_PROVIDER_API_KEY", "GST_PROVIDER_LEGAL_NAME"]) {
+    const value = env[key];
+    if (!value || isPlaceholder(value)) fail(`${key} must be configured with a real certified GSP value`);
+  }
+  if (!env.GST_PROVIDER_CERTIFIED) fail("GST_PROVIDER_CERTIFIED must be true before legal production IRN submission");
+  if (!/^https:\/\//i.test(env.GST_PROVIDER_BASE_URL || "")) fail("GST_PROVIDER_BASE_URL must use HTTPS");
+} else {
+  warn("Certified GSTN/GSP submission is disabled; the app can export GST registers but cannot create legal IRNs");
+}
+
 if (env.STORAGE_PROVIDER === "local" && env.EXPORT_DOWNLOADS_PUBLIC) {
   fail("Local storage cannot be public for production report exports");
 }

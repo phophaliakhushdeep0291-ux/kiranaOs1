@@ -16,6 +16,7 @@ export const updateCustomerSchema = createCustomerSchema.partial().extend({
 });
 
 export const udharPaymentSchema = z.object({
+  locationId: z.string().min(1).optional(),
   amount: moneyAmount({ positive: true }),
   mode: z.enum(["cash", "upi", "bank"]),
   note: z.string().optional(),

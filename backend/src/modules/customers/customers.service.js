@@ -9,6 +9,7 @@ import {
   syncCustomerUdharBalance,
 } from "../udhar/udharBalance.service.js";
 import { postUdharPaymentLedger } from "../finance/financial-ledger.service.js";
+import { resolveOperationalLocation } from "../stores/location-context.service.js";
 
 async function lockCustomerUdharBalance(tx, shopId, customerId) {
   if (!/^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL || "")) return;
@@ -208,6 +209,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
 
   try {
     return await db.$transaction(async (tx) => {
+      const location = await resolveOperationalLocation(shopId, input.locationId ?? actor.locationId ?? null, tx);
       // Serialize balance checks for this customer across application instances.
       // Without the row lock, concurrent payments can both validate the same
       // balance and over-credit the ledger.
@@ -239,6 +241,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
     const ledger = await tx.udharLedger.create({
       data: {
         shopId,
+        locationId: location.id,
         customerId,
         customerName: customer.name,
         type: "payment",
@@ -330,6 +333,7 @@ export async function reverseUdharPayment(shopId, customerId, ledgerEntryId, { r
     const reversal = await tx.udharLedger.create({
       data: {
         shopId,
+        locationId: payment.locationId,
         customerId,
         customerName: customer.name,
         type: "debit",

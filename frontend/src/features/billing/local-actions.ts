@@ -1,6 +1,7 @@
 import { offlineDB } from "@/lib/offline/db";
 import { getOfflineScope } from "@/lib/offline/context";
 import { billCreationSchema, ownerPinRequiredActionSchema } from "@/lib/validation";
+import { getActiveLocationId } from "@/features/stores/location-context";
 import { createLocalId, emitLocalDataChanged, normaliseInstantCacheValue, readInstantCache, upsertCachedListItem, writeInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation, enqueueOutboxOperation } from "@/features/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
@@ -480,7 +481,7 @@ function localBillNoForType(billType: BillInput["billType"], billId: string) {
 export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
   // Estimates (kacha bills) are full sales in everything but their EST- number series: they
   // move stock, record tender, and can carry udhar exactly like a pakka bill.
-  const inputForCreation: BillInput = input;
+  const inputForCreation: BillInput = { ...input, locationId: input.locationId ?? getActiveLocationId() ?? undefined };
   const sensitiveActions = readSensitiveBillActions(inputForCreation);
   validateSensitiveBillApproval(inputForCreation, sensitiveActions);
   const validated = parseOrThrow(billCreationSchema, inputForCreation) as BillInput;
@@ -534,6 +535,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     billNo: localBillNo,
     billNumber: localBillNo,
     billType: billData.billType,
+    locationId: billData.locationId ?? null,
     status: "pending_sync",
     isSynced: false,
     is_synced: false,

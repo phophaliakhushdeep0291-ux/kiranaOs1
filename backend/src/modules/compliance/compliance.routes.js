@@ -12,5 +12,6 @@ router.use(requireAuth, requireShop, requireDeviceActivated());
 router.get("/readiness", controller.readiness);
 router.get("/gst-register", requireFeature("gst_reports"), validateQuery(complianceExportQuery), controller.gstRegister);
 router.post("/e-invoices/:billId/sandbox", requireRole("owner", "admin"), requireFeature("gst_reports"), requireOwnerPin, controller.sandboxEInvoice);
+router.post("/e-invoices/:billId/submit", requireRole("owner", "admin"), requireFeature("gst_reports"), requireOwnerPin, controller.submitEInvoice);
 
 export default router;

@@ -4,6 +4,11 @@ import * as exportSvc from "./reportExport.service.js";
 import { getExportSignedDownloadUrl, streamExportFile } from "../../lib/fileStorage.js";
 import { env } from "../../config/env.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
+
+function scopedQuery(req, extra = {}) {
+  return { ...req.query, locationId: requestLocationId(req), ...extra };
+}
 
 function canViewProfit(req) {
   return ["owner", "admin"].includes(req.user?.role);
@@ -15,11 +20,11 @@ export async function dailyClosing(req, res, next) {
     const date = req.query?.date;
 
     if (source === "live") {
-      return res.json({ success: true, data: await svc.getDailyClosing(req.shopId, req.query) });
+      return res.json({ success: true, data: await svc.getDailyClosing(req.shopId, scopedQuery(req)) });
     }
 
     if (source === "snapshot") {
-      const snapshot = await snapshotSvc.getDailyClosingSnapshot(req.shopId, date);
+      const snapshot = await snapshotSvc.getDailyClosingSnapshot(req.shopId, date, requestLocationId(req));
       if (!snapshot) {
         const err = new Error("Daily closing snapshot not found");
         err.statusCode = 404;
@@ -30,12 +35,12 @@ export async function dailyClosing(req, res, next) {
     }
 
     // Default: locked snapshot is authoritative for a closed day; otherwise live report remains source of truth.
-    const snapshot = date ? await snapshotSvc.getDailyClosingSnapshot(req.shopId, date) : null;
+    const snapshot = date ? await snapshotSvc.getDailyClosingSnapshot(req.shopId, date, requestLocationId(req)) : null;
     if (snapshot?.snapshot?.lockedAt) {
       return res.json({ success: true, data: snapshot });
     }
 
-    return res.json({ success: true, data: await svc.getDailyClosing(req.shopId, req.query) });
+    return res.json({ success: true, data: await svc.getDailyClosing(req.shopId, scopedQuery(req)) });
   }
   catch (err) { next(err); }
 }
@@ -45,6 +50,7 @@ export async function createDailyClosingSnapshot(req, res, next) {
     const data = await snapshotSvc.refreshDailyClosingSnapshot(req.shopId, req.body.date, {
       source: "manual",
       userId: req.user?.userId ?? null,
+      storeId: requestLocationId(req),
     });
     await createAuditLog({
       shopId: req.shopId,
@@ -62,7 +68,7 @@ export async function createDailyClosingSnapshot(req, res, next) {
 
 export async function lockDailyClosingSnapshot(req, res, next) {
   try {
-    const data = await snapshotSvc.lockDailyClosingSnapshot(req.shopId, req.params.date, req.user?.userId ?? null);
+    const data = await snapshotSvc.lockDailyClosingSnapshot(req.shopId, req.params.date, req.user?.userId ?? null, requestLocationId(req));
     await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,
@@ -83,6 +89,7 @@ export async function overrideRefreshDailyClosingSnapshot(req, res, next) {
       userId: req.user?.userId ?? null,
       reason: req.body.reason,
       source: "manual",
+      storeId: requestLocationId(req),
     });
     await createAuditLog({
       shopId: req.shopId,
@@ -104,12 +111,12 @@ export async function overrideRefreshDailyClosingSnapshot(req, res, next) {
 }
 
 export async function salesSummary(req, res, next) {
-  try { res.json({ success: true, data: await svc.getSalesSummary(req.shopId, { ...req.query, includeProfit: canViewProfit(req) }) }); }
+  try { res.json({ success: true, data: await svc.getSalesSummary(req.shopId, scopedQuery(req, { includeProfit: canViewProfit(req) })) }); }
   catch (err) { next(err); }
 }
 
 export async function paymentModes(req, res, next) {
-  try { res.json({ success: true, data: await svc.getPaymentModeReport(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.getPaymentModeReport(req.shopId, scopedQuery(req)) }); }
   catch (err) { next(err); }
 }
 
@@ -119,45 +126,45 @@ export async function udharAgeing(req, res, next) {
 }
 
 export async function inventoryHealth(req, res, next) {
-  try { res.json({ success: true, data: await svc.getInventoryHealth(req.shopId, { ...req.query, includeCost: canViewProfit(req) }) }); }
+  try { res.json({ success: true, data: await svc.getInventoryHealth(req.shopId, scopedQuery(req, { includeCost: canViewProfit(req) })) }); }
   catch (err) { next(err); }
 }
 
 export async function staffSales(req, res, next) {
-  try { res.json({ success: true, data: await svc.getStaffSales(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.getStaffSales(req.shopId, scopedQuery(req)) }); }
   catch (err) { next(err); }
 }
 
 export async function pnl(req, res, next) {
-  try { res.json({ success: true, data: await svc.getPnL(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.getPnL(req.shopId, scopedQuery(req)) }); }
   catch (err) { next(err); }
 }
 export async function gstReport(req, res, next) {
-  try { res.json({ success: true, data: await svc.getGstReport(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.getGstReport(req.shopId, scopedQuery(req)) }); }
   catch (err) { next(err); }
 }
 export async function monthlyBreakdown(req, res, next) {
-  try { res.json({ success: true, data: await svc.getMonthlyBreakdown(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.getMonthlyBreakdown(req.shopId, scopedQuery(req)) }); }
   catch (err) { next(err); }
 }
 export async function topProducts(req, res, next) {
-  try { res.json({ success: true, data: await svc.getTopProducts(req.shopId, { ...req.query, includeProfit: canViewProfit(req) }) }); }
+  try { res.json({ success: true, data: await svc.getTopProducts(req.shopId, scopedQuery(req, { includeProfit: canViewProfit(req) })) }); }
   catch (err) { next(err); }
 }
 export async function paymentSummary(req, res, next) {
-  try { res.json({ success: true, data: await svc.getPaymentSummary(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.getPaymentSummary(req.shopId, scopedQuery(req)) }); }
   catch (err) { next(err); }
 }
 export async function exportBills(req, res, next) {
   try {
-    const data = await svc.exportBillsData(req.shopId, req.query);
+    const data = await svc.exportBillsData(req.shopId, scopedQuery(req));
     await logDataExport(req, "bills", { rowCount: data.rows?.length ?? 0, billCount: data.count ?? 0 });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
 export async function exportStock(req, res, next) {
   try {
-    const data = await svc.exportStockLedgerData(req.shopId, req.query);
+    const data = await svc.exportStockLedgerData(req.shopId, scopedQuery(req));
     await logDataExport(req, "stock", { rowCount: Array.isArray(data) ? data.length : 0 });
     res.json({ success: true, data });
   } catch (err) { next(err); }

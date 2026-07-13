@@ -1,19 +1,20 @@
 import db from "../../db.js";
 import * as svc from "./expenses.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
 
 export async function list(req, res, next) {
-  try { res.json({ success: true, data: await svc.listExpenses(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.listExpenses(req.shopId, { ...req.query, locationId: requestLocationId(req) }) }); }
   catch (err) { next(err); }
 }
 
 export async function summary(req, res, next) {
-  try { res.json({ success: true, data: await svc.getExpenseSummary(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.getExpenseSummary(req.shopId, { ...req.query, locationId: requestLocationId(req) }) }); }
   catch (err) { next(err); }
 }
 
 export async function overview(req, res, next) {
-  try { res.json({ success: true, data: await svc.getExpenseOverview(req.shopId, req.query) }); }
+  try { res.json({ success: true, data: await svc.getExpenseOverview(req.shopId, { ...req.query, locationId: requestLocationId(req) }) }); }
   catch (err) { next(err); }
 }
 
@@ -21,7 +22,7 @@ export async function create(req, res, next) {
   try {
     // Stamp who recorded it (display-only) without trusting client input.
     const user = req.user?.userId ? await db.user.findUnique({ where: { id: req.user.userId }, select: { name: true } }) : null;
-    const expense = await svc.createExpense(req.shopId, { ...req.body, recordedBy: user?.name ?? null });
+    const expense = await svc.createExpense(req.shopId, { ...req.body, locationId: requestLocationId(req), recordedBy: user?.name ?? null });
     await createAuditLog({
       shopId: req.shopId, userId: req.user?.userId, action: "EXPENSE_CREATED",
       entityType: "Expense", entityId: expense.id,

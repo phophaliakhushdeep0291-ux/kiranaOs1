@@ -4,6 +4,7 @@ import { createLocalId, readInstantCache, upsertCachedListItem } from "@/lib/off
 import { buildOutboxOperation, type SyncOutboxOperationType } from "@/features/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import type { InventoryItem, Product, StockMovementInput } from "@/types/api";
+import { getActiveLocationId } from "@/features/stores/location-context";
 import { buildAuditLogOutboxInput, buildAuditLogRow } from "@/features/audit-logs/local-actions";
 import { buildUnitMismatchWarning, fromInventoryBaseQty, toInventoryBaseQty } from "@/features/inventory/calculations";
 
@@ -132,6 +133,7 @@ function derivePurchaseBillAmount(input: {
 }
 
 async function stockMovementLocalFirst(data: StockMovementInput, movementType: StockMovementType) {
+  data = { ...data, locationId: data.locationId ?? getActiveLocationId() ?? undefined };
   const productId = typeof data.productId === "string" ? data.productId : "";
   const quantity = readNumber(data.quantity ?? data.quantityDelta, 0);
   const enteredUnit = typeof data.enteredUnit === "string" ? data.enteredUnit : typeof data.unit === "string" ? data.unit : "piece";

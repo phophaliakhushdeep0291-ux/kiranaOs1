@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { Link, useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/useAuth";
 import { useOfflineStatus } from "@/features/sync";
 import {
@@ -27,6 +28,7 @@ import {
   Search,
   Settings,
   ShoppingCart,
+  Store,
   TrendingUp,
   Truck,
   Undo2,
@@ -40,7 +42,8 @@ import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
 import { DemoModeBanner } from "@/features/demo/DemoModeBanner";
 import { SyncAlertBanner } from "@/features/sync/SyncAlertBanner";
 import { CommandPalette } from "./CommandPalette";
-import { getApiBaseUrl } from "@/lib/api/http";
+import { apiRequest, getApiBaseUrl } from "@/lib/api/http";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/stores/location-context";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -175,6 +178,8 @@ interface GroupItem {
 }
 
 type NavItem = LinkItem | GroupItem;
+type StoreLocationOption = { id: string; code: string; name: string; city?: string | null; isPrimary: boolean; active: boolean };
+type StoreLocationsResponse = { locations: StoreLocationOption[] };
 
 const NAV: NavItem[] = [
   { kind: "link", href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
@@ -300,6 +305,36 @@ export function Layout({ children }: { children: ReactNode }) {
   const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();
+  const queryClient = useQueryClient();
+  const locationsQuery = useQuery({
+    queryKey: ["store-locations", "active-context"],
+    queryFn: () => apiRequest<StoreLocationsResponse>("/stores"),
+    staleTime: 60_000,
+  });
+  const locations = (locationsQuery.data?.locations ?? []).filter((row) => row.active);
+  const [activeLocationId, setActiveLocationId] = useState(() => getActiveLocationId());
+
+  useEffect(() => {
+    const syncLocation = (event: Event) => setActiveLocationId((event as CustomEvent<{ locationId?: string }>).detail?.locationId ?? getActiveLocationId());
+    window.addEventListener(LOCATION_CHANGED_EVENT, syncLocation);
+    return () => window.removeEventListener(LOCATION_CHANGED_EVENT, syncLocation);
+  }, []);
+
+  useEffect(() => {
+    if (!locations.length) return;
+    if (activeLocationId && locations.some((row) => row.id === activeLocationId)) return;
+    const fallback = locations.find((row) => row.isPrimary) ?? locations[0];
+    persistActiveLocationId(fallback.id);
+    setActiveLocationId(fallback.id);
+  }, [activeLocationId, locations]);
+
+  const activeStoreLocation = locations.find((row) => row.id === activeLocationId) ?? locations.find((row) => row.isPrimary) ?? locations[0];
+  const switchLocation = (locationId: string) => {
+    if (locationId === activeLocationId) return;
+    persistActiveLocationId(locationId);
+    setActiveLocationId(locationId);
+    void queryClient.invalidateQueries();
+  };
 
   const attentionCount = pendingCount + failedCount + conflictCount;
   const hasSyncProblems = failedCount > 0 || conflictCount > 0;
@@ -407,7 +442,9 @@ export function Layout({ children }: { children: ReactNode }) {
   }, [collapsed, sidebarWidth]);
 
   const storeName = shop?.name ?? user?.name ?? "My Store";
-  const storeLocation = [shop?.city, shop?.address].filter(Boolean)[0] ?? user?.email ?? "Owner";
+  const storeLocation = activeStoreLocation
+    ? `${activeStoreLocation.name}${activeStoreLocation.city ? ` · ${activeStoreLocation.city}` : ""}`
+    : [shop?.city, shop?.address].filter(Boolean)[0] ?? user?.email ?? "Owner";
 
   // apply business-type nav label overrides
   const labelOverrides: Record<string, string> = {
@@ -515,6 +552,17 @@ export function Layout({ children }: { children: ReactNode }) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="start" className="w-52">
+                  {locations.length > 1 && <>
+                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">Working location</div>
+                    {locations.map((location) => (
+                      <DropdownMenuItem key={location.id} onClick={() => switchLocation(location.id)} className={cn(location.id === activeStoreLocation?.id && "bg-primary/8 text-primary")}>
+                        <Store size={14} className="mr-2" />
+                        <span className="min-w-0 flex-1 truncate">{location.name}</span>
+                        {location.id === activeStoreLocation?.id && <span className="ml-2 text-[10px] font-black">ACTIVE</span>}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>}
                   <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -551,6 +599,31 @@ export function Layout({ children }: { children: ReactNode }) {
               <p className="mt-1.5 hidden truncate text-[12px] font-medium leading-none text-[#64748b] 2xl:block">{getPageSubtitle(loc)}</p>
             )}
           </div>
+
+          {activeStoreLocation && <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="flex h-11 max-w-[210px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-white px-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
+                <Store size={16} className="shrink-0 text-primary" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11px] font-black text-[#0f2147]">{activeStoreLocation.name}</span>
+                  <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-[#64748b]">{activeStoreLocation.code}{activeStoreLocation.isPrimary ? " · Primary" : " · Branch"}</span>
+                </span>
+                <ChevronDown size={13} className="shrink-0 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">All operations use this location</div>
+              {locations.map((location) => (
+                <DropdownMenuItem key={location.id} onClick={() => switchLocation(location.id)} className={cn(location.id === activeStoreLocation.id && "bg-primary/8 text-primary")}>
+                  <Store size={14} className="mr-2" />
+                  <span className="min-w-0 flex-1 truncate">{location.name}</span>
+                  <span className="ml-2 text-[10px] font-bold text-muted-foreground">{location.code}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild><Link href="/inventory/stock-transfers">Manage locations & transfers</Link></DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>}
 
           {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <button
             type="button"
@@ -638,6 +711,11 @@ export function Layout({ children }: { children: ReactNode }) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
+                  {locations.length > 1 && <>
+                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">Working location</div>
+                    {locations.map((location) => <DropdownMenuItem key={location.id} onClick={() => switchLocation(location.id)} className={cn(location.id === activeStoreLocation?.id && "bg-primary/8 text-primary")}><Store size={14} className="mr-2" /><span className="truncate">{location.name}</span></DropdownMenuItem>)}
+                    <DropdownMenuSeparator />
+                  </>}
                   <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />

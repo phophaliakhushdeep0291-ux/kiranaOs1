@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { getDailyClosing } from "./reports.service.js";
 import { dateRangeForDateOnly } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
+import { resolveOperationalLocation } from "../stores/location-context.service.js";
 
 function normalizeDateInput(date) {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
@@ -88,17 +89,18 @@ function dailyClosingToSnapshotData(shopId, day, dailyClosing, options = {}) {
   };
 }
 
-export async function getDailyClosingSnapshot(shopId, date) {
+export async function getDailyClosingSnapshot(shopId, date, requestedStoreId = null) {
   const day = normalizeDateInput(date);
+  const location = await resolveOperationalLocation(shopId, requestedStoreId, db, { allowInactive: true });
   const snapshot = await db.dailyClosingSnapshot.findUnique({
-    where: { shopId_date: { shopId, date: day } },
+    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
   });
   if (!snapshot) return null;
-  const staleness = await getSnapshotStaleness(shopId, dateKey(day), snapshot);
+  const staleness = await getSnapshotStaleness(shopId, dateKey(day), snapshot, location.id);
   return snapshotToDailyClosing(snapshot, { staleness });
 }
 
-export async function getSnapshotStaleness(shopId, date, snapshot) {
+export async function getSnapshotStaleness(shopId, date, snapshot, locationId = snapshot?.storeId ?? null) {
   if (!snapshot?.generatedAt) return { stale: false, reason: null, latestChangeAt: null };
   normalizeDateInput(date); // validates YYYY-MM-DD shape (throws a 400 with a stable code)
   // Use the SAME shop-timezone day window the snapshot was generated with (getDailyClosing →
@@ -110,17 +112,17 @@ export async function getSnapshotStaleness(shopId, date, snapshot) {
 
   const [billChange, udharChange, stockChange] = await Promise.all([
     db.bill.findFirst({
-      where: { shopId, createdAt: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
+      where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),
     db.udharLedger.findFirst({
-      where: { shopId, createdAt: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
+      where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),
     db.stockLedger.findFirst({
-      where: { shopId, createdAt: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
+      where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),
@@ -143,19 +145,20 @@ export async function getSnapshotStaleness(shopId, date, snapshot) {
 
 export async function generateDailyClosingSnapshot(shopId, date, options = {}) {
   const day = normalizeDateInput(date);
+  const location = await resolveOperationalLocation(shopId, options.storeId ?? null, db, { allowInactive: true });
   const existing = await db.dailyClosingSnapshot.findUnique({
-    where: { shopId_date: { shopId, date: day } },
+    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
   });
 
   if (existing?.lockedAt && !options.allowLockedOverride) {
     return snapshotToDailyClosing(existing, { locked: true, skipped: true, reason: "SNAPSHOT_LOCKED" });
   }
 
-  const live = await getDailyClosing(shopId, { date: dateKey(day) });
-  const data = dailyClosingToSnapshotData(shopId, day, live, options);
+  const live = await getDailyClosing(shopId, { date: dateKey(day), locationId: location.id });
+  const data = dailyClosingToSnapshotData(shopId, day, live, { ...options, storeId: location.id });
 
   const snapshot = await db.dailyClosingSnapshot.upsert({
-    where: { shopId_date: { shopId, date: day } },
+    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
     create: data,
     update: {
       ...data,
@@ -172,23 +175,24 @@ export async function refreshDailyClosingSnapshot(shopId, date, options = {}) {
   return generateDailyClosingSnapshot(shopId, date, { ...options, source: options.source ?? "manual" });
 }
 
-export async function lockDailyClosingSnapshot(shopId, date, userId) {
+export async function lockDailyClosingSnapshot(shopId, date, userId, requestedStoreId = null) {
   const day = normalizeDateInput(date);
+  const location = await resolveOperationalLocation(shopId, requestedStoreId, db, { allowInactive: true });
   let snapshot = await db.dailyClosingSnapshot.findUnique({
-    where: { shopId_date: { shopId, date: day } },
+    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
   });
 
   if (!snapshot) {
-    const generated = await generateDailyClosingSnapshot(shopId, date, { source: "manual", userId });
+    const generated = await generateDailyClosingSnapshot(shopId, date, { source: "manual", userId, storeId: location.id });
     snapshot = await db.dailyClosingSnapshot.findUnique({
-      where: { shopId_date: { shopId, date: day } },
+      where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
     });
     if (!snapshot) return generated;
   }
 
   if (!snapshot.lockedAt) {
     snapshot = await db.dailyClosingSnapshot.update({
-      where: { shopId_date: { shopId, date: day } },
+      where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
       data: { lockedAt: new Date(), lockedByUserId: userId ?? null },
     });
   }
@@ -203,13 +207,15 @@ export async function overrideRefreshDailyClosingSnapshot(shopId, date, options 
     throw err;
   }
   const day = normalizeDateInput(date);
+  const location = await resolveOperationalLocation(shopId, options.storeId ?? null, db, { allowInactive: true });
   const existing = await db.dailyClosingSnapshot.findUnique({
-    where: { shopId_date: { shopId, date: day } },
+    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
   });
   const refreshed = await generateDailyClosingSnapshot(shopId, dateKey(day), {
     ...options,
     source: options.source ?? "manual",
     allowLockedOverride: true,
+    storeId: location.id,
   });
   return {
     ...refreshed,
@@ -223,10 +229,11 @@ export async function overrideRefreshDailyClosingSnapshot(shopId, date, options 
   };
 }
 
-export async function unlockDailyClosingSnapshot(shopId, date, userId) {
+export async function unlockDailyClosingSnapshot(shopId, date, userId, requestedStoreId = null) {
   const day = normalizeDateInput(date);
+  const location = await resolveOperationalLocation(shopId, requestedStoreId, db, { allowInactive: true });
   const snapshot = await db.dailyClosingSnapshot.update({
-    where: { shopId_date: { shopId, date: day } },
+    where: { shopId_storeId_date: { shopId, storeId: location.id, date: day } },
     data: { lockedAt: null, lockedByUserId: null, generatedByUserId: userId ?? null },
   });
   return snapshotToDailyClosing(snapshot, { locked: false });

@@ -419,6 +419,7 @@ export interface BillInputItem {
 }
 
 export interface BillInput {
+  locationId?: string;
   billType: typeof BillInputBillType[keyof typeof BillInputBillType];
   /** How GST applies: inclusive (MRP prices, default), exclusive (added on top), or none. */
   gstMode?: "inclusive" | "exclusive" | "none";
@@ -444,6 +445,7 @@ export interface Bill {
   billNumber?: string;
   billType: string;
   status: string;
+  locationId?: string | null;
   isSynced?: boolean;
   is_synced?: boolean;
   sync_status?: string;
@@ -566,6 +568,7 @@ export interface UdharPaymentInput {
 }
 
 export interface StockMovementInput {
+  locationId?: string;
   productId?: string;
   productName?: string;
   quantity?: number;

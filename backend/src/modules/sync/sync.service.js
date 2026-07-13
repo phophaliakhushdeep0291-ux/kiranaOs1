@@ -32,6 +32,10 @@ import { moneyAmount, quantityAmount } from "../../utils/validationSchemas.js";
 import { moneyShadows, round2 } from "../../utils/money.js";
 import { toBaseQty } from "../../utils/units.js";
 import { calculateCustomerUdharBalance, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
+import {
+  decrementLocationInventory,
+  resolveOperationalLocation,
+} from "../stores/location-context.service.js";
 
 const protectedProductFields = [
   "defaultPricePerRateUnit",
@@ -1136,6 +1140,7 @@ async function applyUdharPayment(shopId, event, context) {
   });
   const data = await recordUdharPayment(shopId, payload.customerId, parsedPayment, {
     deviceId: paymentIdentity.sourceDeviceId ?? context?.user?.deviceId ?? null,
+    locationId: payload.locationId ?? payload.location_id ?? payment.locationId ?? payment.location_id ?? null,
   });
   return {
     type: event.type,
@@ -1720,36 +1725,38 @@ async function applyStockSale(shopId, event, context) {
 
       const product = await tx.product.findFirst({ where: { id: payload.productId, shopId, deletedAt: null } });
       if (!product) throw new AppError("Product not found", 404);
+      const location = await resolveOperationalLocation(
+        shopId,
+        payload.locationId ?? payload.location_id ?? null,
+        tx,
+      );
       const qtyInBase = toBaseQty(payload.quantity, payload.enteredUnit, product.baseUnit);
-      const updated = await tx.product.updateMany({
-        where: { id: product.id, shopId, deletedAt: null },
-        data: { stockBaseQty: { decrement: qtyInBase } },
+      const stock = await decrementLocationInventory(tx, {
+        shopId,
+        location,
+        product,
+        quantityBase: qtyInBase,
+        // Offline sales must remain mergeable. A branch shortfall is recorded and
+        // surfaced for reconciliation instead of silently consuming another branch.
+        allowShortfall: true,
       });
-      if (updated.count !== 1) {
-        const err = new AppError("Product stock could not be updated", 409);
-        err.code = "INSUFFICIENT_STOCK_CONCURRENT_MODIFICATION";
-        throw err;
-      }
-      const freshProduct = await tx.product.findFirst({ where: { id: product.id, shopId } });
-      const newStock = round2(freshProduct?.stockBaseQty ?? product.stockBaseQty - qtyInBase);
-      const oldStock = round2(newStock + qtyInBase);
-      const shortfallBaseQty = round2(Math.max(0, -newStock));
       const ledger = await tx.stockLedger.create({
         data: {
           shopId,
+          locationId: location.id,
           productId: product.id,
           productName: product.name,
           action: "sale",
           changeBaseQty: -qtyInBase,
-          oldStockBaseQty: oldStock,
-          newStockBaseQty: newStock,
+          oldStockBaseQty: stock.oldStock,
+          newStockBaseQty: stock.newStock,
           idempotencyKey,
           clientMovementId,
           sourceDeviceId,
           sourceType: idempotencyKey ? "sale" : null,
           sourceId: idempotencyKey ? product.id : null,
-          note: shortfallBaseQty > 0
-            ? `${payload.note ?? "Offline manual stock sale"} | Stock negative by ${shortfallBaseQty} ${product.baseUnit}; reconcile inventory`
+          note: stock.shortfallBaseQty > 0
+            ? `${payload.note ?? "Offline manual stock sale"} | ${location.name} stock negative by ${stock.shortfallBaseQty} ${product.baseUnit}; reconcile inventory`
             : payload.note ?? "Offline manual stock sale",
         },
       });
@@ -1759,8 +1766,9 @@ async function applyStockSale(shopId, event, context) {
         localMovementId: payload.movementId ?? payload.localMovementId ?? payload.localId ?? null,
         productId: product.id,
         qtyRemoved: qtyInBase,
-        oldStock,
-        newStock,
+        oldStock: stock.oldStock,
+        newStock: stock.newStock,
+        locationId: location.id,
       };
     });
   } catch (error) {

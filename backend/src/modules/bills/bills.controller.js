@@ -2,10 +2,11 @@ import * as svc from "./bills.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
+import { requestLocationId } from "../stores/location-context.service.js";
 
 export async function list(req, res, next) {
   try {
-    const data = await svc.listBills(req.shopId, req.query);
+    const data = await svc.listBills(req.shopId, { ...req.query, locationId: requestLocationId(req) });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -22,6 +23,7 @@ export async function confirm(req, res, next) {
     const data = await svc.confirmBill(req.shopId, req.body, {
       userId: req.user?.userId ?? null,
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+      locationId: requestLocationId(req),
       allowStockShortfall: true,
     });
     await publishIntegrationEvent(req.shopId, "bill.created", {
@@ -35,6 +37,7 @@ export async function confirm(req, res, next) {
       paidAmount: data.paidAmount,
       creditAmount: data.creditAmount,
       createdAt: data.createdAt,
+      locationId: data.locationId,
     }).catch(() => []);
     await recordBillLoyalty(req.shopId, data).catch(() => null);
     res.status(201).json({ success: true, data });
