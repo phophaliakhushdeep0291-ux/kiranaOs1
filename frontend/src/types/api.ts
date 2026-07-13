@@ -477,6 +477,9 @@ export interface Bill {
   paidAmount?: number;
   buyerPaidAmount?: number;
   creditAmount?: number;
+  giftCardAmount?: number;
+  refundMode?: "cash" | "upi" | "bank" | "udhar" | "gift_card";
+  returnOfBillId?: string | null;
   createdAt?: string;
   updatedAt?: string;
   items?: unknown[];

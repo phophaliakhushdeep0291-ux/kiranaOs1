@@ -434,6 +434,53 @@ if (ctx.skip) {
       assert.equal(overspend.code, "GIFT_CARD_INSUFFICIENT_BALANCE");
       assert.equal((await ctx.db.giftCard.findUnique({ where: { id: issued.id } })).balancePaise, 17500n, "failed checkout must not consume value");
 
+      const cashSale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        customerId: customer.id,
+        customerName: customer.name,
+        quantity: 1,
+        ratePerRateUnit: 100,
+        payments: [{ mode: "cash", amount: 100 }],
+        actualAmount: 100,
+        buyerPaidAmount: 100,
+      }), { token: auth.accessToken }), 201);
+      const branch = assertSuccess(await ctx.post("/api/stores", { name: "Returns Branch", code: "RET01", city: "Pune" }, { token: auth.accessToken }), 201);
+      const returnCredit = assertSuccess(await ctx.post("/api/bills/returns", {
+        refundMode: "gift_card",
+        customerId: customer.id,
+        customerName: customer.name,
+        returnOfBillId: cashSale.id,
+        reason: "Customer changed their mind",
+        items: [{ productId: product.id, name: product.name, quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, damaged: false }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": branch.id } }), 201);
+      assert.equal(returnCredit.refundMode, "gift_card");
+      assert.equal(returnCredit.giftCardAmount, -100);
+      assert.match(returnCredit.issuedGiftCard.code, /^KOS-/);
+      assert.equal(returnCredit.issuedGiftCard.balance, 100);
+      assert.equal(returnCredit.locationId, branch.id, "a cross-channel return must restock the accepting branch");
+
+      const repeatReturn = assertFailure(await ctx.post("/api/bills/returns", {
+        refundMode: "cash",
+        returnOfBillId: cashSale.id,
+        reason: "Duplicate return attempt",
+        items: [{ productId: product.id, name: product.name, quantity: 1, enteredUnit: "piece", ratePerRateUnit: 100, gstRate: 0, damaged: false }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": branch.id } }), 409);
+      assert.equal(repeatReturn.code, "RETURN_EXCEEDS_ORIGINAL_SALE");
+
+      const cancelReturnedSale = assertFailure(await ctx.post(`/api/bills/${cashSale.id}/cancel`, { reason: "Invalid cancellation after return" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(cancelReturnedSale.code, "BILL_HAS_ACTIVE_RETURNS");
+
+      const crossBranchRedemption = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        customerId: customer.id,
+        customerName: customer.name,
+        quantity: 1,
+        ratePerRateUnit: 100,
+        payments: [{ mode: "gift_card", amount: 100, giftCardCode: returnCredit.issuedGiftCard.code }],
+        actualAmount: 100,
+        buyerPaidAmount: 100,
+      }), { token: auth.accessToken, headers: { "x-location-id": branch.id } }), 201);
+      assert.equal(crossBranchRedemption.locationId, branch.id);
+      assert.equal((await ctx.db.giftCard.findUnique({ where: { id: returnCredit.issuedGiftCard.id } })).balancePaise, 0n);
+
       assertSuccess(await ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Gift purchase cancelled" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal((await ctx.db.giftCard.findUnique({ where: { id: issued.id } })).balancePaise, 25000n);
       const ledger = await ctx.db.giftCardTransaction.findMany({ where: { giftCardId: issued.id, billId: bill.id } });

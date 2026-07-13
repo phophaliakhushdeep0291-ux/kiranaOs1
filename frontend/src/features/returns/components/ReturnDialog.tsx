@@ -6,6 +6,25 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { createSaleReturnLocalFirst, type RefundMode } from "@/features/returns/local-actions";
+import { apiRequest } from "@/lib/api/http";
+import { useOfflineStatus } from "@/features/sync";
+import { Copy, Gift } from "lucide-react";
+
+type ReturnRefundMode = RefundMode | "gift_card";
+
+interface IssuedReturnGiftCard {
+  id: string;
+  code: string;
+  codeLast4: string;
+  balance: number;
+  initialBalance: number;
+}
+
+interface CreatedReturn {
+  id: string;
+  billNo: string;
+  issuedGiftCard?: IssuedReturnGiftCard;
+}
 
 export interface ReturnLineInput {
   billItemId?: string;
@@ -40,9 +59,11 @@ function round2(n: number) {
 
 export function ReturnDialog({ open, onOpenChange, lines, customerId, customerName, originalBillId, gstMode = "inclusive", onDone }: ReturnDialogProps) {
   const { toast } = useToast();
+  const { isOnline } = useOfflineStatus();
   const [qty, setQty] = useState<Record<number, number>>({});
   const [damaged, setDamaged] = useState<Record<number, boolean>>({});
-  const [refundMode, setRefundMode] = useState<RefundMode>("cash");
+  const [refundMode, setRefundMode] = useState<ReturnRefundMode>("cash");
+  const [issuedGiftCard, setIssuedGiftCard] = useState<IssuedReturnGiftCard | null>(null);
   const [ownerPin, setOwnerPin] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -94,17 +115,37 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
     }
     setBusy(true);
     try {
-      await createSaleReturnLocalFirst({
-        items,
-        refundMode,
-        gstMode,
-        customerId,
-        customerName,
-        originalBillId,
-        ownerPin,
-        reason: reason.trim() || undefined,
-      });
-      toast({ title: "Return recorded", description: `Refund ₹${refundTotal.toLocaleString("en-IN")} via ${refundMode}. Stock and reports updated; cloud backup will run.` });
+      if (refundMode === "gift_card") {
+        if (!isOnline) throw new Error("Connect to KiranaOS to issue secure store credit. Other refund modes remain available offline.");
+        const created = await apiRequest<CreatedReturn>("/bills/returns", {
+          method: "POST",
+          ownerPin,
+          body: JSON.stringify({
+            items,
+            refundMode,
+            gstMode,
+            customerId,
+            customerName,
+            returnOfBillId: originalBillId,
+            reason: reason.trim() || "Customer return",
+          }),
+        });
+        if (!created.issuedGiftCard?.code) throw new Error("Return was recorded but its store-credit code was not returned. Contact support before closing this screen.");
+        setIssuedGiftCard(created.issuedGiftCard);
+        toast({ title: "Store credit issued", description: `Return ${created.billNo} created for ₹${refundTotal.toLocaleString("en-IN")}. Copy the one-time code now.` });
+      } else {
+        await createSaleReturnLocalFirst({
+          items,
+          refundMode,
+          gstMode,
+          customerId,
+          customerName,
+          originalBillId,
+          ownerPin,
+          reason: reason.trim() || undefined,
+        });
+        toast({ title: "Return recorded", description: `Refund ₹${refundTotal.toLocaleString("en-IN")} via ${refundMode}. Stock and reports updated; cloud backup will run.` });
+      }
       onOpenChange(false);
       setQty({});
       setDamaged({});
@@ -118,14 +159,16 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
     }
   }
 
-  const modes: { key: RefundMode; label: string; disabled?: boolean }[] = [
+  const modes: { key: ReturnRefundMode; label: string; disabled?: boolean }[] = [
     { key: "cash", label: "₹ Cash" },
     { key: "upi", label: "UPI" },
     { key: "bank", label: "Bank" },
     { key: "udhar", label: "Reduce udhar", disabled: !hasCustomer },
+    { key: "gift_card", label: "Store credit", disabled: !isOnline },
   ];
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
@@ -196,6 +239,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
               ))}
             </div>
             {!hasCustomer && <p className="mt-1 text-[11px] text-muted-foreground">Udhar refund needs a linked customer.</p>}
+            {!isOnline && <p className="mt-1 text-[11px] text-amber-700">Store credit needs a live connection so its balance stays safe across every location.</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -221,5 +265,27 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         </div>
       </DialogContent>
     </Dialog>
+    <Dialog open={Boolean(issuedGiftCard)} onOpenChange={(next) => { if (!next) setIssuedGiftCard(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><Gift className="h-6 w-6" /></div>
+          <DialogTitle>Store credit ready</DialogTitle>
+          <DialogDescription>This code is shown once. Give it to the customer now; KiranaOS stores only a protected fingerprint.</DialogDescription>
+        </DialogHeader>
+        {issuedGiftCard && (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+              <div className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Redeem at any location</div>
+              <div className="mt-2 font-mono text-xl font-black tracking-wider text-slate-950">{issuedGiftCard.code}</div>
+              <div className="mt-2 text-sm text-slate-600">Balance ₹{issuedGiftCard.balance.toLocaleString("en-IN")}</div>
+            </div>
+            <Button className="w-full" onClick={() => void navigator.clipboard.writeText(issuedGiftCard.code).then(() => toast({ title: "Code copied" }))}>
+              <Copy className="mr-2 h-4 w-4" /> Copy customer code
+            </Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

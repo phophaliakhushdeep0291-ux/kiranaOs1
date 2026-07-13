@@ -541,6 +541,19 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
   // cancel can be replayed by sync. Already-cancelled => return as-is WITHOUT re-reversing
   // stock/udhar (the reversal already happened), instead of throwing a permanent CONFLICT.
   if (bill.status === "cancelled") return bill;
+  if (bill.billType === "sales_return") {
+    const err = new AppError("A completed sale return cannot be cancelled from the bill screen", 409);
+    err.code = "SALE_RETURN_NOT_CANCELLABLE";
+    throw err;
+  }
+  const activeReturnCount = await db.bill.count({
+    where: { shopId, returnOfBillId: bill.id, billType: "sales_return", status: "active" },
+  });
+  if (activeReturnCount > 0) {
+    const err = new AppError("This bill has completed returns and can no longer be cancelled", 409);
+    err.code = "BILL_HAS_ACTIVE_RETURNS";
+    throw err;
+  }
 
   return db.$transaction(async (tx) => {
     // Atomic claim: only one concurrent request can transition active -> cancelled, so two
@@ -688,8 +701,19 @@ export async function createSaleReturn(shopId, body, actor = {}) {
 
       // Optional link to the original sale (bill-linked returns).
       const original = returnOfBillId
-        ? await tx.bill.findFirst({ where: { id: returnOfBillId, shopId } })
+        ? await tx.bill.findFirst({ where: { id: returnOfBillId, shopId }, include: { items: true } })
         : null;
+      if (returnOfBillId && !original) throw new AppError("Original sale not found", 404);
+      if (original && original.status !== "active") {
+        const err = new AppError("Only an active sale can be returned", 409);
+        err.code = "ORIGINAL_BILL_NOT_RETURNABLE";
+        throw err;
+      }
+      if (original?.billType === "sales_return") {
+        const err = new AppError("A return cannot be returned again", 409);
+        err.code = "RETURN_OF_RETURN_NOT_ALLOWED";
+        throw err;
+      }
       const location = await resolveOperationalLocation(
         shopId,
         body.locationId ?? body.location_id ?? original?.locationId ?? actor?.locationId ?? null,
@@ -711,6 +735,11 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       let itemProfit = 0;
       const billItems = [];
       const restockPlan = []; // { product, qtyInBase, lineCost, damaged }
+
+      const returnLineKey = (line) => [
+        line.productId ? `product:${line.productId}` : `name:${String(line.name ?? "").trim().toLowerCase()}`,
+        `rate:${round2(Math.abs(Number(line.ratePerRateUnit ?? 0)))}`,
+      ].join("|");
 
       for (const item of items) {
         const product = item.productId ? productMap[item.productId] : null;
@@ -760,6 +789,40 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         });
 
         if (product) restockPlan.push({ product, qtyInBase: round2(qtyInBase), lineCost, damaged });
+      }
+
+      if (original) {
+        const previouslyReturned = await tx.bill.findMany({
+          where: { shopId, returnOfBillId: original.id, billType: "sales_return", status: "active" },
+          include: { items: true },
+        });
+        const availableByLine = new Map();
+        for (const originalItem of original.items) {
+          const key = returnLineKey(originalItem);
+          const soldQuantity = Math.abs(Number(originalItem.quantityInBaseUnit ?? originalItem.quantity ?? 0));
+          availableByLine.set(key, round2((availableByLine.get(key) ?? 0) + soldQuantity));
+        }
+        for (const previousReturn of previouslyReturned) {
+          for (const returnedItem of previousReturn.items) {
+            const key = returnLineKey(returnedItem);
+            const returnedQuantity = Math.abs(Number(returnedItem.quantityInBaseUnit ?? returnedItem.quantity ?? 0));
+            availableByLine.set(key, round2((availableByLine.get(key) ?? 0) - returnedQuantity));
+          }
+        }
+        const requestedByLine = new Map();
+        for (const returnedItem of billItems) {
+          const key = returnLineKey(returnedItem);
+          const requestedQuantity = Math.abs(Number(returnedItem.quantityInBaseUnit ?? returnedItem.quantity ?? 0));
+          requestedByLine.set(key, round2((requestedByLine.get(key) ?? 0) + requestedQuantity));
+        }
+        for (const [key, requestedQuantity] of requestedByLine.entries()) {
+          const availableQuantity = Math.max(0, Number(availableByLine.get(key) ?? 0));
+          if (requestedQuantity > availableQuantity + 0.000001) {
+            const err = new AppError("Return quantity or price exceeds what remains on the original sale", 409);
+            err.code = "RETURN_EXCEEDS_ORIGINAL_SALE";
+            throw err;
+          }
+        }
       }
 
       const grandTotalMagnitude = effectiveGstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;

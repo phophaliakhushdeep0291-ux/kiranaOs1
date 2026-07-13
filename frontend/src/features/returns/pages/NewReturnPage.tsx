@@ -44,7 +44,7 @@ import type { Bill, Product } from "@/types/api";
 type RecordLike = Record<string, unknown>;
 type ReturnTab = "sales" | "purchase";
 type ReturnStatus = "all" | "completed" | "pending";
-type ReturnModeFilter = "all" | "cash" | "upi" | "bank" | "udhar";
+type ReturnModeFilter = "all" | "cash" | "upi" | "bank" | "udhar" | "gift_card";
 
 interface ReturnRegisterData {
   bills: Bill[];
@@ -63,7 +63,7 @@ interface ReturnRow {
   itemCount: number;
   quantity: number;
   amount: number;
-  mode: "cash" | "upi" | "bank" | "udhar" | "credit_note";
+  mode: "cash" | "upi" | "bank" | "udhar" | "gift_card" | "credit_note";
   status: "completed" | "pending";
   items: RecordLike[];
 }
@@ -74,6 +74,7 @@ const MODE_META = {
   upi: { label: "UPI", color: "#1768f5", icon: Smartphone },
   bank: { label: "Bank", color: "#6366f1", icon: Landmark },
   udhar: { label: "Credit (Udhar)", color: "#7c4df1", icon: CreditCard },
+  gift_card: { label: "Store Credit", color: "#0f9f78", icon: CreditCard },
   credit_note: { label: "Credit Note", color: "#f5a30a", icon: ReceiptText },
 } as const;
 
@@ -128,6 +129,7 @@ function returnStatus(bill: Bill): ReturnRow["status"] {
 function refundMode(bill: Bill): ReturnRow["mode"] {
   const record = bill as Bill & RecordLike;
   const raw = String(record.refundMode ?? record.refund_mode ?? record.paymentMode ?? record.payment_mode ?? "cash").toLowerCase();
+  if (raw.includes("gift") || raw.includes("store_credit")) return "gift_card";
   if (raw.includes("udhar") || raw.includes("credit")) return returnType(bill) === "purchase" ? "credit_note" : "udhar";
   if (raw.includes("bank") || raw.includes("card")) return "bank";
   if (raw.includes("upi")) return "upi";
@@ -261,7 +263,7 @@ export default function NewReturnPage() {
   const spark = useMemo(() => buildSparkRows(selectedRows, from, to), [selectedRows, from, to]);
   const topItems = useMemo(() => buildTopItems(selectedRows), [selectedRows]);
   const modeSummary = useMemo(() => {
-    return (["cash", "udhar", "upi", "bank", "credit_note"] as const)
+    return (["cash", "udhar", "gift_card", "upi", "bank", "credit_note"] as const)
       .map((mode) => ({ mode, value: selectedRows.filter((row) => row.mode === mode).reduce((sum, row) => sum + row.amount, 0), ...MODE_META[mode] }))
       .filter((item) => item.value > 0);
   }, [selectedRows]);
@@ -325,7 +327,7 @@ export default function NewReturnPage() {
             <PopoverTrigger asChild><Button variant="outline" className="h-10 gap-2 rounded-[8px] border-[#dfe7f2] px-4 text-[12px] font-semibold"><Filter size={14} />Filters</Button></PopoverTrigger>
             <PopoverContent align="end" className="w-56 space-y-3 rounded-[8px] p-3">
               <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">Status</Label><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as ReturnStatus)} className="mt-1 h-9 w-full rounded-[6px] border border-[#dfe7f2] bg-white px-2 text-xs"><option value="all">All status</option><option value="completed">Completed</option><option value="pending">Pending sync</option></select></div>
-              <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">Refund mode</Label><select value={modeFilter} onChange={(event) => setModeFilter(event.target.value as ReturnModeFilter)} className="mt-1 h-9 w-full rounded-[6px] border border-[#dfe7f2] bg-white px-2 text-xs"><option value="all">All modes</option><option value="cash">Cash</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="udhar">Credit (Udhar)</option></select></div>
+              <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">Refund mode</Label><select value={modeFilter} onChange={(event) => setModeFilter(event.target.value as ReturnModeFilter)} className="mt-1 h-9 w-full rounded-[6px] border border-[#dfe7f2] bg-white px-2 text-xs"><option value="all">All modes</option><option value="cash">Cash</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="udhar">Credit (Udhar)</option><option value="gift_card">Store Credit</option></select></div>
             </PopoverContent>
           </Popover>
           <Button onClick={() => setBuilderOpen(true)} className="h-10 gap-2 rounded-[8px] bg-[#075fff] px-5 text-[12px] font-bold text-white shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Plus size={15} />New Return</Button>
