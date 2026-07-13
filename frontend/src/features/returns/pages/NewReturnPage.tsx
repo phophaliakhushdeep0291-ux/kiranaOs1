@@ -34,6 +34,7 @@ import { PageShell, SyncBadge } from "@/components/shared";
 import { useListBills } from "@/features/bills/queries";
 import { useListCustomers } from "@/features/customers/queries";
 import { useListProducts } from "@/features/products/queries";
+import { listPurchaseReturns, type PurchaseReturn } from "@/features/purchases/purchase-orders-api";
 import { ReturnDialog, type ReturnLineInput } from "@/features/returns/components/ReturnDialog";
 import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
 import { useOfflineStatus } from "@/features/sync";
@@ -136,6 +137,16 @@ function refundMode(bill: Bill): ReturnRow["mode"] {
   return "cash";
 }
 
+function supplierRefundMode(value: string): ReturnRow["mode"] {
+  if (value === "bank") return "bank";
+  if (value === "cash") return "cash";
+  return "credit_note";
+}
+
+function returnHref(row: ReturnRow): string {
+  return row.type === "purchase" ? "/purchase-bills" : `/bills/${row.bill.id}`;
+}
+
 function billIdentityKeys(bill: Bill): string[] {
   const record = bill as Bill & RecordLike;
   return [bill.id, bill.localBillId, bill.clientBillId, record.server_id, record.local_id]
@@ -178,6 +189,7 @@ export default function NewReturnPage() {
   const productsQuery = useListProducts({ limit: 1000 });
   const customersQuery = useListCustomers({ limit: 2000 });
   const registerQuery = useQuery({ queryKey: ["return-register"], queryFn: loadReturnRegister, staleTime: 1_000 });
+  const purchaseReturnsQuery = useQuery({ queryKey: ["purchase-returns"], queryFn: listPurchaseReturns, staleTime: 30_000 });
   const [from, setFrom] = useState(daysAgo(6));
   const [to, setTo] = useState(dateInput(new Date()));
   const [tab, setTab] = useState<ReturnTab>("sales");
@@ -216,7 +228,7 @@ export default function NewReturnPage() {
     const items = registerQuery.data?.items ?? [];
     const originalById = new Map<string, Bill>();
     allBills.forEach((bill) => billIdentityKeys(bill).forEach((key) => originalById.set(key, bill)));
-    return allBills.filter(isReturnBill).map((bill) => {
+    const salesRows = allBills.filter(isReturnBill).filter((bill) => returnType(bill) === "sales").map((bill) => {
       const keys = new Set(billIdentityKeys(bill));
       const billItems = items.filter((item) => keys.has(itemBillId(item)));
       const embedded = Array.isArray(bill.items) ? bill.items.filter((item): item is RecordLike => Boolean(item && typeof item === "object")) : [];
@@ -241,12 +253,29 @@ export default function NewReturnPage() {
         status: returnStatus(bill),
         items: returnItems,
       };
-    }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [allBills, registerQuery.data?.items]);
+    });
+    const supplierRows = (purchaseReturnsQuery.data ?? []).map((entry: PurchaseReturn): ReturnRow => ({
+      bill: { id: entry.id } as Bill,
+      id: entry.returnNumber,
+      type: "purchase",
+      reference: entry.purchaseReceipt?.supplierInvoiceNumber || entry.purchaseReceipt?.receiptNumber || entry.supplierReference || "—",
+      customer: entry.supplier?.name || "Supplier",
+      mobile: entry.supplier?.mobile || "",
+      createdAt: entry.createdAt,
+      dateKey: entry.createdAt.slice(0, 10),
+      itemCount: entry.items.length,
+      quantity: entry.items.reduce((sum, item) => sum + money(item.quantityBaseQty), 0),
+      amount: money(entry.totalAmount),
+      mode: supplierRefundMode(entry.refundMode),
+      status: "completed",
+      items: entry.items.map((item) => ({ ...item, name: item.product?.name || "Returned item", category: item.product?.category || "General" })),
+    }));
+    return [...salesRows, ...supplierRows].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [allBills, purchaseReturnsQuery.data, registerQuery.data?.items]);
 
   const previous = useMemo(() => previousRange(from, to), [from, to]);
-  const selectedRows = useMemo(() => rows.filter((row) => row.dateKey >= from && row.dateKey <= to), [rows, from, to]);
-  const previousRows = useMemo(() => rows.filter((row) => row.dateKey >= previous.from && row.dateKey <= previous.to), [rows, previous]);
+  const selectedRows = useMemo(() => rows.filter((row) => row.type === tab && row.dateKey >= from && row.dateKey <= to), [rows, tab, from, to]);
+  const previousRows = useMemo(() => rows.filter((row) => row.type === tab && row.dateKey >= previous.from && row.dateKey <= previous.to), [rows, tab, previous]);
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     return selectedRows.filter((row) => {
@@ -330,7 +359,7 @@ export default function NewReturnPage() {
               <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">Refund mode</Label><select value={modeFilter} onChange={(event) => setModeFilter(event.target.value as ReturnModeFilter)} className="mt-1 h-9 w-full rounded-[6px] border border-[#dfe7f2] bg-white px-2 text-xs"><option value="all">All modes</option><option value="cash">Cash</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="udhar">Credit (Udhar)</option><option value="gift_card">Store Credit</option></select></div>
             </PopoverContent>
           </Popover>
-          <Button onClick={() => setBuilderOpen(true)} className="h-10 gap-2 rounded-[8px] bg-[#075fff] px-5 text-[12px] font-bold text-white shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Plus size={15} />New Return</Button>
+          <Button onClick={() => tab === "purchase" ? navigate("/purchase-bills") : setBuilderOpen(true)} className="h-10 gap-2 rounded-[8px] bg-[#075fff] px-5 text-[12px] font-bold text-white shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Plus size={15} />{tab === "purchase" ? "Supplier Return" : "New Return"}</Button>
         </div>
       </section>
 
@@ -347,17 +376,17 @@ export default function NewReturnPage() {
           <TabButton active={tab === "sales"} onClick={() => setTab("sales")} icon={<RotateCcw size={14} />}>Sales Returns</TabButton>
           <TabButton active={tab === "purchase"} onClick={() => setTab("purchase")} icon={<Undo2 size={14} />}>Purchase Returns</TabButton>
         </div>
-        <div className="relative w-full lg:w-[320px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by invoice, customer, mobile..." className="h-10 rounded-[8px] border-[#dfe7f2] pl-9 text-xs" /></div>
+        <div className="relative w-full lg:w-[320px]"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tab === "purchase" ? "Search return, GRN or supplier..." : "Search invoice, customer or mobile..."} className="h-10 rounded-[8px] border-[#dfe7f2] pl-9 text-xs" /></div>
       </section>
 
-      <ReturnOrdersTable rows={filteredRows} loading={registerQuery.isLoading || billsQuery.isLoading} />
+      <ReturnOrdersTable rows={filteredRows} loading={registerQuery.isLoading || billsQuery.isLoading || (tab === "purchase" && purchaseReturnsQuery.isLoading)} />
 
       <section className="grid gap-4 xl:grid-cols-[0.82fr_1fr]">
         <TopReturnedItems rows={topItems} />
         <ReturnSummary rows={modeSummary} total={metrics.total} />
       </section>
 
-      <p className="mx-auto flex max-w-xl items-center justify-center gap-2 rounded-full bg-[#f7f9fc] px-4 py-2 text-center text-[10px] font-medium text-[#687792]"><CheckCircle2 size={13} className="text-[#1768f5]" />Sales returns affect stock. Resellable items are added back to inventory automatically.</p>
+      <p className="mx-auto flex max-w-xl items-center justify-center gap-2 rounded-full bg-[#f7f9fc] px-4 py-2 text-center text-[10px] font-medium text-[#687792]"><CheckCircle2 size={13} className="text-[#1768f5]" />{tab === "purchase" ? "Supplier returns remove branch stock, preserve batch traceability and record the credit or refund settlement." : "Sales returns affect stock. Resellable items are added back to inventory automatically."}</p>
 
       <Dialog open={builderOpen} onOpenChange={closeBuilder}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
@@ -432,7 +461,7 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
 }
 
 function ReturnOrdersTable({ rows, loading }: { rows: ReturnRow[]; loading: boolean }) {
-  return <section className={PANEL}><header className="flex h-12 items-center px-4"><h2 className="text-[14px] font-extrabold text-[#13254a]">Return Orders</h2></header><div className="divide-y divide-[#e8edf4] md:hidden">{loading ? <div className="py-12 text-center text-[#8290a8]">Loading returns...</div> : rows.length === 0 ? <div className="px-4 py-12 text-center"><RotateCcw className="mx-auto mb-2 text-[#9aa8bc]" size={22} /><p className="font-bold text-[#314563]">No returns in this period</p><p className="mt-1 text-[#8290a8]">Record a new return or adjust the filters.</p></div> : rows.slice(0, 8).map((row) => { const mode = MODE_META[row.mode]; return <Link key={row.bill.id} href={`/bills/${row.bill.id}`} className="grid grid-cols-[38px_1fr_auto] items-center gap-3 px-4 py-4"><span className={cn("grid h-9 w-9 place-items-center rounded-[10px]", row.type === "sales" ? "bg-[#edf4ff] text-[#1768f5]" : "bg-[#f5efff] text-[#8043e9]")}><RotateCcw size={16} /></span><span className="min-w-0"><span className="block truncate text-[13px] font-extrabold text-[#13254a]">{row.id}</span><span className="mt-1 block truncate text-[11px] text-[#52617c]">{row.customer} • {row.createdAt ? format(new Date(row.createdAt), "dd MMM, hh:mm a") : "No date"}</span><span className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#405273]"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} />{mode.label}</span></span><span className="text-right"><span className="block text-[14px] font-black text-[#102347]">{inr(row.amount)}</span><span className={cn("mt-1 inline-block rounded-[7px] border px-2 py-1 text-[10px] font-bold", row.status === "completed" ? "border-[#c9efd5] bg-[#eaf9ef] text-[#169447]" : "border-[#ffdda8] bg-[#fff3e1] text-[#d77c00]")}>{row.status === "completed" ? "Completed" : "Pending"}</span></span></Link>; })}</div><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[1040px] border-collapse text-[10px]"><thead><tr className="border-y border-[#e5ebf3] bg-[#f7f9fc] text-[#52617c]">{["Return ID", "Order Type", "Reference", "Customer", "Date", "Items", "Return Amount", "Payment Mode", "Status", "Action"].map((header) => <th key={header} className="px-4 py-2.5 text-left font-bold">{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{loading ? <tr><td colSpan={10} className="h-32 text-center text-[#8290a8]">Loading returns...</td></tr> : rows.length === 0 ? <tr><td colSpan={10} className="h-36 text-center"><RotateCcw className="mx-auto mb-2 text-[#9aa8bc]" size={22} /><p className="font-bold text-[#314563]">No returns in this period</p><p className="mt-1 text-[#8290a8]">Record a new return or adjust the filters.</p></td></tr> : rows.slice(0, 10).map((row) => { const mode = MODE_META[row.mode]; return <tr key={row.bill.id} className="text-[#24385f] hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-4 py-2.5 font-bold">{row.id}</td><td className="px-4 py-2.5"><span className={cn("rounded-[5px] border px-2 py-1 font-bold", row.type === "sales" ? "border-[#cadcff] bg-[#edf4ff] text-[#1768f5]" : "border-[#dfcffd] bg-[#f5efff] text-[#8043e9]")}>{row.type === "sales" ? "Sales Return" : "Purchase Return"}</span></td><td className="px-4 py-2.5 font-semibold">{row.reference}</td><td className="px-4 py-2.5"><p className="font-bold">{row.customer}</p>{row.mobile && <p className="mt-0.5 text-[#73829a]">{row.mobile}</p>}</td><td className="whitespace-nowrap px-4 py-2.5"><p className="font-semibold">{row.createdAt ? format(new Date(row.createdAt), "dd MMM yyyy") : "—"}</p>{row.createdAt && <p className="mt-0.5 text-[#73829a]">{format(new Date(row.createdAt), "hh:mm a")}</p>}</td><td className="px-4 py-2.5 font-semibold">{row.quantity || row.itemCount}</td><td className="px-4 py-2.5 font-black text-[#102347]">{inr(row.amount)}</td><td className="whitespace-nowrap px-4 py-2.5"><span className="inline-flex items-center gap-2 font-semibold"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} />{mode.label}</span></td><td className="px-4 py-2.5"><span className={cn("rounded-[5px] border px-2 py-1 font-bold", row.status === "completed" ? "border-[#c9efd5] bg-[#eaf9ef] text-[#169447]" : "border-[#ffdda8] bg-[#fff3e1] text-[#d77c00]")}>{row.status === "completed" ? "Completed" : "Pending"}</span></td><td className="px-4 py-2.5"><Link href={`/bills/${row.bill.id}`} title="View return"><span className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] text-[#075fff] hover:bg-[#edf4ff]"><Eye size={14} /></span></Link></td></tr>; })}</tbody></table></div>{rows.length > 0 && <Link href="/bills" className="flex h-10 items-center justify-center border-t border-[#e8edf4] text-[10px] font-bold text-[#075fff] hover:bg-[#f7faff]">View all returns</Link>}</section>;
+  return <section className={PANEL}><header className="flex h-12 items-center px-4"><h2 className="text-[14px] font-extrabold text-[#13254a]">Return Orders</h2></header><div className="divide-y divide-[#e8edf4] md:hidden">{loading ? <div className="py-12 text-center text-[#8290a8]">Loading returns...</div> : rows.length === 0 ? <div className="px-4 py-12 text-center"><RotateCcw className="mx-auto mb-2 text-[#9aa8bc]" size={22} /><p className="font-bold text-[#314563]">No returns in this period</p><p className="mt-1 text-[#8290a8]">Record a new return or adjust the filters.</p></div> : rows.slice(0, 8).map((row) => { const mode = MODE_META[row.mode]; return <Link key={row.bill.id} href={returnHref(row)} className="grid grid-cols-[38px_1fr_auto] items-center gap-3 px-4 py-4"><span className={cn("grid h-9 w-9 place-items-center rounded-[10px]", row.type === "sales" ? "bg-[#edf4ff] text-[#1768f5]" : "bg-[#f5efff] text-[#8043e9]")}><RotateCcw size={16} /></span><span className="min-w-0"><span className="block truncate text-[13px] font-extrabold text-[#13254a]">{row.id}</span><span className="mt-1 block truncate text-[11px] text-[#52617c]">{row.customer} • {row.createdAt ? format(new Date(row.createdAt), "dd MMM, hh:mm a") : "No date"}</span><span className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#405273]"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} />{mode.label}</span></span><span className="text-right"><span className="block text-[14px] font-black text-[#102347]">{inr(row.amount)}</span><span className={cn("mt-1 inline-block rounded-[7px] border px-2 py-1 text-[10px] font-bold", row.status === "completed" ? "border-[#c9efd5] bg-[#eaf9ef] text-[#169447]" : "border-[#ffdda8] bg-[#fff3e1] text-[#d77c00]")}>{row.status === "completed" ? "Completed" : "Pending"}</span></span></Link>; })}</div><div className="hidden overflow-x-auto md:block"><table className="w-full min-w-[1040px] border-collapse text-[10px]"><thead><tr className="border-y border-[#e5ebf3] bg-[#f7f9fc] text-[#52617c]">{["Return ID", "Order Type", "Reference", "Customer", "Date", "Items", "Return Amount", "Payment Mode", "Status", "Action"].map((header) => <th key={header} className="px-4 py-2.5 text-left font-bold">{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{loading ? <tr><td colSpan={10} className="h-32 text-center text-[#8290a8]">Loading returns...</td></tr> : rows.length === 0 ? <tr><td colSpan={10} className="h-36 text-center"><RotateCcw className="mx-auto mb-2 text-[#9aa8bc]" size={22} /><p className="font-bold text-[#314563]">No returns in this period</p><p className="mt-1 text-[#8290a8]">Record a new return or adjust the filters.</p></td></tr> : rows.slice(0, 10).map((row) => { const mode = MODE_META[row.mode]; return <tr key={row.bill.id} className="text-[#24385f] hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-4 py-2.5 font-bold">{row.id}</td><td className="px-4 py-2.5"><span className={cn("rounded-[5px] border px-2 py-1 font-bold", row.type === "sales" ? "border-[#cadcff] bg-[#edf4ff] text-[#1768f5]" : "border-[#dfcffd] bg-[#f5efff] text-[#8043e9]")}>{row.type === "sales" ? "Sales Return" : "Purchase Return"}</span></td><td className="px-4 py-2.5 font-semibold">{row.reference}</td><td className="px-4 py-2.5"><p className="font-bold">{row.customer}</p>{row.mobile && <p className="mt-0.5 text-[#73829a]">{row.mobile}</p>}</td><td className="whitespace-nowrap px-4 py-2.5"><p className="font-semibold">{row.createdAt ? format(new Date(row.createdAt), "dd MMM yyyy") : "—"}</p>{row.createdAt && <p className="mt-0.5 text-[#73829a]">{format(new Date(row.createdAt), "hh:mm a")}</p>}</td><td className="px-4 py-2.5 font-semibold">{row.quantity || row.itemCount}</td><td className="px-4 py-2.5 font-black text-[#102347]">{inr(row.amount)}</td><td className="whitespace-nowrap px-4 py-2.5"><span className="inline-flex items-center gap-2 font-semibold"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} />{mode.label}</span></td><td className="px-4 py-2.5"><span className={cn("rounded-[5px] border px-2 py-1 font-bold", row.status === "completed" ? "border-[#c9efd5] bg-[#eaf9ef] text-[#169447]" : "border-[#ffdda8] bg-[#fff3e1] text-[#d77c00]")}>{row.status === "completed" ? "Completed" : "Pending"}</span></td><td className="px-4 py-2.5"><Link href={returnHref(row)} title="View return"><span className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] text-[#075fff] hover:bg-[#edf4ff]"><Eye size={14} /></span></Link></td></tr>; })}</tbody></table></div>{rows.length > 0 && <Link href={rows[0]?.type === "purchase" ? "/purchase-bills" : "/bills"} className="flex h-10 items-center justify-center border-t border-[#e8edf4] text-[10px] font-bold text-[#075fff] hover:bg-[#f7faff]">View all returns</Link>}</section>;
 }
 
 function TopReturnedItems({ rows }: { rows: Array<{ name: string; category: string; quantity: number; amount: number }> }) {

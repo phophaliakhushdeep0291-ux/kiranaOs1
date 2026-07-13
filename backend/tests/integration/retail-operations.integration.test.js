@@ -262,13 +262,15 @@ if (ctx.skip) {
       const afterLotReturn = await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } });
       assert.deepEqual(afterLotReturn.map((lot) => lot.availableBaseQty), [3, 6], "a partial return must restore the exact FEFO lot used by its original sale");
 
-      const supplierReturn = assertSuccess(await ctx.post("/api/purchase-returns", {
+      const supplierReturnPayload = {
         purchaseReceiptId: completed.receipt.id,
         refundMode: "bank",
         reason: "Supplier shipment damaged in transit",
         supplierReference: "CN-RW-1001",
+        idempotencyKey: "supplier-return-retry-001",
         items: [{ purchaseReceiptItemId: completed.receipt.items[0].id, quantityBaseQty: 2 }],
-      }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }), 201);
+      };
+      const supplierReturn = assertSuccess(await ctx.post("/api/purchase-returns", supplierReturnPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }), 201);
       assert.equal(supplierReturn.totalAmount, 38);
       assert.equal(supplierReturn.refundAmount, 38);
       assert.equal(supplierReturn.supplierCreditAmount, 0);
@@ -276,6 +278,10 @@ if (ctx.skip) {
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 10);
       const afterSupplierReturnLots = await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } });
       assert.deepEqual(afterSupplierReturnLots.map((lot) => lot.availableBaseQty), [3, 4], "supplier return must remove stock from its received batch first");
+      const replayedSupplierReturn = assertSuccess(await ctx.post("/api/purchase-returns", supplierReturnPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }), 200);
+      assert.equal(replayedSupplierReturn.id, supplierReturn.id);
+      assert.equal(replayedSupplierReturn.idempotentReplay, true);
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 10, "retry must not remove stock twice");
       const duplicateSupplierReturn = assertFailure(await ctx.post("/api/purchase-returns", {
         purchaseReceiptId: completed.receipt.id, refundMode: "supplier_credit", reason: "Over-return attempt",
         items: [{ purchaseReceiptItemId: completed.receipt.items[0].id, quantityBaseQty: 5 }],
