@@ -80,7 +80,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/returns/new": "Manage returned items from customers or suppliers",
   "/customers": "Manage customer credit, record payments, and track full udhar ledger",
   "/reports": "Track performance, trends, and data-driven decisions",
-  "/money-statement": "Trace cash, UPI, and bank money movement",
+  "/money-statement": "Trace every cash, UPI, bank, and credit movement",
   "/daily-closing": "Cash drawer and daily business summary",
   "/expenses": "Track shop expenses and outflows",
   "/offers": "Create coupons and discounts for billing",
@@ -106,7 +106,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/returns/new": "Return Items",
   "/customers": "Customers / Udhar",
   "/reports": "Reports & Analytics",
-  "/money-statement": "Money Statement",
+  "/money-statement": "Cash & Payments",
   "/daily-closing": "Daily Closing",
   "/expenses": "Expenses",
   "/offers": "Offers & Discounts",
@@ -184,7 +184,7 @@ const NAV: NavItem[] = [
   },
   { kind: "link", href: "/returns", label: "Returns", Icon: Undo2 },
   { kind: "link", href: "/reports", label: "Reports", Icon: BarChart3 },
-  { kind: "link", href: "/money-statement", label: "Money Statement", Icon: Landmark },
+  { kind: "link", href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
   { kind: "link", href: "/expenses", label: "Expenses", Icon: Wallet },
   { kind: "link", href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
@@ -235,7 +235,7 @@ const MOBILE_MENU: MobileMenuItem[] = [
   },
   { href: "/returns", label: "Returns", Icon: Undo2 },
   { href: "/reports", label: "Reports", Icon: BarChart3 },
-  { href: "/money-statement", label: "Money Statement", Icon: Landmark },
+  { href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
   { href: "/expenses", label: "Expenses", Icon: Wallet },
   { href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
   { href: "/settings", label: "Settings", Icon: Settings },
@@ -585,7 +585,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         {/* Mobile topbar */}
-        <header className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b border-[#edf2f8] bg-white/98 px-5 pb-3 pt-[max(1.1rem,env(safe-area-inset-top))] shadow-[0_8px_22px_rgba(15,35,80,0.035)] backdrop-blur-xl lg:hidden">
+        <header className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b border-[#edf2f8] bg-white/98 px-4 pb-2 pt-[max(0.65rem,env(safe-area-inset-top))] shadow-[0_8px_22px_rgba(15,35,80,0.035)] backdrop-blur-xl lg:hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-4">
               <DropdownMenu>

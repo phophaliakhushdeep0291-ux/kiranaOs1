@@ -128,7 +128,7 @@
   --app-font-mono: Menlo, monospace;
   --radius: .625rem;
   --app-desktop-topbar-height: 76px;
-  --app-mobile-topbar-height: 110px;
+  --app-mobile-topbar-height: 88px;
   --app-mobile-nav-height: 84px;
   --app-page-max: 1600px;
   --app-page-gutter: clamp(0.875rem, 0.65rem + 0.7vw, 1.5rem);
@@ -936,4 +936,20 @@
   --sidebar-primary: 215 40% 58%;
   --sidebar-accent: 215 25% 20%;
   --sidebar-ring: 215 40% 58%;
+}
+
+/* Respect operating-system motion preferences without removing useful state changes. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

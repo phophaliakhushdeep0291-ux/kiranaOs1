@@ -690,6 +690,23 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, cashInDrawer, lowSto
       />
       <div className="hidden w-full min-w-0 space-y-4 overflow-x-hidden bg-white p-4 font-sans sm:p-5 lg:block lg:p-5 2xl:p-6">
 
+      {!dashboard.hasBusinessData && (
+        <section className="overflow-hidden rounded-[18px] border border-[#cfe0ff] bg-[linear-gradient(135deg,#f3f7ff_0%,#ffffff_62%)] p-5 shadow-[0_14px_36px_rgba(7,95,255,0.08)]">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="max-w-xl">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#075fff]">Quick start</p>
+              <h2 className="mt-1 font-display text-[22px] font-black text-[#071333]">Open your counter in three simple steps</h2>
+              <p className="mt-1 text-[13px] font-medium text-[#52627e]">Set up one product, complete a test bill, and check your receipt before serving customers.</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3 xl:w-[650px]">
+              <QuickStartLink href="/products?add=1" step="1" icon={<PackagePlus size={17} />} title="Add products" detail="Name, price and stock" />
+              <QuickStartLink href="/billing" step="2" icon={<ShoppingCart size={17} />} title="Create a test bill" detail="Try cash or UPI" />
+              <QuickStartLink href="/settings/printer" step="3" icon={<Wrench size={17} />} title="Test your receipt" detail="Printer and shop details" />
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Counter focus */}
       <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
         <KpiCard
@@ -1069,6 +1086,19 @@ function MobileGeneralDashboard({
         </Link>
       </section>
 
+      {!dashboard.hasBusinessData && (
+        <section className="rounded-[18px] border border-[#cfe0ff] bg-[linear-gradient(145deg,#f1f6ff,#ffffff)] p-4 shadow-[0_12px_30px_rgba(7,95,255,0.08)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#075fff]">Quick start</p>
+          <h2 className="mt-1 font-display text-[19px] font-black text-[#071333]">Get ready for your first customer</h2>
+          <p className="mt-1 text-[12px] font-medium leading-5 text-[#52627e]">Complete these once, then billing stays fast every day.</p>
+          <div className="mt-3 grid gap-2">
+            <QuickStartLink href="/products?add=1" step="1" icon={<PackagePlus size={17} />} title="Add your first product" detail="Set price and opening stock" />
+            <QuickStartLink href="/billing" step="2" icon={<ShoppingCart size={17} />} title="Create a test bill" detail="Practice checkout without pressure" />
+            <QuickStartLink href="/settings/printer" step="3" icon={<Wrench size={17} />} title="Check your receipt" detail="Store name, GST and printer" />
+          </div>
+        </section>
+      )}
+
       <section>
         <div className="mb-3.5 flex items-center justify-between gap-3">
           <h2 className="font-display text-[20px] font-black text-[#071333]">Business Overview</h2>
@@ -1342,6 +1372,22 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
         </div>
       ) : null}
     </div>
+  );
+}
+
+function QuickStartLink({ href, step, icon, title, detail }: { href: string; step: string; icon: ReactNode; title: string; detail: string }) {
+  return (
+    <Link href={href} className="group flex min-h-[64px] items-center gap-3 rounded-[14px] border border-[#dbe6f5] bg-white p-3 text-left shadow-[0_8px_20px_rgba(15,35,80,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#9fc0ff] hover:shadow-[0_12px_28px_rgba(7,95,255,0.10)]">
+      <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-[#edf4ff] text-[#075fff]">
+        {icon}
+        <span className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-[#075fff] text-[9px] font-black text-white ring-2 ring-white">{step}</span>
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[12px] font-black text-[#102347] group-hover:text-[#075fff]">{title}</span>
+        <span className="mt-0.5 block text-[10px] font-semibold text-[#718096]">{detail}</span>
+      </span>
+      <ChevronRight size={15} className="shrink-0 text-[#9aa8bc] group-hover:text-[#075fff]" />
+    </Link>
   );
 }
 

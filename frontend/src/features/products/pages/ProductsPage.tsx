@@ -378,7 +378,55 @@ export default function ProductsPage() {
 
       {/* ── Products table ── */}
       <div className="mt-3.5 overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <div className="app-table-scroll overflow-x-auto">
+        <div className="space-y-2.5 p-2.5 lg:hidden">
+          {products.isLoading && rows.length === 0 ? (
+            <div className="py-12 text-center text-sm font-semibold text-[#64748b]">Loading products…</div>
+          ) : pagedRows.length === 0 ? (
+            <div className="rounded-[16px] border border-dashed border-[#d8e2f1] px-4 py-12 text-center">
+              <Package size={26} className="mx-auto text-[#94a3b8]" />
+              <p className="mt-2 text-sm font-black text-[#102347]">No products found</p>
+              <p className="mt-1 text-xs text-[#64748b]">Add a product or clear the current filters.</p>
+            </div>
+          ) : pagedRows.map((product) => {
+            const defaultUnit = product.sellingUnits?.find((row) => row.isDefault) ?? product.sellingUnits?.[0];
+            const unit = defaultUnit?.name ?? productDisplayUnit(product);
+            const stockBase = Number(product.stockBaseQty ?? 0);
+            const stock = defaultUnit?.conversionToBase
+              ? Math.round((stockBase / defaultUnit.conversionToBase + Number.EPSILON) * 100) / 100
+              : fromBaseQty(product.stockBaseQty, productDisplayUnit(product));
+            const outOfStock = stockBase <= 0;
+            const low = isLowStock(product) && !outOfStock;
+            const price = product.sellingPrice ?? product.defaultPricePerRateUnit;
+            return (
+              <article key={product.id} className="rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-[13px] bg-[#f4f7fb] text-xl">
+                    {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(product.name, product.category)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[14px] font-black text-[#102347]">{product.name}</p>
+                    <p className="mt-0.5 truncate text-[11px] font-semibold capitalize text-[#64748b]">{product.category || "General"} · {unit}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="text-[15px] font-black text-[#075fff]">{rs(price)}</span>
+                      {outOfStock ? <StatusPill tone="rose">Out of stock</StatusPill> : low ? <StatusPill tone="amber">Low stock</StatusPill> : <StatusPill tone="emerald">{stock} available</StatusPill>}
+                    </div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="grid h-11 w-11 shrink-0 place-items-center rounded-[12px] border border-[#dfe7f2] text-[#405273]" aria-label={`Actions for ${product.name}`}><MoreVertical size={17} /></button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem onClick={() => openEdit(product)}><Pencil size={14} className="mr-2" /> Edit product</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setLocation(`/products/${product.id}/pricing`)}><Layers size={14} className="mr-2" /> Customer pricing</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(product)}><Trash2 size={14} className="mr-2" /> Recycle product</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        <div className="app-table-scroll hidden overflow-x-auto lg:block">
           <table className="w-full min-w-[920px] text-left text-[13px]">
             <thead>
               <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
