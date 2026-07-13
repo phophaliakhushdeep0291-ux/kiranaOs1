@@ -278,7 +278,12 @@ runStep({
   cwd: frontendDir,
   // The workflow-level NODE_ENV is "test" for backend suites. Vite respects
   // an existing NODE_ENV and otherwise emits an unminified test build.
-  env: { NODE_ENV: "production" },
+  env: {
+    NODE_ENV: "production",
+    // Production URL validation remains active while reliability tests use a
+    // deterministic, non-routable CI endpoint instead of failing at startup.
+    VITE_API_BASE_URL: process.env.VITE_API_BASE_URL || "http://127.0.0.1:3000",
+  },
 });
 runStep({
   id: "local-storage-proof",
@@ -294,6 +299,9 @@ runStep({
   requiredFor: ["ci", "strict"],
   configured: hasPostgres,
   blockedReason: "set POSTGRES_TEST_DATABASE_URL to an isolated *_test or *_ci database",
+  // This proof always targets an isolated test database. Exercise the guarded
+  // legacy-money backfill, then verify every paise shadow column is consistent.
+  env: { ALLOW_MONEY_PAISE_BACKFILL: "true" },
 });
 runStep({
   id: "redis-worker-runtime",
