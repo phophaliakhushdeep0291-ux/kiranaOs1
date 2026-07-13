@@ -52,12 +52,14 @@ for (const snippet of [
 
 const concurrency = read("tests/integration/production-concurrency.integration.test.js");
 for (const snippet of [
-  "parallel bills cannot oversell",
+  "parallel bills apply every sale once while preserving negative-stock reconciliation",
   "parallel udhar payments cannot over-decrement",
   "Promise.all",
-  "stockBaseQty, 3",
+  "stockBaseQty, -4",
+  "saleLedgers.length, 2",
+  "new Set(saleLedgers.map((entry) => entry.billId)).size, 2",
   "udharAmount, 20",
-  "[201, 409]",
+  "[201, 201]",
   "[200, 409]",
 ]) {
   assert.ok(concurrency.includes(snippet), `concurrency test must include ${snippet}`);

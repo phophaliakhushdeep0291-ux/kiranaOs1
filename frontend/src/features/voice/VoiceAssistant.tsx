@@ -77,6 +77,7 @@ export function VoiceAssistant() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const livePositionRef = useRef<AssistantPosition | null>(null);
   const dragFrameRef = useRef<number | null>(null);
+  const suppressMicClickRef = useRef(false);
   const [position, setPosition] = useState<AssistantPosition | null>(readStoredAssistantPosition);
   const [dragging, setDragging] = useState(false);
   const Recognition = useMemo(() => getSpeechRecognitionConstructor(), []);
@@ -119,18 +120,32 @@ export function VoiceAssistant() {
     const container = containerRef.current;
     if (!container) return;
 
-    event.preventDefault();
+    const draggingFromMic = event.currentTarget.dataset.voiceMic === "true";
+    if (!draggingFromMic) event.preventDefault();
     event.stopPropagation();
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Window-level pointer listeners below keep dragging functional when an
+      // embedded browser exposes pointer capture but rejects the active pointer.
+    }
 
     const rect = container.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
     const offsetX = event.clientX - rect.left;
     const offsetY = event.clientY - rect.top;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "grabbing";
-    document.body.style.userSelect = "none";
-    setDragging(true);
+    let dragStarted = !draggingFromMic;
+
+    const startDrag = () => {
+      document.body.style.cursor = "grabbing";
+      document.body.style.userSelect = "none";
+      setDragging(true);
+    };
+
+    if (dragStarted) startDrag();
 
     const updatePosition = (next: AssistantPosition) => {
       livePositionRef.current = next;
@@ -142,6 +157,14 @@ export function VoiceAssistant() {
     };
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (!dragStarted) {
+        const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
+        if (distance < 5) return;
+        dragStarted = true;
+        suppressMicClickRef.current = true;
+        startDrag();
+      }
+      moveEvent.preventDefault();
       updatePosition(clampAssistantPosition(
         { x: moveEvent.clientX - offsetX, y: moveEvent.clientY - offsetY },
         rect.width,
@@ -149,24 +172,31 @@ export function VoiceAssistant() {
       ));
     };
 
-    const handlePointerUp = () => {
+    const finishPointerInteraction = () => {
       if (dragFrameRef.current !== null) {
         window.cancelAnimationFrame(dragFrameRef.current);
         dragFrameRef.current = null;
       }
-      const next = livePositionRef.current ?? clampAssistantPosition({ x: rect.left, y: rect.top }, rect.width, rect.height);
-      setPosition(next);
-      saveAssistantPosition(next);
-      setDragging(false);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
+      if (dragStarted) {
+        const next = livePositionRef.current ?? clampAssistantPosition({ x: rect.left, y: rect.top }, rect.width, rect.height);
+        setPosition(next);
+        saveAssistantPosition(next);
+        setDragging(false);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+      }
       window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointerup", finishPointerInteraction);
+      window.removeEventListener("pointercancel", finishPointerInteraction);
+      if (draggingFromMic && dragStarted) {
+        window.setTimeout(() => { suppressMicClickRef.current = false; }, 0);
+      }
     };
 
-    updatePosition(clampAssistantPosition({ x: rect.left, y: rect.top }, rect.width, rect.height));
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    if (dragStarted) updatePosition(clampAssistantPosition({ x: rect.left, y: rect.top }, rect.width, rect.height));
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", finishPointerInteraction, { once: true });
+    window.addEventListener("pointercancel", finishPointerInteraction, { once: true });
   }, []);
 
   function stopMic() {
@@ -270,7 +300,7 @@ export function VoiceAssistant() {
                 aria-label="Move voice assistant"
                 title="Move voice assistant"
                 onPointerDown={handleMovePointerDown}
-                className="flex h-8 w-8 cursor-grab items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground active:cursor-grabbing"
+                className="flex h-8 w-8 touch-none cursor-grab items-center justify-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground active:cursor-grabbing"
               >
                 <GripVertical className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -306,17 +336,26 @@ export function VoiceAssistant() {
             aria-label="Move voice assistant"
             title="Move voice assistant"
             onPointerDown={handleMovePointerDown}
-            className="flex h-10 w-9 cursor-grab items-center justify-center rounded-full border bg-card text-muted-foreground shadow-xl backdrop-blur-md transition-all duration-200 hover:bg-muted hover:text-foreground active:cursor-grabbing"
+            className="flex h-10 w-9 touch-none cursor-grab items-center justify-center rounded-full border bg-card text-muted-foreground shadow-xl backdrop-blur-md transition-all duration-200 hover:bg-muted hover:text-foreground active:cursor-grabbing"
           >
             <GripVertical className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
         <Button
           type="button"
+          data-voice-mic="true"
           size="icon"
           variant="ghost"
-          className={`rounded-full border backdrop-blur-md transition-all duration-200 ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-11 w-11 border-[#cfe0ff] bg-white text-[#075fff] shadow-[0_12px_28px_rgba(7,95,255,0.2)] hover:-translate-y-0.5 hover:bg-[#075fff] hover:text-white hover:shadow-2xl"}`}
-          onClick={() => (open ? startMic() : setOpen(true))}
+          className={`touch-none rounded-full border backdrop-blur-md transition-all duration-200 ${dragging ? "cursor-grabbing" : "cursor-grab"} ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-11 w-11 border-[#cfe0ff] bg-white text-[#075fff] shadow-[0_12px_28px_rgba(7,95,255,0.2)] hover:-translate-y-0.5 hover:bg-[#075fff] hover:text-white hover:shadow-2xl"}`}
+          onPointerDown={handleMovePointerDown}
+          onClick={() => {
+            if (suppressMicClickRef.current) {
+              suppressMicClickRef.current = false;
+              return;
+            }
+            if (open) startMic();
+            else setOpen(true);
+          }}
         >
           <Mic className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">Voice assistant</span>

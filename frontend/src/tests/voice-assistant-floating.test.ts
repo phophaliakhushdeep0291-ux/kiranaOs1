@@ -19,6 +19,15 @@ describe("floating voice assistant", () => {
     expect(source).toContain("Voice assistant");
   });
 
+  it("lets the closed mic itself move while preserving click-to-open", () => {
+    expect(source).toContain('data-voice-mic="true"');
+    expect(source).toContain("distance < 5");
+    expect(source).toContain("suppressMicClickRef");
+    expect(source).toContain("onPointerDown={handleMovePointerDown}");
+    expect(source).toContain("touch-none");
+    expect(source).toContain('window.addEventListener("pointercancel"');
+  });
+
   it("stays compact and blended until the owner hovers or focuses it", () => {
     expect(source).toContain("assistantIsIdle");
     expect(source).toContain("opacity-75 hover:opacity-100 focus-within:opacity-100");

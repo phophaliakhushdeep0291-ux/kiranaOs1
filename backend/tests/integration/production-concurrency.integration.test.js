@@ -24,7 +24,7 @@ if (ctx.skip) {
   }
 
   describe("production concurrency proof", () => {
-    test("parallel bills cannot oversell the same product", async () => {
+    test("parallel bills apply every sale once while preserving negative-stock reconciliation", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, {
         stockBaseQty: 10,
@@ -44,16 +44,20 @@ if (ctx.skip) {
       ]);
 
       const statuses = [first.status, second.status].sort();
-      assert.deepEqual(statuses, [201, 409], JSON.stringify([first.body, second.body]));
+      assert.deepEqual(statuses, [201, 201], JSON.stringify([first.body, second.body]));
 
       const refreshedProduct = await ctx.db.product.findUnique({ where: { id: product.id } });
       const activeBills = await ctx.db.bill.count({ where: { shopId: tenant.shop.id, status: "active" } });
-      const saleLedger = await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, productId: product.id, action: "sale" } });
+      const saleLedgers = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "sale" },
+        select: { billId: true, changeBaseQty: true },
+      });
 
-      assert.equal(refreshedProduct.stockBaseQty, 3);
-      assert.equal(activeBills, 1);
-      assert.equal(saleLedger, 1);
-      assert.ok(refreshedProduct.stockBaseQty >= 0, "stock must never become negative");
+      assert.equal(refreshedProduct.stockBaseQty, -4);
+      assert.equal(activeBills, 2);
+      assert.equal(saleLedgers.length, 2);
+      assert.equal(new Set(saleLedgers.map((entry) => entry.billId)).size, 2);
+      assert.equal(saleLedgers.reduce((sum, entry) => sum + entry.changeBaseQty, 0), -14);
     });
 
     test("parallel udhar payments cannot over-decrement customer balance", async () => {

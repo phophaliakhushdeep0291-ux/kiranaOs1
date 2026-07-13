@@ -1055,17 +1055,32 @@ async function decrementProductStockOrThrow(tx, { shopId, product, qtyInBase, st
       err.code = code;
       throw err;
     }
-    // Offline/current-counter sale already happened: record the real negative
-    // balance so the shopkeeper can reconcile it with the next stock-in.
+    // The counter intentionally permits negative inventory so sales can continue
+    // before a delayed stock-in is recorded. Keep the fallback atomic: a
+    // read-then-absolute-write loses deductions when two bills arrive together.
+    const shortfallUpdate = await tx.product.updateMany({
+      where: { id: product.id, shopId, deletedAt: null },
+      data: { stockBaseQty: { decrement: qtyInBase } },
+    });
+    if (shortfallUpdate.count !== 1) {
+      const err = new AppError(`Product "${product.name}" is no longer available`, 409);
+      err.code = "PRODUCT_NOT_AVAILABLE";
+      throw err;
+    }
+
     const fresh = await tx.product.findFirst({
-      where: { id: product.id, shopId },
+      where: { id: product.id, shopId, deletedAt: null },
       select: { stockBaseQty: true },
     });
-    const available = round2(fresh?.stockBaseQty ?? product.stockBaseQty ?? 0);
-    const newStock = round2(available - qtyInBase);
+    if (!fresh) {
+      const err = new AppError(`Product "${product.name}" is no longer available`, 409);
+      err.code = "PRODUCT_NOT_AVAILABLE";
+      throw err;
+    }
+    const newStock = round2(fresh.stockBaseQty);
+    const oldStock = round2(newStock + qtyInBase);
     const shortfallBaseQty = round2(Math.max(0, -newStock));
-    await tx.product.updateMany({ where: { id: product.id, shopId }, data: { stockBaseQty: newStock } });
-    return { oldStock: available, newStock, shortfallBaseQty };
+    return { oldStock, newStock, shortfallBaseQty };
   }
 
   const freshProduct = await tx.product.findFirst({
