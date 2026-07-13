@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import type { Product } from "@/lib/api/client";
@@ -6,16 +6,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Package, Plus, Scale, ScanLine, Sparkles, Upload, X } from "lucide-react";
+import { Loader2, Package, Plus, Scale, ScanLine, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useBusinessType } from "@/features/settings/business-types";
 import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAliases } from "@/features/products/product-reliability";
 import { fetchGroqAliasSuggestions } from "../product-aliases";
-import { baseUnitFor, sellingUnitConversion, UNITS } from "../product-pricing";
+import { baseUnitFor, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
 import type { ProductFormData } from "../product-form-state";
 
 const GST_RATES = [0, 5, 12, 18, 28];
-const PACK_MEASURE_UNITS = ["piece", "packet", "gram", "kg", "ml", "litre"];
+const PACK_MEASURE_UNITS = ["piece", "tablet", "gram", "kg", "ml", "litre"];
+const PACK_SELLING_UNITS = ["piece", "packet", "pouch", "bottle", "box", "carton"];
+
+const EMPTY_EXTRA_PACK = {
+  unitType: "packet",
+  packSizeValue: "500",
+  packSizeUnit: "gram",
+  price: "",
+  barcode: "",
+};
 
 interface ProductFormPanelProps {
   open: boolean;
@@ -73,6 +82,8 @@ export function ProductFormPanel({
   const [imgError, setImgError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [extraPackOpen, setExtraPackOpen] = useState(false);
+  const [extraPack, setExtraPack] = useState(EMPTY_EXTRA_PACK);
   const categories = def.categories.filter((c) => c !== "all");
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
@@ -80,10 +91,67 @@ export function ProductFormPanel({
   const selectedUnit = form.watch("unit");
   const packSizeValue = Number(form.watch("packSizeValue") || 0);
   const packSizeUnit = form.watch("packSizeUnit");
-  const showPackContent = !isLoose && selectedUnit !== "piece";
+  const showPackContent = !isLoose;
   const packBaseQuantity = sellingUnitConversion(packSizeValue, packSizeUnit);
   const packBaseUnit = baseUnitFor(packSizeUnit);
+  const currentSellingUnitName = isLoose
+    ? selectedUnit
+    : sellingUnitName(selectedUnit, packSizeValue, packSizeUnit);
+  const sellingUnits = form.watch("sellingUnits") ?? [];
+  const alternateSellingUnits = sellingUnits.filter((row) => !row.isDefault);
   const err = form.formState.errors;
+
+  useEffect(() => {
+    if (!open) return;
+    setExtraPackOpen(false);
+    setExtraPack(EMPTY_EXTRA_PACK);
+  }, [editing?.id, open]);
+
+  function addAlternatePack() {
+    const size = Number(extraPack.packSizeValue);
+    const price = Number(extraPack.price);
+    if (!(size > 0) || !(price > 0)) {
+      toast({
+        title: "Pack size and price required",
+        description: "Enter what the pack contains and its selling price.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const code = sellingUnitCode(extraPack.unitType, size, extraPack.packSizeUnit);
+    const defaultCode = sellingUnitCode(selectedUnit, packSizeValue, packSizeUnit);
+    if (code === defaultCode || sellingUnits.some((row) => row.unitCode === code)) {
+      toast({ title: "Pack already added", description: "Choose a different unit or pack size.", variant: "destructive" });
+      return;
+    }
+    form.setValue("sellingUnits", [
+      ...sellingUnits,
+      {
+        name: sellingUnitName(extraPack.unitType, size, extraPack.packSizeUnit),
+        unitType: extraPack.unitType,
+        unitCode: code,
+        packSizeValue: size,
+        packSizeUnit: extraPack.packSizeUnit,
+        conversionToBase: sellingUnitConversion(size, extraPack.packSizeUnit),
+        barcode: extraPack.barcode.trim() || null,
+        defaultPrice: price,
+        minimumPrice: null,
+        maximumPrice: null,
+        costPrice: null,
+        isDefault: false,
+        isActive: true,
+      },
+    ], { shouldDirty: true, shouldValidate: true });
+    setExtraPack(EMPTY_EXTRA_PACK);
+    setExtraPackOpen(false);
+  }
+
+  function removeAlternatePack(unitCode: string) {
+    form.setValue("sellingUnits", sellingUnits.filter((row) => row.unitCode !== unitCode), {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  }
 
   /* aliases */
   const aliasesText = form.watch("aliasesText") ?? "";
@@ -153,7 +221,7 @@ export function ProductFormPanel({
     </Field>
   );
   const UnitField = (
-    <Field label="Unit Type" required>
+    <Field label={isLoose ? "Rate / Stock Unit" : "Sold As"} required>
       <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
@@ -231,28 +299,57 @@ export function ProductFormPanel({
             )}
 
             {showPackContent ? (
-              <Field label={`One ${selectedUnit} contains`} required error={err.packSizeValue?.message}>
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(120px,0.9fr)] gap-2">
-                  <Input
-                    className="h-10"
-                    type="number"
-                    inputMode="decimal"
-                    min="0.001"
-                    step="0.001"
-                    placeholder="e.g. 500"
-                    {...form.register("packSizeValue")}
-                  />
-                  <Select value={packSizeUnit} onValueChange={(v) => form.setValue("packSizeUnit", v, { shouldDirty: true, shouldValidate: true })}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PACK_MEASURE_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+              <div className="rounded-[12px] border border-[#cfe0ff] bg-[#f7faff] p-3.5" data-testid="packed-unit-setup">
+                <div className="mb-3 flex items-start gap-2.5">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e7f0ff] text-[#075fff]"><Package size={16} /></span>
+                  <div>
+                    <p className="text-[12px] font-black text-[#13274d]">Pack size used for billing and stock</p>
+                    <p className="mt-0.5 text-[10.5px] font-semibold leading-relaxed text-[#6d7c98]">Example: a salt packet sold for Rs 28 contains 1 kg. Billing counts packets; inventory counts grams.</p>
+                  </div>
                 </div>
-                <p className="mt-1.5 rounded-lg bg-[#eef5ff] px-2.5 py-2 text-[11px] font-semibold leading-relaxed text-[#31527e]">
-                  1 {selectedUnit} = {packBaseQuantity || 0} {packBaseUnit} in stock. Quantity pricing uses the number of {selectedUnit}s.
-                </p>
-              </Field>
+
+                <p className="mb-1.5 text-[11px] font-bold text-[#45577a]">Quick selling unit</p>
+                <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                  {PACK_SELLING_UNITS.map((unit) => (
+                    <button
+                      key={unit}
+                      type="button"
+                      onClick={() => form.setValue("unit", unit, { shouldDirty: true, shouldValidate: true })}
+                      className={`h-8 shrink-0 rounded-lg border px-2.5 text-[10.5px] font-extrabold capitalize transition-colors ${selectedUnit === unit ? "border-[#075fff] bg-[#075fff] text-white" : "border-[#dfe8f5] bg-white text-[#45577a] hover:border-[#a9c5ff]"}`}
+                    >
+                      {unit}
+                    </button>
+                  ))}
+                </div>
+
+                <Field label={`One ${selectedUnit || "selling unit"} contains`} required error={err.packSizeValue?.message}>
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(120px,0.9fr)] gap-2">
+                    <Input
+                      data-testid="input-pack-size"
+                      className="h-10 bg-white"
+                      type="number"
+                      inputMode="decimal"
+                      min="0.001"
+                      step="0.001"
+                      placeholder="e.g. 500"
+                      {...form.register("packSizeValue")}
+                    />
+                    <Select value={packSizeUnit} onValueChange={(v) => form.setValue("packSizeUnit", v, { shouldDirty: true, shouldValidate: true })}>
+                      <SelectTrigger data-testid="select-pack-measure" className="h-10 bg-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {PACK_MEASURE_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </Field>
+                <div className="mt-2.5 flex items-center justify-between gap-3 rounded-lg border border-[#dce8fb] bg-white px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-[11.5px] font-black text-[#12346b]">Billing unit: {currentSellingUnitName}</p>
+                    <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">1 {selectedUnit} removes {packBaseQuantity || 0} {packBaseUnit} from stock</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-[#e9fff0] px-2 py-1 text-[9.5px] font-black uppercase text-[#159447]">Exact pack</span>
+                </div>
+              </div>
             ) : null}
 
             <Field label="HSN (Optional)">
@@ -327,15 +424,79 @@ export function ProductFormPanel({
               <span className="font-semibold text-[#6d7c98]">Margin</span>
               <span className={`font-black ${margin < 0 ? "text-rose-600" : "text-emerald-600"}`}>{margin}%</span>
             </div>
+
+            {!isLoose ? (
+              <div className="rounded-[12px] border border-[#e3eaf3] bg-[#fbfcfe] p-3" data-testid="alternate-pack-sizes">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-black text-[#13274d]">Other pack sizes</p>
+                    <p className="mt-0.5 text-[10.5px] font-semibold text-[#6d7c98]">Optional: sell the same stock as 500 g, 1 kg, carton, etc.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExtraPackOpen((value) => !value)}
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#bcd0ff] bg-white px-2.5 text-[10.5px] font-black text-[#075fff] hover:bg-[#f2f7ff]"
+                  >
+                    {extraPackOpen ? <X size={12} /> : <Plus size={12} />}
+                    {extraPackOpen ? "Close" : "Add size"}
+                  </button>
+                </div>
+
+                {alternateSellingUnits.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {alternateSellingUnits.map((row) => (
+                      <div key={row.id ?? row.unitCode} className="flex items-center justify-between gap-3 rounded-lg border border-[#e3eaf3] bg-white px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[11.5px] font-black text-[#13274d]">{row.name}</p>
+                          <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">Rs {Number(row.defaultPrice).toLocaleString("en-IN")} · removes {row.conversionToBase} {baseUnitFor(row.packSizeUnit ?? packSizeUnit)}</p>
+                        </div>
+                        <button type="button" onClick={() => removeAlternatePack(row.unitCode)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-rose-600 hover:bg-rose-50" aria-label={`Remove ${row.name}`}><Trash2 size={13} /></button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {extraPackOpen ? (
+                  <div className="mt-3 space-y-2.5 rounded-[10px] border border-[#cfe0ff] bg-white p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Sold as" required>
+                        <Select value={extraPack.unitType} onValueChange={(value) => setExtraPack((current) => ({ ...current, unitType: value }))}>
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>{PACK_SELLING_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </Field>
+                      <Field label="Selling price (Rs)" required>
+                        <Input className="h-9" type="number" min="0.01" step="0.01" value={extraPack.price} onChange={(event) => setExtraPack((current) => ({ ...current, price: event.target.value }))} placeholder="0.00" />
+                      </Field>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label={`One ${extraPack.unitType} contains`} required>
+                        <Input className="h-9" type="number" min="0.001" step="0.001" value={extraPack.packSizeValue} onChange={(event) => setExtraPack((current) => ({ ...current, packSizeValue: event.target.value }))} placeholder="500" />
+                      </Field>
+                      <Field label="Measure" required>
+                        <Select value={extraPack.packSizeUnit} onValueChange={(value) => setExtraPack((current) => ({ ...current, packSizeUnit: value }))}>
+                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                          <SelectContent>{PACK_MEASURE_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </Field>
+                    </div>
+                    <Field label="Pack barcode (Optional)">
+                      <Input className="h-9" value={extraPack.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder="Barcode for this size" />
+                    </Field>
+                    <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[#075fff] text-[11.5px] font-black text-white hover:bg-[#0052e8]">Add pack to product</button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </Section>
 
           {/* Stock & Inventory */}
           <Section title="Stock & Inventory">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Field label="Opening Stock" required>
+              <Field label={`Opening Stock (${currentSellingUnitName || selectedUnit})`} required>
                 <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
               </Field>
-              <Field label="Low Stock Alert">
+              <Field label={`Low Stock Alert (${selectedUnit})`}>
                 <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("lowStockAlert")} />
               </Field>
               <Field label="Reorder Level">

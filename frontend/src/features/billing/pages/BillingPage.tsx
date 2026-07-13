@@ -29,7 +29,7 @@ import { computeGstBreakdown } from "@/lib/gst";
 import { redeemOffer } from "@/features/offers/api";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
-import { SPLIT_PAYMENT, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
+import { SPLIT_PAYMENT, cartItemKey, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const FAVORITE_PRODUCTS_KEY = "kirana-os:billing-favorite-products:v1";
@@ -510,14 +510,23 @@ export default function Billing() {
 
   function addToCart(product: Product, options?: { custom?: boolean }) {
     setCart((previous) => {
-      const existing = previous.find((item) => item.product.id === product.id && !item.isCustom);
+      const sellingUnit = defaultSellingUnit(product);
+      const candidate: CartItem = {
+        product,
+        quantity: 1,
+        rate: product.defaultPricePerRateUnit,
+        unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece",
+        sellingUnit,
+        isCustom: options?.custom,
+      };
+      const candidateKey = cartItemKey(candidate);
+      const existing = previous.find((item) => cartItemKey(item) === candidateKey);
       if (existing && !options?.custom) {
         const quantity = roundMoney(existing.quantity + 1);
         const priced = resolveLine(product, quantity, existing.sellingUnit);
-        return previous.map((item) => item.product.id === product.id ? { ...item, quantity, rate: item.manualRate ? item.rate : priced.rate, pricing: item.manualRate ? item.pricing : priced.pricing } : item);
+        return previous.map((item) => cartItemKey(item) === candidateKey ? { ...item, quantity, rate: item.manualRate ? item.rate : priced.rate, pricing: item.manualRate ? item.pricing : priced.pricing } : item);
       }
       const quantity = 1;
-      const sellingUnit = defaultSellingUnit(product);
       const priced = resolveLine(product, quantity, sellingUnit);
       return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece", sellingUnit, isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing }];
     });
@@ -545,11 +554,23 @@ export default function Billing() {
     setCart((previous) => {
       let next = [...previous];
       for (const line of voiceDraft.lines) {
-        const existing = next.find((item) => item.product.id === line.product.id && !item.isCustom);
+        const sellingUnit = activeSellingUnits(line.product).find((unit) =>
+          [unit.name, unit.unitType, unit.packSizeUnit].filter(Boolean).some((value) => String(value).toLowerCase() === line.unit.toLowerCase()),
+        ) ?? defaultSellingUnit(line.product);
+        const candidate: CartItem = {
+          product: line.product,
+          quantity: line.quantity,
+          rate: line.rate,
+          unit: sellingUnit?.name ?? line.unit,
+          sellingUnit,
+          manualRate: true,
+        };
+        const candidateKey = cartItemKey(candidate);
+        const existing = next.find((item) => cartItemKey(item) === candidateKey);
         if (existing) {
-          next = next.map((item) => item.product.id === line.product.id ? { ...item, quantity: roundMoney(item.quantity + line.quantity), rate: line.rate, unit: line.unit, manualRate: true } : item);
+          next = next.map((item) => cartItemKey(item) === candidateKey ? { ...item, quantity: roundMoney(item.quantity + line.quantity), rate: line.rate, unit: candidate.unit, sellingUnit, manualRate: true } : item);
         } else {
-          next.push({ product: line.product, quantity: line.quantity, rate: line.rate, unit: line.unit, manualRate: true });
+          next.push(candidate);
         }
       }
       return next;
@@ -708,10 +729,10 @@ export default function Billing() {
     });
   }
 
-  function updateQty(productId: string, nextQuantity: number) {
+  function updateQty(lineKey: string, nextQuantity: number) {
     setCart((previous) => previous
       .map((item) => {
-        if (item.product.id !== productId) return item;
+        if (cartItemKey(item) !== lineKey) return item;
         const quantity = Math.max(0, roundMoney(nextQuantity));
         if (item.manualRate || item.isCustom) return { ...item, quantity };
         const priced = resolveLine(item.product, quantity, item.sellingUnit);
@@ -720,22 +741,35 @@ export default function Billing() {
       .filter((item) => item.quantity > 0));
   }
 
-  function updateRate(productId: string, nextRate: number) {
-    setCart((previous) => previous.map((item) => item.product.id === productId ? { ...item, rate: Math.max(0, roundMoney(nextRate)), manualRate: true } : item));
+  function updateRate(lineKey: string, nextRate: number) {
+    setCart((previous) => previous.map((item) => cartItemKey(item) === lineKey ? { ...item, rate: Math.max(0, roundMoney(nextRate)), manualRate: true } : item));
   }
 
-  function updateUnit(productId: string, unitCode: string) {
-    setCart((previous) => previous.map((item) => {
-      if (item.product.id !== productId) return item;
-      const sellingUnit = activeSellingUnits(item.product).find((candidate) => candidate.unitCode === unitCode);
-      if (!sellingUnit) return item;
-      const priced = resolveLine(item.product, item.quantity, sellingUnit);
-      return { ...item, unit: sellingUnit.name, sellingUnit, rate: priced.rate, pricing: priced.pricing, manualRate: false };
-    }));
+  function updateUnit(lineKey: string, unitCode: string) {
+    setCart((previous) => {
+      const current = previous.find((item) => cartItemKey(item) === lineKey);
+      if (!current) return previous;
+      const sellingUnit = activeSellingUnits(current.product).find((candidate) => candidate.unitCode === unitCode);
+      if (!sellingUnit) return previous;
+      const priced = resolveLine(current.product, current.quantity, sellingUnit);
+      const updated: CartItem = { ...current, unit: sellingUnit.name, sellingUnit, rate: priced.rate, pricing: priced.pricing, manualRate: false };
+      const updatedKey = cartItemKey(updated);
+      const collision = previous.find((item) => cartItemKey(item) === updatedKey && cartItemKey(item) !== lineKey);
+      if (!collision) {
+        return previous.map((item) => cartItemKey(item) === lineKey ? updated : item);
+      }
+      const quantity = roundMoney(collision.quantity + updated.quantity);
+      const mergedPrice = collision.manualRate ? undefined : resolveLine(collision.product, quantity, collision.sellingUnit);
+      return previous
+        .filter((item) => cartItemKey(item) !== lineKey)
+        .map((item) => cartItemKey(item) === updatedKey
+          ? { ...item, quantity, rate: collision.manualRate ? collision.rate : mergedPrice?.rate ?? collision.rate, pricing: collision.manualRate ? collision.pricing : mergedPrice?.pricing }
+          : item);
+    });
   }
 
-  function removeItem(productId: string) {
-    setCart((previous) => previous.filter((item) => item.product.id !== productId));
+  function removeItem(lineKey: string) {
+    setCart((previous) => previous.filter((item) => cartItemKey(item) !== lineKey));
   }
 
   function validateBeforeConfirm(nextBillType: BillTypeSelection) {

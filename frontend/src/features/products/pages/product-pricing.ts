@@ -4,7 +4,7 @@ export const UNITS = [
   "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
   "kg", "gram", "litre", "ml",
   "meter", "yard",
-  "packet", "box",
+  "packet", "pack", "pouch", "box", "carton", "bottle", "jar", "can", "sachet",
   "strip", "tablet", "bottle", "tube",
   "plate", "glass",
   "custom",
@@ -15,11 +15,12 @@ export const CATEGORIES = ["all", "general", "grocery", "dairy", "beverages", "s
 const UNIT_TO_BASE_UNIT: Record<string, string> = {
   kg: "gram", gram: "gram", g: "gram",
   litre: "ml", liter: "ml", ml: "ml",
-  piece: "piece", packet: "packet", box: "box",
+  piece: "piece", packet: "piece", pack: "piece", pouch: "piece", box: "piece", carton: "piece",
+  bottle: "piece", jar: "piece", can: "piece", sachet: "piece",
   dozen: "piece", bundle: "bundle", roll: "roll", sheet: "sheet",
   set: "set", pair: "pair",
   meter: "meter", yard: "yard",
-  strip: "strip", tablet: "tablet", bottle: "bottle", tube: "tube",
+  strip: "strip", tablet: "tablet", tube: "tube",
   plate: "plate", glass: "glass",
   custom: "custom",
 };
@@ -27,11 +28,12 @@ const UNIT_TO_BASE_UNIT: Record<string, string> = {
 const UNIT_FACTOR_TO_BASE: Record<string, number> = {
   kg: 1000, gram: 1, g: 1,
   litre: 1000, liter: 1000, ml: 1,
-  piece: 1, packet: 1, box: 1,
+  piece: 1, packet: 1, pack: 1, pouch: 1, box: 1, carton: 1,
+  bottle: 1, jar: 1, can: 1, sachet: 1,
   dozen: 12, bundle: 1, roll: 1, sheet: 1,
   set: 1, pair: 1,
   meter: 1, yard: 1,
-  strip: 1, tablet: 1, bottle: 1, tube: 1,
+  strip: 1, tablet: 1, tube: 1,
   plate: 1, glass: 1,
   custom: 1,
 };

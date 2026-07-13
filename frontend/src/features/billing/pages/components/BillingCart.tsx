@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { Pencil, ShoppingCart, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productMinSellingPrice, roundMoney } from "../billing-calculations";
-import type { CartItem } from "../billing-types";
+import { cartItemKey, type CartItem } from "../billing-types";
 import { getProductEmoji, productPlaceholderColor } from "./BillingSearch";
 
 interface BillingCartProps {
   cart: CartItem[];
-  onUpdateQty: (productId: string, nextQuantity: number) => void;
-  onUpdateRate: (productId: string, nextRate: number) => void;
-  onUpdateUnit: (productId: string, unit: string) => void;
-  onRemoveItem: (productId: string) => void;
+  onUpdateQty: (lineKey: string, nextQuantity: number) => void;
+  onUpdateRate: (lineKey: string, nextRate: number) => void;
+  onUpdateUnit: (lineKey: string, unit: string) => void;
+  onRemoveItem: (lineKey: string) => void;
 }
 
 export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onRemoveItem }: BillingCartProps) {
@@ -32,7 +32,7 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onR
     <div>
       {cart.map((item) => (
         <CartRow
-          key={item.product.id}
+          key={cartItemKey(item)}
           item={item}
           onUpdateQty={onUpdateQty}
           onUpdateRate={onUpdateRate}
@@ -68,6 +68,7 @@ function CartRow({
   const color = productPlaceholderColor(item.product.name);
   const emoji = getProductEmoji(item.product.name, item.product.category);
   const sellingUnits = (item.product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
+  const lineKey = cartItemKey(item);
 
   function startEditRate() {
     setRateDraft(String(item.rate));
@@ -80,14 +81,14 @@ function CartRow({
     setRateDraft(next);
     const parsed = Number(next);
     if (next.trim() !== "" && Number.isFinite(parsed) && parsed >= 0) {
-      onUpdateRate(item.product.id, parsed);
+      onUpdateRate(lineKey, parsed);
     }
   }
 
   function commitRate() {
     const parsed = Number(rateDraft);
     const safe = rateDraft.trim() !== "" && Number.isFinite(parsed) && parsed >= 0 ? parsed : item.rate;
-    onUpdateRate(item.product.id, safe);
+    onUpdateRate(lineKey, safe);
     setRateDraft(String(safe));
     setEditingRate(false);
   }
@@ -118,13 +119,15 @@ function CartRow({
           <select
             aria-label={`Selling unit for ${item.product.name}`}
             value={item.sellingUnit?.unitCode ?? sellingUnits.find((unit) => unit.isDefault)?.unitCode ?? sellingUnits[0]?.unitCode}
-            onChange={(event) => onUpdateUnit(item.product.id, event.target.value)}
+            onChange={(event) => onUpdateUnit(lineKey, event.target.value)}
             className="mt-1 h-6 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[#0057ff]"
           >
-            {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{unit.name}</option>)}
+            {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{unit.name} · Rs {Number(unit.defaultPrice).toLocaleString("en-IN")}</option>)}
           </select>
-        ) : item.sellingUnit?.packSizeValue && item.sellingUnit.packSizeUnit ? (
-          <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">{item.sellingUnit.name}</p>
+        ) : item.sellingUnit ? (
+          <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[#f7faff] px-1.5 py-1 text-[10px] font-bold text-[#31527e]">
+            Pack: {item.sellingUnit.name}
+          </p>
         ) : null}
         {editingRate ? (
           <div
@@ -181,7 +184,7 @@ function CartRow({
       <div className="grid h-[30px] w-[84px] grid-cols-3 overflow-hidden rounded-[8px] border border-[#dfe8f5]">
         <button
           data-testid={`button-dec-${item.product.id}`}
-          onClick={() => onUpdateQty(item.product.id, item.quantity - 1)}
+          onClick={() => onUpdateQty(lineKey, item.quantity - 1)}
           className="bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
           aria-label={`Decrease ${item.product.name}`}
         >
@@ -192,12 +195,12 @@ function CartRow({
           type="number"
           inputMode="decimal"
           value={item.quantity}
-          onChange={(e) => onUpdateQty(item.product.id, Number(e.target.value) || 0)}
+          onChange={(e) => onUpdateQty(lineKey, Number(e.target.value) || 0)}
           className="border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         <button
           data-testid={`button-inc-${item.product.id}`}
-          onClick={() => onUpdateQty(item.product.id, item.quantity + 1)}
+          onClick={() => onUpdateQty(lineKey, item.quantity + 1)}
           className="bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
           aria-label={`Increase ${item.product.name}`}
         >
@@ -213,7 +216,7 @@ function CartRow({
       {/* Remove */}
       <button
         data-testid={`button-remove-${item.product.id}`}
-        onClick={() => onRemoveItem(item.product.id)}
+        onClick={() => onRemoveItem(lineKey)}
         className="grid h-[22px] w-[22px] place-items-center rounded text-[#536383] transition-colors hover:bg-red-50 hover:text-red-600"
         aria-label={`Remove ${item.product.name}`}
       >

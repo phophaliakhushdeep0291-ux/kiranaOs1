@@ -329,7 +329,9 @@ export function BillingSearch({
                 <p className="mb-1.5 text-[11px] font-semibold text-[#536383]">Recent Products</p>
                 <div className="flex items-center gap-2.5">
                   {recentProducts.slice(0, 3).map((p) => {
-                    const price = productSellingPrice(p, 1);
+                    const sellingUnit = (p.sellingUnits ?? []).filter((unit) => unit.isActive !== false).find((unit) => unit.isDefault)
+                      ?? (p.sellingUnits ?? []).find((unit) => unit.isActive !== false);
+                    const price = sellingUnit?.defaultPrice ?? productSellingPrice(p, 1);
                     const color = productPlaceholderColor(p.name);
                     return (
                       <button
@@ -563,13 +565,15 @@ export function BillingSearch({
 
 /* ─── Product card — spec: 176px height, absolute price + add button ─── */
 function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }) {
-  const price = productSellingPrice(product, 1);
-  const unit = product.rateUnit ?? product.displayUnit ?? "pc";
+  const sellingUnits = (product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
+  const defaultUnit = sellingUnits.find((unit) => unit.isDefault) ?? sellingUnits[0];
+  const price = defaultUnit?.defaultPrice ?? productSellingPrice(product, 1);
+  const unit = defaultUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "pc";
   const stock = product.stockBaseQty ?? 0;
   const emoji = getProductEmoji(product.name, product.category);
 
   const priceLabel = price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const subtitle = product.category?.trim() || `per ${unit}`;
+  const subtitle = unit;
 
   return (
     <button
@@ -584,6 +588,11 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
           <span className="absolute bottom-1 right-1 rounded bg-red-600 px-1 py-0.5 text-[9px] font-bold text-white">Out</span>
         ) : stock <= 5 ? (
           <span className="absolute bottom-1 right-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">Low</span>
+        ) : null}
+        {sellingUnits.length > 1 ? (
+          <span className="absolute left-1.5 top-1.5 rounded-md border border-[#cfe0ff] bg-white/95 px-1.5 py-0.5 text-[8.5px] font-black text-[#075fff] shadow-sm">
+            {sellingUnits.length} pack sizes
+          </span>
         ) : null}
       </div>
 

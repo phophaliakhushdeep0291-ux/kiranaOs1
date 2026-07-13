@@ -12,6 +12,15 @@ export interface CartItem {
   pricing?: LinePricingMeta;
 }
 
+/**
+ * A product can be sold in more than one configured pack (for example 500 g
+ * and 1 kg). Product id alone is therefore not a cart-line identity.
+ */
+export function cartItemKey(item: CartItem): string {
+  const unitKey = item.sellingUnit?.id ?? item.sellingUnit?.unitCode ?? item.unit ?? "default";
+  return `${item.product.id}::${unitKey}::${item.isCustom ? "custom" : "catalog"}`;
+}
+
 export interface LinePricingMeta {
   explanation: string;
   appliedRuleType: string;

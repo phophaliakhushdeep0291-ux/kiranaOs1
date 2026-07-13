@@ -403,9 +403,12 @@ export default function ProductsPage() {
                 </td></tr>
               ) : (
                 pagedRows.map((product) => {
-                  const unit = productDisplayUnit(product);
+                  const defaultSellingUnit = product.sellingUnits?.find((row) => row.isDefault) ?? product.sellingUnits?.[0];
+                  const unit = defaultSellingUnit?.name ?? productDisplayUnit(product);
                   const stockBase = Number(product.stockBaseQty ?? 0);
-                  const stock = fromBaseQty(product.stockBaseQty, unit);
+                  const stock = defaultSellingUnit?.conversionToBase
+                    ? Math.round((stockBase / defaultSellingUnit.conversionToBase + Number.EPSILON) * 100) / 100
+                    : fromBaseQty(product.stockBaseQty, productDisplayUnit(product));
                   const outOfStock = stockBase <= 0;
                   const low = isLowStock(product) && !outOfStock;
                   const cat = (product.category ?? "general").trim() || "general";
