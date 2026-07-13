@@ -299,6 +299,7 @@ export const ownerPinRequiredActionSchema = z.object({
     "stock_correction",
     "price_below_minimum",
     "large_discount",
+    "loyalty_redemption",
     "data_export",
     "export_report",
     "change_settings",

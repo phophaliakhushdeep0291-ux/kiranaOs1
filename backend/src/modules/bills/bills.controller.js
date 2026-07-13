@@ -1,7 +1,6 @@
 import * as svc from "./bills.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { publishIntegrationEvent } from "../integrations/integrations.service.js";
-import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 import { assertLocationCapability } from "../stores/location-access.service.js";
 
@@ -41,7 +40,23 @@ export async function confirm(req, res, next) {
       createdAt: data.createdAt,
       locationId: data.locationId,
     }).catch(() => []);
-    await recordBillLoyalty(req.shopId, data).catch(() => null);
+    if (Number(data.loyaltyPointsRedeemed || 0) > 0) {
+      await createAuditLog({
+        shopId: req.shopId,
+        userId: req.user?.userId,
+        action: "LOYALTY_POINTS_REDEEMED",
+        entityType: "Bill",
+        entityId: data.id,
+        metadata: {
+          billNo: data.billNo,
+          customerId: data.customerId,
+          points: data.loyaltyPointsRedeemed,
+          discount: data.loyaltyDiscount,
+          locationId: data.locationId,
+        },
+        req,
+      }).catch(() => null);
+    }
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -61,7 +76,6 @@ export async function cancel(req, res, next) {
       metadata: { reason: req.body?.reason ?? null, billNo: data.billNo },
       req,
     });
-    await reverseBillLoyalty(req.shopId, data.id).catch(() => null);
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }

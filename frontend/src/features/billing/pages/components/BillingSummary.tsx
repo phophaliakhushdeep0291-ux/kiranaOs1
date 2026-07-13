@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BillInputBillType, type Customer } from "@/lib/api/client";
 import {
   CheckCircle,
+  Award,
   ChevronRight,
   FileText,
   Loader2,
@@ -43,6 +44,17 @@ interface BillingSummaryProps {
   safeDiscount: number;
   setDiscount: Dispatch<SetStateAction<number>>;
   onCouponApplied?: (offerId: string | null, discount: number) => void;
+  loyaltyOnline: boolean;
+  loyaltyCustomerSelected: boolean;
+  loyaltyLoading: boolean;
+  loyaltyActive: boolean;
+  loyaltyTier?: string;
+  loyaltyBalance: number;
+  loyaltyMinimumPoints: number;
+  loyaltyMaxPoints: number;
+  loyaltyPoints: number;
+  setLoyaltyPoints: (points: number) => void;
+  loyaltyDiscount: number;
   gstAmount: number;
   gstMode: "inclusive" | "exclusive" | "none";
   grandTotal: number;
@@ -117,6 +129,17 @@ export function BillingSummary({
   safeDiscount,
   setDiscount,
   onCouponApplied,
+  loyaltyOnline,
+  loyaltyCustomerSelected,
+  loyaltyLoading,
+  loyaltyActive,
+  loyaltyTier,
+  loyaltyBalance,
+  loyaltyMinimumPoints,
+  loyaltyMaxPoints,
+  loyaltyPoints,
+  setLoyaltyPoints,
+  loyaltyDiscount,
   gstAmount,
   gstMode,
   grandTotal,
@@ -161,6 +184,7 @@ export function BillingSummary({
   const [showCustomerOptions, setShowCustomerOptions] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [couponExpanded, setCouponExpanded] = useState(false);
+  const [loyaltyExpanded, setLoyaltyExpanded] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponMsg, setCouponMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -426,6 +450,13 @@ export function BillingSummary({
               <span data-testid="text-subtotal" className="font-black text-[#13274d]">{fmtRs(subtotal)}</span>
             </div>
 
+            {loyaltyDiscount > 0 && (
+              <div className="flex h-[29px] items-center justify-between text-[12px]">
+                <span className="font-semibold text-[#536383]">Loyalty rewards <span className="text-[10px] text-[#94a3b8]">({loyaltyPoints.toLocaleString("en-IN")} pts)</span></span>
+                <span className="font-black text-violet-700">−{fmtRs(loyaltyDiscount)}</span>
+              </div>
+            )}
+
             {/* GST — exclusive adds to the payable; inclusive is informational */}
             {gstAmount > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
@@ -491,6 +522,31 @@ export function BillingSummary({
                 <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-[#075fff] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
               </div>
               {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
+            </div>
+          )}
+
+          <button onClick={() => setLoyaltyExpanded((value) => !value)} aria-expanded={loyaltyExpanded} className="flex min-h-[42px] w-full items-center gap-2.5 rounded-[9px] border border-violet-200 bg-violet-50/60 px-3.5 py-2 transition-colors hover:bg-violet-50">
+            <Award size={15} className="text-violet-700" />
+            <span className="text-left text-[12px] font-extrabold text-violet-800">Use loyalty points</span>
+            {loyaltyCustomerSelected && loyaltyActive && !loyaltyLoading ? <span className="ml-auto text-[10px] font-black text-violet-700">{loyaltyBalance.toLocaleString("en-IN")} available</span> : null}
+            <ChevronRight size={15} className={`${loyaltyCustomerSelected && loyaltyActive && !loyaltyLoading ? "" : "ml-auto"} text-violet-700 transition-transform ${loyaltyExpanded ? "rotate-90" : ""}`} />
+          </button>
+          {loyaltyExpanded && (
+            <div className="rounded-[9px] border border-violet-200 bg-violet-50/50 p-3">
+              {!loyaltyOnline ? <p className="text-[11px] font-semibold text-amber-700">Connect to redeem points. The balance and bill are committed together for safety.</p>
+                : !loyaltyCustomerSelected ? <p className="text-[11px] font-semibold text-violet-800">Choose a saved customer above to load their rewards.</p>
+                  : loyaltyLoading ? <p className="flex items-center gap-2 text-[11px] font-semibold text-violet-700"><Loader2 size={12} className="animate-spin" /> Loading rewards…</p>
+                    : !loyaltyActive ? <p className="text-[11px] font-semibold text-slate-600">The loyalty program is not active for this store.</p>
+                      : loyaltyBalance < loyaltyMinimumPoints ? <p className="text-[11px] font-semibold text-slate-600">{loyaltyTier ? `${loyaltyTier} member · ` : ""}{loyaltyBalance.toLocaleString("en-IN")} points available. Minimum redemption is {loyaltyMinimumPoints.toLocaleString("en-IN")}.</p>
+                        : <>
+                            <div className="flex items-center gap-2">
+                              <Input type="number" min={loyaltyMinimumPoints} max={loyaltyMaxPoints} value={loyaltyPoints || ""} onChange={(event) => setLoyaltyPoints(Math.min(loyaltyMaxPoints, Math.max(0, Math.floor(Number(event.target.value) || 0))))} placeholder={`Min ${loyaltyMinimumPoints}`} className="h-9 bg-white text-xs" />
+                              <Button type="button" variant="outline" className="h-9 shrink-0 border-violet-200 text-[11px] font-black text-violet-700" disabled={loyaltyMaxPoints < loyaltyMinimumPoints} onClick={() => setLoyaltyPoints(loyaltyMaxPoints)}>Use max</Button>
+                              {loyaltyPoints > 0 ? <Button type="button" variant="ghost" className="h-9 px-2 text-[11px] font-bold text-slate-500" onClick={() => setLoyaltyPoints(0)}>Clear</Button> : null}
+                            </div>
+                            <p className="mt-2 text-[10px] font-semibold text-violet-700">{loyaltyTier ? `${loyaltyTier} · ` : ""}{loyaltyBalance.toLocaleString("en-IN")} available · save {fmtRs(loyaltyDiscount)}. Owner approval is requested when the bill is saved.</p>
+                            {loyaltyMaxPoints < loyaltyMinimumPoints ? <p className="mt-1 text-[10px] font-semibold text-amber-700">This bill’s remaining value is below the minimum redemption amount.</p> : null}
+                          </>}
             </div>
           )}
 

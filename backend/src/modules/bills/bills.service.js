@@ -12,7 +12,7 @@ import {
   resolveOperationalLocation,
 } from "../stores/location-context.service.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
-import { recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption } from "../loyalty/loyalty.service.js";
+import { recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -420,6 +420,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       locationId: location.id,
       redemption: loyaltyRedemption,
     });
+    await recordBillLoyaltyInTransaction(tx, shopId, bill);
     await consumeRetailPaymentIntents(tx, retailIntents);
 
     // ── 5. Deduct stock + create stock ledger entries ─────────
@@ -631,6 +632,10 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
         reversalAt: cancelledAt,
       });
     }
+
+    // Loyalty earning and redemption are part of the same cancellation unit as
+    // stock, udhar, and accounting. A crash can no longer leave points detached.
+    await reverseBillLoyaltyInTransaction(tx, shopId, bill.id);
 
     return tx.bill.findFirst({ where: { id: billId, shopId } });
   });

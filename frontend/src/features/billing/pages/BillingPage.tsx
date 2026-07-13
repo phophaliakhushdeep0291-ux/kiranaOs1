@@ -432,6 +432,10 @@ export default function Billing() {
   }, [resolvedCustomerId]);
 
   useEffect(() => {
+    if (billType === BillInputBillType.estimate) setLoyaltyPointsToRedeem(0);
+  }, [billType]);
+
+  useEffect(() => {
     if (loyaltyPointsToRedeem !== effectiveLoyaltyPoints) setLoyaltyPointsToRedeem(effectiveLoyaltyPoints);
   }, [effectiveLoyaltyPoints, loyaltyPointsToRedeem]);
 
@@ -843,8 +847,16 @@ export default function Billing() {
       toast({ title: "Invalid item", description: "Every item must have quantity and rate above zero.", variant: "destructive" });
       return false;
     }
-    if (safeDiscount > subtotal) {
+    if (totalDiscount > payableBase) {
       toast({ title: "Discount too high", description: "Discount cannot exceed bill subtotal.", variant: "destructive" });
+      return false;
+    }
+    if (effectiveLoyaltyPoints > 0 && !isOnline) {
+      toast({ title: "Connect to redeem points", description: "The points balance and bill must be committed together online.", variant: "destructive" });
+      return false;
+    }
+    if (effectiveLoyaltyPoints > 0 && effectiveLoyaltyPoints < Number(loyaltyProgram.data?.minimumRedeemPoints || 0)) {
+      toast({ title: "More points required", description: `Minimum redemption is ${loyaltyProgram.data?.minimumRedeemPoints} points.`, variant: "destructive" });
       return false;
     }
     const needsCustomer = billNeedsCustomer({
@@ -879,7 +891,7 @@ export default function Billing() {
       customerMobile: resolvedCustomerMobile || undefined,
       items: cart,
       subtotal,
-      discount: safeDiscount,
+      discount: totalDiscount,
       total: grandTotal,
       paid,
       credit,
@@ -909,6 +921,7 @@ export default function Billing() {
     if (isLargeDiscount) actions.push("large_discount");
     const hasBelowMinimumRate = cart.some(lineNeedsOwnerApproval);
     if (hasBelowMinimumRate) actions.push("selling_below_minimum_price");
+    if (effectiveLoyaltyPoints > 0) actions.push("loyalty_redemption");
     return actions;
   }
 
@@ -997,6 +1010,7 @@ export default function Billing() {
         customerName: resolvedCustomerName || "Walk-in",
         customerMobile: resolvedCustomerMobile || undefined,
         discount: safeDiscount,
+        loyaltyPointsToRedeem: effectiveLoyaltyPoints > 0 ? effectiveLoyaltyPoints : undefined,
         actualAmount: grandTotal,
         buyerPaidAmount: paid,
         waivedAmount: 0,
@@ -1331,6 +1345,17 @@ export default function Billing() {
         safeDiscount={safeDiscount}
         setDiscount={setDiscount}
         onCouponApplied={(offerId, discount) => { appliedOfferRef.current = offerId ? { id: offerId, discount } : null; }}
+        loyaltyOnline={isOnline}
+        loyaltyCustomerSelected={Boolean(resolvedCustomerId)}
+        loyaltyLoading={loyaltyProgram.isLoading || loyaltyAccount.isLoading}
+        loyaltyActive={loyaltyProgram.data?.active === true && billType !== BillInputBillType.estimate}
+        loyaltyTier={loyaltyAccount.data?.account.tier}
+        loyaltyBalance={loyaltyBalance}
+        loyaltyMinimumPoints={Number(loyaltyProgram.data?.minimumRedeemPoints || 0)}
+        loyaltyMaxPoints={loyaltyMaxPoints}
+        loyaltyPoints={effectiveLoyaltyPoints}
+        setLoyaltyPoints={setLoyaltyPointsToRedeem}
+        loyaltyDiscount={loyaltyDiscount}
         gstAmount={gstBreakdown.gst}
         gstMode={gstBreakdown.mode}
         grandTotal={grandTotal}
@@ -1416,7 +1441,7 @@ export default function Billing() {
         open={sensitivePinOpen}
         onCancel={() => setSensitivePinOpen(false)}
         title="Owner approval required"
-        description="Large discounts or selling below minimum price need owner PIN before the bill can be saved. The PIN and reason are passed into the local-first billing action and audit log."
+        description="Large discounts, loyalty redemption, or selling below minimum price need owner PIN before the bill can be saved. Online loyalty redemption commits the points ledger and bill together."
         confirmLabel="Approve bill"
         reasonRequired
         onConfirm={async ({ ownerPin, reason }) => {

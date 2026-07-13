@@ -17,7 +17,7 @@ export function useConfirmBill(options?: MutationHookOptions<Bill, ConfirmBillVa
     mutationFn: ({ data }) => {
       if (Number(data.loyaltyPointsToRedeem || 0) > 0) {
         if (typeof navigator !== "undefined" && !navigator.onLine) {
-          throw new ApiClientError("Loyalty redemption needs a connection so the points and bill can commit together", 0, "LOYALTY_REDEMPTION_OFFLINE");
+          throw new ApiClientError("Loyalty redemption needs a connection so the points and bill can commit together", 0, { code: "LOYALTY_REDEMPTION_OFFLINE" });
         }
         return createBill(data);
       }

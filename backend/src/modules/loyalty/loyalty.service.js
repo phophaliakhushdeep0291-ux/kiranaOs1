@@ -99,26 +99,28 @@ export async function getAccount(shopId, customerId) {
 }
 
 export async function recordBillLoyalty(shopId, bill) {
-  if (!bill?.customerId || bill.billType === "estimate" || bill.status === "cancelled") return null;
-  const program = await db.loyaltyProgram.findUnique({ where: { shopId } });
-  if (!program?.active) return null;
-  const points = Math.max(0, Math.floor(Number(bill.grandTotal) * Number(program.pointsPerRupee)));
-  if (!points) return null;
   try {
-    return await db.$transaction(async (tx) => {
-      const account = await tx.loyaltyAccount.upsert({
-        where: { customerId: bill.customerId },
-        create: { shopId, customerId: bill.customerId },
-        update: {},
-      });
-      const transaction = await tx.loyaltyTransaction.create({ data: { shopId, accountId: account.id, billId: bill.id, locationId: bill.locationId ?? null, type: "earn", points, source: "pos", note: `Earned on ${bill.billNo}` } });
-      await tx.loyaltyAccount.update({ where: { id: account.id }, data: { pointsBalance: { increment: points }, lifetimeEarned: { increment: points }, lastEarnedAt: new Date() } });
-      return transaction;
-    });
+    return await db.$transaction((tx) => recordBillLoyaltyInTransaction(tx, shopId, bill));
   } catch (error) {
     if (error?.code === "P2002") return db.loyaltyTransaction.findFirst({ where: { billId: bill.id, type: "earn" } });
     throw error;
   }
+}
+
+export async function recordBillLoyaltyInTransaction(tx, shopId, bill) {
+  if (!bill?.customerId || bill.billType === "estimate" || bill.status === "cancelled") return null;
+  const program = await tx.loyaltyProgram.findUnique({ where: { shopId } });
+  if (!program?.active) return null;
+  const points = Math.max(0, Math.floor(Number(bill.grandTotal) * Number(program.pointsPerRupee)));
+  if (!points) return null;
+  const account = await tx.loyaltyAccount.upsert({
+    where: { customerId: bill.customerId },
+    create: { shopId, customerId: bill.customerId },
+    update: {},
+  });
+  const transaction = await tx.loyaltyTransaction.create({ data: { shopId, accountId: account.id, billId: bill.id, locationId: bill.locationId ?? null, type: "earn", points, source: "pos", note: `Earned on ${bill.billNo}` } });
+  await tx.loyaltyAccount.update({ where: { id: account.id }, data: { pointsBalance: { increment: points }, lifetimeEarned: { increment: points }, lastEarnedAt: new Date() } });
+  return transaction;
 }
 
 export async function reserveBillLoyaltyRedemption(client, { shopId, customerId, points, isEstimate }) {
@@ -166,7 +168,10 @@ export async function recordBillLoyaltyRedemption(client, { shopId, billId, bill
 }
 
 export async function reverseBillLoyalty(shopId, billId) {
-  return db.$transaction(async (tx) => {
+  return db.$transaction((tx) => reverseBillLoyaltyInTransaction(tx, shopId, billId));
+}
+
+export async function reverseBillLoyaltyInTransaction(tx, shopId, billId) {
     const transactions = await tx.loyaltyTransaction.findMany({ where: { shopId, billId } });
     const earned = transactions.find((row) => row.type === "earn");
     const redeemed = transactions.find((row) => row.type === "redeem");
@@ -191,7 +196,6 @@ export async function reverseBillLoyalty(shopId, billId) {
     }
 
     return results;
-  });
 }
 
 export async function redeemPoints(shopId, customerId, data) {

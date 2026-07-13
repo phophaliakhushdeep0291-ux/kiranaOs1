@@ -27,9 +27,6 @@ export default function LoyaltyPage() {
   const [silverAt, setSilverAt] = useState("1000");
   const [goldAt, setGoldAt] = useState("5000");
   const [ownerPin, setOwnerPin] = useState("");
-  const [redeemAccount, setRedeemAccount] = useState<Account | null>(null);
-  const [redeemPoints, setRedeemPoints] = useState("");
-  const [redeemPin, setRedeemPin] = useState("");
 
   useEffect(() => {
     if (!programQ.data) return;
@@ -40,11 +37,6 @@ export default function LoyaltyPage() {
     mutationFn: () => apiRequest<Program>("/loyalty/program", { method: "PUT", ownerPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active, pointsPerRupee: Number(earnRate), redemptionPaisePerPoint: Number(pointValue), minimumRedeemPoints: Number(minimum), pointsExpireDays: Number(expiryDays), tiers: [{ name: "Bronze", minLifetimePoints: 0 }, { name: "Silver", minLifetimePoints: Number(silverAt) }, { name: "Gold", minLifetimePoints: Number(goldAt) }], ownerPin }) }),
     onSuccess: () => { setOwnerPin(""); void queryClient.invalidateQueries({ queryKey: ["loyalty-program"] }); toast({ title: "Loyalty program saved", description: active ? "Named customers will earn points automatically on new bills." : "New point earning is paused; existing balances remain safe." }); },
     onError: (error: Error) => toast({ title: "Settings not saved", description: error.message, variant: "destructive" }),
-  });
-  const redeem = useMutation({
-    mutationFn: () => apiRequest<{ discountValuePaise: number }>(`/loyalty/accounts/${redeemAccount?.customer.id}/redeem`, { method: "POST", ownerPin: redeemPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ points: Number(redeemPoints), note: "Redeemed at loyalty counter", ownerPin: redeemPin }) }),
-    onSuccess: (data) => { toast({ title: "Points redeemed", description: `Apply ₹${(data.discountValuePaise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })} to the customer's bill.` }); setRedeemAccount(null); setRedeemPoints(""); setRedeemPin(""); void queryClient.invalidateQueries({ queryKey: ["loyalty-accounts"] }); },
-    onError: (error: Error) => toast({ title: "Redemption failed", description: error.message, variant: "destructive" }),
   });
   const totals = useMemo(() => (accountsQ.data ?? []).reduce((sum, row) => ({ members: sum.members + 1, balance: sum.balance + row.pointsBalance, earned: sum.earned + row.lifetimeEarned, redeemed: sum.redeemed + row.lifetimeRedeemed }), { members: 0, balance: 0, earned: 0, redeemed: 0 }), [accountsQ.data]);
   const discountPerPoint = Number(pointValue || 0) / 100;
@@ -68,14 +60,9 @@ export default function LoyaltyPage() {
       <section className={`${card} overflow-hidden`}><div className="border-b border-slate-100 px-5 py-4"><h2 className="text-base font-black text-slate-900">Member balances</h2><p className="mt-1 text-xs text-slate-500">Customers appear after their first points-earning bill.</p></div><div className="divide-y divide-slate-100">{(accountsQ.data ?? []).map((account) => <div key={account.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[1fr_110px_130px] sm:items-center"><div className="flex items-center gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-purple-100 text-sm font-black text-purple-700">{account.customer.name.slice(0, 2).toUpperCase()}</span><div className="min-w-0"><div className="flex items-center gap-2"><p className="truncate text-sm font-black text-slate-900">{account.customer.name}</p><span className="rounded-full bg-purple-50 px-2 py-0.5 text-[9px] font-black uppercase text-purple-700">{account.tier}</span></div><p className="text-xs text-slate-500">{account.customer.mobile || "No mobile"}{account.nextTier ? ` · ${account.pointsToNextTier.toLocaleString("en-IN")} to ${account.nextTier.name}` : " · Top tier"}</p>{account.expiresAt ? <p className="text-[10px] text-amber-600">Expires {new Date(account.expiresAt).toLocaleDateString("en-IN")}</p> : null}</div></div><div className="sm:text-right"><p className="text-sm font-black text-purple-700">{account.pointsBalance.toLocaleString("en-IN")}</p><p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">available</p></div><div className="sm:text-right"><p className="text-xs font-bold text-slate-700">₹{(account.pointsBalance * discountPerPoint).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</p><p className="text-[10px] text-slate-400">redemption value</p></div></div>)}{!accountsQ.isLoading && !(accountsQ.data?.length) && <div className="p-12 text-center"><Gift className="mx-auto text-slate-300" size={34} /><p className="mt-3 text-sm font-black text-slate-700">No loyalty members yet</p><p className="mt-1 text-xs text-slate-500">Enable the program and bill a named customer to start.</p></div>}</div></section>
     </div>
 
-    <section className={`${card} p-5`}>
-      <div className="grid gap-4 lg:grid-cols-[1fr_160px_150px_auto] lg:items-end">
-        <div className="space-y-2"><Label>Redeem for customer</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={redeemAccount?.id ?? ""} onChange={(event) => setRedeemAccount((accountsQ.data ?? []).find((account) => account.id === event.target.value) ?? null)}><option value="">Choose a loyalty member</option>{(accountsQ.data ?? []).filter((account) => account.pointsBalance > 0).map((account) => <option key={account.id} value={account.id}>{account.customer.name} · {account.pointsBalance} points</option>)}</select></div>
-        <div className="space-y-2"><Label>Points</Label><Input type="number" min={programQ.data?.minimumRedeemPoints ?? 1} max={redeemAccount?.pointsBalance ?? undefined} value={redeemPoints} onChange={(event) => setRedeemPoints(event.target.value)} /></div>
-        <div className="space-y-2"><Label>Owner PIN</Label><Input type="password" inputMode="numeric" maxLength={4} value={redeemPin} onChange={(event) => setRedeemPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4 digits" /></div>
-        <Button className="bg-purple-700 font-black hover:bg-purple-800" disabled={!redeemAccount || Number(redeemPoints) < (programQ.data?.minimumRedeemPoints ?? 1) || Number(redeemPoints) > (redeemAccount?.pointsBalance ?? 0) || redeemPin.length !== 4 || redeem.isPending} onClick={() => redeem.mutate()}>{redeem.isPending ? "Redeeming…" : "Redeem points"}</Button>
-      </div>
-      {redeemAccount && Number(redeemPoints) > 0 ? <p className="mt-3 text-xs font-semibold text-purple-700">Discount value: ₹{(Number(redeemPoints) * discountPerPoint).toLocaleString("en-IN", { maximumFractionDigits: 2 })}. Apply this value to the same customer's current bill.</p> : null}
+    <section className={`${card} flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between`}>
+      <div><h2 className="text-sm font-black text-slate-900">Redemptions happen at checkout</h2><p className="mt-1 text-xs text-slate-500">Select a saved customer on Billing, open Loyalty points, and redeem there. The points and bill commit atomically and cancellation restores them.</p></div>
+      <span className="shrink-0 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-emerald-700">Checkout protected</span>
     </section>
   </div>;
 }
