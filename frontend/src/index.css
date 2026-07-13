@@ -295,6 +295,10 @@
     outline: 3px solid hsl(var(--ring) / 0.35);
     outline-offset: 2px;
   }
+
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
 }
 
 @layer components {
@@ -484,6 +488,35 @@
     border-radius: 12px;
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.22) transparent;
+  }
+
+  .app-table-scroll:focus-visible {
+    outline: 3px solid hsl(var(--ring) / 0.28);
+    outline-offset: 3px;
+  }
+
+  .app-skip-link {
+    position: fixed;
+    left: 1rem;
+    top: 1rem;
+    z-index: 200;
+    translate: 0 -160%;
+    border-radius: 0.75rem;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    padding: 0.7rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 800;
+    box-shadow: 0 14px 34px hsl(var(--primary) / 0.25);
+    transition: translate 160ms ease-out;
+  }
+
+  .app-skip-link:focus {
+    translate: 0;
+  }
+
+  .app-main-scroll:focus {
+    outline: none;
   }
 
   .app-table-scroll::-webkit-scrollbar {

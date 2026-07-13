@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { BarChart3, Boxes, Download, Pencil, Receipt, ShieldCheck } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
@@ -33,6 +35,7 @@ interface HsnRow {
   hsn: string;
   count: number;
 }
+type HsnEditor = { mode: "single"; row: HsnRow } | { mode: "bulk" };
 interface GstReport {
   totalBills: number;
   gstBills: number;
@@ -74,6 +77,12 @@ export default function TaxesSettingsPage() {
   const { toast } = useToast();
   const { prefs, patch, shop, hydrated } = useSettingsPrefs();
   const [tax, setTax] = useState<TaxConfig>(DEFAULT_TAX);
+  const [hsnEditor, setHsnEditor] = useState<HsnEditor | null>(null);
+  const [draftHsn, setDraftHsn] = useState("");
+  const [draftRate, setDraftRate] = useState("");
+  const [editorError, setEditorError] = useState("");
+  const hsnInputRef = useRef<HTMLInputElement>(null);
+  const rateInputRef = useRef<HTMLInputElement>(null);
   const seeded = useRef(false);
   // Real numbers from stored bills (gst + gstMode persisted per bill).
   const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), retry: 1 });
@@ -91,20 +100,47 @@ export default function TaxesSettingsPage() {
   const setText = (partial: Partial<TaxConfig>) => setTax((t) => ({ ...t, ...partial }));
   const flush = () => patch({ taxes: tax });
   const hsnRows = tax.hsnMappings.length > 0 ? tax.hsnMappings : HSN_ROWS;
+  const hsnHasError = editorError.includes("HSN code");
+  const rateHasError = editorError.includes("GST rate");
   const saveHsnRows = (rows: HsnRow[]) => update({ hsnMappings: rows });
   function editHsn(row: HsnRow) {
-    const hsn = window.prompt(`HSN code for ${row.cat}`, row.hsn);
-    if (hsn == null) return;
-    const rate = window.prompt(`GST rate for ${row.cat} (example: 5%)`, row.rate);
-    if (rate == null) return;
-    saveHsnRows(hsnRows.map((r) => r.cat === row.cat ? { ...r, hsn: hsn.trim(), rate: rate.trim() || r.rate } : r));
-    toast({ title: "HSN mapping saved", description: `${row.cat} updated.` });
+    setDraftHsn(row.hsn);
+    setDraftRate(row.rate.replace("%", ""));
+    setEditorError("");
+    setHsnEditor({ mode: "single", row });
   }
   function bulkAssignHsn() {
-    const rate = window.prompt("Apply GST rate to all listed categories (example: 5%)", tax.defaultRate ? `${tax.defaultRate}%` : "5%");
-    if (rate == null) return;
-    saveHsnRows(hsnRows.map((row) => ({ ...row, rate: rate.trim() || row.rate })));
-    toast({ title: "Bulk GST rate saved", description: `Applied ${rate} to ${hsnRows.length} category mappings.` });
+    setDraftHsn("");
+    setDraftRate(tax.defaultRate || "5");
+    setEditorError("");
+    setHsnEditor({ mode: "bulk" });
+  }
+  function saveHsnEditor() {
+    if (!hsnEditor) return;
+    const rateNumber = Number(draftRate.replace("%", "").trim());
+    if (!Number.isFinite(rateNumber) || rateNumber < 0 || rateNumber > 100) {
+      setEditorError("Enter a GST rate between 0 and 100.");
+      window.requestAnimationFrame(() => rateInputRef.current?.focus());
+      return;
+    }
+    const normalizedRate = `${rateNumber}%`;
+    if (hsnEditor.mode === "single") {
+      const normalizedHsn = draftHsn.trim();
+      if (!/^\d{2,8}$/.test(normalizedHsn)) {
+        setEditorError("Enter a valid 2 to 8 digit HSN code.");
+        window.requestAnimationFrame(() => hsnInputRef.current?.focus());
+        return;
+      }
+      saveHsnRows(hsnRows.map((row) => row.cat === hsnEditor.row.cat
+        ? { ...row, hsn: normalizedHsn, rate: normalizedRate }
+        : row));
+      toast({ title: "HSN mapping saved", description: `${hsnEditor.row.cat} now uses HSN ${normalizedHsn} at ${normalizedRate}.` });
+    } else {
+      saveHsnRows(hsnRows.map((row) => ({ ...row, rate: normalizedRate })));
+      toast({ title: "Bulk GST rate saved", description: `Applied ${normalizedRate} to ${hsnRows.length} category mappings.` });
+    }
+    setHsnEditor(null);
+    setEditorError("");
   }
   function exportGstReport() {
     const report = gstQ.data;
@@ -174,7 +210,7 @@ export default function TaxesSettingsPage() {
 
       {/* HSN / Product Mapping */}
       <Card>
-        <CardHead icon={<Boxes size={15} />} title="HSN / Product Mapping" sub="GST rate & HSN code by category" action={<button onClick={bulkAssignHsn} className="text-[12px] font-bold text-[#005dff] hover:underline">Bulk assign</button>} />
+        <CardHead icon={<Boxes size={15} />} title="HSN / Product Mapping" sub="GST rate & HSN code by category" action={<button type="button" onClick={bulkAssignHsn} className="text-[12px] font-bold text-[#005dff] hover:underline">Bulk assign</button>} />
         <div className="px-5 pb-5">
           <div className="app-table-scroll overflow-x-auto rounded-[10px] border border-[#eef2f8]">
             <table className="min-w-[680px] w-full text-[12px]">
@@ -194,7 +230,7 @@ export default function TaxesSettingsPage() {
                     <td className="px-3 py-2.5"><Badge tone="gray">{row.rate}</Badge></td>
                     <td className="px-3 py-2.5 font-mono text-[#344668]">{row.hsn}</td>
                     <td className="px-3 py-2.5 text-[#64748b]">{row.count} products</td>
-                    <td className="px-3 py-2.5 text-right"><button onClick={() => editHsn(row)} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Pencil size={12} /> Edit</button></td>
+                    <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => editHsn(row)} aria-label={`Edit GST mapping for ${row.cat}`} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-bold text-[#005dff] hover:bg-[#eef4ff]"><Pencil size={12} aria-hidden="true" /> Edit</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -229,6 +265,43 @@ export default function TaxesSettingsPage() {
           </div>
         </Card>
       </div>
+
+      <Dialog open={Boolean(hsnEditor)} onOpenChange={(open) => { if (!open) { setHsnEditor(null); setEditorError(""); } }}>
+        <DialogContent className="max-w-md">
+          <form onSubmit={(event) => { event.preventDefault(); saveHsnEditor(); }}>
+            <DialogHeader>
+              <DialogTitle>{hsnEditor?.mode === "single" ? `Edit ${hsnEditor.row.cat}` : "Bulk assign GST rate"}</DialogTitle>
+              <DialogDescription>
+                {hsnEditor?.mode === "single"
+                  ? "Update the tax classification used for products in this category."
+                  : `Apply one GST rate to all ${hsnRows.length} listed categories.`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-5">
+              {hsnEditor?.mode === "single" && (
+                <div className="space-y-2">
+                  <Label htmlFor="hsn-code">HSN code</Label>
+                  <Input ref={hsnInputRef} id="hsn-code" value={draftHsn} onChange={(event) => { setDraftHsn(event.target.value.replace(/\D/g, "").slice(0, 8)); setEditorError(""); }} inputMode="numeric" autoComplete="off" aria-describedby={hsnHasError ? "hsn-editor-error" : "hsn-code-help"} aria-invalid={hsnHasError || undefined} autoFocus />
+                  <p id="hsn-code-help" className="text-xs text-muted-foreground">Use the 2 to 8 digit code from your GST classification.</p>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="gst-rate">GST rate</Label>
+                <div className="relative">
+                  <Input ref={rateInputRef} id="gst-rate" value={draftRate} onChange={(event) => { setDraftRate(event.target.value.replace(/[^\d.]/g, "").slice(0, 6)); setEditorError(""); }} inputMode="decimal" autoComplete="off" className="pr-10" aria-describedby={rateHasError ? "hsn-editor-error" : "gst-rate-help"} aria-invalid={rateHasError || undefined} autoFocus={hsnEditor?.mode === "bulk"} />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-bold text-muted-foreground" aria-hidden="true">%</span>
+                </div>
+                <p id="gst-rate-help" className="text-xs text-muted-foreground">Enter a value from 0 to 100.</p>
+              </div>
+              {editorError && <p id="hsn-editor-error" role="alert" aria-live="polite" className="rounded-lg bg-destructive/8 px-3 py-2 text-sm font-medium text-destructive">{editorError}</p>}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setHsnEditor(null)}>Cancel</Button>
+              <Button type="submit">{hsnEditor?.mode === "single" ? "Save mapping" : `Apply to ${hsnRows.length} categories`}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </SettingsShell>
   );
 }

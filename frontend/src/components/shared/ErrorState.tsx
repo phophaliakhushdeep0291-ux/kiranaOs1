@@ -37,6 +37,8 @@ export function ErrorState({
         className,
       )}
       role="alert"
+      aria-live="assertive"
+      aria-atomic="true"
       {...props}
     >
       <span className="grid h-12 w-12 place-items-center rounded-full bg-destructive/10">

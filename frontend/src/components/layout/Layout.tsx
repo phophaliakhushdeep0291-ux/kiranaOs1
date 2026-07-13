@@ -412,6 +412,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div ref={shellRef} className="app-shell isolate h-[100dvh] overflow-hidden bg-background text-foreground lg:h-screen" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
+      <a href="#main-content" className="app-skip-link">Skip to main content</a>
 
       {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
       <aside
@@ -647,6 +648,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
         <main
           id="main-content"
+          tabIndex={-1}
           className={cn(
             "app-main-scroll app-scrollbar min-w-0 flex-1 overflow-auto overscroll-contain pb-[calc(var(--app-mobile-nav-height)+env(safe-area-inset-bottom))] lg:pb-0",
             pageHasOwnTopbarActions ? "bg-[#ffffff]" : "bg-white",

@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import {
   Select,
   SelectContent,
@@ -36,13 +36,15 @@ export function SelectInput({
   value, onValueChange, options, disabled, required, id,
   prefix, wrapperClassName, triggerClassName,
 }: SelectInputProps) {
-  const inputId = id ?? (label ? `si-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
+  const generatedId = useId();
+  const inputId = id ?? `select-input-${generatedId.replace(/:/g, "")}`;
+  const describedBy = error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined;
   return (
     <div className={cn("space-y-1.5", wrapperClassName)}>
       {label && (
         <Label htmlFor={inputId} className="text-sm font-medium text-foreground">
           {label}
-          {required && <span className="ml-0.5 text-destructive">*</span>}
+          {required && <span className="ml-0.5 text-destructive" aria-hidden="true">*</span>}
         </Label>
       )}
       <div className="relative flex items-center">
@@ -59,6 +61,8 @@ export function SelectInput({
               triggerClassName,
             )}
             aria-invalid={error ? true : undefined}
+            aria-describedby={describedBy}
+            aria-required={required || undefined}
           >
             <SelectValue placeholder={placeholder} />
           </SelectTrigger>
@@ -72,10 +76,10 @@ export function SelectInput({
         </Select>
       </div>
       {hint && !error && (
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p id={`${inputId}-hint`} className="text-xs text-muted-foreground">{hint}</p>
       )}
       {error && (
-        <p role="alert" className="text-xs text-destructive">{error}</p>
+        <p id={`${inputId}-error`} role="alert" aria-live="polite" className="text-xs text-destructive">{error}</p>
       )}
     </div>
   );

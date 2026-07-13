@@ -154,6 +154,8 @@ export default function Billing() {
   const [draftRestored, setDraftRestored] = useState(false);
   const [sensitivePinOpen, setSensitivePinOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [printConfirmOpen, setPrintConfirmOpen] = useState(false);
+  const [pendingPrintBillType, setPendingPrintBillType] = useState<BillTypeSelection | null>(null);
   const [mobileCheckoutOpen, setMobileCheckoutOpen] = useState(false);
   const [sensitiveApproval, setSensitiveApproval] = useState<{ ownerPin: string; reason: string; actions: BillingSensitiveAction[] } | null>(null);
   const [pendingSensitiveBillType, setPendingSensitiveBillType] = useState<BillTypeSelection | null>(null);
@@ -852,7 +854,7 @@ export default function Billing() {
     return actions;
   }
 
-  function handleConfirm(overrideBillType?: BillTypeSelection) {
+  function handleConfirm(overrideBillType?: BillTypeSelection, printDecision?: boolean) {
     if (!newBillingFeature.allowed) {
       toast({ title: "Billing locked", description: newBillingFeature.reason, variant: "destructive" });
       return;
@@ -885,6 +887,13 @@ export default function Billing() {
       return;
     }
 
+    const printerConfig = getPrinterConfigSync();
+    if (printerConfig.autoPrint && printerConfig.askBeforePrint && printDecision === undefined) {
+      setPendingPrintBillType(nextBillType);
+      setPrintConfirmOpen(true);
+      return;
+    }
+
     const paid = isUdharEntry ? 0 : effectivePaidAmount;
     const cappedPaidForCredit = Math.min(paid, grandTotal);
     const remainingCredit = isUdharEntry ? grandTotal : roundMoney(Math.max(0, grandTotal - cappedPaidForCredit));
@@ -906,11 +915,8 @@ export default function Billing() {
     setLastPrintableBill(printable);
     pendingAutoPrintRef.current = null;
 
-    const printerConfig = getPrinterConfigSync();
-    const printDeclined = printerConfig.askBeforePrint && !window.confirm("Print this bill now?");
-
-    if (getPrinterConfigSync().autoPrint) {
-      if (!printDeclined) {
+    if (printerConfig.autoPrint) {
+      if (printDecision !== false) {
         const popup = window.open("", "_blank", "width=460,height=760");
         if (popup) {
           pendingAutoPrintRef.current = { popup, printable };
@@ -1364,6 +1370,27 @@ export default function Billing() {
         destructive
         onConfirm={executeClearCart}
         onCancel={() => setClearConfirmOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={printConfirmOpen}
+        title="Print this bill after saving?"
+        description="The bill will be saved either way. Choose print to open the configured receipt printer, or continue without printing."
+        confirmLabel="Save & print"
+        cancelLabel="Save without printing"
+        disabled={confirmBill.isPending}
+        onConfirm={() => {
+          const nextType = pendingPrintBillType ?? undefined;
+          setPrintConfirmOpen(false);
+          setPendingPrintBillType(null);
+          window.setTimeout(() => handleConfirm(nextType, true), 0);
+        }}
+        onCancel={() => {
+          const nextType = pendingPrintBillType ?? undefined;
+          setPrintConfirmOpen(false);
+          setPendingPrintBillType(null);
+          window.setTimeout(() => handleConfirm(nextType, false), 0);
+        }}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -14,13 +14,14 @@ export interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElemen
 
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   ({ label, hint, error, prefix, suffix, id, wrapperClassName, className, ...props }, ref) => {
-    const inputId = id ?? (label ? `ti-${label.toLowerCase().replace(/\s+/g, "-")}` : undefined);
+    const generatedId = useId();
+    const inputId = id ?? `text-input-${generatedId.replace(/:/g, "")}`;
     return (
       <div className={cn("space-y-1.5", wrapperClassName)}>
         {label && (
           <Label htmlFor={inputId} className="text-sm font-medium text-foreground">
             {label}
-            {props.required && <span className="ml-0.5 text-destructive">*</span>}
+            {props.required && <span className="ml-0.5 text-destructive" aria-hidden="true">*</span>}
           </Label>
         )}
         <div className="relative flex items-center">
@@ -49,7 +50,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
           <p id={`${inputId}-hint`} className="text-xs text-muted-foreground">{hint}</p>
         )}
         {error && (
-          <p id={`${inputId}-error`} role="alert" className="text-xs text-destructive">{error}</p>
+          <p id={`${inputId}-error`} role="alert" aria-live="polite" className="text-xs text-destructive">{error}</p>
         )}
       </div>
     );

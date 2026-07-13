@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import { useId, type HTMLAttributes, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -14,20 +14,24 @@ export interface DataTableCardProps extends Omit<HTMLAttributes<HTMLDivElement>,
   empty?: boolean;
   emptyState?: ReactNode;
   loadingRows?: number;
+  tableLabel?: string;
 }
 
-export function DataTableCard({ title, description, actions, children, loading = false, error, empty = false, emptyState, loadingRows = 3, className, ...props }: DataTableCardProps) {
+export function DataTableCard({ title, description, actions, children, loading = false, error, empty = false, emptyState, loadingRows = 3, tableLabel, className, ...props }: DataTableCardProps) {
+  const id = useId();
+  const titleId = `data-table-title-${id.replace(/:/g, "")}`;
+
   return (
-    <section className={cn("premium-panel min-w-0 p-3 text-card-foreground sm:p-4", className)} {...props}>
+    <section className={cn("premium-panel min-w-0 p-3 text-card-foreground sm:p-4", className)} aria-labelledby={titleId} {...props}>
       <div className="mb-3 flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
-          <h2 className="break-words text-base font-bold text-foreground">{title}</h2>
+          <h2 id={titleId} className="break-words text-base font-bold text-foreground">{title}</h2>
           {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
         </div>
         {actions ? <div className="responsive-action-row shrink-0 md:justify-end">{actions}</div> : null}
       </div>
       {loading ? (
-        <div className="space-y-2" aria-busy="true" aria-label="Loading">
+        <div className="space-y-2" role="status" aria-live="polite" aria-busy="true" aria-label="Loading table data">
           {Array.from({ length: loadingRows }).map((_, index) => <Skeleton key={index} className="h-10 w-full" />)}
         </div>
       ) : error ? (
@@ -41,7 +45,14 @@ export function DataTableCard({ title, description, actions, children, loading =
       ) : empty ? (
         emptyState ?? <EmptyState title="No data found" description="There is nothing to show right now." />
       ) : (
-        <div className="app-table-scroll min-w-0 overflow-x-auto">{children}</div>
+        <div
+          className="app-table-scroll min-w-0 overflow-x-auto"
+          role="region"
+          aria-label={tableLabel ?? "Scrollable data table"}
+          tabIndex={0}
+        >
+          {children}
+        </div>
       )}
     </section>
   );
