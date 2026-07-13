@@ -30,6 +30,9 @@ export function decodeCursor(cursor) {
 
 export const pullQuerySchema = z.object({
   since: z.string().datetime({ message: "since must be ISO datetime, e.g. 2026-01-01T00:00:00.000Z" }),
+  // Monotonic protocol v2 cursor. Unlike timestamps, a database sequence cannot
+  // share or cross a boundary with a concurrent update.
+  afterSeq: z.string().regex(/^\d+$/, "afterSeq must be a non-negative integer").optional(),
   // cursor is the legacy single cursor. Prefer cursors for production per-entity pagination.
   cursor: z.string().optional(),
   // JSON string of per-entity cursors: {"products":"...","customers":"..."}.

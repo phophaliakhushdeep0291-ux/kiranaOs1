@@ -269,6 +269,30 @@ export async function mergeServerChange(
     duplicateLedger ??
     (await findExistingServerRow(tableName, serverId, effectiveLocalId));
 
+  const isDeletion = String(change.operation_type ?? change.operationType ?? change.type ?? "").toLowerCase() === "delete"
+    || change.deleted_at != null;
+  if (isDeletion) {
+    if (existing && UNSYNCED_STATUSES.has(String(existing.sync_status ?? "synced") as SyncStatus)) {
+      await storeConflict({
+        entityType: entityTypeFromOperation("", entityType),
+        entityId: getStringFrom(existing, ["id"]) ?? serverId,
+        sourceId: getStringFrom(change, ["change_id"]) ?? String(change.server_version ?? Date.now()),
+        localSnapshot: existing,
+        serverSnapshot: null,
+        errorMessage: "Server deleted an entity that has unsynced local changes",
+      });
+      const table = dexieDB.table(tableName) as Table<Record<string, unknown>, string>;
+      await table.put({ ...existing, sync_status: "conflict", updated_at: nowIso() });
+      return "conflict";
+    }
+    if (existing) {
+      const table = dexieDB.table(tableName) as Table<Record<string, unknown>, string>;
+      const keys = [getStringFrom(existing, ["id"]), effectiveLocalId, serverId].filter((value): value is string => Boolean(value));
+      await table.bulkDelete([...new Set(keys)]);
+    }
+    return "merged";
+  }
+
   const duplicateBill =
     tableName === "bills" &&
     existing != null &&

@@ -94,6 +94,12 @@ if (isPostgres) {
   // declared client, because a live Windows dev server can hold the canonical
   // engine DLL open while the isolated integration client remains available.
   runPrisma(["db", "push", "--force-reset", "--accept-data-loss", "--skip-generate"]);
+  const triggerInstall = spawnSync(process.execPath, ["scripts/install-sqlite-sync-triggers.js"], {
+    cwd: process.cwd(), env, stdio: "pipe", encoding: "utf8",
+  });
+  if (triggerInstall.stdout) process.stdout.write(triggerInstall.stdout);
+  if (triggerInstall.stderr) process.stderr.write(triggerInstall.stderr);
+  if (triggerInstall.status !== 0) process.exit(triggerInstall.status || 1);
 }
 
 console.log("Test database is ready.");

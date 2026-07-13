@@ -12,6 +12,7 @@ export interface SyncPullRequestParams {
   since?: string;
   cursor?: string | number | null;
   cursors?: Record<string, string | null | undefined> | null;
+  afterSeq?: string | number | null;
   limit?: number;
   background?: boolean;
 }
@@ -42,6 +43,7 @@ export function syncPull(paramsOrCursor?: SyncPullRequestParams | string | numbe
     since: params.since ?? DEFAULT_SYNC_SINCE,
     cursor: params.cursor ?? undefined,
     cursors: encodeCursorMap(params.cursors),
+    afterSeq: params.afterSeq ?? undefined,
     limit: params.limit ?? 500,
   })}`, {
     method: "GET",

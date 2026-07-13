@@ -679,13 +679,17 @@ export interface SyncPullChange extends Record<string, unknown> {
 }
 
 export interface SyncPullMetadata {
-  entityCursors?: Record<string, string | null>;
+    protocol?: string;
+    entityCursors?: Record<string, string | null>;
   hasMoreByEntity?: Record<string, boolean>;
   hasMore?: boolean;
   nextCursor?: string | number | null;
   serverTime?: string;
   limit?: number;
-  returnedCount?: number;
+    returnedCount?: number;
+    scannedCount?: number;
+    nextServerSeq?: string | number | null;
+    serverVersion?: string | number | null;
 }
 
 export interface SyncPullResponse extends Record<string, unknown> {

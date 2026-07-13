@@ -596,6 +596,36 @@ if (ctx.skip) {
       assert.ok("nextCursor" in second.sync);
     });
 
+    test("sequence pull cannot miss same-record updates and emits durable tombstones", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: unique("Sequence Product") });
+      const since = encodeURIComponent(new Date(0).toISOString());
+      const baseline = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&afterSeq=0&limit=1000`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(baseline.sync.protocol, "server_sequence_v2");
+      assert.ok(baseline.changes.some((change) => change.entity_id === product.id));
+      const baselineSeq = BigInt(baseline.sync.nextServerSeq);
+
+      await ctx.db.product.update({ where: { id: product.id }, data: { name: "Sequence update one" } });
+      await ctx.db.product.update({ where: { id: product.id }, data: { name: "Sequence update two" } });
+      const first = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&afterSeq=${baselineSeq}&limit=1`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(first.sync.hasMore, true);
+      assert.equal(first.changes.length, 1);
+      assert.equal(first.changes[0].entity.name, "Sequence update two", "change feed resolves to the committed current snapshot");
+      const firstSeq = BigInt(first.sync.nextServerSeq);
+      assert.ok(firstSeq > baselineSeq);
+
+      const second = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&afterSeq=${firstSeq}&limit=1`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(second.changes.length, 1);
+      assert.ok(BigInt(second.sync.nextServerSeq) > firstSeq, "each mutation receives a strictly increasing cursor");
+
+      const beforeDelete = second.sync.nextServerSeq;
+      await ctx.db.product.delete({ where: { id: product.id } });
+      const deleted = assertSuccess(await ctx.get(`/api/sync/pull?since=${since}&afterSeq=${beforeDelete}&limit=100`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const tombstone = deleted.changes.find((change) => change.entity_id === product.id && change.operation_type === "delete");
+      assert.ok(tombstone, "hard deletes must reach every device as a sequence tombstone");
+      assert.equal(tombstone.entity, null);
+    });
+
     test("cashier sync pull excludes product cost + supplier/purchase data; owner pull includes cost", async () => {
       // Synced data lives in inspectable IndexedDB, so a cashier device must never receive
       // cost/profit/supplier/purchase-cost data even though the UI hides it.

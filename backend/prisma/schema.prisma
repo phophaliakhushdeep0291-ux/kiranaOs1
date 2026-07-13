@@ -1584,7 +1584,9 @@ model SyncCommand {
 }
 
 model ChangeLog {
-  seq         BigInt   @id @default(autoincrement())
+  // SQLite rowid autoincrement only works on INTEGER PRIMARY KEY. PostgreSQL
+  // keeps BigInt in its provider-specific schema for effectively unbounded use.
+  seq         Int      @id @default(autoincrement())
   shopId      String
   entityType  String
   entityId    String

@@ -227,6 +227,9 @@ export async function resetDatabase(db) {
     db.authToken.deleteMany(),
     db.session.deleteMany(),
     db.user.deleteMany(),
+    // Database sync triggers intentionally log hard deletes. Clear those fresh
+    // tombstones only in the test reset, after every sync-visible root is gone.
+    db.changeLog.deleteMany(),
     db.shop.deleteMany(),
   ]);
 }

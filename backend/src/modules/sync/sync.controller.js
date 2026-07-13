@@ -24,7 +24,7 @@ function writeSyncLog(level, payload) {
 }
 
 
-function buildStatusPayload(req, effectivePlan) {
+function buildStatusPayload(req, effectivePlan, serverSeq) {
   const features = Array.isArray(effectivePlan.features) ? effectivePlan.features : [];
   const subscriptionActive = isSubscriptionActive(effectivePlan.subscription);
   const featureAllowed = features.includes("cloud_backup") || features.includes("auto_two_way_sync");
@@ -35,8 +35,8 @@ function buildStatusPayload(req, effectivePlan) {
     online: true,
     allowed,
     serverTime,
-    server_version: serverTime,
-    cursor: serverTime,
+    server_version: serverSeq,
+    cursor: serverSeq,
     shopId: req.shopId,
     deviceId: req.device?.deviceId ?? null,
     planCode: effectivePlan.planCode,
@@ -54,14 +54,15 @@ function buildStatusPayload(req, effectivePlan) {
 export async function status(req, res, next) {
   try {
     const effectivePlan = await getEffectivePlan(req.shopId);
-    res.json({ success: true, data: buildStatusPayload(req, effectivePlan) });
+    const serverSeq = await svc.getCurrentServerSeq(req.shopId);
+    res.json({ success: true, data: buildStatusPayload(req, effectivePlan, serverSeq) });
   } catch (err) { next(err); }
 }
 
 export async function retry(req, res, next) {
   try {
     const effectivePlan = await getEffectivePlan(req.shopId);
-    const payload = buildStatusPayload(req, effectivePlan);
+    const payload = buildStatusPayload(req, effectivePlan, await svc.getCurrentServerSeq(req.shopId));
     res.json({
       success: true,
       data: {
@@ -77,7 +78,7 @@ export async function retry(req, res, next) {
 export async function resolveConflict(req, res, next) {
   try {
     const effectivePlan = await getEffectivePlan(req.shopId);
-    const payload = buildStatusPayload(req, effectivePlan);
+    const payload = buildStatusPayload(req, effectivePlan, await svc.getCurrentServerSeq(req.shopId));
     res.json({
       success: true,
       data: {
@@ -94,11 +95,11 @@ export async function resolveConflict(req, res, next) {
 export async function pull(req, res, next) {
   const startedAt = Date.now();
   try {
-    const { since, cursor, limit } = req.query;
+    const { since, cursor, limit, afterSeq } = req.query;
     const { cursors } = req.query;
     // Legacy contract kept for old tests/clients: pullSince(req.shopId, since, { cursor, limit })
     // Role drives field-level redaction so a cashier device never receives cost/profit data.
-    const data = await svc.pullSince(req.shopId, since, { cursor, limit, cursors, role: req.user?.role });
+    const data = await svc.pullSince(req.shopId, since, { cursor, limit, cursors, role: req.user?.role, afterSeq });
     await markDeviceSynced(req.shopId, req.device?.deviceId);
     incrementMetric("sync_pull_total", { status: "success" });
 
@@ -111,6 +112,7 @@ export async function pull(req, res, next) {
         since,
         cursorPresent: Boolean(cursor),
         entityCursorPresent: Boolean(cursors),
+        afterSeqPresent: Boolean(afterSeq),
         limit:         data.sync?.limit ?? limit,
         returnedCount: data.sync?.returnedCount ?? null,
         hasMore:       data.sync?.hasMore ?? false,

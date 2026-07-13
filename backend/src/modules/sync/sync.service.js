@@ -253,7 +253,8 @@ async function backfillLegacyBillIdentity(shopId, bills) {
   });
 }
 
-export async function pullSince(shopId, since, { cursor, limit, cursors, role } = {}) {
+export async function pullSince(shopId, since, { cursor, limit, cursors, role, afterSeq } = {}) {
+  if (afterSeq !== undefined) return pullBySequence(shopId, afterSeq, { limit, role });
   const sinceDate = new Date(since);
   limit = Math.min(
     typeof limit === "number" ? limit : PULL_DEFAULT_LIMIT,
@@ -364,6 +365,78 @@ function redactProductCostForCashier(product) {
     redacted.sellingUnits = redacted.sellingUnits.map((unit) => omitFields(unit, CASHIER_HIDDEN_SELLING_UNIT_FIELDS));
   }
   return redacted;
+}
+
+export async function getCurrentServerSeq(shopId) {
+  const aggregate = await db.changeLog.aggregate({ where: { shopId }, _max: { seq: true } });
+  return String(aggregate._max.seq ?? 0n);
+}
+
+async function pullBySequence(shopId, afterSeq, { limit, role } = {}) {
+  const cursor = env.DATABASE_URL.startsWith("file:") ? Number(afterSeq || 0) : BigInt(afterSeq || "0");
+  const pageLimit = Math.min(typeof limit === "number" ? limit : PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT);
+  const logs = await db.changeLog.findMany({
+    where: { shopId, seq: { gt: cursor } },
+    orderBy: { seq: "asc" },
+    take: pageLimit + 1,
+  });
+  const page = logs.slice(0, pageLimit);
+  const hasMore = logs.length > pageLimit;
+  const privileged = role === "owner" || role === "admin";
+  const rowsByIdentity = await loadSequenceEntities(shopId, page);
+  const changes = [];
+  for (const log of page) {
+    if (!privileged && (log.entityType === "supplier" || log.entityType === "purchase_history")) continue;
+    let entity = rowsByIdentity.get(`${log.entityType}:${log.entityId}`) ?? null;
+    if (entity && !privileged && log.entityType === "product") entity = redactProductCostForCashier(entity);
+    if (entity && !privileged && log.entityType === "bill") entity = redactBillProfitForCashier(entity);
+    const deleted = log.operation === "delete" || !entity;
+    changes.push({
+      change_id: String(log.seq),
+      entity_type: log.entityType,
+      entity_id: log.entityId,
+      operation_type: deleted ? "delete" : log.operation,
+      entity,
+      server_version: String(log.seq),
+      deleted_at: deleted ? log.createdAt.toISOString() : null,
+    });
+  }
+  const nextServerSeq = String(page.length ? page[page.length - 1].seq : cursor);
+  const currentServerSeq = await getCurrentServerSeq(shopId);
+  return {
+    syncedAt: new Date().toISOString(),
+    changes,
+    sync: {
+      protocol: "server_sequence_v2",
+      hasMore,
+      nextCursor: nextServerSeq,
+      nextServerSeq,
+      serverVersion: currentServerSeq,
+      serverTime: new Date().toISOString(),
+      limit: pageLimit,
+      returnedCount: changes.length,
+      scannedCount: page.length,
+    },
+  };
+}
+
+async function loadSequenceEntities(shopId, logs) {
+  const ids = (type) => [...new Set(logs.filter((log) => log.entityType === type && log.operation !== "delete").map((log) => log.entityId))];
+  const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory] = await Promise.all([
+    db.product.findMany({ where: { shopId, id: { in: ids("product") } }, include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } } }),
+    db.customer.findMany({ where: { shopId, id: { in: ids("customer") } } }),
+    db.bill.findMany({ where: { shopId, id: { in: ids("bill") } }, include: { items: true, payments: true } }),
+    db.stockLedger.findMany({ where: { shopId, id: { in: ids("stock_ledger") } } }),
+    db.udharLedger.findMany({ where: { shopId, id: { in: ids("udhar_ledger") } } }),
+    db.supplier.findMany({ where: { shopId, id: { in: ids("supplier") } } }),
+    db.purchaseHistory.findMany({ where: { shopId, id: { in: ids("purchase_history") } } }),
+  ]);
+  const bills = await backfillLegacyBillIdentity(shopId, rawBills);
+  const map = new Map();
+  for (const [type, rows] of Object.entries({ product: products, customer: customers, bill: bills, stock_ledger: stockLedger, udhar_ledger: udharLedger, supplier: suppliers, purchase_history: purchaseHistory })) {
+    for (const row of rows) map.set(`${type}:${row.id}`, row);
+  }
+  return map;
 }
 
 function redactBillProfitForCashier(bill) {

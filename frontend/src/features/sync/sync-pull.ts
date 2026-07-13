@@ -10,6 +10,8 @@ import {
   DEFAULT_CURSOR_ID,
   isRecord,
   nextCursorFromResponse,
+  SERVER_SEQUENCE_CURSOR_ID,
+  serverSequenceFromResponse,
 } from "@/features/sync/sync-types";
 import type { SyncPullChange, SyncPullResponse } from "@/types/api";
 
@@ -71,6 +73,19 @@ export async function setStoredCursor(
   if (cursor === undefined || cursor === "") return;
   await dexieDB.open();
   await dexieDB.sync_cursor.put(buildCursorRow(DEFAULT_CURSOR_ID, "global", cursor));
+}
+
+export async function getStoredServerSequence(): Promise<string | number | null> {
+  await dexieDB.open();
+  const row = await dexieDB.sync_cursor.get(SERVER_SEQUENCE_CURSOR_ID);
+  if (!isCurrentScope(row)) return null;
+  return row?.cursor ?? null;
+}
+
+export async function setStoredServerSequence(cursor: string | number | null | undefined): Promise<void> {
+  if (cursor === undefined || cursor === "") return;
+  await dexieDB.open();
+  await dexieDB.sync_cursor.put(buildCursorRow(SERVER_SEQUENCE_CURSOR_ID, "server_sequence", cursor));
 }
 
 export async function getStoredEntityCursors(): Promise<EntityCursorMap> {
@@ -158,15 +173,15 @@ export async function pullServerChanges(): Promise<{
   let totalPulled = 0;
   let totalConflicts = 0;
   let latestCursor: string | number | null | undefined = await getStoredCursor();
+  let latestServerSequence: string | number | null | undefined = await getStoredServerSequence();
   let hasMore = false;
 
   try {
     for (let page = 0; page < MAX_PULL_PAGES_PER_CYCLE; page += 1) {
-      const entityCursors = await getStoredEntityCursors();
       const response = await syncPull({
         since: DEFAULT_SYNC_SINCE,
         cursor: latestCursor,
-        cursors: entityCursors,
+        afterSeq: latestServerSequence ?? "0",
         limit: SYNC_PULL_LIMIT,
         background: true,
       });
@@ -182,11 +197,14 @@ export async function pullServerChanges(): Promise<{
       totalConflicts += conflicts;
 
       latestCursor = nextCursorFromResponse(response);
+      const responseServerSequence = serverSequenceFromResponse(response);
+      if (responseServerSequence !== undefined) latestServerSequence = responseServerSequence;
       await setStoredCursor(latestCursor);
+      await setStoredServerSequence(latestServerSequence);
       await setStoredEntityCursors(getResponseEntityCursors(response));
       hasMore = responseHasMore(response);
 
-      if (!hasMore || changes.length === 0) break;
+      if (!hasMore) break;
     }
 
     await refreshBusinessCaches();

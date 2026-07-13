@@ -8,6 +8,7 @@ import type { SyncStatus } from "@/types/domain";
 
 export const SYNC_BATCH_SIZE = 50;
 export const DEFAULT_CURSOR_ID = "global";
+export const SERVER_SEQUENCE_CURSOR_ID = "server-sequence-v2";
 export const LOCAL_ID_PREFIXES = [
   "customer_",
   "product_",
@@ -182,6 +183,15 @@ export function nextCursorFromResponse(
     value === undefined
     ? value
     : undefined;
+}
+
+export function serverSequenceFromResponse(
+  response: SyncPullResponse | Record<string, unknown>,
+): string | number | null | undefined {
+  const sync = isRecord(response.sync) ? response.sync : {};
+  if (sync.protocol !== "server_sequence_v2") return undefined;
+  const value = sync.nextServerSeq ?? sync.serverVersion;
+  return typeof value === "string" || typeof value === "number" || value === null ? value : undefined;
 }
 
 export function resultListFromPush(
