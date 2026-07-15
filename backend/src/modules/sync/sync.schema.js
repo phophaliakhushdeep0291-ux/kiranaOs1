@@ -93,3 +93,47 @@ export const pushBodySchema = z.object({
 }).transform((data) => ({
   events: data.events ?? data.actions ?? [],
 }));
+
+export const syncConflictListQuerySchema = z.object({
+  status: z.enum(["open", "resolved", "dismissed", "all"]).default("open"),
+  entity_type: z.string().min(1).max(80).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().optional(),
+});
+
+const conflictSnapshotSchema = z.record(z.any()).nullable().optional();
+
+export const reportSyncConflictSchema = z.object({
+  client_conflict_id: z.string().min(1).max(220),
+  entity_type: z.string().min(1).max(80),
+  entity_id: z.string().min(1).max(220),
+  reason_code: z.string().min(1).max(100).default("CLIENT_SYNC_CONFLICT"),
+  message: z.string().min(1).max(1000).default("Client detected a sync conflict"),
+  local_snapshot: conflictSnapshotSchema,
+  server_snapshot: conflictSnapshotSchema,
+  base_snapshot: conflictSnapshotSchema,
+  server_version: z.union([z.string(), z.number()]).nullable().optional(),
+});
+
+export const resolveSyncConflictSchema = z.object({
+  conflict_id: z.string().min(1).max(220),
+  resolution: z.enum([
+    "use_server",
+    "use_local",
+    "manual_merge",
+    "dismiss",
+    "resolved_by_owner",
+    "ignored_by_owner",
+  ]),
+  merged_payload: z.record(z.any()).optional(),
+  note: z.string().max(1000).optional(),
+  expected_version: z.coerce.number().int().positive().optional(),
+}).superRefine((data, ctx) => {
+  if (data.resolution === "manual_merge" && !data.merged_payload) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["merged_payload"],
+      message: "merged_payload is required for manual_merge",
+    });
+  }
+});

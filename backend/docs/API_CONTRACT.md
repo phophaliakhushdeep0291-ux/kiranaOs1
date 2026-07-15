@@ -67,32 +67,39 @@ Money fields must be finite numbers with max two decimal places. Paise fields mu
 
 ### Sync pull pagination
 
-New frontend clients must use per-entity cursors.
+New frontend clients use the monotonic server sequence protocol. Start with
+`GET /api/sync/pull?afterSeq=0&limit=500`, persist `nextServerSeq` before
+refreshing the UI, and send that value as the next `afterSeq`.
 
 Server response contains:
 
 ```json
 {
   "sync": {
-    "entityCursors": {
-      "products": "...",
-      "customers": "...",
-      "bills": "...",
-      "stockLedger": "...",
-      "udharLedger": "..."
-    },
-    "hasMoreByEntity": {
-      "products": false,
-      "customers": true,
-      "bills": false,
-      "stockLedger": false,
-      "udharLedger": false
-    }
+    "protocol": "server_sequence_v2",
+    "nextServerSeq": "1842",
+    "serverVersion": "1901",
+    "hasMore": true
   }
 }
 ```
 
-The next pull should send those cursors back as the `cursors` query JSON. Do not rely only on one global cursor for new clients.
+Sequence values are decimal strings because PostgreSQL uses a 64-bit sequence.
+The server emits durable tombstones for hard deletes. Legacy clients that omit
+`afterSeq` continue to receive `(updatedAt, id)` `entityCursors` during rollout;
+new clients must not mix those cursors with `server_sequence_v2`.
+
+### Durable sync conflict ledger
+
+```text
+POST /api/sync/conflicts/report   # idempotent client conflict report
+GET  /api/sync/conflicts          # owner/admin cross-device review list
+POST /api/sync/resolve-conflict   # optimistic owner/admin decision + audit
+```
+
+Conflict snapshots are server-redacted, bounded, tenant-scoped, and never
+available to cashier roles. Resolution should send `expected_version` from the
+list response so another device cannot silently overwrite the first decision.
 
 
 ### Sync push local ID mapping
@@ -203,10 +210,11 @@ Before a frontend build is considered compatible with this backend, verify:
 5. Subscription expired/payment required errors are handled.
 6. Owner PIN modal is used for destructive/sensitive actions.
 7. Offline outbox push uses batch size limits.
-8. Sync pull persists entityCursors.
+8. Sync pull persists nextServerSeq and resumes with afterSeq.
 9. Sync push stores returned idMappings for offline-created products/customers/bills.
 10. Money inputs are capped to 2 decimal places before sending.
 11. Payment verification never sends shopId in body.
+12. Owner/admin Sync Status merges the server conflict ledger and records resolutions online.
 ```
 
 ## Phase 48 financial correction endpoints

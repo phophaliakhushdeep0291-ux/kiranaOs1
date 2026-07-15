@@ -77,18 +77,39 @@ export async function retry(req, res, next) {
 
 export async function resolveConflict(req, res, next) {
   try {
-    const effectivePlan = await getEffectivePlan(req.shopId);
-    const payload = buildStatusPayload(req, effectivePlan, await svc.getCurrentServerSeq(req.shopId));
+    const conflict = await svc.resolveSyncConflict(req.shopId, req.body, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.device?.deviceId ?? null,
+      ipAddress: req.ip ?? null,
+      userAgent: req.get?.("user-agent") ?? null,
+    });
     res.json({
       success: true,
       data: {
-        ...payload,
-        resolutionAccepted: true,
-        conflictId: req.body?.conflict_id ?? null,
-        resolution: req.body?.resolution ?? null,
-        message: "Conflict resolution acknowledged. Frontend local conflict state remains the source of truth unless a future server conflict ledger is added.",
+        resolutionRecorded: true,
+        conflict,
+        message: "Conflict decision stored in the server audit ledger for every device.",
       },
     });
+  } catch (err) { next(err); }
+}
+
+export async function listConflicts(req, res, next) {
+  try {
+    const data = await svc.listSyncConflicts(req.shopId, req.query);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function reportConflict(req, res, next) {
+  try {
+    const conflict = await svc.reportSyncConflict(req.shopId, req.body, {
+      userId: req.user?.userId ?? null,
+      deviceId: req.device?.deviceId ?? null,
+    });
+    // Reporting is an idempotent upsert: a repeated clientConflictId updates the
+    // same ledger row, so 200 is accurate for both first and subsequent reports.
+    res.json({ success: true, data: { conflict } });
   } catch (err) { next(err); }
 }
 

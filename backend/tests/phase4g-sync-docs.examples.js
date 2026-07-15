@@ -13,13 +13,13 @@
  *  8.  Documents that duplicate/already-synced must be treated as success.
  *  9.  Documents that ownerPin must not be stored or logged.
  * 10.  Documents that frontend must not wipe IndexedDB after reconnect.
- * 11.  Documents serverVersion sync as future work.
+ * 11.  Documents live serverVersion sequence sync and legacy compatibility.
  * 12.  Documents owner-gated event types (all 5).
  * 13.  Documents sequential event processing.
  * 14.  Documents cursor format (ISO_TIMESTAMP|ID).
  * 15.  Documents (updatedAt, id) ordering for pull.
- * 16.  Documents concurrent duplicate push race condition as known limitation.
- * 17.  Documents OfflineSyncEvent cleanup as known limitation.
+ * 16.  Documents database-guarded concurrent duplicate push claiming.
+ * 17.  Documents safe, confirmed OfflineSyncEvent retention cleanup.
  * 18.  Test is in the test:billing chain.
  */
 
@@ -123,8 +123,14 @@ assert.match(
 
 assert.match(
   doc,
-  /[Ss]erver[Vv]ersion.{0,200}(future|planned|roadmap)|[Ff]uture.{0,200}[Ss]erver[Vv]ersion/s,
-  "SYNC.md must document that serverVersion sync is future work"
+  /[Mm]onotonic.{0,200}[Ss]erver[Vv]ersion.{0,300}(live|server_sequence_v2)|server_sequence_v2.{0,300}nextServerSeq/s,
+  "SYNC.md must document the live monotonic serverVersion protocol"
+);
+
+assert.match(
+  doc,
+  /legacy.{0,200}(updatedAt.{0,50}id|timestamp)|clients that omit `afterSeq`/i,
+  "SYNC.md must document compatibility behavior for legacy clients"
 );
 
 // ── 12. Owner-gated event types (all 5) ──────────────────────────────────────
@@ -170,16 +176,16 @@ assert.match(
 
 assert.match(
   doc,
-  /[Cc]oncurrent.{0,100}(race|duplicate)|race.{0,100}condition/i,
-  "SYNC.md must document the concurrent duplicate push race condition as a known limitation"
+  /[Cc]oncurrent.{0,150}duplicate.{0,300}(unique|P2002|database-guarded)/s,
+  "SYNC.md must document database-guarded concurrent duplicate push claiming"
 );
 
 // ── 17. OfflineSyncEvent cleanup limitation documented ────────────────────────
 
 assert.match(
   doc,
-  /OfflineSyncEvent.{0,200}(cleanup|retention|grow)|cleanup.{0,200}OfflineSyncEvent/s,
-  "SYNC.md must document the OfflineSyncEvent cleanup/retention limitation"
+  /retention cleanup.{0,500}(dry run|dryRun).{0,300}confirm.{0,500}(Failed|open conflicts)/is,
+  "SYNC.md must document confirmed retention and the statuses it preserves"
 );
 
 // ── 18. Test is in the chain ──────────────────────────────────────────────────

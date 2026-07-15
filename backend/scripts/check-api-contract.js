@@ -57,6 +57,8 @@ const requiredEndpoints = [
   "POST /api/inventory/correction",
   "GET /api/sync/status",
   "POST /api/sync/retry",
+  "GET /api/sync/conflicts",
+  "POST /api/sync/conflicts/report",
   "POST /api/sync/resolve-conflict",
   "GET /api/sync/pull",
   "POST /api/sync/push",
@@ -108,7 +110,10 @@ if (!app.includes('express.raw({ type: "application/json"') && !app.includes("ex
 }
 
 const pull = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/pull");
-if (!pull?.responseMustInclude?.includes("sync.entityCursors")) fail("sync pull contract must require sync.entityCursors");
+for (const field of ["sync.protocol", "sync.nextServerSeq", "sync.serverVersion", "sync.hasMore"]) {
+  if (!pull?.responseMustInclude?.includes(field)) fail(`sync pull contract must require ${field}`);
+}
+if (!String(pull?.purpose ?? "").includes("legacy")) fail("sync pull contract must document legacy cursor compatibility");
 
 const verifyPayment = contract.endpoints.find((endpoint) => endpoint.path === "/api/subscription/verify-payment");
 for (const requirement of ["signature", "orderId", "paymentId", "amount", "currency", "localTransaction"]) {

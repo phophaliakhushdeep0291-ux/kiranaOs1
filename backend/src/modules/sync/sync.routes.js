@@ -1,8 +1,16 @@
 import { Router } from "express";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireShop } from "../../middleware/permissions.js";
 import { validate, validateQuery } from "../../middleware/validate.js";
-import { pullQuerySchema, pushBodySchema, PUSH_MAX_BATCH_SIZE, PUSH_BATCH_TOO_LARGE_CODE } from "./sync.schema.js";
+import {
+  pullQuerySchema,
+  pushBodySchema,
+  PUSH_MAX_BATCH_SIZE,
+  PUSH_BATCH_TOO_LARGE_CODE,
+  reportSyncConflictSchema,
+  resolveSyncConflictSchema,
+  syncConflictListQuerySchema,
+} from "./sync.schema.js";
 import * as ctrl from "./sync.controller.js";
 import { requireDeviceActivated, requireDeviceAllowedForSync } from "../devices/device.middleware.js";
 
@@ -39,7 +47,9 @@ function checkPushBatchSize(req, res, next) {
 
 router.get("/status", requireDeviceActivated(), ctrl.status);
 router.post("/retry", requireDeviceActivated(), ctrl.retry);
-router.post("/resolve-conflict", requireDeviceActivated(), ctrl.resolveConflict);
+router.get("/conflicts", requireDeviceActivated(), requireRole("owner", "admin"), validateQuery(syncConflictListQuerySchema), ctrl.listConflicts);
+router.post("/conflicts/report", requireDeviceActivated(), validate(reportSyncConflictSchema), ctrl.reportConflict);
+router.post("/resolve-conflict", requireDeviceActivated(), requireRole("owner", "admin"), validate(resolveSyncConflictSchema), ctrl.resolveConflict);
 router.get("/pull", requireDeviceAllowedForSync(), validateQuery(pullQuerySchema), ctrl.pull);
 router.post("/push", requireDeviceAllowedForSync(), checkPushBatchSize, validate(pushBodySchema), ctrl.push);
 

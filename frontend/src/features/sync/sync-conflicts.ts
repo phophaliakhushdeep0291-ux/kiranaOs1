@@ -1,5 +1,12 @@
 import { dexieDB } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
+import { reportSyncConflict } from "@/features/sync/api";
+
+function snapshotRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
 
 function makeConflictId(
   entityType: string,
@@ -41,4 +48,32 @@ export async function storeConflict(input: {
     server_snapshot: input.serverSnapshot ?? null,
     error_message: input.errorMessage ?? "Sync conflict",
   });
+
+  // Local persistence is authoritative while offline. Reporting is deliberately
+  // best-effort and backgrounded; when connectivity exists it makes the same
+  // review item visible to every owner/admin device without blocking reconciliation.
+  try {
+    const reporting = reportSyncConflict({
+      client_conflict_id: id,
+      entity_type: input.entityType,
+      entity_id: input.entityId,
+      reason_code: "CLIENT_SYNC_CONFLICT",
+      message: input.errorMessage ?? "Sync conflict",
+      local_snapshot: snapshotRecord(input.localSnapshot),
+      server_snapshot: snapshotRecord(input.serverSnapshot),
+      server_version: input.sourceId,
+    }, { background: true });
+    void reporting.then(async ({ conflict }) => {
+      const current = await dexieDB.sync_conflicts.get(id);
+      if (!current) return;
+      await dexieDB.sync_conflicts.put({
+        ...current,
+        server_conflict_id: conflict.id,
+        server_version: conflict.server_version ?? input.sourceId,
+        updated_at: nowIso(),
+      });
+    }).catch(() => undefined);
+  } catch {
+    // The local conflict row is already durable; reporting must never break sync.
+  }
 }

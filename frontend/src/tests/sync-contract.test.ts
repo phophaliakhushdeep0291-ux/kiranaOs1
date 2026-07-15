@@ -212,6 +212,7 @@ const dbState = vi.hoisted(() => {
 const syncPushMock = vi.hoisted(() => vi.fn());
 const syncPullMock = vi.hoisted(() => vi.fn());
 const requestSyncRetryMock = vi.hoisted(() => vi.fn());
+const reportSyncConflictMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/offline/context", () => ({
   getOfflineScope: () => dbState.scope,
@@ -312,6 +313,7 @@ vi.mock("@/features/sync/api", () => ({
   syncPull: syncPullMock,
   getSyncStatus: vi.fn(async () => ({ allowed: true })),
   requestSyncRetry: requestSyncRetryMock,
+  reportSyncConflict: reportSyncConflictMock,
 }));
 
 vi.mock("@/features/subscription/access", () => ({
@@ -490,6 +492,21 @@ describe("sync backend contract", () => {
     dbState.reset();
     syncPullMock.mockResolvedValue({ changes: [], cursor: "cursor_empty" });
     requestSyncRetryMock.mockResolvedValue({ queued: true });
+    reportSyncConflictMock.mockResolvedValue({
+      conflict: {
+        id: "server_conflict_reported_1",
+        entity_type: "product",
+        entity_id: "server_product_delete_pending",
+        reason_code: "CLIENT_SYNC_CONFLICT",
+        message: "reported",
+        status: "open",
+        version: 1,
+        detected_at: "2026-06-06T12:00:00.000Z",
+        created_at: "2026-06-06T12:00:00.000Z",
+        updated_at: "2026-06-06T12:00:00.000Z",
+        server_version: "52",
+      },
+    });
   });
 
   it("POST /sync/push successful CREATE_BILL maps local IDs to server IDs", async () => {
@@ -1058,6 +1075,22 @@ describe("sync backend contract", () => {
         server_snapshot: null,
       }),
     ]);
+    expect(reportSyncConflictMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entity_type: "product",
+        entity_id: "server_product_delete_pending",
+        server_version: "52",
+      }),
+      { background: true },
+    );
+    await vi.waitFor(() => {
+      expect(scopedRows("sync_conflicts")[0]).toEqual(
+        expect.objectContaining({
+          server_conflict_id: "server_conflict_reported_1",
+          server_version: "52",
+        }),
+      );
+    });
   });
 
   it("backend conflict response stores conflict and marks outbox CONFLICT", async () => {

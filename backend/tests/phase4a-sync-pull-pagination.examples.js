@@ -214,14 +214,14 @@ assert.match(
 
 assert.match(
   syncCtrl,
-  /const \{ since, cursor, limit \} = req\.query/,
-  "pull controller must destructure since, cursor, limit from req.query"
+  /const \{ since, cursor, limit, afterSeq \} = req\.query/,
+  "pull controller must destructure legacy pagination fields and afterSeq from req.query"
 );
 
 assert.match(
   syncCtrl,
-  /pullSince\(req\.shopId, since, \{ cursor, limit \}\)/,
-  "pull controller must pass { cursor, limit } to pullSince"
+  /pullSince\(req\.shopId, since, \{ cursor, limit, cursors, role: req\.user\?\.role, afterSeq \}\)/,
+  "pull controller must pass legacy cursors, role, and afterSeq to pullSince"
 );
 
 // ── 12. Ordering uses updatedAt ASC + id ASC ──────────────────────────────────

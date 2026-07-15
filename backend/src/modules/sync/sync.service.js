@@ -45,6 +45,270 @@ const protectedProductFields = [
   "hsn",
 ];
 
+const SYNC_CONFLICT_RETENTION_DAYS = 90;
+const SYNC_CONFLICT_SNAPSHOT_MAX_CHARS = 64 * 1024;
+
+function syncConflictExpiry() {
+  return new Date(Date.now() + SYNC_CONFLICT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+}
+
+function snapshotJson(value, fallback = null) {
+  if (value === undefined || value === null) return fallback;
+  const sanitized = removeSensitiveSyncFields(value);
+  const serialized = JSON.stringify(sanitized);
+  if (serialized.length <= SYNC_CONFLICT_SNAPSHOT_MAX_CHARS) return serialized;
+  return JSON.stringify({
+    truncated: true,
+    originalCharacters: serialized.length,
+    reason: "Conflict snapshot exceeded the 64 KiB privacy and storage limit",
+  });
+}
+
+function publicSyncConflict(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    source_event_id: row.sourceEventId,
+    client_conflict_id: row.clientConflictId,
+    device_id: row.deviceId,
+    reported_by_user_id: row.reportedByUserId,
+    entity_type: row.entityType,
+    entity_id: row.entityId,
+    reason_code: row.reasonCode,
+    message: row.message,
+    status: row.status,
+    local_snapshot: safeJsonParse(row.localSnapshotJson),
+    server_snapshot: safeJsonParse(row.serverSnapshotJson),
+    base_snapshot: safeJsonParse(row.baseSnapshotJson),
+    server_version: row.serverVersion,
+    resolution: row.resolution,
+    merged_payload: safeJsonParse(row.mergedPayloadJson),
+    resolution_note: row.resolutionNote,
+    resolved_by_user_id: row.resolvedByUserId,
+    resolved_by_device_id: row.resolvedByDeviceId,
+    version: row.version,
+    detected_at: row.detectedAt?.toISOString?.() ?? row.detectedAt,
+    resolved_at: row.resolvedAt?.toISOString?.() ?? row.resolvedAt,
+    expires_at: row.expiresAt?.toISOString?.() ?? row.expiresAt,
+    created_at: row.createdAt?.toISOString?.() ?? row.createdAt,
+    updated_at: row.updatedAt?.toISOString?.() ?? row.updatedAt,
+  };
+}
+
+function conflictEntityFromEvent(event) {
+  const type = String(event?.type ?? "UNKNOWN");
+  const payload = getEventPayload(event);
+  const nested = payload.product ?? payload.customer ?? payload.bill ?? payload.supplier ?? {};
+  const entityType = type.includes("PRODUCT")
+    ? "product"
+    : type.includes("CUSTOMER") || type.includes("UDHAR")
+      ? "customer"
+      : type.includes("BILL")
+        ? "bill"
+        : type.includes("SUPPLIER")
+          ? "supplier"
+          : type.includes("STOCK") || type.includes("DAMAGE")
+            ? "stock_ledger"
+            : "sync_event";
+  const entityId = [
+    payload.productId,
+    payload.localProductId,
+    payload.customerId,
+    payload.localCustomerId,
+    payload.billId,
+    payload.localBillId,
+    payload.supplierId,
+    payload.localSupplierId,
+    nested.id,
+    nested.localId,
+    nested.local_id,
+    getClientEventId(event),
+  ].find((value) => typeof value === "string" && value.length > 0);
+  return { entityType, entityId: entityId ?? "unknown" };
+}
+
+function canonicalConflictResolution(value) {
+  if (value === "resolved_by_owner") return "use_server";
+  if (value === "ignored_by_owner") return "dismiss";
+  return value;
+}
+
+export async function reportSyncConflict(shopId, input, actor = {}) {
+  const create = {
+    shopId,
+    clientConflictId: input.client_conflict_id,
+    deviceId: actor.deviceId ?? null,
+    reportedByUserId: actor.userId ?? null,
+    entityType: input.entity_type,
+    entityId: input.entity_id,
+    reasonCode: input.reason_code,
+    message: input.message,
+    status: "open",
+    localSnapshotJson: snapshotJson(input.local_snapshot, "{}"),
+    serverSnapshotJson: snapshotJson(input.server_snapshot),
+    baseSnapshotJson: snapshotJson(input.base_snapshot),
+    serverVersion: input.server_version == null ? null : String(input.server_version),
+    expiresAt: syncConflictExpiry(),
+  };
+  const row = await db.syncConflict.upsert({
+    where: {
+      shopId_clientConflictId: {
+        shopId,
+        clientConflictId: input.client_conflict_id,
+      },
+    },
+    create,
+    update: {
+      deviceId: create.deviceId,
+      reportedByUserId: create.reportedByUserId,
+      reasonCode: create.reasonCode,
+      message: create.message,
+      localSnapshotJson: create.localSnapshotJson,
+      serverSnapshotJson: create.serverSnapshotJson,
+      baseSnapshotJson: create.baseSnapshotJson,
+      serverVersion: create.serverVersion,
+      expiresAt: create.expiresAt,
+    },
+  });
+  return publicSyncConflict(row);
+}
+
+export async function listSyncConflicts(shopId, options = {}) {
+  const limit = Math.min(Math.max(Number(options.limit) || 50, 1), 100);
+  const decoded = decodeCursor(options.cursor);
+  const where = {
+    shopId,
+    ...(options.status && options.status !== "all" ? { status: options.status } : {}),
+    ...(options.entity_type ? { entityType: options.entity_type } : {}),
+    ...(decoded
+      ? {
+          OR: [
+            { createdAt: { lt: decoded.date } },
+            { createdAt: decoded.date, id: { lt: decoded.id } },
+          ],
+        }
+      : {}),
+  };
+  const [rows, open, resolved, dismissed] = await Promise.all([
+    db.syncConflict.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+    }),
+    db.syncConflict.count({ where: { shopId, status: "open" } }),
+    db.syncConflict.count({ where: { shopId, status: "resolved" } }),
+    db.syncConflict.count({ where: { shopId, status: "dismissed" } }),
+  ]);
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return {
+    conflicts: page.map(publicSyncConflict),
+    summary: { open, resolved, dismissed },
+    pagination: {
+      hasMore,
+      nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+      limit,
+    },
+  };
+}
+
+export async function resolveSyncConflict(shopId, input, actor = {}) {
+  const existing = await db.syncConflict.findFirst({
+    where: {
+      shopId,
+      OR: [
+        { id: input.conflict_id },
+        { clientConflictId: input.conflict_id },
+      ],
+    },
+  });
+  if (!existing) throw new AppError("Sync conflict not found", 404, "SYNC_CONFLICT_NOT_FOUND");
+
+  const resolution = canonicalConflictResolution(input.resolution);
+  const targetStatus = resolution === "dismiss" ? "dismissed" : "resolved";
+  if (existing.status !== "open") {
+    if (existing.status === targetStatus && existing.resolution === resolution) {
+      return publicSyncConflict(existing);
+    }
+    throw new AppError("Sync conflict was already resolved by another device", 409, "SYNC_CONFLICT_ALREADY_RESOLVED");
+  }
+
+  const expectedVersion = input.expected_version ?? existing.version;
+  const resolvedAt = new Date();
+  const changed = await db.syncConflict.updateMany({
+    where: {
+      id: existing.id,
+      shopId,
+      status: "open",
+      version: expectedVersion,
+    },
+    data: {
+      status: targetStatus,
+      resolution,
+      mergedPayloadJson: snapshotJson(input.merged_payload),
+      resolutionNote: input.note ?? null,
+      resolvedByUserId: actor.userId ?? null,
+      resolvedByDeviceId: actor.deviceId ?? null,
+      resolvedAt,
+      version: { increment: 1 },
+      expiresAt: syncConflictExpiry(),
+    },
+  });
+  if (changed.count !== 1) {
+    throw new AppError("Sync conflict changed on another device; refresh before resolving", 409, "SYNC_CONFLICT_VERSION_MISMATCH");
+  }
+  const updated = await db.syncConflict.findUnique({ where: { id: existing.id } });
+  await createAuditLog({
+    shopId,
+    userId: actor.userId ?? null,
+    action: "SYNC_CONFLICT_RESOLVED",
+    entityType: "SyncConflict",
+    entityId: existing.id,
+    before: { status: existing.status, version: existing.version },
+    after: { status: updated.status, resolution: updated.resolution, version: updated.version },
+    metadata: {
+      deviceId: actor.deviceId ?? null,
+      entityType: existing.entityType,
+      entityId: existing.entityId,
+      reasonCode: existing.reasonCode,
+    },
+  });
+  return publicSyncConflict(updated);
+}
+
+async function recordSyncEventConflict(shopId, event, classified, error, user) {
+  const eventId = getClientEventId(event);
+  const entity = conflictEntityFromEvent(event);
+  const message = error?.message || "Sync event conflict";
+  const row = await db.syncConflict.upsert({
+    where: { shopId_sourceEventId: { shopId, sourceEventId: eventId } },
+    create: {
+      shopId,
+      sourceEventId: eventId,
+      deviceId: user?.deviceId ?? null,
+      reportedByUserId: user?.userId ?? null,
+      entityType: entity.entityType,
+      entityId: entity.entityId,
+      reasonCode: classified.code,
+      message,
+      localSnapshotJson: snapshotJson(event, "{}"),
+      serverSnapshotJson: snapshotJson(error?.serverSnapshot ?? error?.server_record),
+      serverVersion: await getCurrentServerSeq(shopId),
+      expiresAt: syncConflictExpiry(),
+    },
+    update: {
+      reasonCode: classified.code,
+      message,
+      localSnapshotJson: snapshotJson(event, "{}"),
+      serverSnapshotJson: snapshotJson(error?.serverSnapshot ?? error?.server_record),
+      serverVersion: await getCurrentServerSeq(shopId),
+      expiresAt: syncConflictExpiry(),
+    },
+  });
+  return publicSyncConflict(row);
+}
+
 const cancelPayloadSchema = z.object({
   billId: z.string().min(1).optional(),
   serverBillId: z.string().min(1).optional(),
@@ -557,6 +821,9 @@ async function processOneSyncEvent(shopId, event, user, context) {
 
   if (claim.conflict) {
     const existingResult = safeJsonParse(claim.existing.resultJson) ?? {};
+    const conflictRow = await db.syncConflict.findFirst({
+      where: { shopId, sourceEventId: eventId },
+    });
     return buildSyncResult({
       eventId,
       type,
@@ -564,7 +831,11 @@ async function processOneSyncEvent(shopId, event, user, context) {
       success: false,
       code: existingResult.code ?? "SYNC_EVENT_CONFLICT",
       error: claim.existing.error ?? "Sync event already ended in conflict. Create a new event after fixing it.",
-      result: { retryable: false, ...existingResult },
+      result: {
+        retryable: false,
+        ...existingResult,
+        ...(conflictRow ? { conflict: publicSyncConflict(conflictRow), conflict_id: conflictRow.id } : {}),
+      },
     });
   }
 
@@ -605,24 +876,32 @@ async function processOneSyncEvent(shopId, event, user, context) {
   } catch (error) {
     const classified = classifySyncError(error);
     const message = error?.message || "Sync event failed";
+    let durableConflict = null;
 
     if (classified.syncStatus === SYNC_EVENT_STATUSES.CONFLICT) {
+      durableConflict = await recordSyncEventConflict(shopId, event, classified, error, user);
       await createAuditLog({
         shopId,
         userId: user?.userId,
         action: "OFFLINE_SYNC_CONFLICT",
-        entityType: "OfflineSyncEvent",
-        entityId: eventId,
+        entityType: "SyncConflict",
+        entityId: durableConflict.id,
         metadata: { eventId, type, code: classified.code, message },
       });
     }
+
+    const conflictResult = {
+      code: classified.code,
+      retryable: classified.retryable,
+      ...(durableConflict ? { conflict: durableConflict, conflict_id: durableConflict.id } : {}),
+    };
 
     await db.offlineSyncEvent.update({
       where: { shopId_eventId: { shopId, eventId } },
       data: {
         status: classified.syncStatus,
         error: message,
-        resultJson: JSON.stringify({ code: classified.code, retryable: classified.retryable }),
+        resultJson: JSON.stringify(conflictResult),
       },
     });
 
@@ -633,7 +912,7 @@ async function processOneSyncEvent(shopId, event, user, context) {
       success: false,
       error: message,
       code: classified.code,
-      result: { retryable: classified.retryable },
+      result: conflictResult,
     });
   }
 }

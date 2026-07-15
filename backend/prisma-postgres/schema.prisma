@@ -51,6 +51,7 @@ model Shop {
   sessions                    Session[]
   authTokens                  AuthToken[]
   offlineSyncEvents           OfflineSyncEvent[]
+  syncConflicts               SyncConflict[]
   syncIdMappings              SyncIdMapping[]
   syncCommands                SyncCommand[]
   changeLogs                  ChangeLog[]
@@ -1541,6 +1542,44 @@ model OfflineSyncEvent {
   @@unique([shopId, eventId])
   @@index([shopId, status, createdAt])
   @@index([shopId, updatedAt, id])
+}
+
+model SyncConflict {
+  id                  String    @id @default(cuid())
+  shopId              String
+  sourceEventId       String?
+  clientConflictId    String?
+  deviceId            String?
+  reportedByUserId    String?
+  entityType          String
+  entityId            String
+  reasonCode          String
+  message             String
+  status              String    @default("open") // open | resolved | dismissed
+  localSnapshotJson   String    @default("{}")
+  serverSnapshotJson  String?
+  baseSnapshotJson    String?
+  serverVersion       String?
+  resolution          String?
+  mergedPayloadJson   String?
+  resolutionNote      String?
+  resolvedByUserId    String?
+  resolvedByDeviceId  String?
+  version             Int       @default(1)
+  detectedAt          DateTime  @default(now())
+  resolvedAt          DateTime?
+  expiresAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, sourceEventId])
+  @@unique([shopId, clientConflictId])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, entityType, entityId])
+  @@index([shopId, deviceId, createdAt])
+  @@index([expiresAt])
 }
 
 // ─────────────────────────────────────────────

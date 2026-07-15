@@ -831,11 +831,38 @@
       "purpose": "acknowledge frontend retry request; local outbox remains source of truth"
     },
     {
+      "method": "GET",
+      "path": "/api/sync/conflicts",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "responseMustInclude": [
+        "conflicts",
+        "summary",
+        "pagination.nextCursor"
+      ],
+      "purpose": "list the tenant-scoped durable sync conflict ledger"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sync/conflicts/report",
+      "authRequired": true,
+      "deviceRequired": true,
+      "purpose": "idempotently report a client-detected conflict with redacted bounded snapshots"
+    },
+    {
       "method": "POST",
       "path": "/api/sync/resolve-conflict",
       "authRequired": true,
       "deviceRequired": true,
-      "purpose": "acknowledge frontend conflict resolution request"
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "purpose": "optimistically resolve or dismiss a durable conflict with an audit trail"
     },
     {
       "method": "GET",
@@ -844,10 +871,12 @@
       "deviceRequired": true,
       "feature": "cloud_backup or auto_two_way_sync",
       "responseMustInclude": [
-        "sync.entityCursors",
-        "sync.hasMoreByEntity"
+        "sync.protocol",
+        "sync.nextServerSeq",
+        "sync.serverVersion",
+        "sync.hasMore"
       ],
-      "purpose": "pull server changes"
+      "purpose": "pull server changes using monotonic server_sequence_v2, with legacy cursor compatibility"
     },
     {
       "method": "POST",

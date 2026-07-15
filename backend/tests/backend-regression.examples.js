@@ -107,6 +107,9 @@ async function cleanupTestData(ids) {
     await tx.session.deleteMany({ where: { shopId: { in: ids } } });
     await tx.user.deleteMany({ where: { shopId: { in: ids } } });
     await tx.billCounter.deleteMany({ where: { shopId: { in: ids } } });
+    // Root/child delete triggers append tombstones while cleanup is running.
+    // Clear those final sequence rows immediately before deleting their shops.
+    await tx.changeLog.deleteMany({ where: { shopId: { in: ids } } });
     await tx.shop.deleteMany({ where: { id: { in: ids } } });
   });
 }

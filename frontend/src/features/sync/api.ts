@@ -1,5 +1,8 @@
 import { apiRequest, buildQuery } from "@/lib/api/http";
 import type {
+  SyncConflictListResponse,
+  SyncConflictReportRequest,
+  SyncConflictReportResponse,
   SyncPullResponse,
   SyncPushRequest,
   SyncPushResponse,
@@ -63,8 +66,34 @@ export function requestSyncRetry(body: SyncRetryRequest = {}) {
 }
 
 export function resolveSyncConflict(body: SyncResolveConflictRequest) {
-  return apiRequest<SyncStatusResponse>("/sync/resolve-conflict", {
+  return apiRequest<{ resolutionRecorded: boolean; conflict: import("@/types/api").SyncConflictRecord }>("/sync/resolve-conflict", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export function listSyncConflicts(params: {
+  status?: "open" | "resolved" | "dismissed" | "all";
+  entityType?: string;
+  limit?: number;
+  cursor?: string | null;
+  background?: boolean;
+} = {}) {
+  return apiRequest<SyncConflictListResponse>(`/sync/conflicts${buildQuery({
+    status: params.status ?? "open",
+    entity_type: params.entityType,
+    limit: params.limit ?? 50,
+    cursor: params.cursor ?? undefined,
+  })}`, { method: "GET", background: params.background });
+}
+
+export function reportSyncConflict(
+  body: SyncConflictReportRequest,
+  options: { background?: boolean } = {},
+) {
+  return apiRequest<SyncConflictReportResponse>("/sync/conflicts/report", {
+    method: "POST",
+    body: JSON.stringify(body),
+    background: options.background,
   });
 }

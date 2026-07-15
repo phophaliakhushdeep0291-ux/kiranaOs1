@@ -354,17 +354,17 @@ The backend enforces these invariants regardless of frontend behavior:
 
 These are honest limitations of the current implementation. They are documented here so teams can plan mitigations before broad production rollout.
 
-1. **Timestamp-based sync, not serverVersion-based.** Pull uses `updatedAt >= since` keyset pagination. This means a record updated between two successive pull requests can be missed if its `updatedAt` falls exactly on the page boundary. The `(updatedAt, id)` keyset cursor mitigates most boundary cases but does not eliminate the theoretical window. A serverVersion-based approach (monotone integer per shop) would close this gap. **ServerVersion sync is planned for a future phase.**
+1. **Monotonic serverVersion sync is live; timestamp pull remains for rollout compatibility.** New clients send `afterSeq` and receive `sync.protocol = "server_sequence_v2"`, `nextServerSeq`, and `serverVersion`. Database triggers append every supported root or child mutation to `ChangeLog`; deployment migrations backfill a complete baseline; and hard deletes are returned as durable tombstones. A client advances strictly by `ChangeLog.seq`, so same-timestamp and page-boundary updates cannot be missed. Clients that omit `afterSeq` continue to receive the legacy `(updatedAt, id)` keyset response during migration.
 
-2. **Concurrent duplicate push race condition.** Two simultaneous push requests with the same `clientEventId` can both pass the `findUnique` check before either writes `PROCESSING` status, and both apply business logic. Bills are protected by `@@unique([shopId, billNo])`. Udhar payments and customer creates have no secondary guard. This is low-probability in practice (the frontend sends events from a single queue), but it is a real risk. Fix requires a database-level advisory lock or `SELECT FOR UPDATE` transaction. **Deferred.**
+2. **Concurrent duplicate push claiming is database-guarded.** The first request atomically creates the unique `(shopId, eventId)` `OfflineSyncEvent` in `PROCESSING`; a concurrent create receives `P2002` and returns the existing result/in-progress state instead of applying business logic twice. Failed or stale claims are reclaimed with a compare-and-swap update on status and `updatedAt`. Financial commands also carry durable domain idempotency keys such as `clientBillId`.
 
-3. **No OfflineSyncEvent cleanup policy.** The `OfflineSyncEvent` table grows indefinitely. `SYNCED` events older than 90 days have no deletion policy yet. A scheduled cleanup job is needed for production stores with years of history. **Design pending.**
+3. **Retention cleanup is implemented but scheduling is deployment-owned.** `CLEANUP_SYNC_EVENTS` performs a dry run by default and requires both `dryRun: false` and `confirm: true` before writing. It deletes only successful idempotency rows older than at least 90 days plus expired resolved/dismissed conflicts, in bounded batches. Failed, processing, conflicted events and open conflicts are never eligible. Production must schedule the job and monitor `hasMore` until each bounded run drains.
 
-4. **Conflict resolution is basic.** Conflicts return `status: "conflict"` with a code and message. There is no server-side conflict resolution endpoint, no SyncConflict table, and no admin dashboard for inspecting/resolving conflicts. **Needs production-grade expansion.**
+4. **Conflict decisions are durable; automatic business-record merging remains limited.** Push conflicts and client-detected pull conflicts are stored in a tenant-scoped `SyncConflict` ledger with redacted 64 KiB snapshots, 90-day expiry metadata, cross-device owner/admin listing, optimistic versions, and immutable audit events. `use_server`/dismiss decisions are complete immediately. A `use_local` or `manual_merge` decision is recorded durably, but the chosen business mutation must still pass through the normal validated sync command path; the resolution endpoint does not bypass domain rules.
 
-5. **DB-backed sync integration tests are limited.** The `backend-regression.examples.js` test file requires a live Prisma engine and is currently skipped in the sandbox (Windows Prisma binary on Linux CI). Full DB-backed tests covering sync push + pull end-to-end are not yet in CI. **Should be expanded once CI environment is on Linux.**
+5. **PostgreSQL runtime proof still depends on external infrastructure.** The isolated SQLite integration suite covers push, pull, permissions, monotonic sequence paging, rapid repeated updates, and tombstones. PostgreSQL schema/migration safety is checked locally, but executing the full suite against a production-like PostgreSQL/Redis stack remains an external release proof.
 
-6. **localId → serverId mapping now exists for products/customers/bills.** Phase 30 adds `SyncIdMapping` and returns `idMappings` in push responses. The frontend should still store mappings locally immediately, but replaying the same event can recover the mapping safely.
+6. **ChangeLog retention is not yet cursor-aware.** Sequence rows currently grow indefinitely. Retention must not delete entries that an active device may still need; production cleanup therefore requires per-device acknowledged cursors, a safe low-water mark, monitoring, and replay tooling.
 
 ---
 
@@ -374,15 +374,15 @@ These improvements are scoped but not yet implemented.
 
 | Item | Description |
 |------|-------------|
-| **ServerVersion + SyncChangeLog** | Replace timestamp-based pull with a monotone integer per shop. Every write increments `shopVersion`. Pull uses `WHERE shopVersion > lastKnown`. Eliminates the timestamp boundary race. |
-| **SyncCursor table** | Store the last-seen cursor per device per shop server-side. Enables resumable sync without the frontend storing cursor state. |
-| **SyncConflict table** | Persist conflicts with full context (event, server state at conflict time, resolution). Powers admin conflict dashboard. |
+| **Sequence-feed operations** | Monitor per-shop lag and growth; compact `ChangeLog` only below a proven active-device low-water mark; add replay and repair tooling. |
+| **SyncCursor table** | Store each device's acknowledged server sequence per shop. Enables safe retention, fleet lag visibility, and recovery if local cursor storage is lost. |
+| **Conflict merge command generation** | Convert approved `use_local`/`manual_merge` decisions into validated, idempotent domain commands without bypassing inventory or financial invariants. |
 | **Sync mapping recovery endpoint** | Optional endpoint to query stored `localId → serverId` mappings if the frontend needs manual repair/debug visibility. |
-| **Strong bill idempotency key** | Add a `clientBillId` field to `Bill`. Allow the frontend to pass a UUID with every bill create; the server uses it as the idempotency key instead of the `OfflineSyncEvent` event ID. This tightens the duplicate-bill race window. |
-| **Device-aware sync** | Track which device last synced what. Enable per-device `SyncCursor`. Required for multi-device shops (owner's phone + cashier tablet). |
-| **Subscription-aware sync** | Gate pull/push based on subscription status. Return `SUBSCRIPTION_REQUIRED` on expired plan. |
+| **Conflict resolution transactions** | Apply `use_local`, `use_server`, or validated manual merges server-side under optimistic version checks, with owner identity and an immutable audit record. |
+| **Device-aware recovery** | Use server cursor acknowledgements to restore a replaced device safely and alert owners about devices that are far behind. |
+| **Conflict retention and privacy** | Define redaction and retention rules for local/server snapshots so support tooling does not become a long-term customer-data store. |
 | **Retry dashboard** | Admin UI showing failed/conflicted sync events per shop, with ability to re-trigger or dismiss. |
-| **Conflict resolution endpoint** | `POST /api/sync/conflicts/:id/resolve` — accept or discard a conflict with an audit trail. |
+| **Retention scheduler policy** | Schedule and monitor bounded confirmed cleanup runs per deployment; alert when `hasMore` or open-conflict age exceeds policy. |
 | **Event outbox for analytics** | Publish synced events to an internal analytics pipeline (e.g., bills confirmed, stock adjusted) for reporting without coupling reporting to the sync path. |
 
 ---
@@ -401,13 +401,13 @@ POST /api/sync/push
 ### Pull request (initial)
 
 ```js
-GET /api/sync/pull?since=1970-01-01T00:00:00.000Z&limit=500
+GET /api/sync/pull?afterSeq=0&limit=500
 ```
 
 ### Pull request (paginated)
 
 ```js
-GET /api/sync/pull?since=<last_since>&cursor=<nextCursor>&limit=500
+GET /api/sync/pull?afterSeq=<nextServerSeq>&limit=500
 ```
 
 ### Supported event types
@@ -422,4 +422,4 @@ ADJUST_STOCK*   CREATE_CUSTOMER UPDATE_CUSTOMER  UDHAR_PAYMENT
 
 ---
 
-*Last updated: Phase 30 — June 2026.*
+*Last updated: monotonic sync protocol v2 — July 2026.*

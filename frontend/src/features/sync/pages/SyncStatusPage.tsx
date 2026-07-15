@@ -38,11 +38,14 @@ import {
 import { getOfflineScope } from "@/lib/offline/context";
 import {
   getSyncStatus,
+  listSyncConflicts,
+  reportSyncConflict,
+  resolveSyncConflict,
   retryFailedSyncOperations,
   runSyncCycle,
 } from "@/features/sync";
 import { getCurrentSubscriptionSnapshot } from "@/features/subscription/access";
-import type { SyncStatusResponse } from "@/types/api";
+import type { SyncConflictRecord, SyncStatusResponse } from "@/types/api";
 import { repairResolvedSyncStatusNoise } from "@/features/sync/sync-status-repair";
 import { PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 
@@ -53,6 +56,9 @@ interface ConflictRow extends OfflineRow {
   error_message?: string;
   local_snapshot?: unknown;
   server_snapshot?: unknown;
+  server_conflict_id?: string;
+  server_record_version?: number;
+  server_version?: string | number | null;
 }
 
 interface SyncStatusSnapshot {
@@ -151,6 +157,46 @@ function readNumberFromRecord(record: unknown, keys: string[]): number | null {
 function moneyLabel(value: number | null): string | null {
   if (value == null) return null;
   return `Rs ${Math.abs(value).toLocaleString("en-IN")}`;
+}
+
+function mergeServerConflictRows(
+  localRows: ConflictRow[],
+  serverRows: SyncConflictRecord[],
+): ConflictRow[] {
+  const scope = getOfflineScope();
+  const byIdentity = new Map<string, ConflictRow>();
+  for (const row of localRows) byIdentity.set(String(row.id), row);
+  for (const server of serverRows) {
+    const clientId = server.client_conflict_id ?? undefined;
+    const local = clientId ? byIdentity.get(clientId) : undefined;
+    const id = local?.id ?? clientId ?? server.id;
+    const merged: ConflictRow = {
+      ...(local ?? {}),
+      id,
+      entity_type: server.entity_type,
+      entity_id: server.entity_id,
+      tenant_id: local?.tenant_id ?? scope.tenant_id,
+      store_id: local?.store_id ?? scope.store_id,
+      device_id: local?.device_id ?? server.device_id ?? scope.device_id,
+      created_at: local?.created_at ?? server.created_at,
+      updated_at: server.updated_at,
+      deleted_at: null,
+      version: local?.version ?? 1,
+      sync_status: "conflict",
+      last_modified_by: local?.last_modified_by ?? null,
+      resolution: "unresolved",
+      local_snapshot: local?.local_snapshot ?? server.local_snapshot ?? null,
+      server_snapshot: server.server_snapshot ?? local?.server_snapshot ?? null,
+      error_message: server.message,
+      server_conflict_id: server.id,
+      server_record_version: server.version,
+      server_version: server.server_version,
+    };
+    byIdentity.set(String(id), merged);
+  }
+  return [...byIdentity.values()].sort((a, b) =>
+    String(b.updated_at ?? b.created_at ?? "").localeCompare(String(a.updated_at ?? a.created_at ?? "")),
+  );
 }
 
 function userSafeSyncReason(rawReason: unknown, fallback = "Something went wrong while backing this up. Please try sync again."): string {
@@ -356,6 +402,7 @@ export async function readSyncSnapshot(): Promise<
   );
 
   let serverStatus: SyncStatusResponse | null = null;
+  let serverConflictRows: SyncConflictRecord[] = [];
   let subscriptionSyncAllowed = localSubscriptionAllowed;
   if (isOnline) {
     try {
@@ -364,6 +411,12 @@ export async function readSyncSnapshot(): Promise<
         subscriptionSyncAllowed = serverStatus.allowed;
     } catch {
       // The page must still work offline or when the sync-status endpoint is unavailable.
+    }
+    try {
+      const ledger = await listSyncConflicts({ status: "open", limit: 100, background: true });
+      serverConflictRows = ledger.conflicts;
+    } catch {
+      // Cashiers cannot list cross-device snapshots; owners still retain local rows offline.
     }
   }
 
@@ -386,7 +439,7 @@ export async function readSyncSnapshot(): Promise<
     backendError: connection.error ?? null,
     pendingOperations,
     failedOperations,
-    conflicts: conflictRows as ConflictRow[],
+    conflicts: mergeServerConflictRows(conflictRows as ConflictRow[], serverConflictRows),
     lastSuccessfulSyncAt,
     deviceId: getOfflineScope().device_id,
     apiBaseUrl: getApiBaseUrl(),
@@ -824,20 +877,51 @@ export default function SyncStatusPage() {
     conflictId: string,
     resolution: "resolved_by_owner" | "ignored_by_owner",
   ) => {
+    if (!snapshot.isBrowserOnline || !snapshot.isBackendReachable) {
+      toast({
+        title: "Server connection required",
+        description: "Reconnect before recording this owner decision so every device receives the same result.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSnapshot((current) => ({ ...current, isSyncing: true }));
     try {
       await offlineDB.init();
       const row = await dexieDB.sync_conflicts.get(conflictId);
       const scope = getOfflineScope();
-      if (!row || row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id) throw new Error("Conflict not found");
-      const now = new Date().toISOString();
-      await dexieDB.sync_conflicts.put({
-        ...row,
+      if (row && (row.tenant_id !== scope.tenant_id || row.store_id !== scope.store_id)) throw new Error("Conflict not found");
+      let serverConflictId = typeof row?.server_conflict_id === "string" ? row.server_conflict_id : conflictId;
+      if (row && !row.server_conflict_id) {
+        const reported = await reportSyncConflict({
+          client_conflict_id: conflictId,
+          entity_type: String(row.entity_type ?? "unknown"),
+          entity_id: String(row.entity_id ?? conflictId),
+          reason_code: "OWNER_REVIEW",
+          message: String(row.error_message ?? "Owner-reviewed sync conflict"),
+          local_snapshot: isRecord(row.local_snapshot) ? row.local_snapshot : null,
+          server_snapshot: isRecord(row.server_snapshot) ? row.server_snapshot : null,
+        });
+        serverConflictId = reported.conflict.id;
+      }
+      await resolveSyncConflict({
+        conflict_id: serverConflictId,
         resolution,
-        sync_status: "synced",
-        resolved_at: now,
-        updated_at: now,
+        ...(typeof row?.server_record_version === "number"
+          ? { expected_version: row.server_record_version }
+          : {}),
       });
+      const now = new Date().toISOString();
+      if (row) {
+        await dexieDB.sync_conflicts.put({
+          ...row,
+          server_conflict_id: serverConflictId,
+          resolution,
+          sync_status: "synced",
+          resolved_at: now,
+          updated_at: now,
+        });
+      }
       window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
       toast({
         title: resolution === "resolved_by_owner" ? "Review marked resolved" : "Review item ignored",
@@ -846,7 +930,7 @@ export default function SyncStatusPage() {
     } catch {
       toast({
         title: "Could not update conflict",
-        description: "The conflict row is still unchanged.",
+        description: "The server decision was not recorded. Refresh in case another device resolved it first.",
         variant: "destructive",
       });
     } finally {

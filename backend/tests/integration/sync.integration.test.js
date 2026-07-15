@@ -2,6 +2,7 @@ import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertSuccess } from "./setup.js";
 import { activateDeviceViaApi, billPayload, createCustomer, createProduct, createStaff, createTenant, login, productPayload, unique } from "./factories.js";
+import { runSyncRetentionCleanup } from "../../src/workers/syncCleanup.worker.js";
 
 const ctx = await createIntegrationContext();
 
@@ -863,6 +864,209 @@ if (ctx.skip) {
       assert.equal(activeCount, 1, "still exactly one active bill after the retry");
       const stocked = await ctx.db.product.findFirst({ where: { id: product.id } });
       assert.equal(stocked.stockBaseQty, 7, "re-cancel doesn't restore stock twice and re-create doesn't deduct twice");
+    });
+
+    test("push conflicts are persisted once with redacted snapshots and survive event replay", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const event = {
+        eventId: "durable-conflict-event-1",
+        type: "CREATE_PRODUCT",
+        ownerPin: "1234",
+        payload: {
+          localProductId: "local_product_conflict_1",
+          ownerPin: "1234",
+          product: { name: "" },
+        },
+      };
+
+      const first = assertSuccess(await ctx.post(
+        "/api/sync/push",
+        { events: [event] },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      ));
+      assert.equal(first.summary.conflicts, 1);
+      const firstConflictId = first.results[0].result.conflict_id;
+      assert.ok(firstConflictId, "push result exposes the durable conflict id");
+
+      const stored = await ctx.db.syncConflict.findUnique({ where: { id: firstConflictId } });
+      assert.equal(stored.shopId, tenant.shop.id);
+      assert.equal(stored.sourceEventId, event.eventId);
+      assert.equal(stored.status, "open");
+      assert.equal(stored.entityType, "product");
+      assert.equal(stored.entityId, "local_product_conflict_1");
+      assert.equal(stored.localSnapshotJson.includes("1234"), false, "owner PIN is never persisted in snapshots");
+
+      const replay = assertSuccess(await ctx.post(
+        "/api/sync/push",
+        { events: [event] },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      ));
+      assert.equal(replay.results[0].result.conflict_id, firstConflictId);
+      assert.equal(
+        await ctx.db.syncConflict.count({ where: { shopId: tenant.shop.id, sourceEventId: event.eventId } }),
+        1,
+        "event replay reuses one durable conflict record",
+      );
+    });
+
+    test("client conflict reporting is idempotent and owner listing is tenant and role scoped", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const reportBody = {
+        client_conflict_id: "client-conflict-1",
+        entity_type: "product",
+        entity_id: "server_product_1",
+        reason_code: "SERVER_DELETED_LOCAL_EDIT",
+        message: "Server deleted a product with a pending local edit",
+        local_snapshot: { id: "server_product_1", name: "Local name", ownerPin: "1234" },
+        server_snapshot: null,
+        server_version: "72",
+      };
+
+      const reported = assertSuccess(await ctx.post(
+        "/api/sync/conflicts/report",
+        reportBody,
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      )).conflict;
+      const repeated = assertSuccess(await ctx.post(
+        "/api/sync/conflicts/report",
+        { ...reportBody, message: "Same conflict reported again" },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      )).conflict;
+      assert.equal(repeated.id, reported.id, "same client conflict id is an idempotent upsert");
+      assert.equal(
+        JSON.stringify(repeated.local_snapshot).includes("1234"),
+        false,
+        "client-reported snapshots are redacted server-side",
+      );
+
+      const listed = assertSuccess(await ctx.get(
+        "/api/sync/conflicts?status=open&limit=20",
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      ));
+      assert.equal(listed.summary.open, 1);
+      assert.equal(listed.conflicts[0].id, reported.id);
+
+      const staff = await createStaff(ctx.db, tenant.shop.id);
+      const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
+      const staffDevice = await activateDeviceViaApi(ctx, staffAuth.accessToken, { deviceId: "conflict-cashier-device" });
+      const denied = await ctx.get("/api/sync/conflicts", {
+        token: staffAuth.accessToken,
+        headers: { "x-device-id": staffDevice.deviceId },
+      });
+      assert.equal(denied.status, 403, "cashiers cannot inspect cross-device conflict snapshots");
+
+      const other = await createTenant(ctx.db, { ownerPin: "5678" });
+      const otherAuth = await login(ctx, other.ownerMobile, other.ownerPassword);
+      const otherDevice = await activateDeviceViaApi(ctx, otherAuth.accessToken, { deviceId: "other-conflict-device" });
+      const otherList = assertSuccess(await ctx.get("/api/sync/conflicts", {
+        token: otherAuth.accessToken,
+        headers: { "x-device-id": otherDevice.deviceId },
+      }));
+      assert.equal(otherList.conflicts.length, 0, "a different shop cannot see this tenant's conflict ledger");
+    });
+
+    test("owner conflict resolution is optimistic, audited, and visible across devices", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const conflict = assertSuccess(await ctx.post(
+        "/api/sync/conflicts/report",
+        {
+          client_conflict_id: "resolution-conflict-1",
+          entity_type: "customer",
+          entity_id: "customer_1",
+          reason_code: "VERSION_MISMATCH",
+          message: "Customer changed on another device",
+          local_snapshot: { name: "Local customer" },
+          server_snapshot: { name: "Server customer" },
+        },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      )).conflict;
+
+      const resolved = assertSuccess(await ctx.post(
+        "/api/sync/resolve-conflict",
+        {
+          conflict_id: conflict.id,
+          resolution: "use_server",
+          expected_version: 1,
+          note: "Reviewed against the paper ledger",
+        },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      )).conflict;
+      assert.equal(resolved.status, "resolved");
+      assert.equal(resolved.resolution, "use_server");
+      assert.equal(resolved.version, 2);
+      assert.equal(resolved.resolved_by_user_id, tenant.owner.id);
+
+      const staleDecision = await ctx.post(
+        "/api/sync/resolve-conflict",
+        { conflict_id: conflict.id, resolution: "dismiss", expected_version: 1 },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      );
+      assert.equal(staleDecision.status, 409, "a competing decision cannot overwrite the recorded resolution");
+
+      const audit = await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, action: "SYNC_CONFLICT_RESOLVED", entityId: conflict.id },
+      });
+      assert.ok(audit, "the owner resolution has an immutable audit record");
+
+      const history = assertSuccess(await ctx.get(
+        "/api/sync/conflicts?status=resolved",
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      ));
+      assert.equal(history.conflicts[0].id, conflict.id);
+      assert.equal(history.conflicts[0].resolution_note, "Reviewed against the paper ledger");
+    });
+
+    test("sync retention is dry-run by default and never deletes failed events or open conflicts", async () => {
+      const { tenant } = await ownerCtx();
+      const old = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);
+      const expired = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      await ctx.db.offlineSyncEvent.createMany({
+        data: [
+          { shopId: tenant.shop.id, eventId: "retention-synced", type: "CREATE_PRODUCT", status: "synced", createdAt: old },
+          { shopId: tenant.shop.id, eventId: "retention-failed", type: "CREATE_PRODUCT", status: "failed", createdAt: old },
+        ],
+      });
+      await ctx.db.syncConflict.createMany({
+        data: [
+          {
+            id: "retention-resolved-conflict",
+            shopId: tenant.shop.id,
+            clientConflictId: "retention-resolved-client",
+            entityType: "product",
+            entityId: "product_resolved",
+            reasonCode: "TEST",
+            message: "Resolved old conflict",
+            status: "resolved",
+            resolvedAt: old,
+            expiresAt: expired,
+          },
+          {
+            id: "retention-open-conflict",
+            shopId: tenant.shop.id,
+            clientConflictId: "retention-open-client",
+            entityType: "product",
+            entityId: "product_open",
+            reasonCode: "TEST",
+            message: "Open old conflict",
+            status: "open",
+            expiresAt: expired,
+          },
+        ],
+      });
+
+      const dryRun = await runSyncRetentionCleanup({ retentionDays: 90, limit: 100 });
+      assert.equal(dryRun.status, "DRY_RUN");
+      assert.equal(dryRun.eligibleOfflineSyncEvents, 1, "only old synced events are eligible");
+      assert.equal(dryRun.eligibleSyncConflicts, 1, "only expired closed conflicts are eligible");
+      assert.equal(await ctx.db.offlineSyncEvent.count({ where: { shopId: tenant.shop.id } }), 2);
+      assert.equal(await ctx.db.syncConflict.count({ where: { shopId: tenant.shop.id } }), 2);
+
+      const applied = await runSyncRetentionCleanup({ retentionDays: 90, limit: 100, dryRun: false, confirm: true });
+      assert.equal(applied.status, "APPLIED");
+      assert.equal(applied.deletedOfflineSyncEvents, 1);
+      assert.equal(applied.deletedSyncConflicts, 1);
+      assert.ok(await ctx.db.offlineSyncEvent.findFirst({ where: { shopId: tenant.shop.id, eventId: "retention-failed" } }), "failed event remains retryable");
+      assert.ok(await ctx.db.syncConflict.findUnique({ where: { id: "retention-open-conflict" } }), "open conflict is preserved");
     });
   });
 }

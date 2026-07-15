@@ -714,6 +714,53 @@ export interface SyncRetryRequest {
 
 export interface SyncResolveConflictRequest {
   conflict_id: string;
-  resolution: "use_local" | "use_server" | "manual_merge";
+  resolution: "use_local" | "use_server" | "manual_merge" | "dismiss" | "resolved_by_owner" | "ignored_by_owner";
   merged_payload?: Record<string, unknown>;
+  note?: string;
+  expected_version?: number;
+}
+
+export interface SyncConflictRecord extends Record<string, unknown> {
+  id: string;
+  client_conflict_id?: string | null;
+  source_event_id?: string | null;
+  device_id?: string | null;
+  entity_type: string;
+  entity_id: string;
+  reason_code: string;
+  message: string;
+  status: "open" | "resolved" | "dismissed";
+  local_snapshot?: Record<string, unknown> | null;
+  server_snapshot?: Record<string, unknown> | null;
+  base_snapshot?: Record<string, unknown> | null;
+  server_version?: string | number | null;
+  resolution?: string | null;
+  resolution_note?: string | null;
+  version: number;
+  detected_at: string;
+  resolved_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SyncConflictListResponse extends Record<string, unknown> {
+  conflicts: SyncConflictRecord[];
+  summary: { open: number; resolved: number; dismissed: number };
+  pagination: { hasMore: boolean; nextCursor: string | null; limit: number };
+}
+
+export interface SyncConflictReportRequest {
+  client_conflict_id: string;
+  entity_type: string;
+  entity_id: string;
+  reason_code?: string;
+  message?: string;
+  local_snapshot?: Record<string, unknown> | null;
+  server_snapshot?: Record<string, unknown> | null;
+  base_snapshot?: Record<string, unknown> | null;
+  server_version?: string | number | null;
+}
+
+export interface SyncConflictReportResponse extends Record<string, unknown> {
+  conflict: SyncConflictRecord;
 }
