@@ -1016,6 +1016,102 @@ if (ctx.skip) {
       assert.equal(history.conflicts[0].resolution_note, "Reviewed against the paper ledger");
     });
 
+    test("device sequence acknowledgements are monotonic, bounded, role-scoped, and tenant-scoped", async () => {
+      const { tenant, ownerAuth, deviceHeaders, device } = await ownerCtx();
+      await createProduct(ctx.db, tenant.shop.id, { name: "Acknowledgement Product" });
+
+      const status = assertSuccess(await ctx.get(
+        "/api/sync/status",
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      ));
+      const serverSeq = String(status.server_version);
+      assert.ok(BigInt(serverSeq) > 0n, "fixture mutation creates a server sequence");
+
+      const first = assertSuccess(await ctx.post(
+        "/api/sync/ack",
+        { server_seq: serverSeq },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      )).acknowledgement;
+      assert.equal(first.accepted, true);
+      assert.equal(first.applied_server_seq, serverSeq);
+      assert.equal(first.lag, "0");
+
+      const stale = assertSuccess(await ctx.post(
+        "/api/sync/ack",
+        { server_seq: "0" },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      )).acknowledgement;
+      assert.equal(stale.accepted, false, "a delayed acknowledgement cannot move the cursor backwards");
+      assert.equal(stale.stale_ack_ignored, true);
+      assert.equal(stale.applied_server_seq, serverSeq);
+
+      const future = await ctx.post(
+        "/api/sync/ack",
+        { server_seq: String(BigInt(serverSeq) + 1n) },
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      );
+      assert.equal(future.status, 409, "a device cannot claim a sequence the shop server has not issued");
+
+      const staleAt = new Date(Date.now() - 30 * 60 * 1000);
+      await ctx.db.device.createMany({
+        data: [
+          {
+            shopId: tenant.shop.id,
+            deviceId: "fleet-stale-device",
+            deviceName: "Back counter",
+            lastAppliedServerSeq: 0,
+            lastSyncAckAt: staleAt,
+            lastSeenAt: staleAt,
+          },
+          {
+            shopId: tenant.shop.id,
+            deviceId: "fleet-never-device",
+            deviceName: "New terminal",
+          },
+        ],
+      });
+
+      const fleet = assertSuccess(await ctx.get(
+        "/api/sync/devices",
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      ));
+      assert.equal(fleet.server_seq, serverSeq);
+      assert.equal(fleet.summary.current, 1);
+      assert.equal(fleet.summary.stale, 1);
+      assert.equal(fleet.summary.never_acknowledged, 1);
+      assert.equal(fleet.summary.attention, 2);
+      assert.equal(
+        fleet.devices.find((row) => row.device_id === device.deviceId).state,
+        "current",
+      );
+      assert.equal(
+        fleet.devices.find((row) => row.device_id === "fleet-stale-device").lag,
+        serverSeq,
+      );
+
+      const staff = await createStaff(ctx.db, tenant.shop.id);
+      const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
+      const staffDevice = await activateDeviceViaApi(ctx, staffAuth.accessToken, { deviceId: "fleet-cashier-device" });
+      const denied = await ctx.get("/api/sync/devices", {
+        token: staffAuth.accessToken,
+        headers: { "x-device-id": staffDevice.deviceId },
+      });
+      assert.equal(denied.status, 403, "cashiers cannot inspect other terminals' sync position");
+
+      const other = await createTenant(ctx.db, { ownerPin: "5678" });
+      const otherAuth = await login(ctx, other.ownerMobile, other.ownerPassword);
+      const otherDevice = await activateDeviceViaApi(ctx, otherAuth.accessToken, { deviceId: "other-fleet-device" });
+      const otherFleet = assertSuccess(await ctx.get("/api/sync/devices", {
+        token: otherAuth.accessToken,
+        headers: { "x-device-id": otherDevice.deviceId },
+      }));
+      assert.equal(
+        otherFleet.devices.some((row) => row.device_id === "fleet-stale-device"),
+        false,
+        "fleet state never crosses shop boundaries",
+      );
+    });
+
     test("sync retention is dry-run by default and never deletes failed events or open conflicts", async () => {
       const { tenant } = await ownerCtx();
       const old = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000);

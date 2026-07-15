@@ -831,6 +831,43 @@
       "purpose": "acknowledge frontend retry request; local outbox remains source of truth"
     },
     {
+      "method": "POST",
+      "path": "/api/sync/ack",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "cloud_backup or auto_two_way_sync",
+      "requestMustSupport": [
+        "server_seq"
+      ],
+      "responseMustInclude": [
+        "acknowledgement.applied_server_seq",
+        "acknowledgement.server_seq",
+        "acknowledgement.lag",
+        "acknowledgement.stale_ack_ignored"
+      ],
+      "syncGuarantees": [
+        "acknowledgements never move a device cursor backwards",
+        "a device cannot acknowledge a sequence greater than the current shop server sequence"
+      ],
+      "purpose": "record the highest server sequence durably applied by the authenticated device"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sync/devices",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "responseMustInclude": [
+        "server_seq",
+        "summary.attention",
+        "devices"
+      ],
+      "purpose": "show tenant-scoped per-device applied sequence, lag, freshness, and fleet attention counts"
+    },
+    {
       "method": "GET",
       "path": "/api/sync/conflicts",
       "authRequired": true,

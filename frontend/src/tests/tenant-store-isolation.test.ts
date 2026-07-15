@@ -52,6 +52,7 @@ const syncPushMock = vi.hoisted(() =>
 vi.mock("@/features/sync/api", () => ({
   syncPush: syncPushMock,
   syncPull: vi.fn(async () => ({ changes: [] })),
+  acknowledgeSyncSequence: vi.fn(async () => ({ acknowledgement: { accepted: true } })),
   getSyncStatus: vi.fn(async () => ({ allowed: true })),
   requestSyncRetry: vi.fn(async () => undefined),
 }));

@@ -211,6 +211,7 @@ const dbState = vi.hoisted(() => {
 
 const syncPushMock = vi.hoisted(() => vi.fn());
 const syncPullMock = vi.hoisted(() => vi.fn());
+const acknowledgeSyncSequenceMock = vi.hoisted(() => vi.fn());
 const requestSyncRetryMock = vi.hoisted(() => vi.fn());
 const reportSyncConflictMock = vi.hoisted(() => vi.fn());
 
@@ -311,6 +312,7 @@ vi.mock("@/lib/offline/db", () => {
 vi.mock("@/features/sync/api", () => ({
   syncPush: syncPushMock,
   syncPull: syncPullMock,
+  acknowledgeSyncSequence: acknowledgeSyncSequenceMock,
   getSyncStatus: vi.fn(async () => ({ allowed: true })),
   requestSyncRetry: requestSyncRetryMock,
   reportSyncConflict: reportSyncConflictMock,
@@ -491,6 +493,7 @@ describe("sync backend contract", () => {
     vi.stubGlobal("navigator", { onLine: true });
     dbState.reset();
     syncPullMock.mockResolvedValue({ changes: [], cursor: "cursor_empty" });
+    acknowledgeSyncSequenceMock.mockResolvedValue({ acknowledgement: { accepted: true } });
     requestSyncRetryMock.mockResolvedValue({ queued: true });
     reportSyncConflictMock.mockResolvedValue({
       conflict: {
@@ -1001,6 +1004,7 @@ describe("sync backend contract", () => {
         cursor: "42",
       }),
     );
+    expect(acknowledgeSyncSequenceMock).toHaveBeenLastCalledWith("42", { background: true });
 
     await pullServerChanges();
 
@@ -1010,6 +1014,7 @@ describe("sync backend contract", () => {
     expect(scopedRows("sync_cursor")).toContainEqual(
       expect.objectContaining({ id: "server-sequence-v2", cursor: "45" }),
     );
+    expect(acknowledgeSyncSequenceMock).toHaveBeenLastCalledWith("45", { background: true });
   });
 
   it("applies server tombstones while preserving unsynced local work as a conflict", async () => {

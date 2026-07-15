@@ -89,6 +89,18 @@ The server emits durable tombstones for hard deletes. Legacy clients that omit
 `afterSeq` continue to receive `(updatedAt, id)` `entityCursors` during rollout;
 new clients must not mix those cursors with `server_sequence_v2`.
 
+After a page has been fully merged (or each conflict has been durably recorded)
+and the local cursor has been committed, the client sends:
+
+```text
+POST /api/sync/ack       # { "server_seq": "<decimal sequence>" }
+GET  /api/sync/devices   # owner/admin fleet lag and freshness view
+```
+
+Acknowledgements are device-scoped, monotonic, and cannot claim a sequence that
+the shop server has not issued. The fleet response reports every active device's
+applied sequence, lag, last acknowledgement, presence, and attention state.
+
 ### Durable sync conflict ledger
 
 ```text

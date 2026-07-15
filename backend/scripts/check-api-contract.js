@@ -57,6 +57,8 @@ const requiredEndpoints = [
   "POST /api/inventory/correction",
   "GET /api/sync/status",
   "POST /api/sync/retry",
+  "POST /api/sync/ack",
+  "GET /api/sync/devices",
   "GET /api/sync/conflicts",
   "POST /api/sync/conflicts/report",
   "POST /api/sync/resolve-conflict",
@@ -116,6 +118,19 @@ for (const field of ["sync.protocol", "sync.nextServerSeq", "sync.serverVersion"
   if (!pull?.responseMustInclude?.includes(field)) fail(`sync pull contract must require ${field}`);
 }
 if (!String(pull?.purpose ?? "").includes("legacy")) fail("sync pull contract must document legacy cursor compatibility");
+
+const ack = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/ack");
+for (const field of ["acknowledgement.applied_server_seq", "acknowledgement.server_seq", "acknowledgement.lag", "acknowledgement.stale_ack_ignored"]) {
+  if (!ack?.responseMustInclude?.includes(field)) fail("sync acknowledgement contract must require " + field);
+}
+if (!ack?.syncGuarantees?.some((guarantee) => guarantee.includes("never move"))) {
+  fail("sync acknowledgement contract must guarantee monotonic device cursors");
+}
+
+const syncDevices = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/devices");
+if (!syncDevices?.roles?.includes("owner") || !syncDevices?.roles?.includes("admin")) {
+  fail("sync device fleet endpoint must require owner/admin");
+}
 
 const verifyPayment = contract.endpoints.find((endpoint) => endpoint.path === "/api/subscription/verify-payment");
 for (const requirement of ["signature", "orderId", "paymentId", "amount", "currency", "localTransaction"]) {

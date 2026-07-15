@@ -310,6 +310,7 @@ vi.mock("@/lib/offline/db", () => {
 vi.mock("@/features/sync/api", () => ({
   syncPush: syncPushMock,
   syncPull: syncPullMock,
+  acknowledgeSyncSequence: vi.fn(async () => ({ acknowledgement: { accepted: true } })),
   getSyncStatus: getSyncStatusMock,
   requestSyncRetry: requestSyncRetryMock,
 }));

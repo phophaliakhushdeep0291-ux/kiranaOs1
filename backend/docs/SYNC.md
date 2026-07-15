@@ -364,7 +364,7 @@ These are honest limitations of the current implementation. They are documented 
 
 5. **PostgreSQL runtime proof still depends on external infrastructure.** The isolated SQLite integration suite covers push, pull, permissions, monotonic sequence paging, rapid repeated updates, and tombstones. PostgreSQL schema/migration safety is checked locally, but executing the full suite against a production-like PostgreSQL/Redis stack remains an external release proof.
 
-6. **ChangeLog retention is not yet cursor-aware.** Sequence rows currently grow indefinitely. Retention must not delete entries that an active device may still need; production cleanup therefore requires per-device acknowledged cursors, a safe low-water mark, monitoring, and replay tooling.
+6. **Device acknowledgements and fleet lag are live; ChangeLog retention is not yet enabled.** After durably applying a page, each client posts its sequence to `/sync/ack`. The server stores only the monotonic maximum on the activated device and rejects future-sequence claims. Owners/admins can inspect current, behind, stale, and never-acknowledged devices through `/sync/devices`. Sequence rows still grow indefinitely because safe compaction also needs inactive-device policy, a proven low-water mark, recovery snapshots, and replay tooling.
 
 ---
 
@@ -375,11 +375,11 @@ These improvements are scoped but not yet implemented.
 | Item | Description |
 |------|-------------|
 | **Sequence-feed operations** | Monitor per-shop lag and growth; compact `ChangeLog` only below a proven active-device low-water mark; add replay and repair tooling. |
-| **SyncCursor table** | Store each device's acknowledged server sequence per shop. Enables safe retention, fleet lag visibility, and recovery if local cursor storage is lost. |
+| **Safe sequence compaction** | Compute an active-device low-water mark from durable acknowledgements, apply an explicit inactive-device policy, checkpoint recovery snapshots, and delete only bounded rows below the proven floor. |
 | **Conflict merge command generation** | Convert approved `use_local`/`manual_merge` decisions into validated, idempotent domain commands without bypassing inventory or financial invariants. |
 | **Sync mapping recovery endpoint** | Optional endpoint to query stored `localId → serverId` mappings if the frontend needs manual repair/debug visibility. |
 | **Conflict resolution transactions** | Apply `use_local`, `use_server`, or validated manual merges server-side under optimistic version checks, with owner identity and an immutable audit record. |
-| **Device-aware recovery** | Use server cursor acknowledgements to restore a replaced device safely and alert owners about devices that are far behind. |
+| **Device-aware recovery** | Seed a replaced device from a signed checkpoint, resume from its checkpoint sequence, and alert owners when acknowledged fleet lag exceeds policy. |
 | **Conflict retention and privacy** | Define redaction and retention rules for local/server snapshots so support tooling does not become a long-term customer-data store. |
 | **Retry dashboard** | Admin UI showing failed/conflicted sync events per shop, with ability to re-trigger or dismiss. |
 | **Retention scheduler policy** | Schedule and monitor bounded confirmed cleanup runs per deployment; alert when `hasMore` or open-conflict age exceeds policy. |

@@ -4,6 +4,7 @@ import type {
   SyncConflictListResponse,
   SyncConflictReportRequest,
   SyncConflictReportResponse,
+  SyncFleetResponse,
   SyncPullResponse,
   SyncPushRequest,
   SyncPushResponse,
@@ -116,4 +117,3 @@ export function reportSyncConflict(
     background: options.background,
   });
 }
-  SyncFleetResponse,
