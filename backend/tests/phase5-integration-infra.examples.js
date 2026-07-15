@@ -45,6 +45,10 @@ assert.match(testDbUtils, /ALLOW_POSTGRES_TEST_DB/, "PostgreSQL test DB must req
 assert.match(testDbUtils, /dev\.db/, "test DB helper must reject dev DB names");
 assert.match(testDbUtils, /production/, "test DB helper must reject production-looking names");
 
+const dbRuntime = read("src/db.js");
+assert.match(dbRuntime, /databaseUrl\.startsWith\("file:"\)/, "isolated Prisma client must only be selected for SQLite file datasources");
+assert.match(dbRuntime, /useIsolatedIntegrationClient/, "database runtime must keep PostgreSQL proof on the generated PostgreSQL client");
+
 const setup = read("tests/integration/setup.js");
 const runner = read("scripts/run-integration-tests.js");
 assert.match(runner, /prepareTestDatabase/, "integration runner must prepare the test DB before tests");

@@ -1,6 +1,6 @@
-ALTER TABLE "Device"
-  ADD COLUMN "lastAppliedServerSeq" BIGINT,
-  ADD COLUMN "lastSyncAckAt" TIMESTAMP(3);
+ALTER TABLE "Device" ADD COLUMN "lastAppliedServerSeq" BIGINT;
+
+ALTER TABLE "Device" ADD COLUMN "lastSyncAckAt" TIMESTAMP(3);
 
 CREATE INDEX "Device_shopId_lastSyncAckAt_idx"
 ON "Device"("shopId", "lastSyncAckAt");
