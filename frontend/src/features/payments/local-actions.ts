@@ -495,6 +495,8 @@ export async function reversePaymentWithOwnerPinLocalFirst(input: {
     payload: {
       paymentId: input.paymentId,
       customerId,
+      ledgerEntryId: String(payment.ledgerEntryId ?? payment.ledger_entry_id ?? ""),
+      localLedgerEntryId: String(payment.localLedgerEntryId ?? payment.local_ledger_entry_id ?? payment.ledgerEntryId ?? payment.ledger_entry_id ?? ""),
       correctionId: correctionWithBalance.id,
       amount,
       reason,

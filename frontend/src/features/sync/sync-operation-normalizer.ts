@@ -22,7 +22,7 @@ const BACKEND_OPERATION_TYPE_MAP: Record<string, string> = {
   DELETE_CUSTOMER_PENDING: "DELETE_CUSTOMER",
   RESTORE_CUSTOMER_PENDING: "RESTORE_CUSTOMER",
   RECORD_PAYMENT: "UDHAR_PAYMENT",
-  REVERSE_PAYMENT: "CREATE_LEDGER_ADJUSTMENT",
+  REVERSE_PAYMENT: "REVERSE_UDHAR_PAYMENT",
   CREATE_LEDGER_ADJUSTMENT: "CREATE_LEDGER_ADJUSTMENT",
   STOCK_PURCHASE: "STOCK_PURCHASE",
   STOCK_SALE: "STOCK_SALE",
@@ -35,6 +35,7 @@ const BACKEND_OPERATION_TYPE_MAP: Record<string, string> = {
 const BACKEND_ENTITY_TYPE_MAP: Record<string, string> = {
   UDHAR_PAYMENT: "payment",
   CREATE_LEDGER_ADJUSTMENT: "ledger_entry",
+  REVERSE_UDHAR_PAYMENT: "ledger_entry",
   STOCK_PURCHASE: "inventory_movement",
   STOCK_SALE: "inventory_movement",
   ADJUST_STOCK: "inventory_movement",
@@ -453,7 +454,7 @@ export function buildBackendSyncOperation(
   payload = normaliseBillLifecyclePayload(backendType, payload);
   payload = normaliseProductLifecyclePayload(backendType, payload);
   payload = normaliseCustomerLifecyclePayload(backendType, payload);
-  if (backendType === "CREATE_LEDGER_ADJUSTMENT") payload = normaliseLedgerPayload(payload);
+  if (backendType === "CREATE_LEDGER_ADJUSTMENT" || backendType === "REVERSE_UDHAR_PAYMENT") payload = normaliseLedgerPayload(payload);
   payload = normaliseStockPayload(backendType, rawType, payload);
 
   const entityType = BACKEND_ENTITY_TYPE_MAP[backendType] ?? event.entity_type;

@@ -65,7 +65,7 @@ export async function readCustomerLedgerEntries(customerId: string): Promise<Cus
 
 export async function refreshCustomerBalanceFromLedger(customerId: string): Promise<number> {
   const ledger = await readCustomerLedgerEntries(customerId);
-  const balance = roundMoney(calculateLedgerBalance(ledger));
+  const balance = roundMoney(Math.max(0, calculateLedgerBalance(ledger)));
   const customers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
   const mappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
   const customer = customers.find((row) => expandIdsWithMappings(customerIdentitySet(row), mappings).has(customerId));
@@ -122,6 +122,12 @@ export async function createLedgerAdjustmentLocalFirst(input: {
   });
   const amount = roundMoney(readNumber(input.amount, 0));
   if (amount === 0) throw new Error("Adjustment amount cannot be zero");
+  const currentBalance = roundMoney(Math.max(0, calculateLedgerBalance(await readCustomerLedgerEntries(input.customerId))));
+  if (roundMoney(currentBalance + amount) < 0) {
+    const error = new Error(`Adjustment would make udhar negative. Maximum reduction is Rs ${currentBalance.toLocaleString("en-IN")}`);
+    (error as Error & { code?: string }).code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
+    throw error;
+  }
   const entry = await appendCustomerLedgerEntry({
     customerId: input.customerId,
     customer_id: input.customerId,

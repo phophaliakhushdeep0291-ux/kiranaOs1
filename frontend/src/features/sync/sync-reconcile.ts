@@ -418,7 +418,7 @@ async function refreshCustomerBalancesFromLocalLedger(): Promise<void> {
       return customerId ? ids.has(customerId) : false;
     });
     if (entries.length === 0) continue;
-    const balance = Math.round((calculateLedgerBalance(entries) + Number.EPSILON) * 100) / 100;
+    const balance = Math.max(0, Math.round((calculateLedgerBalance(entries) + Number.EPSILON) * 100) / 100);
     const current = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
     if (Number.isFinite(current) && Math.abs(current - balance) < 0.005) continue;
     await table.put({
