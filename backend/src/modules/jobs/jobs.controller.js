@@ -9,6 +9,11 @@ import {
 } from "../../lib/queue.js";
 import { getWorkerHeartbeats } from "../../lib/workerHeartbeat.js";
 import { QUEUE_NAMES, listQueueNames } from "../../workers/queueNames.js";
+import {
+  createAndEnqueueShopBackup,
+  listShopBackups,
+  openShopBackup,
+} from "../backups/backup.service.js";
 
 const QUEUE_ALIASES = Object.freeze({
   reminders: QUEUE_NAMES.reminderQueue,
@@ -46,6 +51,39 @@ export async function workerHealth(_req, res, next) {
   try {
     const data = await getWorkerHeartbeats();
     res.json({ success: true, data: { ...data, payloadsExposed: false, serverTime: new Date().toISOString() } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function createShopBackup(req, res, next) {
+  try {
+    const backup = await createAndEnqueueShopBackup(req.shopId, req.user?.userId ?? req.user?.id);
+    res.status(202).json({ success: true, data: { backup } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function shopBackups(req, res, next) {
+  try {
+    res.json({ success: true, data: await listShopBackups(req.shopId, req.query) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function downloadShopBackup(req, res, next) {
+  try {
+    const download = await openShopBackup(req.shopId, req.params.id);
+    if (download.kind === "signed_url") {
+      return res.json({ success: true, data: download });
+    }
+    res.setHeader("Content-Type", "application/vnd.kiranaos.backup");
+    res.setHeader("Content-Disposition", `attachment; filename="${download.fileName}"`);
+    if (download.contentLength !== null) res.setHeader("Content-Length", String(download.contentLength));
+    download.stream.on("error", next);
+    return download.stream.pipe(res);
   } catch (error) {
     next(error);
   }

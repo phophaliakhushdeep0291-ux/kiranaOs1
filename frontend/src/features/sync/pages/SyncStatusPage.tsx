@@ -38,6 +38,7 @@ import {
 import { getOfflineScope } from "@/lib/offline/context";
 import {
   getSyncStatus,
+  getSyncFleet,
   listSyncConflicts,
   reportSyncConflict,
   resolveSyncConflict,
@@ -45,7 +46,7 @@ import {
   runSyncCycle,
 } from "@/features/sync";
 import { getCurrentSubscriptionSnapshot } from "@/features/subscription/access";
-import type { SyncConflictRecord, SyncStatusResponse } from "@/types/api";
+import type { SyncConflictRecord, SyncFleetResponse, SyncStatusResponse } from "@/types/api";
 import { repairResolvedSyncStatusNoise } from "@/features/sync/sync-status-repair";
 import { PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 
@@ -76,6 +77,7 @@ interface SyncStatusSnapshot {
   apiBaseUrl: string;
   subscriptionSyncAllowed: boolean | null;
   serverStatus: SyncStatusResponse | null;
+  fleet: SyncFleetResponse | null;
   localBusinessRowsCount: number;
 }
 
@@ -94,6 +96,7 @@ const initialSnapshot: SyncStatusSnapshot = {
   apiBaseUrl: getApiBaseUrl(),
   subscriptionSyncAllowed: null,
   serverStatus: null,
+  fleet: null,
   localBusinessRowsCount: 0,
 };
 
@@ -403,6 +406,7 @@ export async function readSyncSnapshot(): Promise<
 
   let serverStatus: SyncStatusResponse | null = null;
   let serverConflictRows: SyncConflictRecord[] = [];
+  let fleet: SyncFleetResponse | null = null;
   let subscriptionSyncAllowed = localSubscriptionAllowed;
   if (isOnline) {
     try {
@@ -417,6 +421,11 @@ export async function readSyncSnapshot(): Promise<
       serverConflictRows = ledger.conflicts;
     } catch {
       // Cashiers cannot list cross-device snapshots; owners still retain local rows offline.
+    }
+    try {
+      fleet = await getSyncFleet({ background: true });
+    } catch {
+      // Fleet visibility is intentionally owner/admin only.
     }
   }
 
@@ -445,8 +454,104 @@ export async function readSyncSnapshot(): Promise<
     apiBaseUrl: getApiBaseUrl(),
     subscriptionSyncAllowed,
     serverStatus,
+    fleet,
     localBusinessRowsCount,
   };
+}
+
+function FleetHealthCard({
+  fleet,
+  currentDeviceId,
+}: {
+  fleet: SyncFleetResponse;
+  currentDeviceId: string;
+}) {
+  const stateMeta = {
+    current: { label: "Current", variant: "secondary" as const, dot: "bg-emerald-500" },
+    behind: { label: "Catching up", variant: "outline" as const, dot: "bg-amber-500" },
+    stale: { label: "Needs attention", variant: "destructive" as const, dot: "bg-red-500" },
+    never_acknowledged: { label: "Not initialized", variant: "outline" as const, dot: "bg-slate-400" },
+  };
+  const formatLag = (value: string) => {
+    try {
+      return BigInt(value).toLocaleString("en-IN");
+    } catch {
+      return value;
+    }
+  };
+
+  return (
+    <Card className={fleet.summary.attention > 0 ? "border-amber-200/80" : "border-emerald-200/80"}>
+      <CardHeader className="gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Smartphone className="h-5 w-5 text-primary" />
+            Device sync health
+          </CardTitle>
+          <CardDescription className="mt-1">
+            Server-confirmed progress for every active terminal in this shop.
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary">{fleet.summary.current} current</Badge>
+          {fleet.summary.attention > 0 ? (
+            <Badge variant="destructive">{fleet.summary.attention} need attention</Badge>
+          ) : (
+            <Badge variant="outline">Fleet healthy</Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {fleet.devices.map((device) => {
+            const meta = stateMeta[device.state];
+            const isCurrentDevice = device.device_id === currentDeviceId;
+            return (
+              <div
+                key={device.device_id}
+                className="rounded-2xl border bg-background p-4 shadow-sm transition-colors hover:border-primary/25"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${device.online ? "bg-emerald-500" : "bg-slate-300"}`} />
+                      <p className="truncate font-semibold">
+                        {device.device_name || "Shop terminal"}
+                      </p>
+                    </div>
+                    <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                      {device.device_id}
+                    </p>
+                  </div>
+                  <Badge variant={meta.variant} className="shrink-0">
+                    <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+                    {meta.label}
+                  </Badge>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-xl bg-muted/60 p-3">
+                    <p className="text-muted-foreground">Sequence lag</p>
+                    <p className="mt-1 text-base font-bold">{formatLag(device.lag)}</p>
+                  </div>
+                  <div className="rounded-xl bg-muted/60 p-3">
+                    <p className="text-muted-foreground">Presence</p>
+                    <p className="mt-1 text-base font-bold">{device.online ? "Online" : "Offline"}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span>{device.acknowledged_at ? `Applied ${formatTimeAgo(device.acknowledged_at)}` : "No applied cursor yet"}</span>
+                  {isCurrentDevice && <Badge variant="outline">This device</Badge>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          A terminal becomes current only after it applies data locally and acknowledges sequence {fleet.server_seq}.
+        </p>
+      </CardContent>
+    </Card>
+  );
 }
 
 function OperationList({
@@ -1123,6 +1228,10 @@ export default function SyncStatusPage() {
         <StatCard label="Pending" value={pendingCount} description={pendingCount === 1 ? "1 change pending cloud backup." : `${pendingCount} changes pending cloud backup.`} icon={<Database className="h-5 w-5" />} tone={pendingCount > 0 ? "amber" : "green"} />
         <StatCard label="Retry / review" value={`${failedCount} / ${conflictCount}`} description="Retry failed backup items. Review only if it remains blocked." icon={<AlertCircle className="h-5 w-5" />} tone={failedCount || conflictCount ? "red" : "green"} />
       </StatsGrid>
+
+      {snapshot.fleet && (
+        <FleetHealthCard fleet={snapshot.fleet} currentDeviceId={snapshot.deviceId} />
+      )}
 
       <Card>
         <CardHeader>

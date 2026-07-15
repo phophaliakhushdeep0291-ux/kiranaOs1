@@ -10,6 +10,9 @@ router.use(requireAuth, requireShop, requireDeviceActivated(), requireRole("owne
 router.get("/status", ctrl.status);
 router.get("/failed", ctrl.failed);
 router.get("/workers", ctrl.workerHealth);
+router.get("/backups", ctrl.shopBackups);
+router.post("/backups", requireOwnerPin, ctrl.createShopBackup);
+router.get("/backups/:id/download", requireOwnerPin, ctrl.downloadShopBackup);
 router.get("/queues/:queueName", ctrl.queueDetail);
 router.get("/queues/:queueName/failed", ctrl.queueFailed);
 router.post("/queues/:queueName/pause", requireOwnerPin, ctrl.pause);

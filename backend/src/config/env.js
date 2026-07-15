@@ -53,6 +53,8 @@ const envSchema = z.object({
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5000).max(300000).default(30000),
   WORKER_STALE_AFTER_MS: z.coerce.number().int().min(10000).max(900000).default(90000),
   JOB_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+  BACKUP_RETENTION_DAYS: z.coerce.number().int().min(7).max(365).default(30),
+  BACKUP_ENCRYPTION_KEY: z.string().optional(),
   DAILY_CLOSING_SCHEDULE_HOUR: z.coerce.number().int().min(0).max(23).default(2),
   DAILY_CLOSING_TIMEZONE: z.string().default("Asia/Kolkata"),
   STORAGE_PROVIDER: z.enum(["local", "s3", "r2", "minio"]).default("local"),

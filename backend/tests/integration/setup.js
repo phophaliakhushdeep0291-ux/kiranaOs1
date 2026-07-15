@@ -196,6 +196,7 @@ export async function resetDatabase(db) {
     db.deviceReplacementChallenge.deleteMany(),
     db.deviceLicense.deleteMany(),
     db.device.deleteMany(),
+    db.backupArtifact.deleteMany(),
     db.reportExportJob.deleteMany(),
     db.reminderLog.deleteMany(),
     db.reminderTemplate.deleteMany(),
