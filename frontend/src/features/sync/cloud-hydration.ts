@@ -36,6 +36,7 @@ function uniqueById<T extends AnyRecord>(rows: T[]): T[] {
 }
 
 const PRODUCT_ID_KEYS = ["id", "server_id", "serverId", "clientProductId", "client_product_id", "local_id", "localId"];
+const CUSTOMER_ID_KEYS = ["id", "server_id", "serverId", "clientCustomerId", "client_customer_id", "local_id", "localId"];
 
 // Bulk hydration overwrites local rows wholesale. Preserve UNSYNCED local edits/creates
 // (sync_status === "pending_sync") so a re-import doesn't clobber a change that hasn't pushed
@@ -98,8 +99,9 @@ async function importCustomers() {
     return { ...customer, udharAmount: udhar, totalUdhar: udhar };
   }) : [];
   if (customers.length > 0) {
-    await offlineDB.putMany("customers", customers as unknown as AnyRecord[]);
-    writeInstantCache("customers", customers);
+    const merged = await preserveLocalPending("customers", customers as unknown as AnyRecord[], CUSTOMER_ID_KEYS);
+    await offlineDB.putMany("customers", merged);
+    writeInstantCache("customers", merged);
   }
   return customers.length;
 }

@@ -35,13 +35,16 @@ describe("cloud hydration direct import wiring", () => {
   });
 
   it("rehydrates authoritative snapshots during user-requested recovery sync", () => {
-    expect(manualSync).toContain("const sync = await runSyncCycle()");
+    expect(manualSync).toContain("sync = await runSyncCycle()");
     expect(manualSync).toContain("const snapshot = await hydrateFromBackendSnapshot()");
-    expect(manualSync.indexOf("const sync = await runSyncCycle()")).toBeLessThan(
+    expect(manualSync.indexOf("sync = await runSyncCycle()")).toBeLessThan(
       manualSync.indexOf("const snapshot = await hydrateFromBackendSnapshot()"),
     );
     expect(offlineStatus).toContain("if (hydrate) await runManualSyncCycle()");
     expect(offlineStatus).toContain("syncNow({ manual: true, hydrate: false })");
     expect(syncBanner).toContain("await runManualSyncCycle()");
+    expect(manualSync).toContain("syncError = error instanceof Error");
+    expect(manualSync).toContain("Snapshot recovery incomplete");
+    expect(hydration).toContain('preserveLocalPending("customers"');
   });
 });
