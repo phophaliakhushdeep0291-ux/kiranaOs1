@@ -712,6 +712,46 @@ export interface SyncRetryRequest {
   op_ids?: string[];
 }
 
+export interface SyncAcknowledgement extends Record<string, unknown> {
+  device_id: string;
+  accepted: boolean;
+  stale_ack_ignored: boolean;
+  applied_server_seq: string;
+  server_seq: string;
+  lag: string;
+  acknowledged_at: string | null;
+}
+
+export interface SyncFleetDevice extends Record<string, unknown> {
+  device_id: string;
+  device_name?: string | null;
+  platform?: string | null;
+  app_version?: string | null;
+  state: "current" | "behind" | "stale" | "never_acknowledged";
+  online: boolean;
+  applied_server_seq: string;
+  server_seq: string;
+  lag: string;
+  last_seen_at: string | null;
+  last_sync_at: string | null;
+  acknowledged_at: string | null;
+}
+
+export interface SyncFleetResponse extends Record<string, unknown> {
+  server_seq: string;
+  generated_at: string;
+  stale_after_seconds: number;
+  summary: {
+    total: number;
+    current: number;
+    behind: number;
+    stale: number;
+    never_acknowledged: number;
+    attention: number;
+  };
+  devices: SyncFleetDevice[];
+}
+
 export interface SyncResolveConflictRequest {
   conflict_id: string;
   resolution: "use_local" | "use_server" | "manual_merge" | "dismiss" | "resolved_by_owner" | "ignored_by_owner";

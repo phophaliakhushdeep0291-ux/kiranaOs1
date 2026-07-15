@@ -47,6 +47,8 @@ const protectedProductFields = [
 
 const SYNC_CONFLICT_RETENTION_DAYS = 90;
 const SYNC_CONFLICT_SNAPSHOT_MAX_CHARS = 64 * 1024;
+const SYNC_DEVICE_STALE_AFTER_MS = 15 * 60 * 1000;
+const SYNC_DEVICE_ONLINE_WINDOW_MS = 5 * 60 * 1000;
 
 function syncConflictExpiry() {
   return new Date(Date.now() + SYNC_CONFLICT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
@@ -634,6 +636,139 @@ function redactProductCostForCashier(product) {
 export async function getCurrentServerSeq(shopId) {
   const aggregate = await db.changeLog.aggregate({ where: { shopId }, _max: { seq: true } });
   return String(aggregate._max.seq ?? 0n);
+}
+
+function databaseSequence(value) {
+  if (!/^\d+$/.test(String(value))) {
+    throw new AppError("Server sequence must be a non-negative integer", 400, "SYNC_ACK_INVALID");
+  }
+  if (!env.DATABASE_URL.startsWith("file:")) return BigInt(value);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new AppError("Server sequence exceeds the supported local range", 400, "SYNC_ACK_INVALID");
+  }
+  return parsed;
+}
+
+export async function acknowledgeDeviceSequence(shopId, deviceId, serverSeq) {
+  if (!deviceId) throw new AppError("Device id required", 400, "DEVICE_REQUIRED");
+  const acknowledged = databaseSequence(serverSeq);
+  const currentServerSeq = databaseSequence(await getCurrentServerSeq(shopId));
+  if (acknowledged > currentServerSeq) {
+    throw new AppError(
+      "Cannot acknowledge a sequence that the server has not issued",
+      409,
+      "SYNC_ACK_AHEAD_OF_SERVER"
+    );
+  }
+
+  const now = new Date();
+  const updated = await db.device.updateMany({
+    where: {
+      shopId,
+      deviceId,
+      status: "active",
+      OR: [
+        { lastAppliedServerSeq: null },
+        { lastAppliedServerSeq: { lte: acknowledged } },
+      ],
+    },
+    data: {
+      lastAppliedServerSeq: acknowledged,
+      lastSyncAckAt: now,
+      lastSyncAt: now,
+      lastSeenAt: now,
+      lastActiveAt: now,
+    },
+  });
+
+  const device = await db.device.findUnique({
+    where: { shopId_deviceId: { shopId, deviceId } },
+    select: {
+      deviceId: true,
+      status: true,
+      lastAppliedServerSeq: true,
+      lastSyncAckAt: true,
+    },
+  });
+  if (!device || device.status !== "active") {
+    throw new AppError("Active device not found", 404, "DEVICE_NOT_FOUND");
+  }
+
+  const applied = BigInt(device.lastAppliedServerSeq ?? 0);
+  const current = BigInt(currentServerSeq);
+  return {
+    device_id: device.deviceId,
+    accepted: updated.count === 1,
+    stale_ack_ignored: updated.count === 0,
+    applied_server_seq: String(applied),
+    server_seq: String(current),
+    lag: String(current > applied ? current - applied : 0n),
+    acknowledged_at: device.lastSyncAckAt?.toISOString() ?? null,
+  };
+}
+
+export async function getDeviceSyncFleet(shopId) {
+  const serverSeq = BigInt(await getCurrentServerSeq(shopId));
+  const now = Date.now();
+  const devices = await db.device.findMany({
+    where: { shopId, status: "active" },
+    orderBy: [{ lastSeenAt: "desc" }, { createdAt: "asc" }],
+    select: {
+      deviceId: true,
+      deviceName: true,
+      platform: true,
+      appVersion: true,
+      lastSeenAt: true,
+      lastSyncAt: true,
+      lastSyncAckAt: true,
+      lastAppliedServerSeq: true,
+    },
+  });
+
+  const rows = devices.map((device) => {
+    const applied = BigInt(device.lastAppliedServerSeq ?? 0);
+    const lag = serverSeq > applied ? serverSeq - applied : 0n;
+    const ackAgeMs = device.lastSyncAckAt ? Math.max(0, now - device.lastSyncAckAt.getTime()) : null;
+    const seenAgeMs = device.lastSeenAt ? Math.max(0, now - device.lastSeenAt.getTime()) : null;
+    const state = device.lastAppliedServerSeq === null
+      ? "never_acknowledged"
+      : lag === 0n
+        ? "current"
+        : ackAgeMs !== null && ackAgeMs > SYNC_DEVICE_STALE_AFTER_MS
+          ? "stale"
+          : "behind";
+    return {
+      device_id: device.deviceId,
+      device_name: device.deviceName,
+      platform: device.platform,
+      app_version: device.appVersion,
+      state,
+      online: seenAgeMs !== null && seenAgeMs <= SYNC_DEVICE_ONLINE_WINDOW_MS,
+      applied_server_seq: String(applied),
+      server_seq: String(serverSeq),
+      lag: String(lag),
+      last_seen_at: device.lastSeenAt?.toISOString() ?? null,
+      last_sync_at: device.lastSyncAt?.toISOString() ?? null,
+      acknowledged_at: device.lastSyncAckAt?.toISOString() ?? null,
+    };
+  });
+
+  const count = (state) => rows.filter((row) => row.state === state).length;
+  const summary = {
+    total: rows.length,
+    current: count("current"),
+    behind: count("behind"),
+    stale: count("stale"),
+    never_acknowledged: count("never_acknowledged"),
+  };
+  return {
+    server_seq: String(serverSeq),
+    generated_at: new Date(now).toISOString(),
+    stale_after_seconds: SYNC_DEVICE_STALE_AFTER_MS / 1000,
+    summary: { ...summary, attention: summary.behind + summary.stale + summary.never_acknowledged },
+    devices: rows,
+  };
 }
 
 async function pullBySequence(shopId, afterSeq, { limit, role } = {}) {

@@ -1,5 +1,6 @@
 import { apiRequest, buildQuery } from "@/lib/api/http";
 import type {
+  SyncAcknowledgement,
   SyncConflictListResponse,
   SyncConflictReportRequest,
   SyncConflictReportResponse,
@@ -65,6 +66,24 @@ export function requestSyncRetry(body: SyncRetryRequest = {}) {
   });
 }
 
+export function acknowledgeSyncSequence(
+  serverSeq: string | number,
+  options: { background?: boolean } = {},
+) {
+  return apiRequest<{ acknowledgement: SyncAcknowledgement }>("/sync/ack", {
+    method: "POST",
+    body: JSON.stringify({ server_seq: String(serverSeq) }),
+    background: options.background,
+  });
+}
+
+export function getSyncFleet(options: { background?: boolean } = {}) {
+  return apiRequest<SyncFleetResponse>("/sync/devices", {
+    method: "GET",
+    background: options.background,
+  });
+}
+
 export function resolveSyncConflict(body: SyncResolveConflictRequest) {
   return apiRequest<{ resolutionRecorded: boolean; conflict: import("@/types/api").SyncConflictRecord }>("/sync/resolve-conflict", {
     method: "POST",
@@ -97,3 +116,4 @@ export function reportSyncConflict(
     background: options.background,
   });
 }
+  SyncFleetResponse,

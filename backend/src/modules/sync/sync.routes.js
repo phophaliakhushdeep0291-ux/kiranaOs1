@@ -9,6 +9,7 @@ import {
   PUSH_BATCH_TOO_LARGE_CODE,
   reportSyncConflictSchema,
   resolveSyncConflictSchema,
+  syncAckSchema,
   syncConflictListQuerySchema,
 } from "./sync.schema.js";
 import * as ctrl from "./sync.controller.js";
@@ -47,6 +48,8 @@ function checkPushBatchSize(req, res, next) {
 
 router.get("/status", requireDeviceActivated(), ctrl.status);
 router.post("/retry", requireDeviceActivated(), ctrl.retry);
+router.post("/ack", requireDeviceAllowedForSync(), validate(syncAckSchema), ctrl.ack);
+router.get("/devices", requireDeviceActivated(), requireRole("owner", "admin"), ctrl.devices);
 router.get("/conflicts", requireDeviceActivated(), requireRole("owner", "admin"), validateQuery(syncConflictListQuerySchema), ctrl.listConflicts);
 router.post("/conflicts/report", requireDeviceActivated(), validate(reportSyncConflictSchema), ctrl.reportConflict);
 router.post("/resolve-conflict", requireDeviceActivated(), requireRole("owner", "admin"), validate(resolveSyncConflictSchema), ctrl.resolveConflict);

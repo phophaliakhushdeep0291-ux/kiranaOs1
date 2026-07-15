@@ -75,6 +75,24 @@ export async function retry(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function ack(req, res, next) {
+  try {
+    const acknowledgement = await svc.acknowledgeDeviceSequence(
+      req.shopId,
+      req.device?.deviceId,
+      req.body.server_seq
+    );
+    res.json({ success: true, data: { acknowledgement } });
+  } catch (err) { next(err); }
+}
+
+export async function devices(req, res, next) {
+  try {
+    const data = await svc.getDeviceSyncFleet(req.shopId);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function resolveConflict(req, res, next) {
   try {
     const conflict = await svc.resolveSyncConflict(req.shopId, req.body, {

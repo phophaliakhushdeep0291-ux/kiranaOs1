@@ -1842,6 +1842,8 @@ model Device {
   lastLoginAt     DateTime?
   lastSeenAt      DateTime?
   lastSyncAt      DateTime?
+  lastAppliedServerSeq BigInt?
+  lastSyncAckAt   DateTime?
   lastIpAddress   String?
   sessionVersion  Int       @default(1)
   removedAt       DateTime?
@@ -1858,6 +1860,8 @@ model Device {
   @@unique([shopId, deviceId])
   @@index([shopId, status])
   @@index([shopId, lastSeenAt])
+  @@index([shopId, lastSyncAckAt])
+  @@index([shopId, lastAppliedServerSeq])
   @@index([userId])
 }
 

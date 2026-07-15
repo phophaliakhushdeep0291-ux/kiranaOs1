@@ -4,7 +4,7 @@ import {
 } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
 import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
-import { syncPull } from "@/features/sync/api";
+import { acknowledgeSyncSequence, syncPull } from "@/features/sync/api";
 import { mergeServerChange, refreshBusinessCaches } from "@/features/sync/sync-reconcile";
 import {
   DEFAULT_CURSOR_ID,
@@ -202,6 +202,13 @@ export async function pullServerChanges(): Promise<{
       await setStoredCursor(latestCursor);
       await setStoredServerSequence(latestServerSequence);
       await setStoredEntityCursors(getResponseEntityCursors(response));
+      // The cursor is acknowledged only after every change on the page has been
+      // merged or durably recorded as a conflict and the local cursor is saved.
+      // A failed acknowledgement must not discard applied data or block paging;
+      // the next cycle retries the same monotonic position.
+      if (latestServerSequence !== undefined && latestServerSequence !== null) {
+        await acknowledgeSyncSequence(latestServerSequence, { background: true }).catch(() => undefined);
+      }
       hasMore = responseHasMore(response);
 
       if (!hasMore) break;

@@ -41,6 +41,13 @@ export const pullQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(PULL_MAX_LIMIT).default(PULL_DEFAULT_LIMIT),
 });
 
+export const syncAckSchema = z.object({
+  server_seq: z.union([
+    z.string().regex(/^\d+$/, "server_seq must be a non-negative integer"),
+    z.number().int().nonnegative(),
+  ]).transform((value) => String(value)),
+});
+
 // ── Push batch size limits ────────────────────────────────────────────────────
 // Recommended frontend batch size: ≤100 events per flush.
 // Hard backend ceiling: 500 events. Requests above this are rejected immediately
