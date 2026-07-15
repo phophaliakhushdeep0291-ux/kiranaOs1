@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { offlineDB, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
-import { runSyncCycle } from "@/features/sync/engine";
+import { runManualSyncCycle } from "@/features/sync/manual-sync";
 
 interface Counts { pending: number; failedOrConflict: number }
 
@@ -56,7 +56,7 @@ export function SyncAlertBanner() {
   const onRetry = async () => {
     setRetrying(true);
     try {
-      await runSyncCycle();
+      await runManualSyncCycle();
       await refresh();
     } catch {
       toast({ title: "Retry failed", description: "Please check your connection and try again.", variant: "destructive" });

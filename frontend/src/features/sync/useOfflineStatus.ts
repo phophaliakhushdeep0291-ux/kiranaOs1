@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { runSyncCycle } from "@/features/sync/engine";
+import { runManualSyncCycle } from "@/features/sync/manual-sync";
 import { readSyncQueueCounts, type SyncQueueCounts } from "@/features/sync/sync-status-repair";
 import { probeBackendConnection, readBackendConnectionSnapshot } from "@/features/sync/backend-health";
 import { shouldPassSharedThrottle, shouldRunScheduledNetworkWork } from "@/lib/browser/multiTabCoordinator";
@@ -32,7 +33,7 @@ export function useOfflineStatus() {
     }
   }, []);
 
-  const syncNow = useCallback(async (options: { manual?: boolean } = {}) => {
+  const syncNow = useCallback(async (options: { manual?: boolean; hydrate?: boolean } = {}) => {
     if (isSyncingRef.current) return;
     if (!options.manual && !shouldRunScheduledNetworkWork()) return;
     const connection = await probeBackendConnection({ force: options.manual });
@@ -41,7 +42,9 @@ export function useOfflineStatus() {
     isSyncingRef.current = true;
     setIsSyncing(true);
     try {
-      await runSyncCycle();
+      const hydrate = options.hydrate ?? options.manual === true;
+      if (hydrate) await runManualSyncCycle();
+      else await runSyncCycle();
       await refreshCount();
     } finally {
       isSyncingRef.current = false;
@@ -55,7 +58,7 @@ export function useOfflineStatus() {
     const counts = await refreshCount();
     if (!counts || counts.totalBlocking === 0) return;
     if (!shouldPassSharedThrottle(LOCAL_QUEUE_RECOVERY_THROTTLE_KEY, LOCAL_QUEUE_RECOVERY_THROTTLE_MS)) return;
-    await syncNow({ manual: true });
+    await syncNow({ manual: true, hydrate: false });
   }, [refreshCount, syncNow]);
 
   useEffect(() => {
