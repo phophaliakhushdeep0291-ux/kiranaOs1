@@ -462,6 +462,50 @@ describe("sync failure handling", () => {
     );
   });
 
+  it("removes an optimistic adjustment rejected for a negative udhar balance", async () => {
+    seedEntity("customer_ledger", "ledger_adjustment_rejected", {
+      customerId: "cmq000000000000000000000",
+      type: "ADJUSTMENT",
+      amount: -500,
+    });
+    const event = seedOutbox(
+      "CREATE_LEDGER_ADJUSTMENT",
+      "ledger_entry",
+      "ledger_adjustment_rejected",
+      {
+        payload: {
+          ledgerEntryId: "ledger_adjustment_rejected",
+          customerId: "cmq000000000000000000000",
+          amount: -500,
+        },
+      },
+    );
+    mockedSyncPush.mockResolvedValueOnce({
+      results: [
+        {
+          op_id: event.op_id,
+          status: "CONFLICT",
+          entity_type: "ledger_entry",
+          local_id: "ledger_adjustment_rejected",
+          error_code: "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE",
+          error_message: "Adjustment would make udhar negative",
+        },
+      ],
+    });
+
+    const result = await pushPendingOutboxOperations();
+
+    expect(result).toEqual(expect.objectContaining({ conflicts: 1 }));
+    expect(scopedRows("customer_ledger")).toHaveLength(0);
+    expect(scopedRows("sync_outbox")[0]).toEqual(
+      expect.objectContaining({
+        status: "CONFLICT",
+        sync_status: "conflict",
+        error_message: "Adjustment would make udhar negative",
+      }),
+    );
+  });
+
   it("retry uses the same idempotency_key", async () => {
     seedEntity("customers", "customer_retry", { name: "Sita" });
     const failedEvent = seedOutbox("CREATE_CUSTOMER", "customer", "customer_retry", {

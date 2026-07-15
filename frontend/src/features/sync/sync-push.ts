@@ -277,6 +277,29 @@ function collectResultIdentityKeys(result: SyncPushEventResult): string[] {
   return [...new Set(nested.flatMap(collectIdentityKeysFromRecord))];
 }
 
+function isRejectedNegativeUdharAdjustment(
+  event: PendingSyncEvent,
+  result: SyncPushEventResult,
+): boolean {
+  if (event.operation_type !== "CREATE_LEDGER_ADJUSTMENT") return false;
+  const responseText = JSON.stringify(result).toLowerCase();
+  return responseText.includes("udhar_adjustment_negative_balance") ||
+    (responseText.includes("udhar") && responseText.includes("negative"));
+}
+
+async function discardRejectedOptimisticAdjustment(
+  event: PendingSyncEvent,
+  result: SyncPushEventResult,
+): Promise<void> {
+  if (!isRejectedNegativeUdharAdjustment(event, result)) return;
+  const row = await dexieDB.customer_ledger
+    .get(event.entity_id)
+    .catch(() => undefined);
+  if (row && String(row.sync_status ?? "").toLowerCase() !== "synced") {
+    await dexieDB.customer_ledger.delete(event.entity_id);
+  }
+}
+
 async function handlePushResults(
   prepared: PreparedOperation[],
   results: SyncPushEventResult[],
@@ -319,6 +342,7 @@ async function handlePushResults(
     }
 
     if (normalized === "conflict") {
+      await discardRejectedOptimisticAdjustment(item.event, result);
       await updateOutboxStatus(
         [item.event],
         "CONFLICT",
@@ -337,6 +361,7 @@ async function handlePushResults(
       continue;
     }
 
+    await discardRejectedOptimisticAdjustment(item.event, result);
     await updateOutboxStatus(
       [item.event],
       "FAILED",
