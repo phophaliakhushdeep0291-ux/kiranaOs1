@@ -18,6 +18,9 @@ assert.ok(endpoints.includes("POST /api/devices/activate"));
 assert.ok(endpoints.includes("GET /api/devices/license"));
 assert.ok(endpoints.includes("POST /api/bills/confirm"));
 assert.ok(endpoints.includes("GET /api/sync/status"));
+assert.ok(endpoints.includes("GET /api/sync/conflicts"));
+assert.ok(endpoints.includes("POST /api/sync/conflicts/report"));
+assert.ok(endpoints.includes("POST /api/sync/resolve-conflict"));
 assert.ok(endpoints.includes("GET /api/sync/pull"));
 assert.ok(endpoints.includes("GET /api/jobs/workers"));
 assert.ok(endpoints.includes("GET /api/payment-provider/events"));
@@ -44,7 +47,10 @@ assert.equal(webhook.rawBodySignature, true, "Razorpay webhook must use raw-body
 assert.equal(webhook.authRequired, false, "Razorpay webhook cannot use JWT auth");
 
 const syncPull = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/pull");
-assert.ok(syncPull.responseMustInclude.includes("sync.entityCursors"), "Sync pull must document entity cursors");
+for (const field of ["sync.protocol", "sync.nextServerSeq", "sync.serverVersion", "sync.hasMore"]) {
+  assert.ok(syncPull.responseMustInclude.includes(field), `Sync pull must document ${field}`);
+}
+assert.match(syncPull.purpose, /legacy/i, "Sync pull must document legacy entity-cursor compatibility");
 
 const verifyPayment = contract.endpoints.find((endpoint) => endpoint.path === "/api/subscription/verify-payment");
 for (const required of ["signature", "orderId", "paymentId", "amount", "currency", "localTransaction"]) {

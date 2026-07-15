@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api/http";
-import { offlineDB } from "@/lib/offline/db";
+import { dexieDB, offlineDB, rowMatchesCurrentScope } from "@/lib/offline/db";
 import { writeInstantCache, emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import { refreshBusinessCaches } from "@/features/sync/sync-reconcile";
 import { syncPull } from "@/features/sync/api";
@@ -176,6 +176,16 @@ async function importUdharLedger() {
   });
   const rows = Array.isArray(result?.entries) ? result.entries : Array.isArray(result?.ledger) ? result.ledger : [];
   const entries = rows.filter(isRecord);
+  // The endpoint is a full server snapshot. Retaining old server rows makes
+  // balances device-dependent, but pending local work must survive hydration.
+  const staleKeys = await dexieDB.customer_ledger
+    .filter((row) => {
+      if (!rowMatchesCurrentScope(row)) return false;
+      const status = String(row.sync_status ?? "synced").toLowerCase();
+      return !["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(status);
+    })
+    .primaryKeys();
+  if (staleKeys.length > 0) await dexieDB.customer_ledger.bulkDelete(staleKeys as string[]);
   if (entries.length > 0) await offlineDB.putMany("customer_ledger", entries);
   return entries.length;
 }

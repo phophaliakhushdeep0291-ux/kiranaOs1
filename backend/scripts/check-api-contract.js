@@ -110,6 +110,8 @@ if (!app.includes('express.raw({ type: "application/json"') && !app.includes("ex
 }
 
 const pull = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/pull");
+// Legacy compatibility remains documented as sync.entityCursors; v2 clients
+// require the monotonic fields below and must not mix cursor protocols.
 for (const field of ["sync.protocol", "sync.nextServerSeq", "sync.serverVersion", "sync.hasMore"]) {
   if (!pull?.responseMustInclude?.includes(field)) fail(`sync pull contract must require ${field}`);
 }

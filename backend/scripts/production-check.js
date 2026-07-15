@@ -458,6 +458,20 @@ if (exists("docker-compose.yml")) {
   if (!compose.includes("condition: service_healthy")) errors.push("API service should wait for healthy Postgres");
 }
 
+// Phase 50 executable retention invariants.
+if (exists("src/workers/syncCleanup.worker.js")) {
+  const cleanup = read("src/workers/syncCleanup.worker.js");
+  for (const snippet of [
+    "payload.dryRun === false && payload.confirm === true",
+    "90, 90, 3650",
+    "Failed, processing, and conflict rows remain recoverable indefinitely",
+    "Open conflict snapshots are never removed by retention",
+    "take: limit",
+  ]) {
+    if (!cleanup.includes(snippet)) errors.push(`sync cleanup worker missing safe retention invariant: ${snippet}`);
+  }
+}
+
 if (exists("src/app.js")) {
   const appSource = read("src/app.js");
   if (!appSource.includes('import helmet from "helmet"') || !appSource.includes("app.use(helmet())")) {
@@ -1123,7 +1137,9 @@ if (exists("src/workers/reminder.worker.js")) {
   const reminder = read("src/workers/reminder.worker.js");
   if (!reminder.includes("WHATSAPP_PROVIDER_NOT_CONFIGURED")) errors.push("reminder worker must not fake WhatsApp success without provider");
 }
-if (exists("src/workers/syncCleanup.worker.js")) {
+// Retained temporarily as source-history context; Phase 50 checks the stronger
+// executable invariants above instead of these pre-implementation placeholders.
+if (false && exists("src/workers/syncCleanup.worker.js")) {
   const cleanup = read("src/workers/syncCleanup.worker.js");
   for (const snippet of ["dryRun", "status: { in: [\"synced\", \"failed\"] }", "Never delete recent idempotency records", "unresolved conflicts"]) {
     if (!cleanup.includes(snippet)) errors.push(`sync cleanup worker missing conservative retention snippet: ${snippet}`);
@@ -1908,11 +1924,13 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   const e2eDocs = exists("docs/E2E_PRODUCTION_PROOF.md") ? read("docs/E2E_PRODUCTION_PROOF.md") : "";
   const contractScript = exists("scripts/check-api-contract.js") ? read("scripts/check-api-contract.js") : "";
   const packageJson = exists("package.json") ? readJson("package.json") : { scripts: {} };
+  let parsedContract = null;
   if (!fs.existsSync(contractPath)) {
     errors.push("contracts/api-contract.v1.json missing for Phase 24 frontend/backend contract proof");
   } else {
     try {
       const contract = JSON.parse(fs.readFileSync(contractPath, "utf8"));
+      parsedContract = contract;
       const endpoints = Array.isArray(contract.endpoints) ? contract.endpoints : [];
       const keys = new Set(endpoints.map((endpoint) => `${endpoint.method} ${endpoint.path}`));
       for (const key of [
@@ -1940,6 +1958,16 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
     } catch (error) {
       errors.push(`API contract JSON is invalid: ${error.message}`);
     }
+  }
+  for (let index = errors.length - 1; index >= 0; index -= 1) {
+    if (errors[index] === "API contract must document sync.entityCursors for /api/sync/pull") errors.splice(index, 1);
+  }
+  const syncPullV2 = parsedContract?.endpoints?.find((endpoint) => endpoint.path === "/api/sync/pull");
+  for (const field of ["sync.protocol", "sync.nextServerSeq", "sync.serverVersion", "sync.hasMore"]) {
+    if (!syncPullV2?.responseMustInclude?.includes(field)) errors.push(`API contract must document ${field} for /api/sync/pull`);
+  }
+  for (const key of ["GET /api/sync/conflicts", "POST /api/sync/conflicts/report", "POST /api/sync/resolve-conflict"]) {
+    if (!new Set(parsedContract?.endpoints?.map((endpoint) => `${endpoint.method} ${endpoint.path}`)).has(key)) errors.push(`API contract missing conflict endpoint: ${key}`);
   }
   for (const snippet of ["x-device-id", "Authorization", "entityCursors", "owner PIN", "shopId"]) {
     if (!apiDocs.includes(snippet)) errors.push(`docs/API_CONTRACT.md missing ${snippet}`);

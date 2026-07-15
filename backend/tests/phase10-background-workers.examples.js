@@ -77,8 +77,13 @@ assert(exportsWorker.includes("NOT_IMPLEMENTED"), "export jobs should return cle
 assert(reminderWorker.includes("WHATSAPP_PROVIDER_NOT_CONFIGURED"), "reminder job must not fake WhatsApp success");
 assert(reminderWorker.includes("whatsapp_reminders"), "reminder job should respect feature gate");
 assert(syncCleanupWorker.includes("dryRun"), "sync cleanup must default to dry run");
-assert(syncCleanupWorker.includes("synced") && syncCleanupWorker.includes("failed"), "sync cleanup must be conservative");
-assert(syncCleanupWorker.includes("Never delete recent idempotency records"), "sync cleanup must document retention policy");
+assert(syncCleanupWorker.includes("payload.dryRun === false && payload.confirm === true"), "sync cleanup writes must require explicit confirmation");
+assert(syncCleanupWorker.includes("90, 90, 3650"), "sync cleanup must enforce a minimum 90-day idempotency window");
+assert(syncCleanupWorker.includes('status: "synced"'), "sync cleanup may delete only successful sync events");
+assert(syncCleanupWorker.includes('status: { in: ["resolved", "dismissed"] }'), "sync cleanup may delete only closed conflict records");
+assert(syncCleanupWorker.includes("Failed, processing, and conflict rows remain recoverable indefinitely"), "sync cleanup must preserve recoverable events");
+assert(syncCleanupWorker.includes("Open conflict snapshots are never removed by retention"), "sync cleanup must preserve open conflicts");
+assert(syncCleanupWorker.includes("take: limit"), "sync cleanup must use bounded batches");
 assert(backupWorker.includes("RUN_SHOP_BACKUP") && backupWorker.includes("RUN_DATABASE_BACKUP"), "backup job skeletons must exist");
 assert(backupWorker.includes("No DB credentials are stored in payloads"), "backup job must avoid DB credentials in payload");
 

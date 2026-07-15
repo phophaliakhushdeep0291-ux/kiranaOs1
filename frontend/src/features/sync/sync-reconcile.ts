@@ -405,12 +405,26 @@ function ledgerCustomerId(row: Partial<CustomerLedgerEntry>): string | null {
 async function refreshCustomerBalancesFromLocalLedger(): Promise<void> {
   const customers = await offlineDB.getAll<Record<string, unknown>>("customers").catch(() => []);
   const ledger = dedupeLedgerEntries(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []));
+  const mappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
   if (customers.length === 0 || ledger.length === 0) return;
 
   const table = dexieDB.customers as Table<Record<string, unknown>, string>;
   const now = nowIso();
   for (const customer of customers) {
     const ids = rowIdSet(customer);
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      for (const mapping of mappings) {
+        const entityType = String(mapping.entity_type ?? mapping.entityType ?? "");
+        if (entityType && entityType !== "customer" && entityType !== "customers") continue;
+        const localId = getStringFrom(mapping, ["local_id", "localId"]);
+        const serverId = getStringFrom(mapping, ["server_id", "serverId"]);
+        if (!localId || !serverId) continue;
+        if (ids.has(localId) && !ids.has(serverId)) { ids.add(serverId); expanded = true; }
+        if (ids.has(serverId) && !ids.has(localId)) { ids.add(localId); expanded = true; }
+      }
+    }
     if (ids.size === 0) continue;
     const entries = ledger.filter((entry) => {
       if (entry.deleted_at != null || entry.deletedAt != null) return false;

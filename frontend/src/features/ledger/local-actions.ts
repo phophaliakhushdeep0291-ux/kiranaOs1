@@ -32,14 +32,18 @@ function readStringField(row: Record<string, unknown>, keys: string[]): string |
 
 function expandIdsWithMappings(ids: Set<string>, mappings: Array<Record<string, unknown>>): Set<string> {
   const expanded = new Set(ids);
-  for (const mapping of mappings) {
-    const entityType = String(mapping.entity_type ?? mapping.entityType ?? "");
-    if (entityType && entityType !== "customer" && entityType !== "customers") continue;
-    const localId = readStringField(mapping, ["local_id", "localId"]);
-    const serverId = readStringField(mapping, ["server_id", "serverId"]);
-    if (!localId || !serverId) continue;
-    if (expanded.has(localId)) expanded.add(serverId);
-    if (expanded.has(serverId)) expanded.add(localId);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const mapping of mappings) {
+      const entityType = String(mapping.entity_type ?? mapping.entityType ?? "");
+      if (entityType && entityType !== "customer" && entityType !== "customers") continue;
+      const localId = readStringField(mapping, ["local_id", "localId"]);
+      const serverId = readStringField(mapping, ["server_id", "serverId"]);
+      if (!localId || !serverId) continue;
+      if (expanded.has(localId) && !expanded.has(serverId)) { expanded.add(serverId); changed = true; }
+      if (expanded.has(serverId) && !expanded.has(localId)) { expanded.add(localId); changed = true; }
+    }
   }
   return expanded;
 }
