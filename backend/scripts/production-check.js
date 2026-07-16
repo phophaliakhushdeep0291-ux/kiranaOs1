@@ -108,6 +108,7 @@ const requiredFiles = [
   "src/modules/reminders/reminders.schemas.js",
   "src/modules/reminders/reminderTemplates.service.js",
   "src/modules/reminders/whatsapp.provider.js",
+  "src/modules/reminders/whatsapp.webhook.js",
   "src/modules/reminders/reminderFormatter.js",
   "scripts/verify-object-storage.js",
   "scripts/verify-export-flow.js",
@@ -246,6 +247,9 @@ const requiredEnvKeys = [
   "WHATSAPP_API_SECRET",
   "WHATSAPP_API_KEY",
   "WHATSAPP_PROVIDER",
+  "WHATSAPP_WEBHOOK_PUBLIC_URL",
+  "WHATSAPP_WEBHOOK_SECRET",
+  "WHATSAPP_WEBHOOK_VERIFY_TOKEN",
   "RELEASE_VERSION",
   "RELEASE_CHANNEL",
   "RELEASE_APPROVED",
@@ -313,6 +317,7 @@ const requiredPostgresTables = [
   "ReportExportJob",
   "ReminderTemplate",
   "ReminderLog",
+  "ReminderDeliveryEvent",
 ];
 
 const errors = [];
@@ -699,7 +704,7 @@ if (exists("prisma-postgres/schema.prisma") && migrationFiles.length) {
     "Shop", "User", "Session", "Product", "Customer",
     "Bill", "BillItem", "Payment", "StockLedger", "UdharLedger",
     "Supplier", "BillCounter", "AuditLog", "OfflineSyncEvent",
-    "Plan", "Subscription", "PaymentTransaction", "Device", "DeviceLicense", "PaymentProviderEvent", "DailyClosingSnapshot", "ReportExportJob", "ReminderTemplate", "ReminderLog",
+    "Plan", "Subscription", "PaymentTransaction", "Device", "DeviceLicense", "PaymentProviderEvent", "DailyClosingSnapshot", "ReportExportJob", "ReminderTemplate", "ReminderLog", "ReminderDeliveryEvent",
   ];
 
   for (const model of criticalModels) {
@@ -1841,18 +1846,18 @@ if (exists("src/modules/offers/offers.service.js") && exists("src/modules/bills/
 if (exists("prisma/schema.prisma") && exists("prisma-postgres/schema.prisma")) {
   const sqliteSchema = read("prisma/schema.prisma");
   const pgSchema = read("prisma-postgres/schema.prisma");
-  for (const model of ["ReminderTemplate", "ReminderLog"]) {
+  for (const model of ["ReminderTemplate", "ReminderLog", "ReminderDeliveryEvent"]) {
     if (!sqliteSchema.includes(`model ${model}`)) errors.push(`prisma/schema.prisma missing reminder model: ${model}`);
     if (!pgSchema.includes(`model ${model}`)) errors.push(`prisma-postgres/schema.prisma missing reminder model: ${model}`);
   }
-  for (const snippet of ["@@index([shopId, active])", "@@index([shopId, customerId, createdAt])", "@@index([shopId, status, createdAt])", "@@index([shopId, channel, createdAt])"]) {
+  for (const snippet of ["@@index([shopId, active])", "@@index([shopId, customerId, createdAt])", "@@index([shopId, status, createdAt])", "@@index([shopId, channel, createdAt])", "@@unique([provider, providerMessageId])"]) {
     if (!sqliteSchema.includes(snippet) || !pgSchema.includes(snippet)) errors.push(`Reminder schemas missing index snippet: ${snippet}`);
   }
 }
 
 if (migrationFiles.length) {
   const migrationText = migrationFiles.map((file) => read(path.join("prisma-postgres", "migrations", file))).join("\n");
-  for (const snippet of ["CREATE TABLE \"ReminderTemplate\"", "CREATE TABLE \"ReminderLog\"", "ReminderLog_shopId_customerId_createdAt_idx", "ReminderTemplate_shopId_active_idx"]) {
+  for (const snippet of ["CREATE TABLE \"ReminderTemplate\"", "CREATE TABLE \"ReminderLog\"", "CREATE TABLE \"ReminderDeliveryEvent\"", "ReminderLog_shopId_customerId_createdAt_idx", "ReminderTemplate_shopId_active_idx", "ReminderLog_provider_providerMessageId_key"]) {
     if (!migrationText.includes(snippet)) errors.push(`PostgreSQL migration missing reminder snippet: ${snippet}`);
   }
 }
@@ -1860,11 +1865,12 @@ if (migrationFiles.length) {
 if (exists("src/app.js")) {
   const appSource = read("src/app.js");
   if (!appSource.includes('app.use("/api/reminders"')) errors.push("src/app.js missing /api/reminders route registration");
+  if (!appSource.includes('app.use("/api/reminders/webhooks", express.raw')) errors.push("src/app.js must retain exact signed WhatsApp JSON bytes");
 }
 
 if (exists("src/modules/reminders/reminders.routes.js")) {
   const routes = read("src/modules/reminders/reminders.routes.js");
-  for (const snippet of ["/status", "/templates", "/logs", "/send", "/send-statement", "requireFeature(\"whatsapp_reminders\")", "requireRole(\"owner\", \"admin\")"]) {
+  for (const snippet of ["/status", "/templates", "/logs", "/send", "/send-statement", "/webhooks/meta", "/webhooks/:provider", "requireFeature(\"whatsapp_reminders\")", "requireRole(\"owner\", \"admin\")"]) {
     if (!routes.includes(snippet)) errors.push(`reminders.routes.js missing route/gate snippet: ${snippet}`);
   }
 }
@@ -1888,11 +1894,18 @@ if (exists("src/modules/reminders/reminders.service.js")) {
 
 if (exists("src/modules/reminders/whatsapp.provider.js")) {
   const provider = read("src/modules/reminders/whatsapp.provider.js");
-  for (const snippet of ["WHATSAPP_PROVIDER_NOT_CONFIGURED", "getWhatsAppProviderStatus", "sendWhatsAppMessage", "graph.facebook.com", "api.twilio.com", "api.gupshup.io", "api.interakt.ai", "WHATSAPP_PROVIDER_RESPONSE_INVALID", "AbortSignal.timeout", "redirect: \"error\""]) {
+  for (const snippet of ["WHATSAPP_PROVIDER_NOT_CONFIGURED", "getWhatsAppProviderStatus", "sendWhatsAppMessage", "graph.facebook.com", "api.twilio.com", "api.gupshup.io", "api.interakt.ai", "WHATSAPP_PROVIDER_RESPONSE_INVALID", "AbortSignal.timeout", "redirect: \"error\"", "StatusCallback", 'status: "accepted"']) {
     if (!provider.includes(snippet)) errors.push(`whatsapp.provider.js missing production adapter behavior: ${snippet}`);
   }
   if (provider.includes("WHATSAPP_PROVIDER_NOT_IMPLEMENTED")) errors.push("whatsapp.provider.js still contains an unimplemented provider path");
   if (/console\.log\([^\n]*(WHATSAPP_API_KEY|WHATSAPP_API_SECRET)/.test(provider)) errors.push("whatsapp.provider.js must not log provider credentials");
+}
+
+if (exists("src/modules/reminders/whatsapp.webhook.js")) {
+  const webhook = read("src/modules/reminders/whatsapp.webhook.js");
+  for (const snippet of ["x-hub-signature-256", "interakt-signature", "x-twilio-signature", "twilio.validateRequest", "WHATSAPP_WEBHOOK_SECRET", "reminderDeliveryEvent", "reconcileReminderDeliveryEvents", "STATUS_PREDECESSORS", "REMINDER_DELIVERED", "REMINDER_READ"]) {
+    if (!webhook.includes(snippet)) errors.push(`whatsapp.webhook.js missing signed delivery behavior: ${snippet}`);
+  }
 }
 
 if (exists("src/workers/reminder.worker.js")) {
@@ -1904,7 +1917,7 @@ if (exists("src/workers/reminder.worker.js")) {
 
 if (exists("src/lib/metrics.js")) {
   const metrics = read("src/lib/metrics.js");
-  for (const snippet of ["reminders_requested_total", "reminders_sent_total", "reminders_failed_total", "reminders_skipped_total", "whatsapp_provider_errors_total", "provider", "channel"]) {
+  for (const snippet of ["reminders_requested_total", "reminders_accepted_total", "reminders_sent_total", "reminders_delivered_total", "reminders_read_total", "reminders_failed_total", "reminders_skipped_total", "whatsapp_provider_errors_total", "provider", "channel"]) {
     if (!metrics.includes(snippet)) errors.push(`metrics.js missing reminder metrics snippet: ${snippet}`);
   }
   for (const forbidden of ["shopId", "customerId", "userId", "phone"]) {
@@ -1915,13 +1928,14 @@ if (exists("src/lib/metrics.js")) {
 
 if (exists("src/config/env.js")) {
   const envSource = read("src/config/env.js");
-  for (const snippet of ["WHATSAPP_PROVIDER", "WHATSAPP_API_KEY", "WHATSAPP_API_SECRET", "WHATSAPP_SENDER_ID", "REMINDER_COOLDOWN_HOURS", "required in production when WHATSAPP_PROVIDER"]) {
+  for (const snippet of ["WHATSAPP_PROVIDER", "WHATSAPP_API_KEY", "WHATSAPP_API_SECRET", "WHATSAPP_SENDER_ID", "WHATSAPP_WEBHOOK_PUBLIC_URL", "WHATSAPP_WEBHOOK_SECRET", "WHATSAPP_WEBHOOK_VERIFY_TOKEN", "REMINDER_COOLDOWN_HOURS", "required in production when WHATSAPP_PROVIDER"]) {
     if (!envSource.includes(snippet)) errors.push(`env.js missing WhatsApp/reminder env snippet: ${snippet}`);
   }
 }
 
 if (exists("package.json")) {
   const packageJson = readJson("package.json");
+  if (packageJson.dependencies?.twilio !== "6.0.2") errors.push("package.json must pin the official Twilio webhook validator SDK");
   if (!packageJson.scripts?.["test:billing"]?.includes("phase17-whatsapp-reminders.examples.js")) {
     errors.push("Phase 17 WhatsApp reminder tests must be wired into npm test");
   }

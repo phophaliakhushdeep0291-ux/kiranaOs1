@@ -194,7 +194,7 @@ for (const snippet of [
   "twilio.validateRequest",
   "WHATSAPP_WEBHOOK_SECRET",
   "WHATSAPP_WEBHOOK_VERIFY_TOKEN",
-  "ReminderDeliveryEvent",
+  "reminderDeliveryEvent",
   "reconcileReminderDeliveryEvents",
   "STATUS_PREDECESSORS",
   "REMINDER_DELIVERED",
