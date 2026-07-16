@@ -187,6 +187,34 @@ These require both `Authorization` and `x-device-id`:
 /api/ai
 ```
 
+### AI audio transcription
+
+`POST /api/ai/transcribe` requires `Authorization`, `x-device-id`, and an active
+shop context. It accepts a multipart `audio` or `file` field, a raw supported
+audio body, or the documented base64 JSON fallback, up to 25 MB. A successful
+response includes `data.transcript`, `data.model`, and `data.provider`.
+
+The server streams the isolated temporary file to the configured Groq or
+OpenAI transcription provider and removes it after both successful and failed
+requests. The endpoint does not log audio bytes or transcript text.
+
+### Encrypted shop backup artifacts
+
+```text
+GET  /api/jobs/backups
+POST /api/jobs/backups                 # owner PIN required
+GET  /api/jobs/backups/:id/download    # owner PIN required
+```
+
+Backup creation captures one transactionally consistent, tenant-scoped logical
+snapshot. It is gzip-compressed, encrypted with AES-256-GCM, checksummed with
+SHA-256, stored under a server-generated key, and retained for the configured
+period. Password/PIN hashes, sessions, device fingerprints, integration-key
+hashes, and webhook secrets are intentionally excluded. API responses never
+expose the object-storage key. Production creation requires the Redis worker,
+non-local object storage, and a base64-encoded 32-byte
+`BACKUP_ENCRYPTION_KEY`.
+
 ### Razorpay webhook
 
 ```text

@@ -1,50 +1,111 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
-import { CheckCircle2, Clock, Cloud, CloudOff, Database, RefreshCcw, ShieldCheck, Upload } from "lucide-react";
+import { Archive, CheckCircle2, Clock, Cloud, CloudOff, Database, Download, Loader2, RefreshCcw, ShieldCheck, Upload } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Badge, Kpi, RowToggle } from "@/features/settings/ui";
-import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
-
-interface BackupConfig {
-  auto: boolean;
-  frequency: string;
-  time: string;
-  location: string;
-  keepFor: string;
-  encrypt: boolean;
-}
-const DEFAULT_BACKUP: BackupConfig = {
-  auto: true, frequency: "Daily", time: "02:00", location: "Secure Cloud Storage", keepFor: "30 days", encrypt: true,
-};
+import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { ApiClientError } from "@/lib/api/http";
+import {
+  createShopBackup,
+  downloadShopBackup,
+  listShopBackups,
+  saveBackupBlob,
+  type BackupArtifact,
+} from "@/features/backups";
 function timeAgo(d: Date | null) {
   if (!d) return "—";
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
+function backupTime(value: string | null) {
+  if (!value) return "Not completed";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Time unavailable";
+  return date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+}
+
+function backupSize(value: string | null) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "Size pending";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function backupTone(status: BackupArtifact["status"]): "green" | "amber" | "red" | "gray" {
+  if (status === "completed") return "green";
+  if (status === "failed") return "red";
+  if (status === "queued" || status === "processing") return "amber";
+  return "gray";
+}
+
 export default function SyncSettingsPage() {
   const { toast } = useToast();
   const { isOnline, isBrowserOnline, backendStatus, isSyncing, pendingCount, failedCount, conflictCount, syncNow } = useOfflineStatus();
-  const { prefs, patch, hydrated } = useSettingsPrefs();
-  const [backup, setBackup] = useState<BackupConfig>(DEFAULT_BACKUP);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [backups, setBackups] = useState<BackupArtifact[]>([]);
+  const [backupRetentionDays, setBackupRetentionDays] = useState(30);
+  const [backupHistoryLoading, setBackupHistoryLoading] = useState(true);
+  const [backupAccessDenied, setBackupAccessDenied] = useState(false);
+  const [backupApproval, setBackupApproval] = useState<{ type: "create" | "download"; artifact?: BackupArtifact } | null>(null);
+  const [backupActionLoading, setBackupActionLoading] = useState(false);
+  const [backupActionError, setBackupActionError] = useState<string | null>(null);
   const wasSyncing = useRef(false);
-  const seeded = useRef(false);
-
-  useEffect(() => {
-    if (seeded.current || !hydrated) return;
-    seeded.current = true;
-    setBackup({ ...DEFAULT_BACKUP, ...((prefs.backup ?? {}) as Partial<BackupConfig>) });
-  }, [hydrated, prefs.backup]);
 
   useEffect(() => { if (wasSyncing.current && !isSyncing) setLastSynced(new Date()); wasSyncing.current = isSyncing; }, [isSyncing]);
 
-  const update = (partial: Partial<BackupConfig>) => { const next = { ...backup, ...partial }; setBackup(next); patch({ backup: next }); };
+  const loadBackups = useCallback(async (background = false) => {
+    if (!isOnline) {
+      setBackupHistoryLoading(false);
+      return;
+    }
+    try {
+      const result = await listShopBackups({ background });
+      setBackups(result.backups);
+      setBackupRetentionDays(result.retention_days);
+      setBackupAccessDenied(false);
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 403) setBackupAccessDenied(true);
+    } finally {
+      setBackupHistoryLoading(false);
+    }
+  }, [isOnline]);
+
+  useEffect(() => {
+    void loadBackups();
+    if (!isOnline || backupAccessDenied) return;
+    const interval = window.setInterval(() => void loadBackups(true), 30_000);
+    return () => window.clearInterval(interval);
+  }, [backupAccessDenied, isOnline, loadBackups]);
+
+  async function confirmBackupAction({ ownerPin }: { ownerPin: string }) {
+    if (!backupApproval) return;
+    setBackupActionLoading(true);
+    setBackupActionError(null);
+    try {
+      if (backupApproval.type === "create") {
+        const result = await createShopBackup(ownerPin);
+        setBackups((current) => [result.backup, ...current.filter((row) => row.id !== result.backup.id)]);
+        toast({
+          title: result.backup.status === "completed" ? "Encrypted backup ready" : "Encrypted backup queued",
+          description: "The portable snapshot is tenant-scoped, checksummed, and protected with AES-256-GCM.",
+        });
+      } else if (backupApproval.artifact) {
+        const blob = await downloadShopBackup(backupApproval.artifact.id, ownerPin);
+        saveBackupBlob(blob, backupApproval.artifact);
+        toast({ title: "Encrypted backup downloaded", description: "Keep the .kosb file and encryption key in separate secure locations." });
+      }
+      setBackupApproval(null);
+      await loadBackups();
+    } catch (error) {
+      setBackupActionError(error instanceof Error ? error.message : "Backup action failed");
+    } finally {
+      setBackupActionLoading(false);
+    }
+  }
   const hasPending = pendingCount > 0;
   const hasFailed = failedCount > 0;
   const hasConflict = conflictCount > 0;
@@ -129,31 +190,101 @@ export default function SyncSettingsPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Backup Settings */}
+      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+        {/* Encrypted portable backups */}
         <Card>
-          <CardHead icon={<Database size={15} />} title="Backup Settings" sub="Automatic cloud backups" action={<button onClick={handleSync} className="text-[12px] font-bold text-[#005dff] hover:underline">Backup now</button>} />
+          <CardHead
+            icon={<Archive size={15} />}
+            title="Portable shop backup"
+            sub="Encrypted recovery artifact"
+            action={!backupAccessDenied ? (
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 rounded-[8px] text-[12px] font-bold"
+                disabled={!isOnline || backupActionLoading}
+                onClick={() => { setBackupActionError(null); setBackupApproval({ type: "create" }); }}
+              >
+                {backupActionLoading ? <Loader2 size={13} className="animate-spin" /> : <Database size={13} />}
+                Create snapshot
+              </Button>
+            ) : undefined}
+          />
           <div className="px-5 pb-4">
-            <RowToggle label="Auto backup" desc="Back up automatically on a schedule" pill={<Switch checked={backup.auto} onCheckedChange={(v) => update({ auto: v })} />} />
-            <RowToggle label="Frequency" pill={<Select value={backup.frequency} onValueChange={(v) => update({ frequency: v })}><SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["Hourly", "Daily", "Weekly"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>} />
-            <RowToggle label="Backup time" pill={<Input className="h-8 w-[110px] text-[12px]" type="time" value={backup.time} onChange={(e) => update({ time: e.target.value })} />} />
-            <RowToggle label="Keep backups for" pill={<Select value={backup.keepFor} onValueChange={(v) => update({ keepFor: v })}><SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["7 days", "30 days", "90 days", "1 year"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>} />
-            <RowToggle label="Encrypt backups" desc="AES-256 at rest" pill={<Switch checked={backup.encrypt} onCheckedChange={(v) => update({ encrypt: v })} />} last />
-            <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-[#eef5ff] px-3 py-2 text-[11px] font-medium text-[#34507f]"><ShieldCheck size={14} /> Backups go to {backup.location}.</div>
+            {backupAccessDenied ? (
+              <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12px] font-medium text-amber-900">
+                Owner or admin access is required to view portable backups.
+              </div>
+            ) : (
+              <>
+                <RowToggle label="Encryption" desc="Authenticated encryption before upload" pill={<Badge tone="green"><ShieldCheck size={11} /> AES-256-GCM</Badge>} />
+                <RowToggle label="Integrity" desc="Verified before recovery" pill={<Badge tone="blue">SHA-256</Badge>} />
+                <RowToggle label="Retention" desc="Expired objects are deleted; audit metadata remains" pill={<Badge>{backupRetentionDays} days</Badge>} />
+                <RowToggle label="Sensitive credentials" desc="Passwords, PINs, sessions, API keys and webhook secrets" pill={<Badge tone="green">Excluded</Badge>} last />
+                <div className="mt-3 flex items-start gap-2 rounded-[10px] bg-[#eef5ff] px-3 py-2 text-[11px] font-medium leading-relaxed text-[#34507f]">
+                  <ShieldCheck size={14} className="mt-0.5 shrink-0" />
+                  Continuous device sync and portable snapshots are separate protections. A snapshot is created only after owner-PIN approval.
+                </div>
+              </>
+            )}
           </div>
         </Card>
 
         {/* Backup History */}
         <Card>
-          <CardHead icon={<Cloud size={15} />} title="Backup History" sub="Cloud backup" />
-          <div className="px-5 pb-4">
-            <div className="flex items-start gap-3 rounded-[10px] bg-[#eef5ff] px-3.5 py-3 text-[12px] font-medium text-[#34507f]">
-              <ShieldCheck size={15} className="mt-0.5 shrink-0" />
-              <span>Your data is continuously backed up to the cloud every time it syncs. Downloadable backup snapshots &amp; restore are coming soon.</span>
-            </div>
+          <CardHead icon={<Cloud size={15} />} title="Backup history" sub="Server-confirmed encrypted artifacts" action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="text-[12px] font-bold text-[#005dff] hover:underline">Refresh</button> : undefined} />
+          <div className="space-y-2 px-5 pb-4">
+            {backupHistoryLoading ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={15} className="animate-spin" /> Loading backup history</div>
+            ) : backupAccessDenied ? (
+              <div className="py-8 text-center text-[12px] text-[#64748b]">Backup history is hidden for cashier accounts.</div>
+            ) : backups.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-7 text-center">
+                <span className="grid h-11 w-11 place-items-center rounded-full bg-[#eef5ff] text-[#005dff]"><Archive size={20} /></span>
+                <p className="text-[13px] font-bold text-[#102347]">No portable snapshot yet</p>
+                <p className="max-w-sm text-[11px] text-[#64748b]">Create one before a major import, migration, device replacement, or support recovery.</p>
+              </div>
+            ) : backups.slice(0, 8).map((artifact) => (
+              <div key={artifact.id} className="flex flex-col gap-3 rounded-[11px] border border-[#e7edf7] px-3.5 py-3 sm:flex-row sm:items-center">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[#eef5ff] text-[#005dff]"><Archive size={16} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[12px] font-bold text-[#102347]">{backupTime(artifact.completed_at ?? artifact.created_at)}</p>
+                    <Badge tone={backupTone(artifact.status)}>{artifact.status.replace("_", " ")}</Badge>
+                  </div>
+                  <p className="mt-1 truncate text-[11px] text-[#64748b]">
+                    {artifact.status === "failed"
+                      ? artifact.error_message || "Backup failed"
+                      : `${backupSize(artifact.size_bytes)} · ${artifact.record_count?.toLocaleString("en-IN") ?? "—"} records · expires ${backupTime(artifact.expires_at)}`}
+                  </p>
+                </div>
+                {artifact.status === "completed" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 rounded-[8px] text-[12px]"
+                    onClick={() => { setBackupActionError(null); setBackupApproval({ type: "download", artifact }); }}
+                  >
+                    <Download size={13} /> Download
+                  </Button>
+                )}
+              </div>
+            ))}
           </div>
         </Card>
       </div>
+
+      <OwnerPinModal
+        open={Boolean(backupApproval)}
+        title={backupApproval?.type === "download" ? "Download encrypted backup" : "Create encrypted shop backup"}
+        description={backupApproval?.type === "download"
+          ? "This exports sensitive shop data in an encrypted .kosb envelope. The download is audited."
+          : "This creates a transactionally consistent, tenant-scoped snapshot. Credential hashes and session secrets are excluded."}
+        confirmLabel={backupApproval?.type === "download" ? "Download backup" : "Create backup"}
+        loading={backupActionLoading}
+        error={backupActionError}
+        onCancel={() => { if (!backupActionLoading) { setBackupApproval(null); setBackupActionError(null); } }}
+        onConfirm={confirmBackupAction}
+      />
     </SettingsShell>
   );
 }

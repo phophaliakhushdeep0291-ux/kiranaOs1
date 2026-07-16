@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import fs from "fs";
 import { env } from "../../config/env.js";
 import { checkPermission } from "./ai.permissions.js";
 import db from "../../db.js";
@@ -14,6 +15,13 @@ import db from "../../db.js";
 
 let _client = null;
 let _model  = null;
+let _transcriptionProvider = null;
+
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+const TRANSCRIPTION_PROMPT = [
+  "Indian kirana retail voice command in Hindi, Hinglish, or English.",
+  "Preserve product names, quantities, units, customer names, mobile numbers, bill numbers, UPI, cash, and udhar accurately.",
+].join(" ");
 
 function getClient() {
   if (_client) return { client: _client, model: _model };
@@ -41,6 +49,85 @@ function getClient() {
     "No AI API key configured. Add GROQ_API_KEY (free) to .env. " +
     "Get one at https://console.groq.com — no credit card needed."
   );
+}
+
+function getTranscriptionProvider() {
+  if (_transcriptionProvider) return _transcriptionProvider;
+
+  if (env.GROQ_API_KEY) {
+    _transcriptionProvider = {
+      client: new OpenAI({
+        apiKey: env.GROQ_API_KEY,
+        baseURL: "https://api.groq.com/openai/v1",
+      }),
+      model: env.GROQ_TRANSCRIBE_MODEL,
+      provider: "groq",
+    };
+    return _transcriptionProvider;
+  }
+
+  if (env.OPENAI_API_KEY) {
+    _transcriptionProvider = {
+      client: new OpenAI({ apiKey: env.OPENAI_API_KEY }),
+      model: env.OPENAI_TRANSCRIBE_MODEL,
+      provider: "openai",
+    };
+    return _transcriptionProvider;
+  }
+
+  const error = new Error("No AI API key configured for audio transcription");
+  error.code = "AI_KEY_MISSING";
+  error.status = 503;
+  throw error;
+}
+
+export async function transcribeAudio(file, { providerOverride } = {}) {
+  if (!file?.path) {
+    const error = new Error("Audio file is required");
+    error.code = "AUDIO_FILE_REQUIRED";
+    error.status = 400;
+    throw error;
+  }
+
+  const stat = await fs.promises.stat(file.path);
+  if (!stat.isFile() || stat.size === 0) {
+    const error = new Error("Uploaded audio file is empty");
+    error.code = "AUDIO_FILE_EMPTY";
+    error.status = 400;
+    throw error;
+  }
+  if (stat.size > MAX_AUDIO_BYTES) {
+    const error = new Error("Audio upload exceeds 25MB limit");
+    error.code = "AUDIO_FILE_TOO_LARGE";
+    error.status = 413;
+    throw error;
+  }
+
+  const selected = providerOverride ?? getTranscriptionProvider();
+  const audioStream = fs.createReadStream(file.path);
+  try {
+    const response = await selected.client.audio.transcriptions.create({
+      file: audioStream,
+      model: selected.model,
+      response_format: "json",
+      prompt: TRANSCRIPTION_PROMPT,
+    });
+    const transcript = String(response?.text ?? "").trim();
+    if (!transcript) {
+      const error = new Error("The transcription provider returned no speech text");
+      error.code = "AI_TRANSCRIPTION_EMPTY";
+      error.status = 502;
+      throw error;
+    }
+
+    return {
+      transcript,
+      model: selected.model,
+      provider: selected.provider,
+    };
+  } finally {
+    audioStream.destroy();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -10,9 +10,11 @@ const envSchema = z.object({
   // Groq — free tier, recommended (https://console.groq.com)
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default("llama3-8b-8192"),
+  GROQ_TRANSCRIBE_MODEL: z.string().default("whisper-large-v3-turbo"),
   // OpenAI — paid fallback
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
+  OPENAI_TRANSCRIBE_MODEL: z.string().default("gpt-4o-mini-transcribe"),
   ALLOWED_ORIGINS: z.string().default("http://localhost:5500"),
   TEST_DATABASE_URL: z.string().optional(),
   API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(15 * 60 * 1000),
@@ -54,6 +56,7 @@ const envSchema = z.object({
   WORKER_STALE_AFTER_MS: z.coerce.number().int().min(10000).max(900000).default(90000),
   JOB_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   BACKUP_RETENTION_DAYS: z.coerce.number().int().min(7).max(365).default(30),
+  BACKUP_CLEANUP_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   BACKUP_ENCRYPTION_KEY: z.string().optional(),
   DAILY_CLOSING_SCHEDULE_HOUR: z.coerce.number().int().min(0).max(23).default(2),
   DAILY_CLOSING_TIMEZONE: z.string().default("Asia/Kolkata"),
@@ -79,6 +82,10 @@ const envSchema = z.object({
   WHATSAPP_API_SECRET: z.string().optional(),
   WHATSAPP_SENDER_ID: z.string().optional(),
   WHATSAPP_BASE_URL: z.string().optional(),
+  WHATSAPP_TEMPLATE_NAME: z.string().optional(),
+  WHATSAPP_TEMPLATE_LANGUAGE: z.string().min(2).max(20).default("en"),
+  WHATSAPP_GUPSHUP_APP_NAME: z.string().optional(),
+  WHATSAPP_DEFAULT_COUNTRY_CODE: z.string().regex(/^\+[1-9]\d{0,3}$/).default("+91"),
   INTEGRATION_SIGNING_SECRET: z.string().optional(),
   INTEGRATION_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
   // GST compliance submission is disabled until a certified provider adapter is
@@ -251,10 +258,24 @@ if (parsed.data.NODE_ENV === "production" && ["s3", "r2", "minio"].includes(pars
 if (parsed.data.NODE_ENV === "production" && parsed.data.WHATSAPP_PROVIDER !== "disabled") {
   const missing = [
     ["WHATSAPP_API_KEY", parsed.data.WHATSAPP_API_KEY],
-    ["WHATSAPP_SENDER_ID", parsed.data.WHATSAPP_SENDER_ID],
+    ...(parsed.data.WHATSAPP_PROVIDER === "interakt" ? [] : [["WHATSAPP_SENDER_ID", parsed.data.WHATSAPP_SENDER_ID]]),
   ].filter(([, value]) => !value).map(([key]) => key);
-  if (["twilio", "gupshup", "interakt"].includes(parsed.data.WHATSAPP_PROVIDER) && !parsed.data.WHATSAPP_API_SECRET) {
+  if (parsed.data.WHATSAPP_PROVIDER === "twilio" && !parsed.data.WHATSAPP_API_SECRET) {
     missing.push("WHATSAPP_API_SECRET");
+  }
+  if (parsed.data.WHATSAPP_PROVIDER === "meta" && !parsed.data.WHATSAPP_BASE_URL) missing.push("WHATSAPP_BASE_URL");
+  if (parsed.data.WHATSAPP_PROVIDER === "gupshup" && !parsed.data.WHATSAPP_GUPSHUP_APP_NAME) missing.push("WHATSAPP_GUPSHUP_APP_NAME");
+  if (parsed.data.WHATSAPP_PROVIDER === "interakt" && !parsed.data.WHATSAPP_TEMPLATE_NAME) missing.push("WHATSAPP_TEMPLATE_NAME");
+  if (parsed.data.WHATSAPP_BASE_URL) {
+    const officialHosts = { meta: "graph.facebook.com", twilio: "api.twilio.com", gupshup: "api.gupshup.io", interakt: "api.interakt.ai" };
+    try {
+      const baseUrl = new URL(parsed.data.WHATSAPP_BASE_URL);
+      if (baseUrl.protocol !== "https:" || baseUrl.hostname !== officialHosts[parsed.data.WHATSAPP_PROVIDER]) {
+        missing.push("WHATSAPP_BASE_URL_OFFICIAL_HTTPS_HOST_REQUIRED");
+      }
+    } catch {
+      missing.push("WHATSAPP_BASE_URL_INVALID");
+    }
   }
   if (missing.length) {
     console.error(`❌ ${missing.join(", ")} required in production when WHATSAPP_PROVIDER=${parsed.data.WHATSAPP_PROVIDER}`);

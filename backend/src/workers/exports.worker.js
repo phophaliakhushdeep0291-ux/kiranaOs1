@@ -4,12 +4,14 @@ import { JOB_NAMES } from "./queueNames.js";
 export async function handleExportsJob(job) {
   switch (job.name) {
     case JOB_NAMES.GENERATE_REPORT_EXPORT:
+    case JOB_NAMES.GENERATE_CSV_EXPORT:
+    case JOB_NAMES.GENERATE_REPORT_PDF:
+      // Legacy names remain accepted for already-enqueued jobs, but they use
+      // the same persisted ReportExportJob pipeline. No export job can report
+      // queued/success without producing an audited artifact.
       return processPersistentReportExport(job.data);
     case JOB_NAMES.CLEANUP_EXPIRED_EXPORTS:
       return cleanupExpiredExports(job.data);
-    case JOB_NAMES.GENERATE_CSV_EXPORT:
-    case JOB_NAMES.GENERATE_REPORT_PDF:
-      return createExportPlaceholder(job.name, job.data);
     default: {
       const error = new Error(`Unknown exports job: ${job.name}`);
       error.code = "UNKNOWN_EXPORTS_JOB";
@@ -35,18 +37,4 @@ async function cleanupExpiredExports(payload = {}) {
   // Phase 14: cleanup only export files/metadata for expired completed exports.
   // It does not delete ReportExportJob records and never touches POS financial records.
   return cleanupExpiredReportExports({ limit: payload.limit ?? 100 });
-}
-
-function createExportPlaceholder(jobName, payload = {}) {
-  if (!payload.shopId || !payload.userId) {
-    const error = new Error("shopId and userId are required for export jobs");
-    error.code = "INVALID_EXPORT_JOB_PAYLOAD";
-    throw error;
-  }
-  return {
-    status: "NOT_IMPLEMENTED",
-    queued: true,
-    jobName,
-    reason: "Use GENERATE_REPORT_EXPORT with ReportExportJob persistence for Phase 13 async exports.",
-  };
 }

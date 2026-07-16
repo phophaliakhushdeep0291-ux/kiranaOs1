@@ -103,13 +103,68 @@ assert(!/phone\s*:\s*req\.body|mobile\s*:\s*req\.body/i.test(service), "service 
 const provider = read("src/modules/reminders/whatsapp.provider.js");
 for (const snippet of [
   "WHATSAPP_PROVIDER_NOT_CONFIGURED",
-  "WHATSAPP_PROVIDER_NOT_IMPLEMENTED",
   "sendWhatsAppMessage",
   "getWhatsAppProviderStatus",
-  "Do not fake sent",
+  "graph.facebook.com",
+  "api.twilio.com",
+  "api.gupshup.io",
+  "api.interakt.ai",
+  "WHATSAPP_PROVIDER_RESPONSE_INVALID",
+  "AbortSignal.timeout",
+  "redirect: \"error\"",
 ]) assert(provider.includes(snippet), `provider missing ${snippet}`);
-assert(!/success:\s*true/.test(provider), "provider must not fake successful WhatsApp sending");
 assert(!/console\.log\([^\n]*(WHATSAPP_API_KEY|WHATSAPP_API_SECRET)/.test(provider), "provider must not log WhatsApp secrets");
+
+const { env: runtimeEnv } = await import("../src/config/env.js");
+const { getWhatsAppProviderStatus, sendWhatsAppMessage } = await import("../src/modules/reminders/whatsapp.provider.js");
+const originalProviderConfig = Object.fromEntries(Object.keys(runtimeEnv).filter((key) => key.startsWith("WHATSAPP_")).map((key) => [key, runtimeEnv[key]]));
+const originalFetch = globalThis.fetch;
+const captured = [];
+globalThis.fetch = async (url, options) => {
+  captured.push({ url: String(url), options });
+  const responses = {
+    meta: { messages: [{ id: "wamid.runtime-proof" }] },
+    twilio: { sid: "SMruntimeproof" },
+    gupshup: { status: "submitted", messageId: "gs-runtime-proof" },
+    interakt: { result: true, id: "interakt-runtime-proof" },
+  };
+  return new Response(JSON.stringify(responses[runtimeEnv.WHATSAPP_PROVIDER]), { status: 200, headers: { "content-type": "application/json" } });
+};
+try {
+  Object.assign(runtimeEnv, {
+    WHATSAPP_API_KEY: "runtime-api-key",
+    WHATSAPP_API_SECRET: "runtime-api-secret",
+    WHATSAPP_SENDER_ID: "+919999999999",
+    WHATSAPP_BASE_URL: undefined,
+    WHATSAPP_TEMPLATE_NAME: undefined,
+    WHATSAPP_TEMPLATE_LANGUAGE: "en",
+    WHATSAPP_GUPSHUP_APP_NAME: undefined,
+    WHATSAPP_DEFAULT_COUNTRY_CODE: "+91",
+  });
+  const cases = [
+    ["meta", { WHATSAPP_BASE_URL: "https://graph.facebook.com/v24.0" }, "graph.facebook.com", "wamid.runtime-proof"],
+    ["twilio", {}, "api.twilio.com", "SMruntimeproof"],
+    ["gupshup", { WHATSAPP_GUPSHUP_APP_NAME: "kirana-runtime" }, "api.gupshup.io", "gs-runtime-proof"],
+    ["interakt", { WHATSAPP_TEMPLATE_NAME: "udhar_reminder" }, "api.interakt.ai", "interakt-runtime-proof"],
+  ];
+  for (const [providerName, overrides, expectedHost, expectedMessageId] of cases) {
+    Object.assign(runtimeEnv, { WHATSAPP_PROVIDER: providerName, WHATSAPP_BASE_URL: undefined, WHATSAPP_GUPSHUP_APP_NAME: undefined, WHATSAPP_TEMPLATE_NAME: undefined }, overrides);
+    assert.equal(getWhatsAppProviderStatus().configured, true, `${providerName} should report configured with its required credentials`);
+    const result = await sendWhatsAppMessage({ to: "9876543210", message: "Runtime provider proof", shopId: "shop-proof", customerId: "customer-proof", reminderLogId: "reminder-proof" });
+    assert.equal(result.success, true, `${providerName} should accept a provider-confirmed request`);
+    assert.equal(result.providerMessageId, expectedMessageId);
+    assert(captured.at(-1).url.includes(expectedHost), `${providerName} must call its official provider host`);
+    assert(!JSON.stringify(result).includes("runtime-api-secret"), "provider credentials must never appear in results");
+  }
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+  Object.assign(runtimeEnv, { WHATSAPP_PROVIDER: "twilio", WHATSAPP_BASE_URL: undefined });
+  const rejected = await sendWhatsAppMessage({ to: "9876543210", message: "Failure proof", shopId: "shop-proof", customerId: "customer-proof", reminderLogId: "reminder-proof" });
+  assert.equal(rejected.success, false);
+  assert.equal(rejected.code, "WHATSAPP_PROVIDER_HTTP_401");
+} finally {
+  Object.assign(runtimeEnv, originalProviderConfig);
+  globalThis.fetch = originalFetch;
+}
 
 const worker = read("src/workers/reminder.worker.js");
 for (const snippet of [
@@ -138,6 +193,8 @@ for (const snippet of [
   "WHATSAPP_API_KEY",
   "WHATSAPP_API_SECRET",
   "WHATSAPP_SENDER_ID",
+  "WHATSAPP_TEMPLATE_NAME",
+  "WHATSAPP_GUPSHUP_APP_NAME",
   "REMINDER_COOLDOWN_HOURS",
   "required in production when WHATSAPP_PROVIDER",
 ]) assert(env.includes(snippet), `env config missing ${snippet}`);
@@ -149,6 +206,9 @@ for (const snippet of [
   "WHATSAPP_API_SECRET=",
   "WHATSAPP_SENDER_ID=",
   "WHATSAPP_BASE_URL=",
+  "WHATSAPP_TEMPLATE_NAME=",
+  "WHATSAPP_GUPSHUP_APP_NAME=",
+  "WHATSAPP_DEFAULT_COUNTRY_CODE=+91",
   "REMINDER_COOLDOWN_HOURS=6",
 ]) assert(envExample.includes(snippet), `.env.example missing ${snippet}`);
 

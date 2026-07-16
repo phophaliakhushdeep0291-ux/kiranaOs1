@@ -65,8 +65,12 @@ const requiredEndpoints = [
   "GET /api/sync/pull",
   "POST /api/sync/push",
   "GET /api/jobs/workers",
+  "GET /api/jobs/backups",
+  "POST /api/jobs/backups",
+  "GET /api/jobs/backups/:id/download",
   "POST /api/reminders/send",
-  "POST /api/ai/parse-command"
+  "POST /api/ai/parse-command",
+  "POST /api/ai/transcribe"
 ];
 for (const key of requiredEndpoints) {
   if (!keys.has(key)) fail(`required endpoint not documented: ${key}`);
@@ -130,6 +134,28 @@ if (!ack?.syncGuarantees?.some((guarantee) => guarantee.includes("never move")))
 const syncDevices = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/devices");
 if (!syncDevices?.roles?.includes("owner") || !syncDevices?.roles?.includes("admin")) {
   fail("sync device fleet endpoint must require owner/admin");
+}
+
+const createBackup = contract.endpoints.find((endpoint) => endpoint.method === "POST" && endpoint.path === "/api/jobs/backups");
+if (!createBackup?.ownerPinRequired) fail("shop backup creation must require owner PIN");
+for (const guarantee of ["AES-256-GCM", "SHA-256", "credentials excluded", "serializable", "no database credentials"]) {
+  if (!createBackup?.securityGuarantees?.some((item) => item.includes(guarantee))) {
+    fail("shop backup contract must guarantee " + guarantee);
+  }
+}
+const downloadBackup = contract.endpoints.find((endpoint) => endpoint.path === "/api/jobs/backups/:id/download");
+if (!downloadBackup?.ownerPinRequired || downloadBackup?.responseContentType !== "application/vnd.kiranaos.backup") {
+  fail("backup download must be owner-PIN protected encrypted binary");
+}
+
+const transcribeAudio = contract.endpoints.find((endpoint) => endpoint.path === "/api/ai/transcribe");
+for (const field of ["data.transcript", "data.model", "data.provider"]) {
+  if (!transcribeAudio?.responseMustInclude?.includes(field)) fail("audio transcription contract must require " + field);
+}
+for (const guarantee of ["temporary file", "removed", "not logged"]) {
+  if (!transcribeAudio?.securityGuarantees?.some((item) => item.includes(guarantee))) {
+    fail("audio transcription contract must guarantee " + guarantee);
+  }
 }
 
 const verifyPayment = contract.endpoints.find((endpoint) => endpoint.path === "/api/subscription/verify-payment");

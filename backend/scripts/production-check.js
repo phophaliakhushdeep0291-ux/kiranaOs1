@@ -181,6 +181,9 @@ const requiredEnvKeys = [
   "OPENAI_API_KEY",
   "OPENAI_MODEL",
   "OPENAI_TRANSCRIBE_MODEL",
+  "GROQ_API_KEY",
+  "GROQ_MODEL",
+  "GROQ_TRANSCRIBE_MODEL",
   "API_RATE_LIMIT_WINDOW_MS",
   "API_RATE_LIMIT_MAX",
   "AUTH_RATE_LIMIT_WINDOW_MS",
@@ -1075,6 +1078,8 @@ for (const requiredFile of [
   "src/workers/reports.worker.js",
   "src/workers/exports.worker.js",
   "src/workers/backup.worker.js",
+  "src/workers/schedulers.js",
+  "src/modules/backups/backup.service.js",
   "src/workers/syncCleanup.worker.js",
   "src/modules/jobs/jobs.routes.js",
 ]) {
@@ -1136,6 +1141,25 @@ if (exists("src/workers/reports.worker.js") && !read("src/workers/reports.worker
 if (exists("src/workers/reminder.worker.js")) {
   const reminder = read("src/workers/reminder.worker.js");
   if (!reminder.includes("WHATSAPP_PROVIDER_NOT_CONFIGURED")) errors.push("reminder worker must not fake WhatsApp success without provider");
+}
+
+if (exists("src/modules/backups/backup.service.js")) {
+  const backupService = read("src/modules/backups/backup.service.js");
+  for (const snippet of ["aes-256-gcm", "sha256", "Serializable", "credentialsExcluded", "MAX_UNCOMPRESSED_BYTES", "BACKUP_IN_PROGRESS", "BACKUP_STORAGE_NOT_PRODUCTION_SAFE"]) {
+    if (!backupService.includes(snippet)) errors.push(`backup service missing production safety invariant: ${snippet}`);
+  }
+}
+if (exists("src/workers/schedulers.js")) {
+  const schedulers = read("src/workers/schedulers.js");
+  for (const snippet of ["upsertJobScheduler", "CLEANUP_EXPIRED_BACKUPS", "BACKUP_CLEANUP_INTERVAL_HOURS", "shop-backup-expiry-cleanup-v1"]) {
+    if (!schedulers.includes(snippet)) errors.push(`backup scheduler missing lifecycle behavior: ${snippet}`);
+  }
+}
+if (exists("src/modules/jobs/jobs.routes.js")) {
+  const routes = read("src/modules/jobs/jobs.routes.js");
+  for (const snippet of ["/backups", "/backups/:id/download", "requireOwnerPin", "requireRole(\"owner\", \"admin\")"]) {
+    if (!routes.includes(snippet)) errors.push(`backup routes missing access control: ${snippet}`);
+  }
 }
 // Retained temporarily as source-history context; Phase 50 checks the stronger
 // executable invariants above instead of these pre-implementation placeholders.
@@ -1755,6 +1779,26 @@ if (exists("package.json")) {
 }
 
 
+// AI transcription must be operational, bounded, and clean up every upload.
+if (exists("src/modules/ai/ai.service.js") && exists("src/modules/ai/ai.controller.js")) {
+  const aiService = read("src/modules/ai/ai.service.js");
+  const aiController = read("src/modules/ai/ai.controller.js");
+  const aiUpload = read("src/modules/ai/ai.upload.js");
+  for (const snippet of ["audio.transcriptions.create", "OPENAI_TRANSCRIBE_MODEL", "GROQ_TRANSCRIBE_MODEL", "MAX_AUDIO_BYTES", "response_format: \"json\""]) {
+    if (!aiService.includes(snippet)) errors.push(`ai.service.js missing operational transcription behavior: ${snippet}`);
+  }
+  for (const snippet of ["getUploadedAudioFile", "removeUploadedAudioFile", "finally", "svc.transcribeAudio(file)"]) {
+    if (!aiController.includes(snippet)) errors.push(`ai.controller.js missing safe transcription lifecycle behavior: ${snippet}`);
+  }
+  for (const snippet of ["25 * 1024 * 1024", "removeUploadedAudioFile", "fs.promises.unlink"]) {
+    if (!aiUpload.includes(snippet)) errors.push(`ai.upload.js missing bounded temporary-upload behavior: ${snippet}`);
+  }
+  if (aiController.includes("status(501)") || aiController.includes("not yet implemented")) {
+    errors.push("AI transcription still contains a placeholder response");
+  }
+}
+
+
 // Phase 17: WhatsApp udhar reminder backend foundation.
 if (exists("prisma/schema.prisma") && exists("prisma-postgres/schema.prisma")) {
   const sqliteSchema = read("prisma/schema.prisma");
@@ -1806,10 +1850,11 @@ if (exists("src/modules/reminders/reminders.service.js")) {
 
 if (exists("src/modules/reminders/whatsapp.provider.js")) {
   const provider = read("src/modules/reminders/whatsapp.provider.js");
-  for (const snippet of ["WHATSAPP_PROVIDER_NOT_CONFIGURED", "WHATSAPP_PROVIDER_NOT_IMPLEMENTED", "Do not fake sent", "getWhatsAppProviderStatus", "sendWhatsAppMessage"]) {
-    if (!provider.includes(snippet)) errors.push(`whatsapp.provider.js missing no-fake provider snippet: ${snippet}`);
+  for (const snippet of ["WHATSAPP_PROVIDER_NOT_CONFIGURED", "getWhatsAppProviderStatus", "sendWhatsAppMessage", "graph.facebook.com", "api.twilio.com", "api.gupshup.io", "api.interakt.ai", "WHATSAPP_PROVIDER_RESPONSE_INVALID", "AbortSignal.timeout", "redirect: \"error\""]) {
+    if (!provider.includes(snippet)) errors.push(`whatsapp.provider.js missing production adapter behavior: ${snippet}`);
   }
-  if (/success:\s*true/.test(provider)) errors.push("whatsapp.provider.js must not fake successful WhatsApp sending in Phase 17");
+  if (provider.includes("WHATSAPP_PROVIDER_NOT_IMPLEMENTED")) errors.push("whatsapp.provider.js still contains an unimplemented provider path");
+  if (/console\.log\([^\n]*(WHATSAPP_API_KEY|WHATSAPP_API_SECRET)/.test(provider)) errors.push("whatsapp.provider.js must not log provider credentials");
 }
 
 if (exists("src/workers/reminder.worker.js")) {

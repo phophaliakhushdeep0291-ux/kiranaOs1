@@ -15,6 +15,8 @@ const reportsWorker = read("src/workers/reports.worker.js");
 const reminderWorker = read("src/workers/reminder.worker.js");
 const syncCleanupWorker = read("src/workers/syncCleanup.worker.js");
 const backupWorker = read("src/workers/backup.worker.js");
+const schedulers = read("src/workers/schedulers.js");
+const backupService = read("src/modules/backups/backup.service.js");
 const exportsWorker = read("src/workers/exports.worker.js");
 const appSource = read("src/app.js");
 const productionCheck = read("scripts/production-check.js");
@@ -30,6 +32,8 @@ for (const file of [
   "src/workers/reports.worker.js",
   "src/workers/exports.worker.js",
   "src/workers/backup.worker.js",
+  "src/workers/schedulers.js",
+  "src/modules/backups/backup.service.js",
   "src/workers/syncCleanup.worker.js",
   "src/modules/jobs/jobs.routes.js",
 ]) {
@@ -72,8 +76,9 @@ for (const forbidden of ["ownerPin", "password", "token"]) {
 
 assert(reportsWorker.includes("GENERATE_DAILY_CLOSING"), "daily closing job must be registered");
 assert(reportsWorker.includes("dailyClosingSnapshot.service.js") || reportsWorker.includes("DailyClosingSnapshot"), "daily closing worker should use persisted snapshot service when available");
-assert(exportsWorker.includes("GENERATE_CSV_EXPORT") && exportsWorker.includes("GENERATE_REPORT_PDF"), "export job skeletons must exist");
-assert(exportsWorker.includes("NOT_IMPLEMENTED"), "export jobs should return clear placeholder status");
+assert(exportsWorker.includes("GENERATE_CSV_EXPORT") && exportsWorker.includes("GENERATE_REPORT_PDF"), "legacy export job names must remain compatible");
+assert(exportsWorker.includes("processReportExportJob"), "all report export jobs must use the persisted artifact pipeline");
+assert(!exportsWorker.includes("NOT_IMPLEMENTED"), "export workers must not return placeholder success/status");
 assert(reminderWorker.includes("WHATSAPP_PROVIDER_NOT_CONFIGURED"), "reminder job must not fake WhatsApp success");
 assert(reminderWorker.includes("whatsapp_reminders"), "reminder job should respect feature gate");
 assert(syncCleanupWorker.includes("dryRun"), "sync cleanup must default to dry run");
@@ -84,7 +89,13 @@ assert(syncCleanupWorker.includes('status: { in: ["resolved", "dismissed"] }'), 
 assert(syncCleanupWorker.includes("Failed, processing, and conflict rows remain recoverable indefinitely"), "sync cleanup must preserve recoverable events");
 assert(syncCleanupWorker.includes("Open conflict snapshots are never removed by retention"), "sync cleanup must preserve open conflicts");
 assert(syncCleanupWorker.includes("take: limit"), "sync cleanup must use bounded batches");
-assert(backupWorker.includes("RUN_SHOP_BACKUP") && backupWorker.includes("RUN_DATABASE_BACKUP"), "backup job skeletons must exist");
+assert(backupWorker.includes("processShopBackupArtifact") && backupWorker.includes("cleanupExpiredShopBackups"), "backup jobs must execute the real encrypted artifact lifecycle");
+for (const snippet of ["aes-256-gcm", "sha256", "Serializable", "credentialsExcluded", "MAX_UNCOMPRESSED_BYTES", "BACKUP_IN_PROGRESS"]) {
+  assert(backupService.includes(snippet), `backup service missing production safety invariant: ${snippet}`);
+}
+for (const snippet of ["upsertJobScheduler", "CLEANUP_EXPIRED_BACKUPS", "BACKUP_CLEANUP_INTERVAL_HOURS", "shop-backup-expiry-cleanup-v1"]) {
+  assert(schedulers.includes(snippet), `backup maintenance scheduler missing: ${snippet}`);
+}
 assert(backupWorker.includes("No DB credentials are stored in payloads"), "backup job must avoid DB credentials in payload");
 
 assert(appSource.includes("/api/jobs"), "job status route must be registered");

@@ -36,7 +36,7 @@ describe("multi-session request isolation", () => {
   it("lets the visible tab with local backup items recover its own queue", () => {
     expect(offlineStatus).toContain("LOCAL_QUEUE_RECOVERY_THROTTLE_KEY");
     expect(offlineStatus).toContain("counts.totalBlocking === 0");
-    expect(offlineStatus).toContain("syncNow({ manual: true })");
+    expect(offlineStatus).toContain("syncNow({ manual: true, hydrate: false })");
     expect(offlineStatus).toContain("shouldPassSharedThrottle");
   });
 

@@ -1,7 +1,7 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase } from "./setup.js";
-import { createProduct, createTenant } from "./factories.js";
+import { createProduct, createStaff, createTenant, login } from "./factories.js";
 import { env } from "../../src/config/env.js";
 import {
   cleanupExpiredShopBackups,
@@ -75,6 +75,91 @@ if (ctx.skip) {
       assert.equal(expired.status, "expired");
       assert.equal(expired.objectKey, null);
       assert.equal(expired.checksumSha256.length, 64, "checksum metadata survives object expiry");
+    });
+
+    test("owner backup routes enforce PIN, role, tenant scope, audit, and protected download", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      await createProduct(ctx.db, tenant.shop.id, { name: "Route Backup Product" });
+      const ownerAuth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+
+      const withoutPin = await ctx.post("/api/jobs/backups", {}, { token: ownerAuth.accessToken });
+      assert.equal(withoutPin.status, 403, "creating a portable data artifact requires owner PIN");
+
+      const createdResponse = await ctx.post(
+        "/api/jobs/backups",
+        {},
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      );
+      assert.equal(createdResponse.status, 202, JSON.stringify(createdResponse.body));
+      const created = createdResponse.body.data.backup;
+      assert.equal(created.status, "completed", "development mode safely executes inline when Redis is disabled");
+
+      const listed = await ctx.get("/api/jobs/backups", { token: ownerAuth.accessToken });
+      assert.equal(listed.status, 200);
+      assert.equal(listed.body.data.backups[0].id, created.id);
+      assert.equal("objectKey" in listed.body.data.backups[0], false, "storage keys are never exposed by list API");
+
+      const downloadDenied = await ctx.get(
+        `/api/jobs/backups/${created.id}/download`,
+        { token: ownerAuth.accessToken },
+      );
+      assert.equal(downloadDenied.status, 403);
+      const downloaded = await ctx.get(
+        `/api/jobs/backups/${created.id}/download`,
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      );
+      assert.equal(downloaded.status, 200);
+      assert.equal(downloaded.text.startsWith("KOSB1"), true, "protected download returns the encrypted backup envelope");
+
+      const staff = await createStaff(ctx.db, tenant.shop.id);
+      const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
+      const staffDenied = await ctx.get("/api/jobs/backups", { token: staffAuth.accessToken });
+      assert.equal(staffDenied.status, 403, "cashiers cannot list portable shop backups");
+
+      const other = await createTenant(ctx.db, { ownerPin: "5678" });
+      const otherAuth = await login(ctx, other.ownerMobile, other.ownerPassword);
+      const otherList = await ctx.get("/api/jobs/backups", { token: otherAuth.accessToken });
+      assert.equal(otherList.status, 200);
+      assert.equal(otherList.body.data.backups.length, 0, "backup metadata never crosses shop boundaries");
+
+      const auditActions = await ctx.db.auditLog.findMany({
+        where: { shopId: tenant.shop.id, entityId: created.id },
+        select: { action: true },
+      });
+      assert.deepEqual(
+        new Set(auditActions.map((row) => row.action)),
+        new Set(["SHOP_BACKUP_REQUESTED", "SHOP_BACKUP_COMPLETED", "SHOP_BACKUP_DOWNLOADED"]),
+      );
+    });
+
+    test("a duplicate worker cannot process the same backup artifact concurrently", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      const artifact = await ctx.db.backupArtifact.create({
+        data: {
+          shopId: tenant.shop.id,
+          requestedByUserId: tenant.owner.id,
+          type: "shop_logical",
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+      const attempts = await Promise.allSettled([
+        processShopBackupArtifact(artifact.id, tenant.shop.id),
+        processShopBackupArtifact(artifact.id, tenant.shop.id),
+      ]);
+      const fulfilled = attempts.filter((result) => result.status === "fulfilled");
+      const rejected = attempts.filter((result) => result.status === "rejected");
+      assert.ok(fulfilled.length >= 1, "one worker must complete the artifact");
+      assert.ok(
+        rejected.length === 0 || rejected.every((result) => result.reason.code === "BACKUP_IN_PROGRESS"),
+        "a truly concurrent duplicate is rejected; a later duplicate returns the idempotent completed result",
+      );
+      assert.ok(fulfilled.every((result) => result.value.status === "completed"));
+      const stored = await ctx.db.backupArtifact.findUnique({ where: { id: artifact.id } });
+      assert.equal(stored.status, "completed");
+      const completionAudits = await ctx.db.auditLog.count({
+        where: { shopId: tenant.shop.id, entityId: artifact.id, action: "SHOP_BACKUP_COMPLETED" },
+      });
+      assert.equal(completionAudits, 1, "duplicate delivery can write the artifact and completion audit only once");
     });
   });
 }

@@ -985,6 +985,59 @@
     },
     {
       "method": "GET",
+      "path": "/api/jobs/backups",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "responseMustInclude": [
+        "backups",
+        "retention_days"
+      ],
+      "purpose": "list tenant-scoped encrypted shop backup artifacts without exposing object keys"
+    },
+    {
+      "method": "POST",
+      "path": "/api/jobs/backups",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "responseMustInclude": [
+        "backup.id",
+        "backup.status",
+        "backup.format",
+        "backup.expires_at"
+      ],
+      "securityGuarantees": [
+        "AES-256-GCM after gzip",
+        "SHA-256 checksum",
+        "credentials excluded",
+        "shop-scoped serializable snapshot",
+        "job payload contains no database credentials"
+      ],
+      "purpose": "create a durable encrypted shop backup through the worker queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/jobs/backups/:id/download",
+      "authRequired": true,
+      "deviceRequired": true,
+      "ownerPinRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "responseContentType": "application/vnd.kiranaos.backup",
+      "purpose": "stream a completed encrypted backup through the protected backend"
+    },
+    {
+      "method": "GET",
       "path": "/api/reminders/templates",
       "authRequired": true,
       "deviceRequired": true,
@@ -1039,7 +1092,28 @@
       "path": "/api/ai/transcribe",
       "authRequired": true,
       "deviceRequired": true,
-      "purpose": "transcribe voice/audio"
+      "purpose": "transcribe Hindi, Hinglish, or English voice/audio through the configured AI provider",
+      "requestContentTypes": [
+        "multipart/form-data",
+        "audio/*",
+        "video/mp4",
+        "application/octet-stream",
+        "application/json"
+      ],
+      "requestLimits": [
+        "25 MB maximum",
+        "multipart field must be audio or file"
+      ],
+      "responseMustInclude": [
+        "data.transcript",
+        "data.model",
+        "data.provider"
+      ],
+      "securityGuarantees": [
+        "uploaded audio uses an isolated operating-system temporary file",
+        "temporary audio is removed after provider success or failure",
+        "audio and transcript contents are not logged by the endpoint"
+      ]
     },
     {
       "method": "POST",

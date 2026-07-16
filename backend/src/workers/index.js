@@ -3,6 +3,7 @@ import { closeRedis, getRedisClient, getRedisStatus } from "../lib/redis.js";
 import { closeQueues, isQueueEnabled } from "../lib/queue.js";
 import { runLoggedJob } from "./workerUtils.js";
 import { startWorkerHeartbeat } from "../lib/workerHeartbeat.js";
+import { registerMaintenanceSchedulers } from "./schedulers.js";
 
 const workers = [];
 let heartbeatController = null;
@@ -58,6 +59,7 @@ async function startWorkers() {
   }
 
   heartbeatController = startWorkerHeartbeat({ queueNames: WORKER_REGISTRY.map((w) => w.queueName) });
+  const schedulerStatus = await registerMaintenanceSchedulers();
 
   console.log(JSON.stringify({
     type: "worker_startup",
@@ -67,6 +69,7 @@ async function startWorkers() {
     workerInstanceId: heartbeatController.instanceId,
     heartbeatIntervalMs: heartbeatController.intervalMs,
     heartbeatStaleAfterMs: heartbeatController.staleAfterMs,
+    schedulerStatus,
     time: new Date().toISOString(),
   }));
 }

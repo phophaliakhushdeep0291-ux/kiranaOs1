@@ -15,6 +15,25 @@ The proof checks that:
 
 ## Create a backup
 
+There are two separate backup layers:
+
+- Platform database backups use `pg_dump` and are the authoritative
+  whole-service disaster-recovery source.
+- Owner-requested shop backups are encrypted, tenant-scoped logical artifacts
+  available through `/api/jobs/backups`. They support portable shop-data
+  recovery and audit, but do not contain passwords, PIN hashes, sessions, API
+  keys, or webhook secrets.
+
+Shop artifacts use the `KOSB1` envelope: gzip-compressed JSON encrypted with
+AES-256-GCM and recorded with a SHA-256 checksum. Production requires
+`BACKUP_ENCRYPTION_KEY`, Redis workers, and S3/R2/MinIO storage. Rotating the
+encryption key requires retaining the old key until all artifacts encrypted
+with it have expired or been re-encrypted.
+
+The worker process registers an idempotent BullMQ schedule for bounded expired
+artifact cleanup. `BACKUP_CLEANUP_INTERVAL_HOURS` defaults to 24; operators
+must monitor the backup queue and worker heartbeat so retention is enforced.
+
 ```bash
 DATABASE_URL="postgresql://kiranaos:***@localhost:5432/kiranaos" \
 BACKUP_DIR="./backups" \

@@ -265,7 +265,7 @@ POST /api/ai/log-action  { transcript, parsedAction, status }
 | Rate limiting | express-rate-limit already installed |
 | Owner PIN for cancel/delete | Bcrypt PIN in User.pinHash |
 | Multi-shop analytics | Queries work across shops by design |
-| Whisper transcription | `/api/ai/transcribe` stub ready |
+| AI audio transcription | Operational OpenAI/Groq provider path with 25 MB upload limit and guaranteed temp-file cleanup |
 | Push offline sync | `/api/sync/push` stub ready |
 | HTTPS | Use nginx/Caddy reverse proxy |
 | Backups | PostgreSQL automated backups |
@@ -355,6 +355,9 @@ Added backend-only AI endpoints. The AI never directly edits the database or run
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o
 OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
+# Optional Groq-first transcription path
+GROQ_API_KEY=gsk_...
+GROQ_TRANSCRIBE_MODEL=whisper-large-v3-turbo
 ```
 
 ### Transcribe audio
@@ -374,7 +377,8 @@ Response:
   "success": true,
   "data": {
     "transcript": "Mohan ka bill banao shakkar 2 kilo",
-    "model": "gpt-4o-mini-transcribe"
+    "model": "gpt-4o-mini-transcribe",
+    "provider": "openai"
   }
 }
 ```

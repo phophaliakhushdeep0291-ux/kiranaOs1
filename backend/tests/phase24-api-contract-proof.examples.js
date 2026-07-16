@@ -23,6 +23,10 @@ assert.ok(endpoints.includes("POST /api/sync/conflicts/report"));
 assert.ok(endpoints.includes("POST /api/sync/resolve-conflict"));
 assert.ok(endpoints.includes("GET /api/sync/pull"));
 assert.ok(endpoints.includes("GET /api/jobs/workers"));
+assert.ok(endpoints.includes("GET /api/jobs/backups"));
+assert.ok(endpoints.includes("POST /api/jobs/backups"));
+assert.ok(endpoints.includes("GET /api/jobs/backups/:id/download"));
+assert.ok(endpoints.includes("POST /api/ai/transcribe"));
 assert.ok(endpoints.includes("GET /api/payment-provider/events"));
 assert.ok(endpoints.includes("POST /api/payment-provider/events/:id/retry"));
 
@@ -56,6 +60,15 @@ const verifyPayment = contract.endpoints.find((endpoint) => endpoint.path === "/
 for (const required of ["signature", "orderId", "paymentId", "amount", "currency", "localTransaction"]) {
   assert.ok(verifyPayment.paymentVerification.includes(required), `verify-payment must require ${required}`);
 }
+
+const transcribeAudio = contract.endpoints.find((endpoint) => endpoint.path === "/api/ai/transcribe");
+for (const field of ["data.transcript", "data.model", "data.provider"]) {
+  assert.ok(transcribeAudio.responseMustInclude.includes(field), `Audio transcription must return ${field}`);
+}
+assert.ok(
+  transcribeAudio.securityGuarantees.some((guarantee) => guarantee.includes("removed")),
+  "Audio transcription must delete its temporary upload after every outcome",
+);
 
 for (const phrase of ["x-device-id", "Authorization", "entityCursors", "owner PIN", "shopId"]) {
   assert.ok(docs.includes(phrase), `API docs must mention ${phrase}`);

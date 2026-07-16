@@ -14,6 +14,8 @@ import {
   listShopBackups,
   openShopBackup,
 } from "../backups/backup.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
+import { pipeline } from "node:stream/promises";
 
 const QUEUE_ALIASES = Object.freeze({
   reminders: QUEUE_NAMES.reminderQueue,
@@ -76,16 +78,23 @@ export async function shopBackups(req, res, next) {
 export async function downloadShopBackup(req, res, next) {
   try {
     const download = await openShopBackup(req.shopId, req.params.id);
-    if (download.kind === "signed_url") {
-      return res.json({ success: true, data: download });
-    }
     res.setHeader("Content-Type", "application/vnd.kiranaos.backup");
     res.setHeader("Content-Disposition", `attachment; filename="${download.fileName}"`);
     if (download.contentLength !== null) res.setHeader("Content-Length", String(download.contentLength));
-    download.stream.on("error", next);
-    return download.stream.pipe(res);
+    await pipeline(download.stream, res);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "SHOP_BACKUP_DOWNLOADED",
+      entityType: "BackupArtifact",
+      entityId: req.params.id,
+      metadata: { encrypted: true, completed: true },
+      req,
+    });
+    return undefined;
   } catch (error) {
-    next(error);
+    if (res.headersSent) return res.destroy(error);
+    return next(error);
   }
 }
 

@@ -26,6 +26,7 @@ export class ApiClientError extends Error {
 
 export interface ApiRequestOptions extends RequestInit {
   ownerPin?: string;
+  responseType?: "json" | "blob";
   skipAuth?: boolean;
   skipRefresh?: boolean;
   skipDevice?: boolean;
@@ -284,7 +285,7 @@ export function refreshStoredAuthSession(refreshToken = getStoredRefreshToken())
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { ownerPin, skipAuth, skipRefresh, skipDevice, background, ...fetchOptions } = options;
+  const { ownerPin, responseType = "json", skipAuth, skipRefresh, skipDevice, background, ...fetchOptions } = options;
   if (!skipDevice) await hydrateDeviceIdentity();
   let token = getStoredAccessToken();
 
@@ -362,6 +363,10 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   try {
+    if (responseType === "blob") {
+      if (!response.ok) return await parseResponse<T>(response);
+      return await response.blob() as T;
+    }
     return await parseResponse<T>(response);
   } catch (error) {
     if (error instanceof ApiClientError && (error.data.code === "DEVICE_SESSION_REVOKED" || error.data.code === "DEVICE_BLOCKED")) {
