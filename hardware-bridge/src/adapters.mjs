@@ -51,5 +51,5 @@ export async function readScaleCommand({ executable, args = [] }) {
   const output = await run(executable, args, { timeoutMs: 4_000 });
   const parsed = JSON.parse(output);
   if (!Number.isFinite(Number(parsed.weight)) || !["g", "kg"].includes(parsed.unit)) throw new Error("Scale adapter returned invalid JSON");
-  return { weight: Number(parsed.weight), unit: parsed.unit };
+  return { weight: Number(parsed.weight), unit: parsed.unit, ...(typeof parsed.stable === "boolean" ? { stable: parsed.stable } : {}) };
 }

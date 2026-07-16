@@ -7,7 +7,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 
 test("bridge binds locally and enforces origin plus pairing token", async (context) => {
   const port = 18_000 + Math.floor(Math.random() * 1_000);
-  const token = "test-pairing-token-123456789";
+  const token = "test-pairing-token-123456789-abcdef";
   const directory = await mkdtemp(path.join(os.tmpdir(), "kiranaos-server-test-"));
   const child = spawn(process.execPath, ["src/server.mjs"], {
     cwd: new URL("..", import.meta.url),

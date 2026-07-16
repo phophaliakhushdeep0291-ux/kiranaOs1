@@ -101,6 +101,8 @@ interface BillingSummaryProps {
   onUpdateQty: (productId: string, qty: number) => void;
   onUpdateRate: (productId: string, rate: number) => void;
   onUpdateUnit: (productId: string, unit: string) => void;
+  onReadScale: (lineKey: string, billingUnit: string) => void;
+  scaleReadingLineKey: string | null;
   onRemoveItem: (productId: string) => void;
   negativeStockWarnings?: Array<{
     productId: string;
@@ -195,6 +197,8 @@ export function BillingSummary({
   onUpdateQty,
   onUpdateRate,
   onUpdateUnit,
+  onReadScale,
+  scaleReadingLineKey,
   onRemoveItem,
   negativeStockWarnings = [],
 }: BillingSummaryProps) {
@@ -434,6 +438,8 @@ export function BillingSummary({
               onUpdateQty={onUpdateQty}
               onUpdateRate={onUpdateRate}
               onUpdateUnit={onUpdateUnit}
+              onReadScale={onReadScale}
+              scaleReadingLineKey={scaleReadingLineKey}
               onRemoveItem={onRemoveItem}
             />
             {cart.length > 0 && (

@@ -8,6 +8,33 @@ export interface HardwareBridgeHealth {
   capabilities?: { print?: boolean; cutter?: boolean; cashDrawer?: boolean; scale?: boolean };
 }
 
+export interface HardwareScaleReading {
+  ok: boolean;
+  weight: number;
+  unit: "g" | "kg";
+  stable?: boolean;
+}
+
+const KILOGRAM_UNITS = new Set(["kg", "kilogram", "kilograms", "kilo", "kilos"]);
+const GRAM_UNITS = new Set(["g", "gram", "grams"]);
+
+export function isScaleBillingUnit(unit: string | null | undefined) {
+  const normalized = String(unit || "").trim().toLowerCase();
+  return KILOGRAM_UNITS.has(normalized) || GRAM_UNITS.has(normalized);
+}
+
+export function scaleReadingToBillingQuantity(reading: Pick<HardwareScaleReading, "weight" | "unit" | "stable">, billingUnit: string) {
+  if (reading.stable === false) throw new Error("The scale reading is not stable yet. Let the item settle and read again.");
+  const weight = Number(reading.weight);
+  if (!Number.isFinite(weight) || weight <= 0) throw new Error("The scale returned an invalid or empty weight.");
+  const grams = reading.unit === "kg" ? weight * 1000 : weight;
+  if (grams > 1_000_000) throw new Error("The scale reading exceeds the supported 1,000 kg safety limit.");
+  const normalized = billingUnit.trim().toLowerCase();
+  const quantity = KILOGRAM_UNITS.has(normalized) ? grams / 1000 : GRAM_UNITS.has(normalized) ? grams : Number.NaN;
+  if (!Number.isFinite(quantity)) throw new Error(`Scale quantity cannot be applied to billing unit "${billingUnit}".`);
+  return Math.round((quantity + Number.EPSILON) * 1000) / 1000;
+}
+
 export function getHardwareBridgeToken() {
   try { return localStorage.getItem(TOKEN_KEY) ?? ""; } catch { return ""; }
 }
@@ -71,5 +98,9 @@ export async function openCashDrawerViaHardwareBridge(bridgeUrl: string) {
 }
 
 export async function readScaleViaHardwareBridge(bridgeUrl: string) {
-  return bridgeRequest<{ ok: boolean; weight: number; unit: "g" | "kg" }>(bridgeUrl, "/v1/scale/read", { method: "POST", body: "{}" });
+  const reading = await bridgeRequest<HardwareScaleReading>(bridgeUrl, "/v1/scale/read", { method: "POST", body: "{}" });
+  if (!reading.ok || !Number.isFinite(Number(reading.weight)) || !["g", "kg"].includes(reading.unit)) {
+    throw new Error("Hardware bridge returned an invalid scale reading.");
+  }
+  return { ...reading, weight: Number(reading.weight) };
 }

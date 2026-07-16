@@ -17,6 +17,8 @@ export function htmlToReceiptText(html, width = 42) {
   const safeWidth = Math.min(64, Math.max(24, Number(width) || 42));
   const source = String(html || "")
     .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, "")
+    // Browser-only controls must never become receipt text on raw printers.
+    .replace(/<([a-z][a-z0-9]*)\b[^>]*class=(["'])[^"']*\bactions\b[^"']*\2[^>]*>[\s\S]*?<\/\1>/gi, "")
     .replace(/<\s*br\s*\/?>/gi, "\n")
     .replace(/<\/(?:p|div|tr|section|header|footer|h[1-6])>/gi, "\n")
     .replace(/<\/(?:td|th)>/gi, "  ")

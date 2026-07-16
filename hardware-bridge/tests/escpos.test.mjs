@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { buildDrawerPulse, buildEscPosJob, htmlToReceiptText } from "../src/escpos.mjs";
 
 test("converts receipt HTML to bounded plain text without scripts", () => {
-  const text = htmlToReceiptText("<style>.x{}</style><h1>Shop &amp; Sons</h1><p>Very long product description for wrapping safely</p><script>alert(1)</script>", 24);
+  const text = htmlToReceiptText("<style>.x{}</style><h1>Shop &amp; Sons</h1><p>Very long product description for wrapping safely</p><div class=\"actions\"><button>Print / Save PDF</button></div><script>alert(1)</script>", 24);
   assert.match(text, /Shop & Sons/);
-  assert.doesNotMatch(text, /alert|\.x/);
+  assert.doesNotMatch(text, /alert|\.x|Print \/ Save PDF/);
   assert.equal(text.split("\n").every((line) => line.length <= 24), true);
 });
 

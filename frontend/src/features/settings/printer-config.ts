@@ -72,9 +72,9 @@ export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
 
 export const PRINTER_CONNECTION_LABELS: Record<PrinterConnection, string> = {
   browser: "Browser / system dialog",
-  bluetooth: "Bluetooth thermal",
-  usb: "USB thermal",
-  network: "Network (LAN/IP)",
+  bluetooth: "Bluetooth printer (system dialog)",
+  usb: "USB printer (system dialog)",
+  network: "Network printer (system dialog)",
   bridge: "KiranaOS local hardware bridge",
 };
 

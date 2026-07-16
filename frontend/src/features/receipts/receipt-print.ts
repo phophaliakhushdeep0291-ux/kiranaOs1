@@ -526,6 +526,7 @@ export function buildReceiptErrorHtml(message: string) {
 export interface ReceiptWindowOptions extends ReceiptRenderOptions {
   autoPrint?: boolean;
   printDelayMs?: number;
+  onDirectPrintSettled?: (result: { status: "sent" | "fallback"; message?: string }) => void;
 }
 
 export function writeReceiptWindow(popup: Window, snapshot: ReceiptSnapshot, options: ReceiptWindowOptions = {}) {
@@ -559,6 +560,18 @@ export function openReceiptWindow(snapshot: ReceiptSnapshot, options: ReceiptWin
   return true;
 }
 
+function writeUncertainDirectPrintFallback(popup: Window, snapshot: ReceiptSnapshot, options: ReceiptWindowOptions) {
+  // A local bridge error can happen after the printer accepted bytes but before the
+  // browser received its acknowledgement. Never auto-print through a second path:
+  // that could silently duplicate a receipt or open the drawer twice.
+  writeReceiptWindow(popup, snapshot, { ...options, autoPrint: false });
+  const warning = popup.document.createElement("div");
+  warning.setAttribute("role", "alert");
+  warning.style.cssText = "max-width:88mm;margin:12px auto 0;padding:10px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;color:#92400e;font:700 12px/1.4 Arial,sans-serif";
+  warning.textContent = "Direct printer confirmation was lost. Inspect the printer before choosing Print / Save PDF below to avoid a duplicate receipt.";
+  popup.document.body.insertBefore(warning, popup.document.body.firstChild);
+}
+
 export function writeConfiguredReceiptWindow(popup: Window, snapshot: ReceiptSnapshot, options: ReceiptWindowOptions = {}) {
   const printer = getPrinterConfigSync();
   if (printer.connection !== "bridge") {
@@ -570,16 +583,21 @@ export function writeConfiguredReceiptWindow(popup: Window, snapshot: ReceiptSna
   const renderOptions = { paperSize: options.paperSize ?? printer.paperSize, copies: options.copies ?? printer.copies };
   const jobId = `receipt:${snapshot.billNo}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
   void printHtmlViaHardwareBridge(printer.bridgeUrl, {
-    html: buildReceiptHtml(snapshot, renderOptions),
+    // The bridge owns copy iteration and journals each physical submission. Sending
+    // HTML that already contains N copies would produce N x N receipts.
+    html: buildReceiptHtml(snapshot, { ...renderOptions, copies: 1 }),
     jobId,
     copies: renderOptions.copies ?? 1,
     paperSize: renderOptions.paperSize ?? "80mm",
     autoCut: printer.autoCut,
     cashDrawer: printer.cashDrawer,
   }).then(() => {
+    options.onDirectPrintSettled?.({ status: "sent" });
     if (!popup.closed) popup.close();
-  }).catch(() => {
-    if (!popup.closed) writeReceiptWindow(popup, snapshot, options);
+  }).catch((error) => {
+    const message = error instanceof Error ? error.message : "Direct printer confirmation failed.";
+    options.onDirectPrintSettled?.({ status: "fallback", message });
+    if (!popup.closed) writeUncertainDirectPrintFallback(popup, snapshot, options);
   });
 }
 

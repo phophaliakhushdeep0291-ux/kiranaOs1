@@ -19,7 +19,7 @@ import { BillingOrderQrButton } from "@/features/customer-order/BillingOrderQrBu
 import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./open-bills";
 import { updateCustomerOrder } from "@/features/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { billNeedsCustomer, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney } from "./billing-calculations";
+import { billNeedsCustomer, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { resolveLinePrice } from "@/features/pricing/resolve-line-price";
 import { useShopPricingRules } from "@/features/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -35,6 +35,7 @@ import { getActiveLocationId } from "@/features/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/loyalty/api";
 import { lookupGiftCard } from "@/features/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/voice/backend-transcription";
+import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity } from "@/features/hardware/local-hardware-bridge";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
@@ -108,7 +109,7 @@ function isStockTracked(product: Product) {
 
 function cartItemBaseQuantity(item: CartItem) {
   if (item.sellingUnit && item.sellingUnit.conversionToBase > 0) {
-    return roundMoney(item.quantity * item.sellingUnit.conversionToBase);
+    return roundQuantity(item.quantity * item.sellingUnit.conversionToBase);
   }
   return toInventoryBaseQty(item.quantity, item.unit, item.product.baseUnit ?? item.product.unit ?? item.unit);
 }
@@ -170,6 +171,7 @@ export default function Billing() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [cart, setCart] = useState<CartItem[]>(() => readBillingDraft().cart ?? []);
+  const [scaleReadingLineKey, setScaleReadingLineKey] = useState<string | null>(null);
   const [discount, setDiscount] = useState(() => readBillingDraft().discount ?? 0);
   const [appliedOffer, setAppliedOffer] = useState<AppliedOffer | null>(() => readBillingDraft().appliedOffer ?? null);
   const [paymentMode, setPaymentMode] = useState<PaymentSelection>(() => readBillingDraft().paymentMode ?? BillPaymentMode.cash);
@@ -693,7 +695,7 @@ export default function Billing() {
       const candidateKey = cartItemKey(candidate);
       const existing = previous.find((item) => cartItemKey(item) === candidateKey);
       if (existing && !options?.custom) {
-        const quantity = roundMoney(existing.quantity + 1);
+        const quantity = roundQuantity(existing.quantity + 1);
         const priced = resolveLine(product, quantity, existing.sellingUnit);
         return previous.map((item) => cartItemKey(item) === candidateKey ? { ...item, quantity, rate: item.manualRate ? item.rate : priced.rate, pricing: item.manualRate ? item.pricing : priced.pricing } : item);
       }
@@ -739,7 +741,7 @@ export default function Billing() {
         const candidateKey = cartItemKey(candidate);
         const existing = next.find((item) => cartItemKey(item) === candidateKey);
         if (existing) {
-          next = next.map((item) => cartItemKey(item) === candidateKey ? { ...item, quantity: roundMoney(item.quantity + line.quantity), rate: line.rate, unit: candidate.unit, sellingUnit, manualRate: true } : item);
+          next = next.map((item) => cartItemKey(item) === candidateKey ? { ...item, quantity: roundQuantity(item.quantity + line.quantity), rate: line.rate, unit: candidate.unit, sellingUnit, manualRate: true } : item);
         } else {
           next.push(candidate);
         }
@@ -939,7 +941,7 @@ export default function Billing() {
     setCart((previous) => previous
       .map((item) => {
         if (cartItemKey(item) !== lineKey) return item;
-        const quantity = Math.max(0, roundMoney(nextQuantity));
+        const quantity = Math.max(0, roundQuantity(nextQuantity));
         if (item.manualRate || item.isCustom) return { ...item, quantity };
         const priced = resolveLine(item.product, quantity, item.sellingUnit);
         return { ...item, quantity, rate: priced.rate, pricing: priced.pricing };
@@ -964,7 +966,7 @@ export default function Billing() {
       if (!collision) {
         return previous.map((item) => cartItemKey(item) === lineKey ? updated : item);
       }
-      const quantity = roundMoney(collision.quantity + updated.quantity);
+      const quantity = roundQuantity(collision.quantity + updated.quantity);
       const mergedPrice = collision.manualRate ? undefined : resolveLine(collision.product, quantity, collision.sellingUnit);
       return previous
         .filter((item) => cartItemKey(item) !== lineKey)
@@ -976,6 +978,29 @@ export default function Billing() {
 
   function removeItem(lineKey: string) {
     setCart((previous) => previous.filter((item) => cartItemKey(item) !== lineKey));
+  }
+
+  async function readCartLineFromScale(lineKey: string, billingUnit: string) {
+    const printer = getPrinterConfigSync();
+    if (printer.connection !== "bridge") {
+      toast({ title: "Connect the counter scale", description: "Choose KiranaOS local hardware bridge in Printer & Hardware settings, then verify the scale.", variant: "destructive" });
+      return;
+    }
+    if (!isScaleBillingUnit(billingUnit)) {
+      toast({ title: "Scale not available for this unit", description: `Use kg or gram as the loose item's billing unit. Current unit: ${billingUnit}.`, variant: "destructive" });
+      return;
+    }
+    setScaleReadingLineKey(lineKey);
+    try {
+      const reading = await readScaleViaHardwareBridge(printer.bridgeUrl);
+      const quantity = scaleReadingToBillingQuantity(reading, billingUnit);
+      updateQty(lineKey, quantity);
+      toast({ title: "Stable weight applied", description: `${quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 })} ${billingUnit} added from the counter scale.` });
+    } catch (error) {
+      toast({ title: "Scale reading not applied", description: error instanceof Error ? error.message : "Check the scale and local hardware bridge.", variant: "destructive" });
+    } finally {
+      setScaleReadingLineKey(null);
+    }
   }
 
   function validateBeforeConfirm(nextBillType: BillTypeSelection) {
@@ -1570,6 +1595,8 @@ export default function Billing() {
         onUpdateQty={updateQty}
         onUpdateRate={updateRate}
         onUpdateUnit={updateUnit}
+        onReadScale={(lineKey, billingUnit) => void readCartLineFromScale(lineKey, billingUnit)}
+        scaleReadingLineKey={scaleReadingLineKey}
         onRemoveItem={removeItem}
         negativeStockWarnings={negativeStockWarnings}
       />

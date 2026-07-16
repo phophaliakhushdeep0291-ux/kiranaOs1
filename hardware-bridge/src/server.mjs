@@ -14,8 +14,8 @@ const MAX_BODY_BYTES = 1024 * 1024;
 const printJournal = new PrintJobJournal();
 const inFlightPrintJobs = new Map();
 
-if (TOKEN.length < 16) {
-  console.error("KIRANA_BRIDGE_TOKEN must be a random value of at least 16 characters.");
+if (TOKEN.length < 32) {
+  console.error("KIRANA_BRIDGE_TOKEN must be a random value of at least 32 characters.");
   process.exit(1);
 }
 
@@ -88,6 +88,9 @@ const server = http.createServer(async (req, res) => {
       if (!/^[a-zA-Z0-9:_-]{8,160}$/.test(jobId)) return json(res, 400, { message: "A valid print job id is required" }, origin);
       if (typeof body.html !== "string" || !body.html.trim() || body.html.length > 900_000) return json(res, 400, { message: "Receipt HTML is required" }, origin);
       const copies = Math.min(5, Math.max(1, Math.floor(Number(body.copies) || 1)));
+      const paperSize = ["58mm", "76mm", "80mm"].includes(body.paperSize) ? body.paperSize : "80mm";
+      const autoCut = body.autoCut !== false;
+      const cashDrawer = body.cashDrawer === true;
       const active = inFlightPrintJobs.get(jobId);
       if (active) {
         if (active.copies !== copies) return json(res, 409, { message: "Print job id is already active with a different copy count" }, origin);
@@ -99,7 +102,13 @@ const server = http.createServer(async (req, res) => {
         if (existing.completedCopies >= copies) return { completedCopies: copies, duplicate: true, resumed: false };
         let completedCopies = existing.completedCopies;
         while (completedCopies < copies) {
-          await sendRaw(buildEscPosJob(body));
+          await sendRaw(buildEscPosJob({
+            html: body.html,
+            paperSize,
+            autoCut,
+            // A sale opens the drawer once, not once per customer/shop copy.
+            cashDrawer: cashDrawer && completedCopies === 0,
+          }));
           const progress = await printJournal.recordCopy(jobId);
           completedCopies = progress.completedCopies;
         }

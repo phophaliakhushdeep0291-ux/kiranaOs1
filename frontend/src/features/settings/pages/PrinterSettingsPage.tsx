@@ -40,7 +40,7 @@ function sampleSnapshot(shop: ReturnType<typeof useGetShop>["data"], cfg: Printe
   };
 }
 
-type PrintJobStatus = "printed" | "failed" | "saved";
+type PrintJobStatus = "pending" | "sent" | "opened" | "failed" | "saved";
 
 interface PrintJob {
   id: string;
@@ -51,12 +51,6 @@ interface PrintJob {
 
 function nowTime() {
   return new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-}
-
-function isValidNetworkAddress(value: string) {
-  const clean = value.trim();
-  if (!clean) return false;
-  return /^[a-z0-9.-]+:\d{2,5}$/i.test(clean);
 }
 
 export default function PrinterSettingsPage() {
@@ -82,20 +76,36 @@ export default function PrinterSettingsPage() {
     const browserNavigator = navigator as Navigator & { bluetooth?: unknown; usb?: unknown; serial?: unknown };
     return [
       { label: "System receipt printing", detail: "Print dialog and installed drivers", ready: typeof window.print === "function", icon: Printer },
-      { label: "Bluetooth device discovery", detail: "Supported browsers and secure connection", ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
-      { label: "USB hardware access", detail: "Barcode/ESC-POS bridge capable browser", ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
+      { label: "Bluetooth browser API", detail: "Detected only; printing still uses the paired system queue", ready: Boolean(browserNavigator.bluetooth) && window.isSecureContext, icon: Bluetooth },
+      { label: "USB browser API", detail: "Detected only; direct ESC/POS uses the local bridge", ready: Boolean(browserNavigator.usb) && window.isSecureContext, icon: Usb },
       { label: "Serial weighing scale", detail: "Web Serial capable browser; device protocol still required", ready: Boolean(browserNavigator.serial) && window.isSecureContext, icon: Scale },
       { label: "Local hardware bridge", detail: bridgeHealth?.deviceName || "Direct printer, cutter, drawer and scale adapter", ready: Boolean(bridgeHealth?.ok), icon: Cable },
     ];
   }, [bridgeHealth]);
 
   function addJob(title: string, status: PrintJobStatus) {
-    setJobs((current) => [{ id: `${Date.now()}-${Math.random()}`, title, status, time: nowTime() }, ...current].slice(0, 8));
+    const id = `${Date.now()}-${Math.random()}`;
+    setJobs((current) => [{ id, title, status, time: nowTime() }, ...current].slice(0, 8));
+    return id;
+  }
+
+  function updateJob(id: string, status: PrintJobStatus) {
+    setJobs((current) => current.map((job) => job.id === id ? { ...job, status, time: nowTime() } : job));
   }
 
   function testPrint() {
-    const ok = openConfiguredReceiptWindow(sampleSnapshot(shop.data, cfg), { paperSize: cfg.paperSize, copies: cfg.copies, autoPrint: true });
-    addJob("Sample receipt", ok ? "printed" : "failed");
+    let jobId = "";
+    const direct = cfg.connection === "bridge";
+    const ok = openConfiguredReceiptWindow(sampleSnapshot(shop.data, cfg), {
+      paperSize: cfg.paperSize,
+      copies: cfg.copies,
+      autoPrint: true,
+      onDirectPrintSettled: (result) => {
+        if (jobId) updateJob(jobId, result.status === "sent" ? "sent" : "failed");
+        if (result.status === "fallback") toast({ title: "Direct print not confirmed", description: result.message || "Inspect the printer before using the manual fallback.", variant: "destructive" });
+      },
+    });
+    jobId = addJob("Sample receipt", ok ? (direct ? "pending" : "opened") : "failed");
     if (!ok) toast({ title: "Allow pop-ups", description: "Enable pop-ups to print the sample.", variant: "destructive" });
   }
 
@@ -106,21 +116,8 @@ export default function PrinterSettingsPage() {
       return;
     }
     if (cfg.connection === "bluetooth") {
-      const bluetooth = (navigator as Navigator & { bluetooth?: { requestDevice: (options: unknown) => Promise<{ name?: string }> } }).bluetooth;
-      if (!bluetooth?.requestDevice) {
-        setScanResult("Bluetooth scan is not available in this browser. Pair the printer in device settings, then use Browser printing.");
-        toast({ title: "Bluetooth scan unavailable", description: "Use the system print dialog fallback.", variant: "destructive" });
-        return;
-      }
-      try {
-        const device = await bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ["battery_service"] });
-        const name = device.name || "Bluetooth printer";
-        void setP("deviceName", name);
-        setScanResult(`Found ${name}. Click Connect to save it.`);
-        toast({ title: "Printer found", description: name });
-      } catch {
-        setScanResult("Bluetooth scan was cancelled or no printer was selected.");
-      }
+      setScanResult("Pair the printer in Windows or Android settings. It will then appear in the system print dialog; KiranaOS does not claim a direct Bluetooth printer protocol.");
+      toast({ title: "Pair in device settings", description: "Then use Test Print to choose the paired queue." });
       return;
     }
     if (cfg.connection === "usb") {
@@ -133,33 +130,34 @@ export default function PrinterSettingsPage() {
         setHardwareBridgeToken(bridgeToken);
         const health = await checkHardwareBridge(cfg.bridgeUrl);
         setBridgeHealth(health);
+        if (!health.capabilities?.print) throw new Error("The local bridge is online, but no printer transport is configured.");
         setScanResult(`Connected to ${health.deviceName || "local hardware bridge"}${health.version ? ` · v${health.version}` : ""}.`);
-        toast({ title: "Hardware bridge ready", description: "Direct hardware capabilities were verified on this device." });
+        toast({ title: "Hardware bridge ready", description: "A direct printer transport was verified on this device." });
       } catch (error) {
         setBridgeHealth(null);
         setScanResult(error instanceof Error ? error.message : "Hardware bridge could not be reached.");
       }
       return;
     }
-    setScanResult("Network printers cannot be scanned directly from the browser. Enter IP:port, for example 192.168.1.50:9100.");
-    toast({ title: "Network printer", description: "Enter IP:port, then connect to validate the format." });
+    setScanResult("Install the network printer as a system queue, then choose it in Test Print. For direct raw TCP printing, configure the local hardware bridge.");
+    toast({ title: "Network printer", description: "Use the system queue or the direct local bridge." });
   }
 
   async function connectPrinter() {
     setConnecting(true);
     try {
-      if (cfg.connection === "network" && !isValidNetworkAddress(cfg.networkAddress)) {
-        toast({ title: "Network address needed", description: "Use format like 192.168.1.50:9100.", variant: "destructive" });
-        return;
-      }
       if (cfg.connection === "bridge") {
+        if (bridgeToken.trim().length < 32) throw new Error("Use the bridge's random pairing token of at least 32 characters.");
         setHardwareBridgeToken(bridgeToken);
         const health = await checkHardwareBridge(cfg.bridgeUrl);
         setBridgeHealth(health);
+        if (!health.capabilities?.print) throw new Error("The bridge is online, but its printer transport is not configured.");
       }
       await patch({ printer: cfg }, { immediate: true });
       setScanResult(`${PRINTER_CONNECTION_LABELS[cfg.connection]} saved as ${cfg.deviceName || "default printer"}.`);
       toast({ title: "Printer settings saved", description: "Bills will use this setup for print preview and printing." });
+    } catch (error) {
+      toast({ title: "Printer connection not ready", description: error instanceof Error ? error.message : "Check this printer setup.", variant: "destructive" });
     } finally {
       setConnecting(false);
     }
@@ -199,7 +197,12 @@ export default function PrinterSettingsPage() {
     addJob("Sample receipt downloaded", "saved");
     toast({ title: "Receipt downloaded", description: "Open it and choose Print / Save PDF." });
   }
-  const connectionStatus = cfg.connection === "browser" || (cfg.connection === "bridge" && bridgeHealth?.ok) ? "ready" : cfg.networkAddress || cfg.model || cfg.bridgeUrl ? "configured" : "not_set";
+  const systemQueueConnection = ["browser", "bluetooth", "usb", "network"].includes(cfg.connection);
+  const connectionStatus = systemQueueConnection || (cfg.connection === "bridge" && bridgeHealth?.ok && bridgeHealth.capabilities?.print)
+    ? "ready"
+    : cfg.connection === "bridge" && bridgeToken.trim().length >= 32
+      ? "configured"
+      : "not_set";
 
   return (
     <SettingsShell>
@@ -233,7 +236,6 @@ export default function PrinterSettingsPage() {
                   </Select>
                 </Fld>
               </div>
-              {cfg.connection === "network" && <Fld label="Network address (IP:port)"><Input className="h-10" placeholder="192.168.1.50:9100" value={cfg.networkAddress} onChange={(e) => setP("networkAddress", e.target.value)} /></Fld>}
               {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="Per-device pairing token" hint="Stored only in this browser, never synced to the cloud."><Input type="password" className="h-10" value={bridgeToken} onChange={(event) => setBridgeToken(event.target.value)} placeholder="Pairing token from the bridge" /></Fld>{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant="outline" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
               <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
@@ -303,12 +305,12 @@ export default function PrinterSettingsPage() {
               </div>
             ) : jobs.map((j, i) => (
               <div key={j.id} className={`flex items-center gap-3 py-2.5 ${i < jobs.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
-                <span className={`grid h-8 w-8 place-items-center rounded-[8px] ${j.status === "printed" || j.status === "saved" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>{j.status === "printed" || j.status === "saved" ? <CheckCircle2 size={15} /> : <XCircle size={15} />}</span>
+                <span className={`grid h-8 w-8 place-items-center rounded-[8px] ${["sent", "opened", "saved"].includes(j.status) ? "bg-emerald-50 text-emerald-600" : j.status === "pending" ? "bg-blue-50 text-blue-600" : "bg-rose-50 text-rose-600"}`}>{j.status === "pending" ? <RefreshCcw size={15} className="animate-spin" /> : ["sent", "opened", "saved"].includes(j.status) ? <CheckCircle2 size={15} /> : <XCircle size={15} />}</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-bold text-[#102347]">{j.title}</p>
                   <p className="text-[11px] text-[#64748b]">{j.time}</p>
                 </div>
-                {j.status === "failed" ? <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button> : <Badge tone="green">{j.status === "saved" ? "Saved" : "Printed"}</Badge>}
+                {j.status === "failed" ? <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button> : <Badge tone={j.status === "pending" ? "blue" : "green"}>{j.status === "saved" ? "Saved" : j.status === "sent" ? "Sent to printer" : j.status === "opened" ? "Dialog opened" : "Sending"}</Badge>}
               </div>
             ))}
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">

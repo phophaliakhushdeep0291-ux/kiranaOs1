@@ -12,7 +12,7 @@ Supported adapters:
 Example PowerShell setup:
 
 ```powershell
-$env:KIRANA_BRIDGE_TOKEN = "replace-with-at-least-16-random-characters"
+$env:KIRANA_BRIDGE_TOKEN = "replace-with-at-least-32-random-characters"
 $env:KIRANA_BRIDGE_ALLOWED_ORIGINS = "https://pos.example.com,http://localhost:5173"
 $env:KIRANA_BRIDGE_PRINTER_TRANSPORT = "windows"
 $env:KIRANA_BRIDGE_PRINTER_NAME = "TVS RP3160"

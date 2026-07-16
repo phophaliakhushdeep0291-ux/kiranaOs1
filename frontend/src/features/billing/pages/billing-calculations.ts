@@ -9,6 +9,12 @@ export function clampAmount(value: number, min: number, max: number): number {
 
 export { roundMoney };
 
+/** Quantities support millesimal precision (for example 0.005 kg = 5 g). */
+export function roundQuantity(value: number): number {
+  const n = Number(value) || 0;
+  return Math.round((n + Number.EPSILON) * 1000) / 1000 || 0;
+}
+
 export function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()

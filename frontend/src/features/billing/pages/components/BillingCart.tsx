@@ -1,19 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { Pencil, ShoppingCart, X } from "lucide-react";
+import { Loader2, Pencil, Scale, ShoppingCart, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { productMinSellingPrice, roundMoney } from "../billing-calculations";
 import { cartItemKey, type CartItem } from "../billing-types";
 import { getProductEmoji, productPlaceholderColor } from "./BillingSearch";
+import { isScaleBillingUnit } from "@/features/hardware/local-hardware-bridge";
 
 interface BillingCartProps {
   cart: CartItem[];
   onUpdateQty: (lineKey: string, nextQuantity: number) => void;
   onUpdateRate: (lineKey: string, nextRate: number) => void;
   onUpdateUnit: (lineKey: string, unit: string) => void;
+  onReadScale: (lineKey: string, billingUnit: string) => void;
+  scaleReadingLineKey: string | null;
   onRemoveItem: (lineKey: string) => void;
 }
 
-export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onRemoveItem }: BillingCartProps) {
+export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
@@ -37,6 +40,8 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onR
           onUpdateQty={onUpdateQty}
           onUpdateRate={onUpdateRate}
           onUpdateUnit={onUpdateUnit}
+          onReadScale={onReadScale}
+          scaleReading={scaleReadingLineKey === cartItemKey(item)}
           onRemoveItem={onRemoveItem}
         />
       ))}
@@ -49,12 +54,16 @@ function CartRow({
   onUpdateQty,
   onUpdateRate,
   onUpdateUnit,
+  onReadScale,
+  scaleReading,
   onRemoveItem,
 }: {
   item: CartItem;
   onUpdateQty: (id: string, qty: number) => void;
   onUpdateRate: (id: string, rate: number) => void;
   onUpdateUnit: (id: string, unitCode: string) => void;
+  onReadScale: (id: string, billingUnit: string) => void;
+  scaleReading: boolean;
   onRemoveItem: (id: string) => void;
 }) {
   const [editingRate, setEditingRate] = useState(false);
@@ -69,6 +78,8 @@ function CartRow({
   const emoji = getProductEmoji(item.product.name, item.product.category);
   const sellingUnits = (item.product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
   const lineKey = cartItemKey(item);
+  const scaleUnit = item.sellingUnit?.unitType ?? item.product.rateUnit ?? item.product.unit ?? item.unit;
+  const canReadScale = item.product.isLooseItem === true && isScaleBillingUnit(scaleUnit);
 
   function startEditRate() {
     setRateDraft(String(item.rate));
@@ -128,6 +139,18 @@ function CartRow({
           <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[#f7faff] px-1.5 py-1 text-[10px] font-bold text-[#31527e]">
             Pack: {item.sellingUnit.name}
           </p>
+        ) : null}
+        {canReadScale ? (
+          <button
+            type="button"
+            onClick={() => onReadScale(lineKey, scaleUnit)}
+            disabled={scaleReading}
+            className="mt-1 inline-flex h-6 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 text-[10px] font-extrabold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
+            aria-label={`Read scale for ${item.product.name}`}
+          >
+            {scaleReading ? <Loader2 size={11} className="animate-spin" /> : <Scale size={11} />}
+            {scaleReading ? "Reading..." : "Use scale"}
+          </button>
         ) : null}
         {editingRate ? (
           <div

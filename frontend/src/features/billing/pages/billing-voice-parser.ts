@@ -13,6 +13,7 @@ import {
   normalizeSearchText,
   productSellingPrice,
   roundMoney,
+  roundQuantity,
 } from "./billing-calculations";
 
 export const VOICE_NUMBER_WORDS: Record<string, number> = {
@@ -154,7 +155,7 @@ function parseQuantityAroundAlias(
     const number = parseVoiceNumber(beforeTokens[index]);
     if (number === undefined) continue;
     return {
-      quantity: roundMoney(number),
+      quantity: roundQuantity(number),
       unit: normalizeVoiceUnit(beforeTokens[index + 1], fallbackUnit),
       explicitQuantity: true,
       consumedAfterIndexes,
@@ -167,7 +168,7 @@ function parseQuantityAroundAlias(
       consumedAfterIndexes.add(0);
       consumedAfterIndexes.add(1);
       return {
-        quantity: roundMoney(firstNumber),
+        quantity: roundQuantity(firstNumber),
         unit: normalizeVoiceUnit(afterTokens[1], fallbackUnit),
         explicitQuantity: true,
         consumedAfterIndexes,
