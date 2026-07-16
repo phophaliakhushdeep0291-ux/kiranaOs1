@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
-import { BadgePercent, CheckCircle2, Gift, IndianRupee, Loader2, Pencil, Percent, Plus, Tag, Ticket, Trash2, X, XCircle } from "lucide-react";
+import { BadgePercent, CheckCircle2, IndianRupee, Loader2, Pencil, Percent, Plus, Tag, Ticket, Trash2, X, XCircle } from "lucide-react";
 import { listOffers, createOffer, updateOffer, deleteOffer, applyOffer } from "@/features/offers/api";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import type { ApplyOfferResult, Offer, OfferInput } from "@/types/api";
@@ -249,17 +249,15 @@ function Kpi({ icon, label, value, tone }: { icon: React.ReactNode; label: strin
 }
 
 /* ── Create / Edit docked panel ── */
-const TYPE_CARDS: { key: OfferFormData["type"] | "bundle"; label: string; icon: typeof Percent; soon?: boolean }[] = [
+const TYPE_CARDS: { key: OfferFormData["type"]; label: string; icon: typeof Percent }[] = [
   { key: "flat", label: "Flat", icon: IndianRupee },
   { key: "percentage", label: "Percentage", icon: Percent },
-  { key: "bundle", label: "Bundle", icon: Gift, soon: true },
 ];
 
 function OfferPanel({ open, editing, saving, width, onResizeStart, onClose, onSubmit }: {
   open: boolean; editing: Offer | null; saving: boolean; width: number;
   onResizeStart: (e: React.MouseEvent) => void; onClose: () => void; onSubmit: (data: OfferInput) => void;
 }) {
-  const { toast } = useToast();
   const form = useForm<OfferFormData>({
     resolver: zodResolver(offerFormSchema),
     values: {
@@ -306,24 +304,21 @@ function OfferPanel({ open, editing, saving, width, onResizeStart, onClose, onSu
           {/* Offer type cards */}
           <div>
             <Label className="mb-1.5 block text-[12px] font-semibold text-[#45577a]">Offer Type</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {TYPE_CARDS.map((t) => {
                 const selected = type === t.key;
                 return (
                   <button
                     key={t.key}
                     type="button"
-                    disabled={t.soon}
-                    onClick={() => { if (t.soon) { toast({ title: "Bundle offers coming soon", description: "Buy-X-get-Y bundles arrive in a later update." }); return; } form.setValue("type", t.key as OfferFormData["type"]); }}
+                    onClick={() => form.setValue("type", t.key)}
                     className={cn(
                       "flex flex-col items-center gap-1.5 rounded-[10px] border px-2 py-3 transition-colors",
                       selected ? "border-[#0057ff] bg-[#eef5ff]" : "border-[#e7edf7] bg-white hover:border-[#cfe0ff]",
-                      t.soon && "cursor-not-allowed opacity-50",
                     )}
                   >
                     <t.icon size={17} className={selected ? "text-[#0057ff]" : "text-[#536583]"} />
                     <span className={cn("text-[11.5px] font-bold", selected ? "text-[#0057ff]" : "text-[#344668]")}>{t.label}</span>
-                    {t.soon && <span className="rounded-full bg-[#eef2f8] px-1.5 text-[9px] font-bold text-[#64748b]">Soon</span>}
                   </button>
                 );
               })}

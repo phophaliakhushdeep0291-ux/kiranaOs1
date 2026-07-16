@@ -29,6 +29,7 @@ function requireWhatsAppReminders(req, res, next) {
 
 router.use(requireWhatsAppReminders);
 
+router.get("/status", ctrl.status);
 router.get("/templates", ctrl.templates);
 router.post("/templates", requireRole("owner", "admin"), validate(createTemplateSchema), ctrl.createTemplate);
 router.patch("/templates/:id", requireRole("owner", "admin"), validate(updateTemplateSchema), ctrl.updateTemplate);

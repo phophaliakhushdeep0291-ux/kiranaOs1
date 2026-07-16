@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, CreditCard, FileText, MessageCircle, RotateCcw, ShieldAlert } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CalendarClock, CreditCard, FileText, Loader2, MessageCircle, RotateCcw, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ import { createLedgerAdjustmentLocalFirst } from "@/features/ledger/local-action
 import { FeatureGate, UpgradePrompt } from "@/features/subscription";
 import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { apiRequest } from "@/lib/api/http";
 
 interface PaymentFormState { amount: string; mode: "cash" | "upi" | "bank"; note: string }
 interface ReverseFormState { paymentId: string }
@@ -74,6 +75,32 @@ export default function CustomerDetailPage() {
   const payments = data?.payments ?? [];
   const bills = data?.bills ?? [];
   const activePayments = useMemo(() => payments.filter((row) => !row.reversed_at && !row.reversedAt), [payments]);
+  const reminder = useMutation({
+    mutationFn: (customerId: string) => apiRequest<{
+      status: string;
+      code?: string;
+      queued: boolean;
+      providerConfigured: boolean;
+    }>("/reminders/send", {
+      method: "POST",
+      body: JSON.stringify({ customerId, channel: "whatsapp" }),
+    }),
+    onSuccess: (result) => {
+      const queued = result.queued || result.status === "queued";
+      toast({
+        title: queued ? "WhatsApp reminder queued" : "Reminder was not queued",
+        description: queued
+          ? "The reminder worker will update the delivery log after the provider responds."
+          : result.code || "Review the provider and queue status in Notification settings.",
+        variant: queued ? "default" : "destructive",
+      });
+    },
+    onError: (error) => toast({
+      title: "Reminder could not be sent",
+      description: error instanceof Error ? error.message : "Review WhatsApp readiness in Notification settings.",
+      variant: "destructive",
+    }),
+  });
 
   async function savePayment() {
     if (!customer) return;
@@ -153,7 +180,15 @@ export default function CustomerDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <FeatureGate featureName="whatsapp_reminders" fallback={<UpgradePrompt compact featureName="whatsapp_reminders" description="Automated WhatsApp reminders require Pro." />}>
-            <Button variant="outline" onClick={() => toast({ title: "Reminder ready", description: "Connect WhatsApp provider to send automated reminders." })}><MessageCircle size={15} className="mr-1" />WhatsApp reminder</Button>
+            <Button
+              variant="outline"
+              disabled={reminder.isPending || !customer.mobile || Number(customer.ledgerBalance || 0) <= 0}
+              onClick={() => reminder.mutate(customer.id)}
+              title={!customer.mobile ? "Add a customer mobile number first" : Number(customer.ledgerBalance || 0) <= 0 ? "No pending udhar to remind" : undefined}
+            >
+              {reminder.isPending ? <Loader2 size={15} className="mr-1 animate-spin" /> : <MessageCircle size={15} className="mr-1" />}
+              WhatsApp reminder
+            </Button>
           </FeatureGate>
           <Button variant="outline" onClick={() => { const ok = printStatement(customer.name, ledger); if (!ok) toast({ title: "Print blocked", variant: "destructive" }); }}><FileText size={15} className="mr-1" />Statement</Button>
           <Button variant="outline" onClick={() => setAdjustOpen(true)}><ShieldAlert size={15} className="mr-1" />Adjustment</Button>

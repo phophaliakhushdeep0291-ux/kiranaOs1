@@ -2,10 +2,9 @@ import type { ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   Bell, ChevronRight, Cloud, CreditCard, ListChecks, MonitorSmartphone, Plug, Printer, Receipt,
-  Settings2, Shield, Sliders, Store, UsersRound, Sparkles, type LucideIcon,
+  Settings2, Shield, Sliders, Store, UsersRound, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Card } from "./ui";
 
 export interface SettingsMenuItem {
   id: string;
@@ -85,35 +84,3 @@ export function FramedSettingsPage({ children }: { children: ReactNode }) {
   );
 }
 
-/** Temporary, on-brand placeholder for tabs still being built out in later batches. */
-export function SettingsPlaceholder({ title, icon, blurb, sections }: { title: string; icon: ReactNode; blurb: string; sections: string[] }) {
-  return (
-    <SettingsShell>
-      <Card>
-        <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-          <span className="grid h-14 w-14 place-items-center rounded-[14px] bg-[#eef5ff] text-[#005dff]">{icon}</span>
-          <div>
-            <h2 className="font-display text-[18px] font-black tracking-tight text-[#0f1e3d]">{title}</h2>
-            <p className="mx-auto mt-1 max-w-[520px] text-[12px] text-[#64748b]">{blurb}</p>
-          </div>
-          <div className="mt-2 flex items-center gap-2 rounded-full bg-[#fff7e8] px-3 py-1 text-[11px] font-bold text-[#8a6314]">
-            <Sparkles size={12} /> Building this view in the next update
-          </div>
-        </div>
-      </Card>
-      <Card>
-        <div className="px-5 py-4">
-          <p className="mb-3 text-[11px] font-bold uppercase tracking-wide text-[#9aa6bb]">Coming to this page</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {sections.map((s) => (
-              <div key={s} className="flex items-center gap-2.5 rounded-[10px] border border-dashed border-[#d8e2f1] bg-[#f9fbff] px-3 py-2.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#b9c7df]" />
-                <span className="text-[12px] font-semibold text-[#52627e]">{s}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Card>
-    </SettingsShell>
-  );
-}

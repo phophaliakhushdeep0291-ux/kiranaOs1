@@ -38,7 +38,6 @@ interface RecoverySnapshot {
   draftExists: boolean;
   pendingSyncCount: number;
   failedSyncCount: number;
-  localBackupAvailable: boolean;
   healthReport: LocalDbHealthReport | null;
 }
 
@@ -47,7 +46,6 @@ const initialSnapshot: RecoverySnapshot = {
   draftExists: false,
   pendingSyncCount: 0,
   failedSyncCount: 0,
-  localBackupAvailable: false,
   healthReport: null,
 };
 
@@ -60,12 +58,9 @@ function isMeaningfulDraft(value: unknown) {
 async function readRecoverySnapshot(): Promise<RecoverySnapshot> {
   try {
     await dexieDB.open();
-    const [draft, outbox, backup, healthReport] = await Promise.all([
+    const [draft, outbox, healthReport] = await Promise.all([
       offlineDB.getSetting<unknown>(BILLING_DRAFT_KEY).catch(() => null),
       offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
-      offlineDB
-        .getSetting<unknown>("kirana-os:local-backup-snapshot:v1")
-        .catch(() => null),
       runLocalDbHealthCheck().catch(() => null),
     ]);
     return {
@@ -81,7 +76,6 @@ async function readRecoverySnapshot(): Promise<RecoverySnapshot> {
       failedSyncCount: outbox.filter(
         (row) => row.status === "FAILED" || row.sync_status === "failed",
       ).length,
-      localBackupAvailable: backup !== null,
       healthReport,
     };
   } catch {
@@ -182,8 +176,7 @@ export default function RecoveryModePage() {
           <h1 className="text-3xl font-black tracking-tight">Recovery mode</h1>
           <p className="mt-2 text-muted-foreground">
             Safe tools for unsaved bills, local database health, pending sync
-            recovery and future backup restore. Nothing here hard-deletes
-            financial data.
+            recovery, and encrypted portable backups. Nothing here hard-deletes financial data.
           </p>
         </div>
 
@@ -230,7 +223,7 @@ export default function RecoveryModePage() {
 
           <RecoveryActionCard
             title="Recover pending sync operations"
-            description="Retry failed cloud backups without duplicating bills/payments."
+            description="Retry failed cloud sync without duplicating bills or payments."
             icon={RefreshCcw}
             status={`${snapshot.pendingSyncCount + snapshot.failedSyncCount} operations`}
           >
@@ -250,23 +243,17 @@ export default function RecoveryModePage() {
           </RecoveryActionCard>
 
           <RecoveryActionCard
-            title="Restore last local backup"
-            description="Architecture placeholder for encrypted backup snapshots."
+            title="Encrypted portable backups"
+            description="Create and download server-backed, encrypted shop snapshots."
             icon={Database}
-            status={
-              snapshot.localBackupAvailable
-                ? "Snapshot found"
-                : "Backend/snapshot needed"
-            }
+            status="Server-backed"
           >
             <p className="mb-3 text-sm text-muted-foreground">
-              Full backup restore needs a snapshot writer/reader service. This
-              UI is ready, but it does not pretend a snapshot exists when none
-              is stored.
+              View real backup history, create a transactionally consistent
+              encrypted artifact, and download it with owner approval. Restore
+              drills remain an operator-run production procedure.
             </p>
-            <Button variant="outline" disabled={!snapshot.localBackupAvailable}>
-              Restore local snapshot
-            </Button>
+            <Link href="/settings/sync"><Button variant="outline">Open backup history</Button></Link>
           </RecoveryActionCard>
 
           <RecoveryActionCard
@@ -277,7 +264,7 @@ export default function RecoveryModePage() {
           >
             <p className="mb-3 text-sm text-muted-foreground">
               Checks browser IndexedDB support, core table reads, billing draft
-              availability and pending backup count. It does not delete or
+              availability and pending sync count. It does not delete or
               mutate financial data.
             </p>
             {snapshot.healthReport?.checks && (

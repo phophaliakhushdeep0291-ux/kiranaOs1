@@ -5,7 +5,7 @@ import {
   listReminderTemplates,
   updateReminderTemplate,
 } from "./reminderTemplates.service.js";
-import { listReminderLogs, sendReminder, sendStatementReminder } from "./reminders.service.js";
+import { getReminderStatus, listReminderLogs, sendReminder, sendStatementReminder } from "./reminders.service.js";
 
 function data(res, payload, status = 200) {
   res.status(status).json({ success: true, data: payload });
@@ -29,6 +29,10 @@ export async function deleteTemplate(req, res, next) {
 
 export async function logs(req, res, next) {
   try { data(res, await listReminderLogs(req.shopId, req.query, req.user)); } catch (error) { next(error); }
+}
+
+export async function status(req, res, next) {
+  try { data(res, await getReminderStatus()); } catch (error) { next(error); }
 }
 
 export async function send(req, res, next) {

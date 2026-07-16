@@ -2,6 +2,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { addJob, isQueueEnabled } from "../../lib/queue.js";
+import { getWorkerHeartbeats } from "../../lib/workerHeartbeat.js";
 import { logger } from "../../lib/logger.js";
 import { recordReminderMetric, recordWhatsAppProviderError } from "../../lib/metrics.js";
 import { QUEUE_NAMES, JOB_NAMES } from "../../workers/queueNames.js";
@@ -119,6 +120,30 @@ export async function listReminderLogs(shopId, filters = {}, user = {}) {
     messagePreview: messagePreview(row.message),
     ...(canViewFull ? { message: row.message } : {}),
   }));
+}
+
+export async function getReminderStatus() {
+  const provider = getWhatsAppProviderStatus();
+  const queueEnabled = isQueueEnabled();
+  const worker = await getWorkerHeartbeats();
+  const workerHealthy = queueEnabled && worker.healthy;
+  const operational = provider.configured && queueEnabled && workerHealthy;
+  const code = !provider.configured
+    ? "PROVIDER_SETUP_REQUIRED"
+    : !queueEnabled
+      ? "QUEUE_SETUP_REQUIRED"
+      : !workerHealthy
+        ? "WORKER_OFFLINE"
+        : "OPERATIONAL";
+  return {
+    channel: "whatsapp",
+    provider: provider.provider,
+    providerConfigured: provider.configured,
+    queueEnabled,
+    workerHealthy,
+    operational,
+    code,
+  };
 }
 
 async function enqueueOrSkip(log, userId, req) {

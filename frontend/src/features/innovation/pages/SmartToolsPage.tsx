@@ -1,4 +1,4 @@
-import { ArrowRight, Brain, CalendarCheck, Cloud, MessageCircle, Mic, RotateCcw, Search, ShieldAlert, Sparkles, WalletCards } from "lucide-react";
+import { ArrowRight, Brain, CalendarCheck, Cloud, MessageCircle, Mic, RotateCcw, Search, ShieldCheck, Sparkles } from "lucide-react";
 import { Link } from "wouter";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -15,17 +15,9 @@ const iconById: Record<string, typeof Mic> = {
   "whatsapp-reminders": MessageCircle,
   "smart-daily-closing": CalendarCheck,
   "customer-trust-score": Brain,
-  "smart-price-memory": WalletCards,
   "no-barcode-fast-billing": Search,
   "offline-confidence-meter": Cloud,
   "recovery-mode": RotateCcw,
-};
-
-const statusLabel: Record<InnovationFeature["status"], string> = {
-  available: "Available now",
-  architecture_ready: "Architecture ready",
-  backend_required: "Backend required",
-  future: "Future module",
 };
 
 function FeatureAccessBadge({ featureName }: { featureName: FeatureName }) {
@@ -48,7 +40,7 @@ function InnovationCard({ feature }: { feature: InnovationFeature }) {
               <CardDescription>{feature.hindiLabel}</CardDescription>
             </div>
           </div>
-          <Badge variant={feature.status === "available" ? "secondary" : "outline"}>{statusLabel[feature.status]}</Badge>
+          <Badge variant="secondary">Available now</Badge>
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
@@ -83,10 +75,10 @@ export default function SmartToolsPage() {
       />
 
       <Alert>
-        <ShieldAlert className="h-4 w-4" />
-        <AlertTitle>Production readiness</AlertTitle>
+        <ShieldCheck className="h-4 w-4" />
+        <AlertTitle>Working tools only</AlertTitle>
         <AlertDescription>
-          Available tools work with saved local data. Items marked for upgrade or backend support stay clearly labeled.
+          Every card below opens a real workflow. Plan-locked tools explain the required plan; roadmap placeholders are not shown.
         </AlertDescription>
       </Alert>
 
