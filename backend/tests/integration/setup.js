@@ -198,6 +198,7 @@ export async function resetDatabase(db) {
     db.device.deleteMany(),
     db.backupArtifact.deleteMany(),
     db.reportExportJob.deleteMany(),
+    db.reminderDeliveryEvent.deleteMany(),
     db.reminderLog.deleteMany(),
     db.reminderTemplate.deleteMany(),
     db.dailyClosingSnapshot.deleteMany(),

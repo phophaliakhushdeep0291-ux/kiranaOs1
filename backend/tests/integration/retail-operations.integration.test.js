@@ -1,8 +1,8 @@
 import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { billPayload, createCustomer, createProduct, createTenant, login } from "./factories.js";
-import { reconcileReminderDeliveryEvents } from "../../src/modules/reminders/whatsapp.webhook.js";
 
 const ctx = await createIntegrationContext();
 
@@ -339,7 +339,7 @@ if (ctx.skip) {
       assert.equal(blocked.code, "STOCK_COUNT_STALE");
     });
 
-    test("earns loyalty points once and reverses available points on bill cancellation", async () => {
+    test("earns loyalty points once and exactly reverses bill points on cancellation", async () => {
       const { tenant, auth } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Loyal Buyer" });
       const product = await createProduct(ctx.db, tenant.shop.id, { defaultPricePerRateUnit: 20, stockBaseQty: 20 });
@@ -382,10 +382,13 @@ if (ctx.skip) {
       assertSuccess(await ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Customer changed mind" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       const reversed = assertSuccess(await ctx.get(`/api/loyalty/accounts/${customer.id}`, { token: auth.accessToken }));
       assert.equal(reversed.account.pointsBalance, 0);
-      assert.equal(reversed.account.transactions.some((row) => row.type === "adjustment" && row.points === -80), true);
+      assert.equal(reversed.account.transactions.some((row) => row.type === "earn_reversal" && row.points === -80), true);
+      assert.equal(reversed.account.lifetimeEarned, 0, "cancelled bills must no longer count toward loyalty tier lifetime");
     });
 
     test("reconciles signed reminder receipts in timestamp order without status regression", async () => {
+      const { env } = await import("../../src/config/env.js");
+      const { reconcileReminderDeliveryEvents } = await import("../../src/modules/reminders/whatsapp.webhook.js");
       const { tenant } = await ownerContext();
       const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Receipt Customer" });
       const providerMessageId = "wamid-receipt-integration-proof";
@@ -401,16 +404,41 @@ if (ctx.skip) {
           lastStatusAt: new Date("2026-01-01T09:59:00.000Z"),
         },
       });
+
+      const callbackPayload = { entry: [{ changes: [{ value: { statuses: [{ id: providerMessageId, status: "sent", timestamp: "1767261600" }] } }] }] };
+      const callbackBytes = Buffer.from(JSON.stringify(callbackPayload));
+      const secret = "integration-meta-webhook-secret-at-least-32-characters";
+      const signature = `sha256=${crypto.createHmac("sha256", secret).update(callbackBytes).digest("hex")}`;
+      const originalWebhookEnv = {
+        WHATSAPP_PROVIDER: env.WHATSAPP_PROVIDER,
+        WHATSAPP_WEBHOOK_PUBLIC_URL: env.WHATSAPP_WEBHOOK_PUBLIC_URL,
+        WHATSAPP_WEBHOOK_SECRET: env.WHATSAPP_WEBHOOK_SECRET,
+        WHATSAPP_WEBHOOK_VERIFY_TOKEN: env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+      };
+      try {
+        Object.assign(env, {
+          WHATSAPP_PROVIDER: "meta",
+          WHATSAPP_WEBHOOK_PUBLIC_URL: "https://pos.example/api/reminders/webhooks",
+          WHATSAPP_WEBHOOK_SECRET: secret,
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: "integration-verify-token",
+        });
+        const rejected = await ctx.request("POST", "/api/reminders/webhooks/meta", { body: callbackPayload, headers: { "x-hub-signature-256": `${signature}tampered` }, autoDevice: false });
+        assertFailure(rejected, 401);
+        const accepted = assertSuccess(await ctx.request("POST", "/api/reminders/webhooks/meta", { body: callbackPayload, headers: { "x-hub-signature-256": signature }, autoDevice: false }));
+        assert.deepEqual({ events: accepted.events, matched: accepted.matched, advanced: accepted.advanced }, { events: 1, matched: 1, advanced: 1 });
+      } finally {
+        Object.assign(env, originalWebhookEnv);
+      }
+
       await ctx.db.reminderDeliveryEvent.createMany({
         data: [
           { provider: "meta", providerMessageId, status: "read", eventAt: new Date("2026-01-01T10:02:00.000Z") },
-          { provider: "meta", providerMessageId, status: "sent", eventAt: new Date("2026-01-01T10:00:00.000Z") },
           { provider: "meta", providerMessageId, status: "delivered", eventAt: new Date("2026-01-01T10:01:00.000Z") },
         ],
       });
 
       const first = await reconcileReminderDeliveryEvents("meta", providerMessageId, reminder.id);
-      assert.deepEqual(first, { matched: 3, advanced: 3 });
+      assert.deepEqual(first, { matched: 2, advanced: 2 });
       const updated = await ctx.db.reminderLog.findUnique({ where: { id: reminder.id } });
       assert.equal(updated.status, "read");
       assert.equal(updated.sentAt.toISOString(), "2026-01-01T10:00:00.000Z");

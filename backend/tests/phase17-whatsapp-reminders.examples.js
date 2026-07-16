@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import twilio from "twilio";
 
 function read(file) { return fs.readFileSync(file, "utf8"); }
 function exists(file) { return fs.existsSync(file); }
@@ -200,10 +202,12 @@ for (const snippet of [
   "STATUS_PREDECESSORS",
   "REMINDER_DELIVERED",
   "REMINDER_READ",
+  "90 * 86_400_000",
+  "30 * 86_400_000",
 ]) assert(webhook.includes(snippet), `webhook integration missing ${snippet}`);
 assert(!/logger\.(?:info|warn|error)\([^\n]*(rawBody|payload|message)/.test(webhook), "webhook logs must not expose callback payloads or messages");
 
-const { __whatsAppWebhookInternals, parseProviderStatusEvents } = await import("../src/modules/reminders/whatsapp.webhook.js");
+const { buildWhatsAppWebhookUrl, parseProviderStatusEvents, verifyMetaSubscription, verifyProviderWebhook } = await import("../src/modules/reminders/whatsapp.webhook.js");
 const metaPayload = Buffer.from(JSON.stringify({ entry: [{ changes: [{ value: { statuses: [{ id: "wamid-proof", status: "delivered", timestamp: "1700000000" }] } }] }] }));
 assert.deepEqual(parseProviderStatusEvents("meta", metaPayload)[0].providerMessageId, "wamid-proof");
 assert.equal(parseProviderStatusEvents("meta", metaPayload)[0].status, "delivered");
@@ -211,7 +215,40 @@ const gupshupEvent = parseProviderStatusEvents("gupshup", Buffer.from(JSON.strin
 assert.deepEqual({ id: gupshupEvent.providerMessageId, status: gupshupEvent.status }, { id: "gs-runtime-proof", status: "read" });
 const interaktEvent = parseProviderStatusEvents("interakt", Buffer.from(JSON.stringify({ type: "message_api_failed", timestamp: "2026-01-01T00:00:00Z", data: { message: { id: "interakt-runtime-proof", channel_error_code: "131026", meta_data: { source_data: { callback_data: "reminder-proof" } } } } })))[0];
 assert.deepEqual({ id: interaktEvent.providerMessageId, status: interaktEvent.status, log: interaktEvent.reminderLogId }, { id: "interakt-runtime-proof", status: "failed", log: "reminder-proof" });
-assert.equal(__whatsAppWebhookInternals.safeErrorCode("bad secret message / 131026"), "bad_secret_message___131026");
+
+const webhookConfig = Object.fromEntries(Object.keys(runtimeEnv).filter((key) => key.startsWith("WHATSAPP_")).map((key) => [key, runtimeEnv[key]]));
+try {
+  Object.assign(runtimeEnv, {
+    WHATSAPP_WEBHOOK_PUBLIC_URL: "https://pos.example/api/reminders/webhooks",
+    WHATSAPP_WEBHOOK_SECRET: "runtime-webhook-secret-that-is-at-least-32-characters",
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: "runtime-verify-token",
+    WHATSAPP_API_SECRET: "runtime-twilio-auth-token",
+  });
+
+  runtimeEnv.WHATSAPP_PROVIDER = "meta";
+  const metaSignature = `sha256=${crypto.createHmac("sha256", runtimeEnv.WHATSAPP_WEBHOOK_SECRET).update(metaPayload).digest("hex")}`;
+  assert.equal(verifyProviderWebhook({ provider: "meta", rawBody: metaPayload, headers: { "x-hub-signature-256": metaSignature } }), true);
+  assert.throws(() => verifyProviderWebhook({ provider: "meta", rawBody: Buffer.concat([metaPayload, Buffer.from(" ")]), headers: { "x-hub-signature-256": metaSignature } }), /Invalid webhook signature/);
+  assert.equal(verifyMetaSubscription({ "hub.mode": "subscribe", "hub.verify_token": "runtime-verify-token", "hub.challenge": "challenge-proof" }), "challenge-proof");
+
+  runtimeEnv.WHATSAPP_PROVIDER = "twilio";
+  const twilioBody = { MessageSid: "SMruntimeproof", MessageStatus: "delivered" };
+  const rawQuery = "reminderLogId=reminder-proof";
+  const twilioUrl = buildWhatsAppWebhookUrl("twilio", { rawQuery });
+  const twilioSignature = twilio.getExpectedTwilioSignature(runtimeEnv.WHATSAPP_API_SECRET, twilioUrl, twilioBody);
+  assert.equal(verifyProviderWebhook({ provider: "twilio", body: twilioBody, rawQuery, headers: { "x-twilio-signature": twilioSignature } }), true);
+  assert.throws(() => verifyProviderWebhook({ provider: "twilio", body: { ...twilioBody, MessageStatus: "failed" }, rawQuery, headers: { "x-twilio-signature": twilioSignature } }), /Invalid webhook signature/);
+
+  runtimeEnv.WHATSAPP_PROVIDER = "gupshup";
+  assert.equal(verifyProviderWebhook({ provider: "gupshup", query: { token: runtimeEnv.WHATSAPP_WEBHOOK_SECRET } }), true);
+
+  runtimeEnv.WHATSAPP_PROVIDER = "interakt";
+  const interaktRaw = Buffer.from(JSON.stringify({ type: "message_api_delivered" }));
+  const interaktSignature = `sha256=${crypto.createHmac("sha256", runtimeEnv.WHATSAPP_WEBHOOK_SECRET).update(interaktRaw).digest("hex")}`;
+  assert.equal(verifyProviderWebhook({ provider: "interakt", rawBody: interaktRaw, headers: { "interakt-signature": interaktSignature } }), true);
+} finally {
+  Object.assign(runtimeEnv, webhookConfig);
+}
 
 const worker = read("src/workers/reminder.worker.js");
 for (const snippet of [
@@ -270,7 +307,7 @@ assert(app.includes('app.use("/api/reminders"'), "app must register /api/reminde
 assert(app.includes('app.use("/api/reminders/webhooks", express.raw'), "signed JSON callbacks must retain exact raw bytes");
 
 const deliveryDocs = read("docs/WHATSAPP_DELIVERY.md");
-for (const snippet of ["accepted", "X-Hub-Signature-256", "X-Twilio-Signature", "Interakt-Signature", "out-of-order", "Staging proof"]) {
+for (const snippet of ["accepted", "X-Hub-Signature-256", "X-Twilio-Signature", "Interakt-Signature", "cannot regress", "Staging proof"]) {
   assert(deliveryDocs.includes(snippet), `WhatsApp delivery documentation missing ${snippet}`);
 }
 

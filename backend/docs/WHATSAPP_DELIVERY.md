@@ -9,6 +9,7 @@ KiranaOS keeps provider API acceptance separate from real delivery:
 - `failed`: the API request or delivery callback reported a terminal failure.
 
 Callbacks are idempotent and monotonic. Late `sent` callbacks cannot regress a `delivered` or `read` record. Signed events are stored without phone numbers or message bodies; an unmatched event stays pending and is reconciled when the worker stores the provider message id.
+Processed event proofs are retained for 90 days; unmatched race records expire after 30 days so callback storage remains bounded.
 
 ## Required configuration
 

@@ -1047,6 +1047,7 @@
       "path": "/api/reminders/webhooks/meta",
       "authRequired": false,
       "deviceRequired": false,
+      "providerAuthenticated": true,
       "purpose": "complete Meta webhook subscription verification using the configured constant-time verification token"
     },
     {
@@ -1054,6 +1055,7 @@
       "path": "/api/reminders/webhooks/:provider",
       "authRequired": false,
       "deviceRequired": false,
+      "providerAuthenticated": true,
       "purpose": "ingest signed provider delivery receipts idempotently without storing customer or message payload data"
     },
     {

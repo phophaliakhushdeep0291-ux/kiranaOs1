@@ -94,10 +94,15 @@ const deviceRequiredPrefixes = [
   "/api/ai"
 ];
 for (const prefix of deviceRequiredPrefixes) {
-  const matching = contract.endpoints.filter((endpoint) => endpoint.path.startsWith(prefix));
+  const matching = contract.endpoints.filter((endpoint) => endpoint.path.startsWith(prefix) && !endpoint.providerAuthenticated);
   if (!matching.length) fail(`no documented endpoints for ${prefix}`);
   const missing = matching.filter((endpoint) => !endpoint.deviceRequired);
   if (missing.length) fail(`${prefix} has endpoint(s) missing deviceRequired=true: ${missing.map(endpointKey).join(", ")}`);
+}
+
+for (const path of ["/api/reminders/webhooks/meta", "/api/reminders/webhooks/:provider"]) {
+  const endpoint = contract.endpoints.find((item) => item.path === path);
+  if (!endpoint?.providerAuthenticated || endpoint.authRequired || endpoint.deviceRequired) fail(`${path} must use provider authentication instead of user/device auth`);
 }
 
 

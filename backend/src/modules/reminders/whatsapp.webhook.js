@@ -22,6 +22,8 @@ const ACTION_BY_STATUS = Object.freeze({
   read: "REMINDER_READ",
   failed: "REMINDER_FAILED",
 });
+const DELIVERY_EVENT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+let lastDeliveryEventCleanupAt = 0;
 
 function webhookError(message, statusCode, code) {
   return new AppError(message, statusCode, code);
@@ -87,8 +89,8 @@ export function requiredWebhookConfiguration(provider = env.WHATSAPP_PROVIDER) {
   if (provider === "disabled") return [];
   const missing = [];
   if (!env.WHATSAPP_WEBHOOK_PUBLIC_URL) missing.push("WHATSAPP_WEBHOOK_PUBLIC_URL");
-  if (["meta", "gupshup", "interakt"].includes(provider) && !env.WHATSAPP_WEBHOOK_SECRET) missing.push("WHATSAPP_WEBHOOK_SECRET");
-  if (provider === "meta" && !env.WHATSAPP_WEBHOOK_VERIFY_TOKEN) missing.push("WHATSAPP_WEBHOOK_VERIFY_TOKEN");
+  if (["meta", "gupshup", "interakt"].includes(provider) && String(env.WHATSAPP_WEBHOOK_SECRET || "").length < 32) missing.push("WHATSAPP_WEBHOOK_SECRET");
+  if (provider === "meta" && String(env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "").length < 16) missing.push("WHATSAPP_WEBHOOK_VERIFY_TOKEN");
   return missing;
 }
 
@@ -102,6 +104,9 @@ export function verifyMetaSubscription(query = {}) {
   const mode = query["hub.mode"];
   const token = query["hub.verify_token"];
   const challenge = String(query["hub.challenge"] || "").slice(0, 256);
+  if (env.WHATSAPP_PROVIDER !== "meta" || String(env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "").length < 16) {
+    throw webhookError("Webhook provider is not active", 404, "WHATSAPP_WEBHOOK_PROVIDER_INACTIVE");
+  }
   if (mode !== "subscribe" || !challenge || !constantTimeEqual(token, env.WHATSAPP_WEBHOOK_VERIFY_TOKEN)) {
     throw webhookError("Webhook verification failed", 403, "WHATSAPP_WEBHOOK_VERIFICATION_FAILED");
   }
@@ -214,6 +219,20 @@ async function persistDeliveryEvent(provider, event) {
   }
 }
 
+async function cleanupDeliveryEventsIfDue() {
+  const now = Date.now();
+  if (now - lastDeliveryEventCleanupAt < DELIVERY_EVENT_CLEANUP_INTERVAL_MS) return;
+  lastDeliveryEventCleanupAt = now;
+  try {
+    await Promise.all([
+      db.reminderDeliveryEvent.deleteMany({ where: { processedAt: { not: null }, receivedAt: { lt: new Date(now - 90 * 86_400_000) } } }),
+      db.reminderDeliveryEvent.deleteMany({ where: { processedAt: null, receivedAt: { lt: new Date(now - 30 * 86_400_000) } } }),
+    ]);
+  } catch (error) {
+    logger.warn({ type: "whatsapp_delivery_cleanup_failed", errorCode: error?.code ?? error?.name ?? "CLEANUP_FAILED" });
+  }
+}
+
 function statusTimestampData(status, at) {
   if (status === "accepted") return { acceptedAt: at };
   if (status === "sent") return { sentAt: at };
@@ -285,6 +304,7 @@ export async function reconcileReminderDeliveryEvents(provider, providerMessageI
 
 export async function handleProviderWebhook({ provider, rawBody, body, headers, query, rawQuery }) {
   verifyProviderWebhook({ provider, rawBody, body, headers, query, rawQuery });
+  await cleanupDeliveryEventsIfDue();
   const parsed = parseProviderStatusEvents(provider, rawBody, body, query).slice(0, 100);
   let matched = 0;
   let advanced = 0;

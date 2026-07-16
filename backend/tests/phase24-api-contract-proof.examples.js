@@ -44,9 +44,16 @@ for (const prefix of [
   "/api/reminders",
   "/api/ai",
 ]) {
-  const matching = contract.endpoints.filter((endpoint) => endpoint.path.startsWith(prefix));
+  const matching = contract.endpoints.filter((endpoint) => endpoint.path.startsWith(prefix) && !endpoint.providerAuthenticated);
   assert.ok(matching.length > 0, `Expected contract coverage for ${prefix}`);
   assert.ok(matching.every((endpoint) => endpoint.authRequired && endpoint.deviceRequired), `${prefix} endpoints must require auth + device`);
+}
+
+for (const path of ["/api/reminders/webhooks/meta", "/api/reminders/webhooks/:provider"]) {
+  const endpoint = contract.endpoints.find((item) => item.path === path);
+  assert.equal(endpoint.providerAuthenticated, true, `${path} must be provider authenticated`);
+  assert.equal(endpoint.authRequired, false, `${path} must not require a user JWT`);
+  assert.equal(endpoint.deviceRequired, false, `${path} must not require a shop device`);
 }
 
 const webhook = contract.endpoints.find((endpoint) => endpoint.path === "/api/payment-provider/razorpay/webhook");

@@ -272,6 +272,8 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.WHATSAPP_PROVIDER !== "
   if (!parsed.data.WHATSAPP_WEBHOOK_PUBLIC_URL) missing.push("WHATSAPP_WEBHOOK_PUBLIC_URL");
   if (["meta", "gupshup", "interakt"].includes(parsed.data.WHATSAPP_PROVIDER) && !parsed.data.WHATSAPP_WEBHOOK_SECRET) missing.push("WHATSAPP_WEBHOOK_SECRET");
   if (parsed.data.WHATSAPP_PROVIDER === "meta" && !parsed.data.WHATSAPP_WEBHOOK_VERIFY_TOKEN) missing.push("WHATSAPP_WEBHOOK_VERIFY_TOKEN");
+  if (parsed.data.WHATSAPP_WEBHOOK_SECRET && parsed.data.WHATSAPP_WEBHOOK_SECRET.length < 32) missing.push("WHATSAPP_WEBHOOK_SECRET_MIN_32_CHARS");
+  if (parsed.data.WHATSAPP_PROVIDER === "meta" && parsed.data.WHATSAPP_WEBHOOK_VERIFY_TOKEN && parsed.data.WHATSAPP_WEBHOOK_VERIFY_TOKEN.length < 16) missing.push("WHATSAPP_WEBHOOK_VERIFY_TOKEN_MIN_16_CHARS");
   if (parsed.data.WHATSAPP_WEBHOOK_PUBLIC_URL && !/^https:\/\//i.test(parsed.data.WHATSAPP_WEBHOOK_PUBLIC_URL)) missing.push("WHATSAPP_WEBHOOK_PUBLIC_URL_HTTPS_REQUIRED");
   if (parsed.data.WHATSAPP_BASE_URL) {
     const officialHosts = { meta: "graph.facebook.com", twilio: "api.twilio.com", gupshup: "api.gupshup.io", interakt: "api.interakt.ai" };

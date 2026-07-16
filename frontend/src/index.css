@@ -1049,6 +1049,34 @@
   --sidebar-ring: 215 40% 58%;
 }
 
+/* Long operational forms become full-screen phone tasks. Keep every field and
+   action comfortably thumb-sized without inflating compact desktop dialogs. */
+@media (max-width: 639px) {
+  [data-mobile-task-dialog="true"] input,
+  [data-mobile-task-dialog="true"] textarea,
+  [data-mobile-task-dialog="true"] select,
+  [data-mobile-task-dialog="true"] button,
+  [data-mobile-task-dialog="true"] [role="combobox"] {
+    min-height: 44px;
+  }
+
+  [data-mobile-task-dialog="true"] [data-dialog-footer="true"] {
+    position: sticky;
+    bottom: calc(-1rem - env(safe-area-inset-bottom));
+    z-index: 2;
+    margin: 0 -1rem calc(-1rem - env(safe-area-inset-bottom));
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / 0.96);
+    box-shadow: 0 -12px 28px hsl(215 35% 20% / 0.08);
+    backdrop-filter: blur(12px);
+  }
+
+  [data-mobile-task-dialog="true"] [data-dialog-footer="true"] > * {
+    width: 100%;
+  }
+}
+
 /* Respect operating-system motion preferences without removing useful state changes. */
 @media (prefers-reduced-motion: reduce) {
   html {

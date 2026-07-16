@@ -1904,7 +1904,7 @@ if (exists("src/modules/reminders/whatsapp.provider.js")) {
 
 if (exists("src/modules/reminders/whatsapp.webhook.js")) {
   const webhook = read("src/modules/reminders/whatsapp.webhook.js");
-  for (const snippet of ["x-hub-signature-256", "interakt-signature", "x-twilio-signature", "twilio.validateRequest", "WHATSAPP_WEBHOOK_SECRET", "reminderDeliveryEvent", "reconcileReminderDeliveryEvents", "STATUS_PREDECESSORS", "REMINDER_DELIVERED", "REMINDER_READ"]) {
+  for (const snippet of ["x-hub-signature-256", "interakt-signature", "x-twilio-signature", "twilio.validateRequest", "WHATSAPP_WEBHOOK_SECRET", "reminderDeliveryEvent", "reconcileReminderDeliveryEvents", "STATUS_PREDECESSORS", "REMINDER_DELIVERED", "REMINDER_READ", "90 * 86_400_000", "30 * 86_400_000"]) {
     if (!webhook.includes(snippet)) errors.push(`whatsapp.webhook.js missing signed delivery behavior: ${snippet}`);
   }
 }
@@ -2045,7 +2045,7 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
       }
       const protectedPrefixes = ["/api/products", "/api/customers", "/api/bills", "/api/inventory", "/api/reports", "/api/sync", "/api/jobs", "/api/reminders", "/api/ai"];
       for (const prefix of protectedPrefixes) {
-        const matching = endpoints.filter((endpoint) => endpoint.path?.startsWith(prefix));
+        const matching = endpoints.filter((endpoint) => endpoint.path?.startsWith(prefix) && !endpoint.providerAuthenticated);
         if (!matching.length) errors.push(`API contract missing protected prefix ${prefix}`);
         if (matching.some((endpoint) => !endpoint.deviceRequired || !endpoint.authRequired)) {
           errors.push(`API contract protected prefix ${prefix} must require auth and device`);
