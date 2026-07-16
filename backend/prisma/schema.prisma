@@ -1554,11 +1554,16 @@ model ReminderLog {
   channel           String    @default("whatsapp") // whatsapp | sms | email
   templateId        String?
   message           String
-  status            String    @default("queued") // queued | sent | failed | skipped
+  status            String    @default("queued") // queued | accepted | sent | delivered | read | failed | skipped
   provider          String    @default("disabled")
   providerMessageId String?
   error             String?
+  acceptedAt        DateTime?
   sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  lastStatusAt      DateTime?
   requestedByUserId String?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -1569,6 +1574,26 @@ model ReminderLog {
   @@index([shopId, customerId, createdAt])
   @@index([shopId, status, createdAt])
   @@index([shopId, channel, createdAt])
+  @@unique([provider, providerMessageId])
+}
+
+// Signed provider status callbacks are persisted without message/customer data.
+// Pending rows close the race where a callback arrives before the send worker has
+// stored the provider message id.
+model ReminderDeliveryEvent {
+  id                String    @id @default(cuid())
+  provider          String
+  providerMessageId String
+  status            String
+  errorCode         String?
+  eventAt           DateTime
+  reminderLogId     String?
+  processedAt       DateTime?
+  receivedAt        DateTime  @default(now())
+
+  @@unique([provider, providerMessageId, status])
+  @@index([provider, providerMessageId, processedAt])
+  @@index([processedAt, receivedAt])
 }
 
 // ─────────────────────────────────────────────

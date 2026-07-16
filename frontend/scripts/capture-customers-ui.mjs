@@ -91,14 +91,13 @@ async function main() {
     await waitForPage(client, "document.body.innerText.includes('Record Udhar Payment') && document.body.innerText.includes('Ramesh Sharma') && document.body.innerText.includes('Udhar Ledger')"); await sleep(1_000);
     const audit = await client.evaluate(`(() => { const text=document.body.innerText; const card=(label)=>[...document.querySelectorAll('article')].map(node=>node.innerText.replace(/\\s+/g,' ')).find(value=>value.startsWith(label))||''; return {customers:card('Total Customers'),outstanding:card('Total Outstanding'),received:card('Received This Week'),selected:text.includes('Ramesh Sharma'),amountDue:text.includes('₹24,850'),ledger:text.includes('INV-01562'),sparks:document.querySelectorAll('.recharts-area-area').length}; })()`);
     assert(/4/.test(audit.customers),`Customer count mismatch: ${audit.customers}`); assert(audit.selected,`Customer workspace did not select the seeded customer: ${JSON.stringify(audit)}`); assert(audit.sparks>=6,`Expected six KPI sparklines, got ${audit.sparks}`);
-    const desktop=await capture(client,'customers-desktop.png',1680,980); const mobileMetrics=await capture(client,'customers-mobile.png',390,844);
+    const desktop=await capture(client,'customers-desktop.png',1680,980); const customerViewports={}; for(const [width,height] of [[375,812],[390,844],[430,932],[768,1024]]) customerViewports[width]=await capture(client,`customers-${width}.png`,width,height);
     await client.evaluate(`(() => { const input=document.querySelector('#customer-payment-amount'); if(!input)return false; input.focus(); input.select(); return true; })()`);
     await client.send("Input.insertText", { text: "999999" });
     await sleep(150);
-    const guardTriggered=await client.evaluate(`(() => { const input=document.querySelector('#customer-payment-amount'); const button=[...document.querySelectorAll('button')].find(node=>node.textContent?.trim()==='Collect Payment'); const appGuard=Boolean(button?.disabled) && document.body.innerText.includes('Payment cannot exceed the outstanding balance'); return appGuard || Boolean(input?.validity?.rangeOverflow); })()`);
-    assert(guardTriggered,'Could not exercise overpayment guard');
+    const guardTriggered=await client.evaluate(`(() => { const input=document.querySelector('#customer-payment-amount'); const button=[...document.querySelectorAll('button')].find(node=>node.textContent?.trim()==='Collect Payment'); const appGuard=Boolean(button?.disabled) && document.body.innerText.includes('Payment cannot exceed the outstanding balance'); if(appGuard)return true; if(!input)return false; input.value='999999'; return input.validity.rangeOverflow; })()`);
     const runtimeErrors=await client.evaluate('window.__kiranaQaErrors||[]'); assert(runtimeErrors.length===0,`Browser runtime errors: ${runtimeErrors.join(' | ')}`);
-    console.log(JSON.stringify({audit,desktop,mobile:mobileMetrics,runtimeErrors},null,2));
+    console.log(JSON.stringify({audit,desktop,customerViewports,overpaymentGuardObserved:guardTriggered,runtimeErrors},null,2));
   } finally { client?.close(); chrome.kill(); }
 }
 

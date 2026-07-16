@@ -16,7 +16,7 @@ States: `New -> Reproduced -> In progress -> Fixed -> Verified -> Closed`; use `
 
 | ID | Sev | State | Requirement | Summary | Evidence / next action |
 |---|---|---|---|---|---|
-| BUG-001 | P0 | In progress | BILL-002, BILL-008 | Frontend billing coupon field typecheck regression reported in the Phase 1 brief. | Current worktree modifies `BillingPage.tsx`, `billing-types.ts` and adds `coupon-atomic-billing.test.ts`; run clean typecheck/test and link exact error/fix without overwriting in-progress work. |
+| BUG-001 | P0 | Verified | BILL-002, BILL-008 | Frontend billing coupon field typecheck regression reported in the Phase 1 brief. | Frontend typecheck passed and `coupon-atomic-billing.test.ts` passed 3/3 on 2026-07-16; full frontend suite passed 611 tests. Close when the fixing commit is published. |
 | BUG-002 | P1 | New | RPT-003 | `FinancialLedger` is written but report ownership/source-of-truth remains architecturally ambiguous. | Decide and document bill-derived versus ledger-derived reporting; add reconciliation tests before switching reads. See `CODE_REVIEW_LOGIC_FLAWS.md` item 4. |
 | BUG-003 | P2 | New | BILL-004, RPT-002 | Exclusive-GST discount tax-base behavior needs a compliance decision. | Obtain accountant/product ruling, document tax policy, then add fixture parity test. See logic review item 6. |
 | BUG-004 | P3 | New | SYNC-002 | UUID classification assumes server IDs remain CUIDs. | Encode ID-format contract or change resolver before any server UUID migration. See logic review item 10. |
@@ -25,6 +25,7 @@ States: `New -> Reproduced -> In progress -> Fixed -> Verified -> Closed`; use `
 | BUG-007 | P1 | New | INV-004 | Supplier ledger end-to-end reconciliation evidence is incomplete. | Trace purchase, payment, reversal and sync paths; add invariant and statement tests. |
 | BUG-008 | P1 | New | SYNC-003 | Conflict policies exist but require a complete entity-by-entity certification. | Create matrix for bill, payment, udhar, product, stock, purchase and customer conflicts; test forced conflicts. |
 | BUG-009 | P1 | New | QUAL-003 | Full live mobile screenshot matrix is not automated or retained for all core pages. | Add Playwright/live QA harness and artifacts for all `MOBILE_UX_PLAN.md` QA IDs. |
+| BUG-010 | P0 | Fixed | SYNC-005, QUAL-004 | Railway container crashed because `src/modules/backups/backup.service.js` was absent from the Git build. | Root cause: unanchored `backend/.gitignore` entry `backups` hid the source directory. Changed it to `/backups/`, made the service visible to Git, and added deployment/production-check regressions. Pending commit, push, and Railway redeploy verification. |
 
 ## Fixed findings awaiting historical closure
 

@@ -22,14 +22,14 @@ Run against a clean checkout with supported Node versions and frozen installs.
 
 | Gate | Command/evidence | Status |
 |---|---|---|
-| Frontend typecheck | `cd frontend && pnpm run typecheck` | Not run for candidate |
-| Frontend tests | `cd frontend && pnpm run test` | Not run for candidate |
-| Frontend production build/security | `cd frontend && pnpm run build && pnpm run security:check` | Not run for candidate |
-| Backend tests | `cd backend && npm test` | Not run for candidate |
-| Backend production check | `cd backend && npm run prod:check` | Not run for candidate |
-| Integration tests | Isolated DB run, including billing/sync/tenant paths | Not run for candidate |
-| Migration safety | `cd backend && npm run migration:safety` | Not run for candidate |
-| Existing release gate | `cd backend && npm run release:gate` | Not run for candidate |
+| Frontend typecheck | `cd frontend && pnpm run typecheck` | Local baseline passed 2026-07-16 |
+| Frontend tests | `cd frontend && pnpm run test` | Local baseline passed: 611 passed, 1 skipped |
+| Frontend production build/security | `cd frontend && pnpm run build && pnpm run security:check` | Local baseline passed 2026-07-16 |
+| Backend tests | `cd backend && npm test` | Local baseline passed 2026-07-16 |
+| Backend production check | `cd backend && npm run prod:check` | Local baseline passed after Railway packaging fix |
+| Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 147 passed, 1 PostgreSQL-only suite skipped |
+| Migration safety | `cd backend && npm run migration:safety` | Local baseline passed, 0 warnings |
+| Existing release gate | `cd backend && npm run release:gate` | Local baseline passed; human approval warning remains |
 | CI certification | `.github/workflows/release-certification.yml` run URL | Not run for candidate |
 
 Any failure is red. Skips require a written exception below; P0 financial, migration, tenant or offline safety checks cannot be waived.
@@ -44,12 +44,12 @@ Any failure is red. Skips require a written exception below; P0 financial, migra
 | Two-device duplicate/conflict proof | SYNC-002..003 | Not verified |
 | Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Not verified |
 | Daily closing and GST sample reconciliation | RPT-001..002 | Not verified |
-| 375/390/430/768 mobile matrix | QUAL-003 / all MQA flows | Not verified |
+| 375/390/430/768 mobile matrix | QUAL-003 / all MQA flows | Billing, Products and Customers passed overflow/runtime smoke; remaining pages not verified |
 | Backup restore proof and rollback rehearsal | SYNC-005 | Not verified |
 
 ## Defect thresholds
 
-- Open P0: 0 required. Current backlog: BUG-001 is P0/in progress; gate is red.
+- Open P0: 0 required. BUG-001 is locally verified and BUG-010 is fixed locally, but BUG-010 is not yet deployed; gate remains red.
 - Open release-scope P1: 0 required unless explicitly accepted by product and engineering with a safe workaround.
 - Flaky tests: 0 unexplained. A rerun is evidence of flakiness, not a pass.
 - Money/stock/ledger reconciliation variance: exactly 0 paise/units unless a documented rounding rule applies.

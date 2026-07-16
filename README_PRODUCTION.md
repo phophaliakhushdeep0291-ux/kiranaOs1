@@ -26,7 +26,7 @@ Create the real `.env` files only in your hosting provider's environment setting
 | `LICENSE_SIGNING_SECRET` | required, ≥ 32 chars, not a placeholder |
 | `DATABASE_URL` | must be a PostgreSQL URL |
 | `DIRECT_DATABASE_URL` | direct (non-pooled) URL for migrations; falls back to `DATABASE_URL` |
-| `CORS_ORIGIN` | your frontend origin(s) |
+| `ALLOWED_ORIGINS` | comma-separated frontend origin(s), for example `https://pos.example.com` |
 | `OWNER_PIN_REQUIRED` | `true` |
 | `RAZORPAY_*` | required only if `RAZORPAY_ENABLED=true` |
 | `STORAGE_*` | required only if exports/uploads are enabled |

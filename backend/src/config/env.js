@@ -86,6 +86,9 @@ const envSchema = z.object({
   WHATSAPP_TEMPLATE_LANGUAGE: z.string().min(2).max(20).default("en"),
   WHATSAPP_GUPSHUP_APP_NAME: z.string().optional(),
   WHATSAPP_DEFAULT_COUNTRY_CODE: z.string().regex(/^\+[1-9]\d{0,3}$/).default("+91"),
+  WHATSAPP_WEBHOOK_PUBLIC_URL: z.string().url().optional(),
+  WHATSAPP_WEBHOOK_SECRET: z.string().optional(),
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   INTEGRATION_SIGNING_SECRET: z.string().optional(),
   INTEGRATION_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
   // GST compliance submission is disabled until a certified provider adapter is
@@ -266,6 +269,10 @@ if (parsed.data.NODE_ENV === "production" && parsed.data.WHATSAPP_PROVIDER !== "
   if (parsed.data.WHATSAPP_PROVIDER === "meta" && !parsed.data.WHATSAPP_BASE_URL) missing.push("WHATSAPP_BASE_URL");
   if (parsed.data.WHATSAPP_PROVIDER === "gupshup" && !parsed.data.WHATSAPP_GUPSHUP_APP_NAME) missing.push("WHATSAPP_GUPSHUP_APP_NAME");
   if (parsed.data.WHATSAPP_PROVIDER === "interakt" && !parsed.data.WHATSAPP_TEMPLATE_NAME) missing.push("WHATSAPP_TEMPLATE_NAME");
+  if (!parsed.data.WHATSAPP_WEBHOOK_PUBLIC_URL) missing.push("WHATSAPP_WEBHOOK_PUBLIC_URL");
+  if (["meta", "gupshup", "interakt"].includes(parsed.data.WHATSAPP_PROVIDER) && !parsed.data.WHATSAPP_WEBHOOK_SECRET) missing.push("WHATSAPP_WEBHOOK_SECRET");
+  if (parsed.data.WHATSAPP_PROVIDER === "meta" && !parsed.data.WHATSAPP_WEBHOOK_VERIFY_TOKEN) missing.push("WHATSAPP_WEBHOOK_VERIFY_TOKEN");
+  if (parsed.data.WHATSAPP_WEBHOOK_PUBLIC_URL && !/^https:\/\//i.test(parsed.data.WHATSAPP_WEBHOOK_PUBLIC_URL)) missing.push("WHATSAPP_WEBHOOK_PUBLIC_URL_HTTPS_REQUIRED");
   if (parsed.data.WHATSAPP_BASE_URL) {
     const officialHosts = { meta: "graph.facebook.com", twilio: "api.twilio.com", gupshup: "api.gupshup.io", interakt: "api.interakt.ai" };
     try {

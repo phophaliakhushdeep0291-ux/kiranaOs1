@@ -247,7 +247,12 @@ async function main() {
     assert(Math.abs(billingAudit.rects[0].width - billingAudit.rects[1].width) <= 4, `Bill type selector columns uneven: ${JSON.stringify(billingAudit)}`);
     assert(billingAudit.summaryOverflow <= 2, `Billing summary overflowed: ${JSON.stringify(billingAudit)}`);
     const billingDesktop = await capture(client, "billing-desktop.png", 1440, 900);
+    const billingViewports = {};
+    for (const [width, height] of [[375, 812], [390, 844], [430, 932], [768, 1024]]) {
+      billingViewports[width] = await capture(client, `billing-${width}.png`, width, height);
+    }
 
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await navigate(client, `${FRONTEND_URL}/billing?billType=estimate`);
     await waitForPage(client, "document.querySelector('[data-testid=\"button-confirm-bill\"]')?.textContent.includes('Save Estimate Bill')");
     await sleep(900);
@@ -284,6 +289,20 @@ async function main() {
     const billsDesktop = await capture(client, "bills-desktop.png", 1440, 900);
     const billsMobile = await capture(client, "bills-mobile.png", 390, 844);
 
+    await navigate(client, `${FRONTEND_URL}/products`);
+    await waitForPage(client, "document.body.innerText.includes('Products') && document.body.innerText.includes('QA Atta 5kg')");
+    const productAudit = await client.evaluate(`(() => ({
+      hasProduct: document.body.innerText.includes('QA Atta 5kg'),
+      hasAddAction: [...document.querySelectorAll('button,a')].some(node => /add product/i.test(node.textContent || '')),
+      runtimeText: document.body.innerText.slice(0, 300),
+    }))()`);
+    assert(productAudit.hasProduct, `Seeded product missing from Products: ${JSON.stringify(productAudit)}`);
+    assert(productAudit.hasAddAction, `Products primary add action missing: ${JSON.stringify(productAudit)}`);
+    const productViewports = {};
+    for (const [width, height] of [[375, 812], [390, 844], [430, 932], [768, 1024]]) {
+      productViewports[width] = await capture(client, `products-${width}.png`, width, height);
+    }
+
     const runtimeErrors = await client.evaluate("window.__kiranaQaErrors || []");
     assert(runtimeErrors.length === 0, `Browser runtime errors: ${runtimeErrors.join(" | ")}`);
     console.log(JSON.stringify({
@@ -291,9 +310,12 @@ async function main() {
       estimateAudit,
       billsAudit,
       billingDesktop,
+      billingViewports,
       estimateDesktop,
       billsDesktop,
       billsMobile,
+      productAudit,
+      productViewports,
       runtimeErrors,
     }, null, 2));
   } finally {
