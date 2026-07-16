@@ -30,6 +30,7 @@ export interface GstRateRow {
   gst: number;
   cgst: number;
   sgst: number;
+  igst: number;
 }
 
 export interface GstBreakdown {
@@ -41,6 +42,8 @@ export interface GstBreakdown {
   gst: number;
   cgst: number;
   sgst: number;
+  igst: number;
+  supplyType: "intrastate" | "interstate";
   /** Amount to ADD to the payable total (0 unless mode is exclusive). */
   gstToAdd: number;
   byRate: GstRateRow[];
@@ -48,7 +51,20 @@ export interface GstBreakdown {
 
 const round2 = (value: number) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
-export function computeGstBreakdown(lines: GstLineInput[], mode: GstMode = "inclusive"): GstBreakdown {
+export interface GstJurisdiction {
+  sellerStateCode?: string | null;
+  buyerStateCode?: string | null;
+}
+
+function normalizedStateCode(value: string | null | undefined) {
+  const code = String(value ?? "").trim();
+  return /^\d{2}$/.test(code) ? code : "";
+}
+
+export function computeGstBreakdown(lines: GstLineInput[], mode: GstMode = "inclusive", jurisdiction: GstJurisdiction = {}): GstBreakdown {
+  const sellerStateCode = normalizedStateCode(jurisdiction.sellerStateCode);
+  const buyerStateCode = normalizedStateCode(jurisdiction.buyerStateCode);
+  const interstate = Boolean(sellerStateCode && buyerStateCode && sellerStateCode !== buyerStateCode);
   const byRateMap = new Map<number, { taxable: number; gst: number }>();
   let lineTotalSum = 0;
 
@@ -77,13 +93,14 @@ export function computeGstBreakdown(lines: GstLineInput[], mode: GstMode = "incl
   const byRate: GstRateRow[] = [...byRateMap.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([rate, { taxable, gst }]) => {
-      const cgst = round2(gst / 2);
-      return { rate, taxable, gst, cgst, sgst: round2(gst - cgst) };
+      const cgst = interstate ? 0 : round2(gst / 2);
+      return { rate, taxable, gst, cgst, sgst: interstate ? 0 : round2(gst - cgst), igst: interstate ? gst : 0 };
     });
 
   const gst = round2(byRate.reduce((sum, row) => sum + row.gst, 0));
   const cgst = round2(byRate.reduce((sum, row) => sum + row.cgst, 0));
   const sgst = round2(gst - cgst);
+  const igst = interstate ? gst : 0;
   const taxableTaxed = round2(byRate.reduce((sum, row) => sum + row.taxable, 0));
   // Zero-rated lines are part of the taxable value too (at their full amount).
   const zeroRated = round2(lineTotalSum - (mode === "exclusive" ? taxableTaxed : round2(taxableTaxed + gst)));
@@ -95,7 +112,9 @@ export function computeGstBreakdown(lines: GstLineInput[], mode: GstMode = "incl
     taxable,
     gst,
     cgst,
-    sgst,
+    sgst: interstate ? 0 : sgst,
+    igst,
+    supplyType: interstate ? "interstate" : "intrastate",
     gstToAdd: mode === "exclusive" ? gst : 0,
     byRate,
   };

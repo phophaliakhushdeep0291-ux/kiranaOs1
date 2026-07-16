@@ -38,6 +38,8 @@ function toCustomer(data: CustomerInput, id = createLocalId("customer"), existin
     type: data.type ?? existing?.type ?? "regular",
     reminderOverrideUntil: data.reminderOverrideUntil ?? existing?.reminderOverrideUntil ?? null,
     address: data.address ?? existing?.address ?? null,
+    gstNumber: data.gstNumber ?? existing?.gstNumber ?? null,
+    stateCode: data.stateCode ?? existing?.stateCode ?? null,
     dueDate: data.dueDate ?? existing?.dueDate ?? null,
     promiseToPayDate: data.promiseToPayDate ?? existing?.promiseToPayDate ?? null,
     udharLimit: data.udharLimit ?? existing?.udharLimit ?? undefined,

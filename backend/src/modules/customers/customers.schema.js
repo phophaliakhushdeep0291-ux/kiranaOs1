@@ -1,19 +1,40 @@
 import { z } from "zod";
 import { moneyAmount } from "../../utils/validationSchemas.js";
+import { validateGstin } from "../../utils/gst.js";
 
-export const createCustomerSchema = z.object({
+const customerFields = {
   name: z.string().min(1),
   mobile: z.string().regex(/^[6-9]\d{9}$/, "Valid Indian mobile required").optional().nullable(),
   address: z.string().trim().max(300).optional().nullable(),
-  gstNumber: z.string().trim().toUpperCase().regex(/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, "Valid 15-character GSTIN required").optional().nullable(),
+  gstNumber: z.string().trim().toUpperCase().optional().nullable(),
   stateCode: z.string().regex(/^\d{2}$/, "Two-digit GST state code required").optional().nullable(),
   type: z.enum(["regular", "udhar"]).default("regular"),
   udharAmount: moneyAmount().default(0).optional(),
-});
+};
 
-export const updateCustomerSchema = createCustomerSchema.partial().extend({
+function withGstIdentityValidation(schema) {
+  return schema.superRefine((customer, ctx) => {
+    if (!customer.gstNumber) return;
+    const result = validateGstin(customer.gstNumber);
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["gstNumber"], message: result.reason });
+      return;
+    }
+    if (customer.stateCode && customer.stateCode !== result.stateCode) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["stateCode"], message: "State code must match the GSTIN" });
+    }
+  }).transform((customer) => {
+    if (!customer.gstNumber) return customer;
+    const result = validateGstin(customer.gstNumber);
+    return result.valid ? { ...customer, gstNumber: result.normalized, stateCode: customer.stateCode || result.stateCode } : customer;
+  });
+}
+
+export const createCustomerSchema = withGstIdentityValidation(z.object(customerFields));
+
+export const updateCustomerSchema = withGstIdentityValidation(z.object(customerFields).partial().extend({
   reminderOverrideUntil: z.string().datetime().optional(),
-});
+}));
 
 export const udharPaymentSchema = z.object({
   locationId: z.string().min(1).optional(),

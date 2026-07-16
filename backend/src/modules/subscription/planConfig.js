@@ -113,7 +113,7 @@ export const PLAN_CONFIGS = {
     priceMonthlyPaise: 99900,
     priceYearlyPaise: 899900,
     maxDevices: 10,
-    maxStores: 2,
+    maxStores: 10,
     maxStaff: 20,
     features: [...starterFeatures, ...standardOnlyFeatures, ...growthOnlyFeatures, ...proOnlyFeatures],
   },

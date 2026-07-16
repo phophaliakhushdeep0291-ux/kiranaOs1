@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validateGstin } from "@/lib/gstin";
 
 // Treat empty string AND null as "no value" → undefined. Hydrated rows from the server carry
 // null for unset optional fields; without this, re-validating one (e.g. editing a synced customer
@@ -24,9 +25,20 @@ export const customerCreationSchema = z.object({
   mobile: mobileNumberSchema,
   type: z.enum(["regular", "udhar"]).default("regular"),
   address: optionalText,
+  gstNumber: optionalText,
+  stateCode: z.preprocess(emptyStringToUndefined, z.string().regex(/^\d{2}$/, "State code must be 2 digits").optional()),
   udharLimit: money.optional(),
   reminderOverrideUntil: optionalText,
   notes: optionalText,
+}).superRefine((customer, ctx) => {
+  if (!customer.gstNumber) return;
+  const result = validateGstin(customer.gstNumber);
+  if (!result.valid) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["gstNumber"], message: result.reason ?? "Invalid GSTIN" });
+  else if (customer.stateCode && customer.stateCode !== result.stateCode) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["stateCode"], message: "State code must match the GSTIN" });
+}).transform((customer) => {
+  if (!customer.gstNumber) return customer;
+  const result = validateGstin(customer.gstNumber);
+  return result.valid ? { ...customer, gstNumber: result.normalized, stateCode: customer.stateCode || result.stateCode } : customer;
 });
 
 export const quantitySlabPriceSchema = z.object({
@@ -163,6 +175,9 @@ export const billCreationSchema = z
     customerLocalId: optionalText,
     customerName: optionalText,
     customerMobile: mobileNumberSchema,
+    buyerGstin: optionalText,
+    buyerStateCode: z.preprocess(emptyStringToUndefined, z.string().regex(/^\d{2}$/).optional()),
+    buyerAddress: optionalText,
     items: z.array(billItemCreationSchema).min(1, "At least one bill item is required"),
     discount: money.default(0),
     actualAmount: money.optional(),

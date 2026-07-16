@@ -60,11 +60,14 @@ import {
 import type { CustomerInput } from "@/types/api";
 import { offlineDB } from "@/lib/offline/db";
 import { cn } from "@/lib/utils";
+import { validateGstin } from "@/lib/gstin";
 
 interface CustomerFormState {
   name: string;
   mobile: string;
   address: string;
+  gstNumber: string;
+  stateCode: string;
   type: "regular" | "udhar";
   dueDate: string;
   promiseToPayDate: string;
@@ -87,7 +90,7 @@ interface CustomerOverviewActivity {
 }
 
 function blankCustomerForm(): CustomerFormState {
-  return { name: "", mobile: "", address: "", type: "regular", dueDate: "", promiseToPayDate: "", udharLimit: "", notes: "" };
+  return { name: "", mobile: "", address: "", gstNumber: "", stateCode: "", type: "regular", dueDate: "", promiseToPayDate: "", udharLimit: "", notes: "" };
 }
 
 function useCustomersLedgerList() {
@@ -521,6 +524,8 @@ export default function CustomersPage() {
       name: customer.name,
       mobile: customer.mobile ?? "",
       address: customer.address ?? "",
+      gstNumber: customer.gstNumber ?? "",
+      stateCode: customer.stateCode ?? "",
       type: customer.type === "udhar" ? "udhar" : "regular",
       dueDate: customer.dueDate ?? "",
       promiseToPayDate: customer.promiseToPayDate ?? "",
@@ -544,12 +549,19 @@ export default function CustomersPage() {
       toast({ title: "Mobile/number required", description: "Use phone, shop number, or local identity number.", variant: "destructive" });
       return;
     }
+    const gstin = customerForm.gstNumber.trim() ? validateGstin(customerForm.gstNumber) : null;
+    if (gstin && !gstin.valid) {
+      toast({ title: "Check customer GSTIN", description: gstin.reason, variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const data: CustomerInput = {
         name: customerForm.name.trim(),
         mobile: customerForm.mobile.trim(),
         address: customerForm.address.trim() || undefined,
+        gstNumber: gstin?.normalized || undefined,
+        stateCode: gstin?.stateCode || customerForm.stateCode || undefined,
         type: customerForm.type,
         dueDate: customerForm.dueDate || undefined,
         promiseToPayDate: customerForm.promiseToPayDate || undefined,
@@ -1129,7 +1141,14 @@ export default function CustomersPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div><Label>Name *</Label><Input className="mt-1" value={customerForm.name} onChange={(event) => setCustomerForm((form) => ({ ...form, name: event.target.value }))} /></div>
             <div><Label>Phone / number *</Label><Input className="mt-1" value={customerForm.mobile} onChange={(event) => setCustomerForm((form) => ({ ...form, mobile: event.target.value }))} /></div>
-            <div className="md:col-span-2"><Label>Address</Label><Input className="mt-1" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} /></div>
+            <div className="md:col-span-2"><Label>Billing address</Label><Input className="mt-1" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} placeholder="Used on B2B GST invoices" /></div>
+            <div className="md:col-span-2 rounded-xl border border-[#dce7f6] bg-[#f8fbff] p-3">
+              <div className="mb-3"><p className="text-[12px] font-bold text-[#19345f]">GST details (optional)</p><p className="mt-0.5 text-[11px] text-[#64748b]">Add these for registered B2B buyers. The state is derived from a valid GSTIN and controls IGST versus CGST/SGST.</p></div>
+              <div className="grid gap-3 md:grid-cols-[1fr_120px]">
+                <div><Label>Customer GSTIN</Label><Input className="mt-1 uppercase" maxLength={15} autoCapitalize="characters" value={customerForm.gstNumber} onChange={(event) => { const gstNumber = event.target.value.toUpperCase().replace(/\s/g, ""); setCustomerForm((form) => ({ ...form, gstNumber, stateCode: /^\d{2}/.test(gstNumber) ? gstNumber.slice(0, 2) : form.stateCode })); }} placeholder="22AAAAA0000A1Z5" /></div>
+                <div><Label>State code</Label><Input className="mt-1 bg-white" value={customerForm.stateCode} readOnly placeholder="--" aria-label="GST state code" /></div>
+              </div>
+            </div>
             <div><Label>Customer type</Label><Select value={customerForm.type} onValueChange={(value) => setCustomerForm((form) => ({ ...form, type: value as "regular" | "udhar" }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="regular">Regular</SelectItem><SelectItem value="udhar">Udhar allowed</SelectItem></SelectContent></Select></div>
             <div><Label>Udhar limit</Label><Input type="number" className="mt-1" value={customerForm.udharLimit} onChange={(event) => setCustomerForm((form) => ({ ...form, udharLimit: event.target.value }))} /></div>
             <div><Label>Due date</Label><Input type="date" className="mt-1" value={customerForm.dueDate} onChange={(event) => setCustomerForm((form) => ({ ...form, dueDate: event.target.value }))} /></div>

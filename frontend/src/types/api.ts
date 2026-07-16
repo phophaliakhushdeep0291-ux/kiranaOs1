@@ -179,6 +179,8 @@ export interface Customer {
   totalUdhar?: number;
   reminderOverrideUntil?: string | null;
   address?: string | null;
+  gstNumber?: string | null;
+  stateCode?: string | null;
   dueDate?: string | null;
   promiseToPayDate?: string | null;
   udharLimit?: number;
@@ -197,6 +199,8 @@ export interface CustomerInput {
   type?: "regular" | "udhar";
   reminderOverrideUntil?: string;
   address?: string;
+  gstNumber?: string;
+  stateCode?: string;
   dueDate?: string;
   promiseToPayDate?: string;
   udharLimit?: number;
@@ -431,6 +435,10 @@ export interface BillInput {
   customerId?: string;
   customerName?: string;
   customerMobile?: string;
+  /** Buyer tax identity is retained only for the offline invoice snapshot; the server resolves it from customerId. */
+  buyerGstin?: string;
+  buyerStateCode?: string;
+  buyerAddress?: string;
   items: BillInputItem[];
   discount?: number;
   offerId?: string;
@@ -469,6 +477,9 @@ export interface Bill {
   customerId?: string | null;
   customerName?: string | null;
   customerMobile?: string | null;
+  buyerGstin?: string | null;
+  buyerStateCode?: string | null;
+  buyerAddress?: string | null;
   subtotal?: number;
   discount?: number;
   offerId?: string | null;
