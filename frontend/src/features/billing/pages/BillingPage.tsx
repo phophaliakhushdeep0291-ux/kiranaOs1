@@ -29,7 +29,7 @@ import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config"
 import { computeGstBreakdown } from "@/lib/gst";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
-import { SPLIT_PAYMENT, cartItemKey, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
+import { SPLIT_PAYMENT, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 import { getRetailPaymentReadiness, verifyRetailPayment } from "../retail-payment";
 import { getActiveLocationId } from "@/features/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/loyalty/api";
@@ -171,6 +171,7 @@ export default function Billing() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [cart, setCart] = useState<CartItem[]>(() => readBillingDraft().cart ?? []);
   const [discount, setDiscount] = useState(() => readBillingDraft().discount ?? 0);
+  const [appliedOffer, setAppliedOffer] = useState<AppliedOffer | null>(() => readBillingDraft().appliedOffer ?? null);
   const [paymentMode, setPaymentMode] = useState<PaymentSelection>(() => readBillingDraft().paymentMode ?? BillPaymentMode.cash);
   const [billType, setBillType] = useState<BillTypeSelection>(() => readBillingDraft().billType ?? BillInputBillType.normal_sale);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => readBillingDraft().selectedCustomerId ?? "walk_in");
@@ -449,6 +450,7 @@ export default function Billing() {
           setSourceOrderId(draft.sourceOrderId);
           setCart(draft.cart ?? []);
           setDiscount(draft.discount ?? 0);
+          setAppliedOffer(draft.appliedOffer ?? null);
           setPaymentMode(draft.paymentMode ?? BillPaymentMode.cash);
           setBillType(draft.billType ?? BillInputBillType.normal_sale);
           setSelectedCustomerId(draft.selectedCustomerId ?? "walk_in");
@@ -470,8 +472,8 @@ export default function Billing() {
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
-  }, [draftHydrated, activeBillId, sourceOrderId, cart, safeDiscount, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
+    writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
+  }, [draftHydrated, activeBillId, sourceOrderId, cart, safeDiscount, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
 
   // Re-price the cart when a pricing input changes (customer, group, payment
   // mode, or the shop's rules). Manual/custom lines keep the cashier's price;
@@ -548,15 +550,13 @@ export default function Billing() {
     });
   }, [allowAdvancePayment, grandTotal, paidAmount, splitCashAmount]);
 
-  const appliedOfferRef = useRef<{ id: string; code: string; discount: number; subtotal: number } | null>(null);
-
   const confirmBill = useConfirmBill({
     mutation: {
       onSuccess: (data: Bill) => {
         const billNo = data.billNumber ?? data.billNo ?? `PENDING-${Date.now()}`;
         setVerifiedRetailPayment(null);
         // Coupon usage and discount impact commit atomically with the bill.
-        appliedOfferRef.current = null;
+        setAppliedOffer(null);
         const pendingPrint = pendingAutoPrintRef.current;
         const printableForSavedBill = pendingPrint
           ? { ...pendingPrint.printable, billNo, createdAt: data.createdAt ?? pendingPrint.printable.createdAt }
@@ -618,6 +618,7 @@ export default function Billing() {
     setSourceOrderId(undefined);
     setCart([]);
     setDiscount(0);
+    setAppliedOffer(null);
     setLoyaltyPointsToRedeem(0);
     setPaidAmount("");
     setSplitCashAmount("");
@@ -1087,7 +1088,6 @@ export default function Billing() {
       toast({ title: "Discount not allowed", description: applyDiscountPermission.reason, variant: "destructive" });
       return;
     }
-    const appliedOffer = appliedOfferRef.current;
     if (appliedOffer && Math.abs(appliedOffer.subtotal - subtotal) > 0.005) {
       toast({ title: "Reapply coupon", description: "The cart total changed after this coupon was checked. Reapply it before saving.", variant: "destructive" });
       return;
@@ -1218,6 +1218,7 @@ export default function Billing() {
       createdAt: new Date().toISOString(),
       cart,
       discount: safeDiscount,
+      appliedOffer,
       paymentMode,
       billType,
       selectedCustomerId,
@@ -1235,6 +1236,7 @@ export default function Billing() {
     setSourceOrderId(bill.sourceOrderId);
     setCart(bill.cart ?? []);
     setDiscount(bill.discount ?? 0);
+    setAppliedOffer(bill.appliedOffer ?? null);
     setPaymentMode(bill.paymentMode ?? BillPaymentMode.cash);
     setBillType(bill.billType ?? BillInputBillType.normal_sale);
     setSelectedCustomerId(bill.selectedCustomerId ?? "walk_in");
@@ -1510,7 +1512,7 @@ export default function Billing() {
         subtotal={subtotal}
         safeDiscount={safeDiscount}
         setDiscount={setDiscount}
-        onCouponApplied={(offerId, discount, code) => { appliedOfferRef.current = offerId ? { id: offerId, discount, code, subtotal } : null; }}
+        onCouponApplied={(offerId, discount, code) => { setAppliedOffer(offerId ? { id: offerId, discount, code, subtotal } : null); }}
         loyaltyOnline={isOnline}
         loyaltyCustomerSelected={Boolean(resolvedCustomerId)}
         loyaltyLoading={loyaltyProgram.isLoading || loyaltyAccount.isLoading}

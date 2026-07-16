@@ -187,6 +187,21 @@ These require both `Authorization` and `x-device-id`:
 /api/ai
 ```
 
+### Grounded AI command parsing
+
+POST /api/ai/parse-command requires Authorization, x-device-id, and an active
+shop context. The provider receives bounded, sanitized context and only
+transcript-relevant candidates from that shop's product catalogue. Provider
+JSON is validated against a strict command schema and then independently
+checked for transcript evidence.
+
+Clients must treat data.permissionAllowed=false, data.safety.schemaValid=false,
+or data.safety.requiresManualFallback=true as a blocked AI suggestion and use
+the deterministic local/manual workflow. The AI endpoint only parses: it never
+creates or changes bills, products, customers, payments, stock, or reports.
+Confirmation and owner-PIN requirements remain deterministic application
+controls. Safety reason codes contain no model reasoning or raw hidden prompt.
+
 ### AI audio transcription
 
 `POST /api/ai/transcribe` requires `Authorization`, `x-device-id`, and an active

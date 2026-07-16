@@ -75,6 +75,21 @@ assert.ok(
   "Audio transcription must delete its temporary upload after every outcome",
 );
 
+const aiCommand = contract.endpoints.find((endpoint) => endpoint.path === "/api/ai/parse-command");
+for (const field of [
+  "data.permissionAllowed",
+  "data.safety.schemaValid",
+  "data.safety.grounded",
+  "data.safety.effectiveConfidence",
+  "data.safety.reasons",
+  "data.safety.requiresManualFallback",
+]) {
+  assert.ok(aiCommand.responseMustInclude.includes(field), "AI command response must document " + field);
+}
+for (const phrase of ["strict schema", "tenant catalogue", "fails closed", "never writes"]) {
+  assert.ok(aiCommand.safetyGuarantees.some((guarantee) => guarantee.includes(phrase)), "AI safety contract must guarantee " + phrase);
+}
+
 for (const phrase of ["x-device-id", "Authorization", "entityCursors", "owner PIN", "shopId"]) {
   assert.ok(docs.includes(phrase), `API docs must mention ${phrase}`);
 }

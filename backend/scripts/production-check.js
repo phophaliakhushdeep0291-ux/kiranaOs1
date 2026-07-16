@@ -52,6 +52,10 @@ const requiredFiles = [
   "tests/phase16-monitoring-provider-validation.examples.js",
   "tests/phase17-whatsapp-reminders.examples.js",
   "tests/offer-bill-atomicity.examples.js",
+  "tests/ai-hallucination-guard.examples.js",
+  "docs/AI_SAFETY.md",
+  "src/modules/ai/ai.command-schema.js",
+  "src/modules/ai/ai.grounding.js",
   "tests/phase18-production-hardening.examples.js",
   "tests/phase19-production-correctness.examples.js",
   "tests/phase20-financial-identity-hardening.examples.js",
@@ -2054,6 +2058,62 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   }
   if (!packageJson.scripts?.["test:billing"]?.includes("phase24-api-contract-proof.examples.js")) {
     errors.push("Phase 24 API contract tests must be wired into npm test");
+  }
+}
+
+{
+  const packageJson = exists("package.json") ? readJson("package.json") : { scripts: {} };
+  const commandSchema = exists("src/modules/ai/ai.command-schema.js") ? read("src/modules/ai/ai.command-schema.js") : "";
+  const grounding = exists("src/modules/ai/ai.grounding.js") ? read("src/modules/ai/ai.grounding.js") : "";
+  const aiService = exists("src/modules/ai/ai.service.js") ? read("src/modules/ai/ai.service.js") : "";
+  const metrics = exists("src/lib/metrics.js") ? read("src/lib/metrics.js") : "";
+  const aiDocs = exists("docs/AI_SAFETY.md") ? read("docs/AI_SAFETY.md") : "";
+  const aiTest = exists("tests/ai-hallucination-guard.examples.js") ? read("tests/ai-hallucination-guard.examples.js") : "";
+  const frontendAdapterPath = path.resolve(root, "..", "frontend", "src", "features", "voice", "voice-ai-client.ts");
+  const frontendAdapter = fs.existsSync(frontendAdapterPath) ? fs.readFileSync(frontendAdapterPath, "utf8") : "";
+
+  if (!packageJson.scripts?.["test:ai-safety"]?.includes("ai-hallucination-guard.examples.js")) {
+    errors.push("package.json must expose the AI hallucination safety suite");
+  }
+  if (!packageJson.scripts?.test?.includes("test:ai-safety")) {
+    errors.push("npm test must run the AI hallucination safety suite");
+  }
+  for (const snippet of ["AI_COMMAND_OUTPUT_SCHEMA", ".strict()", "safeUnknownAiCommand"]) {
+    if (!commandSchema.includes(snippet)) errors.push("AI strict command schema missing " + snippet);
+  }
+  for (const snippet of [
+    "ITEM_NOT_IN_TRANSCRIPT",
+    "ITEM_QUANTITY_NOT_IN_TRANSCRIPT",
+    "ITEM_UNIT_NOT_IN_TRANSCRIPT",
+    "CUSTOMER_MOBILE_NOT_IN_TRANSCRIPT",
+    "TARGET_NOT_IN_TRANSCRIPT",
+    "INTENT_NOT_SUPPORTED_BY_TRANSCRIPT",
+    "requiresManualFallback",
+  ]) {
+    if (!grounding.includes(snippet)) errors.push("AI grounding guard missing " + snippet);
+  }
+  for (const snippet of [
+    'response_format: { type: "json_schema"',
+    "selectRelevantCatalog",
+    "sanitizeContext",
+    "permissionAllowed",
+    "CATALOG_UNAVAILABLE",
+    "invalid_provider_json",
+    "recordAiCommand",
+  ]) {
+    if (!aiService.includes(snippet)) errors.push("AI live parser safety path missing " + snippet);
+  }
+  for (const snippet of ["ai_commands_total", "ai_command_effective_confidence"]) {
+    if (!metrics.includes(snippet)) errors.push("AI production metrics missing " + snippet);
+  }
+  for (const snippet of ["0 unsafe acceptances", "at least 90%", "permissionAllowed=false", "does not write"]) {
+    if (!aiDocs.includes(snippet)) errors.push("docs/AI_SAFETY.md missing " + snippet);
+  }
+  for (const snippet of ["unsafeAccepted", "unsafeAcceptanceRate", "malformed provider output", "catalog verification is unavailable"]) {
+    if (!aiTest.includes(snippet)) errors.push("AI adversarial suite missing " + snippet);
+  }
+  for (const snippet of ["permissionAllowed === false", "requiresManualFallback === true", "confidence < 0.65"]) {
+    if (!frontendAdapter.includes(snippet)) errors.push("Frontend AI fail-closed adapter missing " + snippet);
   }
 }
 

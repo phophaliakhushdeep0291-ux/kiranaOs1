@@ -20,6 +20,8 @@ const KNOWN_METRICS = [
   "reminders_skipped_total",
   "whatsapp_provider_errors_total",
   "integration_api_auth_total",
+  "ai_commands_total",
+  "ai_command_effective_confidence",
   "webhook_deliveries_total",
   "webhook_delivery_duration_ms",
   "webhook_queue_dispatch_total",
@@ -135,6 +137,11 @@ export function recordWhatsAppProviderError(provider = "disabled", status = "fai
 
 export function recordIntegrationApiAuth(status) {
   incrementMetric("integration_api_auth_total", { status });
+}
+
+export function recordAiCommand({ provider = "unknown", status = "blocked", intent = "UNKNOWN", confidence = 0 }) {
+  incrementMetric("ai_commands_total", { provider, status, intent });
+  observeMetric("ai_command_effective_confidence", { provider, status }, confidence);
 }
 
 export function recordWebhookDelivery({ eventType, status, durationMs }) {

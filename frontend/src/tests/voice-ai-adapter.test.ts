@@ -38,6 +38,28 @@ describe("adaptBackendCommandIntent", () => {
   it("defers to the local parser (null) when clarification is needed or confidence is low", () => {
     expect(adaptBackendCommandIntent({ intent: "ADD_ITEMS", clarificationNeeded: true }, "kuch add karo")).toBeNull();
     expect(adaptBackendCommandIntent({ intent: "SEARCH_PRODUCT", confidence: 0.2, items: [{ query: "x" }] }, "x")).toBeNull();
+    expect(adaptBackendCommandIntent({ intent: "SEARCH_PRODUCT", items: [{ query: "x" }] }, "x")).toBeNull();
+  });
+
+  it("fails closed when backend grounding or permissions reject the model output", () => {
+    expect(adaptBackendCommandIntent({
+      intent: "ADD_ITEMS",
+      confidence: 0.95,
+      permissionAllowed: false,
+      items: [{ query: "sugar" }],
+    }, "add sugar")).toBeNull();
+    expect(adaptBackendCommandIntent({
+      intent: "SEARCH_PRODUCT",
+      confidence: 0.95,
+      safety: { schemaValid: false },
+      items: [{ query: "sugar" }],
+    }, "search sugar")).toBeNull();
+    expect(adaptBackendCommandIntent({
+      intent: "SEARCH_PRODUCT",
+      confidence: 0.95,
+      safety: { requiresManualFallback: true },
+      items: [{ query: "sugar" }],
+    }, "search sugar")).toBeNull();
   });
 
   it("returns null for unknown and destructive intents (never auto-executed)", () => {

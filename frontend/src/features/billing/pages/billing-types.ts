@@ -38,6 +38,13 @@ export type PaymentSelection = typeof BillPaymentMode[keyof typeof BillPaymentMo
 export type BillTypeSelection = typeof BillInputBillType[keyof typeof BillInputBillType];
 export type BillingSensitiveAction = "large_discount" | "selling_below_minimum_price" | "loyalty_redemption";
 
+export interface AppliedOffer {
+  id: string;
+  code: string;
+  discount: number;
+  subtotal: number;
+}
+
 export interface BillingDraft {
   /** Stable id of the bill currently in the workspace (for the open-bills switcher). */
   activeBillId?: string;
@@ -45,6 +52,7 @@ export interface BillingDraft {
   sourceOrderId?: string;
   cart?: CartItem[];
   discount?: number;
+  appliedOffer?: AppliedOffer | null;
   paymentMode?: PaymentSelection;
   billType?: BillTypeSelection;
   selectedCustomerId?: string;

@@ -123,6 +123,23 @@ for (const field of ["sync.protocol", "sync.nextServerSeq", "sync.serverVersion"
 }
 if (!String(pull?.purpose ?? "").includes("legacy")) fail("sync pull contract must document legacy cursor compatibility");
 
+const aiCommand = contract.endpoints.find((endpoint) => endpoint.path === "/api/ai/parse-command");
+for (const field of [
+  "data.permissionAllowed",
+  "data.safety.schemaValid",
+  "data.safety.grounded",
+  "data.safety.effectiveConfidence",
+  "data.safety.reasons",
+  "data.safety.requiresManualFallback",
+]) {
+  if (!aiCommand?.responseMustInclude?.includes(field)) fail("AI command contract must require " + field);
+}
+for (const phrase of ["strict schema", "tenant catalogue", "fails closed", "never writes"]) {
+  if (!aiCommand?.safetyGuarantees?.some((guarantee) => guarantee.includes(phrase))) {
+    fail("AI command contract must guarantee " + phrase);
+  }
+}
+
 const ack = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/ack");
 for (const field of ["acknowledgement.applied_server_seq", "acknowledgement.server_seq", "acknowledgement.lag", "acknowledgement.stale_ack_ignored"]) {
   if (!ack?.responseMustInclude?.includes(field)) fail("sync acknowledgement contract must require " + field);

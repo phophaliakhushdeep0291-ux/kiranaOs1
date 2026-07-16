@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export const AI_INTENTS = Object.freeze({
   SEARCH_PRODUCT: "SEARCH_PRODUCT",
   ADD_ITEMS: "ADD_ITEMS",
@@ -111,6 +113,63 @@ export const AI_COMMAND_JSON_SCHEMA = Object.freeze({
     ],
   },
 });
+
+const nullableText = (max) => z.string().trim().min(1).max(max).nullable();
+const optionalMoney = z.number().finite().min(0).max(100_000_000).nullable();
+
+export const AI_COMMAND_OUTPUT_SCHEMA = z.object({
+  intent: z.enum(AI_INTENT_VALUES),
+  confidence: z.number().finite().min(0).max(1),
+  customer: z.object({
+    name: nullableText(100),
+    mobile: z.string().trim().regex(/^\d{10}$/, "mobile must be 10 digits").nullable(),
+  }).strict().nullable(),
+  items: z.array(z.object({
+    query: z.string().trim().min(1).max(120),
+    quantity: z.number().finite().positive().max(1_000_000),
+    unit: z.enum(["kg", "g", "ltr", "ml", "piece", "pcs", "packet", "box", "dozen", "unknown"]),
+  }).strict()).max(50).nullable(),
+  payment: z.object({
+    cash: optionalMoney,
+    upi: optionalMoney,
+    remaining: z.enum(["udhar"]).nullable(),
+  }).strict().nullable(),
+  target: nullableText(160),
+  discount: optionalMoney,
+  needsConfirmation: z.boolean(),
+  clarificationNeeded: z.boolean(),
+  clarificationQuestion: nullableText(300),
+  messageToUser: z.string().trim().min(1).max(500),
+}).strict();
+
+export function safeUnknownAiCommand(message = "Command samajh nahi aaya. Please rephrase it.") {
+  return {
+    intent: AI_INTENTS.UNKNOWN,
+    confidence: 0,
+    customer: null,
+    items: null,
+    payment: null,
+    target: null,
+    discount: null,
+    needsConfirmation: true,
+    clarificationNeeded: true,
+    clarificationQuestion: "Please say one clear action with the exact item, customer, and amount.",
+    messageToUser: message,
+  };
+}
+
+export function parseAiCommandOutput(value) {
+  const result = AI_COMMAND_OUTPUT_SCHEMA.safeParse(value);
+  if (result.success) return { ok: true, command: result.data, issues: [] };
+  return {
+    ok: false,
+    command: safeUnknownAiCommand("The AI response could not be verified. Please rephrase the command."),
+    issues: result.error.issues.slice(0, 10).map((issue) => ({
+      path: issue.path.join("."),
+      code: issue.code,
+    })),
+  };
+}
 
 export function normalizeAiCommand(command) {
   const safeCommand = command && typeof command === "object" ? command : {};

@@ -1091,7 +1091,24 @@
       "path": "/api/ai/parse-command",
       "authRequired": true,
       "deviceRequired": true,
-      "purpose": "parse AI command"
+      "purpose": "parse an AI-assisted command, validate strict output, and ground every actionable value against the transcript and tenant product catalogue",
+      "responseMustInclude": [
+        "data.permissionAllowed",
+        "data.permissionLevel",
+        "data.safety.schemaValid",
+        "data.safety.grounded",
+        "data.safety.effectiveConfidence",
+        "data.safety.reasons",
+        "data.safety.requiresManualFallback"
+      ],
+      "safetyGuarantees": [
+        "provider output is accepted only after strict schema validation",
+        "products and aliases are grounded against the authenticated tenant catalogue",
+        "items, quantities, units, customer details, mobile numbers, payment amounts, discounts, targets, and sensitive intents require transcript evidence",
+        "invalid, unsupported, ambiguous, or low-confidence output fails closed with permissionAllowed=false",
+        "AI parsing never writes a bill, product, customer, payment, stock adjustment, or cancellation",
+        "sensitive commands retain deterministic confirmation and owner-PIN enforcement outside the model"
+      ]
     },
     {
       "method": "POST",

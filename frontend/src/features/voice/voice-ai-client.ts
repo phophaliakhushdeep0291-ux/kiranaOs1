@@ -37,7 +37,15 @@ export function adaptBackendCommandIntent(data: unknown, command: string): Voice
 
   const message = str(data.messageToUser);
   const confidence = num(data.confidence);
-  if (data.clarificationNeeded === true || (confidence !== undefined && confidence < 0.4)) {
+  const safety = isRecord(data.safety) ? data.safety : undefined;
+  if (
+    data.permissionAllowed === false
+    || safety?.schemaValid === false
+    || safety?.requiresManualFallback === true
+    || data.clarificationNeeded === true
+    || confidence === undefined
+    || confidence < 0.65
+  ) {
     return null;
   }
 
