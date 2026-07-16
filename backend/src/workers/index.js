@@ -4,6 +4,7 @@ import { closeQueues, isQueueEnabled } from "../lib/queue.js";
 import { runLoggedJob } from "./workerUtils.js";
 import { startWorkerHeartbeat } from "../lib/workerHeartbeat.js";
 import { registerMaintenanceSchedulers } from "./schedulers.js";
+import { captureWorkerError, closeErrorTracking } from "../lib/errorTracking.js";
 
 const workers = [];
 let heartbeatController = null;
@@ -41,6 +42,12 @@ async function startWorkers() {
       { connection, concurrency: env.WORKER_CONCURRENCY }
     );
     worker.on("failed", (job, error) => {
+      captureWorkerError(error, {
+        queueName: spec.queueName,
+        jobName: job?.name,
+        jobId: job?.id,
+        attemptsMade: job?.attemptsMade,
+      });
       console.error(JSON.stringify({
         type: "worker_job_failed",
         queueName: spec.queueName,
@@ -88,6 +95,7 @@ async function shutdown(signal) {
   } catch {
     // Prisma may be unavailable in restricted sandboxes; shutdown should stay safe.
   }
+  await closeErrorTracking();
   console.log(JSON.stringify({ type: "worker_shutdown_complete", signal, time: new Date().toISOString() }));
   process.exit(0);
 }
@@ -96,6 +104,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 startWorkers().catch((error) => {
+  captureWorkerError(error, { phase: "startup" });
   console.error(JSON.stringify({ type: "worker_startup_error", errorMessage: error?.message, time: new Date().toISOString() }));
-  process.exit(1);
+  closeErrorTracking().finally(() => process.exit(1));
 });

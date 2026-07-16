@@ -12,7 +12,7 @@ import {
   resolveOperationalLocation,
 } from "../stores/location-context.service.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
-import { recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
+import { reapplyBillLoyaltyInTransaction, recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
 import { allocateLotsForBill, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
@@ -1139,6 +1139,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
       });
     }
 
+    await reapplyBillLoyaltyInTransaction(tx, shopId, bill.id);
     await reapplyGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill restored: ${reason}` });
     await reapplyBillOfferRedemption(tx, shopId, bill);
     await reapplyBillLotAllocations(tx, bill.id);

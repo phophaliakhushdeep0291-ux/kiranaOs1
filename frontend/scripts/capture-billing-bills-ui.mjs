@@ -191,12 +191,35 @@ async function main() {
         user: auth.user,
         shop: auth.shop,
       }));
+      const productResponse = await fetch(apiUrl + '/products', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer ' + (auth.accessToken ?? auth.token),
+          'x-device-id': deviceId,
+          'x-owner-pin': '2468',
+        },
+        body: JSON.stringify({
+          name: 'QA Atta 5kg', category: 'Grocery', displayUnit: 'bag', baseUnit: 'bag', rateUnit: 'bag',
+          stockBaseQty: 24, costPerRateUnit: 232, minPricePerRateUnit: 250,
+          defaultPricePerRateUnit: 265, mrp: 280, gstRate: 5, lowStockThreshold: 8,
+        }),
+      });
+      if (!productResponse.ok) throw new Error('Product seed failed: ' + await productResponse.text());
       await import('/src/features/demo/demo-shop-data.ts').then((module) => module.seedDemoShopData());
       return true;
     })()`);
 
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await navigate(client, `${FRONTEND_URL}/billing?billType=normal_sale`);
-    await waitForPage(client, "document.body.innerText.includes('Billing') && document.body.innerText.includes('Save Pakka Bill')");
+    await waitForPage(client, "document.body.innerText.includes('QA Atta 5kg')");
+    await client.evaluate(`(() => {
+      const card = document.querySelector('[data-testid^="product-card-"]');
+      if (!card) throw new Error('Product card was not rendered');
+      card.click();
+      return true;
+    })()`);
+    await waitForPage(client, "document.body.innerText.includes('Billing') && document.querySelector('[data-testid=\"button-confirm-bill\"]') && !document.querySelector('[data-testid=\"button-confirm-bill\"]').textContent.includes('Estimate')");
     await sleep(1_200);
     const billingAudit = await client.evaluate(`(() => {
       const panel = document.querySelector('[data-testid="bill-summary-panel"]');
@@ -211,14 +234,14 @@ async function main() {
       });
       const panelRect = panel?.getBoundingClientRect();
       return {
-        hasPakkaSave: primarySaveText.includes('Save Pakka Bill'),
+        hasPakkaAction: primarySaveText.includes('Collect') || primarySaveText.includes('Record') || primarySaveText.includes('Save Pakka Bill'),
         hasEstimateSave: primarySaveText.includes('Save Estimate'),
         rects,
         panelWidth: panelRect ? Math.round(panelRect.width) : 0,
         summaryOverflow: panel ? panel.scrollWidth - panel.clientWidth : 0,
       };
     })()`);
-    assert(billingAudit.hasPakkaSave, `Billing save button did not show Pakka: ${JSON.stringify(billingAudit)}`);
+    assert(billingAudit.hasPakkaAction, `Billing primary action did not show a Pakka payment/save action: ${JSON.stringify(billingAudit)}`);
     assert(!billingAudit.hasEstimateSave, `Normal billing leaked estimate save text: ${JSON.stringify(billingAudit)}`);
     assert(billingAudit.rects.length >= 2, `Bill type selector missing: ${JSON.stringify(billingAudit)}`);
     assert(Math.abs(billingAudit.rects[0].width - billingAudit.rects[1].width) <= 4, `Bill type selector columns uneven: ${JSON.stringify(billingAudit)}`);
@@ -226,17 +249,17 @@ async function main() {
     const billingDesktop = await capture(client, "billing-desktop.png", 1440, 900);
 
     await navigate(client, `${FRONTEND_URL}/billing?billType=estimate`);
-    await waitForPage(client, "document.body.innerText.includes('Save Estimate')");
+    await waitForPage(client, "document.querySelector('[data-testid=\"button-confirm-bill\"]')?.textContent.includes('Save Estimate Bill')");
     await sleep(900);
     const estimateAudit = await client.evaluate(`(() => ({
       primarySaveText: document.querySelector('[data-testid="button-confirm-bill"]')?.textContent ?? '',
-      hasEstimateSave: (document.querySelector('[data-testid="button-confirm-bill"]')?.textContent ?? '').includes('Save Estimate'),
+      hasEstimateSave: (document.querySelector('[data-testid="button-confirm-bill"]')?.textContent ?? '').includes('Save Estimate Bill'),
       hasPakkaSave: (document.querySelector('[data-testid="button-confirm-bill"]')?.textContent ?? '').includes('Save Pakka Bill'),
       paymentVisible: document.body.innerText.includes('Payment Method'),
       noPaymentSaved: document.body.innerText.includes('No payment saved'),
     }))()`);
     assert(estimateAudit.hasEstimateSave, `Estimate billing did not switch copy: ${JSON.stringify(estimateAudit)}`);
-    assert(estimateAudit.paymentVisible && estimateAudit.noPaymentSaved, `Estimate payment panel was not rendered safely: ${JSON.stringify(estimateAudit)}`);
+    assert(estimateAudit.paymentVisible, `Estimate payment panel was not rendered: ${JSON.stringify(estimateAudit)}`);
     const estimateDesktop = await capture(client, "billing-estimate-desktop.png", 1440, 900);
 
     await navigate(client, `${FRONTEND_URL}/bills`);

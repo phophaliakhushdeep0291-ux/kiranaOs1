@@ -875,6 +875,7 @@ model LoyaltyTransaction {
   billId    String?
   locationId String?
   type      String // earn | redeem | adjustment | expire | redeem_reversal
+  lifecycleCycle Int @default(0) // 0 = original/legacy; 1+ = immutable cancel/restore cycle
   points    Int
   source    String   @default("pos") // pos | customer_order | admin | system
   note      String?
@@ -885,7 +886,7 @@ model LoyaltyTransaction {
   bill    Bill?          @relation(fields: [billId], references: [id], onDelete: SetNull)
   location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
-  @@unique([billId, type])
+  @@unique([billId, type, lifecycleCycle])
   @@index([shopId, createdAt])
   @@index([accountId, createdAt])
   @@index([shopId, locationId, createdAt])

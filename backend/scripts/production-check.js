@@ -1742,9 +1742,13 @@ if (exists("src/app.js")) {
 
 if (exists("src/lib/errorTracking.js")) {
   const source = read("src/lib/errorTracking.js");
-  for (const snippet of ["ERROR_TRACKING_ENABLED", "SENTRY_DSN", "captureException", "captureRequestError", "captureWorkerError", "redactSensitive"]) {
-    if (!source.includes(snippet)) errors.push(`errorTracking.js missing adapter snippet: ${snippet}`);
+  for (const snippet of ["@sentry/node", "ERROR_TRACKING_ENABLED", "SENTRY_DSN", "Sentry.init", "Sentry.captureException", "Sentry.close", "sendDefaultPii: false", "beforeSend: sanitizeSentryEvent", "captureRequestError", "captureWorkerError", "redactSensitive", "sdkLoaded: true", 'mode: "sdk"']) {
+    if (!source.includes(snippet)) errors.push(`errorTracking.js missing real SDK behavior: ${snippet}`);
   }
+  if (source.includes("adapter_stub")) errors.push("errorTracking.js must not remain a no-op adapter stub");
+}
+if (!exists("src/instrumentation.js") || !read("src/instrumentation.js").includes("initErrorTracking")) {
+  errors.push("src/instrumentation.js must initialize error tracking before API/worker imports");
 }
 
 if (exists("scripts/smoke-test.js")) {
@@ -1778,6 +1782,9 @@ if (exists("package.json")) {
   const packageJson = readJson("package.json");
   if (!packageJson.scripts?.["storage:verify"]) errors.push("package.json missing storage:verify script");
   if (!packageJson.scripts?.["export:verify"]) errors.push("package.json missing export:verify script");
+  if (packageJson.dependencies?.["@sentry/node"] !== "10.65.0") errors.push("package.json must pin audited @sentry/node 10.65.0");
+  if (!packageJson.scripts?.start?.includes("--import ./src/instrumentation.js")) errors.push("API start script must preload Sentry instrumentation");
+  if (!packageJson.scripts?.worker?.includes("--import ./src/instrumentation.js")) errors.push("worker start script must preload Sentry instrumentation");
   if (!packageJson.scripts?.["test:billing"]?.includes("phase16-monitoring-provider-validation.examples.js")) {
     errors.push("Phase 16 monitoring/provider validation tests must be wired into npm test");
   }

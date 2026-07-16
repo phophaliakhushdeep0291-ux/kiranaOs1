@@ -57,7 +57,7 @@ for (const snippet of ["reminderQueue", "reportsQueue", "exportsQueue", "backupQ
   assert(queueNames.includes(snippet), `queueNames.js missing ${snippet}`);
 }
 
-assert(packageJson.scripts.worker === "node src/workers/index.js", "npm run worker must start worker entry point");
+assert(packageJson.scripts.worker === "node --import ./src/instrumentation.js src/workers/index.js", "npm run worker must preload monitoring and start worker entry point");
 assert(packageJson.scripts["worker:dev"], "worker:dev script should exist");
 assert(packageJson.dependencies.bullmq, "bullmq dependency must be declared");
 assert(packageJson.dependencies.ioredis, "ioredis dependency must be declared");

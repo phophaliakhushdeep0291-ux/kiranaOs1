@@ -1,7 +1,7 @@
 import { env } from "./config/env.js";
 import app from "./app.js";
 import db from "./db.js";
-import { initErrorTracking, captureException } from "./lib/errorTracking.js";
+import { initErrorTracking, captureException, closeErrorTracking } from "./lib/errorTracking.js";
 import { closeRedis } from "./lib/redis.js";
 import { seedPlans } from "./modules/subscription/subscription.service.js";
 import { recoverWebhookDeliveries } from "./modules/integrations/integrations.service.js";
@@ -55,9 +55,10 @@ async function main() {
   httpServer.requestTimeout = 30_000;
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   captureException(err, { type: "startup_error" });
   console.error(JSON.stringify({ type: "startup_error", message: err.message, time: new Date().toISOString() }));
+  await closeErrorTracking();
   process.exit(1);
 });
 
@@ -90,12 +91,14 @@ async function shutdown(signal, exitCode = 0) {
     await closeHttpServer();
     await closeRedis();
     await db.$disconnect();
+    await closeErrorTracking();
     console.log(JSON.stringify({ type: "shutdown", signal, time: new Date().toISOString() }));
     clearTimeout(forceExit);
     process.exit(exitCode);
   } catch (err) {
     captureException(err, { type: "shutdown_error", signal });
     console.error(JSON.stringify({ type: "shutdown_error", signal, message: err.message, time: new Date().toISOString() }));
+    await closeErrorTracking();
     clearTimeout(forceExit);
     process.exit(1);
   }

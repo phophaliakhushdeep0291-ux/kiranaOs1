@@ -357,7 +357,7 @@ Set `METRICS_REQUIRE_TOKEN=true` and `METRICS_TOKEN=<secret>` to protect metrics
 
 ### Error tracking
 
-Sentry is supported as an optional adapter stub:
+Sentry is supported through the production `@sentry/node` SDK:
 
 ```env
 ERROR_TRACKING_ENABLED=true
@@ -366,7 +366,9 @@ SENTRY_ENVIRONMENT=production
 SENTRY_RELEASE=kiranaos-backend@x.y.z
 ```
 
-The current adapter sanitizes context and centralizes call sites. To send events to Sentry, install and wire `@sentry/node` inside `src/lib/errorTracking.js`; do not send passwords, PINs, JWTs, payment secrets, storage secrets, or full customer phone numbers.
+The API and worker scripts preload `src/instrumentation.js` with Node's `--import` flag so ESM instrumentation runs before Express, Prisma, or worker modules. Keep that preload in every production process command.
+
+The SDK runs error-only (`tracesSampleRate: 0`) and `sendDefaultPii: false`. Its final `beforeSend` guard removes the Sentry user object, request headers/cookies/query/body, business identifiers, email addresses, and phone numbers. Only the HTTP method, query-free path, error details, and safe request id are retained. Verify an intentional staging error arrives and contains no customer or credential data before enabling it in production.
 
 ### Smoke tests
 

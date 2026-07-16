@@ -11,6 +11,7 @@ for (const file of [
   "src/modules/jobs/jobs.controller.js",
   "src/lib/metrics.js",
   "src/lib/errorTracking.js",
+  "src/instrumentation.js",
   "scripts/smoke-test.js",
   "docs/ALERTING_RUNBOOK.md",
   "docs/PRODUCTION_DEPLOYMENT.md",
@@ -73,9 +74,49 @@ assert(metrics.includes("shopId") && metrics.includes("userId") && metrics.inclu
 assert(!/labels\s*=\s*\{[^}]*shopId/.test(metrics), "metrics must not create labels with shopId");
 
 const errorTracking = read("src/lib/errorTracking.js");
-for (const snippet of ["ERROR_TRACKING_ENABLED", "SENTRY_DSN", "captureException", "captureRequestError", "captureWorkerError", "redactSensitive"]) {
-  assert(errorTracking.includes(snippet), `error tracking adapter missing ${snippet}`);
+for (const snippet of [
+  '@sentry/node',
+  "ERROR_TRACKING_ENABLED",
+  "SENTRY_DSN",
+  "Sentry.init",
+  "Sentry.captureException",
+  "Sentry.close",
+  "sendDefaultPii: false",
+  "beforeSend: sanitizeSentryEvent",
+  "captureRequestError",
+  "captureWorkerError",
+  "redactSensitive",
+  'sdkLoaded: true',
+  'mode: "sdk"',
+]) assert(errorTracking.includes(snippet), `real error tracking integration missing ${snippet}`);
+assert(!errorTracking.includes("adapter_stub"), "production error tracking must not remain a no-op adapter stub");
+
+const instrumentation = read("src/instrumentation.js");
+assert(instrumentation.includes("initErrorTracking"), "early ESM instrumentation must initialize error tracking");
+
+const { __errorTrackingInternals } = await import("../src/lib/errorTracking.js");
+const sanitizedEvent = __errorTrackingInternals.sanitizeSentryEvent({
+  user: { id: "user-secret", email: "owner@example.com" },
+  message: "Customer owner@example.com / 9876543210 failed",
+  request: {
+    method: "POST",
+    url: "https://pos.example/api/bills?token=secret&customer=9876543210",
+    headers: { authorization: "Bearer secret" },
+    cookies: { session: "secret" },
+    data: { mobile: "9876543210" },
+  },
+  extra: { requestId: "req-safe", userId: "user-secret", nested: { mobile: "9876543210" } },
+  contexts: { business: { shopId: "shop-secret", path: "/api/bills?customer=secret" } },
+  breadcrumbs: [{ message: "owner@example.com", data: { deviceId: "device-secret" } }],
+  exception: { values: [{ value: "Call 9876543210", stacktrace: { frames: [{ filename: "file:///app/server.js?token=secret", vars: { pin: "1234" } }] } }] },
+});
+assert.equal(sanitizedEvent.user, undefined, "telemetry must remove the Sentry user object");
+assert.deepEqual(sanitizedEvent.request, { method: "POST", url: "/api/bills" }, "telemetry must retain only method and query-free request path");
+const serializedEvent = JSON.stringify(sanitizedEvent);
+for (const secret of ["owner@example.com", "9876543210", "user-secret", "shop-secret", "device-secret", "Bearer secret", "1234", "?token="]) {
+  assert(!serializedEvent.includes(secret), `telemetry leaked private value: ${secret}`);
 }
+assert(serializedEvent.includes("req-safe"), "safe request id must remain available for log correlation");
 
 const app = read("src/app.js");
 for (const snippet of ["requireMetricsAccess", "METRICS_REQUIRE_TOKEN", "renderPrometheusMetrics", "recordReadinessStatus", "errorTracking"]) {
@@ -133,6 +174,9 @@ for (const snippet of [
 const pkg = JSON.parse(read("package.json"));
 assert(pkg.scripts["storage:verify"], "package.json must include storage:verify");
 assert(pkg.scripts["export:verify"], "package.json must include export:verify");
+assert.equal(pkg.dependencies["@sentry/node"], "10.65.0", "Sentry must be pinned to the audited SDK version");
+assert(pkg.scripts.start.includes("--import ./src/instrumentation.js"), "API startup must preload Sentry instrumentation");
+assert(pkg.scripts.worker.includes("--import ./src/instrumentation.js"), "worker startup must preload Sentry instrumentation");
 assert(pkg.scripts["test:billing"].includes("phase16-monitoring-provider-validation.examples.js"), "Phase 16 tests must be wired into npm test");
 
 console.log("Phase 16 monitoring/provider validation examples passed");

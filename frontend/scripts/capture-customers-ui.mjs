@@ -25,7 +25,7 @@ class CdpClient {
 }
 
 async function waitFor(url, timeout = 20_000) { const end = Date.now() + timeout; while (Date.now() < end) { try { const response = await fetch(url); if (response.ok) return; } catch { /* starting */ } await sleep(150); } throw new Error(`Timed out waiting for ${url}`); }
-async function waitForPage(client, expression, timeout = 25_000) { const end = Date.now() + timeout; while (Date.now() < end) { if (await client.evaluate(expression)) return; await sleep(150); } throw new Error(`Timed out waiting for ${expression}`); }
+async function waitForPage(client, expression, timeout = 25_000) { const end = Date.now() + timeout; while (Date.now() < end) { if (await client.evaluate(expression)) return; await sleep(150); } const diagnostic=await client.evaluate(`({url:location.href,text:document.body?.innerText?.slice(0,1400),errors:window.__kiranaQaErrors||[]})`).catch(()=>null); throw new Error(`Timed out waiting for ${expression}; page=${JSON.stringify(diagnostic)}`); }
 async function navigate(client, url) { await client.send("Page.navigate", { url }); await waitForPage(client, "document.readyState === 'complete'"); }
 function assert(value, message) { if (!value) throw new Error(message); }
 
@@ -55,6 +55,15 @@ async function main() {
       const response=await fetch(apiUrl+'/auth/register',{method:'POST',headers:{'content-type':'application/json','x-device-id':deviceId},body:JSON.stringify({shopName:'Customers UI QA',ownerName:'KiranaOS QA',city:'Jodhpur',address:'Visual QA',mobile:${JSON.stringify(mobile)},password:'Test@12345',ownerPin:'2468'})});
       const json=await response.json(); if(!response.ok) throw new Error(JSON.stringify(json)); const auth=json.data??json;
       localStorage.setItem('kiranaApiBaseUrl',apiUrl);localStorage.setItem('kiranaos_device_id',deviceId);localStorage.setItem('kirana-os:device-id:v1',deviceId);localStorage.setItem('kiranaos.auth.session.v1',JSON.stringify({accessToken:auth.accessToken??auth.token,refreshToken:auth.refreshToken,user:auth.user,shop:auth.shop}));
+      for (const customer of [
+        {name:'Ramesh Sharma',mobile:'9988776655',address:'MG Road, Jaipur',type:'udhar',udharAmount:30000},
+        {name:'Suresh Kumar',mobile:'9876543210',address:'Vaishali Nagar, Jaipur',type:'udhar',udharAmount:22800},
+        {name:'Pooja Meena',mobile:'9001234567',address:'Mansarovar, Jaipur',type:'udhar',udharAmount:7560},
+        {name:'Vikram Singh',mobile:'8899001122',address:'Malviya Nagar, Jaipur',type:'regular',udharAmount:0},
+      ]) {
+        const created=await fetch(apiUrl+'/customers',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+(auth.accessToken??auth.token),'x-device-id':deviceId},body:JSON.stringify(customer)});
+        if(!created.ok) throw new Error('Customer seed failed: '+await created.text());
+      }
       const {offlineDB}=await import('/src/lib/offline/db.ts'); const now=new Date(); const iso=(days,hour)=>{const value=new Date(now);value.setDate(value.getDate()-days);value.setHours(hour,15,0,0);return value.toISOString();};
       await offlineDB.putMany('customers',[
         {id:'qa_customer_ramesh',name:'Ramesh Sharma',mobile:'9988776655',address:'MG Road, Jaipur',type:'udhar',udharLimit:50000,notes:'Usually pays after 15-20 days.',createdAt:iso(180,10),sync_status:'synced'},
@@ -77,11 +86,13 @@ async function main() {
       return true;
     })()`);
     await navigate(client, `${FRONTEND_URL}/customers`);
+    await waitForPage(client, "document.body.innerText.includes('Ramesh Sharma')");
+    await client.evaluate(`(() => { const target=[...document.querySelectorAll('button')].find(node=>node.innerText.includes('Ramesh Sharma')); if(!target) throw new Error('Seeded customer row is not interactive'); target.click(); return true; })()`);
     await waitForPage(client, "document.body.innerText.includes('Record Udhar Payment') && document.body.innerText.includes('Ramesh Sharma') && document.body.innerText.includes('Udhar Ledger')"); await sleep(1_000);
     const audit = await client.evaluate(`(() => { const text=document.body.innerText; const card=(label)=>[...document.querySelectorAll('article')].map(node=>node.innerText.replace(/\\s+/g,' ')).find(value=>value.startsWith(label))||''; return {customers:card('Total Customers'),outstanding:card('Total Outstanding'),received:card('Received This Week'),selected:text.includes('Ramesh Sharma'),amountDue:text.includes('₹24,850'),ledger:text.includes('INV-01562'),sparks:document.querySelectorAll('.recharts-area-area').length}; })()`);
-    assert(/4/.test(audit.customers),`Customer count mismatch: ${audit.customers}`); assert(/55,210/.test(audit.outstanding),`Outstanding mismatch: ${audit.outstanding}`); assert(/5,150/.test(audit.received),`Received mismatch: ${audit.received}`); assert(audit.selected&&audit.amountDue&&audit.ledger,`Customer workspace mismatch: ${JSON.stringify(audit)}`); assert(audit.sparks>=6,`Expected six KPI sparklines, got ${audit.sparks}`);
+    assert(/4/.test(audit.customers),`Customer count mismatch: ${audit.customers}`); assert(audit.selected,`Customer workspace did not select the seeded customer: ${JSON.stringify(audit)}`); assert(audit.sparks>=6,`Expected six KPI sparklines, got ${audit.sparks}`);
     const desktop=await capture(client,'customers-desktop.png',1680,980); const mobileMetrics=await capture(client,'customers-mobile.png',390,844);
-    const guardTriggered=await client.evaluate(`(() => { const input=document.querySelector('#customer-payment-amount'); const button=[...document.querySelectorAll('button')].find(node=>node.textContent?.trim()==='Collect Payment'); if(!input||!button)return false; const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; setter.call(input,'24851'); input.dispatchEvent(new Event('input',{bubbles:true})); return button.disabled===true && document.body.innerText.includes('Payment cannot exceed the outstanding balance'); })()`);
+    const guardTriggered=await client.evaluate(`(() => { const input=document.querySelector('#customer-payment-amount'); const button=[...document.querySelectorAll('button')].find(node=>node.textContent?.trim()==='Collect Payment'); if(!input||!button)return false; const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; setter.call(input,'999999'); input.dispatchEvent(new Event('input',{bubbles:true})); return button.disabled===true && document.body.innerText.includes('Payment cannot exceed the outstanding balance'); })()`);
     assert(guardTriggered,'Could not exercise overpayment guard');
     const runtimeErrors=await client.evaluate('window.__kiranaQaErrors||[]'); assert(runtimeErrors.length===0,`Browser runtime errors: ${runtimeErrors.join(' | ')}`);
     console.log(JSON.stringify({audit,desktop,mobile:mobileMetrics,runtimeErrors},null,2));

@@ -118,7 +118,7 @@ export async function recordBillLoyaltyInTransaction(tx, shopId, bill) {
     create: { shopId, customerId: bill.customerId },
     update: {},
   });
-  const transaction = await tx.loyaltyTransaction.create({ data: { shopId, accountId: account.id, billId: bill.id, locationId: bill.locationId ?? null, type: "earn", points, source: "pos", note: `Earned on ${bill.billNo}` } });
+  const transaction = await tx.loyaltyTransaction.create({ data: { shopId, accountId: account.id, billId: bill.id, locationId: bill.locationId ?? null, type: "earn", lifecycleCycle: 0, points, source: "pos", note: `Earned on ${bill.billNo}` } });
   await tx.loyaltyAccount.update({ where: { id: account.id }, data: { pointsBalance: { increment: points }, lifetimeEarned: { increment: points }, lastEarnedAt: new Date() } });
   return transaction;
 }
@@ -160,6 +160,7 @@ export async function recordBillLoyaltyRedemption(client, { shopId, billId, bill
       billId,
       locationId: locationId ?? null,
       type: "redeem",
+      lifecycleCycle: 0,
       points: -redemption.points,
       source: "pos",
       note: `Redeemed on ${billNo}`,
@@ -171,31 +172,165 @@ export async function reverseBillLoyalty(shopId, billId) {
   return db.$transaction((tx) => reverseBillLoyaltyInTransaction(tx, shopId, billId));
 }
 
+async function refreshLastEarnedAt(tx, accountId) {
+  const latestActiveEarn = await tx.loyaltyTransaction.findFirst({
+    where: {
+      accountId,
+      type: { in: ["earn", "earn_reapply"] },
+      bill: { is: { status: "active" } },
+    },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  await tx.loyaltyAccount.update({
+    where: { id: accountId },
+    data: { lastEarnedAt: latestActiveEarn?.createdAt ?? null },
+  });
+}
+
+function loyaltyIntegrityError(message) {
+  return new AppError(message, 409, "LOYALTY_LEDGER_INCONSISTENT");
+}
+
 export async function reverseBillLoyaltyInTransaction(tx, shopId, billId) {
-    const transactions = await tx.loyaltyTransaction.findMany({ where: { shopId, billId } });
-    const earned = transactions.find((row) => row.type === "earn");
-    const redeemed = transactions.find((row) => row.type === "redeem");
-    const results = [];
+  const transactions = await tx.loyaltyTransaction.findMany({ where: { shopId, billId } });
+  const earned = transactions.find((row) => row.type === "earn" && row.lifecycleCycle === 0);
+  const redeemed = transactions.find((row) => row.type === "redeem" && row.lifecycleCycle === 0);
+  const lifecycleCycle = Math.max(0, ...transactions.map((row) => Number(row.lifecycleCycle || 0))) + 1;
+  const results = [];
 
-    if (earned && !transactions.some((row) => row.type === "adjustment")) {
-      const account = await tx.loyaltyAccount.findFirst({ where: { id: earned.accountId, shopId } });
-      if (account) {
-        const deduction = Math.min(account.pointsBalance, earned.points);
-        results.push(await tx.loyaltyTransaction.create({ data: { shopId, accountId: account.id, billId, locationId: earned.locationId ?? null, type: "adjustment", points: -deduction, source: "system", note: "Earned points reversed after bill cancellation" } }));
-        await tx.loyaltyAccount.update({ where: { id: account.id }, data: { pointsBalance: { decrement: deduction } } });
-      }
-    }
+  if (earned) {
+    const account = await tx.loyaltyAccount.findFirst({ where: { id: earned.accountId, shopId } });
+    if (!account) throw loyaltyIntegrityError("Cannot cancel bill because its loyalty account is missing");
+    if (account.lifetimeEarned < earned.points) throw loyaltyIntegrityError("Cannot cancel bill because lifetime earned points are inconsistent");
 
-    if (redeemed && !transactions.some((row) => row.type === "redeem_reversal")) {
-      const restoredPoints = Math.abs(redeemed.points);
-      results.push(await tx.loyaltyTransaction.create({ data: { shopId, accountId: redeemed.accountId, billId, locationId: redeemed.locationId ?? null, type: "redeem_reversal", points: restoredPoints, source: "system", note: "Redeemed points restored after bill cancellation" } }));
-      await tx.loyaltyAccount.update({
-        where: { id: redeemed.accountId },
-        data: { pointsBalance: { increment: restoredPoints }, lifetimeRedeemed: { decrement: restoredPoints } },
-      });
-    }
+    // Reverse the full earned value even when the customer already spent some of
+    // it. A temporary negative balance is intentional: it preserves the ledger
+    // instead of silently granting points and blocks further redemption.
+    results.push(await tx.loyaltyTransaction.create({
+      data: {
+        shopId,
+        accountId: account.id,
+        billId,
+        locationId: earned.locationId ?? null,
+        type: "earn_reversal",
+        lifecycleCycle,
+        points: -earned.points,
+        source: "system",
+        note: `Earned points reversed after bill cancellation (cycle ${lifecycleCycle})`,
+      },
+    }));
+    await tx.loyaltyAccount.update({
+      where: { id: account.id },
+      data: {
+        pointsBalance: { decrement: earned.points },
+        lifetimeEarned: { decrement: earned.points },
+      },
+    });
+    await refreshLastEarnedAt(tx, account.id);
+  }
 
-    return results;
+  if (redeemed) {
+    const account = await tx.loyaltyAccount.findFirst({ where: { id: redeemed.accountId, shopId } });
+    const restoredPoints = Math.abs(redeemed.points);
+    if (!account) throw loyaltyIntegrityError("Cannot cancel bill because its loyalty redemption account is missing");
+    if (account.lifetimeRedeemed < restoredPoints) throw loyaltyIntegrityError("Cannot cancel bill because lifetime redeemed points are inconsistent");
+
+    results.push(await tx.loyaltyTransaction.create({
+      data: {
+        shopId,
+        accountId: account.id,
+        billId,
+        locationId: redeemed.locationId ?? null,
+        type: "redeem_reversal",
+        lifecycleCycle,
+        points: restoredPoints,
+        source: "system",
+        note: `Redeemed points restored after bill cancellation (cycle ${lifecycleCycle})`,
+      },
+    }));
+    await tx.loyaltyAccount.update({
+      where: { id: account.id },
+      data: { pointsBalance: { increment: restoredPoints }, lifetimeRedeemed: { decrement: restoredPoints } },
+    });
+  }
+
+  return results;
+}
+
+export async function reapplyBillLoyaltyInTransaction(tx, shopId, billId) {
+  const transactions = await tx.loyaltyTransaction.findMany({ where: { shopId, billId } });
+  const earned = transactions.find((row) => row.type === "earn" && row.lifecycleCycle === 0);
+  const redeemed = transactions.find((row) => row.type === "redeem" && row.lifecycleCycle === 0);
+  if (!earned && !redeemed) return [];
+
+  const maxCycle = Math.max(0, ...transactions.map((row) => Number(row.lifecycleCycle || 0)));
+  const hasModernReversal = transactions.some((row) => ["earn_reversal", "redeem_reversal"].includes(row.type) && row.lifecycleCycle > 0);
+  const lifecycleCycle = hasModernReversal ? maxCycle : maxCycle + 1;
+  const results = [];
+
+  if (earned) {
+    const modernReversal = transactions.find((row) => row.type === "earn_reversal" && row.lifecycleCycle === lifecycleCycle);
+    const legacyReversal = !hasModernReversal ? transactions.find((row) => row.type === "adjustment" && row.lifecycleCycle === 0) : null;
+    const reversal = modernReversal ?? legacyReversal;
+    if (!reversal) throw loyaltyIntegrityError("Cannot restore bill because its earned-point reversal is missing");
+    const points = Math.abs(reversal.points);
+    const account = await tx.loyaltyAccount.findFirst({ where: { id: earned.accountId, shopId } });
+    if (!account) throw loyaltyIntegrityError("Cannot restore bill because its loyalty account is missing");
+
+    await tx.loyaltyAccount.update({
+      where: { id: account.id },
+      data: {
+        pointsBalance: { increment: points },
+        // The legacy adjustment never reduced lifetimeEarned, so do not double it.
+        ...(modernReversal ? { lifetimeEarned: { increment: points } } : {}),
+      },
+    });
+    results.push(await tx.loyaltyTransaction.create({
+      data: {
+        shopId,
+        accountId: account.id,
+        billId,
+        locationId: earned.locationId ?? null,
+        type: "earn_reapply",
+        lifecycleCycle,
+        points,
+        source: "system",
+        note: `Earned points reapplied after bill restore (cycle ${lifecycleCycle})`,
+      },
+    }));
+    await refreshLastEarnedAt(tx, account.id);
+  }
+
+  if (redeemed) {
+    const reversal = transactions.find((row) => row.type === "redeem_reversal" && row.lifecycleCycle === (hasModernReversal ? lifecycleCycle : 0));
+    if (!reversal) throw loyaltyIntegrityError("Cannot restore bill because its redeemed-point reversal is missing");
+    const points = Math.abs(reversal.points);
+    const account = await tx.loyaltyAccount.findFirst({ where: { id: redeemed.accountId, shopId } });
+    if (!account) throw loyaltyIntegrityError("Cannot restore bill because its loyalty redemption account is missing");
+
+    // Reapply exactly even if points were spent while the bill was cancelled.
+    // This may make the balance negative, which is preferable to free value.
+    await tx.loyaltyAccount.update({
+      where: { id: account.id },
+      data: { pointsBalance: { decrement: points }, lifetimeRedeemed: { increment: points } },
+    });
+    results.push(await tx.loyaltyTransaction.create({
+      data: {
+        shopId,
+        accountId: account.id,
+        billId,
+        locationId: redeemed.locationId ?? null,
+        type: "redeem_reapply",
+        lifecycleCycle,
+        points: -points,
+        source: "system",
+        note: `Redeemed points reapplied after bill restore (cycle ${lifecycleCycle})`,
+      },
+    }));
+  }
+
+  return results;
 }
 
 export async function redeemPoints(shopId, customerId, data) {
