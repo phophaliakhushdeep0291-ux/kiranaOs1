@@ -179,9 +179,13 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
   });
 }
 
-export async function listTransfers(shopId, { limit = 50 } = {}) {
+export async function listTransfers(shopId, { limit = 50 } = {}, user = null) {
+  const accessibleIds = user ? await accessibleLocationIds(shopId, user.userId, user.role) : null;
   return db.stockTransfer.findMany({
-    where: { shopId },
+    where: {
+      shopId,
+      ...(accessibleIds && { OR: [{ fromLocationId: { in: accessibleIds } }, { toLocationId: { in: accessibleIds } }] }),
+    },
     orderBy: { createdAt: "desc" },
     take: Math.min(Math.max(Number(limit) || 50, 1), 100),
     include: { fromLocation: true, toLocation: true, items: true },

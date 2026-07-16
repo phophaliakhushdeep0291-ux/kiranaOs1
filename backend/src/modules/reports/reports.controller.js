@@ -7,7 +7,7 @@ import { createAuditLog } from "../audit/audit.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 
 function scopedQuery(req, extra = {}) {
-  return { ...req.query, locationId: requestLocationId(req), ...extra };
+  return { ...req.query, locationId: requestLocationId(req), allLocations: req.locationScopeAll === true, ...extra };
 }
 
 function canViewProfit(req) {
@@ -18,6 +18,12 @@ export async function dailyClosing(req, res, next) {
   try {
     const source = req.query?.source ?? "auto";
     const date = req.query?.date;
+
+    // Consolidated scope is computed live. Branch snapshots have independent
+    // lock/audit lifecycles and must not be silently presented as an all-store close.
+    if (req.locationScopeAll === true) {
+      return res.json({ success: true, data: await svc.getDailyClosing(req.shopId, scopedQuery(req)) });
+    }
 
     if (source === "live") {
       return res.json({ success: true, data: await svc.getDailyClosing(req.shopId, scopedQuery(req)) });

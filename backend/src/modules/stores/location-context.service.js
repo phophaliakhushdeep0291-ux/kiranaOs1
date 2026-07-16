@@ -4,7 +4,8 @@ import { round2 } from "../../utils/money.js";
 import { ensurePrimaryLocation } from "./stores.service.js";
 
 export function requestLocationId(req) {
-  const values = [req?.body?.locationId, req?.body?.location_id, req?.query?.locationId, req?.headers?.["x-location-id"]];
+  if (req?.locationScopeAll === true) return null;
+  const values = [req?.body?.locationId, req?.body?.location_id, req?.query?.locationId, req?.headers?.["x-location-id"], req?.operationalLocation?.id];
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim();
   }

@@ -147,7 +147,7 @@ async function countPendingSync(shopId) {
 // ─────────────────────────────────────────────────────────────
 // DAILY CLOSING — shopkeeper dashboard report
 // ─────────────────────────────────────────────────────────────
-export async function getDailyClosing(shopId, { date, locationId } = {}) {
+export async function getDailyClosing(shopId, { date, locationId, allLocations = false } = {}) {
   const day = date ? parseDateOnly(date) : new Date();
   const start = startOfDay(day);
   const end = endOfDay(day);
@@ -177,11 +177,13 @@ export async function getDailyClosing(shopId, { date, locationId } = {}) {
     getTopProducts(shopId, { from: dateKey, to: dateKey, limit: 5, includeProfit: false, locationId }),
   ]);
 
-  const reportLocation = await resolveOperationalLocation(shopId, locationId);
-  const lowStockAtLocation = await Promise.all(lowStockProducts.map(async (product) => ({
-    ...product,
-    stockBaseQty: await getLocationQuantity(db, shopId, reportLocation, product),
-  })));
+  const reportLocation = allLocations ? null : await resolveOperationalLocation(shopId, locationId);
+  const lowStockAtLocation = allLocations
+    ? lowStockProducts
+    : await Promise.all(lowStockProducts.map(async (product) => ({
+      ...product,
+      stockBaseQty: await getLocationQuantity(db, shopId, reportLocation, product),
+    })));
 
   const activePayments = activeBills.flatMap((b) => b.payments);
   const billCash = sumPaymentsByMode(activePayments, "cash");
@@ -207,7 +209,9 @@ export async function getDailyClosing(shopId, { date, locationId } = {}) {
     cancelledBills: cancelledBills.length,
     roughBills: roughBillsCount,
     topProducts,
-    location: { id: reportLocation.id, code: reportLocation.code, name: reportLocation.name },
+    location: reportLocation
+      ? { id: reportLocation.id, code: reportLocation.code, name: reportLocation.name }
+      : { id: "all", code: "ALL", name: "All locations" },
     lowStock: lowStockAtLocation
       .filter((p) => Number(p.stockBaseQty) <= Number(p.lowStockThreshold))
       .map((p) => ({

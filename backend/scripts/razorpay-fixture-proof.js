@@ -61,6 +61,7 @@ const capturedPayload = {
         amount: 39900,
         currency: "INR",
         status: "captured",
+        method: "upi",
         order_id: orderId,
         captured: true,
         notes: { localTransactionId: "txn_fixture_phase26" },
@@ -79,6 +80,7 @@ assert(invalidWebhook.verified === false, "tampered webhook signature must fail"
 const parsed = parseWebhookBody(rawCaptured);
 assert(parsed.event === "payment.captured", "webhook parser should parse event type from raw body");
 assert(parsed.payload?.payment?.entity?.amount === 39900, "webhook parser should preserve payment amount");
+assert(parsed.payload?.payment?.entity?.method === "upi", "webhook parser should preserve the tender method");
 
 let invalidBodyRejected = false;
 try {

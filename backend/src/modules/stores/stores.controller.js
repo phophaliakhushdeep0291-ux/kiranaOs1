@@ -21,7 +21,7 @@ export async function inventory(req, res, next) {
 }
 
 export async function transfers(req, res, next) {
-  try { res.json({ success: true, data: await service.listTransfers(req.shopId, req.query) }); } catch (error) { next(error); }
+  try { res.json({ success: true, data: await service.listTransfers(req.shopId, req.query, req.user) }); } catch (error) { next(error); }
 }
 
 export async function createTransfer(req, res, next) {

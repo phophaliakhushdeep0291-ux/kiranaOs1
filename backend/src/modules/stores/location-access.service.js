@@ -45,7 +45,14 @@ export async function accessibleLocationIds(shopId, userId, role, client = db) {
 export function requireLocationAccess(capability = "view") {
   return async function locationAccessMiddleware(req, _res, next) {
     try {
-      const location = await resolveOperationalLocation(req.shopId, requestLocationId(req));
+      const requestedLocationId = requestLocationId(req);
+      if (req.method === "GET" && capability === "view" && requestedLocationId?.toLowerCase() === "all") {
+        if (req.user?.role !== "owner") throw denied("all", capability);
+        req.locationScopeAll = true;
+        req.operationalLocation = null;
+        return next();
+      }
+      const location = await resolveOperationalLocation(req.shopId, requestedLocationId);
       await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId: location.id, capability });
       req.operationalLocation = location;
       next();

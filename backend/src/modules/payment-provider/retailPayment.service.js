@@ -9,6 +9,7 @@ import {
   getRazorpayCheckoutKeyId,
   verifyPaymentSignature,
 } from "./razorpay.provider.js";
+import { validateRetailUpiPayment } from "./retailPayment.validation.js";
 
 export function retailPaymentReadiness() {
   const configured = env.RETAIL_PAYMENT_PROVIDER === "razorpay" && env.RAZORPAY_ENABLED
@@ -43,13 +44,8 @@ export async function createRetailPaymentIntent({ shopId, requestedLocationId, u
 }
 
 function assertRemotePayment(intent, orderId, paymentId, payment, order) {
-  const valid = payment?.id === paymentId
-    && payment?.order_id === orderId
-    && Number(payment?.amount) === intent.amountPaise
-    && String(payment?.currency || "").toUpperCase() === intent.currency
-    && String(payment?.status || "").toLowerCase() === "captured"
-    && (!order || (order.id === orderId && Number(order.amount) === intent.amountPaise));
-  if (!valid) throw new AppError("Razorpay payment does not match this retail intent", 409, "RETAIL_PAYMENT_MISMATCH");
+  const validation = validateRetailUpiPayment(intent, orderId, paymentId, payment, order);
+  if (!validation.valid) throw new AppError(validation.reason || "Razorpay UPI payment does not match this retail intent", 409, "RETAIL_PAYMENT_MISMATCH");
 }
 
 export async function verifyRetailPaymentIntent({ shopId, intentId, input }) {

@@ -34,6 +34,13 @@ type RazorpayWindow = Window & {
     handler: (response: RazorpaySuccess) => void;
     modal: { ondismiss: () => void };
     theme: { color: string };
+    config: {
+      display: {
+        blocks: { upi_only: { name: string; instruments: Array<{ method: "upi" }> } };
+        sequence: string[];
+        preferences: { show_default_blocks: false };
+      };
+    };
   }) => { open: () => void; on: (event: "payment.failed", handler: (response: { error?: { description?: string } }) => void) => void };
 };
 
@@ -76,6 +83,15 @@ function openCheckout(checkout: RetailCheckout) {
       handler: (response) => { completed = true; resolve(response); },
       modal: { ondismiss: () => { if (!completed) reject(new Error("Payment checkout was cancelled.")); } },
       theme: { color: "#075fff" },
+      // This bill tender is UPI. Hiding the provider defaults prevents a card or
+      // wallet transaction from being posted to the UPI ledger.
+      config: {
+        display: {
+          blocks: { upi_only: { name: "Pay via UPI", instruments: [{ method: "upi" }] } },
+          sequence: ["block.upi_only"],
+          preferences: { show_default_blocks: false },
+        },
+      },
     });
     instance.on("payment.failed", (response) => reject(new Error(response.error?.description || "Payment failed.")));
     instance.open();
