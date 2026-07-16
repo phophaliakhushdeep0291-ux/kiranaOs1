@@ -189,13 +189,18 @@ These require both `Authorization` and `x-device-id`:
 
 ### WhatsApp reminder truth
 
-GET /api/reminders/status reports providerConfigured, queueEnabled,
-workerHealthy, operational, and a bounded status code. The settings UI must not
-show a channel as connected unless all three runtime dependencies are ready.
+GET /api/reminders/status reports providerSendConfigured, webhookConfigured,
+providerConfigured, queueEnabled, workerHealthy, operational, and a bounded
+status code. The settings UI must not show the delivery pipeline as operational
+unless the provider API, signed callback, queue, and worker are ready.
 Templates and delivery history come from /api/reminders/templates and
 /api/reminders/logs; preview text is never inserted into delivery history.
 POST /api/reminders/send creates an auditable attempt and returns queued,
-skipped, or failed truthfully. Sent is recorded only after provider acceptance.
+skipped, or failed truthfully. Provider API success is `accepted`; `sent`,
+`delivered`, and `read` require a verified callback at
+POST /api/reminders/webhooks/:provider. The Meta GET route is subscription
+verification only and both callback routes are provider-authenticated, not
+user-session authenticated.
 
 ### Grounded AI command parsing
 

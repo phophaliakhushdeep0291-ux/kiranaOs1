@@ -1555,10 +1555,10 @@ model ReminderLog {
   shop     Shop     @relation(fields: [shopId], references: [id])
   customer Customer @relation(fields: [customerId], references: [id])
 
+  @@unique([provider, providerMessageId])
   @@index([shopId, customerId, createdAt])
   @@index([shopId, status, createdAt])
   @@index([shopId, channel, createdAt])
-  @@unique([provider, providerMessageId])
 }
 
 // Signed provider status callbacks are persisted without message/customer data.

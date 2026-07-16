@@ -737,7 +737,7 @@ Production export storage now supports local dev storage plus S3/R2/MinIO-compat
 
 Provider validation and alerting docs are in `docs/PRODUCTION_DEPLOYMENT.md` and `docs/ALERTING_RUNBOOK.md`. Useful commands: `npm run storage:verify`, `npm run export:verify`, `npm run worker:verify`, and `npm run smoke:test`.
 
-## Phase 17: WhatsApp Udhar Reminder Foundation
+## Phase 17: WhatsApp Udhar Reminders and Delivery Receipts
 
 KiranaOS now includes a Pro-plan WhatsApp reminder backend foundation under `/api/reminders`:
 
@@ -746,9 +746,11 @@ KiranaOS now includes a Pro-plan WhatsApp reminder backend foundation under `/ap
 - short customer statement reminder requests
 - BullMQ `SEND_WHATSAPP_REMINDER` worker integration
 - anti-spam cooldown via `REMINDER_COOLDOWN_HOURS`
-- provider abstraction for future Meta/Twilio/Gupshup/Interakt adapters
+- live Meta, Twilio, Gupshup, and Interakt provider adapters
+- signed, idempotent sent/delivered/read/failed callbacks with out-of-order protection
+- a pending callback ledger that closes provider-response race conditions
 
-The default provider is `WHATSAPP_PROVIDER=disabled`. In disabled mode the backend never marks a reminder as sent. It returns/records skipped or failed status and keeps audit history. Real provider adapters must be configured and implemented before live WhatsApp sending is enabled.
+The default provider is `WHATSAPP_PROVIDER=disabled`. In disabled mode the backend never marks a reminder as accepted or delivered. When enabled, provider API success is recorded only as `accepted`; `sent`, `delivered`, and `read` require a verified callback. See `docs/WHATSAPP_DELIVERY.md` for provider setup and staging proof.
 
 ## Phase 28 — Disaster recovery proof
 

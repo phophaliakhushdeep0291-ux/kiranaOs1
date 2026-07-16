@@ -64,6 +64,52 @@ export default function SettingsPage() {
 
   return (
     <SettingsShell>
+      <section className="space-y-4 lg:hidden" aria-label="Settings shortcuts">
+        <div className="rounded-[20px] bg-[linear-gradient(135deg,#075fff_0%,#0046d8_100%)] p-5 text-white shadow-[0_18px_40px_rgba(7,95,255,0.24)]">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-100">Store control centre</p>
+              <h1 className="mt-1 font-display text-[24px] font-black tracking-tight">Settings</h1>
+              <p className="mt-1 max-w-[260px] text-[12px] leading-5 text-blue-100">Billing, hardware, staff and backup controls—built for quick owner access.</p>
+            </div>
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/20"><Settings2 size={22} /></span>
+          </div>
+          <div className="mt-4 flex items-center justify-between rounded-xl bg-white/10 px-3 py-2.5 text-[11px] font-bold ring-1 ring-white/15">
+            <span>{shopName}</span>
+            <span className="inline-flex items-center gap-1.5 text-emerald-100"><span className="h-2 w-2 rounded-full bg-emerald-300" />{isOnline ? (isSyncing ? "Syncing" : "Protected") : "Offline safe"}</span>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-[18px] border border-[#e2eaf6] bg-white shadow-[0_12px_30px_rgba(15,35,80,0.06)]">
+          {[
+            { href: "/settings/store-profile", label: "Store profile", desc: "Business identity and GSTIN", icon: Store, tone: "bg-blue-50 text-blue-600" },
+            { href: "/settings/billing", label: "Billing & receipts", desc: "Invoice, payment and bill defaults", icon: Receipt, tone: "bg-violet-50 text-violet-600" },
+            { href: "/settings/printer", label: "Printer & hardware", desc: "Thermal printer and receipt setup", icon: Printer, tone: "bg-amber-50 text-amber-600" },
+            { href: "/settings/staff", label: "Staff & permissions", desc: "Roles and counter access", icon: UsersRound, tone: "bg-cyan-50 text-cyan-600" },
+            { href: "/settings/security", label: "Security & owner PIN", desc: "Approvals, sessions and protection", icon: Shield, tone: "bg-rose-50 text-rose-600" },
+            { href: "/settings/sync", label: "Backup & sync", desc: isOnline ? "Cloud backup is available" : "Working safely offline", icon: Cloud, tone: "bg-emerald-50 text-emerald-600" },
+            { href: "/settings/notifications", label: "Notifications", desc: "Stock, udhar and closing alerts", icon: Bell, tone: "bg-fuchsia-50 text-fuchsia-600" },
+            { href: "/settings/integrations", label: "Integrations", desc: "WhatsApp, payments and accounting", icon: Plug, tone: "bg-indigo-50 text-indigo-600" },
+          ].map((item, index, rows) => (
+            <Link key={item.href} href={item.href} className={`flex min-h-[68px] items-center gap-3 px-4 py-3 transition-colors active:bg-[#f4f7fc] ${index < rows.length - 1 ? "border-b border-[#edf1f7]" : ""}`}>
+              <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[13px] ${item.tone}`}><item.icon size={19} /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-black text-[#102347]">{item.label}</span>
+                <span className="mt-0.5 block truncate text-[11px] text-[#6d7c98]">{item.desc}</span>
+              </span>
+              <ChevronRight size={17} className="shrink-0 text-[#9aa8bd]" />
+            </Link>
+          ))}
+        </div>
+
+        <Link href="/settings/advanced" className="flex min-h-14 items-center gap-3 rounded-[16px] border border-[#e2eaf6] bg-white px-4 shadow-[0_8px_22px_rgba(15,35,80,0.045)]">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef5ff] text-[#075fff]"><Sliders size={18} /></span>
+          <span className="flex-1 text-[13px] font-black text-[#102347]">Advanced tools & data</span>
+          <ChevronRight size={17} className="text-[#9aa8bd]" />
+        </Link>
+      </section>
+
+      <div className="hidden lg:contents">
       {/* Row 1: Store Profile + Billing */}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -246,6 +292,7 @@ export default function SettingsPage() {
           <Link href="/smart-tools" className="hover:underline">Help Center</Link>
           <a href="mailto:support@kiranaos.local?subject=KiranaOS%20support" className="hover:underline">Contact Support</a>
         </div>
+      </div>
       </div>
     </SettingsShell>
   );

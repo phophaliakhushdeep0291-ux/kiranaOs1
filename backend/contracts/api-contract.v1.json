@@ -1044,13 +1044,29 @@
     },
     {
       "method": "GET",
+      "path": "/api/reminders/webhooks/meta",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "complete Meta webhook subscription verification using the configured constant-time verification token"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reminders/webhooks/:provider",
+      "authRequired": false,
+      "deviceRequired": false,
+      "purpose": "ingest signed provider delivery receipts idempotently without storing customer or message payload data"
+    },
+    {
+      "method": "GET",
       "path": "/api/reminders/status",
       "authRequired": true,
       "deviceRequired": true,
       "feature": "whatsapp_reminders",
       "purpose": "report live WhatsApp provider, Redis queue, and reminder-worker readiness without exposing credentials",
       "responseMustInclude": [
+        "data.providerSendConfigured",
         "data.providerConfigured",
+        "data.webhookConfigured",
         "data.queueEnabled",
         "data.workerHealthy",
         "data.operational",

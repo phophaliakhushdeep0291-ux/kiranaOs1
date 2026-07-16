@@ -109,6 +109,7 @@ const requiredFiles = [
   "src/modules/reminders/reminderTemplates.service.js",
   "src/modules/reminders/whatsapp.provider.js",
   "src/modules/reminders/whatsapp.webhook.js",
+  "docs/WHATSAPP_DELIVERY.md",
   "src/modules/reminders/reminderFormatter.js",
   "scripts/verify-object-storage.js",
   "scripts/verify-export-flow.js",

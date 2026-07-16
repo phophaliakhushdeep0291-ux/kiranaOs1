@@ -70,6 +70,8 @@ const requiredEndpoints = [
   "GET /api/jobs/backups/:id/download",
   "POST /api/reminders/send",
   "GET /api/reminders/status",
+  "GET /api/reminders/webhooks/meta",
+  "POST /api/reminders/webhooks/:provider",
   "POST /api/ai/parse-command",
   "POST /api/ai/transcribe"
 ];
@@ -142,7 +144,7 @@ for (const phrase of ["strict schema", "tenant catalogue", "fails closed", "neve
 }
 
 const reminderStatus = contract.endpoints.find((endpoint) => endpoint.path === "/api/reminders/status");
-for (const field of ["data.providerConfigured", "data.queueEnabled", "data.workerHealthy", "data.operational", "data.code"]) {
+for (const field of ["data.providerSendConfigured", "data.providerConfigured", "data.webhookConfigured", "data.queueEnabled", "data.workerHealthy", "data.operational", "data.code"]) {
   if (!reminderStatus?.responseMustInclude?.includes(field)) fail("Reminder status contract must require " + field);
 }
 

@@ -16,6 +16,7 @@ for (const file of [
   "src/workers/reminder.worker.js",
   "prisma-postgres/migrations/000006_whatsapp_reminders/migration.sql",
   "prisma-postgres/migrations/000059_whatsapp_delivery_receipts/migration.sql",
+  "docs/WHATSAPP_DELIVERY.md",
 ]) assert(exists(file), `${file} must exist`);
 
 const sqliteSchema = read("prisma/schema.prisma");
@@ -267,6 +268,11 @@ for (const snippet of [
 const app = read("src/app.js");
 assert(app.includes('app.use("/api/reminders"'), "app must register /api/reminders");
 assert(app.includes('app.use("/api/reminders/webhooks", express.raw'), "signed JSON callbacks must retain exact raw bytes");
+
+const deliveryDocs = read("docs/WHATSAPP_DELIVERY.md");
+for (const snippet of ["accepted", "X-Hub-Signature-256", "X-Twilio-Signature", "Interakt-Signature", "out-of-order", "Staging proof"]) {
+  assert(deliveryDocs.includes(snippet), `WhatsApp delivery documentation missing ${snippet}`);
+}
 
 const notificationUi = read("../frontend/src/features/settings/pages/NotificationsSettingsPage.tsx");
 for (const snippet of ["/reminders/status", "/reminders/templates", "/reminders/logs?limit=20", "Actual Delivery History", "No local sample is being substituted", "Accepted", "Delivered", "Read", "verified provider callback"]) {
