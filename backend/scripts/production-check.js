@@ -51,6 +51,7 @@ const requiredFiles = [
   "tests/phase15-observability-storage.examples.js",
   "tests/phase16-monitoring-provider-validation.examples.js",
   "tests/phase17-whatsapp-reminders.examples.js",
+  "tests/offer-bill-atomicity.examples.js",
   "tests/phase18-production-hardening.examples.js",
   "tests/phase19-production-correctness.examples.js",
   "tests/phase20-financial-identity-hardening.examples.js",
@@ -1796,6 +1797,28 @@ if (exists("src/modules/ai/ai.service.js") && exists("src/modules/ai/ai.controll
   if (aiController.includes("status(501)") || aiController.includes("not yet implemented")) {
     errors.push("AI transcription still contains a placeholder response");
   }
+}
+
+// Coupon accounting is a server-authoritative part of the bill transaction.
+if (exists("src/modules/offers/offers.service.js") && exists("src/modules/bills/bills.service.js")) {
+  const offersService = read("src/modules/offers/offers.service.js");
+  const billsService = read("src/modules/bills/bills.service.js");
+  const billsSchema = read("src/modules/bills/bills.schema.js");
+  const sqliteSchema = read("prisma/schema.prisma");
+  const postgresSchema = read("prisma-postgres/schema.prisma");
+  for (const snippet of ["validateOfferForBill", "redeemOfferInTransaction", "reverseBillOfferRedemption", "reapplyBillOfferRedemption", "OFFER_REDEMPTION_CONFLICT", "usedCount: { lt: offer.usageLimit }"]) {
+    if (!offersService.includes(snippet)) errors.push(`offers.service.js missing atomic coupon behavior: ${snippet}`);
+  }
+  for (const snippet of ["validateOfferForBill(tx", "redeemOfferInTransaction(tx", "reverseBillOfferRedemption(tx", "reapplyBillOfferRedemption(tx", "offerDiscount: computedOfferDiscount"]) {
+    if (!billsService.includes(snippet)) errors.push(`bills.service.js missing transactional coupon behavior: ${snippet}`);
+  }
+  for (const snippet of ["offerId", "offerCode", "offerDiscount"]) {
+    if (!billsSchema.includes(snippet)) errors.push(`bills.schema.js missing coupon field: ${snippet}`);
+    if (!sqliteSchema.includes(snippet) || !postgresSchema.includes(snippet)) errors.push(`Bill schemas missing coupon field: ${snippet}`);
+  }
+  if (!offersService.includes("OFFER_REDEMPTION_REQUIRES_BILL")) errors.push("standalone client-trusted coupon redemption must be disabled");
+  const packageJson = readJson("package.json");
+  if (!packageJson.scripts?.["test:atomic-offers"]) errors.push("package.json missing test:atomic-offers script");
 }
 
 

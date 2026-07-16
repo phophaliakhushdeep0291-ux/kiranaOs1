@@ -21,6 +21,3 @@ export function applyOffer(subtotal: number, code?: string) {
   return apiRequest<ApplyOfferResult>("/offers/apply", { method: "POST", body: JSON.stringify({ subtotal, code }) });
 }
 
-export function redeemOffer(id: string, discount = 0) {
-  return apiRequest<Offer | null>(`/offers/${id}/redeem`, { method: "POST", body: JSON.stringify({ discount }) });
-}

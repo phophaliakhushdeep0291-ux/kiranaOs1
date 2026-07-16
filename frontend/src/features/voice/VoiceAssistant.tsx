@@ -18,6 +18,7 @@ import { parseLocalVoiceIntent } from "./voice-command-parser";
 import { askAiIntent } from "./voice-ai-client";
 import { createOneShotRecognition, getSpeechRecognitionConstructor, shouldAcceptFinalTranscript, voiceTranscriptKey } from "./voice-recognition";
 import type { SpeechRecognitionLike, VoiceToastPayload } from "./voice-types";
+import { startBackendTranscription, type BackendTranscriptionSession } from "./backend-transcription";
 
 type AssistantPosition = { x: number; y: number };
 
@@ -72,6 +73,8 @@ export function VoiceAssistant() {
   const [listening, setListening] = useState(false);
   const [status, setStatus] = useState("Say: open billing, search product chini, add customer Ramesh, record payment Ramesh 500 cash, or pending sync count.");
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const backendRecordingRef = useRef<BackendTranscriptionSession | null>(null);
+  const preferBackendRecordingRef = useRef(false);
   const lastCapturedTranscriptRef = useRef<{ key: string; at: number } | null>(null);
   const lastProcessedTranscriptRef = useRef<{ key: string; at: number } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -94,6 +97,8 @@ export function VoiceAssistant() {
   useEffect(() => {
     return () => {
       if (dragFrameRef.current !== null) window.cancelAnimationFrame(dragFrameRef.current);
+      recognitionRef.current?.abort?.();
+      backendRecordingRef.current?.cancel();
     };
   }, []);
 
@@ -200,19 +205,64 @@ export function VoiceAssistant() {
   }, []);
 
   function stopMic() {
+    if (backendRecordingRef.current) {
+      setStatus("Recording stopped. Transcribing securely...");
+      backendRecordingRef.current.stop();
+      return;
+    }
     recognitionRef.current?.stop?.();
     recognitionRef.current = null;
     setListening(false);
   }
 
-  function startMic() {
-    if (!Recognition) {
-      setStatus("Voice recognition is not available in this browser. Use Chrome/Edge or type the command.");
-      setOpen(true);
-      return;
+  async function startBackendMic() {
+    setOpen(true);
+    setStatus("Requesting microphone access for cloud transcription...");
+    try {
+      backendRecordingRef.current = await startBackendTranscription({
+        onStart: () => {
+          setListening(true);
+          setStatus("Recording securely. Speak one command, then press Stop. Auto-stops after 15 seconds.");
+        },
+        onTranscribing: () => {
+          setListening(false);
+          setStatus("Transcribing Hindi/Hinglish audio...");
+        },
+        onTranscript: ({ transcript, provider }) => {
+          const now = Date.now();
+          if (!shouldAcceptFinalTranscript(transcript, lastCapturedTranscriptRef.current, now)) {
+            setStatus("Duplicate voice result ignored. Review the captured command and press Run.");
+            return;
+          }
+          lastCapturedTranscriptRef.current = { key: voiceTranscriptKey(transcript), at: now };
+          setCommand(transcript);
+          setStatus(`Command captured with ${provider}. Review it and press Run.`);
+        },
+        onError: (message) => {
+          setStatus(message);
+          toast({ title: "Voice assistant", description: message, variant: "destructive" });
+        },
+        onEnd: () => {
+          backendRecordingRef.current = null;
+          setListening(false);
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Voice recording could not start.";
+      backendRecordingRef.current = null;
+      setListening(false);
+      setStatus(message);
+      toast({ title: "Voice assistant", description: message, variant: "destructive" });
     }
+  }
+
+  function startMic() {
     if (listening) {
       stopMic();
+      return;
+    }
+    if (!Recognition || preferBackendRecordingRef.current) {
+      void startBackendMic();
       return;
     }
 
@@ -232,7 +282,11 @@ export function VoiceAssistant() {
         setCommand(text);
         setStatus("Command captured. Review it and press Run.");
       },
-      onError: (message, variant) => {
+      onError: (message, variant, errorCode) => {
+        if (errorCode === "network" || errorCode === "service-not-allowed") {
+          preferBackendRecordingRef.current = true;
+          message = `${message} Press Speak again to use KiranaOS cloud transcription.`;
+        }
         setStatus(message);
         toast({ title: "Voice assistant", description: message, variant });
       },
@@ -318,7 +372,7 @@ export function VoiceAssistant() {
             placeholder="Try: open products / search product chini / add product chini cost 40 selling 45 / record payment Ramesh 500 cash / pending sync count"
           />
           <div className="mt-2 grid grid-cols-2 gap-2 min-[420px]:flex min-[420px]:flex-wrap">
-            <Button type="button" variant={listening ? "destructive" : "outline"} onClick={startMic}>
+            <Button type="button" variant={listening ? "destructive" : "outline"} onClick={() => startMic()}>
               {listening ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
               {listening ? "Stop" : "Speak"}
             </Button>

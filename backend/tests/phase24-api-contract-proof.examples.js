@@ -61,6 +61,11 @@ for (const required of ["signature", "orderId", "paymentId", "amount", "currency
   assert.ok(verifyPayment.paymentVerification.includes(required), `verify-payment must require ${required}`);
 }
 
+const confirmBill = contract.endpoints.find((endpoint) => endpoint.path === "/api/bills/confirm");
+for (const guarantee of ["recomputed by the server", "same transaction as the bill", "conditional atomic claim", "cancellation and restoration"]) {
+  assert.ok(confirmBill.transactionGuarantees.some((item) => item.includes(guarantee)), `Bill confirmation must guarantee ${guarantee}`);
+}
+
 const transcribeAudio = contract.endpoints.find((endpoint) => endpoint.path === "/api/ai/transcribe");
 for (const field of ["data.transcript", "data.model", "data.provider"]) {
   assert.ok(transcribeAudio.responseMustInclude.includes(field), `Audio transcription must return ${field}`);

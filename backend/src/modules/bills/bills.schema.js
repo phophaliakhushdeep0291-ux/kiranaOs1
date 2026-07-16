@@ -46,6 +46,9 @@ export const confirmBillSchema = z.object({
   customerName: z.string().default("Walk-in"),
   items: z.array(billItemSchema).min(1, "At least one item required"),
   discount: moneyAmount().default(0),
+  offerId: z.string().min(1).optional(),
+  offerCode: z.string().trim().max(40).optional(),
+  offerDiscount: moneyAmount().default(0),
   loyaltyPointsToRedeem: z.coerce.number().int().min(1).max(100000000).optional(),
   actualAmount: moneyAmount().optional(),
   buyerPaidAmount: moneyAmount().optional(),
@@ -74,6 +77,12 @@ export const confirmBillSchema = z.object({
   }
   if (data.loyaltyPointsToRedeem && data.billType === "estimate") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loyaltyPointsToRedeem"], message: "Loyalty points cannot be redeemed on an estimate" });
+  }
+  if (data.offerDiscount > 0 && !data.offerId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["offerId"], message: "Offer reference is required for a coupon discount" });
+  }
+  if (data.offerId && data.offerDiscount <= 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["offerDiscount"], message: "Validated coupon discount is required" });
   }
   data.payments.forEach((payment, index) => {
     if (payment.mode === "gift_card" && !(payment.giftCardCode || payment.gift_card_code)) {

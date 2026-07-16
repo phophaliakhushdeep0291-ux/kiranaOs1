@@ -15,6 +15,7 @@ import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../pay
 import { recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
 import { allocateLotsForBill, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
+import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
 
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
@@ -68,6 +69,9 @@ export async function confirmBill(shopId, body, actor = {}) {
     customerName,
     items,
     discount,
+    offerId,
+    offerCode,
+    offerDiscount: claimedOfferDiscount = 0,
     gstMode = "inclusive",
     payments = [],
     creditAmount: inputCreditAmount,
@@ -280,6 +284,22 @@ export async function confirmBill(shopId, body, actor = {}) {
     subtotal = round2(subtotal);
     totalGst = round2(totalGst);
     itemProfit = round2(itemProfit);
+    const validatedOffer = await validateOfferForBill(tx, shopId, {
+      offerId,
+      code: offerCode,
+      subtotal,
+    });
+    const computedOfferDiscount = round2(validatedOffer?.discount ?? 0);
+    const normalizedClaimedOfferDiscount = round2(claimedOfferDiscount);
+    if (offerId && !moneyEquals(normalizedClaimedOfferDiscount, computedOfferDiscount)) {
+      throw new AppError("Coupon value changed. Reapply the coupon before saving the bill.", 409, "OFFER_DISCOUNT_CHANGED");
+    }
+    if (!offerId && normalizedClaimedOfferDiscount > 0) {
+      throw new AppError("Coupon discount requires an offer reference", 422, "OFFER_REFERENCE_REQUIRED");
+    }
+    if (computedOfferDiscount > round2(discount)) {
+      throw new AppError("Bill discount is lower than the validated coupon value", 422, "OFFER_DISCOUNT_MISMATCH");
+    }
     const loyaltyDiscount = round2((loyaltyRedemption?.discountValuePaise ?? 0) / 100);
     const billDiscount = addMoney(discount, loyaltyDiscount);
     // Inclusive: tax already lives inside subtotal, so the payable is simply
@@ -395,6 +415,9 @@ export async function confirmBill(shopId, body, actor = {}) {
         buyerAddress: invoiceCustomer?.address ?? null,
         subtotal,
         discount: billDiscount,
+        offerId: validatedOffer?.offer.id ?? null,
+        offerCode: validatedOffer?.offer.code ?? null,
+        offerDiscount: computedOfferDiscount,
         loyaltyPointsRedeemed: loyaltyRedemption?.points ?? 0,
         loyaltyDiscount,
         giftCardAmount,
@@ -407,7 +430,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         grossProfit,
         paidAmount,
         creditAmount,
-        ...moneyShadows({ subtotal, discount: billDiscount, loyaltyDiscount, giftCardAmount, gst: totalGst, grandTotal, actualAmount, buyerPaidAmount, waivedAmount, grossProfit, paidAmount, creditAmount }),
+        ...moneyShadows({ subtotal, discount: billDiscount, offerDiscount: computedOfferDiscount, loyaltyDiscount, giftCardAmount, gst: totalGst, grandTotal, actualAmount, buyerPaidAmount, waivedAmount, grossProfit, paidAmount, creditAmount }),
         createdByUserId,
         deviceId,
         clientBillId: billIdentity.clientBillId,
@@ -418,6 +441,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       },
       include: { items: true, payments: true, loyaltyTransactions: true },
     });
+    await redeemOfferInTransaction(tx, shopId, validatedOffer, { isEstimate });
     await allocateLotsForBill(tx, { shopId, locationId: location.id, bill });
     await recordBillLoyaltyRedemption(tx, {
       shopId,
@@ -656,6 +680,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
     // Loyalty earning and redemption are part of the same cancellation unit as
     // stock, udhar, and accounting. A crash can no longer leave points detached.
     await reverseBillLoyaltyInTransaction(tx, shopId, bill.id);
+    await reverseBillOfferRedemption(tx, shopId, bill);
     await reverseGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill cancelled: ${reason}` });
     await restoreBillLotAllocations(tx, bill.id);
 
@@ -1115,6 +1140,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
     }
 
     await reapplyGiftCardRedemptions(tx, shopId, bill.id, { note: `Bill restored: ${reason}` });
+    await reapplyBillOfferRedemption(tx, shopId, bill);
     await reapplyBillLotAllocations(tx, bill.id);
 
     return tx.bill.findFirst({ where: { id: billId, shopId }, include: { items: true, payments: true } });

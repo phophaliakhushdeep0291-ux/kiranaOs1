@@ -1,0 +1,6 @@
+ALTER TABLE "Bill" ADD COLUMN IF NOT EXISTS "offerId" TEXT;
+ALTER TABLE "Bill" ADD COLUMN IF NOT EXISTS "offerCode" TEXT;
+ALTER TABLE "Bill" ADD COLUMN IF NOT EXISTS "offerDiscount" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "Bill" ADD COLUMN IF NOT EXISTS "offerDiscountPaise" BIGINT;
+
+CREATE INDEX IF NOT EXISTS "Bill_shopId_offerId_status_idx" ON "Bill"("shopId", "offerId", "status");

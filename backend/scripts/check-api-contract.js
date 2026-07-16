@@ -163,6 +163,13 @@ for (const requirement of ["signature", "orderId", "paymentId", "amount", "curre
   if (!verifyPayment?.paymentVerification?.includes(requirement)) fail(`payment verification missing ${requirement}`);
 }
 
+const confirmBill = contract.endpoints.find((endpoint) => endpoint.path === "/api/bills/confirm");
+for (const guarantee of ["recomputed by the server", "same transaction as the bill", "conditional atomic claim", "cancellation and restoration"]) {
+  if (!confirmBill?.transactionGuarantees?.some((item) => item.includes(guarantee))) {
+    fail("bill confirmation contract must guarantee " + guarantee);
+  }
+}
+
 for (const phrase of ["x-device-id", "Authorization", "entityCursors", "owner PIN", "shopId"]) {
   if (!docs.includes(phrase)) fail(`API contract docs must mention ${phrase}`);
 }

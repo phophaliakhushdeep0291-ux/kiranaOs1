@@ -556,7 +556,13 @@
       "authRequired": true,
       "deviceRequired": true,
       "feature": "basic_billing",
-      "purpose": "create confirmed bill with stock guard"
+      "purpose": "create confirmed bill with stock, payment, loyalty, gift-card, and coupon integrity guards",
+      "transactionGuarantees": [
+        "coupon identity, code, eligibility, and discount are recomputed by the server",
+        "coupon usage count and discount impact commit in the same transaction as the bill",
+        "coupon usage limits use a conditional atomic claim",
+        "bill cancellation and restoration reverse and reapply coupon totals in their existing lifecycle transactions"
+      ]
     },
     {
       "method": "POST",

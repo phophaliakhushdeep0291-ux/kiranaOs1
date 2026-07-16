@@ -2,6 +2,7 @@ import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { billPayload, createCustomer, createPaidBillViaApi, createProduct, createTenant, login } from "./factories.js";
+import { restoreCancelledBill } from "../../src/modules/bills/bills.service.js";
 
 const ctx = await createIntegrationContext();
 
@@ -54,6 +55,63 @@ if (ctx.skip) {
       const approved = assertSuccess(await ctx.post("/api/bills/confirm", { ...payload, ownerPin: tenant.ownerPin }, { token: ownerAuth.accessToken }), 201);
       assert.equal(approved.discount, 20);
       assert.equal(approved.grandTotal, 180);
+    });
+
+    test("coupon validation and usage accounting commit with the bill lifecycle", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 20, defaultPricePerRateUnit: 100 });
+      const offer = await ctx.db.offer.create({
+        data: {
+          shopId: tenant.shop.id,
+          title: "Ten percent capped",
+          code: "SAVE10",
+          type: "percentage",
+          value: 10,
+          minBillAmount: 500,
+          maxDiscount: 80,
+          usageLimit: 1,
+          active: true,
+        },
+      });
+      const payload = {
+        ...billPayload(product, {
+          quantity: 10,
+          ratePerRateUnit: 100,
+          discount: 80,
+          actualAmount: 920,
+          buyerPaidAmount: 920,
+          payments: [{ mode: "cash", amount: 920 }],
+        }),
+        offerId: offer.id,
+        offerCode: "save10",
+        offerDiscount: 80,
+      };
+
+      const changedDiscount = await ctx.post("/api/bills/confirm", { ...payload, offerDiscount: 70 }, { token: ownerAuth.accessToken });
+      assertFailure(changedDiscount, 409);
+      assert.equal((await ctx.db.offer.findUnique({ where: { id: offer.id } })).usedCount, 0, "rejected bill must not consume the coupon");
+
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", payload, { token: ownerAuth.accessToken }), 201);
+      assert.equal(bill.offerId, offer.id);
+      assert.equal(bill.offerCode, "SAVE10");
+      assert.equal(bill.offerDiscount, 80);
+      let refreshedOffer = await ctx.db.offer.findUnique({ where: { id: offer.id } });
+      assert.equal(refreshedOffer.usedCount, 1);
+      assert.equal(refreshedOffer.discountGiven, 80);
+
+      assertSuccess(await ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Coupon lifecycle proof" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
+      refreshedOffer = await ctx.db.offer.findUnique({ where: { id: offer.id } });
+      assert.equal(refreshedOffer.usedCount, 0);
+      assert.equal(refreshedOffer.discountGiven, 0);
+
+      await restoreCancelledBill(tenant.shop.id, bill.id, { reason: "Coupon lifecycle restore proof" });
+      refreshedOffer = await ctx.db.offer.findUnique({ where: { id: offer.id } });
+      assert.equal(refreshedOffer.usedCount, 1);
+      assert.equal(refreshedOffer.discountGiven, 80);
+
+      const standalone = await ctx.post(`/api/offers/${offer.id}/redeem`, { discount: 80 }, { token: ownerAuth.accessToken });
+      const standaloneBody = assertFailure(standalone, 409);
+      assert.equal(standaloneBody.code, "OFFER_REDEMPTION_REQUIRES_BILL");
     });
 
     test("partial bill creates paid payment + udhar impact", async () => {

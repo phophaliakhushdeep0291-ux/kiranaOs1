@@ -433,6 +433,9 @@ export interface BillInput {
   customerMobile?: string;
   items: BillInputItem[];
   discount?: number;
+  offerId?: string;
+  offerCode?: string;
+  offerDiscount?: number;
   loyaltyPointsToRedeem?: number;
   actualAmount?: number;
   buyerPaidAmount?: number;
@@ -468,6 +471,9 @@ export interface Bill {
   customerMobile?: string | null;
   subtotal?: number;
   discount?: number;
+  offerId?: string | null;
+  offerCode?: string | null;
+  offerDiscount?: number;
   loyaltyPointsRedeemed?: number;
   loyaltyDiscount?: number;
   gst?: number;

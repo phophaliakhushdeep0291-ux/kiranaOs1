@@ -466,8 +466,12 @@ model Bill {
   buyerAddress         String?
   subtotal             Float     @default(0)
   subtotalPaise        BigInt?
-  discount             Float     @default(0)
-  discountPaise        BigInt?
+    discount             Float     @default(0)
+    discountPaise        BigInt?
+    offerId              String?
+    offerCode            String?
+    offerDiscount        Float     @default(0)
+    offerDiscountPaise   BigInt?
   loyaltyPointsRedeemed Int      @default(0)
   loyaltyDiscount      Float     @default(0)
   loyaltyDiscountPaise BigInt?
@@ -519,7 +523,8 @@ model Bill {
   @@index([shopId, createdByUserId, createdAt])
   @@index([shopId, status, createdAt])
   @@index([shopId, locationId, status, createdAt])
-  @@index([shopId, returnOfBillId])
+    @@index([shopId, returnOfBillId])
+    @@index([shopId, offerId, status])
   @@index([shopId, updatedAt, id])
 }
 

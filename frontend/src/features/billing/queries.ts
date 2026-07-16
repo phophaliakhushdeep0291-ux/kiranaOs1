@@ -15,9 +15,9 @@ export function useConfirmBill(options?: MutationHookOptions<Bill, ConfirmBillVa
     // the billing UI stuck on Saving and never creating the outbox record.
     networkMode: "always",
     mutationFn: ({ data }) => {
-      if (Number(data.loyaltyPointsToRedeem || 0) > 0 || (data.payments ?? []).some((payment) => payment.mode === "gift_card")) {
+      if (data.offerId || Number(data.loyaltyPointsToRedeem || 0) > 0 || (data.payments ?? []).some((payment) => payment.mode === "gift_card")) {
         if (typeof navigator !== "undefined" && !navigator.onLine) {
-          throw new ApiClientError("Rewards and gift-card redemption need a connection so value and the bill commit together", 0, { code: "VALUE_REDEMPTION_OFFLINE" });
+          throw new ApiClientError("Coupons, rewards, and gift-card redemption need a connection so value and the bill commit together", 0, { code: "VALUE_REDEMPTION_OFFLINE" });
         }
         return createBill(data);
       }

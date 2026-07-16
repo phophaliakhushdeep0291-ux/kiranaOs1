@@ -60,6 +60,93 @@ function isLive(offer, now) {
   return true;
 }
 
+function offerError(message, status, code) {
+  return new AppError(message, status, code);
+}
+
+export async function validateOfferForBill(client, shopId, { offerId, code, subtotal }) {
+  if (!offerId) return null;
+  const offer = await client.offer.findFirst({ where: { id: offerId, shopId, deletedAt: null } });
+  if (!offer) throw offerError("Coupon no longer exists", 409, "OFFER_NOT_AVAILABLE");
+
+  const normalizedCode = code ? String(code).trim().toUpperCase() : null;
+  if (offer.code && offer.code.toUpperCase() !== normalizedCode) {
+    throw offerError("Coupon code does not match the selected offer", 409, "OFFER_CODE_MISMATCH");
+  }
+  if (!isLive(offer, new Date())) throw offerError("Coupon is paused, expired, or used up", 409, "OFFER_NOT_AVAILABLE");
+  if (subtotal < offer.minBillAmount) {
+    throw offerError(`Coupon requires a minimum bill of Rs ${offer.minBillAmount}`, 409, "OFFER_MINIMUM_NOT_MET");
+  }
+
+  const discount = computeDiscount(offer, subtotal);
+  if (discount <= 0) throw offerError("Coupon does not produce a valid discount", 409, "OFFER_NOT_APPLICABLE");
+  return { offer, discount };
+}
+
+export async function redeemOfferInTransaction(client, shopId, validatedOffer, { isEstimate = false } = {}) {
+  if (!validatedOffer || isEstimate) return null;
+  const { offer, discount } = validatedOffer;
+  const now = new Date();
+  const claimed = await client.offer.updateMany({
+    where: {
+      id: offer.id,
+      shopId,
+      deletedAt: null,
+      active: true,
+      AND: [
+        { OR: [{ validFrom: null }, { validFrom: { lte: now } }] },
+        { OR: [{ validTo: null }, { validTo: { gte: now } }] },
+        { OR: [{ usageLimit: 0 }, { usedCount: { lt: offer.usageLimit } }] },
+      ],
+    },
+    data: {
+      usedCount: { increment: 1 },
+      discountGiven: { increment: discount },
+    },
+  });
+  if (claimed.count !== 1) {
+    throw offerError("Coupon became unavailable while the bill was being saved", 409, "OFFER_REDEMPTION_CONFLICT");
+  }
+  return { offerId: offer.id, discount };
+}
+
+export async function reverseBillOfferRedemption(client, shopId, bill) {
+  const discount = round2(Number(bill?.offerDiscount) || 0);
+  if (!bill?.offerId || bill.billType === "estimate" || discount <= 0) return null;
+  const reversed = await client.offer.updateMany({
+    where: {
+      id: bill.offerId,
+      shopId,
+      usedCount: { gt: 0 },
+      discountGiven: { gte: discount },
+    },
+    data: {
+      usedCount: { decrement: 1 },
+      discountGiven: { decrement: discount },
+    },
+  });
+  if (reversed.count !== 1) {
+    throw offerError("Coupon totals could not be reversed safely", 409, "OFFER_REVERSAL_CONFLICT");
+  }
+  return { offerId: bill.offerId, discount };
+}
+
+export async function reapplyBillOfferRedemption(client, shopId, bill) {
+  const discount = round2(Number(bill?.offerDiscount) || 0);
+  if (!bill?.offerId || bill.billType === "estimate" || discount <= 0) return null;
+  const reapplied = await client.offer.updateMany({
+    where: { id: bill.offerId, shopId },
+    data: {
+      usedCount: { increment: 1 },
+      discountGiven: { increment: discount },
+    },
+  });
+  if (reapplied.count !== 1) {
+    throw offerError("Coupon totals could not be restored safely", 409, "OFFER_REAPPLY_CONFLICT");
+  }
+  return { offerId: bill.offerId, discount };
+}
+
 /**
  * Validate a coupon code (or auto-apply code-less offers) against a bill subtotal
  * and return the best applicable discount. Does not mutate usedCount — that is
@@ -97,11 +184,8 @@ export async function applyOffer(shopId, { subtotal, code }) {
 
 /** Increment usage + accumulated discount after a bill that used the offer is confirmed. */
 export async function redeemOffer(shopId, id, discount = 0) {
-  const offer = await db.offer.findFirst({ where: { id, shopId, deletedAt: null } });
-  if (!offer) return null;
-  const safeDiscount = round2(Math.max(0, Number(discount) || 0));
-  return db.offer.update({
-    where: { id: offer.id },
-    data: { usedCount: { increment: 1 }, ...(safeDiscount > 0 && { discountGiven: { increment: safeDiscount } }) },
-  });
+  void shopId;
+  void id;
+  void discount;
+  throw offerError("Coupons are redeemed only inside bill confirmation", 409, "OFFER_REDEMPTION_REQUIRES_BILL");
 }

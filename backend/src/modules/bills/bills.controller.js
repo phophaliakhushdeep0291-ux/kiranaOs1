@@ -37,9 +37,29 @@ export async function confirm(req, res, next) {
       grandTotal: data.grandTotal,
       paidAmount: data.paidAmount,
       creditAmount: data.creditAmount,
+      offerId: data.offerId,
+      offerCode: data.offerCode,
+      offerDiscount: data.offerDiscount,
       createdAt: data.createdAt,
       locationId: data.locationId,
     }).catch(() => []);
+    if (data.offerId && Number(data.offerDiscount || 0) > 0 && data.billType !== "estimate") {
+      await createAuditLog({
+        shopId: req.shopId,
+        userId: req.user?.userId,
+        action: "OFFER_REDEEMED",
+        entityType: "Bill",
+        entityId: data.id,
+        metadata: {
+          billNo: data.billNo,
+          offerId: data.offerId,
+          offerCode: data.offerCode,
+          discount: data.offerDiscount,
+          locationId: data.locationId,
+        },
+        req,
+      }).catch(() => null);
+    }
     if (Number(data.loyaltyPointsRedeemed || 0) > 0) {
       await createAuditLog({
         shopId: req.shopId,

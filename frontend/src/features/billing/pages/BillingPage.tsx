@@ -27,7 +27,6 @@ import { shareBillOnWhatsapp, derivePaymentModeLabel, type BillShareInput } from
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
 import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config";
 import { computeGstBreakdown } from "@/lib/gst";
-import { redeemOffer } from "@/features/offers/api";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, cartItemKey, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
@@ -35,6 +34,7 @@ import { getRetailPaymentReadiness, verifyRetailPayment } from "../retail-paymen
 import { getActiveLocationId } from "@/features/stores/location-context";
 import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/loyalty/api";
 import { lookupGiftCard } from "@/features/gift-cards/api";
+import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/voice/backend-transcription";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
@@ -215,6 +215,13 @@ export default function Billing() {
   const [giftCardError, setGiftCardError] = useState<string | null>(null);
   const [localProductRows, setLocalProductRows] = useState<Product[]>([]);
   const voiceRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceBackendRecordingRef = useRef<BackendTranscriptionSession | null>(null);
+  const preferBackendVoiceRef = useRef(false);
+
+  useEffect(() => () => {
+    voiceRecognitionRef.current?.abort?.();
+    voiceBackendRecordingRef.current?.cancel();
+  }, []);
 
   const requestedBillType = useMemo<BillTypeSelection | null>(() => {
     const query = location.includes("?")
@@ -541,19 +548,15 @@ export default function Billing() {
     });
   }, [allowAdvancePayment, grandTotal, paidAmount, splitCashAmount]);
 
-  const appliedOfferRef = useRef<{ id: string; discount: number } | null>(null);
+  const appliedOfferRef = useRef<{ id: string; code: string; discount: number; subtotal: number } | null>(null);
 
   const confirmBill = useConfirmBill({
     mutation: {
       onSuccess: (data: Bill) => {
         const billNo = data.billNumber ?? data.billNo ?? `PENDING-${Date.now()}`;
         setVerifiedRetailPayment(null);
-        // Count the coupon redemption (usage + discount impact) — fire-and-forget;
-        // offline redemptions are skipped rather than queued.
-        if (appliedOfferRef.current) {
-          void redeemOffer(appliedOfferRef.current.id, appliedOfferRef.current.discount).catch(() => undefined);
-          appliedOfferRef.current = null;
-        }
+        // Coupon usage and discount impact commit atomically with the bill.
+        appliedOfferRef.current = null;
         const pendingPrint = pendingAutoPrintRef.current;
         const printableForSavedBill = pendingPrint
           ? { ...pendingPrint.printable, billNo, createdAt: data.createdAt ?? pendingPrint.printable.createdAt }
@@ -757,8 +760,48 @@ export default function Billing() {
     toast({ title: "Added to cart", description: "Review quantity, rate and profit before confirming bill." });
   }
 
+  async function startBackendVoiceListening() {
+    const existingText = voiceCommand.trim();
+    setVoiceMicMessage("Requesting microphone access for KiranaOS transcription...");
+    try {
+      voiceBackendRecordingRef.current = await startBackendTranscription({
+        onStart: () => {
+          setVoiceListening(true);
+          setVoiceMicMessage("Recording securely. Speak the bill, then press Stop mic. Auto-stops after 15 seconds.");
+        },
+        onTranscribing: () => {
+          setVoiceListening(false);
+          setVoiceMicMessage("Transcribing Hindi/Hinglish bill details...");
+        },
+        onTranscript: ({ transcript, provider }) => {
+          setVoiceCommand(existingText ? `${existingText} ${transcript}` : transcript);
+          setVoiceMicMessage(`Voice captured with ${provider}. Press Parse command to review the cart draft.`);
+        },
+        onError: (message) => {
+          setVoiceMicMessage(message);
+          toast({ title: "Voice transcription", description: message, variant: "destructive" });
+        },
+        onEnd: () => {
+          voiceBackendRecordingRef.current = null;
+          setVoiceListening(false);
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Voice recording could not start.";
+      voiceBackendRecordingRef.current = null;
+      setVoiceListening(false);
+      setVoiceMicMessage(message);
+      toast({ title: "Mic could not start", description: message, variant: "destructive" });
+    }
+  }
+
   async function startVoiceListening() {
     if (voiceListening) {
+      if (voiceBackendRecordingRef.current) {
+        setVoiceMicMessage("Recording stopped. Transcribing securely...");
+        voiceBackendRecordingRef.current.stop();
+        return;
+      }
       voiceRecognitionRef.current?.stop?.();
       setVoiceListening(false);
       return;
@@ -766,10 +809,8 @@ export default function Billing() {
 
     const speechWindow = window as typeof window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor };
     const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
-    if (!Recognition) {
-      const message = "This browser cannot convert speech to text. Use Chrome/Edge, or type the command and press Parse command.";
-      setVoiceMicMessage(message);
-      toast({ title: "Mic speech not supported", description: message, variant: "destructive" });
+    if (!Recognition || preferBackendVoiceRef.current) {
+      await startBackendVoiceListening();
       return;
     }
 
@@ -847,9 +888,14 @@ export default function Billing() {
             : error === "network"
               ? "Chrome speech service is not reachable. Type the command and press Parse command."
               : `Voice capture failed (${error}). Type the command or try mic again.`;
-      setVoiceMicMessage(message);
+      const useBackendNext = error === "network" || error === "service-not-allowed";
+      if (useBackendNext) preferBackendVoiceRef.current = true;
+      const actionableMessage = useBackendNext
+        ? `${message} Press Start mic again to use KiranaOS cloud transcription.`
+        : message;
+      setVoiceMicMessage(actionableMessage);
       if (error !== "aborted") {
-        toast({ title: "Mic issue", description: message, variant: error === "no-speech" ? "default" : "destructive" });
+        toast({ title: "Mic issue", description: actionableMessage, variant: error === "no-speech" ? "default" : "destructive" });
       }
     };
 
@@ -1041,6 +1087,15 @@ export default function Billing() {
       toast({ title: "Discount not allowed", description: applyDiscountPermission.reason, variant: "destructive" });
       return;
     }
+    const appliedOffer = appliedOfferRef.current;
+    if (appliedOffer && Math.abs(appliedOffer.subtotal - subtotal) > 0.005) {
+      toast({ title: "Reapply coupon", description: "The cart total changed after this coupon was checked. Reapply it before saving.", variant: "destructive" });
+      return;
+    }
+    if (appliedOffer && safeDiscount + 0.005 < appliedOffer.discount) {
+      toast({ title: "Reapply coupon", description: "The bill discount no longer matches the validated coupon.", variant: "destructive" });
+      return;
+    }
     const nextBillType = overrideBillType ?? billType;
     const isUdharEntry = nextBillType === BillInputBillType.udhar_entry;
 
@@ -1118,6 +1173,9 @@ export default function Billing() {
         customerName: resolvedCustomerName || "Walk-in",
         customerMobile: resolvedCustomerMobile || undefined,
         discount: safeDiscount,
+        offerId: appliedOffer?.id,
+        offerCode: appliedOffer?.code,
+        offerDiscount: appliedOffer?.discount,
         loyaltyPointsToRedeem: effectiveLoyaltyPoints > 0 ? effectiveLoyaltyPoints : undefined,
         actualAmount: grandTotal,
         buyerPaidAmount: paid,
@@ -1452,7 +1510,7 @@ export default function Billing() {
         subtotal={subtotal}
         safeDiscount={safeDiscount}
         setDiscount={setDiscount}
-        onCouponApplied={(offerId, discount) => { appliedOfferRef.current = offerId ? { id: offerId, discount } : null; }}
+        onCouponApplied={(offerId, discount, code) => { appliedOfferRef.current = offerId ? { id: offerId, discount, code, subtotal } : null; }}
         loyaltyOnline={isOnline}
         loyaltyCustomerSelected={Boolean(resolvedCustomerId)}
         loyaltyLoading={loyaltyProgram.isLoading || loyaltyAccount.isLoading}

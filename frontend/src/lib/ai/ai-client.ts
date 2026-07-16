@@ -29,6 +29,37 @@ export interface FormFillAiRequest {
   currentValues?: Record<string, unknown>;
 }
 
+export interface AudioTranscriptionResult {
+  transcript: string;
+  model: string;
+  provider: "openai" | "groq" | string;
+}
+
+function audioFileExtension(mimeType: string) {
+  if (mimeType.includes("mp4")) return "m4a";
+  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("wav")) return "wav";
+  if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return "mp3";
+  return "webm";
+}
+
+export async function requestAiAudioTranscription(
+  audio: Blob,
+  init?: { signal?: AbortSignal; fileName?: string },
+): Promise<AudioTranscriptionResult> {
+  if (!(audio instanceof Blob) || audio.size === 0) throw new Error("Recorded audio is empty");
+
+  const form = new FormData();
+  const fileName = init?.fileName ?? `voice-command.${audioFileExtension(audio.type)}`;
+  form.append("audio", audio, fileName);
+
+  return apiRequest<AudioTranscriptionResult>("/ai/transcribe", {
+    method: "POST",
+    body: form,
+    signal: init?.signal,
+  });
+}
+
 export async function requestAiAppCommand(
   payload: AppCommandAiRequest,
   init?: { signal?: AbortSignal },

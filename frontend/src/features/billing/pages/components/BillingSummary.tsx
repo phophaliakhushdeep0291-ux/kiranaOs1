@@ -43,7 +43,7 @@ interface BillingSummaryProps {
   subtotal: number;
   safeDiscount: number;
   setDiscount: Dispatch<SetStateAction<number>>;
-  onCouponApplied?: (offerId: string | null, discount: number) => void;
+  onCouponApplied?: (offerId: string | null, discount: number, code: string) => void;
   loyaltyOnline: boolean;
   loyaltyCustomerSelected: boolean;
   loyaltyLoading: boolean;
@@ -214,12 +214,14 @@ export function BillingSummary({
       const res = await applyOffer(subtotal, couponCode.trim());
       if (res.applicable && res.discount > 0) {
         setDiscount(clampAmount(res.discount, 0, subtotal));
-        onCouponApplied?.(res.offerId ?? null, res.discount);
+        onCouponApplied?.(res.offerId ?? null, res.discount, res.code ?? couponCode.trim().toUpperCase());
         setCouponMsg({ ok: true, text: `${res.title ?? "Coupon"} applied — saved ₹${res.discount.toLocaleString("en-IN")}` });
       } else {
+        onCouponApplied?.(null, 0, "");
         setCouponMsg({ ok: false, text: res.reason ?? "Coupon not applicable to this bill" });
       }
     } catch {
+      onCouponApplied?.(null, 0, "");
       setCouponMsg({ ok: false, text: "Couldn't check coupon — needs connection" });
     } finally {
       setCouponBusy(false);
@@ -535,7 +537,7 @@ export function BillingSummary({
           {couponExpanded && (
             <div className="rounded-[9px] border border-[#dbe8ff] bg-[#f8fbff] p-2.5">
               <div className="flex items-center gap-2">
-                <input autoFocus value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder="Enter coupon code" className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]" />
+                <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder="Enter coupon code" className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]" />
                 <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-[#075fff] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
               </div>
               {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}

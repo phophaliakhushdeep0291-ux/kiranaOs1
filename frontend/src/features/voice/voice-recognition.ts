@@ -8,7 +8,7 @@ type SpeechWindow = typeof window & {
 export type VoiceRecognitionCallbacks = {
   onStart: () => void;
   onTranscript: (text: string) => void;
-  onError: (message: string, toastVariant: VoiceToastPayload["variant"]) => void;
+  onError: (message: string, toastVariant: VoiceToastPayload["variant"], errorCode?: string) => void;
   onEnd: () => void;
 };
 
@@ -101,7 +101,7 @@ export function createOneShotRecognition(Recognition: SpeechRecognitionConstruct
   };
   recognition.onerror = (event) => {
     const error = event.error ?? "unknown";
-    callbacks.onError(voiceRecognitionErrorMessage(error), error === "no-speech" ? "default" : "destructive");
+    callbacks.onError(voiceRecognitionErrorMessage(error), error === "no-speech" ? "default" : "destructive", error);
   };
   recognition.onend = callbacks.onEnd;
 

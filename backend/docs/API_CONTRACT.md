@@ -198,6 +198,16 @@ The server streams the isolated temporary file to the configured Groq or
 OpenAI transcription provider and removes it after both successful and failed
 requests. The endpoint does not log audio bytes or transcript text.
 
+### Atomic coupon redemption
+
+`POST /api/bills/confirm` accepts a previously checked `offerId`, `offerCode`,
+and `offerDiscount`, but never trusts those values. Inside the bill transaction,
+the server reloads the tenant offer, verifies its code, live dates, minimum bill,
+usage limit, and recomputed discount, then conditionally claims one redemption.
+The bill and offer totals commit or roll back together. Cancelling or restoring
+that bill reverses or reapplies the offer counters in the same lifecycle
+transaction. Standalone client-trusted redemption is rejected.
+
 ### Encrypted shop backup artifacts
 
 ```text
