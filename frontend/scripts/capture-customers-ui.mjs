@@ -3,10 +3,10 @@ import { writeFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const FRONTEND_URL = "http://localhost:5173";
-const API_URL = "http://localhost:3000/api";
-const CHROME_PATH = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-const DEBUG_PORT = 9446;
+const FRONTEND_URL = process.env.QA_FRONTEND_URL || "http://localhost:5173";
+const API_URL = process.env.QA_API_URL || "http://localhost:3000/api";
+const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const DEBUG_PORT = Number(process.env.QA_DEBUG_PORT || 9446);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class CdpClient {
@@ -51,9 +51,10 @@ async function main() {
     const runId = `${Date.now()}${Math.floor(Math.random() * 1000)}`; const mobile = `9${runId.slice(-9)}`;
     await client.evaluate(`(async () => {
       const apiUrl=${JSON.stringify(API_URL)}, runId=${JSON.stringify(runId)};
-      const response=await fetch(apiUrl+'/auth/register',{method:'POST',headers:{'content-type':'application/json','x-device-id':'customers_ui_'+runId},body:JSON.stringify({shopName:'Customers UI QA',ownerName:'KiranaOS QA',city:'Jodhpur',address:'Visual QA',mobile:${JSON.stringify(mobile)},password:'Test@12345',ownerPin:'2468'})});
+      const deviceId=localStorage.getItem('kiranaos_device_id')||localStorage.getItem('kirana-os:device-id:v1')||('customers_ui_'+runId);
+      const response=await fetch(apiUrl+'/auth/register',{method:'POST',headers:{'content-type':'application/json','x-device-id':deviceId},body:JSON.stringify({shopName:'Customers UI QA',ownerName:'KiranaOS QA',city:'Jodhpur',address:'Visual QA',mobile:${JSON.stringify(mobile)},password:'Test@12345',ownerPin:'2468'})});
       const json=await response.json(); if(!response.ok) throw new Error(JSON.stringify(json)); const auth=json.data??json;
-      localStorage.setItem('kiranaApiBaseUrl',apiUrl);localStorage.setItem('kirana-os:device-id:v1','customers_ui_'+runId);localStorage.setItem('kiranaos.auth.session.v1',JSON.stringify({accessToken:auth.accessToken??auth.token,refreshToken:auth.refreshToken,user:auth.user,shop:auth.shop}));
+      localStorage.setItem('kiranaApiBaseUrl',apiUrl);localStorage.setItem('kiranaos_device_id',deviceId);localStorage.setItem('kirana-os:device-id:v1',deviceId);localStorage.setItem('kiranaos.auth.session.v1',JSON.stringify({accessToken:auth.accessToken??auth.token,refreshToken:auth.refreshToken,user:auth.user,shop:auth.shop}));
       const {offlineDB}=await import('/src/lib/offline/db.ts'); const now=new Date(); const iso=(days,hour)=>{const value=new Date(now);value.setDate(value.getDate()-days);value.setHours(hour,15,0,0);return value.toISOString();};
       await offlineDB.putMany('customers',[
         {id:'qa_customer_ramesh',name:'Ramesh Sharma',mobile:'9988776655',address:'MG Road, Jaipur',type:'udhar',udharLimit:50000,notes:'Usually pays after 15-20 days.',createdAt:iso(180,10),sync_status:'synced'},

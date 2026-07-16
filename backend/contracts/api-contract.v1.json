@@ -1044,6 +1044,21 @@
     },
     {
       "method": "GET",
+      "path": "/api/reminders/status",
+      "authRequired": true,
+      "deviceRequired": true,
+      "feature": "whatsapp_reminders",
+      "purpose": "report live WhatsApp provider, Redis queue, and reminder-worker readiness without exposing credentials",
+      "responseMustInclude": [
+        "data.providerConfigured",
+        "data.queueEnabled",
+        "data.workerHealthy",
+        "data.operational",
+        "data.code"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/reminders/templates",
       "authRequired": true,
       "deviceRequired": true,
@@ -1061,6 +1076,30 @@
       ],
       "feature": "whatsapp_reminders",
       "purpose": "create WhatsApp template"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/reminders/templates/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "feature": "whatsapp_reminders",
+      "purpose": "update or pause a WhatsApp template"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/reminders/templates/:id",
+      "authRequired": true,
+      "deviceRequired": true,
+      "roles": [
+        "owner",
+        "admin"
+      ],
+      "feature": "whatsapp_reminders",
+      "purpose": "soft-delete a WhatsApp template while preserving audit history"
     },
     {
       "method": "GET",

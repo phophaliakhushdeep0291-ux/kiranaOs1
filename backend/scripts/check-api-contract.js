@@ -69,6 +69,7 @@ const requiredEndpoints = [
   "POST /api/jobs/backups",
   "GET /api/jobs/backups/:id/download",
   "POST /api/reminders/send",
+  "GET /api/reminders/status",
   "POST /api/ai/parse-command",
   "POST /api/ai/transcribe"
 ];
@@ -138,6 +139,11 @@ for (const phrase of ["strict schema", "tenant catalogue", "fails closed", "neve
   if (!aiCommand?.safetyGuarantees?.some((guarantee) => guarantee.includes(phrase))) {
     fail("AI command contract must guarantee " + phrase);
   }
+}
+
+const reminderStatus = contract.endpoints.find((endpoint) => endpoint.path === "/api/reminders/status");
+for (const field of ["data.providerConfigured", "data.queueEnabled", "data.workerHealthy", "data.operational", "data.code"]) {
+  if (!reminderStatus?.responseMustInclude?.includes(field)) fail("Reminder status contract must require " + field);
 }
 
 const ack = contract.endpoints.find((endpoint) => endpoint.path === "/api/sync/ack");

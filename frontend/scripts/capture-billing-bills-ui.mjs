@@ -3,10 +3,10 @@ import { writeFile, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const FRONTEND_URL = "http://localhost:5173";
-const API_URL = "http://localhost:3000/api";
-const CHROME_PATH = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-const DEBUG_PORT = 9452;
+const FRONTEND_URL = process.env.QA_FRONTEND_URL || "http://localhost:5173";
+const API_URL = process.env.QA_API_URL || "http://localhost:3000/api";
+const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const DEBUG_PORT = Number(process.env.QA_DEBUG_PORT || 9452);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class CdpClient {
@@ -73,7 +73,8 @@ async function waitForPage(client, expression, timeout = 30_000) {
     if (await client.evaluate(expression)) return;
     await sleep(150);
   }
-  throw new Error(`Timed out waiting for page condition: ${expression}`);
+  const diagnostic = await client.evaluate(`({ url: location.href, text: document.body?.innerText?.slice(0, 1200), errors: window.__kiranaQaErrors || [] })`).catch(() => null);
+  throw new Error(`Timed out waiting for page condition: ${expression}; page=${JSON.stringify(diagnostic)}`);
 }
 
 async function navigate(client, url) {
@@ -164,9 +165,10 @@ async function main() {
     await client.evaluate(`(async () => {
       const apiUrl = ${JSON.stringify(API_URL)};
       const runId = ${JSON.stringify(runId)};
+      const deviceId = localStorage.getItem('kiranaos_device_id') || localStorage.getItem('kirana-os:device-id:v1') || ('billing_bills_ui_' + runId);
       const response = await fetch(apiUrl + '/auth/register', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-device-id': 'billing_bills_ui_' + runId },
+        headers: { 'content-type': 'application/json', 'x-device-id': deviceId },
         body: JSON.stringify({
           shopName: 'Billing Bills UI QA',
           ownerName: 'KiranaOS QA',
@@ -181,7 +183,8 @@ async function main() {
       if (!response.ok) throw new Error(JSON.stringify(json));
       const auth = json.data ?? json;
       localStorage.setItem('kiranaApiBaseUrl', apiUrl);
-      localStorage.setItem('kirana-os:device-id:v1', 'billing_bills_ui_' + runId);
+      localStorage.setItem('kiranaos_device_id', deviceId);
+      localStorage.setItem('kirana-os:device-id:v1', deviceId);
       localStorage.setItem('kiranaos.auth.session.v1', JSON.stringify({
         accessToken: auth.accessToken ?? auth.token,
         refreshToken: auth.refreshToken,

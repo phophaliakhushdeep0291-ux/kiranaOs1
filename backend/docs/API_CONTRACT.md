@@ -187,6 +187,16 @@ These require both `Authorization` and `x-device-id`:
 /api/ai
 ```
 
+### WhatsApp reminder truth
+
+GET /api/reminders/status reports providerConfigured, queueEnabled,
+workerHealthy, operational, and a bounded status code. The settings UI must not
+show a channel as connected unless all three runtime dependencies are ready.
+Templates and delivery history come from /api/reminders/templates and
+/api/reminders/logs; preview text is never inserted into delivery history.
+POST /api/reminders/send creates an auditable attempt and returns queued,
+skipped, or failed truthfully. Sent is recorded only after provider acceptance.
+
 ### Grounded AI command parsing
 
 POST /api/ai/parse-command requires Authorization, x-device-id, and an active

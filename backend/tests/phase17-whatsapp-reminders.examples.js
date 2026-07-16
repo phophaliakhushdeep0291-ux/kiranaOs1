@@ -49,6 +49,7 @@ for (const snippet of [
   "requireShop",
   "requireFeature(\"whatsapp_reminders\")",
   "FEATURE_NOT_AVAILABLE",
+  "router.get(\"/status\"",
   "router.get(\"/templates\"",
   "router.post(\"/templates\"",
   "router.patch(\"/templates/:id\"",
@@ -97,6 +98,10 @@ for (const snippet of [
   "REMINDER_SKIPPED_COOLDOWN",
   "REMINDER_PROVIDER_NOT_CONFIGURED",
   "recordReminderMetric",
+  "getReminderStatus",
+  "getWorkerHeartbeats",
+  "workerHealthy",
+  "OPERATIONAL",
 ]) assert(service.includes(snippet), `reminder service missing ${snippet}`);
 assert(!/phone\s*:\s*req\.body|mobile\s*:\s*req\.body/i.test(service), "service must not use arbitrary frontend phone/mobile input");
 
@@ -214,6 +219,16 @@ for (const snippet of [
 
 const app = read("src/app.js");
 assert(app.includes('app.use("/api/reminders"'), "app must register /api/reminders");
+
+const notificationUi = read("../frontend/src/features/settings/pages/NotificationsSettingsPage.tsx");
+for (const snippet of ["/reminders/status", "/reminders/templates", "/reminders/logs?limit=20", "Actual Delivery History", "No local sample is being substituted"]) {
+  assert(notificationUi.includes(snippet), "notification UI missing real server flow: " + snippet);
+}
+assert(!notificationUi.includes("const HISTORY"), "notification UI must never render fabricated delivery history");
+assert(!notificationUi.includes("Notification Channels"), "unimplemented SMS/email/push channels must not be presented as connected");
+const customerDetailUi = read("../frontend/src/features/customers/pages/CustomerDetailPage.tsx");
+assert(customerDetailUi.includes('"/reminders/send"'), "customer reminder button must call the real send endpoint");
+assert(!customerDetailUi.includes("Reminder ready"), "customer reminder button must not use a placeholder toast");
 
 const prodCheck = read("scripts/production-check.js");
 for (const snippet of [

@@ -27,6 +27,7 @@ assert.ok(endpoints.includes("GET /api/jobs/backups"));
 assert.ok(endpoints.includes("POST /api/jobs/backups"));
 assert.ok(endpoints.includes("GET /api/jobs/backups/:id/download"));
 assert.ok(endpoints.includes("POST /api/ai/transcribe"));
+assert.ok(endpoints.includes("GET /api/reminders/status"));
 assert.ok(endpoints.includes("GET /api/payment-provider/events"));
 assert.ok(endpoints.includes("POST /api/payment-provider/events/:id/retry"));
 
@@ -88,6 +89,11 @@ for (const field of [
 }
 for (const phrase of ["strict schema", "tenant catalogue", "fails closed", "never writes"]) {
   assert.ok(aiCommand.safetyGuarantees.some((guarantee) => guarantee.includes(phrase)), "AI safety contract must guarantee " + phrase);
+}
+
+const reminderStatus = contract.endpoints.find((endpoint) => endpoint.path === "/api/reminders/status");
+for (const field of ["data.providerConfigured", "data.queueEnabled", "data.workerHealthy", "data.operational", "data.code"]) {
+  assert.ok(reminderStatus.responseMustInclude.includes(field), "Reminder status response must document " + field);
 }
 
 for (const phrase of ["x-device-id", "Authorization", "entityCursors", "owner PIN", "shopId"]) {

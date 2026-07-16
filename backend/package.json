@@ -79,6 +79,7 @@
     "@aws-sdk/client-s3": "^3.1063.0",
     "@aws-sdk/s3-request-presigner": "^3.1063.0",
     "@prisma/client": "5.14.0",
+    "@sentry/node": "10.65.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.34.1",
     "compression": "^1.8.1",

@@ -1853,7 +1853,7 @@ if (exists("src/app.js")) {
 
 if (exists("src/modules/reminders/reminders.routes.js")) {
   const routes = read("src/modules/reminders/reminders.routes.js");
-  for (const snippet of ["/templates", "/logs", "/send", "/send-statement", "requireFeature(\"whatsapp_reminders\")", "requireRole(\"owner\", \"admin\")"]) {
+  for (const snippet of ["/status", "/templates", "/logs", "/send", "/send-statement", "requireFeature(\"whatsapp_reminders\")", "requireRole(\"owner\", \"admin\")"]) {
     if (!routes.includes(snippet)) errors.push(`reminders.routes.js missing route/gate snippet: ${snippet}`);
   }
 }
@@ -1867,7 +1867,7 @@ if (exists("src/modules/reminders/reminderFormatter.js")) {
 
 if (exists("src/modules/reminders/reminders.service.js")) {
   const service = read("src/modules/reminders/reminders.service.js");
-  for (const snippet of ["CUSTOMER_PHONE_REQUIRED", "REMINDER_COOLDOWN_ACTIVE", "overrideCooldown", "JOB_QUEUE_DISABLED", "REMINDER_REQUESTED", "REMINDER_SKIPPED_COOLDOWN", "recordReminderMetric", "customer.udharAmount"]) {
+  for (const snippet of ["CUSTOMER_PHONE_REQUIRED", "REMINDER_COOLDOWN_ACTIVE", "overrideCooldown", "JOB_QUEUE_DISABLED", "REMINDER_REQUESTED", "REMINDER_SKIPPED_COOLDOWN", "recordReminderMetric", "customer.udharAmount", "getReminderStatus", "getWorkerHeartbeats", "workerHealthy", "OPERATIONAL"]) {
     if (!service.includes(snippet)) errors.push(`reminders.service.js missing send/cooldown/audit snippet: ${snippet}`);
   }
   if (service.includes("frontend") && service.includes("udhar")) {
