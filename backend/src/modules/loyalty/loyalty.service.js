@@ -102,7 +102,7 @@ export async function recordBillLoyalty(shopId, bill) {
   try {
     return await db.$transaction((tx) => recordBillLoyaltyInTransaction(tx, shopId, bill));
   } catch (error) {
-    if (error?.code === "P2002") return db.loyaltyTransaction.findFirst({ where: { billId: bill.id, type: "earn" } });
+    if (error?.code === "P2002") return db.loyaltyTransaction.findFirst({ where: { billId: bill.id, type: "earn", lifecycleCycle: 0 } });
     throw error;
   }
 }

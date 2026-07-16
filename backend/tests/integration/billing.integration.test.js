@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { billPayload, createCustomer, createPaidBillViaApi, createProduct, createTenant, login } from "./factories.js";
 import { restoreCancelledBill } from "../../src/modules/bills/bills.service.js";
+import { redeemPoints } from "../../src/modules/loyalty/loyalty.service.js";
 
 const ctx = await createIntegrationContext();
 
@@ -112,6 +113,98 @@ if (ctx.skip) {
       const standalone = await ctx.post(`/api/offers/${offer.id}/redeem`, { discount: 80 }, { token: ownerAuth.accessToken });
       const standaloneBody = assertFailure(standalone, 409);
       assert.equal(standaloneBody.code, "OFFER_REDEMPTION_REQUIRES_BILL");
+    });
+
+    test("loyalty cancel/restore cycles preserve balances and immutable lifetime totals", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Lifecycle Loyal" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 20, defaultPricePerRateUnit: 100 });
+      await ctx.db.loyaltyProgram.create({
+        data: {
+          shopId: tenant.shop.id,
+          active: true,
+          pointsPerRupee: 1,
+          redemptionPaisePerPoint: 25,
+          minimumRedeemPoints: 10,
+        },
+      });
+
+      assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 1,
+        ratePerRateUnit: 100,
+        customerId: customer.id,
+        customerName: customer.name,
+      }), { token: ownerAuth.accessToken }), 201);
+
+      const lifecycleBill = assertSuccess(await ctx.post("/api/bills/confirm", {
+        ...billPayload(product, {
+          quantity: 1,
+          ratePerRateUnit: 50,
+          customerId: customer.id,
+          customerName: customer.name,
+          actualAmount: 40,
+          buyerPaidAmount: 40,
+          payments: [{ mode: "cash", amount: 40 }],
+        }),
+        loyaltyPointsToRedeem: 40,
+        sensitiveActions: ["loyalty_redemption"],
+        reason: "Lifecycle ledger proof",
+        ownerPin: tenant.ownerPin,
+      }, { token: ownerAuth.accessToken }), 201);
+
+      let account = await ctx.db.loyaltyAccount.findUnique({ where: { customerId: customer.id } });
+      assert.deepEqual(
+        { balance: account.pointsBalance, earned: account.lifetimeEarned, redeemed: account.lifetimeRedeemed },
+        { balance: 100, earned: 140, redeemed: 40 },
+      );
+
+      for (const cycle of [1, 2]) {
+        assertSuccess(await ctx.post(`/api/bills/${lifecycleBill.id}/cancel`, { reason: `Loyalty cycle ${cycle}` }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
+        account = await ctx.db.loyaltyAccount.findUnique({ where: { customerId: customer.id } });
+        assert.deepEqual(
+          { balance: account.pointsBalance, earned: account.lifetimeEarned, redeemed: account.lifetimeRedeemed },
+          { balance: 100, earned: 100, redeemed: 0 },
+        );
+
+        await restoreCancelledBill(tenant.shop.id, lifecycleBill.id, { reason: `Loyalty cycle ${cycle} restore` });
+        account = await ctx.db.loyaltyAccount.findUnique({ where: { customerId: customer.id } });
+        assert.deepEqual(
+          { balance: account.pointsBalance, earned: account.lifetimeEarned, redeemed: account.lifetimeRedeemed },
+          { balance: 100, earned: 140, redeemed: 40 },
+        );
+      }
+
+      const ledger = await ctx.db.loyaltyTransaction.findMany({ where: { billId: lifecycleBill.id } });
+      for (const type of ["earn_reversal", "redeem_reversal", "earn_reapply", "redeem_reapply"]) {
+        assert.deepEqual(
+          ledger.filter((row) => row.type === type).map((row) => row.lifecycleCycle).sort(),
+          [1, 2],
+          `${type} must retain one immutable entry per lifecycle cycle`,
+        );
+      }
+    });
+
+    test("cancelling an earn bill never grants already-spent loyalty points", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Spent Points" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100 });
+      await ctx.db.loyaltyProgram.create({ data: { shopId: tenant.shop.id, active: true, pointsPerRupee: 1, redemptionPaisePerPoint: 25, minimumRedeemPoints: 10 } });
+      const earnBill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        customerId: customer.id,
+        customerName: customer.name,
+      }), { token: ownerAuth.accessToken }), 201);
+
+      await redeemPoints(tenant.shop.id, customer.id, { points: 80, note: "Spent before source bill cancellation" });
+      assertSuccess(await ctx.post(`/api/bills/${earnBill.id}/cancel`, { reason: "Source sale reversed after points spent" }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
+
+      const account = await ctx.db.loyaltyAccount.findUnique({ where: { customerId: customer.id } });
+      assert.equal(account.pointsBalance, -80, "spent points must become a recoverable negative balance, not free value");
+      assert.equal(account.lifetimeEarned, 0);
+      assert.equal(account.lifetimeRedeemed, 80);
+      await assert.rejects(
+        () => redeemPoints(tenant.shop.id, customer.id, { points: 10, note: "Must be blocked while negative" }),
+        (error) => error?.code === "INSUFFICIENT_LOYALTY_POINTS",
+      );
     });
 
     test("partial bill creates paid payment + udhar impact", async () => {

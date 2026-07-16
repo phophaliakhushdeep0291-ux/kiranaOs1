@@ -14,7 +14,7 @@ for (const schemaPath of ["../prisma/schema.prisma", "../prisma-postgres/schema.
   assert.match(schema, /pointsExpireDays/);
   assert.match(schema, /tierRulesJson/);
   assert.match(schema, /lastEarnedAt/);
-  assert.match(schema, /locationId String\?/);
+  assert.match(schema, /locationId\s+String\?/);
   assert.match(schema, /source\s+String/);
   assert.match(schema, /lifecycleCycle\s+Int\s+@default\(0\)/);
   assert.match(schema, /@@unique\(\[billId, type, lifecycleCycle\]\)/);

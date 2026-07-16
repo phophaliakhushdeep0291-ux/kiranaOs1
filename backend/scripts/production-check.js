@@ -37,6 +37,7 @@ const requiredFiles = [
   "tests/phase11-shopkeeper-reports.examples.js",
   "tests/phase12-daily-closing-snapshots.examples.js",
   "src/lib/fileStorage.js",
+  "src/modules/backups/backup.service.js",
   "src/modules/reports/reportExport.service.js",
   "tests/phase13-report-export-jobs.examples.js",
   ".github/workflows/backend-ci.yml",
@@ -363,6 +364,9 @@ if (!migrationFiles.length) {
 
 const gitignoreLines = readLines(".gitignore");
 const dockerignoreLines = readLines(".dockerignore");
+if (gitignoreLines.includes("backups")) {
+  errors.push(".gitignore pattern 'backups' is unanchored and hides src/modules/backups; use /backups/ for runtime artifacts");
+}
 for (const pattern of requiredGitignorePatterns) {
   if (!gitignoreLines.includes(pattern)) errors.push(`.gitignore missing required pattern: ${pattern}`);
 }

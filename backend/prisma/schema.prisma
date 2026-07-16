@@ -76,7 +76,7 @@ model Shop {
   customerOrders              CustomerOrder[]
   pricingRules                PricingRule[]
   productSellingUnits         ProductSellingUnit[]
-  inventoryLots              InventoryLot[]
+  inventoryLots               InventoryLot[]
   pricingDecisionEvents       PricingDecisionEvent[]
   integrationApiKeys          IntegrationApiKey[]
   webhookEndpoints            WebhookEndpoint[]
@@ -231,19 +231,19 @@ model PricingDecisionEvent {
 // itemsJson is a storefront snapshot: [{ productId, name, unit, price, qty }].
 // ─────────────────────────────────────────────
 model CustomerOrder {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   shopId          String
   locationId      String?
   customerName    String
   customerMobile  String
   customerAddress String?
-  itemsJson       String   @default("[]")
-  itemCount       Int      @default(0)
-  estimatedTotal  Float    @default(0)
+  itemsJson       String    @default("[]")
+  itemCount       Int       @default(0)
+  estimatedTotal  Float     @default(0)
   note            String?
-  fulfillmentType String   @default("delivery") // delivery | pickup
+  fulfillmentType String    @default("delivery") // delivery | pickup
   promisedSlot    String?
-  status          String   @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
+  status          String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
   billId          String?
   idempotencyKey  String?
   acceptedAt      DateTime?
@@ -251,8 +251,8 @@ model CustomerOrder {
   fulfilledAt     DateTime?
   rejectedAt      DateTime?
   cancelledAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   shop     Shop           @relation(fields: [shopId], references: [id])
   location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -404,18 +404,18 @@ model Product {
   createdAt                    DateTime  @default(now())
   updatedAt                    DateTime  @updatedAt
 
-  shop            Shop                 @relation(fields: [shopId], references: [id])
-  billItems       BillItem[]
-  stockLedger     StockLedger[]
-  purchaseHistory PurchaseHistory[]
-  sellingUnits    ProductSellingUnit[]
-  locationStocks  LocationStock[]
-  transferItems   StockTransferItem[]
-  purchaseOrderItems PurchaseOrderItem[]
+  shop                 Shop                  @relation(fields: [shopId], references: [id])
+  billItems            BillItem[]
+  stockLedger          StockLedger[]
+  purchaseHistory      PurchaseHistory[]
+  sellingUnits         ProductSellingUnit[]
+  locationStocks       LocationStock[]
+  transferItems        StockTransferItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
   purchaseReceiptItems PurchaseReceiptItem[]
-  purchaseReturnItems PurchaseReturnItem[]
-  stockCountLines  StockCountLine[]
-  inventoryLots    InventoryLot[]
+  purchaseReturnItems  PurchaseReturnItem[]
+  stockCountLines      StockCountLine[]
+  inventoryLots        InventoryLot[]
 
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, sourceDeviceId, clientProductId])
@@ -462,68 +462,68 @@ model Customer {
 // BILL
 // ─────────────────────────────────────────────
 model Bill {
-  id                   String    @id @default(cuid())
-  shopId               String
-  locationId           String?
-  billNo               String // e.g. KOS-2026-0001
-  billType             String    @default("normal_sale") // estimate | normal_sale | gst_invoice | udhar_entry
-  status               String    @default("active") // active | cancelled
-  customerId           String?
-  customerName         String    @default("Walk-in")
-  buyerGstin           String?
-  buyerStateCode       String?
-  buyerAddress         String?
-  subtotal             Float     @default(0)
-  subtotalPaise        BigInt?
-    discount             Float     @default(0)
-    discountPaise        BigInt?
-    offerId              String?
-    offerCode            String?
-    offerDiscount        Float     @default(0)
-    offerDiscountPaise   BigInt?
-  loyaltyPointsRedeemed Int      @default(0)
-  loyaltyDiscount      Float     @default(0)
-  loyaltyDiscountPaise BigInt?
+  id                    String    @id @default(cuid())
+  shopId                String
+  locationId            String?
+  billNo                String // e.g. KOS-2026-0001
+  billType              String    @default("normal_sale") // estimate | normal_sale | gst_invoice | udhar_entry
+  status                String    @default("active") // active | cancelled
+  customerId            String?
+  customerName          String    @default("Walk-in")
+  buyerGstin            String?
+  buyerStateCode        String?
+  buyerAddress          String?
+  subtotal              Float     @default(0)
+  subtotalPaise         BigInt?
+  discount              Float     @default(0)
+  discountPaise         BigInt?
+  offerId               String?
+  offerCode             String?
+  offerDiscount         Float     @default(0)
+  offerDiscountPaise    BigInt?
+  loyaltyPointsRedeemed Int       @default(0)
+  loyaltyDiscount       Float     @default(0)
+  loyaltyDiscountPaise  BigInt?
   giftCardAmount        Float     @default(0)
   giftCardAmountPaise   BigInt?
-  gst                  Float     @default(0)
-  gstPaise             BigInt?
-  gstMode              String    @default("inclusive") // inclusive | exclusive | none
-  grandTotal           Float     @default(0)
-  grandTotalPaise      BigInt?
-  actualAmount         Float     @default(0) // frontend actual bill amount before let-go handling
-  actualAmountPaise    BigInt?
-  buyerPaidAmount      Float     @default(0) // amount entered/received from buyer
-  buyerPaidAmountPaise BigInt?
-  waivedAmount         Float     @default(0) // let-go amount absorbed by shop
-  waivedAmountPaise    BigInt?
-  grossProfit          Float     @default(0)
-  grossProfitPaise     BigInt?
-  paidAmount           Float     @default(0)
-  paidAmountPaise      BigInt?
-  creditAmount         Float     @default(0) // went to udhar
-  creditAmountPaise    BigInt?
-  createdByUserId      String? // authenticated user who created the bill; nullable for legacy/offline imports
-  deviceId             String? // client device id at bill creation, if available
-  clientBillId         String?
-  idempotencyKey       String?
-  sourceDeviceId       String?
-  cancelledAt          DateTime?
-  cancelledReason      String?
-  returnOfBillId       String? // set on billType "sales_return": the original sale this return reverses
-  refundMode           String? // cash | upi | bank | udhar | gift_card
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  gst                   Float     @default(0)
+  gstPaise              BigInt?
+  gstMode               String    @default("inclusive") // inclusive | exclusive | none
+  grandTotal            Float     @default(0)
+  grandTotalPaise       BigInt?
+  actualAmount          Float     @default(0) // frontend actual bill amount before let-go handling
+  actualAmountPaise     BigInt?
+  buyerPaidAmount       Float     @default(0) // amount entered/received from buyer
+  buyerPaidAmountPaise  BigInt?
+  waivedAmount          Float     @default(0) // let-go amount absorbed by shop
+  waivedAmountPaise     BigInt?
+  grossProfit           Float     @default(0)
+  grossProfitPaise      BigInt?
+  paidAmount            Float     @default(0)
+  paidAmountPaise       BigInt?
+  creditAmount          Float     @default(0) // went to udhar
+  creditAmountPaise     BigInt?
+  createdByUserId       String? // authenticated user who created the bill; nullable for legacy/offline imports
+  deviceId              String? // client device id at bill creation, if available
+  clientBillId          String?
+  idempotencyKey        String?
+  sourceDeviceId        String?
+  cancelledAt           DateTime?
+  cancelledReason       String?
+  returnOfBillId        String? // set on billType "sales_return": the original sale this return reverses
+  refundMode            String? // cash | upi | bank | udhar | gift_card
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  shop                Shop                 @relation(fields: [shopId], references: [id])
-  location            StoreLocation?       @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  customer            Customer?            @relation(fields: [customerId], references: [id])
-  items               BillItem[]
-  payments            Payment[]
-  udharLedger         UdharLedger[]
-  stockLedger         StockLedger[]
-  loyaltyTransactions LoyaltyTransaction[]
-  complianceDocuments ComplianceDocument[]
+  shop                 Shop                  @relation(fields: [shopId], references: [id])
+  location             StoreLocation?        @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  customer             Customer?             @relation(fields: [customerId], references: [id])
+  items                BillItem[]
+  payments             Payment[]
+  udharLedger          UdharLedger[]
+  stockLedger          StockLedger[]
+  loyaltyTransactions  LoyaltyTransaction[]
+  complianceDocuments  ComplianceDocument[]
   giftCardTransactions GiftCardTransaction[]
 
   @@unique([shopId, billNo])
@@ -532,8 +532,8 @@ model Bill {
   @@index([shopId, createdByUserId, createdAt])
   @@index([shopId, status, createdAt])
   @@index([shopId, locationId, status, createdAt])
-    @@index([shopId, returnOfBillId])
-    @@index([shopId, offerId, status])
+  @@index([shopId, returnOfBillId])
+  @@index([shopId, offerId, status])
   // Sync pull keyset pagination
   @@index([shopId, updatedAt, id])
 }
@@ -577,9 +577,9 @@ model BillItem {
   priceOverrideReason       String?
   priceApprovedByUserId     String?
 
-  bill        Bill                @relation(fields: [billId], references: [id])
-  product     Product?            @relation(fields: [productId], references: [id])
-  sellingUnit ProductSellingUnit? @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
+  bill           Bill                    @relation(fields: [billId], references: [id])
+  product        Product?                @relation(fields: [productId], references: [id])
+  sellingUnit    ProductSellingUnit?     @relation(fields: [sellingUnitId], references: [id], onDelete: SetNull)
   lotAllocations BillItemLotAllocation[]
 
   @@index([billId])
@@ -589,25 +589,25 @@ model BillItem {
 // PAYMENT — one bill can have multiple payment modes
 // ─────────────────────────────────────────────
 model Payment {
-  id              String   @id @default(cuid())
-  shopId          String?
-  billId          String
-  mode            String // cash | upi | credit
-  amount          Float
-  amountPaise     BigInt?
-  clientPaymentId String?
-  idempotencyKey  String?
-  sourceDeviceId  String?
-  status          String   @default("confirmed") // pending | confirmed | failed | refunded
-  provider        String? // manual | razorpay | terminal
-  providerReference String?
-  confirmationSource String @default("manual") // manual | provider_api | signed_webhook
-  confirmedAt     DateTime?
-  retailPaymentIntentId String? @unique
-  createdAt       DateTime @default(now())
+  id                    String    @id @default(cuid())
+  shopId                String?
+  billId                String
+  mode                  String // cash | upi | credit
+  amount                Float
+  amountPaise           BigInt?
+  clientPaymentId       String?
+  idempotencyKey        String?
+  sourceDeviceId        String?
+  status                String    @default("confirmed") // pending | confirmed | failed | refunded
+  provider              String? // manual | razorpay | terminal
+  providerReference     String?
+  confirmationSource    String    @default("manual") // manual | provider_api | signed_webhook
+  confirmedAt           DateTime?
+  retailPaymentIntentId String?   @unique
+  createdAt             DateTime  @default(now())
 
-  bill Bill  @relation(fields: [billId], references: [id])
-  shop Shop? @relation(fields: [shopId], references: [id])
+  bill                Bill                 @relation(fields: [billId], references: [id])
+  shop                Shop?                @relation(fields: [shopId], references: [id])
   retailPaymentIntent RetailPaymentIntent? @relation(fields: [retailPaymentIntentId], references: [id])
 
   @@unique([shopId, idempotencyKey])
@@ -616,23 +616,23 @@ model Payment {
 }
 
 model RetailPaymentIntent {
-  id                String    @id @default(cuid())
-  shopId            String
-  locationId        String
-  provider          String    @default("razorpay")
-  providerOrderId   String?   @unique
-  providerPaymentId String?   @unique
-  amountPaise       Int
-  currency          String    @default("INR")
-  status            String    @default("creating") // creating | pending | confirmed | failed | expired | refunded
-  createdByUserId   String?
-  expiresAt         DateTime
-  confirmedAt       DateTime?
+  id                 String    @id @default(cuid())
+  shopId             String
+  locationId         String
+  provider           String    @default("razorpay")
+  providerOrderId    String?   @unique
+  providerPaymentId  String?   @unique
+  amountPaise        Int
+  currency           String    @default("INR")
+  status             String    @default("creating") // creating | pending | confirmed | failed | expired | refunded
+  createdByUserId    String?
+  expiresAt          DateTime
+  confirmedAt        DateTime?
   confirmationSource String?
-  consumedAt        DateTime?
-  failureReason     String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  consumedAt         DateTime?
+  failureReason      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   shop     Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
   location StoreLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
@@ -660,26 +660,26 @@ model StoreLocation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  shop              Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  stocks            LocationStock[]
-  outgoingTransfers StockTransfer[] @relation("TransferFrom")
-  incomingTransfers StockTransfer[] @relation("TransferTo")
-  bills             Bill[]
-  stockLedger       StockLedger[]
-  udharLedger       UdharLedger[]
-  purchaseHistory   PurchaseHistory[]
-  expenses          Expense[]
-  dailyClosings     DailyClosingSnapshot[]
+  shop                 Shop                   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  stocks               LocationStock[]
+  outgoingTransfers    StockTransfer[]        @relation("TransferFrom")
+  incomingTransfers    StockTransfer[]        @relation("TransferTo")
+  bills                Bill[]
+  stockLedger          StockLedger[]
+  udharLedger          UdharLedger[]
+  purchaseHistory      PurchaseHistory[]
+  expenses             Expense[]
+  dailyClosings        DailyClosingSnapshot[]
   retailPaymentIntents RetailPaymentIntent[]
-  purchaseOrders    PurchaseOrder[]
-  purchaseReceipts  PurchaseReceipt[]
-  purchaseReturns   PurchaseReturn[]
-  customerOrders    CustomerOrder[]
-  userAccess        UserLocationAccess[]
-  pricingRules      PricingRule[]
-  loyaltyTransactions LoyaltyTransaction[]
-  stockCountSessions StockCountSession[]
-  inventoryLots InventoryLot[]
+  purchaseOrders       PurchaseOrder[]
+  purchaseReceipts     PurchaseReceipt[]
+  purchaseReturns      PurchaseReturn[]
+  customerOrders       CustomerOrder[]
+  userAccess           UserLocationAccess[]
+  pricingRules         PricingRule[]
+  loyaltyTransactions  LoyaltyTransaction[]
+  stockCountSessions   StockCountSession[]
+  inventoryLots        InventoryLot[]
 
   @@unique([shopId, code])
   @@index([shopId, active, createdAt])
@@ -704,42 +704,42 @@ model LocationStock {
 }
 
 model StockCountSession {
-  id              String    @id @default(cuid())
-  shopId          String
-  locationId      String
-  activeKey       String?   @unique
-  name            String
-  status          String    @default("counting") // counting | review | applied | cancelled
-  blindCount      Boolean   @default(true)
-  createdByUserId String?
+  id               String    @id @default(cuid())
+  shopId           String
+  locationId       String
+  activeKey        String?   @unique
+  name             String
+  status           String    @default("counting") // counting | review | applied | cancelled
+  blindCount       Boolean   @default(true)
+  createdByUserId  String?
   approvedByUserId String?
-  submittedAt     DateTime?
-  appliedAt       DateTime?
-  cancelledAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  submittedAt      DateTime?
+  appliedAt        DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location StoreLocation  @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  shop     Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation    @relation(fields: [locationId], references: [id], onDelete: Restrict)
   lines    StockCountLine[]
 
   @@index([shopId, locationId, status, createdAt])
 }
 
 model StockCountLine {
-  id                String    @id @default(cuid())
-  sessionId         String
-  productId         String
-  productName       String
-  baseUnit           String
-  expectedBaseQty   Float
-  countedBaseQty    Float?
-  varianceBaseQty   Float?
-  reason             String?
-  countedByUserId   String?
-  countedAt          DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  sessionId       String
+  productId       String
+  productName     String
+  baseUnit        String
+  expectedBaseQty Float
+  countedBaseQty  Float?
+  varianceBaseQty Float?
+  reason          String?
+  countedByUserId String?
+  countedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   session StockCountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   product Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
@@ -749,21 +749,21 @@ model StockCountLine {
 }
 
 model GiftCard {
-  id                    String    @id @default(cuid())
-  shopId                String
-  customerId            String?
-  codeHash              String
-  codeLast4             String
-  status                String    @default("active") // active | depleted | disabled | expired
-  initialBalancePaise   BigInt
-  balancePaise          BigInt
-  expiresAt             DateTime?
-  issuedAt              DateTime  @default(now())
-  disabledAt            DateTime?
-  note                  String?
-  createdByUserId       String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  shopId              String
+  customerId          String?
+  codeHash            String
+  codeLast4           String
+  status              String    @default("active") // active | depleted | disabled | expired
+  initialBalancePaise BigInt
+  balancePaise        BigInt
+  expiresAt           DateTime?
+  issuedAt            DateTime  @default(now())
+  disabledAt          DateTime?
+  note                String?
+  createdByUserId     String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   shop         Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customer     Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
@@ -851,15 +851,15 @@ model LoyaltyProgram {
 }
 
 model LoyaltyAccount {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   shopId           String
-  customerId       String   @unique
-  pointsBalance    Int      @default(0)
-  lifetimeEarned   Int      @default(0)
-  lifetimeRedeemed Int      @default(0)
+  customerId       String    @unique
+  pointsBalance    Int       @default(0)
+  lifetimeEarned   Int       @default(0)
+  lifetimeRedeemed Int       @default(0)
   lastEarnedAt     DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   shop         Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customer     Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -869,21 +869,21 @@ model LoyaltyAccount {
 }
 
 model LoyaltyTransaction {
-  id        String   @id @default(cuid())
-  shopId    String
-  accountId String
-  billId    String?
-  locationId String?
-  type      String // earn | redeem | adjustment | expire | redeem_reversal
-  lifecycleCycle Int @default(0) // 0 = original/legacy; 1+ = immutable cancel/restore cycle
-  points    Int
-  source    String   @default("pos") // pos | customer_order | admin | system
-  note      String?
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  shopId         String
+  accountId      String
+  billId         String?
+  locationId     String?
+  type           String // earn | redeem | adjustment | expire | redeem_reversal
+  lifecycleCycle Int      @default(0) // 0 = original/legacy; 1+ = immutable cancel/restore cycle
+  points         Int
+  source         String   @default("pos") // pos | customer_order | admin | system
+  note           String?
+  createdAt      DateTime @default(now())
 
-  shop    Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  account LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  bill    Bill?          @relation(fields: [billId], references: [id], onDelete: SetNull)
+  shop     Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  account  LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bill     Bill?          @relation(fields: [billId], references: [id], onDelete: SetNull)
   location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
   @@unique([billId, type, lifecycleCycle])
@@ -1022,9 +1022,9 @@ model Supplier {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  shop            Shop              @relation(fields: [shopId], references: [id])
-  purchaseHistory PurchaseHistory[]
-  purchaseOrders  PurchaseOrder[]
+  shop             Shop              @relation(fields: [shopId], references: [id])
+  purchaseHistory  PurchaseHistory[]
+  purchaseOrders   PurchaseOrder[]
   purchaseReceipts PurchaseReceipt[]
   purchaseReturns  PurchaseReturn[]
 
@@ -1129,13 +1129,13 @@ model PurchaseHistory {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
-  shop     Shop           @relation(fields: [shopId], references: [id])
-  location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  product  Product        @relation(fields: [productId], references: [id])
-  supplier Supplier?      @relation(fields: [supplierId], references: [id])
-  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  shop              Shop               @relation(fields: [shopId], references: [id])
+  location          StoreLocation?     @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  product           Product            @relation(fields: [productId], references: [id])
+  supplier          Supplier?          @relation(fields: [supplierId], references: [id])
+  purchaseOrder     PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
   purchaseOrderItem PurchaseOrderItem? @relation(fields: [purchaseOrderItemId], references: [id], onDelete: SetNull)
-  purchaseReceipt PurchaseReceipt? @relation(fields: [purchaseReceiptId], references: [id], onDelete: SetNull)
+  purchaseReceipt   PurchaseReceipt?   @relation(fields: [purchaseReceiptId], references: [id], onDelete: SetNull)
 
   @@index([shopId, productId, createdAt])
   @@index([shopId, locationId, createdAt])
@@ -1167,12 +1167,12 @@ model PurchaseOrder {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  shop      Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location  StoreLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  supplier  Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  items     PurchaseOrderItem[]
-  receipts  PurchaseReceipt[]
-  history   PurchaseHistory[]
+  shop     Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location StoreLocation       @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  supplier Supplier?           @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items    PurchaseOrderItem[]
+  receipts PurchaseReceipt[]
+  history  PurchaseHistory[]
 
   @@unique([shopId, orderNumber])
   @@index([shopId, locationId, status, createdAt])
@@ -1181,18 +1181,18 @@ model PurchaseOrder {
 }
 
 model PurchaseOrderItem {
-  id                    String  @id @default(cuid())
-  purchaseOrderId       String
-  productId             String
-  productName           String
-  baseUnit              String
-  rateUnit              String
-  orderedBaseQty        Float
-  receivedBaseQty       Float   @default(0)
-  expectedRate          Float
-  expectedRatePaise     BigInt?
-  expectedAmount        Float
-  expectedAmountPaise   BigInt?
+  id                  String  @id @default(cuid())
+  purchaseOrderId     String
+  productId           String
+  productName         String
+  baseUnit            String
+  rateUnit            String
+  orderedBaseQty      Float
+  receivedBaseQty     Float   @default(0)
+  expectedRate        Float
+  expectedRatePaise   BigInt?
+  expectedAmount      Float
+  expectedAmountPaise BigInt?
 
   purchaseOrder PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   product       Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
@@ -1204,7 +1204,7 @@ model PurchaseOrderItem {
 }
 
 model PurchaseReceipt {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   shopId                String
   locationId            String
   purchaseOrderId       String
@@ -1214,20 +1214,20 @@ model PurchaseReceipt {
   idempotencyKey        String?
   totalAmount           Float
   totalAmountPaise      BigInt?
-  paidAmount            Float    @default(0)
+  paidAmount            Float     @default(0)
   paidAmountPaise       BigInt?
-  dueAmount             Float    @default(0)
+  dueAmount             Float     @default(0)
   dueAmountPaise        BigInt?
   paymentMode           String?
   dueDate               DateTime?
   note                  String?
   receivedByUserId      String?
-  createdAt             DateTime @default(now())
+  createdAt             DateTime  @default(now())
 
-  shop          Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location      StoreLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
-  supplier      Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  shop          Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location      StoreLocation         @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  purchaseOrder PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  supplier      Supplier?             @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   items         PurchaseReceiptItem[]
   history       PurchaseHistory[]
   returns       PurchaseReturn[]
@@ -1239,7 +1239,7 @@ model PurchaseReceipt {
 }
 
 model PurchaseReceiptItem {
-  id                  String @id @default(cuid())
+  id                  String  @id @default(cuid())
   receiptId           String
   purchaseOrderItemId String
   productId           String
@@ -1251,9 +1251,9 @@ model PurchaseReceiptItem {
   stockLedgerId       String?
   purchaseHistoryId   String?
 
-  receipt           PurchaseReceipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
-  product           Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  receipt           PurchaseReceipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  purchaseOrderItem PurchaseOrderItem    @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
+  product           Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
   inventoryLots     InventoryLot[]
   returnItems       PurchaseReturnItem[]
 
@@ -1262,33 +1262,33 @@ model PurchaseReceiptItem {
 }
 
 model PurchaseReturn {
-  id                    String   @id @default(cuid())
-  shopId                String
-  locationId            String
-  supplierId            String?
-  purchaseReceiptId     String
-  returnNumber          String
-  refundMode            String   @default("supplier_credit") // supplier_credit | cash | bank
-  totalAmount           Float
-  totalAmountPaise      BigInt?
-  supplierCreditAmount  Float    @default(0)
+  id                        String    @id @default(cuid())
+  shopId                    String
+  locationId                String
+  supplierId                String?
+  purchaseReceiptId         String
+  returnNumber              String
+  refundMode                String    @default("supplier_credit") // supplier_credit | cash | bank
+  totalAmount               Float
+  totalAmountPaise          BigInt?
+  supplierCreditAmount      Float     @default(0)
   supplierCreditAmountPaise BigInt?
-  refundAmount          Float    @default(0)
-  refundAmountPaise     BigInt?
-  reason                String
-  supplierReference     String?
-  idempotencyKey        String?
-  status                String   @default("active") // active | cancelled
-  cancelledAt           DateTime?
-  cancelledByUserId     String?
-  cancellationReason    String?
-  createdByUserId       String?
-  createdAt             DateTime @default(now())
+  refundAmount              Float     @default(0)
+  refundAmountPaise         BigInt?
+  reason                    String
+  supplierReference         String?
+  idempotencyKey            String?
+  status                    String    @default("active") // active | cancelled
+  cancelledAt               DateTime?
+  cancelledByUserId         String?
+  cancellationReason        String?
+  createdByUserId           String?
+  createdAt                 DateTime  @default(now())
 
-  shop            Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location        StoreLocation    @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  supplier        Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-  purchaseReceipt PurchaseReceipt  @relation(fields: [purchaseReceiptId], references: [id], onDelete: Restrict)
+  shop            Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location        StoreLocation        @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  supplier        Supplier?            @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  purchaseReceipt PurchaseReceipt      @relation(fields: [purchaseReceiptId], references: [id], onDelete: Restrict)
   items           PurchaseReturnItem[]
 
   @@unique([shopId, returnNumber])
@@ -1300,7 +1300,7 @@ model PurchaseReturn {
 }
 
 model PurchaseReturnItem {
-  id                    String @id @default(cuid())
+  id                    String  @id @default(cuid())
   purchaseReturnId      String
   purchaseReceiptItemId String
   productId             String
@@ -1309,7 +1309,7 @@ model PurchaseReturnItem {
   actualRatePaise       BigInt?
   lineAmount            Float
   lineAmountPaise       BigInt?
-  lotAllocationsJson    String @default("[]")
+  lotAllocationsJson    String  @default("[]")
 
   purchaseReturn      PurchaseReturn      @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
   purchaseReceiptItem PurchaseReceiptItem @relation(fields: [purchaseReceiptItemId], references: [id], onDelete: Restrict)
@@ -1320,7 +1320,7 @@ model PurchaseReturnItem {
 }
 
 model InventoryLot {
-  id                    String   @id @default(cuid())
+  id                    String    @id @default(cuid())
   shopId                String
   locationId            String
   productId             String
@@ -1332,15 +1332,15 @@ model InventoryLot {
   availableBaseQty      Float
   costPerRateUnit       Float
   costPerRateUnitPaise  BigInt?
-  status                String   @default("active") // active | depleted | quarantined | recalled
+  status                String    @default("active") // active | depleted | quarantined | recalled
   note                  String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  shop                Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  location            StoreLocation        @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  product             Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
-  purchaseReceiptItem PurchaseReceiptItem? @relation(fields: [purchaseReceiptItemId], references: [id], onDelete: SetNull)
+  shop                Shop                    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  location            StoreLocation           @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  product             Product                 @relation(fields: [productId], references: [id], onDelete: Restrict)
+  purchaseReceiptItem PurchaseReceiptItem?    @relation(fields: [purchaseReceiptItemId], references: [id], onDelete: SetNull)
   allocations         BillItemLotAllocation[]
 
   @@unique([shopId, locationId, productId, batchNumber, expiresOn])
@@ -1502,7 +1502,7 @@ model BackupArtifact {
   id                String    @id @default(cuid())
   shopId            String?
   requestedByUserId String?
-  type              String    // shop_logical
+  type              String // shop_logical
   status            String    @default("queued") // queued | processing | completed | failed | expired
   format            String    @default("kiranaos_aes256gcm_gzip_v1")
   storageProvider   String?
@@ -1594,32 +1594,32 @@ model OfflineSyncEvent {
 }
 
 model SyncConflict {
-  id                  String    @id @default(cuid())
-  shopId              String
-  sourceEventId       String?
-  clientConflictId    String?
-  deviceId            String?
-  reportedByUserId    String?
-  entityType          String
-  entityId            String
-  reasonCode          String
-  message             String
-  status              String    @default("open") // open | resolved | dismissed
-  localSnapshotJson   String    @default("{}")
-  serverSnapshotJson  String?
-  baseSnapshotJson    String?
-  serverVersion       String?
-  resolution          String?
-  mergedPayloadJson   String?
-  resolutionNote      String?
-  resolvedByUserId    String?
-  resolvedByDeviceId  String?
-  version             Int       @default(1)
-  detectedAt          DateTime  @default(now())
-  resolvedAt          DateTime?
-  expiresAt           DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  shopId             String
+  sourceEventId      String?
+  clientConflictId   String?
+  deviceId           String?
+  reportedByUserId   String?
+  entityType         String
+  entityId           String
+  reasonCode         String
+  message            String
+  status             String    @default("open") // open | resolved | dismissed
+  localSnapshotJson  String    @default("{}")
+  serverSnapshotJson String?
+  baseSnapshotJson   String?
+  serverVersion      String?
+  resolution         String?
+  mergedPayloadJson  String?
+  resolutionNote     String?
+  resolvedByUserId   String?
+  resolvedByDeviceId String?
+  version            Int       @default(1)
+  detectedAt         DateTime  @default(now())
+  resolvedAt         DateTime?
+  expiresAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
@@ -1876,35 +1876,35 @@ model WebhookDelivery {
 // DEVICE FOUNDATION — backend remains final authority
 // ─────────────────────────────────────────────
 model Device {
-  id              String    @id @default(cuid())
-  shopId          String
-  userId          String?
-  deviceId        String
-  deviceName      String?
-  platform        String?
-  deviceType      String?
-  operatingSystem String?
-  browser         String?
-  userAgent       String?
-  appVersion      String?
-  fingerprintHash String?
-  status          String    @default("active") // active | logged_out | blocked | revoked
-  isTrusted       Boolean   @default(false)
-  activatedAt     DateTime?
-  lastActiveAt    DateTime?
-  lastLoginAt     DateTime?
-  lastSeenAt      DateTime?
-  lastSyncAt      DateTime?
+  id                   String    @id @default(cuid())
+  shopId               String
+  userId               String?
+  deviceId             String
+  deviceName           String?
+  platform             String?
+  deviceType           String?
+  operatingSystem      String?
+  browser              String?
+  userAgent            String?
+  appVersion           String?
+  fingerprintHash      String?
+  status               String    @default("active") // active | logged_out | blocked | revoked
+  isTrusted            Boolean   @default(false)
+  activatedAt          DateTime?
+  lastActiveAt         DateTime?
+  lastLoginAt          DateTime?
+  lastSeenAt           DateTime?
+  lastSyncAt           DateTime?
   lastAppliedServerSeq Int?
-  lastSyncAckAt   DateTime?
-  lastIpAddress   String?
-  sessionVersion  Int       @default(1)
-  removedAt       DateTime?
-  revokedAt       DateTime?
-  revokedByUserId String?
-  revokeReason    String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  lastSyncAckAt        DateTime?
+  lastIpAddress        String?
+  sessionVersion       Int       @default(1)
+  removedAt            DateTime?
+  revokedAt            DateTime?
+  revokedByUserId      String?
+  revokeReason         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   shop     Shop      @relation(fields: [shopId], references: [id])
   user     User?     @relation(fields: [userId], references: [id])

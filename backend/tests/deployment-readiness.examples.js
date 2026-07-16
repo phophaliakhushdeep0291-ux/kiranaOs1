@@ -17,6 +17,7 @@ assert.ok(fs.existsSync("scripts/backup-postgres.sh"), "PostgreSQL backup script
 assert.ok(fs.existsSync("prisma-postgres/schema.prisma"), "PostgreSQL Prisma schema must exist");
 assert.ok(fs.existsSync("prisma-postgres/migrations/000001_init/migration.sql"), "PostgreSQL initial migration must exist");
 assert.ok(fs.existsSync("scripts/production-check.js"), "production check script must exist");
+assert.ok(fs.existsSync("src/modules/backups/backup.service.js"), "backup service imported by jobs and workers must ship");
 
 const pkg = JSON.parse(read("package.json"));
 for (const scriptName of [
@@ -68,6 +69,10 @@ const dockerignore = read(".dockerignore");
 for (const forbidden of ["node_modules", ".env", "prisma/dev.db", "dev.db"]) {
   assert.ok(dockerignore.includes(forbidden), `.dockerignore must exclude ${forbidden}`);
 }
+
+const gitignore = read(".gitignore").split(/\r?\n/).map((line) => line.trim());
+assert.ok(!gitignore.includes("backups"), "unanchored backups ignore rule must not hide src/modules/backups");
+assert.ok(gitignore.includes("/backups/"), "runtime backup artifacts must use an anchored ignore rule");
 
 const envExample = read(".env.example");
 for (const key of ["DATABASE_URL", "JWT_SECRET", "ALLOWED_ORIGINS", "API_RATE_LIMIT_MAX", "AUTH_RATE_LIMIT_MAX", "AI_RATE_LIMIT_MAX", "LOG_LEVEL"]) {

@@ -15,5 +15,5 @@ coverage
 
 # Release proof artifacts
 release-artifacts
-backups
+/backups/
 *.dump
