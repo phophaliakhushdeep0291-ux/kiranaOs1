@@ -15,6 +15,12 @@ import {
 import * as ctrl from "./reminders.controller.js";
 
 const router = Router();
+
+// Provider callbacks are authenticated by provider signatures/tokens, not by a
+// shop user session. They must stay before the authenticated reminder routes.
+router.get("/webhooks/meta", ctrl.verifyMetaWebhook);
+router.post("/webhooks/:provider", ctrl.providerWebhook);
+
 router.use(requireAuth, requireShop, requireDeviceActivated());
 
 // WhatsApp reminders are a Pro feature. Wrap requireFeature("whatsapp_reminders")

@@ -27,7 +27,9 @@ import { UpgradePrompt, useFeature } from "@/features/subscription";
 interface ReminderStatus {
   channel: "whatsapp";
   provider: string;
+  providerSendConfigured: boolean;
   providerConfigured: boolean;
+  webhookConfigured: boolean;
   queueEnabled: boolean;
   workerHealthy: boolean;
   operational: boolean;
@@ -48,10 +50,15 @@ interface ReminderLog {
   customerName: string | null;
   customerMobileMasked: string;
   channel: string;
-  status: "queued" | "sent" | "failed" | "skipped";
+  status: "queued" | "accepted" | "sent" | "delivered" | "read" | "failed" | "skipped";
   provider: string;
   error?: string | null;
+  acceptedAt?: string | null;
   sentAt?: string | null;
+  deliveredAt?: string | null;
+  readAt?: string | null;
+  failedAt?: string | null;
+  lastStatusAt?: string | null;
   createdAt: string;
   messagePreview: string;
 }
@@ -238,8 +245,9 @@ export default function NotificationsSettingsPage() {
                     </Button>
                   </Link>
                 </div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                  <ReadinessCheck label="Provider" ready={statusQ.data?.providerConfigured === true} value={statusQ.data?.provider || "unknown"} />
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  <ReadinessCheck label="Provider API" ready={statusQ.data?.providerSendConfigured === true} value={statusQ.data?.provider || "unknown"} />
+                  <ReadinessCheck label="Signed callbacks" ready={statusQ.data?.webhookConfigured === true} value={statusQ.data?.webhookConfigured ? "configured" : "not ready"} />
                   <ReadinessCheck label="Redis queue" ready={statusQ.data?.queueEnabled === true} value={statusQ.data?.queueEnabled ? "enabled" : "not ready"} />
                   <ReadinessCheck label="Reminder worker" ready={statusQ.data?.workerHealthy === true} value={statusQ.data?.workerHealthy ? "healthy" : "no heartbeat"} />
                 </div>
@@ -250,8 +258,8 @@ export default function NotificationsSettingsPage() {
                   <div>
                     <p className="text-[13px] font-black text-emerald-950">Delivery truth, not optimistic UI</p>
                     <p className="mt-1 text-[11px] leading-5 text-emerald-800">
-                      A reminder is shown as sent only after the configured provider accepts it. Queue-disabled,
-                      skipped, and failed attempts remain visible in the history below.
+                      Provider acceptance is shown as Accepted. Sent, Delivered, and Read appear only after a
+                      verified provider callback; skipped and failed attempts remain visible below.
                     </p>
                   </div>
                 </div>
@@ -347,7 +355,7 @@ export default function NotificationsSettingsPage() {
                       <td className="max-w-[340px] px-4 py-3 text-[#52627e]"><p className="line-clamp-2">{log.messagePreview}</p>{log.error ? <p className="mt-1 text-[10px] font-bold text-rose-600">{log.error}</p> : null}</td>
                       <td className="px-4 py-3 font-bold uppercase text-[#52627e]">{log.provider || "disabled"}</td>
                       <td className="px-4 py-3"><DeliveryBadge status={log.status} /></td>
-                      <td className="whitespace-nowrap px-4 py-3 text-[#64748b]">{readableDate(log.sentAt || log.createdAt)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-[#64748b]">{readableDate(log.readAt || log.deliveredAt || log.sentAt || log.acceptedAt || log.failedAt || log.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -399,7 +407,10 @@ function ReadinessCheck({ label, ready, value }: { label: string; ready: boolean
 }
 
 function DeliveryBadge({ status }: { status: ReminderLog["status"] }) {
-  if (status === "sent") return <Badge tone="green">Sent</Badge>;
+  if (status === "read") return <Badge tone="green">Read</Badge>;
+  if (status === "delivered") return <Badge tone="green">Delivered</Badge>;
+  if (status === "sent") return <Badge tone="blue">Sent</Badge>;
+  if (status === "accepted") return <Badge tone="blue">Accepted</Badge>;
   if (status === "queued") return <Badge tone="blue">Queued</Badge>;
   if (status === "failed") return <Badge tone="red">Failed</Badge>;
   return <Badge tone="gray">Skipped</Badge>;

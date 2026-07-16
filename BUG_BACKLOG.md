@@ -25,7 +25,7 @@ States: `New -> Reproduced -> In progress -> Fixed -> Verified -> Closed`; use `
 | BUG-007 | P1 | New | INV-004 | Supplier ledger end-to-end reconciliation evidence is incomplete. | Trace purchase, payment, reversal and sync paths; add invariant and statement tests. |
 | BUG-008 | P1 | New | SYNC-003 | Conflict policies exist but require a complete entity-by-entity certification. | Create matrix for bill, payment, udhar, product, stock, purchase and customer conflicts; test forced conflicts. |
 | BUG-009 | P1 | New | QUAL-003 | Full live mobile screenshot matrix is not automated or retained for all core pages. | Add Playwright/live QA harness and artifacts for all `MOBILE_UX_PLAN.md` QA IDs. |
-| BUG-010 | P0 | Fixed | SYNC-005, QUAL-004 | Railway container crashed because `src/modules/backups/backup.service.js` was absent from the Git build. | Root cause: unanchored `backend/.gitignore` entry `backups` hid the source directory. Changed it to `/backups/`, made the service visible to Git, and added deployment/production-check regressions. Pending commit, push, and Railway redeploy verification. |
+| BUG-010 | P0 | Verified | SYNC-005, QUAL-004 | Railway container crashed because `src/modules/backups/backup.service.js` was absent from the Git build. | Root cause: unanchored `backend/.gitignore` entry `backups` hid the source directory. Changed it to `/backups/`, made the service visible to Git, and added deployment/production-check regressions. Railway `/api/health`, `/health`, and `/health/ready` returned HTTP 200 on 2026-07-16; database and storage checks reported `ok`. |
 
 ## Fixed findings awaiting historical closure
 

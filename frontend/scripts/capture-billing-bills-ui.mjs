@@ -303,6 +303,23 @@ async function main() {
       productViewports[width] = await capture(client, `products-${width}.png`, width, height);
     }
 
+    const pageViewports = {};
+    for (const page of [
+      { id: "inventory", path: "/inventory", marker: "Inventory" },
+      { id: "purchases", path: "/purchase-bills", marker: "Purchases" },
+      { id: "reports", path: "/reports", marker: "Reports" },
+      { id: "settings", path: "/settings", marker: "Settings" },
+      { id: "sync", path: "/sync-status", marker: "Cloud Backup" },
+    ]) {
+      await navigate(client, `${FRONTEND_URL}${page.path}`);
+      await waitForPage(client, `document.body.innerText.includes(${JSON.stringify(page.marker)})`);
+      await sleep(500);
+      pageViewports[page.id] = {};
+      for (const [width, height] of [[375, 812], [390, 844], [430, 932], [768, 1024]]) {
+        pageViewports[page.id][width] = await capture(client, `${page.id}-${width}.png`, width, height);
+      }
+    }
+
     const runtimeErrors = await client.evaluate("window.__kiranaQaErrors || []");
     assert(runtimeErrors.length === 0, `Browser runtime errors: ${runtimeErrors.join(" | ")}`);
     console.log(JSON.stringify({
@@ -316,6 +333,7 @@ async function main() {
       billsMobile,
       productAudit,
       productViewports,
+      pageViewports,
       runtimeErrors,
     }, null, 2));
   } finally {

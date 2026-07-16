@@ -15,7 +15,10 @@ const KNOWN_METRICS = [
   "worker_jobs_failed_total",
   "storage_errors_total",
   "reminders_requested_total",
+  "reminders_accepted_total",
   "reminders_sent_total",
+  "reminders_delivered_total",
+  "reminders_read_total",
   "reminders_failed_total",
   "reminders_skipped_total",
   "whatsapp_provider_errors_total",
@@ -126,7 +129,10 @@ export function recordStorageError(provider, operation) {
 export function recordReminderMetric({ status, provider = "disabled", channel = "whatsapp" }) {
   const labels = { provider, status, channel };
   if (status === "requested") incrementMetric("reminders_requested_total", labels);
+  if (status === "accepted") incrementMetric("reminders_accepted_total", labels);
   if (status === "sent") incrementMetric("reminders_sent_total", labels);
+  if (status === "delivered") incrementMetric("reminders_delivered_total", labels);
+  if (status === "read") incrementMetric("reminders_read_total", labels);
   if (status === "failed") incrementMetric("reminders_failed_total", labels);
   if (status === "skipped") incrementMetric("reminders_skipped_total", labels);
 }

@@ -2,6 +2,7 @@ import test, { after, beforeEach, describe } from "node:test";
 import assert from "node:assert/strict";
 import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess } from "./setup.js";
 import { billPayload, createCustomer, createProduct, createTenant, login } from "./factories.js";
+import { reconcileReminderDeliveryEvents } from "../../src/modules/reminders/whatsapp.webhook.js";
 
 const ctx = await createIntegrationContext();
 
@@ -382,6 +383,44 @@ if (ctx.skip) {
       const reversed = assertSuccess(await ctx.get(`/api/loyalty/accounts/${customer.id}`, { token: auth.accessToken }));
       assert.equal(reversed.account.pointsBalance, 0);
       assert.equal(reversed.account.transactions.some((row) => row.type === "adjustment" && row.points === -80), true);
+    });
+
+    test("reconciles signed reminder receipts in timestamp order without status regression", async () => {
+      const { tenant } = await ownerContext();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Receipt Customer" });
+      const providerMessageId = "wamid-receipt-integration-proof";
+      const reminder = await ctx.db.reminderLog.create({
+        data: {
+          shopId: tenant.shop.id,
+          customerId: customer.id,
+          message: "Private reminder body",
+          status: "accepted",
+          provider: "meta",
+          providerMessageId,
+          acceptedAt: new Date("2026-01-01T09:59:00.000Z"),
+          lastStatusAt: new Date("2026-01-01T09:59:00.000Z"),
+        },
+      });
+      await ctx.db.reminderDeliveryEvent.createMany({
+        data: [
+          { provider: "meta", providerMessageId, status: "read", eventAt: new Date("2026-01-01T10:02:00.000Z") },
+          { provider: "meta", providerMessageId, status: "sent", eventAt: new Date("2026-01-01T10:00:00.000Z") },
+          { provider: "meta", providerMessageId, status: "delivered", eventAt: new Date("2026-01-01T10:01:00.000Z") },
+        ],
+      });
+
+      const first = await reconcileReminderDeliveryEvents("meta", providerMessageId, reminder.id);
+      assert.deepEqual(first, { matched: 3, advanced: 3 });
+      const updated = await ctx.db.reminderLog.findUnique({ where: { id: reminder.id } });
+      assert.equal(updated.status, "read");
+      assert.equal(updated.sentAt.toISOString(), "2026-01-01T10:00:00.000Z");
+      assert.equal(updated.deliveredAt.toISOString(), "2026-01-01T10:01:00.000Z");
+      assert.equal(updated.readAt.toISOString(), "2026-01-01T10:02:00.000Z");
+
+      const duplicate = await reconcileReminderDeliveryEvents("meta", providerMessageId, reminder.id);
+      assert.deepEqual(duplicate, { matched: 0, advanced: 0 });
+      assert.equal(await ctx.db.auditLog.count({ where: { entityId: reminder.id, action: { in: ["REMINDER_SENT", "REMINDER_DELIVERED", "REMINDER_READ"] } } }), 3);
+      assert.equal(await ctx.db.reminderDeliveryEvent.count({ where: { providerMessageId, processedAt: null } }), 0);
     });
 
     test("reports GST readiness, exports an HSN invoice register, and blocks fake legal submission", async () => {

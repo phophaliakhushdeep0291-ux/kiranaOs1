@@ -309,7 +309,7 @@ export function BillingSearch({
                   title="Scan barcode"
                   aria-label="Scan barcode"
                   onClick={openBarcodeScanner}
-                  className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff]"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] sm:h-9 sm:w-9"
                 >
                   <ScanLine size={16} aria-hidden="true" />
                 </button>
@@ -318,7 +318,7 @@ export function BillingSearch({
                   title="Voice billing"
                   aria-label="Open voice billing"
                   onClick={onToggleVoice}
-                  className={`grid h-9 w-9 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] ${voiceVisible ? "border-[#bcd0ff] bg-[#eef5ff] text-[#0057ff]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
+                  className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] sm:h-9 sm:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[#eef5ff] text-[#0057ff]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
                 >
                   <Mic size={16} aria-hidden="true" />
                 </button>
@@ -379,7 +379,7 @@ export function BillingSearch({
               />
             ))}
             {hasMoreCategories && (
-              <button onClick={() => setShowAllCategories((value) => !value)} className="h-[36px] shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd]">
+              <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] sm:h-9">
                 {showAllCategories ? "Less" : "More"} ▾
               </button>
             )}
@@ -398,7 +398,7 @@ export function BillingSearch({
                 <button
                   type="button"
                   onClick={() => setScannerOpen(false)}
-                  className="grid h-9 w-9 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd]"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:h-9 sm:w-9"
                   aria-label="Close scanner"
                 >
                   <X size={16} />
@@ -419,7 +419,7 @@ export function BillingSearch({
                     setScannerOpen(false);
                     searchInputRef.current?.focus();
                   }}
-                  className="h-9 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[#0057ff] hover:bg-[#f5f9ff]"
+                  className="h-11 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[#0057ff] hover:bg-[#f5f9ff] sm:h-9"
                 >
                   Type instead
                 </button>
@@ -469,7 +469,7 @@ export function BillingSearch({
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={() => setShowAll((v) => !v)}
-                  className="flex h-[38px] items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white px-7 text-[12px] font-semibold text-[#0057ff] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff]"
+                  className="flex h-11 items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white px-7 text-[12px] font-semibold text-[#0057ff] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff] sm:h-[38px]"
                 >
                   {showAll ? (
                     <>Show less <ChevronUp size={13} /></>
@@ -624,7 +624,7 @@ function CategoryChip({ label, active, onClick }: { label: string; active: boole
   return (
     <button
       onClick={onClick}
-      className={`h-[36px] shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all ${
+      className={`h-11 shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all sm:h-9 ${
         active
           ? "border-[#0057ff] bg-[#0057ff] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
           : "border-[#e6ecf4] bg-white text-[#3a4a6b] hover:bg-[#f7f9fd]"

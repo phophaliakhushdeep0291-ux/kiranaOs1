@@ -92,6 +92,9 @@ app.use(
 // ── Body parsing ──────────────────────────────────────────────
 // Razorpay webhook signature verification must use the exact raw request body.
 app.use("/api/payment-provider/razorpay/webhook", express.raw({ type: "application/json", limit: "2mb" }));
+// Meta and Interakt sign the exact JSON bytes. Twilio callbacks remain
+// application/x-www-form-urlencoded and are parsed below for its SDK validator.
+app.use("/api/reminders/webhooks", express.raw({ type: "application/json", limit: "256kb" }));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 

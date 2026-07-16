@@ -7,6 +7,7 @@ import { logger } from "../../lib/logger.js";
 import { recordReminderMetric, recordWhatsAppProviderError } from "../../lib/metrics.js";
 import { QUEUE_NAMES, JOB_NAMES } from "../../workers/queueNames.js";
 import { getWhatsAppProviderStatus } from "./whatsapp.provider.js";
+import { reconcileReminderDeliveryEvents } from "./whatsapp.webhook.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { getReminderTemplate } from "./reminderTemplates.service.js";
 import {
@@ -76,7 +77,7 @@ async function checkCooldown(shopId, customerId, channel) {
       shopId,
       customerId,
       channel,
-      status: { in: ["queued", "sent"] },
+      status: { in: ["queued", "accepted", "sent", "delivered", "read"] },
       createdAt: { gte: since },
     },
     orderBy: { createdAt: "desc" },
@@ -115,7 +116,12 @@ export async function listReminderLogs(shopId, filters = {}, user = {}) {
     provider: row.provider,
     providerMessageId: row.providerMessageId,
     error: row.error,
+    acceptedAt: row.acceptedAt,
     sentAt: row.sentAt,
+    deliveredAt: row.deliveredAt,
+    readAt: row.readAt,
+    failedAt: row.failedAt,
+    lastStatusAt: row.lastStatusAt,
     createdAt: row.createdAt,
     messagePreview: messagePreview(row.message),
     ...(canViewFull ? { message: row.message } : {}),
@@ -138,7 +144,9 @@ export async function getReminderStatus() {
   return {
     channel: "whatsapp",
     provider: provider.provider,
+    providerSendConfigured: provider.sendConfigured,
     providerConfigured: provider.configured,
+    webhookConfigured: provider.webhookConfigured,
     queueEnabled,
     workerHealthy,
     operational,
@@ -238,29 +246,37 @@ export async function sendStatementReminder(shopId, user, input, { req = null } 
 export async function markReminderFromProvider(reminderLogId, result, { req = null } = {}) {
   const existing = await db.reminderLog.findUnique({ where: { id: reminderLogId } });
   if (!existing) throw appError("Reminder log not found", 404, "REMINDER_LOG_NOT_FOUND");
-  const status = result?.success ? "sent" : (result?.status === "skipped" ? "skipped" : "failed");
-  const updated = await db.reminderLog.update({
-    where: { id: reminderLogId },
+  const status = result?.success ? "accepted" : (result?.status === "skipped" ? "skipped" : "failed");
+  const changed = await db.reminderLog.updateMany({
+    where: { id: reminderLogId, status: "queued" },
     data: {
       status,
       provider: result?.provider ?? existing.provider ?? "disabled",
       providerMessageId: result?.providerMessageId ?? null,
       error: result?.success ? null : (result?.code || "WHATSAPP_SEND_FAILED"),
-      sentAt: result?.success ? new Date() : null,
+      acceptedAt: result?.success ? new Date(result?.acceptedAt || Date.now()) : null,
+      failedAt: status === "failed" ? new Date() : null,
+      lastStatusAt: new Date(),
     },
   });
+  const updated = await db.reminderLog.findUnique({ where: { id: reminderLogId } });
+  if (changed.count !== 1) return updated;
   recordReminderMetric({ status, provider: updated.provider, channel: updated.channel });
   if (status === "failed") recordWhatsAppProviderError(updated.provider, status);
   await createAuditLog({
     shopId: updated.shopId,
     userId: updated.requestedByUserId,
-    action: status === "sent" ? "REMINDER_SENT" : (status === "skipped" ? "REMINDER_PROVIDER_NOT_CONFIGURED" : "REMINDER_FAILED"),
+    action: status === "accepted" ? "REMINDER_ACCEPTED" : (status === "skipped" ? "REMINDER_PROVIDER_NOT_CONFIGURED" : "REMINDER_FAILED"),
     entityType: "ReminderLog",
     entityId: updated.id,
     metadata: { customerId: updated.customerId, channel: updated.channel, status, provider: updated.provider, errorCode: updated.error },
     req,
   });
-  logger.info({ type: status === "sent" ? "reminder_sent" : status === "skipped" ? "reminder_skipped" : "reminder_failed", shopId: updated.shopId, customerId: updated.customerId, reminderLogId: updated.id, provider: updated.provider, status });
+  logger.info({ type: status === "accepted" ? "reminder_accepted" : status === "skipped" ? "reminder_skipped" : "reminder_failed", shopId: updated.shopId, customerId: updated.customerId, reminderLogId: updated.id, provider: updated.provider, status });
+  if (status === "accepted" && updated.providerMessageId) {
+    await reconcileReminderDeliveryEvents(updated.provider, updated.providerMessageId, updated.id);
+    return db.reminderLog.findUnique({ where: { id: reminderLogId } });
+  }
   return updated;
 }
 

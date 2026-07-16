@@ -1,5 +1,6 @@
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
+import { buildWhatsAppWebhookUrl, requiredWebhookConfiguration } from "./whatsapp.webhook.js";
 
 const PROVIDERS = new Set(["meta", "twilio", "gupshup", "interakt"]);
 const OFFICIAL_PROVIDER_HOSTS = Object.freeze({
@@ -38,15 +39,19 @@ function requiredConfiguration(provider = env.WHATSAPP_PROVIDER) {
   if (provider === "twilio" && !env.WHATSAPP_API_SECRET) missing.push("WHATSAPP_API_SECRET");
   if (provider === "gupshup" && !env.WHATSAPP_GUPSHUP_APP_NAME) missing.push("WHATSAPP_GUPSHUP_APP_NAME");
   if (provider === "interakt" && !env.WHATSAPP_TEMPLATE_NAME) missing.push("WHATSAPP_TEMPLATE_NAME");
+  missing.push(...requiredWebhookConfiguration(provider));
   return missing;
 }
 
 export function getWhatsAppProviderStatus() {
   const provider = env.WHATSAPP_PROVIDER;
   const missing = requiredConfiguration(provider);
+  const webhookMissing = requiredWebhookConfiguration(provider);
   return {
     provider,
     configured: provider !== "disabled" && PROVIDERS.has(provider) && missing.length === 0,
+    sendConfigured: provider !== "disabled" && PROVIDERS.has(provider) && missing.filter((key) => !webhookMissing.includes(key)).length === 0,
+    webhookConfigured: provider !== "disabled" && webhookMissing.length === 0,
     implemented: PROVIDERS.has(provider),
     missing,
   };
@@ -120,11 +125,12 @@ function metaRequest(recipient, message) {
   };
 }
 
-function twilioRequest(recipient, message) {
+function twilioRequest(recipient, message, reminderLogId) {
   const accountSid = String(env.WHATSAPP_API_KEY);
   const params = new URLSearchParams({
     To: `whatsapp:+${recipient}`,
     From: String(env.WHATSAPP_SENDER_ID).startsWith("whatsapp:") ? String(env.WHATSAPP_SENDER_ID) : `whatsapp:${env.WHATSAPP_SENDER_ID}`,
+    StatusCallback: buildWhatsAppWebhookUrl("twilio", { query: { reminderLogId } }),
   });
   if (env.WHATSAPP_TEMPLATE_NAME) {
     params.set("ContentSid", env.WHATSAPP_TEMPLATE_NAME);
@@ -186,7 +192,7 @@ function interaktRequest(recipient, message, reminderLogId) {
 
 function buildRequest(provider, recipient, message, reminderLogId) {
   if (provider === "meta") return metaRequest(recipient, message);
-  if (provider === "twilio") return twilioRequest(recipient, message);
+  if (provider === "twilio") return twilioRequest(recipient, message, reminderLogId);
   if (provider === "gupshup") return gupshupRequest(recipient, message);
   if (provider === "interakt") return interaktRequest(recipient, message, reminderLogId);
   const error = new Error("WhatsApp provider is unsupported");
@@ -237,7 +243,7 @@ export async function sendWhatsAppMessage({ to, message, shopId, customerId, rem
       return { success: false, status: "failed", code, provider };
     }
     logger.info({ type: "whatsapp_provider_accepted", shopId, customerId, reminderLogId, provider, providerMessageId, toMasked: "[REDACTED]" });
-    return { success: true, status: "sent", provider, providerMessageId: String(providerMessageId), acceptedAt: new Date().toISOString() };
+    return { success: true, status: "accepted", provider, providerMessageId: String(providerMessageId), acceptedAt: new Date().toISOString() };
   } catch (error) {
     const code = error?.code || (error?.name === "TimeoutError" ? "WHATSAPP_PROVIDER_TIMEOUT" : "WHATSAPP_PROVIDER_REQUEST_FAILED");
     logger.warn({ type: "whatsapp_provider_error", shopId, customerId, reminderLogId, provider, errorCode: code, toMasked: "[REDACTED]" });

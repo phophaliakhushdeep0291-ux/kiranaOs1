@@ -6,6 +6,7 @@ import {
   updateReminderTemplate,
 } from "./reminderTemplates.service.js";
 import { getReminderStatus, listReminderLogs, sendReminder, sendStatementReminder } from "./reminders.service.js";
+import { handleProviderWebhook, verifyMetaSubscription } from "./whatsapp.webhook.js";
 
 function data(res, payload, status = 200) {
   res.status(status).json({ success: true, data: payload });
@@ -33,6 +34,27 @@ export async function logs(req, res, next) {
 
 export async function status(req, res, next) {
   try { data(res, await getReminderStatus()); } catch (error) { next(error); }
+}
+
+export function verifyMetaWebhook(req, res, next) {
+  try {
+    res.status(200).type("text/plain").send(verifyMetaSubscription(req.query));
+  } catch (error) { next(error); }
+}
+
+export async function providerWebhook(req, res, next) {
+  try {
+    const queryIndex = req.originalUrl.indexOf("?");
+    const result = await handleProviderWebhook({
+      provider: String(req.params.provider || "").toLowerCase(),
+      rawBody: Buffer.isBuffer(req.body) ? req.body : null,
+      body: Buffer.isBuffer(req.body) ? null : req.body,
+      headers: req.headers,
+      query: req.query,
+      rawQuery: queryIndex >= 0 ? req.originalUrl.slice(queryIndex + 1) : "",
+    });
+    res.status(200).json({ success: true, data: result });
+  } catch (error) { next(error); }
 }
 
 export async function send(req, res, next) {
