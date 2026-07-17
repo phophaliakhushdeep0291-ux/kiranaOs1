@@ -255,10 +255,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         toast({ title: "Return recorded", description: `Refund ₹${refundTotal.toLocaleString("en-IN")} via ${refundMode}. Stock and reports updated; cloud backup will run.` });
       }
       onOpenChange(false);
-      setQty({});
-      setDamaged({});
-      setOwnerPin("");
-      setReason("");
+      resetForm();
       onDone?.();
     } catch (error) {
       toast({ title: "Could not record return", description: error instanceof Error ? error.message : "Please try again.", variant: "destructive" });
@@ -327,10 +324,66 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
             );
           })}
 
+          {/* Exchange: the customer takes replacement items instead of (or on top of) the refund. */}
+          <div className="rounded-lg border">
+            <button
+              type="button"
+              data-testid="exchange-toggle"
+              onClick={() => setExchangeOpen((current) => !current)}
+              className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-semibold"
+            >
+              <span className="inline-flex items-center gap-2"><ArrowLeftRight size={15} className="text-primary" />Customer takes new items (exchange)</span>
+              <span className="text-xs text-muted-foreground">{exchangeOpen ? "Hide" : "Add"}</span>
+            </button>
+            {exchangeOpen && (
+              <div className="space-y-2 border-t px-3 py-3">
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <select
+                    data-testid="exchange-product-select"
+                    value={exchangeProductId}
+                    onChange={(event) => setExchangeProductId(event.target.value)}
+                    className="h-9 w-full rounded-lg border bg-white px-2 text-sm"
+                  >
+                    <option value="">Add replacement product...</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} — ₹{Number(product.defaultPricePerRateUnit ?? product.sellingPrice ?? 0).toLocaleString("en-IN")}
+                      </option>
+                    ))}
+                  </select>
+                  <Button type="button" size="sm" className="h-9 gap-1" onClick={addExchangeLine} disabled={!exchangeProductId}><Plus size={14} />Add</Button>
+                </div>
+                {exchangeLines.length === 0 ? (
+                  <p className="rounded-md border border-dashed p-2.5 text-center text-xs text-muted-foreground">No replacement items yet.</p>
+                ) : exchangeLines.map((line) => (
+                  <div key={line.productId} className="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{line.name}</p>
+                      <p className="text-xs text-muted-foreground">₹{line.ratePerRateUnit.toLocaleString("en-IN")}/{line.enteredUnit}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setExchangeQty(line.productId, line.quantity - 1)}>−</Button>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        className="h-8 w-14 text-center"
+                        value={line.quantity === 0 ? "" : line.quantity}
+                        placeholder="0"
+                        onChange={(event) => setExchangeQty(line.productId, Number(event.target.value) || 0)}
+                      />
+                      <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => setExchangeQty(line.productId, line.quantity + 1)}>+</Button>
+                      <button type="button" title={`Remove ${line.name}`} onClick={() => setExchangeLines((current) => current.filter((item) => item.productId !== line.productId))} className="ml-1 text-rose-600 hover:text-rose-700"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div>
-            <Label className="text-xs">Refund via</Label>
+            <Label className="text-xs">{isExchange ? "Settle difference via" : "Refund via"}</Label>
             <div className="mt-1 grid grid-cols-3 gap-2">
-              {modes.map((mode) => (
+              {(isExchange ? modes.filter((mode) => mode.key === "cash" || mode.key === "upi" || mode.key === "bank") : modes).map((mode) => (
                 <button
                   key={mode.key}
                   type="button"
@@ -338,7 +391,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
                   onClick={() => setRefundMode(mode.key)}
                   className={cn(
                     "rounded-lg border px-2 py-2 text-xs font-semibold",
-                    refundMode === mode.key ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground",
+                    (isExchange ? settleMode : refundMode) === mode.key ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground",
                     mode.disabled && "cursor-not-allowed opacity-40",
                   )}
                 >
@@ -346,8 +399,9 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
                 </button>
               ))}
             </div>
-            {!hasCustomer && <p className="mt-1 text-[11px] text-muted-foreground">Udhar refund needs a linked customer.</p>}
-            {!isOnline && <p className="mt-1 text-[11px] text-amber-700">Store credit needs a live connection so its balance stays safe across every location.</p>}
+            {isExchange && <p className="mt-1 text-[11px] text-muted-foreground">An exchange settles in immediate tender — the return refund and the new sale both use this mode; only the difference changes hands.</p>}
+            {!isExchange && !hasCustomer && <p className="mt-1 text-[11px] text-muted-foreground">Udhar refund needs a linked customer.</p>}
+            {!isExchange && !isOnline && <p className="mt-1 text-[11px] text-amber-700">Store credit needs a live connection so its balance stays safe across every location.</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
