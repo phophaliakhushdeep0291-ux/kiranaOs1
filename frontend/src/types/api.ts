@@ -416,6 +416,8 @@ export interface BillInputItem {
   quantity: number;
   enteredUnit: string;
   ratePerRateUnit: number;
+  /** Flat rupee discount applied to the whole line (not per unit). */
+  lineDiscount?: number;
   originalUnitPrice?: number;
   appliedPricingRuleId?: string;
   appliedPricingRuleType?: string;

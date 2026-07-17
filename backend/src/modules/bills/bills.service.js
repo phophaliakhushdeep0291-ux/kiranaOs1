@@ -226,9 +226,16 @@ export async function confirmBill(shopId, body, actor = {}) {
         error.code = "PRICE_ABOVE_CONFIGURED_MAXIMUM";
         throw error;
       }
-      const lineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
+      const grossLineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
+      // A line discount can never exceed its own line; clamping (rather than
+      // rejecting) keeps offline bills replayable even if a stale client sent
+      // a discount computed against a different quantity.
+      const lineDiscount = Math.min(round2(Math.max(0, Number(item.lineDiscount ?? 0))), grossLineTotal);
+      const lineTotal = subtractMoney(grossLineTotal, lineDiscount);
       // GST: exclusive adds tax on top of the entered price; inclusive (kirana
       // MRP default) extracts the tax already inside it; none disables GST.
+      // Both apply to the discounted line total — a discount reduces the
+      // taxable value on a GST invoice.
       const gstAmount = gstMode === "exclusive"
         ? multiplyMoney(lineTotal, item.gstRate / 100)
         : gstMode === "none" || item.gstRate <= 0
@@ -257,6 +264,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         ratePerRateUnit: item.ratePerRateUnit,
         costPerRateUnit,
         gstRate: item.gstRate,
+        lineDiscount,
         lineTotal,
         lineCost,
         lineProfit,
@@ -269,7 +277,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         wasPriceOverridden: item.wasPriceOverridden === true,
         priceOverrideReason: item.priceOverrideReason ?? null,
         priceApprovedByUserId: item.wasPriceOverridden ? createdByUserId : null,
-        ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineTotal, lineCost, lineProfit, originalUnitPrice: item.originalUnitPrice ?? item.ratePerRateUnit }),
+        ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineDiscount, lineTotal, lineCost, lineProfit, originalUnitPrice: item.originalUnitPrice ?? item.ratePerRateUnit }),
       });
 
       if (product) {
@@ -783,7 +791,11 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         const qtyInBase = product ? toBaseQty(item.quantity, enteredUnit, product.baseUnit) : item.quantity;
         const qtyInRateUnit = product ? baseQtyToRateQty(qtyInBase, rateUnit, baseUnit) : item.quantity;
 
-        const lineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
+        const grossLineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
+        // Mirror of the sale path: a line sold with a per-line discount must
+        // refund the discounted amount, not the sticker total.
+        const lineDiscount = Math.min(round2(Math.max(0, Number(item.lineDiscount ?? 0))), grossLineTotal);
+        const lineTotal = subtractMoney(grossLineTotal, lineDiscount);
         const rate = Number(item.gstRate ?? product?.gstRate ?? 0);
         const gstAmount = effectiveGstMode === "exclusive"
           ? multiplyMoney(lineTotal, rate / 100)
@@ -810,10 +822,11 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           ratePerRateUnit: item.ratePerRateUnit,
           costPerRateUnit,
           gstRate: rate,
+          lineDiscount: -lineDiscount,
           lineTotal: -lineTotal,
           lineCost: -lineCost,
           lineProfit: -lineProfit,
-          ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
+          ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineDiscount: -lineDiscount, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
         });
 
         if (product) restockPlan.push({ product, qtyInBase: round2(qtyInBase), lineCost, damaged });

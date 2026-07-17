@@ -147,6 +147,8 @@ export const billItemCreationSchema = z.object({
   quantity,
   enteredUnit: z.string().trim().min(1),
   ratePerRateUnit: money,
+  // Flat rupee discount for the whole line (not per unit).
+  lineDiscount: money.default(0),
   originalUnitPrice: money.optional(),
   appliedPricingRuleId: optionalText,
   appliedPricingRuleType: optionalText,
@@ -188,11 +190,23 @@ export const billCreationSchema = z
     payments: z.array(billPaymentSchema).default([]),
   })
   .superRefine((bill, ctx) => {
-    const subtotal = bill.items.reduce((sum, item) => sum + item.quantity * item.ratePerRateUnit, 0);
+    bill.items.forEach((item, index) => {
+      if (item.lineDiscount > item.quantity * item.ratePerRateUnit) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["items", index, "lineDiscount"],
+          message: "Line discount cannot exceed the line amount",
+        });
+      }
+    });
+    const lineNet = (item: { quantity: number; ratePerRateUnit: number; lineDiscount: number }) =>
+      Math.max(0, item.quantity * item.ratePerRateUnit - item.lineDiscount);
+    const subtotal = bill.items.reduce((sum, item) => sum + lineNet(item), 0);
     // Inclusive mode (kirana MRP default): tax lives inside the entered prices,
-    // so the payable base is the subtotal itself. Exclusive adds tax on top.
+    // so the payable base is the subtotal itself. Exclusive adds tax on top —
+    // on the discounted line value, since a discount reduces taxable value.
     const gstToAdd = bill.gstMode === "exclusive"
-      ? bill.items.reduce((sum, item) => sum + item.quantity * item.ratePerRateUnit * (item.gstRate / 100), 0)
+      ? bill.items.reduce((sum, item) => sum + lineNet(item) * (item.gstRate / 100), 0)
       : 0;
     const payableBase = subtotal + gstToAdd;
     const total = Math.max(0, payableBase - bill.discount);

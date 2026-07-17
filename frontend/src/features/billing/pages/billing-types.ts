@@ -8,6 +8,8 @@ export interface CartItem {
   sellingUnit?: ProductSellingUnit;
   isCustom?: boolean;
   manualRate?: boolean;
+  /** Flat rupee discount for this whole line (not per unit). */
+  lineDiscount?: number;
   /** Smart Adaptive Pricing — why this rate was chosen (for the cart chip). */
   pricing?: LinePricingMeta;
 }

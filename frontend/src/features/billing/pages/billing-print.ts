@@ -11,6 +11,7 @@ import {
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
 import { getTaxConfigSync } from "@/features/settings/tax-config";
 import { computeGstBreakdown } from "@/lib/gst";
+import { cartItemLineDiscount, cartItemNet } from "./billing-calculations";
 import type { PrintableBill } from "./billing-types";
 
 function billTypeLabel(type: PrintableBill["billType"]) {
@@ -40,7 +41,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
   const shop = bill.shop && !printer.showGst ? { ...bill.shop, gstNumber: null } : bill.shop;
   // CGST/SGST breakup for the receipt — same engine as the billing totals.
   const breakdown = computeGstBreakdown(
-    bill.items.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0 })),
+    bill.items.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
     getTaxConfigSync().mode,
   );
   return {
@@ -55,7 +56,8 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
       quantity: item.quantity,
       unit: item.unit,
       rate: item.rate,
-      total: item.quantity * item.rate,
+      total: cartItemNet(item),
+      lineDiscount: cartItemLineDiscount(item),
       hsn: item.product.hsn ?? null,
     })),
     subtotal: bill.subtotal,

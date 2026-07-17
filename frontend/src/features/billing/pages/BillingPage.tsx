@@ -19,7 +19,7 @@ import { BillingOrderQrButton } from "@/features/customer-order/BillingOrderQrBu
 import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./open-bills";
 import { updateCustomerOrder } from "@/features/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { billNeedsCustomer, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
+import { billNeedsCustomer, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { resolveLinePrice } from "@/features/pricing/resolve-line-price";
 import { useShopPricingRules } from "@/features/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -272,12 +272,13 @@ export default function Billing() {
     retry: false,
   });
 
-  const subtotal = useMemo(() => roundMoney(cart.reduce((sum, item) => sum + item.quantity * item.rate, 0)), [cart]);
+  const subtotal = useMemo(() => calculateCartSubtotal(cart), [cart]);
+  const lineDiscountTotal = useMemo(() => calculateLineDiscountTotal(cart), [cart]);
   // GST: one engine for UI, local record and server. Inclusive (kirana MRP
   // default) extracts tax from the entered prices without changing the payable;
   // exclusive adds it on top — and then the discount cap must include it.
   const gstBreakdown = useMemo(
-    () => computeGstBreakdown(cart.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0 })), getTaxConfigSync().mode),
+    () => computeGstBreakdown(cart.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })), getTaxConfigSync().mode),
     [cart],
   );
   const payableBase = roundMoney(subtotal + gstBreakdown.gstToAdd);
@@ -953,6 +954,14 @@ export default function Billing() {
     setCart((previous) => previous.map((item) => cartItemKey(item) === lineKey ? { ...item, rate: Math.max(0, roundMoney(nextRate)), manualRate: true } : item));
   }
 
+  function updateLineDiscount(lineKey: string, nextDiscount: number) {
+    setCart((previous) => previous.map((item) => {
+      if (cartItemKey(item) !== lineKey) return item;
+      const clamped = Math.min(Math.max(0, roundMoney(nextDiscount)), cartItemGross(item));
+      return { ...item, lineDiscount: clamped > 0 ? clamped : undefined };
+    }));
+  }
+
   function updateUnit(lineKey: string, unitCode: string) {
     setCart((previous) => {
       const current = previous.find((item) => cartItemKey(item) === lineKey);
@@ -1223,6 +1232,7 @@ export default function Billing() {
           quantity: item.quantity,
           enteredUnit: item.unit,
           ratePerRateUnit: item.rate,
+          lineDiscount: cartItemLineDiscount(item),
           originalUnitPrice: item.pricing?.originalUnitPrice,
           appliedPricingRuleId: item.pricing?.appliedRuleId ?? undefined,
           appliedPricingRuleType: item.pricing?.appliedRuleType,
@@ -1541,6 +1551,7 @@ export default function Billing() {
         hasCreditCustomerIdentity={hasCreditCustomerIdentity}
         cart={cart}
         subtotal={subtotal}
+        lineDiscountTotal={lineDiscountTotal}
         safeDiscount={safeDiscount}
         setDiscount={setDiscount}
         onCouponApplied={(offerId, discount, code) => { setAppliedOffer(offerId ? { id: offerId, discount, code, subtotal } : null); }}
@@ -1601,6 +1612,7 @@ export default function Billing() {
         onUpdateQty={updateQty}
         onUpdateRate={updateRate}
         onUpdateUnit={updateUnit}
+        onUpdateLineDiscount={updateLineDiscount}
         onReadScale={(lineKey, billingUnit) => void readCartLineFromScale(lineKey, billingUnit)}
         scaleReadingLineKey={scaleReadingLineKey}
         onRemoveItem={removeItem}

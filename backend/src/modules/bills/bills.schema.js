@@ -11,6 +11,9 @@ const billItemSchema = z.object({
   quantity: quantityAmount({ positive: true }),
   enteredUnit: z.string(),
   ratePerRateUnit: moneyAmount(),
+  // Flat rupee discount applied to this whole line (not per unit). GST is
+  // computed on the discounted line total (discount reduces taxable value).
+  lineDiscount: moneyAmount().default(0),
   originalUnitPrice: moneyAmount().optional(),
   appliedPricingRuleId: z.string().optional(),
   appliedPricingRuleType: z.string().optional(),

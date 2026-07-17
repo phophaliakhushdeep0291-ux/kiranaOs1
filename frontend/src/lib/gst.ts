@@ -22,6 +22,11 @@ export interface GstLineInput {
   quantity: number;
   /** Percentage, e.g. 18 for 18%. */
   gstRate: number;
+  /**
+   * Flat rupee discount for the whole line. Unlike the bill-level discount
+   * (post-tax concession), a line discount reduces the line's taxable value.
+   */
+  lineDiscount?: number;
 }
 
 export interface GstRateRow {
@@ -69,7 +74,8 @@ export function computeGstBreakdown(lines: GstLineInput[], mode: GstMode = "incl
   let lineTotalSum = 0;
 
   for (const line of lines) {
-    const lineTotal = round2((Number(line.price) || 0) * (Number(line.quantity) || 0));
+    const gross = round2((Number(line.price) || 0) * (Number(line.quantity) || 0));
+    const lineTotal = round2(gross - Math.min(Math.max(Number(line.lineDiscount) || 0, 0), gross));
     lineTotalSum = round2(lineTotalSum + lineTotal);
     const rate = mode === "none" ? 0 : Math.max(0, Number(line.gstRate) || 0);
     if (rate <= 0 || lineTotal <= 0) continue;

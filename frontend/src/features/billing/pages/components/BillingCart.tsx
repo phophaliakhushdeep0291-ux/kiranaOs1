@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, Pencil, Scale, ShoppingCart, X } from "lucide-react";
+import { BadgePercent, Loader2, Pencil, Scale, ShoppingCart, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { productMinSellingPrice, roundMoney } from "../billing-calculations";
+import { cartItemGross, cartItemLineDiscount, cartItemNet, productMinSellingPrice, roundMoney } from "../billing-calculations";
 import { cartItemKey, type CartItem } from "../billing-types";
 import { getProductEmoji, productPlaceholderColor } from "./BillingSearch";
 import { isScaleBillingUnit } from "@/features/hardware/local-hardware-bridge";
@@ -11,12 +11,13 @@ interface BillingCartProps {
   onUpdateQty: (lineKey: string, nextQuantity: number) => void;
   onUpdateRate: (lineKey: string, nextRate: number) => void;
   onUpdateUnit: (lineKey: string, unit: string) => void;
+  onUpdateLineDiscount: (lineKey: string, amount: number) => void;
   onReadScale: (lineKey: string, billingUnit: string) => void;
   scaleReadingLineKey: string | null;
   onRemoveItem: (lineKey: string) => void;
 }
 
-export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
+export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onUpdateLineDiscount, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
@@ -40,6 +41,7 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onR
           onUpdateQty={onUpdateQty}
           onUpdateRate={onUpdateRate}
           onUpdateUnit={onUpdateUnit}
+          onUpdateLineDiscount={onUpdateLineDiscount}
           onReadScale={onReadScale}
           scaleReading={scaleReadingLineKey === cartItemKey(item)}
           onRemoveItem={onRemoveItem}
@@ -54,6 +56,7 @@ function CartRow({
   onUpdateQty,
   onUpdateRate,
   onUpdateUnit,
+  onUpdateLineDiscount,
   onReadScale,
   scaleReading,
   onRemoveItem,
@@ -62,6 +65,7 @@ function CartRow({
   onUpdateQty: (id: string, qty: number) => void;
   onUpdateRate: (id: string, rate: number) => void;
   onUpdateUnit: (id: string, unitCode: string) => void;
+  onUpdateLineDiscount: (id: string, amount: number) => void;
   onReadScale: (id: string, billingUnit: string) => void;
   scaleReading: boolean;
   onRemoveItem: (id: string) => void;
@@ -69,7 +73,12 @@ function CartRow({
   const [editingRate, setEditingRate] = useState(false);
   const [rateDraft, setRateDraft] = useState<string>(String(item.rate));
   const rateInputRef = useRef<HTMLInputElement | null>(null);
-  const lineTotal = roundMoney(item.quantity * item.rate);
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  const [discountDraft, setDiscountDraft] = useState<string>("");
+  const discountInputRef = useRef<HTMLInputElement | null>(null);
+  const lineGross = cartItemGross(item);
+  const lineDiscount = cartItemLineDiscount(item);
+  const lineTotal = cartItemNet(item);
   const isBelowMin =
     !item.isCustom &&
     productMinSellingPrice(item.product) > 0 &&
@@ -110,6 +119,31 @@ function CartRow({
       rateInputRef.current?.select();
     }
   }, [editingRate]);
+
+  function startEditDiscount() {
+    setDiscountDraft(lineDiscount > 0 ? String(lineDiscount) : "");
+    setEditingDiscount(true);
+  }
+
+  function commitDiscount() {
+    // "10" = ₹10 off the line; "10%" = 10% of the line's gross amount.
+    const raw = discountDraft.trim();
+    const isPercent = raw.endsWith("%");
+    const parsed = Number(isPercent ? raw.slice(0, -1) : raw);
+    if (raw === "" || !Number.isFinite(parsed) || parsed <= 0) {
+      onUpdateLineDiscount(lineKey, 0);
+    } else {
+      onUpdateLineDiscount(lineKey, isPercent ? roundMoney(lineGross * Math.min(parsed, 100) / 100) : parsed);
+    }
+    setEditingDiscount(false);
+  }
+
+  useEffect(() => {
+    if (editingDiscount) {
+      discountInputRef.current?.focus();
+      discountInputRef.current?.select();
+    }
+  }, [editingDiscount]);
 
   return (
     <div
@@ -191,6 +225,47 @@ function CartRow({
             <Pencil size={10} className="text-[#9aa7bd] group-hover:text-[#0057ff]" aria-hidden="true" />
           </button>
         )}
+        {editingDiscount ? (
+          <div className="mt-1 inline-flex h-[26px] items-center gap-0.5 rounded-[7px] border border-[#0057ff] bg-white px-1.5 shadow-sm ring-2 ring-[#0057ff]/15">
+            <span className="text-[11px] font-bold text-[#8290a8]">−₹</span>
+            <input
+              ref={discountInputRef}
+              data-testid={`line-discount-input-${item.product.id}`}
+              type="text"
+              inputMode="decimal"
+              value={discountDraft}
+              onChange={(e) => setDiscountDraft(e.target.value)}
+              onBlur={commitDiscount}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commitDiscount(); }
+                if (e.key === "Escape") { setEditingDiscount(false); }
+              }}
+              placeholder="10 or 5%"
+              className="w-14 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#13274d] focus:outline-none"
+            />
+            <span className="whitespace-nowrap text-[10px] font-semibold text-[#8290a8]">off line</span>
+          </div>
+        ) : lineDiscount > 0 ? (
+          <button
+            data-testid={`line-discount-edit-${item.product.id}`}
+            onClick={startEditDiscount}
+            className="mt-1 inline-flex items-center gap-1 rounded-[6px] bg-[#e9f9f0] px-1.5 py-[2px] text-[10px] font-extrabold leading-none text-[#1a8a4e] transition-colors hover:bg-[#d8f3e5]"
+            title="Tap to change this line's discount"
+          >
+            <BadgePercent size={10} aria-hidden="true" />
+            −₹{lineDiscount.toLocaleString("en-IN")} off
+          </button>
+        ) : (
+          <button
+            data-testid={`line-discount-add-${item.product.id}`}
+            onClick={startEditDiscount}
+            className="group mt-1 inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[10px] font-bold leading-none -ml-1 text-[#9aa7bd] transition-colors hover:bg-[#eef4ff] hover:text-[#0057ff]"
+            title="Give a discount on this line only (₹ or %)"
+          >
+            <BadgePercent size={10} aria-hidden="true" />
+            Line off
+          </button>
+        )}
         {/* Smart Pricing explanation — why this rate (only when a rule beat the default). */}
         {!item.manualRate && !item.isCustom && item.pricing && item.pricing.appliedRuleType !== "DEFAULT_PRICE" ? (
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[10px] leading-tight" data-testid={`price-why-${item.product.id}`}>
@@ -232,8 +307,11 @@ function CartRow({
         </button>
       </div>
 
-      {/* Line total */}
+      {/* Line total (net of its own discount, with the gross struck through) */}
       <span className="text-right text-[12px] font-black text-[#13274d] tabular-nums">
+        {lineDiscount > 0 ? (
+          <span className="mr-1 text-[10px] font-semibold text-[#9aa7bd] line-through">₹{lineGross.toLocaleString("en-IN")}</span>
+        ) : null}
         ₹{lineTotal.toLocaleString("en-IN")}
       </span>
 

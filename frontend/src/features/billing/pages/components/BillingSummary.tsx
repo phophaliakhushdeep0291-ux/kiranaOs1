@@ -41,6 +41,8 @@ interface BillingSummaryProps {
   hasCreditCustomerIdentity: boolean;
   cart: CartItem[];
   subtotal: number;
+  /** Total ₹ given away via per-line discounts (already inside subtotal). */
+  lineDiscountTotal: number;
   safeDiscount: number;
   setDiscount: Dispatch<SetStateAction<number>>;
   onCouponApplied?: (offerId: string | null, discount: number, code: string) => void;
@@ -101,6 +103,7 @@ interface BillingSummaryProps {
   onUpdateQty: (productId: string, qty: number) => void;
   onUpdateRate: (productId: string, rate: number) => void;
   onUpdateUnit: (productId: string, unit: string) => void;
+  onUpdateLineDiscount: (lineKey: string, amount: number) => void;
   onReadScale: (lineKey: string, billingUnit: string) => void;
   scaleReadingLineKey: string | null;
   onRemoveItem: (productId: string) => void;
@@ -137,6 +140,7 @@ export function BillingSummary({
   hasCreditCustomerIdentity,
   cart,
   subtotal,
+  lineDiscountTotal,
   safeDiscount,
   setDiscount,
   onCouponApplied,
@@ -197,6 +201,7 @@ export function BillingSummary({
   onUpdateQty,
   onUpdateRate,
   onUpdateUnit,
+  onUpdateLineDiscount,
   onReadScale,
   scaleReadingLineKey,
   onRemoveItem,
@@ -438,6 +443,7 @@ export function BillingSummary({
               onUpdateQty={onUpdateQty}
               onUpdateRate={onUpdateRate}
               onUpdateUnit={onUpdateUnit}
+              onUpdateLineDiscount={onUpdateLineDiscount}
               onReadScale={onReadScale}
               scaleReadingLineKey={scaleReadingLineKey}
               onRemoveItem={onRemoveItem}
@@ -474,6 +480,13 @@ export function BillingSummary({
               <span className="font-semibold text-[#536383]">Subtotal</span>
               <span data-testid="text-subtotal" className="font-black text-[#13274d]">{fmtRs(subtotal)}</span>
             </div>
+
+            {lineDiscountTotal > 0 && (
+              <div className="flex h-[29px] items-center justify-between text-[12px]">
+                <span className="font-semibold text-[#536383]">Line discounts <span className="text-[10px] text-[#94a3b8]">(already in subtotal)</span></span>
+                <span data-testid="text-line-discounts" className="font-black text-[#1a8a4e]">−{fmtRs(lineDiscountTotal)}</span>
+              </div>
+            )}
 
             {loyaltyDiscount > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">

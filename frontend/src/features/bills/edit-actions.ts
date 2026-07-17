@@ -53,6 +53,7 @@ export function billItemsToInput(itemRows: AnyRow[]): BillInputItem[] {
       quantity: readNumber(row.quantity, 0),
       enteredUnit: str(row.enteredUnit ?? row.entered_unit ?? row.unit) || "piece",
       ratePerRateUnit: readNumber(row.ratePerRateUnit ?? row.rate_per_rate_unit ?? row.rate, 0),
+      lineDiscount: readNumber(row.lineDiscount ?? row.line_discount, 0) || undefined,
       originalUnitPrice: readNumber(row.originalUnitPrice ?? row.original_unit_price, 0) || undefined,
       appliedPricingRuleId: str(row.appliedPricingRuleId ?? row.applied_pricing_rule_id) || undefined,
       appliedPricingRuleType: str(row.appliedPricingRuleType ?? row.applied_pricing_rule_type) || undefined,
@@ -75,15 +76,13 @@ export function billItemsToInput(itemRows: AnyRow[]): BillInputItem[] {
  * adds tax on top, then the discount is subtracted (never below zero).
  */
 export function computeBillInputTotal(items: BillInputItem[], discount: number, gstMode: GstMode): number {
-  const subtotal = items.reduce(
-    (sum, item) => sum + readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0),
-    0,
-  );
+  const lineNet = (item: BillInputItem) => {
+    const gross = readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0);
+    return Math.max(0, gross - Math.min(Math.max(readNumber(item.lineDiscount, 0), 0), gross));
+  };
+  const subtotal = items.reduce((sum, item) => sum + lineNet(item), 0);
   const gstToAdd = gstMode === "exclusive"
-    ? items.reduce(
-        (sum, item) => sum + readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0) * (readNumber(item.gstRate, 0) / 100),
-        0,
-      )
+    ? items.reduce((sum, item) => sum + lineNet(item) * (readNumber(item.gstRate, 0) / 100), 0)
     : 0;
   return roundMoney(Math.max(0, subtotal + gstToAdd - roundMoney(readNumber(discount, 0))));
 }

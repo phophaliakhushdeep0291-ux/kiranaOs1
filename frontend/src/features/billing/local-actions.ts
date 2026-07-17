@@ -171,10 +171,18 @@ async function prepareCustomerForCreditBill(data: BillInput, creditAmount: numbe
   };
 }
 
+/** Line net after its own flat discount — the amount GST and totals apply to. */
+function billItemNet(item: BillInputItem) {
+  const gross = roundMoney(readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0));
+  return roundMoney(gross - Math.min(Math.max(readNumber(item.lineDiscount, 0), 0), gross));
+}
+
 function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode = "inclusive") {
   const now = new Date().toISOString();
   return items.map((item) => {
-    const subtotal = roundMoney(item.quantity * item.ratePerRateUnit);
+    const gross = roundMoney(item.quantity * item.ratePerRateUnit);
+    const subtotal = billItemNet(item);
+    const lineDiscount = roundMoney(gross - subtotal);
     const rate = readNumber(item.gstRate, 0);
     // Inclusive (default): tax is extracted from the entered price, line total
     // stays the entered amount. Exclusive: tax is added on top.
@@ -201,6 +209,8 @@ function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode
       entered_unit: item.enteredUnit,
       ratePerRateUnit: item.ratePerRateUnit,
       rate_per_rate_unit: item.ratePerRateUnit,
+      lineDiscount,
+      line_discount: lineDiscount,
       originalUnitPrice: item.originalUnitPrice ?? item.ratePerRateUnit,
       original_unit_price: item.originalUnitPrice ?? item.ratePerRateUnit,
       appliedPricingRuleId: item.appliedPricingRuleId ?? null,
@@ -369,9 +379,9 @@ function calculateBillAmounts(data: BillInput) {
   // tax; exclusive mode adds tax on top of the entered prices.
   const rawGstMode = String((data as { gstMode?: string }).gstMode ?? "inclusive");
   const gstMode: GstMode = rawGstMode === "exclusive" || rawGstMode === "none" ? rawGstMode : "inclusive";
-  const subtotal = roundMoney(data.items.reduce((sum, item) => sum + readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0), 0));
+  const subtotal = roundMoney(data.items.reduce((sum, item) => sum + billItemNet(item), 0));
   const gst = roundMoney(data.items.reduce((sum, item) => {
-    const lineTotal = readNumber(item.quantity, 0) * readNumber(item.ratePerRateUnit, 0);
+    const lineTotal = billItemNet(item);
     const rate = readNumber(item.gstRate, 0);
     if (rate <= 0 || lineTotal <= 0 || gstMode === "none") return sum;
     if (gstMode === "exclusive") return sum + lineTotal * rate / 100;

@@ -15,7 +15,10 @@ export interface ReceiptLine {
   quantity: number;
   unit?: string | null;
   rate: number;
+  /** Net amount after the line's own discount. */
   total: number;
+  /** Flat rupee discount applied to this line (shown under the item name). */
+  lineDiscount?: number;
   hsn?: string | null;
 }
 
@@ -135,6 +138,7 @@ function receiptRows(rows: ReceiptLine[], showHsn = false) {
             <span class="serial">${index + 1}.</span>
             <span>${escapeHtml(safeText(item.name, "Item"))}</span>
             ${showHsn && item.hsn ? `<div class="hsn">HSN: ${escapeHtml(safeText(item.hsn))}</div>` : ""}
+            ${Number(item.lineDiscount) > 0 ? `<div class="hsn">Less discount ${formatReceiptMoney(Number(item.lineDiscount))}</div>` : ""}
           </td>
           <td class="right nowrap">${formatQuantity(item.quantity)} ${escapeHtml(safeText(item.unit))}</td>
           <td class="right nowrap">${formatReceiptMoney(item.rate)}</td>

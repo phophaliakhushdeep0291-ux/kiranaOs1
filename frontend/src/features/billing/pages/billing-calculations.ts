@@ -71,9 +71,24 @@ export function lineNeedsOwnerApproval(item: CartItem): boolean {
   return false;
 }
 
+/** Gross line amount before any per-line discount. */
+export function cartItemGross(item: CartItem): number {
+  return roundMoney(Number(item.quantity) * Number(item.rate));
+}
+
+/** Effective per-line discount, clamped to the line's own gross amount. */
+export function cartItemLineDiscount(item: CartItem): number {
+  return roundMoney(Math.min(Math.max(Number(item.lineDiscount) || 0, 0), cartItemGross(item)));
+}
+
+/** What the customer pays for this line: gross minus its line discount. */
+export function cartItemNet(item: CartItem): number {
+  return roundMoney(cartItemGross(item) - cartItemLineDiscount(item));
+}
+
 export function cartItemProfit(item: CartItem): number {
   if (item.isCustom) return 0;
-  return roundMoney((Number(item.rate) - productCostPrice(item.product)) * Number(item.quantity));
+  return roundMoney((Number(item.rate) - productCostPrice(item.product)) * Number(item.quantity) - cartItemLineDiscount(item));
 }
 
 export function profitClass(value: number): string {
@@ -82,8 +97,14 @@ export function profitClass(value: number): string {
   return "text-muted-foreground";
 }
 
+/** Sum of line nets — per-line discounts are already inside the subtotal. */
 export function calculateCartSubtotal(cart: CartItem[]): number {
-  return roundMoney(cart.reduce((sum, item) => sum + item.quantity * item.rate, 0));
+  return roundMoney(cart.reduce((sum, item) => sum + cartItemNet(item), 0));
+}
+
+/** Total rupees given away through per-line discounts (for the summary row). */
+export function calculateLineDiscountTotal(cart: CartItem[]): number {
+  return roundMoney(cart.reduce((sum, item) => sum + cartItemLineDiscount(item), 0));
 }
 
 export function calculateDiscount(subtotal: number, discount: number): number {
