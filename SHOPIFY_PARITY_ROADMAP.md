@@ -26,9 +26,9 @@ the codebase, not assumed.
 
 ## Tier 1 — Checkout & returns depth
 
-- [ ] **Per-line discounts** — flat ₹ (UI also accepts %) per cart line with
+- [x] **Per-line discounts** — flat ₹ (UI also accepts %) per cart line with
       GST-aware taxable value; flows through offline bill path, sync payload,
-      backend totals, print, and returns. *(iteration 1 — in progress)*
+      backend totals, print, and returns. *(done 2026-07-17)*
 - [ ] **Exchanges** — one flow that returns items from a bill AND sells new
       items, settling only the difference (refund or collect). Today returns
       and new sales are separate bills; Shopify POS treats exchange as a
@@ -78,4 +78,4 @@ the codebase, not assumed.
 
 | Date | Item | Commit |
 |---|---|---|
-| 2026-07-17 | Roadmap created; per-line discounts started | — |
+| 2026-07-17 | Roadmap created; per-line discounts shipped full-stack | feat(billing): per-line discounts |
