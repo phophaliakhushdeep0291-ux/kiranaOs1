@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type { AccentColor } from "./theme";
 
 export type BusinessType =
@@ -318,21 +318,50 @@ export const BUSINESS_TYPE_DEFS: Record<BusinessType, BusinessTypeDefinition> = 
 
 const LS_KEY = "kirana-os:ui-business-type:v1";
 
+export function isBusinessType(value: unknown): value is BusinessType {
+  return typeof value === "string" && value in BUSINESS_TYPE_DEFS;
+}
+
+export function businessTypeFromLabel(label: unknown): BusinessType | null {
+  if (typeof label !== "string") return null;
+  const hit = (Object.keys(BUSINESS_TYPE_DEFS) as BusinessType[]).find(
+    (key) => BUSINESS_TYPE_DEFS[key].label === label,
+  );
+  return hit ?? null;
+}
+
+// Module-level reactive store: every component using useBusinessType() re-renders
+// the moment the type changes (settings save, server hydration) — no reload needed.
+let currentType: BusinessType = (() => {
+  try {
+    const saved = localStorage.getItem(LS_KEY);
+    return isBusinessType(saved) ? saved : "kirana";
+  } catch {
+    return "kirana";
+  }
+})();
+const listeners = new Set<() => void>();
+
 export function getStoredBusinessType(): BusinessType {
-  return (localStorage.getItem(LS_KEY) as BusinessType) ?? "kirana";
+  return currentType;
 }
 
 export function saveBusinessType(bt: BusinessType) {
-  localStorage.setItem(LS_KEY, bt);
+  if (!isBusinessType(bt)) return;
+  currentType = bt;
+  try {
+    localStorage.setItem(LS_KEY, bt);
+  } catch { /* private mode */ }
+  listeners.forEach((notify) => notify());
+}
+
+function subscribe(notify: () => void) {
+  listeners.add(notify);
+  return () => { listeners.delete(notify); };
 }
 
 export function useBusinessType() {
-  const [businessType, setBusinessTypeState] = useState<BusinessType>(getStoredBusinessType);
-
-  const setBusinessType = useCallback((bt: BusinessType) => {
-    setBusinessTypeState(bt);
-    saveBusinessType(bt);
-  }, []);
-
+  const businessType = useSyncExternalStore(subscribe, getStoredBusinessType);
+  const setBusinessType = useCallback((bt: BusinessType) => saveBusinessType(bt), []);
   return { businessType, setBusinessType, def: BUSINESS_TYPE_DEFS[businessType] };
 }

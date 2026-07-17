@@ -18,6 +18,16 @@ import { Card, CardHead, Fld, Badge } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { OwnerOrderingCard } from "@/features/customer-order/OwnerOrderingCard";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import {
+  BUSINESS_TYPE_DEFS,
+  businessTypeFromLabel,
+  getStoredBusinessType,
+  isBusinessType,
+  saveBusinessType,
+  type BusinessType,
+} from "@/features/settings/business-types";
+
+const BUSINESS_TYPE_OPTIONS = Object.entries(BUSINESS_TYPE_DEFS) as [BusinessType, (typeof BUSINESS_TYPE_DEFS)[BusinessType]][];
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 type DayHours = { open: boolean; from: string; to: string };
@@ -47,7 +57,7 @@ export default function StoreProfilePage() {
   const bank = (prefs.bank ?? {}) as Record<string, string>;
   const docs = (prefs.docs ?? {}) as Record<string, string>;
 
-  const [biz, setBiz] = useState({ name: "", ownerName: "", phone: "", altPhone: "", email: "", gstNumber: "", pan: "", businessType: "Kirana / General Store", currency: "₹ Indian Rupee" });
+  const [biz, setBiz] = useState({ name: "", ownerName: "", phone: "", altPhone: "", email: "", gstNumber: "", pan: "", businessTypeKey: getStoredBusinessType() as BusinessType, currency: "₹ Indian Rupee" });
   const [addr, setAddr] = useState({ address: "", city: "", state: "", pincode: "", country: "India", deliveryRadius: "" });
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
@@ -72,7 +82,11 @@ export default function StoreProfilePage() {
     setBiz({
       name: shop.name ?? "", ownerName: shop.ownerName ?? "", phone: shop.phone ?? "",
       altPhone: sp.altPhone ?? "", email: sp.email ?? user?.email ?? "", gstNumber: shop.gstNumber ?? "",
-      pan: sp.pan ?? "", businessType: sp.businessType ?? "Kirana / General Store", currency: sp.currency ?? "₹ Indian Rupee",
+      pan: sp.pan ?? "",
+      businessTypeKey: isBusinessType(sp.businessTypeKey)
+        ? sp.businessTypeKey
+        : businessTypeFromLabel(sp.businessType) ?? getStoredBusinessType(),
+      currency: sp.currency ?? "₹ Indian Rupee",
     });
     setAddr({
       address: shop.address ?? "", city: shop.city ?? "", state: sp.state ?? "",
@@ -127,7 +141,8 @@ export default function StoreProfilePage() {
           altPhone: clean(biz.altPhone),
           email: clean(biz.email),
           pan: clean(biz.pan),
-          businessType: biz.businessType,
+          businessTypeKey: biz.businessTypeKey,
+          businessType: BUSINESS_TYPE_DEFS[biz.businessTypeKey].label,
           currency: biz.currency,
           state: clean(addr.state),
           pincode: clean(addr.pincode),
@@ -135,6 +150,7 @@ export default function StoreProfilePage() {
           deliveryRadius: clean(addr.deliveryRadius),
         },
       }, { immediate: true });
+      saveBusinessType(biz.businessTypeKey); // adapt nav/dashboard/product form instantly
       const finalShop = {
         ...(profilePrefsShop ?? updatedShop),
         name: updatedShop.name,
@@ -204,7 +220,7 @@ export default function StoreProfilePage() {
                 <Badge tone="green"><BadgeCheck size={12} /> Verified</Badge>
                 <Badge tone="amber">{planName} Plan</Badge>
               </div>
-              <p className="mt-0.5 text-[12px] text-[#52627e]">{biz.businessType} · Store ID {storeId}</p>
+              <p className="mt-0.5 text-[12px] text-[#52627e]">{BUSINESS_TYPE_DEFS[biz.businessTypeKey].label} · Store ID {storeId}</p>
               <p className="text-[12px] text-[#52627e]">{[addr.address, addr.city].filter(Boolean).join(", ") || "Add your store address"}</p>
             </div>
           </div>
@@ -230,10 +246,10 @@ export default function StoreProfilePage() {
             <Fld label="Email"><Input className="h-10" value={biz.email} onChange={(e) => setBiz({ ...biz, email: e.target.value })} /></Fld>
             <Fld label="GSTIN"><Input className="h-10" value={biz.gstNumber} onChange={(e) => setBiz({ ...biz, gstNumber: e.target.value })} /></Fld>
             <Fld label="PAN Number"><Input className="h-10" value={biz.pan} onChange={(e) => setBiz({ ...biz, pan: e.target.value })} /></Fld>
-            <Fld label="Business Type">
-              <Select value={biz.businessType} onValueChange={(v) => setBiz({ ...biz, businessType: v })}>
+            <Fld label="Business Type" hint="Adapts navigation, dashboard, categories & units to your trade">
+              <Select value={biz.businessTypeKey} onValueChange={(v) => setBiz({ ...biz, businessTypeKey: v as BusinessType })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>{["Kirana / General Store", "Supermarket", "Wholesale", "Pharmacy", "Restaurant", "Other"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                <SelectContent>{BUSINESS_TYPE_OPTIONS.map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {def.label}</SelectItem>)}</SelectContent>
               </Select>
             </Fld>
           </div>

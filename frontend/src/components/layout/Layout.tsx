@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/features/subscription";
 import { useBusinessType } from "@/features/settings/business-types";
+import { useBusinessTypeServerSync } from "@/features/settings/business-type-sync";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
 import { DemoModeBanner } from "@/features/demo/DemoModeBanner";
 import { SyncAlertBanner } from "@/features/sync/SyncAlertBanner";
@@ -317,6 +318,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();
+  useBusinessTypeServerSync();
   const queryClient = useQueryClient();
   const locationsQuery = useQuery({
     queryKey: ["store-locations", "active-context"],

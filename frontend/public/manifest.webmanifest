@@ -1,8 +1,8 @@
 {
   "id": "/dashboard",
-  "name": "KiranaOS POS",
-  "short_name": "KiranaOS",
-  "description": "Offline-first kirana POS for billing, udhar, inventory, reports and cloud backup.",
+  "name": "Veyra POS",
+  "short_name": "Veyra",
+  "description": "Offline-first POS for billing, credit, inventory, reports and cloud backup — for every retail business.",
   "start_url": "/dashboard?source=pwa",
   "scope": "/",
   "display": "standalone",
