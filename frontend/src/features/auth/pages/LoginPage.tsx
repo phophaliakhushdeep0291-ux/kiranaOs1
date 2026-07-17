@@ -243,10 +243,10 @@ export default function Login() {
               <Store size={24} aria-hidden="true" />
             </div>
             <p className="relative mt-8 text-[11px] font-black uppercase tracking-[0.2em] text-[#78a8ff]">Retail operating system</p>
-            <h1 className="relative mt-3 font-display text-4xl font-black tracking-tight text-white">Kirana<span className="text-[#4c8dff]">OS</span></h1>
+            <h1 className="relative mt-3 font-display text-4xl font-black tracking-tight text-white">Vey<span className="text-[#4c8dff]">ra</span></h1>
             <h2 className="relative mt-7 max-w-md font-display text-[30px] font-black leading-[1.08] tracking-tight text-white">Run the counter.<br />Know the business.</h2>
             <p className="relative mt-4 max-w-md text-sm leading-6 text-white/70">
-              Fast billing, clear cash visibility, udhar, inventory, and reliable offline work—built around the way Indian stores operate.
+              Fast billing, clear cash visibility, customer credit, inventory, and reliable offline work—built for every kind of retail counter.
             </p>
           </div>
           <div className="relative grid gap-3 text-sm">

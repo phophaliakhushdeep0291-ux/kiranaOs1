@@ -498,7 +498,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {!collapsed && (
               <div className="min-w-0">
                 <div className="font-display text-[28px] font-black leading-none tracking-tight text-white">
-                  Kirana<span className="text-[#2b7cff]">OS</span>
+                  Vey<span className="text-[#2b7cff]">ra</span>
                 </div>
                 <div className="mt-1 truncate text-[11px] font-medium leading-none text-white/68">{btDef.navConfig.tagline}</div>
               </div>
@@ -709,8 +709,8 @@ export function Layout({ children }: { children: ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
               <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Kirana<span className="text-[#075fff]">OS</span></span>
-                <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">Built for busy Indian stores</span>
+                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Vey<span className="text-[#075fff]">ra</span></span>
+                <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">{btDef.navConfig.tagline}</span>
               </Link>
             </div>
             <div className="flex shrink-0 items-center gap-3">
