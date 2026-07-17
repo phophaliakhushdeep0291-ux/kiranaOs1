@@ -442,6 +442,8 @@ export default function CustomersPage() {
         name: draft.name ?? existing?.name ?? "",
         mobile: draft.mobile ?? existing?.mobile ?? "",
         address: draft.address ?? existing?.address ?? "",
+        gstNumber: draft.gstNumber ?? existing?.gstNumber ?? "",
+        stateCode: draft.stateCode ?? existing?.stateCode ?? "",
         type: draft.type === "udhar" || existing?.type === "udhar" ? "udhar" : "regular",
         dueDate: draft.dueDate ?? existing?.dueDate ?? "",
         promiseToPayDate: draft.promiseToPayDate ?? existing?.promiseToPayDate ?? "",
