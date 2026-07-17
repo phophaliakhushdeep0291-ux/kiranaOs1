@@ -137,7 +137,7 @@ export default function AdvancedSettingsPage() {
     } catch { toast({ title: "Could not clear cache", variant: "destructive" }); }
   }
   function copyDiagnostics() {
-    const diag = { app: "KiranaOS 2.1.3", online: navigator.onLine, language, accent, prefs: { advanced: adv }, ua: navigator.userAgent, at: new Date().toISOString() };
+    const diag = { app: "Veyra 2.1.3", online: navigator.onLine, language, accent, prefs: { advanced: adv }, ua: navigator.userAgent, at: new Date().toISOString() };
     void navigator.clipboard?.writeText(JSON.stringify(diag, null, 2));
     toast({ title: "Diagnostics copied" });
   }
@@ -186,7 +186,7 @@ export default function AdvancedSettingsPage() {
     try {
       const entries = await Promise.all(EXPORT_TABLES.map(async (table) => [table, await offlineDB.getAll<Record<string, unknown>>(table)] as const));
       downloadJson(`kiranaos-backup-${new Date().toISOString().slice(0, 10)}.json`, {
-        app: "KiranaOS",
+        app: "Veyra",
         exportedAt: new Date().toISOString(),
         tables: Object.fromEntries(entries),
       });
@@ -334,7 +334,7 @@ export default function AdvancedSettingsPage() {
             ))}
             <div className="mt-1 grid gap-2 sm:col-span-2 sm:grid-cols-2">
               <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={copyDiagnostics}><HardDrive size={14} /> Copy diagnostics</Button>
-              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => mailSupport("KiranaOS diagnostics", JSON.stringify({ online: navigator.onLine, language, accent, at: new Date().toISOString() }, null, 2))}>Send to support</Button>
+              <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => mailSupport("Veyra diagnostics", JSON.stringify({ online: navigator.onLine, language, accent, at: new Date().toISOString() }, null, 2))}>Send to support</Button>
             </div>
           </div>
         </Card>

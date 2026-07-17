@@ -33,7 +33,7 @@ export async function runManualSyncCycle(): Promise<ManualSyncResult> {
   }
   const snapshot = await hydrateFromBackendSnapshot();
   if (snapshot.errors.length > 0) {
-    console.error("[KiranaOS] Snapshot recovery incomplete", snapshot.errors);
+    console.error("[Veyra] Snapshot recovery incomplete", snapshot.errors);
   }
   return { ...sync, snapshot, ...(syncError ? { syncError } : {}) };
 }

@@ -133,7 +133,7 @@ export default function IntegrationsSettingsPage() {
   function createKey() {
     if (keyName.trim().length < 2 || !scopes.length) return toast({ title: "Add a name and at least one scope", variant: "destructive" });
     setKeyOpen(false);
-    requestApproval({ title: "Create API credential", description: "The full key is shown once. KiranaOS stores only an irreversible SHA-256 hash.", confirmLabel: "Create secure key", run: async (ownerPin) => {
+    requestApproval({ title: "Create API credential", description: "The full key is shown once. Veyra stores only an irreversible SHA-256 hash.", confirmLabel: "Create secure key", run: async (ownerPin) => {
       const ttlDays = Number(keyTtlDays);
       const expiresAt = ttlDays > 0 ? new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString() : null;
       const result = await apiRequest<ApiKeyRow & { secret: string }>("/integrations/api-keys", { method: "POST", ownerPin, body: JSON.stringify({ name: keyName.trim(), scopes, expiresAt }) });
@@ -145,7 +145,7 @@ export default function IntegrationsSettingsPage() {
   function createWebhook() {
     if (webhookName.trim().length < 2 || !webhookUrl.trim() || !events.length) return toast({ title: "Complete the endpoint details", variant: "destructive" });
     setWebhookOpen(false);
-    requestApproval({ title: "Create webhook endpoint", description: "KiranaOS validates the destination, blocks private networks and signs every request.", confirmLabel: "Create endpoint", run: async (ownerPin) => {
+    requestApproval({ title: "Create webhook endpoint", description: "Veyra validates the destination, blocks private networks and signs every request.", confirmLabel: "Create endpoint", run: async (ownerPin) => {
       const result = await apiRequest<WebhookRow & { secret: string }>("/integrations/webhooks", { method: "POST", ownerPin, body: JSON.stringify({ name: webhookName.trim(), url: webhookUrl.trim(), events }) });
       setSecret({ title: "Webhook signing secret", value: result.secret, note: "Use this secret to verify the x-kiranaos-signature header. It is shown only now." });
       setWebhookUrl("");

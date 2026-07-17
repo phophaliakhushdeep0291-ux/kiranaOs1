@@ -24,7 +24,7 @@ export type ProductImportStrategy = "skip-existing" | "update-existing";
 export type ProductImportAction = "create" | "update" | "skip" | "invalid";
 
 // Keep the legacy column order stable. New packet/loose fields are appended so an old
-// KiranaOS template can still be imported without shifting values into the wrong fields.
+// Veyra template can still be imported without shifting values into the wrong fields.
 export const PRODUCT_IMPORT_COLUMNS: ImportColumn[] = [
   { header: "Name", field: "name", example: "Tata Salt 1kg", required: true },
   { header: "Category", field: "category", example: "Grocery" },

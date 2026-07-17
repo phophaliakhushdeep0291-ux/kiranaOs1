@@ -1,5 +1,5 @@
 /*
- * QR Code generator library (TypeScript) — vendored into KiranaOS.
+ * QR Code generator library (TypeScript) — vendored into Veyra.
  *
  * Copyright (c) Project Nayuki. (MIT License)
  * https://www.nayuki.io/page/qr-code-generator-library
@@ -815,7 +815,7 @@ export class QrCode {
   ];
 }
 
-/*---- KiranaOS wrapper (not part of the upstream library) ----*/
+/*---- Veyra wrapper (not part of the upstream library) ----*/
 
 export type QrEccLevel = "L" | "M" | "Q" | "H";
 

@@ -64,7 +64,7 @@ export function buildDailyClosingShareText({ report, shopName, include }: DailyC
     }
   }
   lines.push("");
-  lines.push("_via KiranaOS_");
+  lines.push("_via Veyra_");
   return lines.join("\n");
 }
 

@@ -1132,7 +1132,7 @@ export default function SyncStatusPage() {
           <CloudOff className="h-4 w-4" />
           <AlertTitle>Backend offline, billing still works locally</AlertTitle>
           <AlertDescription>
-            Your internet is available, but the KiranaOS backend is not reachable at {snapshot.apiBaseUrl}. Start backend, then press Force sync.
+            Your internet is available, but the Veyra backend is not reachable at {snapshot.apiBaseUrl}. Start backend, then press Force sync.
           </AlertDescription>
         </Alert>
       )}

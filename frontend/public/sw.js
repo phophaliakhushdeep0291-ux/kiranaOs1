@@ -1,4 +1,4 @@
-/* KiranaOS service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
+/* Veyra service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
 const BUILD_ID = "__KIRANA_BUILD_ID__";
 const CACHE_VERSION = `kiranaos-shell-v6-${BUILD_ID}`;
 const APP_SHELL = [

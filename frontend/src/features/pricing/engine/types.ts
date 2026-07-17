@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Smart Adaptive Pricing Engine — canonical types.
 //
-// Adapted to KiranaOS's ACTUAL model (not the generic spec):
+// Adapted to Veyra's ACTUAL model (not the generic spec):
 //   • Money is rupees rounded to paise via @/lib/money.roundMoney (the repo has NO
 //     Prisma Decimal — it uses Float columns + integer-paise reconciliation).
 //   • Products use a single base-unit model (displayUnit/baseUnit/rateUnit +

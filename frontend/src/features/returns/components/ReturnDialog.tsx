@@ -6,11 +6,25 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { createSaleReturnLocalFirst, type RefundMode } from "@/features/returns/local-actions";
+import { createBillLocalFirst } from "@/features/billing/local-actions";
+import { useListProducts } from "@/features/products/queries";
 import { apiRequest } from "@/lib/api/http";
 import { useOfflineStatus } from "@/features/sync";
-import { Copy, Gift } from "lucide-react";
+import { BillPaymentMode, type BillInput } from "@/types/api";
+import { ArrowLeftRight, Copy, Gift, Plus, Trash2 } from "lucide-react";
 
 type ReturnRefundMode = RefundMode | "gift_card";
+/** Exchanges settle in immediate tender only — udhar/store-credit stay plain returns. */
+type ExchangeSettleMode = "cash" | "upi" | "bank";
+
+interface ExchangeLine {
+  productId: string;
+  name: string;
+  enteredUnit: string;
+  ratePerRateUnit: number;
+  gstRate: number;
+  quantity: number;
+}
 
 interface IssuedReturnGiftCard {
   id: string;
@@ -60,6 +74,7 @@ function round2(n: number) {
 export function ReturnDialog({ open, onOpenChange, lines, customerId, customerName, originalBillId, gstMode = "inclusive", onDone }: ReturnDialogProps) {
   const { toast } = useToast();
   const { isOnline } = useOfflineStatus();
+  const productsQuery = useListProducts({ limit: 1000 });
   const [qty, setQty] = useState<Record<number, number>>({});
   const [damaged, setDamaged] = useState<Record<number, boolean>>({});
   const [refundMode, setRefundMode] = useState<ReturnRefundMode>("cash");
@@ -67,6 +82,9 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   const [ownerPin, setOwnerPin] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exchangeOpen, setExchangeOpen] = useState(false);
+  const [exchangeLines, setExchangeLines] = useState<ExchangeLine[]>([]);
+  const [exchangeProductId, setExchangeProductId] = useState("");
 
   const getQty = (i: number) => (qty[i] ?? 0);
   const refundTotal = useMemo(
@@ -75,10 +93,49 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
   );
   const hasCustomer = Boolean(customerId);
   const selectedCount = lines.filter((_, i) => getQty(i) > 0).length;
+  const products = productsQuery.data ?? [];
+  const isExchange = exchangeOpen && exchangeLines.some((line) => line.quantity > 0);
+  const exchangeTotal = useMemo(
+    () => round2(exchangeLines.reduce((sum, line) => sum + line.quantity * line.ratePerRateUnit, 0)),
+    [exchangeLines],
+  );
+  // Positive = customer pays the shop; negative = shop refunds the customer.
+  const exchangeDifference = round2(exchangeTotal - refundTotal);
+  // Both documents settle fully in the SAME immediate tender; the drawer nets to
+  // the difference on its own, so daily close and reports stay double-entry clean.
+  const settleMode: ExchangeSettleMode = refundMode === "upi" || refundMode === "bank" ? refundMode : "cash";
 
   function setLineQty(i: number, value: number, max: number) {
     const capped = max > 0 ? Math.max(0, Math.min(value, max)) : Math.max(0, value);
     setQty((prev) => ({ ...prev, [i]: round2(capped) }));
+  }
+
+  function addExchangeLine() {
+    const product = products.find((item) => item.id === exchangeProductId);
+    if (!product) return;
+    setExchangeLines((current) => current.some((line) => line.productId === product.id) ? current : [...current, {
+      productId: product.id,
+      name: product.name,
+      enteredUnit: String(product.displayUnit ?? product.unit ?? product.rateUnit ?? "piece"),
+      ratePerRateUnit: round2(Number(product.defaultPricePerRateUnit ?? product.sellingPrice ?? product.mrp ?? 0)),
+      gstRate: Number(product.gstRate ?? 0),
+      quantity: 1,
+    }]);
+    setExchangeProductId("");
+  }
+
+  function setExchangeQty(productId: string, value: number) {
+    setExchangeLines((current) => current.map((line) => line.productId === productId ? { ...line, quantity: Math.max(0, round2(value)) } : line));
+  }
+
+  function resetForm() {
+    setQty({});
+    setDamaged({});
+    setOwnerPin("");
+    setReason("");
+    setExchangeLines([]);
+    setExchangeOpen(false);
+    setExchangeProductId("");
   }
 
   async function submit() {
@@ -113,10 +170,61 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
       toast({ title: "Customer required", description: "A return can only reduce udhar for a known customer.", variant: "destructive" });
       return;
     }
+    const activeExchangeLines = isExchange ? exchangeLines.filter((line) => line.quantity > 0) : [];
     setBusy(true);
     try {
-      if (refundMode === "gift_card") {
-        if (!isOnline) throw new Error("Connect to KiranaOS to issue secure store credit. Other refund modes remain available offline.");
+      if (activeExchangeLines.length > 0) {
+        // Exchange = the return + a replacement sale, each fully settled in the
+        // same tender. The customer only handles the difference at the counter;
+        // the drawer nets to exactly that difference.
+        const returned = await createSaleReturnLocalFirst({
+          items,
+          refundMode: settleMode,
+          gstMode,
+          customerId,
+          customerName,
+          originalBillId,
+          ownerPin,
+          reason: reason.trim() || "Exchange",
+        });
+        try {
+          const paymentMode = settleMode === "upi" ? BillPaymentMode.upi : settleMode === "bank" ? BillPaymentMode.bank : BillPaymentMode.cash;
+          await createBillLocalFirst({
+            billType: "normal_sale",
+            gstMode,
+            customerId,
+            customerName: customerName ?? "Walk-in",
+            items: activeExchangeLines.map((line) => ({
+              productId: line.productId,
+              name: line.name,
+              quantity: line.quantity,
+              enteredUnit: line.enteredUnit,
+              ratePerRateUnit: line.ratePerRateUnit,
+              gstRate: line.gstRate,
+            })),
+            payments: [{ mode: paymentMode, amount: exchangeTotal }],
+          } as BillInput);
+        } catch (saleError) {
+          toast({
+            title: "Return saved, new items NOT billed",
+            description: `${returned.billNo} recorded the return, but the replacement sale failed: ${saleError instanceof Error ? saleError.message : "unknown error"}. Bill the new items from the Billing page.`,
+            variant: "destructive",
+          });
+          onOpenChange(false);
+          resetForm();
+          onDone?.();
+          return;
+        }
+        toast({
+          title: "Exchange recorded",
+          description: exchangeDifference > 0
+            ? `Collect ₹${exchangeDifference.toLocaleString("en-IN")} from the customer (${settleMode}).`
+            : exchangeDifference < 0
+              ? `Refund ₹${Math.abs(exchangeDifference).toLocaleString("en-IN")} to the customer (${settleMode}).`
+              : "Even exchange — nothing to collect or refund.",
+        });
+      } else if (refundMode === "gift_card") {
+        if (!isOnline) throw new Error("Connect to Veyra to issue secure store credit. Other refund modes remain available offline.");
         const created = await apiRequest<CreatedReturn>("/bills/returns", {
           method: "POST",
           ownerPin,
@@ -270,7 +378,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         <DialogHeader>
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><Gift className="h-6 w-6" /></div>
           <DialogTitle>Store credit ready</DialogTitle>
-          <DialogDescription>This code is shown once. Give it to the customer now; KiranaOS stores only a protected fingerprint.</DialogDescription>
+          <DialogDescription>This code is shown once. Give it to the customer now; Veyra stores only a protected fingerprint.</DialogDescription>
         </DialogHeader>
         {issuedGiftCard && (
           <div className="space-y-4">
