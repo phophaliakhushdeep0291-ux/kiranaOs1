@@ -16,4 +16,7 @@ coverage
 # Release proof artifacts
 release-artifacts
 /backups/
+# Runtime shop backup snapshots (BACKUP_STORAGE_DIR default) — anchored so
+# src/modules/backups source is never hidden (deployment-readiness asserts this).
+/storage/backups/
 *.dump
