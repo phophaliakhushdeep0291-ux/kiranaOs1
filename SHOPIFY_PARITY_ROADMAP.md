@@ -29,10 +29,11 @@ the codebase, not assumed.
 - [x] **Per-line discounts** — flat ₹ (UI also accepts %) per cart line with
       GST-aware taxable value; flows through offline bill path, sync payload,
       backend totals, print, and returns. *(done 2026-07-17)*
-- [ ] **Exchanges** — one flow that returns items from a bill AND sells new
-      items, settling only the difference (refund or collect). Today returns
-      and new sales are separate bills; Shopify POS treats exchange as a
-      first-class object.
+- [x] **Exchanges** — ReturnDialog gained a "Customer takes new items" section:
+      return + replacement sale in one flow, each document fully settled in the
+      same tender so the drawer nets to the difference (offline-capable, no
+      schema change). Both entry points (standalone return + bill detail)
+      inherit it. *(done 2026-07-17)*
 - [ ] **Line-item notes** — per-line note (e.g. "no bag", weight callout)
       stored on the bill item and printed on the receipt.
 - [ ] **Discount reasons + report** — optional reason chip on cart/line
@@ -79,3 +80,4 @@ the codebase, not assumed.
 | Date | Item | Commit |
 |---|---|---|
 | 2026-07-17 | Roadmap created; per-line discounts shipped full-stack | feat(billing): per-line discounts |
+| 2026-07-17 | Exchanges shipped in ReturnDialog; live browser QA of discounts + exchange | feat(returns): exchange flow |

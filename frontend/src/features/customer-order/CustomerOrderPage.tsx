@@ -700,7 +700,7 @@ function CustomerSidebar({
           <ShoppingCart size={25} />
         </div>
         <div>
-          <p className="font-display text-2xl font-black tracking-[-0.03em]">Vey<span className="text-[#0b77ff]">ra</span></p>
+          <p className="font-display text-2xl font-black tracking-[-0.03em]">Ar<span className="text-[#0b77ff]">tha</span></p>
           <p className="text-[11px] font-semibold text-[#b5c4df]">Order direct from your store</p>
         </div>
       </div>

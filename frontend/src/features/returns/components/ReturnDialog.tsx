@@ -171,6 +171,10 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
       return;
     }
     const activeExchangeLines = isExchange ? exchangeLines.filter((line) => line.quantity > 0) : [];
+    if (activeExchangeLines.length > 0 && exchangeTotal <= 0) {
+      toast({ title: "Replacement items have no value", description: "Set a price on the new items, or remove them to record a plain return.", variant: "destructive" });
+      return;
+    }
     setBusy(true);
     try {
       if (activeExchangeLines.length > 0) {
@@ -277,9 +281,9 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Return items</DialogTitle>
+          <DialogTitle>{isExchange ? "Exchange items" : "Return items"}</DialogTitle>
           <DialogDescription>
-            Set how many of each item are coming back. Resellable items go back into stock; tick “Damaged” to write one off instead.
+            Set how many of each item are coming back. Resellable items go back into stock; tick “Damaged” to write one off instead. Add replacement items below to make it an exchange.
           </DialogDescription>
         </DialogHeader>
 
@@ -415,15 +419,34 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
             </div>
           </div>
 
-          <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-            <span className="text-sm text-muted-foreground">{selectedCount} item{selectedCount === 1 ? "" : "s"} · Refund</span>
-            <span className="text-lg font-black">₹{refundTotal.toLocaleString("en-IN")}</span>
-          </div>
+          {isExchange ? (
+            <div className="space-y-1 rounded-lg bg-muted/40 px-3 py-2 text-sm" data-testid="exchange-summary">
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>Returning ({selectedCount} item{selectedCount === 1 ? "" : "s"})</span>
+                <span>−₹{refundTotal.toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>New items</span>
+                <span>+₹{exchangeTotal.toLocaleString("en-IN")}</span>
+              </div>
+              <div className="flex items-center justify-between border-t pt-1 font-black">
+                <span>{exchangeDifference > 0 ? "Customer pays" : exchangeDifference < 0 ? "Refund customer" : "Even exchange"}</span>
+                <span className="text-lg">₹{Math.abs(exchangeDifference).toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
+              <span className="text-sm text-muted-foreground">{selectedCount} item{selectedCount === 1 ? "" : "s"} · Refund</span>
+              <span className="text-lg font-black">₹{refundTotal.toLocaleString("en-IN")}</span>
+            </div>
+          )}
         </div>
 
         <div className="mt-2 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-          <Button onClick={submit} disabled={busy || refundTotal <= 0}>{busy ? "Processing…" : "Process return"}</Button>
+          <Button data-testid="process-return" onClick={submit} disabled={busy || refundTotal <= 0}>
+            {busy ? "Processing…" : isExchange ? "Process exchange" : "Process return"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
