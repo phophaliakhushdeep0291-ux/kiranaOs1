@@ -169,8 +169,38 @@ function toProduct(data: ProductInput, id = createLocalId("product"), existing?:
   };
 }
 
+/** Mirrors backend normalizeProductName (productRecycleRules.js) exactly. */
+function normalizeProductName(name = ""): string {
+  return String(name).trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/**
+ * Fail fast on duplicate product names BEFORE anything persists. The server
+ * enforces this (409 PRODUCT_NAME_DUPLICATE) — without the local guard a
+ * duplicate saves locally, then its CREATE_PRODUCT sync op conflicts forever.
+ * The message steers the user to the right model: one product, many packagings.
+ */
+async function assertNoLocalProductNameConflict(name: string, excludeId?: string): Promise<void> {
+  const normalized = normalizeProductName(name);
+  if (!normalized) return;
+  const products = await offlineDB.getAll<Product>("products").catch(() => [] as Product[]);
+  const duplicate = products.find((row) =>
+    row.id !== excludeId
+    && !row.deletedAt
+    && row.status !== "deleted"
+    && normalizeProductName(row.name) === normalized);
+  if (duplicate) {
+    const error = new Error(
+      `A product named "${duplicate.name}" already exists. To sell it in another pack size, edit that product and add a packaging under Selling units — don't create a duplicate.`,
+    );
+    (error as Error & { code?: string }).code = "PRODUCT_NAME_DUPLICATE";
+    throw error;
+  }
+}
+
 export async function createProductLocalFirst(data: ProductInput): Promise<Product> {
   const validated = parseOrThrow(productCreationSchema, data) as unknown as ProductInput;
+  await assertNoLocalProductNameConflict(validated.name);
   const product = makeLocalEntity(toProduct(validated), "product", "pending_sync");
   const auditLogs = [
     buildAuditLogRow({
@@ -205,6 +235,7 @@ export async function createProductLocalFirst(data: ProductInput): Promise<Produ
 
 export async function updateProductLocalFirst(id: string, data: ProductInput): Promise<Product> {
   const validated = parseOrThrow(productCreationSchema, data) as unknown as ProductInput;
+  await assertNoLocalProductNameConflict(validated.name, id);
   const existing = await offlineDB.getAll<Product>("products").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
   const product = touchLocalEntity(toProduct(validated, id, existing), "pending_sync");
   const auditLogs = [

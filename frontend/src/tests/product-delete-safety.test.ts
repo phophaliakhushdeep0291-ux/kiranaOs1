@@ -128,9 +128,9 @@ describe("product local-first write safety", () => {
   });
 
   it("creates product offline with product row, audit log, and outbox in one transaction", async () => {
-    const product = await createProductLocalFirst(baseProductInput);
+    const product = await createProductLocalFirst({ ...baseProductInput, name: "Fortune Chakki Atta" });
 
-    expect(product).toEqual(expect.objectContaining({ name: "Aashirvaad Atta", sync_status: "pending_sync" }));
+    expect(product).toEqual(expect.objectContaining({ name: "Fortune Chakki Atta", sync_status: "pending_sync" }));
     expect(mockedOfflineDB.transaction).toHaveBeenCalledTimes(1);
     expect(mockState.lastTables).toEqual(expect.arrayContaining(["products", "local_audit_logs", "sync_outbox"]));
     expect(mockState.committed.products).toHaveLength(1);
@@ -141,6 +141,35 @@ describe("product local-first write safety", () => {
       expect.objectContaining({ operation_type: "CREATE_PRODUCT", entity_type: "product", entity_id: product.id }),
     ]));
     expect(mockedUpsertCachedListItem).toHaveBeenCalledWith("products", expect.objectContaining({ id: product.id }), 1000);
+  });
+
+  it("rejects a duplicate product name BEFORE anything persists (the multi-packaging trap)", async () => {
+    // Same item re-added for a different pack size — must fail fast with guidance,
+    // not save locally and jam the sync outbox with a permanent 409 conflict.
+    await expect(createProductLocalFirst({ ...baseProductInput, name: "  aashirvaad   ATTA " }))
+      .rejects.toThrow(/already exists.*add a packaging/i);
+    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+    expect(mockState.committed.products).toHaveLength(0);
+    expect(mockState.committed.sync_outbox).toHaveLength(0);
+  });
+
+  it("allows re-using the name of a deleted product", async () => {
+    mockState.products = [{ ...existingProduct, deletedAt: "2026-07-01T00:00:00.000Z", status: "deleted" }];
+    const product = await createProductLocalFirst(baseProductInput);
+    expect(product).toEqual(expect.objectContaining({ name: "Aashirvaad Atta" }));
+  });
+
+  it("update keeps its own name but cannot take another product's name", async () => {
+    mockState.products = [
+      { ...existingProduct },
+      { ...existingProduct, id: "product_2", local_id: "product_2", server_id: "server_product_2", name: "Tata Salt" },
+    ];
+    // Self-rename to the same name (normalized) is fine.
+    await expect(updateProductLocalFirst("product_1", { ...baseProductInput, name: "Aashirvaad Atta" }))
+      .resolves.toEqual(expect.objectContaining({ id: "product_1" }));
+    // Renaming onto an existing different product is blocked.
+    await expect(updateProductLocalFirst("product_2", { ...baseProductInput, name: "Aashirvaad Atta" }))
+      .rejects.toThrow(/already exists/i);
   });
 
   it("updates product offline with audit log and outbox in the same transaction", async () => {
@@ -212,7 +241,7 @@ describe("product local-first write safety", () => {
   it("rolls back product write when audit or outbox insert fails", async () => {
     mockState.failOnStore = "local_audit_logs";
 
-    await expect(createProductLocalFirst(baseProductInput)).rejects.toThrow(/forced local_audit_logs failure/i);
+    await expect(createProductLocalFirst({ ...baseProductInput, name: "Rollback Test Atta" })).rejects.toThrow(/forced local_audit_logs failure/i);
 
     expect(mockState.committed.products).toHaveLength(0);
     expect(mockState.committed.local_audit_logs).toHaveLength(0);
