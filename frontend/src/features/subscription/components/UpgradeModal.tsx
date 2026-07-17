@@ -113,7 +113,7 @@ async function openRazorpayCheckout(
       key: checkout.razorpayKeyId,
       amount: checkout.amountPaise,
       currency: checkout.currency,
-      name: "Kirana OS",
+      name: "Veyra",
       description: `${planName} subscription`,
       order_id: checkout.orderId,
       handler: (response) => {

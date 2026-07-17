@@ -110,7 +110,7 @@ function LoadingScreen() {
   const [location] = useLocation();
   const path = location.split(/[?#]/)[0].replace(/^\/+/, "");
   const section = path.split("/").filter(Boolean)[0] ?? "dashboard";
-  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? "Opening KiranaOS..."} />;
+  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? "Opening Veyra..."} />;
 }
 
 function LazyPage({ component: Component, featureName }: { component: ComponentType; featureName?: FeatureName }) {

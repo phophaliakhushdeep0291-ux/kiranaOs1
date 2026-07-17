@@ -77,7 +77,7 @@ function openCheckout(checkout: RetailCheckout) {
       key: checkout.razorpayKeyId,
       amount: checkout.amountPaise,
       currency: checkout.currency,
-      name: "Kirana OS",
+      name: "Veyra",
       description: `Retail payment at ${checkout.location.name}`,
       order_id: checkout.orderId,
       handler: (response) => { completed = true; resolve(response); },

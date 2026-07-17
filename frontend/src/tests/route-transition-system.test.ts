@@ -36,7 +36,7 @@ describe("product-wide route transition system", () => {
     expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
   });
 
-  it("updates browser titles to preserve KiranaOS identity", () => {
-    expect(routeTransition).toContain('`${label} · KiranaOS`');
+  it("updates browser titles to preserve the Veyra brand identity", () => {
+    expect(routeTransition).toContain('`${label} · Veyra`');
   });
 });
