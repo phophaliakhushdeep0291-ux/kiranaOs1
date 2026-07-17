@@ -75,7 +75,7 @@ export const PRINTER_CONNECTION_LABELS: Record<PrinterConnection, string> = {
   bluetooth: "Bluetooth printer (system dialog)",
   usb: "USB printer (system dialog)",
   network: "Network printer (system dialog)",
-  bridge: "Veyra local hardware bridge",
+  bridge: "Artha local hardware bridge",
 };
 
 const PREFS_KEY = "kirana:settings-prefs:v1";

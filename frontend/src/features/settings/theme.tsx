@@ -11,7 +11,7 @@ export interface AccentDefinition {
 export const ACCENT_COLORS: Record<AccentColor, AccentDefinition> = {
   emerald: { label: "Emerald", swatch: "#16a34a", description: "Fresh green" },
   teal: { label: "Teal", swatch: "#0d9488", description: "Cool blue-green" },
-  blue: { label: "Blue", swatch: "#2563eb", description: "Veyra premium default" },
+  blue: { label: "Blue", swatch: "#2563eb", description: "Artha premium default" },
   violet: { label: "Violet", swatch: "#7c3aed", description: "Bold and modern purple" },
   rose: { label: "Rose", swatch: "#e11d48", description: "Vibrant and energetic" },
   amber: { label: "Amber", swatch: "#d97706", description: "Warm and inviting gold" },

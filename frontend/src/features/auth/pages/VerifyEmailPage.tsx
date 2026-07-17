@@ -32,7 +32,7 @@ export default function VerifyEmailPage() {
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {success
-            ? "Your Veyra email is verified. You can use it for safer account recovery."
+            ? "Your Artha email is verified. You can use it for safer account recovery."
             : error
               ? "This verification link is invalid or expired. Please request a new link from sign in."
               : "Please wait while we confirm your email."}

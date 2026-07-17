@@ -10,9 +10,9 @@ export function RouteTransition({ children, routeKey }: RouteTransitionProps) {
 
   useEffect(() => {
     const headings = Array.from(document.querySelectorAll<HTMLElement>(".app-route-ready h1, header h1"));
-    const heading = headings.find((candidate) => candidate.textContent?.trim() && candidate.textContent.trim() !== "Veyra") ?? headings[0];
+    const heading = headings.find((candidate) => candidate.textContent?.trim() && candidate.textContent.trim() !== "Artha") ?? headings[0];
     const label = heading?.textContent?.trim();
-    document.title = label ? `${label} · Veyra` : "Veyra";
+    document.title = label ? `${label} · Artha` : "Artha";
     setAnnouncement(label ? `${label} page loaded` : "Page loaded");
   }, [routeKey]);
 

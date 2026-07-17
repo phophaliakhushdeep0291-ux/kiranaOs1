@@ -285,7 +285,7 @@ export function VoiceAssistant() {
       onError: (message, variant, errorCode) => {
         if (errorCode === "network" || errorCode === "service-not-allowed") {
           preferBackendRecordingRef.current = true;
-          message = `${message} Press Speak again to use Veyra cloud transcription.`;
+          message = `${message} Press Speak again to use Artha cloud transcription.`;
         }
         setStatus(message);
         toast({ title: "Voice assistant", description: message, variant });

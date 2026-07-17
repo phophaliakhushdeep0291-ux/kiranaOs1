@@ -283,14 +283,14 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#eef5ff] text-[#005dff]"><Settings2 size={16} /></span>
           <div>
-            <p className="text-[13px] font-extrabold text-[#102347]">About Veyra</p>
+            <p className="text-[13px] font-extrabold text-[#102347]">About Artha</p>
             <p className="text-[11px] text-[#64748b]">Version 2.1.3 · You're up to date</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] font-bold text-[#005dff]">
           <Link href="/settings/sync" className="hover:underline">What's New</Link>
           <Link href="/smart-tools" className="hover:underline">Help Center</Link>
-          <a href="mailto:support@kiranaos.local?subject=Veyra%20support" className="hover:underline">Contact Support</a>
+          <a href="mailto:support@kiranaos.local?subject=Artha%20support" className="hover:underline">Contact Support</a>
         </div>
       </div>
       </div>

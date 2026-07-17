@@ -111,7 +111,7 @@ function statusCopy(status?: ReminderStatus) {
 function previewTemplate(template: string) {
   const values: Record<string, string> = {
     customerName: "Ramesh",
-    shopName: "Veyra Store",
+    shopName: "Artha Store",
     balance: "850",
     dueDate: "31 Jul 2026",
     lastPaymentDate: "10 Jul 2026",

@@ -116,7 +116,7 @@ export default function PrinterSettingsPage() {
       return;
     }
     if (cfg.connection === "bluetooth") {
-      setScanResult("Pair the printer in Windows or Android settings. It will then appear in the system print dialog; Veyra does not claim a direct Bluetooth printer protocol.");
+      setScanResult("Pair the printer in Windows or Android settings. It will then appear in the system print dialog; Artha does not claim a direct Bluetooth printer protocol.");
       toast({ title: "Pair in device settings", description: "Then use Test Print to choose the paired queue." });
       return;
     }
@@ -291,7 +291,7 @@ export default function PrinterSettingsPage() {
             <Fld label="Footer note">
               <Input className="h-10" value={cfg.footerText} onChange={(e) => setP("footerText", e.target.value)} />
             </Fld>
-            <p className="pt-2 text-[11px] text-[#9aa6bb]">Browser security allows direct printer scanning only for supported Bluetooth devices. For most thermal printers, install or pair the printer in Windows/Android and Veyra will print through the system dialog.</p>
+            <p className="pt-2 text-[11px] text-[#9aa6bb]">Browser security allows direct printer scanning only for supported Bluetooth devices. For most thermal printers, install or pair the printer in Windows/Android and Artha will print through the system dialog.</p>
           </div>
         </Card>
 

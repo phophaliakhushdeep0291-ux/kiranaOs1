@@ -64,7 +64,7 @@ export function buildDailyClosingShareText({ report, shopName, include }: DailyC
     }
   }
   lines.push("");
-  lines.push("_via Veyra_");
+  lines.push("_via Artha_");
   return lines.join("\n");
 }
 

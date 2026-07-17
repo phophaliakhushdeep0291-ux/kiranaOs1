@@ -766,7 +766,7 @@ export default function Billing() {
 
   async function startBackendVoiceListening() {
     const existingText = voiceCommand.trim();
-    setVoiceMicMessage("Requesting microphone access for Veyra transcription...");
+    setVoiceMicMessage("Requesting microphone access for Artha transcription...");
     try {
       voiceBackendRecordingRef.current = await startBackendTranscription({
         onStart: () => {
@@ -895,7 +895,7 @@ export default function Billing() {
       const useBackendNext = error === "network" || error === "service-not-allowed";
       if (useBackendNext) preferBackendVoiceRef.current = true;
       const actionableMessage = useBackendNext
-        ? `${message} Press Start mic again to use Veyra cloud transcription.`
+        ? `${message} Press Start mic again to use Artha cloud transcription.`
         : message;
       setVoiceMicMessage(actionableMessage);
       if (error !== "aborted") {
@@ -992,7 +992,7 @@ export default function Billing() {
   async function readCartLineFromScale(lineKey: string, billingUnit: string) {
     const printer = getPrinterConfigSync();
     if (printer.connection !== "bridge") {
-      toast({ title: "Connect the counter scale", description: "Choose Veyra local hardware bridge in Printer & Hardware settings, then verify the scale.", variant: "destructive" });
+      toast({ title: "Connect the counter scale", description: "Choose Artha local hardware bridge in Printer & Hardware settings, then verify the scale.", variant: "destructive" });
       return;
     }
     if (!isScaleBillingUnit(billingUnit)) {
@@ -1083,7 +1083,7 @@ export default function Billing() {
       billType: nextBillType,
       payments,
       shop: {
-        name: shop?.name ?? "Veyra",
+        name: shop?.name ?? "Artha",
         address: shop?.address ?? null,
         city: shop?.city ?? null,
         phone: shop?.phone ?? user?.mobile ?? null,

@@ -152,7 +152,7 @@ const PAGE_TITLES: Record<string, string> = {
 function getPageTitle(loc: string): string {
   if (PAGE_TITLES[loc]) return PAGE_TITLES[loc];
   const match = Object.keys(PAGE_TITLES).find(k => k !== "/dashboard" && loc.startsWith(k + "/"));
-  return match ? PAGE_TITLES[match] : "Veyra";
+  return match ? PAGE_TITLES[match] : "Artha";
 }
 
 function getPageSubtitle(loc: string): string | undefined {

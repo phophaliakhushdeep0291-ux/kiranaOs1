@@ -1,7 +1,7 @@
 {
   "id": "/dashboard",
-  "name": "Veyra POS",
-  "short_name": "Veyra",
+  "name": "Artha POS",
+  "short_name": "Artha",
   "description": "Offline-first POS for billing, credit, inventory, reports and cloud backup — for every retail business.",
   "start_url": "/dashboard?source=pwa",
   "scope": "/",

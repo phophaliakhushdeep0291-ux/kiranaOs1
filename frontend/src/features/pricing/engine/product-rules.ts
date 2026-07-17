@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Bridge from the EXISTING product master → canonical pricing rules.
 //
-// Veyra products already carry a nascent tiered-pricing model that
+// Artha products already carry a nascent tiered-pricing model that
 // billing-calculations.productSellingPrice() reads today:
 //   retailPrice / retailFromQuantity, wholesalePrice / wholesaleFromQuantity.
 // This adapter translates those existing fields into engine rules so the

@@ -55,7 +55,7 @@ const PRIORITY_MAPPING_FIELDS: ProductImportField[] = [
 ];
 
 const SOURCE_LABELS: Record<ProductImportSource, string> = {
-  kiranaos: "Veyra template",
+  kiranaos: "Artha template",
   vyapar: "Vyapar-style export",
   mybillbook: "myBillBook-style export",
   tally: "Tally-compatible export",

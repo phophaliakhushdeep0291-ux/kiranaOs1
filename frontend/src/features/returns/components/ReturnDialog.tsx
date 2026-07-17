@@ -228,7 +228,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
               : "Even exchange — nothing to collect or refund.",
         });
       } else if (refundMode === "gift_card") {
-        if (!isOnline) throw new Error("Connect to Veyra to issue secure store credit. Other refund modes remain available offline.");
+        if (!isOnline) throw new Error("Connect to Artha to issue secure store credit. Other refund modes remain available offline.");
         const created = await apiRequest<CreatedReturn>("/bills/returns", {
           method: "POST",
           ownerPin,
@@ -455,7 +455,7 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         <DialogHeader>
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><Gift className="h-6 w-6" /></div>
           <DialogTitle>Store credit ready</DialogTitle>
-          <DialogDescription>This code is shown once. Give it to the customer now; Veyra stores only a protected fingerprint.</DialogDescription>
+          <DialogDescription>This code is shown once. Give it to the customer now; Artha stores only a protected fingerprint.</DialogDescription>
         </DialogHeader>
         {issuedGiftCard && (
           <div className="space-y-4">

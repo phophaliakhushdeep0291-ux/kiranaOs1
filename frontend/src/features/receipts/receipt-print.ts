@@ -198,7 +198,7 @@ function shopLines(shop?: ReceiptShopInfo | null) {
 export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRenderOptions = {}) {
   const paperSize = options.paperSize ?? "80mm";
   const copies = Math.max(1, Math.min(4, Math.floor(options.copies ?? 1)));
-  const shopName = safeText(snapshot.shop?.name, "Veyra");
+  const shopName = safeText(snapshot.shop?.name, "Artha");
   const dateTime = formatDateTime(snapshot.createdAt);
   const customerName = safeText(snapshot.customerName, "Walk-in");
   const customerMobile = safeText(snapshot.customerMobile);
@@ -244,7 +244,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
         ${paymentRows(snapshot)}
         <footer class="footer">
           <strong>${escapeHtml(footerNote)}</strong>
-          <div class="system-note">Powered by Veyra - local-first counter billing.</div>
+          <div class="system-note">Powered by Artha - local-first counter billing.</div>
         </footer>`;
 
   const actionsHtml = `<div class="actions"><button onclick="window.print()">Print / Save PDF</button></div>`;
@@ -499,7 +499,7 @@ export function buildReceiptPendingHtml(snapshot?: Pick<ReceiptSnapshot, "billNo
 <body>
   <div class="box">
     <h1>Saving bill...</h1>
-    <p>${escapeHtml(safeText(snapshot?.shop?.name, "Veyra"))} is saving this bill. Printing will start after the bill number is ready.</p>
+    <p>${escapeHtml(safeText(snapshot?.shop?.name, "Artha"))} is saving this bill. Printing will start after the bill number is ready.</p>
   </div>
 </body>
 </html>`;

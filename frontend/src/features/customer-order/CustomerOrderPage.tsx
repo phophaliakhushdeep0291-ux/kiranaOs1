@@ -479,7 +479,7 @@ function StorefrontHeader({
             </div>
             <div className="min-w-0">
               <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-[#071432] sm:text-2xl">
-                {catalog.shop.name || "Veyra"}
+                {catalog.shop.name || "Artha"}
               </h1>
               {catalog.locations.length > 1 ? (
                 <select
@@ -737,7 +737,7 @@ function CustomerSidebar({
             <span className="h-2 w-2 rounded-full bg-[#2be07e]" /> Accepting online orders
           </p>
         </div>
-        <p className="text-center text-[11px] text-[#8092b3]">Powered by Veyra</p>
+        <p className="text-center text-[11px] text-[#8092b3]">Powered by Artha</p>
       </div>
     </aside>
   );
@@ -1568,7 +1568,7 @@ function AddressesPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (v
 }
 
 function PaymentsPortalPage({ onView }: { onView: (view: CustomerStorefrontView) => void }) {
-  const methods = ["ramesh@okicici", "Visa **** 4242", "Mastercard **** 8567", "HDFC Bank", "Cash on Delivery", "Veyra Wallet"];
+  const methods = ["ramesh@okicici", "Visa **** 4242", "Mastercard **** 8567", "HDFC Bank", "Cash on Delivery", "Artha Wallet"];
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-5">
@@ -1613,7 +1613,7 @@ function CustomerSettingsPortalPage({ catalog, onView }: { catalog: CustomerCata
       </div>
       <aside className="space-y-4">
         <PortalCard><h2 className="font-display text-lg font-black">Account Summary</h2><div className="mt-4 flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-full bg-[#eaf2ff] font-black text-[#075fff]">RS</span><div><p className="font-black">Ramesh Sharma</p><p className="text-xs text-[#66758f]">Customer</p></div></div><PriceSummaryLine label="Wallet Balance" value="Rs 250.00" /><PriceSummaryLine label="Preferred Store" value={catalog.shop.name} /></PortalCard>
-        <PortalCard className="bg-[#061a39] text-white"><h2 className="font-display text-lg font-black">Veyra Plus</h2><p className="mt-3 text-sm text-[#b5c4df]">You are Rs 56 away from Gold membership</p><div className="mt-4 h-2 rounded-full bg-white/15"><div className="h-full w-2/3 rounded-full bg-[#ffc247]" /></div></PortalCard>
+        <PortalCard className="bg-[#061a39] text-white"><h2 className="font-display text-lg font-black">Artha Plus</h2><p className="mt-3 text-sm text-[#b5c4df]">You are Rs 56 away from Gold membership</p><div className="mt-4 h-2 rounded-full bg-white/15"><div className="h-full w-2/3 rounded-full bg-[#ffc247]" /></div></PortalCard>
         <PortalCard><h2 className="font-display text-lg font-black">Quick Actions</h2>{[["Manage Addresses", "addresses"], ["Payment Methods", "payments"], ["My Lists", "lists"], ["Help & Support", "support"]].map(([label, target]) => <button key={label} type="button" onClick={() => onView(target as CustomerStorefrontView)} className="flex w-full items-center justify-between border-b border-[#edf2f8] py-3 text-sm font-black"><span>{label}</span><ChevronRight size={15} /></button>)}</PortalCard>
       </aside>
     </div>

@@ -1,5 +1,5 @@
 /*
- * QR Code generator library (TypeScript) — vendored into Veyra.
+ * QR Code generator library (TypeScript) — vendored into Artha.
  *
  * Copyright (c) Project Nayuki. (MIT License)
  * https://www.nayuki.io/page/qr-code-generator-library
@@ -815,7 +815,7 @@ export class QrCode {
   ];
 }
 
-/*---- Veyra wrapper (not part of the upstream library) ----*/
+/*---- Artha wrapper (not part of the upstream library) ----*/
 
 export type QrEccLevel = "L" | "M" | "Q" | "H";
 
