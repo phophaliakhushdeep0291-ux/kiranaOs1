@@ -428,6 +428,14 @@ export interface BillInputItem {
 }
 
 export interface BillInput {
+  /**
+   * Stable client identity for this bill so server-side creates are idempotent.
+   * Vital on the ONLINE path (coupons/loyalty/gift cards): a retry after a lost
+   * response must return the existing bill, not create a duplicate and redeem
+   * the coupon twice. confirmBillSchema accepts it; the backend derives
+   * create-bill:{shop}:{device}:{clientBillId} as the idempotency key.
+   */
+  clientBillId?: string;
   locationId?: string;
   billType: typeof BillInputBillType[keyof typeof BillInputBillType];
   /** How GST applies: inclusive (MRP prices, default), exclusive (added on top), or none. */

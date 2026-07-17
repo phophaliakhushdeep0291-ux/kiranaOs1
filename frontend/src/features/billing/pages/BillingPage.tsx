@@ -1192,6 +1192,12 @@ export default function Billing() {
 
     confirmBill.mutate({
       data: {
+        // Stable per-open-bill identity. The local-first path already mints its own,
+        // but the ONLINE path (coupons/loyalty/gift cards go straight to the server)
+        // needs this so a retry after a lost response dedupes server-side instead of
+        // creating a second bill and double-redeeming the coupon. A fresh id is set
+        // after every successful save, so distinct sales never collide.
+        clientBillId: activeBillId,
         billType: nextBillType,
         gstMode: getTaxConfigSync().mode,
         customerId: resolvedCustomerId || undefined,
