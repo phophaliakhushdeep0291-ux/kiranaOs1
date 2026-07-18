@@ -22,7 +22,7 @@ describe("atomic coupon billing client", () => {
 
   it("persists the validated coupon across reloads and held-bill switching", () => {
     expect(billingTypes).toContain("appliedOffer?: AppliedOffer | null");
-    expect(billingPage).toContain("writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, appliedOffer");
+    expect(billingPage).toContain("writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, discountReason, appliedOffer");
     expect(billingPage).toContain("setAppliedOffer(bill.appliedOffer ?? null)");
   });
 });

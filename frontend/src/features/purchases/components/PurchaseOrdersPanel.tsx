@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { safeRandomUUID } from "@/lib/safe-uuid";
 import { ArrowRight, ClipboardCheck, FileText, Loader2, PackageCheck, Plus, Printer, RotateCcw, Send, Share2, TrendingUp, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -225,7 +226,7 @@ export function PurchaseOrdersPanel() {
   const openReceive = (order: PurchaseOrder) => {
     const lines = order.items.filter((item) => item.receivedBaseQty < item.orderedBaseQty).map((item) => ({ purchaseOrderItemId: item.id, productName: item.productName, baseUnit: item.baseUnit, qty: String(Number((item.orderedBaseQty - item.receivedBaseQty).toFixed(2))), rate: String(item.expectedRate), expectedRate: item.expectedRate, remaining: Number((item.orderedBaseQty - item.receivedBaseQty).toFixed(2)), basePerRateUnit: item.expectedRate > 0 && item.expectedAmount > 0 ? item.orderedBaseQty / (item.expectedAmount / item.expectedRate) : 1, batchTrackingEnabled: Boolean(item.product?.batchTrackingEnabled), batchNumber: "", manufacturedOn: "", expiresOn: "" }));
     const total = lines.reduce((sum, line) => sum + (Number(line.qty) / line.basePerRateUnit) * Number(line.rate), 0);
-    setReceiptLines(lines); setSupplierInvoice(""); setSupplierInvoiceAmount(""); setReceiptVarianceReason(""); setPaidAmount(String(Number(total.toFixed(2)))); setPaymentMode("cash"); setReceiptKey(`po-receipt:${order.id}:${crypto.randomUUID()}`); setError(""); setReceiveOrder(order);
+    setReceiptLines(lines); setSupplierInvoice(""); setSupplierInvoiceAmount(""); setReceiptVarianceReason(""); setPaidAmount(String(Number(total.toFixed(2)))); setPaymentMode("cash"); setReceiptKey(`po-receipt:${order.id}:${safeRandomUUID()}`); setError(""); setReceiveOrder(order);
   };
 
   const receiptTotal = useMemo(() => receiptLines.reduce((sum, line) => sum + (Number(line.qty || 0) / line.basePerRateUnit) * Number(line.rate || 0), 0), [receiptLines]);
@@ -337,7 +338,7 @@ export function PurchaseOrdersPanel() {
     const items = selectedReturn.receipt.items.map((item) => ({ purchaseReceiptItemId: item.id, quantityBaseQty: Number(returnQuantities[item.id] || 0) })).filter((item) => item.quantityBaseQty > 0);
     if (!items.length || returnReason.trim().length < 3) { setError("Enter a return quantity and a clear reason."); return; }
     setReturnOpen(false);
-    const idempotencyKey = crypto.randomUUID();
+    const idempotencyKey = safeRandomUUID();
     setApproval({ title: `Return stock from ${selectedReturn.receipt.receiptNumber}`, description: `${items.length} receipt line${items.length === 1 ? "" : "s"} will leave branch stock and create a supplier credit/refund trail.`, confirmLabel: "Create supplier return", run: async (pin) => { const result = await createPurchaseReturn({ purchaseReceiptId: selectedReturn.receipt.id, refundMode: returnMode, reason: returnReason.trim(), idempotencyKey, items }, pin); await refresh(); setReturnReceiptId(""); setReturnQuantities({}); setReturnReason(""); toast({ title: result.idempotentReplay ? `${result.returnNumber} already recorded` : `${result.returnNumber} created`, description: result.idempotentReplay ? "The safe retry returned the original supplier return without changing stock twice." : `${inr(result.totalAmount)} removed from inventory with supplier settlement recorded.` }); } });
   };
 

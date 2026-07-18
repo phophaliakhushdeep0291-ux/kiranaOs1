@@ -106,7 +106,10 @@ export default function IntegrationsSettingsPage() {
   const delivered = deliveries.filter((item) => item.status === "delivered").length;
   const failed = deliveries.filter((item) => item.status === "failed").length;
   const deliveryRate = delivered + failed ? Math.round((delivered / (delivered + failed)) * 100) : null;
-  const lastActivity = useMemo(() => deliveries.map((item) => item.lastAttemptAt || item.createdAt).sort().at(-1), [deliveries]);
+  const lastActivity = useMemo(() => {
+    const sorted = deliveries.map((item) => item.lastAttemptAt || item.createdAt).sort();
+    return sorted.length ? sorted[sorted.length - 1] : undefined;
+  }, [deliveries]);
 
   function refresh() {
     void queryClient.invalidateQueries({ queryKey: ["integrations"] });

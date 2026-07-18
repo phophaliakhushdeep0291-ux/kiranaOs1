@@ -50,9 +50,10 @@ export default defineConfig({
   },
   root: projectRoot,
   build: {
-    // KiranaOS is an installed/evergreen-browser POS; avoid shipping legacy
-    // transforms that add weight without helping the supported runtime.
-    target: "es2022",
+    // Floor chosen for iOS: Safari only ships with the OS, so old iPhones are
+    // stuck on old engines. safari14 transpiles class fields/static blocks that
+    // hard-crash (SyntaxError -> white screen) on iOS 14-16.3 WebKit.
+    target: ["es2020", "safari14"],
     // Release builds favor smaller payloads over the default minifier's speed.
     // Two compression passes keep the full POS feature set inside the enforced
     // raw and gzip budgets without changing runtime behavior.

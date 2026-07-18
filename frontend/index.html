@@ -28,6 +28,97 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Runtime polyfills (ES5) for APIs missing on iOS Safari < 15.4. esbuild
+      // transpiles syntax for the build target but never polyfills these methods,
+      // so old iPhones/iPads used as counter terminals crash without them. Covers
+      // our own code AND third-party bundles that assume a modern runtime.
+      (function () {
+        function def(obj, name, value) {
+          if (obj && typeof obj[name] !== "function") {
+            try { Object.defineProperty(obj, name, { value: value, writable: true, configurable: true }); }
+            catch (e) { obj[name] = value; }
+          }
+        }
+        function atImpl(n) {
+          var len = this.length;
+          n = Math.trunc(n) || 0;
+          if (n < 0) n += len;
+          if (n < 0 || n >= len) return undefined;
+          return this[n];
+        }
+        def(Array.prototype, "at", atImpl);
+        def(String.prototype, "at", atImpl);
+        if (typeof Object.hasOwn !== "function") {
+          Object.hasOwn = function (o, p) { return Object.prototype.hasOwnProperty.call(o, p); };
+        }
+        if (typeof window.structuredClone !== "function") {
+          window.structuredClone = function (v) {
+            // Best-effort fallback; adequate for the plain data this app clones.
+            return v === undefined ? v : JSON.parse(JSON.stringify(v));
+          };
+        }
+      })();
+    </script>
+    <script>
+      // Boot guard (ES5 on purpose): if the module bundle fails to parse or run
+      // (old WebKit SyntaxError, stale cached chunk, storage failure), the page
+      // stays blank with no feedback — especially on iOS where users can't open
+      // a console. Show a recoverable error screen instead of a white screen.
+      (function () {
+        var shown = false;
+        function rootEmpty() {
+          var root = document.getElementById("root");
+          return !root || root.childNodes.length === 0;
+        }
+        function show(detail) {
+          if (shown || !rootEmpty()) return;
+          shown = true;
+          var root = document.getElementById("root");
+          if (!root) return;
+          root.innerHTML =
+            '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:26rem;margin:18vh auto 0;padding:0 1.25rem;text-align:center;color:#0f1e3d">' +
+            '<div style="font-size:44px;line-height:1">&#9888;&#65039;</div>' +
+            '<h1 style="font-size:1.15rem;margin:0.75rem 0 0.35rem">Artha could not start</h1>' +
+            '<p style="font-size:0.85rem;color:#52627e;margin:0 0 1rem">Your browser may be outdated or holding a stale copy of the app. Try reloading; if it repeats, clear the cached copy below.</p>' +
+            '<button onclick="location.reload()" style="display:block;width:100%;padding:0.7rem;border-radius:10px;border:0;background:#005dff;color:#fff;font-weight:700;font-size:0.9rem;margin-bottom:0.5rem">Reload app</button>' +
+            '<button id="artha-boot-clear" style="display:block;width:100%;padding:0.7rem;border-radius:10px;border:1px solid #dbe6f7;background:#fff;color:#0f1e3d;font-weight:700;font-size:0.9rem">Clear cached app &amp; reload</button>' +
+            '<p style="font-size:0.7rem;color:#9aa6bb;margin-top:1rem;word-break:break-word">' + String(detail || "").slice(0, 200) + "</p>" +
+            "</div>";
+          var clearBtn = document.getElementById("artha-boot-clear");
+          if (clearBtn) {
+            clearBtn.onclick = function () {
+              var done = function () { location.reload(); };
+              try {
+                var work = [];
+                if (window.caches && caches.keys) {
+                  work.push(caches.keys().then(function (keys) {
+                    return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                  }));
+                }
+                if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                  work.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+                    return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                  }));
+                }
+                Promise.all(work).then(done, done);
+                setTimeout(done, 3000);
+              } catch (e) { done(); }
+            };
+          }
+        }
+        window.addEventListener("error", function (event) {
+          // Only react while the app has not mounted; later errors are the app's business.
+          if (rootEmpty()) show(event.message || (event.error && event.error.message));
+        });
+        window.addEventListener("unhandledrejection", function (event) {
+          var reason = event && event.reason;
+          if (rootEmpty()) show(reason && reason.message ? reason.message : String(reason || ""));
+        });
+        // Old engines ignore type=module scripts entirely — no error event at all.
+        setTimeout(function () { show("The app did not finish loading (timeout)."); }, 12000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
