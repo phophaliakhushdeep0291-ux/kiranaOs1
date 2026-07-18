@@ -177,7 +177,7 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
         sellerStateCode,
         placeOfSupply: tax.placeOfSupply,
         supplyType: tax.supplyType,
-        hsn: item.product?.hsn || "",
+        hsn: item.hsn || item.product?.hsn || "",
         description: item.name,
         quantity: item.quantity,
         unit: item.enteredUnit,
@@ -249,7 +249,7 @@ function canonicalPayload(bill, shop) {
     schemaVersion: "kiranaos-gst-sandbox-v1",
     seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
     invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
-    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
+    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
   };
 }
 
@@ -263,7 +263,7 @@ export async function createSandboxEInvoice(shopId, billId) {
   if (bill.billType !== "gst_invoice") throw new AppError("Only GST invoices can be prepared for e-invoice submission", 409, "GST_INVOICE_REQUIRED");
   const gstin = validateGstin(shop?.gstNumber);
   if (!gstin.valid) throw new AppError(gstin.reason, 422, "INVALID_SHOP_GSTIN");
-  const missing = bill.items.filter((item) => Number(item.gstRate) > 0 && !validateHsn(item.product?.hsn).valid);
+  const missing = bill.items.filter((item) => Number(item.gstRate) > 0 && !validateHsn(item.hsn || item.product?.hsn).valid);
   if (missing.length) throw new AppError("Every taxable invoice item needs a valid 4, 6 or 8 digit HSN", 422, "INVOICE_HSN_INCOMPLETE");
   const payload = canonicalPayload(bill, shop);
   const payloadJson = JSON.stringify(payload);
@@ -285,7 +285,7 @@ async function loadValidatedInvoice(shopId, billId) {
   if (bill.billType !== "gst_invoice") throw new AppError("Only GST invoices can be submitted", 409, "GST_INVOICE_REQUIRED");
   const gstin = validateGstin(shop?.gstNumber);
   if (!gstin.valid) throw new AppError(gstin.reason, 422, "INVALID_SHOP_GSTIN");
-  const missing = bill.items.filter((item) => Number(item.gstRate) > 0 && !validateHsn(item.product?.hsn).valid);
+  const missing = bill.items.filter((item) => Number(item.gstRate) > 0 && !validateHsn(item.hsn || item.product?.hsn).valid);
   if (missing.length) throw new AppError("Every taxable invoice item needs a valid 4, 6 or 8 digit HSN", 422, "INVOICE_HSN_INCOMPLETE");
   return { shop, bill };
 }
@@ -355,7 +355,7 @@ function canonicalEWayPayload(bill, shop, transport) {
       documentDate: transport.transportDocumentDate || null,
       deliveryAddress: transport.deliveryAddress,
     },
-    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
+    items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
   };
 }
 

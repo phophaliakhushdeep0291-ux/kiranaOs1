@@ -144,6 +144,19 @@ describe("customer reliability", () => {
     expect(mockedUpsertCachedListItem).toHaveBeenCalledWith("customers", expect.objectContaining({ id: created.id }), 1000);
   });
 
+  it("persists a validated buyer GST identity offline and derives its state", async () => {
+    const created = await createCustomerLocalFirst({
+      ...baseCustomerInput,
+      mobile: "9123456789",
+      gstNumber: "29AAPFU0939F1ZR",
+    });
+
+    expect(created).toEqual(expect.objectContaining({ gstNumber: "29AAPFU0939F1ZR", stateCode: "29" }));
+    expect(mockState.committed.customers[0]).toEqual(expect.objectContaining({ gstNumber: "29AAPFU0939F1ZR", stateCode: "29" }));
+    const event = mockState.committed.sync_outbox.find((row) => row.operation_type === "CREATE_CUSTOMER");
+    expect(event?.payload).toEqual(expect.objectContaining({ customer: expect.objectContaining({ gstNumber: "29AAPFU0939F1ZR", stateCode: "29" }) }));
+  });
+
   it("customer update works offline", async () => {
     const updated = await updateCustomerLocalFirst("customer_ramesh", {
       ...baseCustomerInput,

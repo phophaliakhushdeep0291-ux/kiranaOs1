@@ -162,6 +162,7 @@ async function main() {
 
     const runId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
     const mobile = `9${runId.slice(-9)}`;
+    console.log("visual-qa: registering and seeding shop");
     await client.evaluate(`(async () => {
       const apiUrl = ${JSON.stringify(API_URL)};
       const runId = ${JSON.stringify(runId)};
@@ -210,6 +211,7 @@ async function main() {
       return true;
     })()`);
 
+    console.log("visual-qa: auditing billing and bills");
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await navigate(client, `${FRONTEND_URL}/billing?billType=normal_sale`);
     await waitForPage(client, "document.body.innerText.includes('QA Atta 5kg')");
@@ -303,6 +305,7 @@ async function main() {
       productViewports[width] = await capture(client, `products-${width}.png`, width, height);
     }
 
+    console.log("visual-qa: capturing operational pages");
     const pageViewports = {};
     for (const page of [
       { id: "inventory", path: "/inventory", marker: "Inventory" },
@@ -321,6 +324,41 @@ async function main() {
       }
     }
 
+    // Long purchasing tasks must behave like native full-screen phone flows,
+    // with reachable controls and safe-area actions after scrolling.
+    console.log("visual-qa: auditing purchase task");
+    await client.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+    await navigate(client, `${FRONTEND_URL}/purchase-bills`);
+    await waitForPage(client, "document.body.innerText.includes('Purchases')");
+    await client.evaluate(`(() => {
+      const trigger = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('New order'));
+      if (!trigger) throw new Error('New order action was not rendered');
+      trigger.click();
+      return true;
+    })()`);
+    await waitForPage(client, "Boolean(document.querySelector('[data-mobile-task-dialog=\"true\"]'))");
+    await sleep(350); // Let Radix's zoom-in transition settle before measuring geometry.
+    const purchaseTaskAudit = await client.evaluate(`(() => {
+      const dialog = document.querySelector('[data-mobile-task-dialog="true"]');
+      const rect = dialog.getBoundingClientRect();
+      const controls = [...dialog.querySelectorAll('input, textarea, button, [role="combobox"]')]
+        .filter((node) => getComputedStyle(node).display !== 'none');
+      dialog.scrollTop = dialog.scrollHeight;
+      const footerRect = dialog.querySelector('[data-dialog-footer="true"]')?.getBoundingClientRect();
+      return {
+        rect: { left: Math.round(rect.left), top: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
+        minControlHeight: Math.min(...controls.map((node) => node.getBoundingClientRect().height)),
+        footerBottom: footerRect ? Math.round(innerHeight - footerRect.bottom) : null,
+        overflowX: dialog.scrollWidth - dialog.clientWidth,
+      };
+    })()`);
+    assert(purchaseTaskAudit.rect.left === 0 && purchaseTaskAudit.rect.top === 0, `Purchase task is not viewport anchored: ${JSON.stringify(purchaseTaskAudit)}`);
+    assert(Math.abs(purchaseTaskAudit.rect.width - 390) <= 2 && Math.abs(purchaseTaskAudit.rect.height - 844) <= 2, `Purchase task is not full-screen: ${JSON.stringify(purchaseTaskAudit)}`);
+    assert(purchaseTaskAudit.minControlHeight >= 43, `Purchase task has undersized controls: ${JSON.stringify(purchaseTaskAudit)}`);
+    assert(purchaseTaskAudit.overflowX <= 2, `Purchase task overflows horizontally: ${JSON.stringify(purchaseTaskAudit)}`);
+    assert(purchaseTaskAudit.footerBottom !== null && Math.abs(purchaseTaskAudit.footerBottom) <= 2, `Purchase task footer is unreachable: ${JSON.stringify(purchaseTaskAudit)}`);
+    const purchaseTaskMobile = await capture(client, "purchase-create-task-390.png", 390, 844);
+
     const runtimeErrors = await client.evaluate("window.__kiranaQaErrors || []");
     assert(runtimeErrors.length === 0, `Browser runtime errors: ${runtimeErrors.join(" | ")}`);
     console.log(JSON.stringify({
@@ -335,6 +373,8 @@ async function main() {
       productAudit,
       productViewports,
       pageViewports,
+      purchaseTaskAudit,
+      purchaseTaskMobile,
       runtimeErrors,
     }, null, 2));
   } finally {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeGstBreakdown, gstGrandTotal } from "@/lib/gst";
 import { buildReceiptHtml, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
+import { validateGstin } from "@/lib/gstin";
 
 describe("GST engine", () => {
   it("inclusive mode extracts tax without changing the payable", () => {
@@ -52,6 +53,24 @@ describe("GST engine", () => {
     expect(gstGrandTotal(100, 150, b)).toBe(0); // clamped, never negative
     expect(gstGrandTotal(100, 18, b)).toBe(100);
   });
+
+  it("uses IGST when valid seller and buyer state codes differ", () => {
+    const b = computeGstBreakdown(
+      [{ price: 118, quantity: 1, gstRate: 18 }],
+      "inclusive",
+      { sellerStateCode: "27", buyerStateCode: "29" },
+    );
+    expect(b.supplyType).toBe("interstate");
+    expect(b.igst).toBe(18);
+    expect(b.cgst).toBe(0);
+    expect(b.sgst).toBe(0);
+    expect(b.byRate[0]).toEqual(expect.objectContaining({ igst: 18, cgst: 0, sgst: 0 }));
+  });
+
+  it("validates the GSTIN checksum and exposes its state code", () => {
+    expect(validateGstin("27AAPFU0939F1ZV")).toEqual(expect.objectContaining({ valid: true, normalized: "27AAPFU0939F1ZV", stateCode: "27" }));
+    expect(validateGstin("27AAPFU0939F1ZA")).toEqual(expect.objectContaining({ valid: false, reason: "GSTIN checksum is invalid" }));
+  });
 });
 
 describe("receipt GST breakup", () => {
@@ -89,6 +108,22 @@ describe("receipt GST breakup", () => {
     });
     expect(html).toContain("GST (CGST + SGST)");
     expect(html).not.toContain("Prices are GST-inclusive");
+  });
+
+  it("prints an interstate buyer identity and IGST breakup", () => {
+    const html = buildReceiptHtml({
+      ...base,
+      buyerGstin: "29AAPFU0939F1ZR",
+      buyerStateCode: "29",
+      buyerAddress: "Bengaluru, Karnataka",
+      gst: { mode: "inclusive", gst: 90, cgst: 0, sgst: 0, igst: 90, supplyType: "interstate", byRate: [{ rate: 18, taxable: 500, cgst: 0, sgst: 0, igst: 90 }] },
+    });
+    expect(html).toContain("Buyer GSTIN");
+    expect(html).toContain("29AAPFU0939F1ZR");
+    expect(html).toContain("Place of supply");
+    expect(html).toContain("GST Breakup (IGST)");
+    expect(html).toContain("IGST Rs 90");
+    expect(html).not.toContain("CGST Rs");
   });
 
   it("omits the section entirely when there is no tax", () => {

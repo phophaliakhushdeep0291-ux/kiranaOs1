@@ -256,6 +256,10 @@ export default function Billing() {
   const resolvedCustomerId = selectedCustomerBackendId || matchingMobileCustomer?.id || "";
   const resolvedCustomerName = selectedCustomer?.name || matchingMobileCustomer?.name || typedCustomerName;
   const resolvedCustomerMobile = selectedCustomer?.mobile || matchingMobileCustomer?.mobile || typedCustomerMobile;
+  const resolvedCustomerRecord = selectedCustomer ?? matchingMobileCustomer;
+  const resolvedBuyerGstin = resolvedCustomerRecord?.gstNumber ?? undefined;
+  const resolvedBuyerStateCode = resolvedCustomerRecord?.stateCode ?? undefined;
+  const resolvedBuyerAddress = resolvedCustomerRecord?.address ?? undefined;
   const hasCreditCustomerIdentity = Boolean(resolvedCustomerId || (typedCustomerName && typedCustomerMobile));
   const loyaltyProgram = useQuery({
     queryKey: ["loyalty-program"],
@@ -1081,6 +1085,9 @@ export default function Billing() {
       createdAt: new Date().toISOString(),
       customerName: resolvedCustomerName || "Walk-in",
       customerMobile: resolvedCustomerMobile || undefined,
+      buyerGstin: resolvedBuyerGstin || undefined,
+      buyerStateCode: resolvedBuyerStateCode || undefined,
+      buyerAddress: resolvedBuyerAddress || undefined,
       items: cart,
       subtotal,
       discount: totalDiscount,
@@ -1220,6 +1227,9 @@ export default function Billing() {
         customerId: resolvedCustomerId || undefined,
         customerName: resolvedCustomerName || "Walk-in",
         customerMobile: resolvedCustomerMobile || undefined,
+        buyerGstin: resolvedBuyerGstin || undefined,
+        buyerStateCode: resolvedBuyerStateCode || undefined,
+        buyerAddress: resolvedBuyerAddress || undefined,
         discount: safeDiscount,
         offerId: appliedOffer?.id,
         offerCode: appliedOffer?.code,
@@ -1250,6 +1260,7 @@ export default function Billing() {
           pricingCalculationVersion: item.pricing?.calculationVersion,
           wasPriceOverridden: item.manualRate === true,
           gstRate: item.product.gstRate ?? 0,
+          hsn: item.product.hsn ?? undefined,
         })),
         payments,
         ownerPin: sensitiveActions.length > 0 ? sensitiveApproval?.ownerPin : undefined,

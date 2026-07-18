@@ -11,6 +11,7 @@ import {
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
 import { getTaxConfigSync } from "@/features/settings/tax-config";
 import { computeGstBreakdown } from "@/lib/gst";
+import { gstStateCode } from "@/lib/gstin";
 import { cartItemLineDiscount, cartItemNet } from "./billing-calculations";
 import type { PrintableBill } from "./billing-types";
 
@@ -43,6 +44,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
   const breakdown = computeGstBreakdown(
     bill.items.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
     getTaxConfigSync().mode,
+    { sellerStateCode: gstStateCode(bill.shop?.gstNumber), buyerStateCode: bill.buyerStateCode },
   );
   return {
     billNo: bill.billNo,
@@ -51,6 +53,9 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     copyLabel: bill.copyLabel ?? "Original customer copy",
     customerName: bill.customerName,
     customerMobile: bill.customerMobile,
+    buyerGstin: bill.buyerGstin,
+    buyerStateCode: bill.buyerStateCode,
+    buyerAddress: bill.buyerAddress,
     rows: bill.items.map((item) => ({
       name: item.product.name,
       quantity: item.quantity,
@@ -69,7 +74,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     payments: bill.payments?.length ? bill.payments : fallbackPaymentLines(bill),
     shop,
     gst: printer.showGstBreakup && breakdown.gst > 0
-      ? { mode: breakdown.mode, gst: breakdown.gst, cgst: breakdown.cgst, sgst: breakdown.sgst, byRate: breakdown.byRate.map(({ rate, taxable, cgst, sgst }) => ({ rate, taxable, cgst, sgst })) }
+      ? { mode: breakdown.mode, gst: breakdown.gst, cgst: breakdown.cgst, sgst: breakdown.sgst, igst: breakdown.igst, supplyType: breakdown.supplyType, byRate: breakdown.byRate.map(({ rate, taxable, cgst, sgst, igst }) => ({ rate, taxable, cgst, sgst, igst })) }
       : null,
     showHsn: printer.showHsn,
     // Udhar bills keep their record-keeping note; everything else uses the

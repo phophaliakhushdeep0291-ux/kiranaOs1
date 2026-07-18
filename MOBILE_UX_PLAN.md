@@ -1,7 +1,7 @@
 # Mobile UX Plan
 
 Status: Execution baseline  
-Last updated: 2026-07-16
+Last updated: 2026-07-18
 
 ## Outcome
 
@@ -48,6 +48,12 @@ Bottom navigation: Home, Billing, Inventory, Customers and More. Billing is the 
 6. Remaining pages and desktop regression.
 
 Use existing components and routes; avoid page rewrites where a shared primitive or layout correction solves the issue.
+
+## Execution evidence
+
+- 2026-07-18: Billing, Products, Inventory, Purchases, Reports, Settings and Sync overview routes passed automated live Chrome checks at 375, 390, 430 and 768 widths with zero horizontal document overflow or runtime errors.
+- 2026-07-18: The 390px purchase-order creation task passed full-screen geometry (390x844 at 0,0), 44px minimum control height, zero horizontal overflow and a sticky safe-area footer at the viewport edge. Artifact: `frontend/purchase-create-task-390.png`.
+- MQA-PUR-01 remains partially open until receipt, payment, stock mutation and duplicate-submission behavior are exercised end to end; overview/create-flow evidence alone does not prove inventory correctness.
 
 ## Live audit procedure
 

@@ -429,6 +429,7 @@ export interface BillInputItem {
   wasPriceOverridden?: boolean;
   priceOverrideReason?: string;
   gstRate?: number;
+  hsn?: string;
 }
 
 export interface BillInput {

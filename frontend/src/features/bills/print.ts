@@ -2,6 +2,8 @@ import type { Bill } from "@/types/api";
 import { buildReceiptHtml, openConfiguredReceiptWindow, type ReceiptPaymentLine, type ReceiptShopInfo, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
 import { dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
+import { computeGstBreakdown, type GstMode } from "@/lib/gst";
+import { gstStateCode } from "@/lib/gstin";
 
 export interface PrintableBillRow {
   name: string;
@@ -9,6 +11,10 @@ export interface PrintableBillRow {
   unit?: string | null;
   rate: number;
   total: number;
+  lineDiscount?: number;
+  gstRate?: number;
+  hsn?: string | null;
+  note?: string | null;
 }
 
 export interface PrintableBillSnapshot {
@@ -16,6 +22,9 @@ export interface PrintableBillSnapshot {
   createdAt?: string;
   customerName?: string | null;
   customerMobile?: string | null;
+  buyerGstin?: string | null;
+  buyerStateCode?: string | null;
+  buyerAddress?: string | null;
   rows: PrintableBillRow[];
   subtotal: number;
   discount: number;
@@ -25,6 +34,7 @@ export interface PrintableBillSnapshot {
   payments?: ReceiptPaymentLine[];
   status?: string;
   billType?: string | null;
+  gstMode?: GstMode;
   shop?: ReceiptShopInfo | null;
 }
 
@@ -55,6 +65,11 @@ function toReceiptSnapshot(snapshot: PrintableBillSnapshot): ReceiptSnapshot {
   // settings (show-GSTIN toggle + configured footer) so a reprint matches the original.
   const printer = getPrinterConfigSync();
   const shop = snapshot.shop && !printer.showGst ? { ...snapshot.shop, gstNumber: null } : snapshot.shop;
+  const breakdown = computeGstBreakdown(
+    snapshot.rows.map((row) => ({ price: row.rate, quantity: row.quantity, gstRate: row.gstRate ?? 0, lineDiscount: row.lineDiscount ?? 0 })),
+    snapshot.gstMode ?? "inclusive",
+    { sellerStateCode: gstStateCode(snapshot.shop?.gstNumber), buyerStateCode: snapshot.buyerStateCode },
+  );
   return {
     billNo: snapshot.billNo,
     createdAt: snapshot.createdAt,
@@ -62,6 +77,9 @@ function toReceiptSnapshot(snapshot: PrintableBillSnapshot): ReceiptSnapshot {
     copyLabel: "Duplicate copy",
     customerName: snapshot.customerName ?? "Walk-in",
     customerMobile: snapshot.customerMobile,
+    buyerGstin: snapshot.buyerGstin,
+    buyerStateCode: snapshot.buyerStateCode,
+    buyerAddress: snapshot.buyerAddress,
     rows: snapshot.rows,
     subtotal: snapshot.subtotal,
     discount: snapshot.discount,
@@ -71,6 +89,10 @@ function toReceiptSnapshot(snapshot: PrintableBillSnapshot): ReceiptSnapshot {
     payments: snapshot.payments,
     status: snapshot.status,
     shop,
+    gst: printer.showGstBreakup && breakdown.gst > 0
+      ? { mode: breakdown.mode, gst: breakdown.gst, cgst: breakdown.cgst, sgst: breakdown.sgst, igst: breakdown.igst, supplyType: breakdown.supplyType, byRate: breakdown.byRate.map(({ rate, taxable, cgst, sgst, igst }) => ({ rate, taxable, cgst, sgst, igst })) }
+      : null,
+    showHsn: printer.showHsn,
     footerNote: snapshot.credit > 0
       ? "Please keep this receipt for udhar records."
       : (printer.footerText || "Thank you for shopping with us."),
@@ -91,6 +113,10 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
       unit: typeof item.enteredUnit === "string" ? item.enteredUnit : typeof item.entered_unit === "string" ? item.entered_unit : "pcs",
       rate,
       total,
+      lineDiscount: readNumber(item.lineDiscount ?? item.line_discount, Math.max(0, rate * quantity - total)),
+      gstRate: readNumber(item.gstRate ?? item.gst_rate, 0),
+      hsn: typeof item.hsn === "string" ? item.hsn : null,
+      note: typeof item.note === "string" ? item.note : null,
     };
   });
 
@@ -122,6 +148,9 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
     createdAt: bill.createdAt,
     customerName: bill.customerName ?? "Walk-in",
     customerMobile: bill.customerMobile ?? null,
+    buyerGstin: bill.buyerGstin ?? null,
+    buyerStateCode: bill.buyerStateCode ?? null,
+    buyerAddress: bill.buyerAddress ?? null,
     rows,
     subtotal: readNumber(bill.subtotal, total + readNumber(bill.discount, 0)),
     discount: readNumber(bill.discount, 0),
@@ -131,6 +160,7 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
     payments: paymentLines,
     status: bill.status,
     billType: bill.billType,
+    gstMode: bill.gstMode ?? "inclusive",
     shop: shop ?? null,
   };
 }

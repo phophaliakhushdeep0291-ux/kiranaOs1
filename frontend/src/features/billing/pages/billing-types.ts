@@ -79,6 +79,9 @@ export interface PrintableBill {
   createdAt: string;
   customerName: string;
   customerMobile?: string;
+  buyerGstin?: string;
+  buyerStateCode?: string;
+  buyerAddress?: string;
   items: CartItem[];
   subtotal: number;
   discount: number;

@@ -29,7 +29,9 @@ export interface ReceiptGstInfo {
   gst: number;
   cgst: number;
   sgst: number;
-  byRate: { rate: number; taxable: number; cgst: number; sgst: number }[];
+  igst?: number;
+  supplyType?: "intrastate" | "interstate";
+  byRate: { rate: number; taxable: number; cgst: number; sgst: number; igst?: number }[];
 }
 
 export interface ReceiptPaymentLine {
@@ -45,6 +47,9 @@ export interface ReceiptSnapshot {
   copyLabel?: string | null;
   customerName?: string | null;
   customerMobile?: string | null;
+  buyerGstin?: string | null;
+  buyerStateCode?: string | null;
+  buyerAddress?: string | null;
   rows: ReceiptLine[];
   subtotal: number;
   discount: number;
@@ -171,16 +176,17 @@ function paymentRows(snapshot: ReceiptSnapshot) {
 function gstSection(snapshot: ReceiptSnapshot) {
   const info = snapshot.gst;
   if (!info || info.gst <= 0) return "";
+  const interstate = info.supplyType === "interstate" || Number(info.igst ?? 0) > 0;
   const rateRows = info.byRate.map((row) => `
           <div class="line">
             <span>@${row.rate}% on ${formatReceiptMoney(row.taxable)}</span>
-            <strong>CGST ${formatReceiptMoney(row.cgst)} · SGST ${formatReceiptMoney(row.sgst)}</strong>
+            <strong>${interstate ? `IGST ${formatReceiptMoney(Number(row.igst ?? 0))}` : `CGST ${formatReceiptMoney(row.cgst)} · SGST ${formatReceiptMoney(row.sgst)}`}</strong>
           </div>`).join("");
   const note = info.mode === "inclusive"
     ? `<div class="gst-note">Prices are GST-inclusive — total includes GST of ${formatReceiptMoney(info.gst)}.</div>`
     : "";
   return `
-      <div class="section-title">GST Breakup (CGST + SGST)</div>
+      <div class="section-title">GST Breakup (${interstate ? "IGST" : "CGST + SGST"})</div>
       <div class="payment-box">
         ${rateRows}
         <div class="line"><span>Total GST</span><strong>${formatReceiptMoney(info.gst)}</strong></div>
@@ -205,6 +211,9 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
   const dateTime = formatDateTime(snapshot.createdAt);
   const customerName = safeText(snapshot.customerName, "Walk-in");
   const customerMobile = safeText(snapshot.customerMobile);
+  const buyerGstin = safeText(snapshot.buyerGstin);
+  const buyerStateCode = safeText(snapshot.buyerStateCode);
+  const buyerAddress = safeText(snapshot.buyerAddress);
   const copyLabel = safeText(snapshot.copyLabel, "Customer copy");
   const billTypeLabel = safeText(snapshot.billTypeLabel, "Sale receipt");
   const cashierName = safeText(snapshot.shop?.cashierName);
@@ -227,6 +236,9 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
           <div><span>Date</span><strong>${escapeHtml(dateTime || "-")}</strong></div>
           <div><span>Customer</span><strong>${escapeHtml(customerName)}</strong></div>
           <div><span>Mobile</span><strong>${escapeHtml(customerMobile || "-")}</strong></div>
+          ${buyerGstin ? `<div><span>Buyer GSTIN</span><strong>${escapeHtml(buyerGstin)}</strong></div>` : ""}
+          ${buyerStateCode ? `<div><span>Place of supply</span><strong>${escapeHtml(buyerStateCode)}</strong></div>` : ""}
+          ${buyerAddress ? `<div class="meta-wide"><span>Billing address</span><strong>${escapeHtml(buyerAddress)}</strong></div>` : ""}
           ${cashierName ? `<div><span>Cashier</span><strong>${escapeHtml(cashierName)}</strong></div>` : ""}
         </section>
         <table>
@@ -237,7 +249,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
         </table>
         <section class="summary">
           <div class="line"><span>Subtotal</span><strong>${formatReceiptMoney(snapshot.subtotal)}</strong></div>
-          ${snapshot.gst && snapshot.gst.gst > 0 && snapshot.gst.mode === "exclusive" ? `<div class="line"><span>GST (CGST + SGST)</span><strong>+${formatReceiptMoney(snapshot.gst.gst)}</strong></div>` : ""}
+          ${snapshot.gst && snapshot.gst.gst > 0 && snapshot.gst.mode === "exclusive" ? `<div class="line"><span>GST (${snapshot.gst.supplyType === "interstate" ? "IGST" : "CGST + SGST"})</span><strong>+${formatReceiptMoney(snapshot.gst.gst)}</strong></div>` : ""}
           ${snapshot.discount > 0 ? `<div class="line"><span>Discount</span><strong>-${formatReceiptMoney(snapshot.discount)}</strong></div>` : ""}
           <div class="line grand"><span>Total</span><strong>${formatReceiptMoney(snapshot.total)}</strong></div>
           <div class="line"><span>Paid</span><strong>${formatReceiptMoney(snapshot.paid)}</strong></div>
@@ -360,6 +372,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
       font-size: 12px;
       word-break: break-word;
     }
+    .meta-wide { grid-column: 1 / -1; }
     table {
       width: 100%;
       border-collapse: collapse;

@@ -2,7 +2,7 @@
 
 Current decision: **NO-GO — baseline evidence not yet recorded**  
 Gate owner: Release owner  
-Last evaluated: 2026-07-16
+Last evaluated: 2026-07-18
 
 No new feature should enter a release branch while the P0 production gate is red. This document records the decision; `PRODUCTION_CHECKLIST.md` contains the full operational checklist.
 
@@ -23,8 +23,8 @@ Run against a clean checkout with supported Node versions and frozen installs.
 | Gate | Command/evidence | Status |
 |---|---|---|
 | Frontend typecheck | `cd frontend && pnpm run typecheck` | Local baseline passed 2026-07-16 |
-| Frontend tests | `cd frontend && pnpm run test` | Local baseline passed: 611 passed, 1 skipped |
-| Frontend production build/security | `cd frontend && pnpm run build && pnpm run security:check` | Local baseline passed 2026-07-16 |
+| Frontend tests | `cd frontend && npm run test` | Local baseline passed 2026-07-18: 624 passed, 1 skipped |
+| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local baseline passed 2026-07-18; 2820.8 kB raw / 844.2 kB gzip |
 | Backend tests | `cd backend && npm test` | Local baseline passed 2026-07-16 |
 | Backend production check | `cd backend && npm run prod:check` | Local baseline passed after Railway packaging fix |
 | Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 147 passed, 1 PostgreSQL-only suite skipped |
@@ -42,9 +42,9 @@ Any failure is red. Skips require a written exception below; P0 financial, migra
 | Cancel/refund/return exact reversal | BILL-006 | Not verified |
 | Offline bill survives reload and syncs once | SYNC-001..002 / MQA-SYNC-01 | Not verified |
 | Two-device duplicate/conflict proof | SYNC-002..003 | Not verified |
-| Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Not verified |
+| Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Create-PO mobile task verified; receipt/payment/stock reconciliation remains not verified |
 | Daily closing and GST sample reconciliation | RPT-001..002 | Not verified |
-| 375/390/430/768 mobile matrix | QUAL-003 / all MQA flows | Billing, Products and Customers passed overflow/runtime smoke; Phase 1 core-flow matrix complete, remaining Phase 2 pages not verified |
+| 375/390/430/768 mobile matrix | QUAL-003 / all MQA flows | Overview routes for Billing, Products, Inventory, Purchases, Reports, Settings and Sync pass overflow/runtime smoke; Customers has separate multi-width evidence. Full transactional flows remain open. |
 | Backup restore proof and rollback rehearsal | SYNC-005 | Not verified |
 
 ## Defect thresholds

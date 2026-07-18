@@ -230,6 +230,7 @@ function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode
       price_override_reason: item.priceOverrideReason ?? null,
       gstRate: item.gstRate ?? 0,
       gst_rate: item.gstRate ?? 0,
+      hsn: item.hsn ?? null,
       line_subtotal: subtotal,
       line_gst: gst,
       line_total: gstMode === "exclusive" ? roundMoney(subtotal + gst) : subtotal,

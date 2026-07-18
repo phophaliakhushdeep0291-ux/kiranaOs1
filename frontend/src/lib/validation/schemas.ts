@@ -159,6 +159,7 @@ export const billItemCreationSchema = z.object({
   wasPriceOverridden: z.boolean().optional(),
   priceOverrideReason: z.string().trim().max(500).optional(),
   gstRate: percentage.default(0),
+  hsn: optionalText,
 });
 
 export const billPaymentSchema = z.object({

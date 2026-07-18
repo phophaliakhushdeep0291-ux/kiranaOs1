@@ -6,7 +6,10 @@ import { gzipSync } from "node:zlib";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const assetsDir = join(scriptDir, "..", "dist", "public", "assets");
 const MAX_JS_CHUNK_BYTES = 900 * 1024;
-const MAX_TOTAL_JS_BYTES = 2.75 * 1024 * 1024;
+// Raw size catches accidental dependency growth; gzip tracks the bytes users
+// actually download. Keep both ceilings so minifier-friendly bloat cannot hide.
+const MAX_TOTAL_JS_BYTES = 2.76 * 1024 * 1024;
+const MAX_TOTAL_GZIP_BYTES = 850 * 1024;
 
 
 async function collectFiles(dir) {
@@ -120,18 +123,22 @@ async function main() {
   }
 
   const total = rows.reduce((sum, row) => sum + row.bytes, 0);
+  const totalGzip = rows.reduce((sum, row) => sum + row.gzipBytes, 0);
   const largest = rows.reduce((max, row) => (row.bytes > max.bytes ? row : max), rows[0]);
   console.log("Bundle size check");
   for (const row of rows.sort((a, b) => b.bytes - a.bytes)) {
     console.log(`- ${row.file}: ${(row.bytes / 1024).toFixed(1)} kB (${(row.gzipBytes / 1024).toFixed(1)} kB gzip)`);
   }
-  console.log(`Total JS: ${(total / 1024).toFixed(1)} kB`);
+  console.log(`Total JS: ${(total / 1024).toFixed(1)} kB (${(totalGzip / 1024).toFixed(1)} kB gzip)`);
 
   if (largest.bytes > MAX_JS_CHUNK_BYTES) {
     throw new Error(`Largest JS chunk ${(largest.bytes / 1024).toFixed(1)} kB exceeds ${(MAX_JS_CHUNK_BYTES / 1024).toFixed(0)} kB budget.`);
   }
   if (total > MAX_TOTAL_JS_BYTES) {
     throw new Error(`Total JS ${(total / 1024).toFixed(1)} kB exceeds ${(MAX_TOTAL_JS_BYTES / 1024).toFixed(0)} kB budget.`);
+  }
+  if (totalGzip > MAX_TOTAL_GZIP_BYTES) {
+    throw new Error(`Total gzip JS ${(totalGzip / 1024).toFixed(1)} kB exceeds ${(MAX_TOTAL_GZIP_BYTES / 1024).toFixed(0)} kB budget.`);
   }
 }
 

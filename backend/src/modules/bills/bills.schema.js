@@ -25,6 +25,7 @@ const billItemSchema = z.object({
   wasPriceOverridden: z.boolean().optional(),
   priceOverrideReason: z.string().max(500).optional(),
   gstRate: percentageRate().default(0),
+  hsn: z.string().trim().regex(/^\d{4}(?:\d{2})?(?:\d{2})?$/, "HSN must contain 4, 6 or 8 digits").optional(),
 });
 
 const paymentSchema = z.object({

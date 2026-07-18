@@ -560,6 +560,7 @@ model BillItem {
   costPerRateUnit           Float
   costPerRateUnitPaise      BigInt?
   gstRate                   Float   @default(0)
+  hsn                       String?
   note                      String?
   lineDiscount              Float   @default(0)
   lineDiscountPaise         BigInt?
