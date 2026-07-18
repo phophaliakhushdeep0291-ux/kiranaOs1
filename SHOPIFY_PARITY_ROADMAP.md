@@ -46,8 +46,10 @@ the codebase, not assumed.
       enter counted qty, post variance adjustments in one commit with reasons.
 - [ ] **Stock adjustment reasons taxonomy** — damage/theft/expiry/correction
       enums on manual adjustments, reportable.
-- [ ] **Barcode label printing** — generate/print price labels (name, price,
-      barcode) for products from the products page.
+- [x] **Barcode label printing** — "Print label" on every product row: printable
+      48mm label sheet with name/price/MRP and a scannable code — vendored
+      EAN-13 SVG encoder (UPC-A/12-digit normalization + checksum) with QR
+      fallback for unbarcoded products. *(done 2026-07-18)*
 - [ ] **Low-stock workflow** — reorder suggestions page driven by
       reorderLevel → one-tap draft purchase order per supplier.
 
@@ -83,3 +85,4 @@ the codebase, not assumed.
 | 2026-07-17 | Roadmap created; per-line discounts shipped full-stack | feat(billing): per-line discounts |
 | 2026-07-17 | Exchanges shipped in ReturnDialog; live browser QA of discounts + exchange | feat(returns): exchange flow |
 | 2026-07-18 | Line-item notes shipped full-stack (cart chip → receipt) | feat(billing): line-item notes |
+| 2026-07-18 | Barcode label printing (EAN-13 + QR fallback) from products page | feat(products): price-label printing |
