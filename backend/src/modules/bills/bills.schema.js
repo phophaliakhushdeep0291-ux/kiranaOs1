@@ -52,6 +52,8 @@ export const confirmBillSchema = z.object({
   customerName: z.string().default("Walk-in"),
   items: z.array(billItemSchema).min(1, "At least one item required"),
   discount: moneyAmount().default(0),
+  // Optional free-text reason for the bill-level discount (discounts report).
+  discountReason: z.string().trim().max(200).optional(),
   offerId: z.string().min(1).optional(),
   offerCode: z.string().trim().max(40).optional(),
   offerDiscount: moneyAmount().default(0),

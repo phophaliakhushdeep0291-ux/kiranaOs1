@@ -425,6 +425,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         buyerAddress: invoiceCustomer?.address ?? null,
         subtotal,
         discount: billDiscount,
+        discountReason: body.discountReason || null,
         offerId: validatedOffer?.offer.id ?? null,
         offerCode: validatedOffer?.offer.code ?? null,
         offerDiscount: computedOfferDiscount,

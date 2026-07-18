@@ -184,6 +184,7 @@ export const billCreationSchema = z
     buyerAddress: optionalText,
     items: z.array(billItemCreationSchema).min(1, "At least one bill item is required"),
     discount: money.default(0),
+    discountReason: z.string().trim().max(200).optional(),
     actualAmount: money.optional(),
     buyerPaidAmount: money.optional(),
     waivedAmount: money.optional(),

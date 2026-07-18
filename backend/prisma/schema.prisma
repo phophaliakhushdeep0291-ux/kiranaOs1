@@ -478,6 +478,7 @@ model Bill {
   subtotalPaise         BigInt?
   discount              Float     @default(0)
   discountPaise         BigInt?
+  discountReason        String?
   offerId               String?
   offerCode             String?
   offerDiscount         Float     @default(0)

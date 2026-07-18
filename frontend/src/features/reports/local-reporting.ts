@@ -115,6 +115,28 @@ export interface StaffSalesRow {
   bills: number;
 }
 
+export interface ReportDiscountedBill {
+  billId: string;
+  billNo: string;
+  at: string;
+  amount: number;
+  reason: string | null;
+}
+
+export interface ReportDiscountSummary {
+  /** All rupees given away in the range (bill-level + line-level). */
+  total: number;
+  /** Bill-level discount minus the coupon and loyalty portions inside it. */
+  manual: number;
+  coupon: number;
+  loyalty: number;
+  /** Per-line discounts (sum of item lineDiscount). */
+  line: number;
+  discountedBillCount: number;
+  /** Most recent bills carrying a bill-level discount, with the typed reason. */
+  recent: ReportDiscountedBill[];
+}
+
 export interface LocalReportSnapshot {
   generatedAt: string;
   range: DateRange;
@@ -132,6 +154,7 @@ export interface LocalReportSnapshot {
   stockMovement: ReportStockMovementSummary;
   lowStock: ReportLowStockItem[];
   staffSales: StaffSalesRow[];
+  discounts: ReportDiscountSummary;
   pendingSyncCount: number;
   failedSyncCount: number;
   conflictCount: number;
@@ -258,6 +281,60 @@ function isSaleBill(row: LocalBill): boolean {
 
 function billTotal(row: LocalBill): number {
   return roundMoney(readNumber(row.grandTotal ?? row.grand_total ?? row.totalAmount ?? row.total_amount ?? row.netAmount ?? row.net_amount, 0));
+}
+
+/**
+ * Discounts given in the range. Bill-level `discount` is all-in on server
+ * bills (coupon + loyalty portions live inside it), so "manual" is derived by
+ * subtracting those; line discounts are summed from the embedded items.
+ */
+export function calculateDiscountSummary(bills: LocalBill[], range: DateRange): ReportDiscountSummary {
+  const saleBills = bills.filter((bill) =>
+    isSaleBill(bill) &&
+    isWithinRange(bill as RecordLike, range) &&
+    !String(bill.billType ?? bill.bill_type ?? "").toLowerCase().includes("return"));
+
+  let billLevel = 0;
+  let coupon = 0;
+  let loyalty = 0;
+  let line = 0;
+  const discounted: ReportDiscountedBill[] = [];
+
+  for (const bill of saleBills) {
+    const record = bill as RecordLike;
+    const billDiscount = roundMoney(Math.max(0, readNumber(record.discount, 0)));
+    const offerDiscount = roundMoney(Math.max(0, readNumber(record.offerDiscount ?? record.offer_discount, 0)));
+    const loyaltyDiscount = roundMoney(Math.max(0, readNumber(record.loyaltyDiscount ?? record.loyalty_discount, 0)));
+    const items = Array.isArray(record.items) ? record.items as RecordLike[] : [];
+    const lineDiscount = roundMoney(items.reduce(
+      (sum, item) => sum + Math.max(0, readNumber(item.lineDiscount ?? item.line_discount, 0)),
+      0,
+    ));
+    billLevel = roundMoney(billLevel + billDiscount);
+    coupon = roundMoney(coupon + Math.min(offerDiscount, billDiscount));
+    loyalty = roundMoney(loyalty + Math.min(loyaltyDiscount, Math.max(0, billDiscount - offerDiscount)));
+    line = roundMoney(line + lineDiscount);
+    if (billDiscount > 0 || lineDiscount > 0) {
+      const reason = readString(record, ["discountReason", "discount_reason"]);
+      discounted.push({
+        billId: String(record.id ?? ""),
+        billNo: readString(record, ["billNumber", "billNo", "bill_no"]) || String(record.id ?? "Bill"),
+        at: rowDate(record),
+        amount: roundMoney(billDiscount + lineDiscount),
+        reason: reason || null,
+      });
+    }
+  }
+
+  return {
+    total: roundMoney(billLevel + line),
+    manual: roundMoney(Math.max(0, billLevel - coupon - loyalty)),
+    coupon,
+    loyalty,
+    line,
+    discountedBillCount: discounted.length,
+    recent: discounted.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8),
+  };
 }
 
 function toMetricWindow(snapshot: FinancialAggregationSnapshot): ReportMetricWindow {
@@ -589,6 +666,7 @@ export async function buildLocalReportSnapshot(range: DateRange): Promise<LocalR
     },
     lowStock,
     staffSales: calculateStaffSales(rows.bills, range),
+    discounts: calculateDiscountSummary(rows.bills, range),
     pendingSyncCount: counters.pending,
     failedSyncCount: counters.failed,
     conflictCount: counters.conflicts,

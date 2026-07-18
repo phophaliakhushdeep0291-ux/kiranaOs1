@@ -567,6 +567,7 @@ export async function createBillLocalFirst(input: BillInput): Promise<Bill> {
     buyerAddress: billData.buyerAddress ?? null,
     subtotal: calculatedAmounts.payableBase,
     discount: calculatedAmounts.discount,
+    discountReason: billData.discountReason ?? null,
     gst: calculatedAmounts.gst,
     gstMode: calculatedAmounts.gstMode,
     grandTotal: total,

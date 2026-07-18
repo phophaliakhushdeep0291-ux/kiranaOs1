@@ -45,6 +45,8 @@ interface BillingSummaryProps {
   lineDiscountTotal: number;
   safeDiscount: number;
   setDiscount: Dispatch<SetStateAction<number>>;
+  discountReason: string;
+  setDiscountReason: (reason: string) => void;
   onCouponApplied?: (offerId: string | null, discount: number, code: string) => void;
   loyaltyOnline: boolean;
   loyaltyCustomerSelected: boolean;
@@ -144,6 +146,8 @@ export function BillingSummary({
   lineDiscountTotal,
   safeDiscount,
   setDiscount,
+  discountReason,
+  setDiscountReason,
   onCouponApplied,
   loyaltyOnline,
   loyaltyCustomerSelected,
@@ -540,6 +544,22 @@ export function BillingSummary({
                 </button>
               </div>
             </div>
+
+            {/* Why the discount — feeds the discounts report. Only shown once a discount exists. */}
+            {safeDiscount > 0 && (
+              <div className="flex h-[29px] items-center justify-between gap-2 text-[12px]">
+                <span className="shrink-0 font-semibold text-[#8290a8]">Reason</span>
+                <input
+                  data-testid="input-discount-reason"
+                  type="text"
+                  maxLength={200}
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  placeholder="e.g. regular customer"
+                  className="w-full max-w-[200px] rounded-[7px] border border-transparent bg-[#f7f9fd] px-2 py-1 text-right text-[11px] font-semibold text-[#31527e] placeholder:text-[#9aa7bd] focus:border-[#dbe8ff] focus:bg-white focus:outline-none"
+                />
+              </div>
+            )}
 
             {/* Grand total */}
             <div className="mt-2 flex items-center justify-between border-t border-[#edf1f6] pt-3">

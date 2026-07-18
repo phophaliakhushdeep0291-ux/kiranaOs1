@@ -173,6 +173,7 @@ export default function Billing() {
   const [cart, setCart] = useState<CartItem[]>(() => readBillingDraft().cart ?? []);
   const [scaleReadingLineKey, setScaleReadingLineKey] = useState<string | null>(null);
   const [discount, setDiscount] = useState(() => readBillingDraft().discount ?? 0);
+  const [discountReason, setDiscountReason] = useState(() => readBillingDraft().discountReason ?? "");
   const [appliedOffer, setAppliedOffer] = useState<AppliedOffer | null>(() => readBillingDraft().appliedOffer ?? null);
   const [paymentMode, setPaymentMode] = useState<PaymentSelection>(() => readBillingDraft().paymentMode ?? BillPaymentMode.cash);
   const [billType, setBillType] = useState<BillTypeSelection>(() => readBillingDraft().billType ?? BillInputBillType.normal_sale);
@@ -457,6 +458,7 @@ export default function Billing() {
           setSourceOrderId(draft.sourceOrderId);
           setCart(draft.cart ?? []);
           setDiscount(draft.discount ?? 0);
+          setDiscountReason(draft.discountReason ?? "");
           setAppliedOffer(draft.appliedOffer ?? null);
           setPaymentMode(draft.paymentMode ?? BillPaymentMode.cash);
           setBillType(draft.billType ?? BillInputBillType.normal_sale);
@@ -479,8 +481,8 @@ export default function Billing() {
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
-  }, [draftHydrated, activeBillId, sourceOrderId, cart, safeDiscount, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
+    writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
+  }, [draftHydrated, activeBillId, sourceOrderId, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
 
   // Re-price the cart when a pricing input changes (customer, group, payment
   // mode, or the shop's rules). Manual/custom lines keep the cashier's price;
@@ -625,6 +627,7 @@ export default function Billing() {
     setSourceOrderId(undefined);
     setCart([]);
     setDiscount(0);
+    setDiscountReason("");
     setAppliedOffer(null);
     setLoyaltyPointsToRedeem(0);
     setPaidAmount("");
@@ -1231,6 +1234,7 @@ export default function Billing() {
         buyerStateCode: resolvedBuyerStateCode || undefined,
         buyerAddress: resolvedBuyerAddress || undefined,
         discount: safeDiscount,
+        discountReason: safeDiscount > 0 ? discountReason.trim() || undefined : undefined,
         offerId: appliedOffer?.id,
         offerCode: appliedOffer?.code,
         offerDiscount: appliedOffer?.discount,
@@ -1279,6 +1283,7 @@ export default function Billing() {
       createdAt: new Date().toISOString(),
       cart,
       discount: safeDiscount,
+      discountReason,
       appliedOffer,
       paymentMode,
       billType,
@@ -1297,6 +1302,7 @@ export default function Billing() {
     setSourceOrderId(bill.sourceOrderId);
     setCart(bill.cart ?? []);
     setDiscount(bill.discount ?? 0);
+    setDiscountReason(bill.discountReason ?? "");
     setAppliedOffer(bill.appliedOffer ?? null);
     setPaymentMode(bill.paymentMode ?? BillPaymentMode.cash);
     setBillType(bill.billType ?? BillInputBillType.normal_sale);
@@ -1574,6 +1580,8 @@ export default function Billing() {
         lineDiscountTotal={lineDiscountTotal}
         safeDiscount={safeDiscount}
         setDiscount={setDiscount}
+        discountReason={discountReason}
+        setDiscountReason={setDiscountReason}
         onCouponApplied={(offerId, discount, code) => { setAppliedOffer(offerId ? { id: offerId, discount, code, subtotal } : null); }}
         loyaltyOnline={isOnline}
         loyaltyCustomerSelected={Boolean(resolvedCustomerId)}

@@ -537,6 +537,18 @@ export default function ReportsPage() {
           ))}
         </MobileReportList>
 
+        <MobileReportList title="Discounts Given" actionHref="/bills">
+          {(snapshot?.discounts.recent ?? []).slice(0, 5).map((row) => (
+            <MobileReportRow
+              key={row.billId}
+              title={row.billNo}
+              subtitle={row.reason ?? "No reason recorded"}
+              value={fmt(row.amount)}
+              meta={row.at ? dateLabel(row.at.slice(0, 10)) : "—"}
+            />
+          ))}
+        </MobileReportList>
+
         <MobileReportList title="Daily Closing Summary" actionHref="/daily-closing">
           {dailyRows.slice(0, 5).map((row) => (
             <MobileReportRow
@@ -559,6 +571,11 @@ export default function ReportsPage() {
         <DenseTable title="Top Customers (Udhar)" action="View all" actionHref="/customers" headers={["Customer", "Total Due (₹)", "Last Purchase", "Risk"]} loading={loading} empty={!snapshot?.topCustomers.length}>
           {snapshot?.topCustomers.slice(0, 5).map((row) => <tr key={row.customerId}><Td strong>{row.name}</Td><Td right strong>{fmt(row.balance)}</Td><Td right>{row.lastPurchase ? dateLabel(row.lastPurchase.slice(0, 10)) : "—"}</Td><Td right><RiskChip balance={row.balance} /></Td></tr>)}
           {snapshot?.topCustomers.length ? <tr className="font-bold"><Td>Total Outstanding</Td><Td right>{fmt(snapshot.topCustomers.reduce((sum, row) => sum + row.balance, 0))}</Td><Td /><Td /></tr> : null}
+        </DenseTable>
+
+        <DenseTable title="Discounts Given" action="View bills" actionHref="/bills" headers={["Bill", "Date", "Discount (₹)", "Reason"]} loading={loading} empty={!snapshot?.discounts.recent.length}>
+          {snapshot?.discounts.recent.slice(0, 5).map((row) => <tr key={row.billId}><Td strong>{row.billNo}</Td><Td>{row.at ? dateLabel(row.at.slice(0, 10)) : "—"}</Td><Td right strong>{fmt(row.amount)}</Td><Td>{row.reason ?? "—"}</Td></tr>)}
+          {snapshot && snapshot.discounts.total > 0 ? <tr className="font-bold"><Td>Total ({snapshot.discounts.discountedBillCount} bills)</Td><Td /><Td right>{fmt(snapshot.discounts.total)}</Td><Td>{[snapshot.discounts.manual > 0 ? `manual ${fmt(snapshot.discounts.manual)}` : null, snapshot.discounts.coupon > 0 ? `coupon ${fmt(snapshot.discounts.coupon)}` : null, snapshot.discounts.loyalty > 0 ? `loyalty ${fmt(snapshot.discounts.loyalty)}` : null, snapshot.discounts.line > 0 ? `line ${fmt(snapshot.discounts.line)}` : null].filter(Boolean).join(" · ") || "—"}</Td></tr> : null}
         </DenseTable>
 
         <DenseTable title="Daily Closing Summary" action="View all" actionHref="/daily-closing" headers={["Date", "Sales (₹)", "Collection (₹)", "Expense (₹)", "Net Profit (₹)"]} loading={loading || expenses.isLoading} empty={!dailyRows.length}>

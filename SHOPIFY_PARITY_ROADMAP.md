@@ -37,8 +37,11 @@ the codebase, not assumed.
 - [x] **Line-item notes** — per-line note chip in the cart ("no bag"), stored
       on BillItem (both schemas + migrations), flows through offline path and
       sync, printed under the item on receipts. *(done 2026-07-18)*
-- [ ] **Discount reasons + report** — optional reason chip on cart/line
-      discounts; discounts-given report by staff/day.
+- [x] **Discount reasons + report** — optional reason input on the bill
+      discount (stored on Bill, both schemas + migrations, offline path);
+      "Discounts Given" report card (desktop + mobile) splitting
+      manual/coupon/loyalty/line totals with recent discounted bills and
+      their reasons. *(done 2026-07-18 — Tier 1 complete)*
 
 ## Tier 2 — Inventory depth
 
@@ -89,3 +92,4 @@ the codebase, not assumed.
 | 2026-07-18 | Line-item notes shipped full-stack (cart chip → receipt) | feat(billing): line-item notes |
 | 2026-07-18 | Barcode label printing (EAN-13 + QR fallback) from products page | feat(products): price-label printing |
 | 2026-07-18 | Customer activity timeline (unified feed on customer page) | feat(customers): activity timeline |
+| 2026-07-18 | Discount reasons + Discounts Given report — Tier 1 complete | feat(billing): discount reasons + report |

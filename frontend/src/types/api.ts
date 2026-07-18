@@ -454,6 +454,8 @@ export interface BillInput {
   buyerAddress?: string;
   items: BillInputItem[];
   discount?: number;
+  /** Optional free-text reason for the bill-level discount (discounts report). */
+  discountReason?: string;
   offerId?: string;
   offerCode?: string;
   offerDiscount?: number;
@@ -495,6 +497,7 @@ export interface Bill {
   buyerAddress?: string | null;
   subtotal?: number;
   discount?: number;
+  discountReason?: string | null;
   offerId?: string | null;
   offerCode?: string | null;
   offerDiscount?: number;

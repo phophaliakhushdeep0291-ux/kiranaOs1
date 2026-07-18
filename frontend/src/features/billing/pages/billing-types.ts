@@ -56,6 +56,7 @@ export interface BillingDraft {
   sourceOrderId?: string;
   cart?: CartItem[];
   discount?: number;
+  discountReason?: string;
   appliedOffer?: AppliedOffer | null;
   paymentMode?: PaymentSelection;
   billType?: BillTypeSelection;
