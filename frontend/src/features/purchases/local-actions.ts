@@ -371,6 +371,7 @@ export async function recordPurchasePaymentLocal(
     local_purchase_history_id: locator.localPurchaseHistoryId ?? displayRow.id,
     supplier_id: displayRow.supplierId ?? null,
     supplier_name: displayRow.supplierName,
+    invoice_number: displayRow.invoiceNumber === "-" ? null : displayRow.invoiceNumber,
     amount,
     mode: payment.mode,
     reference: payment.reference?.trim() || null,
@@ -398,9 +399,22 @@ export async function recordPurchasePaymentLocal(
 
 export async function listSupplierPaymentsLocal(displayRow: SupplierDueRow) {
   const rows = filterRowsForCurrentScope(await offlineDB.getAll<MutableRow>("payments").catch(() => []));
-  return rows.filter((row) => String(row.kind ?? "") === "supplier_payment"
-    && [row.local_purchase_history_id, row.purchase_history_id, row.purchase_bill_id].map(String).includes(displayRow.id))
-    .sort((a, b) => String(b.paid_at ?? b.created_at).localeCompare(String(a.paid_at ?? a.created_at)));
+  const invoice = normalizeKey(displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber);
+  const supplier = normalizeKey(displayRow.supplierId || displayRow.supplierName);
+  const matches = rows.filter((row) => {
+    if (String(row.kind ?? "") !== "supplier_payment") return false;
+    if ([row.local_purchase_history_id, row.purchase_history_id, row.purchase_bill_id].map(String).includes(displayRow.id)) return true;
+    const rowInvoice = normalizeKey(row.invoice_number ?? row.invoiceNumber);
+    const rowSupplier = normalizeKey(row.supplier_id ?? row.supplierId ?? row.supplier_name ?? row.supplierName);
+    return Boolean(invoice && rowInvoice === invoice && supplier && rowSupplier === supplier);
+  });
+  const unique = new Map<string, MutableRow>();
+  for (const row of matches) {
+    const key = readString(row, ["local_id", "localId", "id"]);
+    const current = unique.get(key);
+    if (!current || (String(row.sync_status) === "synced" && String(current.sync_status) !== "synced")) unique.set(key, row);
+  }
+  return [...unique.values()].sort((a, b) => String(b.paid_at ?? b.created_at).localeCompare(String(a.paid_at ?? a.created_at)));
 }
 
 export async function reverseSupplierPaymentLocal(
@@ -417,7 +431,9 @@ export async function reverseSupplierPaymentLocal(
   const paid = roundMoney(Math.max(0, displayRow.paid - amount));
   const due = roundMoney(Math.max(0, displayRow.amount - paid));
   const patch: PurchaseEditInput = { supplierName: displayRow.supplierName, invoiceNumber: displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber, amount: displayRow.amount, paid, due, paymentMode: displayRow.paymentMode, status: paid > 0 ? "partial" : "due" };
-  const paymentId = readString(paymentRow, ["server_id", "id", "local_id"]);
+  // The supplier-payment ledger is keyed by the immutable client payment id. Sync's generic
+  // `server_id` may point at the reconciled purchase history, so it is not a payment locator.
+  const paymentId = readString(paymentRow, ["id", "local_id"]);
   const outbox = buildOutboxOperation({ entity_type: "payment", entity_id: paymentId, operation_type: "REVERSE_SUPPLIER_PAYMENT", payload: { paymentId, reason, ownerPin: input.ownerPin } });
   await offlineDB.transaction(["purchase_bills", "inventory_movements", "payments", "sync_outbox"], async (tx) => {
     for (const match of matches) await tx.put(match.tableName, withPurchasePatch(match.row, patch));

@@ -108,7 +108,7 @@ export function buildSyncResult({ eventId, clientEventId, type, status, success,
 
 function deriveServerId(result) {
   if (!result || typeof result !== 'object') return null;
-  return result.billId ?? result.productId ?? result.customerId ?? result.supplierId ?? result.purchaseHistoryId ?? result.stockLedgerId ?? result.ledgerEntryId ?? result.reversalLedgerEntryId ?? null;
+  return result.billId ?? result.productId ?? result.customerId ?? result.supplierId ?? result.ledgerEntryId ?? result.reversalLedgerEntryId ?? result.purchaseHistoryId ?? result.stockLedgerId ?? null;
 }
 
 function promoteSyncResultFields(result) {

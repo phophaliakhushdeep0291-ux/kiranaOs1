@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { apiRequest } from "@/lib/api/http";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import { Card, CardHead, Fld, Badge, RowToggle, Kpi } from "@/features/settings/
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import type { BillListResult } from "@/types/api";
-import { UpgradePrompt, useFeature } from "@/features/subscription";
+import { useFeature } from "@/features/subscription";
 
 interface TaxConfig {
   mode: "exclusive" | "inclusive" | "none";
@@ -298,7 +299,7 @@ export default function TaxesSettingsPage() {
           sub="Live classifications from the product catalogue"
           action={gstReportsFeature.allowed
             ? <button type="button" onClick={() => void hsnSummaryQ.refetch()} className="text-[12px] font-bold text-[#005dff] hover:underline">Refresh</button>
-            : <UpgradePrompt compact featureName="gst_reports" description="HSN coverage and GST working papers are included in the Business plan." />}
+            : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">Upgrade to Business</Link></Button>}
         />
         <div className="px-5 pb-5">
           {!gstReportsFeature.loading && !gstReportsFeature.allowed ? (
@@ -344,7 +345,7 @@ export default function TaxesSettingsPage() {
             sub="This month"
             action={gstReportsFeature.allowed
               ? <span className="flex items-center gap-3"><button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Register</button><button onClick={exportGstr1Working} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> GSTR-1 working</button></span>
-              : <UpgradePrompt compact featureName="gst_reports" description="GST registers and GSTR-1 working papers are included in the Business plan." />}
+              : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">Upgrade to Business</Link></Button>}
           />
           {!gstReportsFeature.loading && !gstReportsFeature.allowed ? (
             <div className="px-5 pb-5">
@@ -391,7 +392,7 @@ export default function TaxesSettingsPage() {
                   : "Blocked until a certified GSTN/GSP provider is connected"}
               pill={<Badge tone={readinessQ.data?.provider.legalSubmission ? "green" : readinessQ.data?.provider.configured ? "blue" : "amber"}>{readinessQ.data?.provider.legalSubmission ? "Connected" : readinessQ.data?.provider.configured ? "Sandbox" : "Not connected"}</Badge>}
             />
-            <RowToggle label="E-Way Bill" desc="Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP" pill={gstReportsFeature.allowed ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> Prepare</Button> : <UpgradePrompt compact featureName="gst_reports" description="Audited e-way transport drafts are included in the Business plan." />} />
+            <RowToggle label="E-Way Bill" desc="Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP" pill={gstReportsFeature.allowed ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> Prepare</Button> : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">Upgrade to Business</Link></Button>} />
             <RowToggle label="Show GST breakup on bill" pill={<Switch checked={tax.showBreakup} onCheckedChange={(v) => update({ showBreakup: v })} />} />
             <RowToggle label="Round off tax amount" pill={<Switch checked={tax.roundOff} onCheckedChange={(v) => update({ roundOff: v })} />} />
             <RowToggle label="Lock tax after bill creation" pill={<Switch checked={tax.lockAfterBill} onCheckedChange={(v) => update({ lockAfterBill: v })} />} />

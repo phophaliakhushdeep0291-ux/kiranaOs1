@@ -37,11 +37,23 @@ assert.equal(s.cashCollected, 100, "cash = 60 (bill) + 40 (udhar payment)");
 assert.equal(s.udharRecovered, 40, "udhar recovered = sum(udhar_credit)");
 assert.equal(s.outstanding, 0, "outstanding back to 0 after full repayment");
 
+// A return credited against udhar reduces outstanding without pretending that
+// the customer paid cash. Gift-card return credit is retained as a liability KPI.
+s = summarizeFinancialLedger([
+  ...billRows,
+  { entryType: "udhar_return_credit", amountPaise: P(15) },
+  { entryType: "gift_card_issued", amountPaise: P(25) },
+]);
+assert.equal(s.udharRecovered, 0, "return credit is not a customer recovery");
+assert.equal(s.udharReturnCredits, 15, "udhar return credits are separately auditable");
+assert.equal(s.outstanding, 25, "return credit reduces outstanding");
+assert.equal(s.giftCardIssued, 25, "gift-card return liability is visible");
+
 // Unknown entry types are ignored; empty input is all zeros.
 s = summarizeFinancialLedger([{ entryType: "mystery", amountPaise: P(999) }, { entryType: "sale", amountPaise: P(5) }]);
 assert.equal(s.sales, 5, "unknown entryType ignored");
 assert.deepEqual(summarizeFinancialLedger([]), {
-  sales: 0, cashCollected: 0, upiCollected: 0, bankCollected: 0, udharCreated: 0, udharRecovered: 0, outstanding: 0,
+  sales: 0, cashCollected: 0, upiCollected: 0, bankCollected: 0, udharCreated: 0, udharRecovered: 0, udharReturnCredits: 0, giftCardIssued: 0, outstanding: 0,
 }, "empty ledger = all zeros");
 
 // Accepts number / numeric-string amountPaise too (not just BigInt).

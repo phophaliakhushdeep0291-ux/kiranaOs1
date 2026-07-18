@@ -12,7 +12,7 @@ describe("taxes plan gates", () => {
 
   it("shows an honest upgrade state instead of blaming connectivity", () => {
     expect(taxes).toContain("GST reporting is not in the {gstReportsFeature.plan.name} plan");
-    expect(taxes).toContain('featureName="gst_reports"');
+    expect(taxes).toContain('<Link href="/plans">Upgrade to Business</Link>');
     expect(taxes).not.toContain("Connect to the cloud to load this month's GST report");
   });
 });

@@ -52,6 +52,35 @@ export async function receive(req, res, next) {
     res.status(data.idempotentReplay ? 200 : 201).json({ success: true, data });
   } catch (error) { next(error); }
 }
+export async function reconcileReceipt(req, res, next) {
+  try {
+    await assertOrderAccess(req, "purchase");
+    const data = await service.reconcilePurchaseReceipt(req.shopId, req.params.id, req.params.receiptId, req.body, req.user?.userId);
+    const receipt = data.receipts.find((row) => row.id === req.params.receiptId);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "PURCHASE_RECEIPT_RECONCILED",
+      entityType: "PurchaseReceipt",
+      entityId: req.params.receiptId,
+      after: receipt ? {
+        supplierInvoiceNumber: receipt.supplierInvoiceNumber,
+        supplierInvoiceAmount: receipt.supplierInvoiceAmount,
+        matchStatus: receipt.matchStatus,
+        priceVarianceAmount: receipt.priceVarianceAmount,
+        invoiceVarianceAmount: receipt.invoiceVarianceAmount,
+      } : null,
+      req,
+    });
+    await publishIntegrationEvent(req.shopId, "purchase_receipt.reconciled", {
+      purchaseOrderId: data.id,
+      receiptId: req.params.receiptId,
+      locationId: data.locationId,
+      matchStatus: receipt?.matchStatus,
+    }).catch(() => []);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
 export async function cancel(req, res, next) {
   try {
     await assertOrderAccess(req, "purchase");

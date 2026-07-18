@@ -121,6 +121,7 @@ export function productData(shopId, overrides = {}) {
     gstRate: overrides.gstRate ?? 0,
     hsn: overrides.hsn || null,
     lowStockThreshold: overrides.lowStockThreshold ?? 5,
+    ...(overrides.reorderLevel !== undefined ? { reorderLevel: overrides.reorderLevel } : {}),
   };
 }
 

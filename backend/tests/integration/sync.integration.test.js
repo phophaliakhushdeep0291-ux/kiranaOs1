@@ -890,6 +890,8 @@ if (ctx.skip) {
       };
       const first = assertSuccess(await ctx.post("/api/sync/push", { events: [paymentEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       assert.equal(first.results[0].success, true);
+      const paymentLedger = await ctx.db.financialLedger.findFirst({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment", sourceId: "local-supplier-payment-1" } });
+      assert.equal(first.results[0].serverId, paymentLedger.id, "payment reconciliation must expose the ledger id, never the purchase-history id");
       assertSuccess(await ctx.post("/api/sync/push", { events: [paymentEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
 
       let updated = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
@@ -903,7 +905,9 @@ if (ctx.skip) {
         ownerPin: "1234",
         payload: { paymentId: "local-supplier-payment-1", reason: "Duplicate UPI posting", ownerPin: "1234" },
       };
-      assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const reversed = assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const reversalLedger = await ctx.db.financialLedger.findFirst({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment_reversal", sourceId: paymentLedger.id } });
+      assert.equal(reversed.results[0].serverId, reversalLedger.id, "reversal reconciliation must expose the reversal-ledger id");
       assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       updated = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
       assert.equal(updated.purchasePaidAmount, 100);

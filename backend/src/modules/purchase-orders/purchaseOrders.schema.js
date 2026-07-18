@@ -35,6 +35,8 @@ export const createPurchaseOrderSchema = z.object({
 export const receivePurchaseOrderSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160).optional(),
   supplierInvoiceNumber: z.string().trim().max(100).optional(),
+  supplierInvoiceAmount: moneyAmount({ positive: true }).optional(),
+  varianceReason: z.string().trim().min(3).max(500).optional(),
   paidAmount: moneyAmount().optional(),
   paymentMode: z.enum(["cash", "upi", "bank"]).optional(),
   dueDate: date,
@@ -49,11 +51,20 @@ export const receivePurchaseOrderSchema = z.object({
     expiresOn: date,
   })).min(1).max(100),
 }).superRefine((value, context) => {
+  if (value.supplierInvoiceAmount !== undefined && !value.supplierInvoiceNumber) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["supplierInvoiceNumber"], message: "Supplier invoice number is required when an invoice total is entered" });
+  }
   const ids = new Set();
   value.items.forEach((item, index) => {
     if (ids.has(item.purchaseOrderItemId)) context.addIssue({ code: z.ZodIssueCode.custom, path: ["items", index, "purchaseOrderItemId"], message: "A purchase-order line can be received only once per receipt" });
     ids.add(item.purchaseOrderItemId);
   });
+});
+
+export const reconcilePurchaseReceiptSchema = z.object({
+  supplierInvoiceNumber: z.string().trim().min(1).max(100),
+  supplierInvoiceAmount: moneyAmount({ positive: true }),
+  varianceReason: z.string().trim().min(3).max(500).optional(),
 });
 
 export const cancelPurchaseOrderSchema = z.object({

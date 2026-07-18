@@ -22,12 +22,12 @@ Run against a clean checkout with supported Node versions and frozen installs.
 
 | Gate | Command/evidence | Status |
 |---|---|---|
-| Frontend typecheck | `cd frontend && pnpm run typecheck` | Local baseline passed 2026-07-16 |
-| Frontend tests | `cd frontend && npm run test` | Local baseline passed 2026-07-18: 624 passed, 1 skipped |
-| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local baseline passed 2026-07-18; 2820.8 kB raw / 844.2 kB gzip |
-| Backend tests | `cd backend && npm test` | Local baseline passed 2026-07-16 |
+| Frontend typecheck | `cd frontend && pnpm run typecheck` | Local baseline passed 2026-07-18 |
+| Frontend tests | `cd frontend && npm run test` | Local baseline passed 2026-07-18: 647 passed, 1 skipped |
+| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local baseline passed 2026-07-18; two-pass release minification: 2785.4 kB raw / 827.6 kB gzip |
+| Backend tests | `cd backend && npm test` | Local baseline passed 2026-07-18, including AI hallucination, GST, loyalty and payment integrity suites |
 | Backend production check | `cd backend && npm run prod:check` | Local baseline passed after Railway packaging fix |
-| Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 147 passed, 1 PostgreSQL-only suite skipped |
+| Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 153 passed, 1 PostgreSQL-only suite skipped |
 | Migration safety | `cd backend && npm run migration:safety` | Local baseline passed, 0 warnings |
 | Existing release gate | `cd backend && npm run release:gate` | Local baseline passed; human approval warning remains |
 | CI certification | `.github/workflows/release-certification.yml` run URL | Candidate run URL not recorded |
@@ -42,10 +42,14 @@ Any failure is red. Skips require a written exception below; P0 financial, migra
 | Cancel/refund/return exact reversal | BILL-006 | Not verified |
 | Offline bill survives reload and syncs once | SYNC-001..002 / MQA-SYNC-01 | Not verified |
 | Two-device duplicate/conflict proof | SYNC-002..003 | Not verified |
-| Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Backend proof verifies partial due, weighted cost, exact stock, lots, audit uniqueness and strict replay identity. Live 390px create plus receive/payment flow reconciled stock 24 -> 28 and ₹920 = ₹100 paid + ₹820 due with zero runtime/overflow errors. Supplier settlement/reversal remains open. |
+| Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Verified. Backend proofs cover partial due, weighted cost, exact stock/lots, audit uniqueness and strict replay identity. Live 390px create/receive reconciled stock 24 -> 28 and ₹920 = ₹100 paid + ₹820 due. Live settlement/reversal proved ₹900 -> ₹700 -> ₹900, exact-event replay, 390x844 geometry, 44px controls and zero runtime/overflow errors. |
 | Daily closing and GST sample reconciliation | RPT-001..002 | Not verified |
 | 375/390/430/768 mobile matrix | QUAL-003 / all MQA flows | Overview routes for Billing, Products, Inventory, Purchases, Reports, Settings and Sync pass overflow/runtime smoke; Customers has separate multi-width evidence. Full transactional flows remain open. |
 | Backup restore proof and rollback rehearsal | SYNC-005 | Not verified |
+
+Supplier settlement/reversal addendum (2026-07-18): dedicated immutable payment and owner-gated reversal events pass focused frontend tests (8/8), backend sync integration (37/37), and live 390px settlement/reversal capture, including exact-event replay, due restoration and zero visual/runtime errors. MQA-PUR-01 is closed for this release scope.
+
+Replenishment and return-ledger addendum (2026-07-18): deterministic 30-day net-sales recommendations now expose their inputs, evidence strength, calculation version, branch stock, open-order coverage and editable quantity; supplier groups cannot be silently combined into one PO. Sale returns now post explicit revenue/tender or gift-liability reversals to the append-only financial ledger. The combined backend suite, 153/154 SQLite integration tests (one expected PostgreSQL-only skip), 647 frontend tests (one skip), typecheck, production build, bundle budget and production-app check pass. This is local proof only and does not replace PostgreSQL concurrency, provider, deployment, backup/restore or human release evidence.
 
 ## Defect thresholds
 

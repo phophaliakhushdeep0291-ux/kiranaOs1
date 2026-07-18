@@ -3019,5 +3019,5 @@ function safeJsonParse(value) {
 
 function getServerId(result) {
   if (!result || typeof result !== "object") return null;
-  return result.billId ?? result.productId ?? result.customerId ?? result.supplierId ?? result.purchaseHistoryId ?? result.stockLedgerId ?? result.ledgerEntryId ?? result.reversalLedgerEntryId ?? null;
+  return result.billId ?? result.productId ?? result.customerId ?? result.supplierId ?? result.ledgerEntryId ?? result.reversalLedgerEntryId ?? result.purchaseHistoryId ?? result.stockLedgerId ?? null;
 }

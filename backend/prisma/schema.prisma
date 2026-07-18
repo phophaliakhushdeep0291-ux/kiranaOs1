@@ -1218,6 +1218,18 @@ model PurchaseReceipt {
   supplierId            String?
   receiptNumber         String
   supplierInvoiceNumber String?
+  supplierInvoiceAmount Float?
+  supplierInvoiceAmountPaise BigInt?
+  expectedGoodsAmount   Float     @default(0)
+  expectedGoodsAmountPaise BigInt?
+  priceVarianceAmount   Float     @default(0)
+  priceVarianceAmountPaise BigInt?
+  invoiceVarianceAmount Float?
+  invoiceVarianceAmountPaise BigInt?
+  matchStatus           String    @default("invoice_pending") // invoice_pending | matched | approved_variance
+  varianceReason        String?
+  varianceApprovedByUserId String?
+  varianceApprovedAt    DateTime?
   idempotencyKey        String?
   totalAmount           Float
   totalAmountPaise      BigInt?
@@ -1243,6 +1255,7 @@ model PurchaseReceipt {
   @@unique([shopId, idempotencyKey])
   @@index([shopId, locationId, createdAt])
   @@index([shopId, purchaseOrderId, createdAt])
+  @@index([shopId, matchStatus, createdAt])
 }
 
 model PurchaseReceiptItem {

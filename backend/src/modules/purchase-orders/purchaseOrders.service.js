@@ -5,6 +5,14 @@ import { moneyShadows, multiplyMoney, round2, weightedAvgCost } from "../../util
 import { rateUnitToBase } from "../../utils/units.js";
 import { getLocationQuantity, incrementLocationInventory, resolveOperationalLocation } from "../stores/location-context.service.js";
 import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
+import {
+  calculateReorderRecommendation,
+  REORDER_SALES_WINDOW_DAYS,
+} from "./reorderRecommendation.js";
+import {
+  calculateReceiptReconciliation,
+  summarizePurchaseOrderReconciliation,
+} from "./procurementReconciliation.js";
 
 function reference(prefix) {
   const day = new Date().toISOString().slice(0, 10).replaceAll("-", "");
@@ -31,6 +39,9 @@ const receiptReplayInclude = {
 function replayMismatch(existing, purchaseOrderId, data) {
   if (existing.purchaseOrderId !== purchaseOrderId) return true;
   if ((existing.supplierInvoiceNumber || null) !== (data.supplierInvoiceNumber || null)) return true;
+  const expectedInvoiceAmount = data.supplierInvoiceAmount === undefined ? null : round2(data.supplierInvoiceAmount);
+  if ((existing.supplierInvoiceAmount === null ? null : round2(existing.supplierInvoiceAmount)) !== expectedInvoiceAmount) return true;
+  if ((existing.varianceReason || null) !== (data.varianceReason || null)) return true;
   const expectedPaid = round2(data.paidAmount ?? existing.totalAmount);
   if (round2(existing.paidAmount) !== expectedPaid) return true;
   if ((existing.paymentMode || null) !== (expectedPaid > 0 ? data.paymentMode || null : null)) return true;
@@ -50,40 +61,104 @@ function assertCompatibleReplay(existing, purchaseOrderId, data) {
   if (replayMismatch(existing, purchaseOrderId, data)) {
     throw new AppError("Idempotency key was already used for a different purchase receipt", 409, "IDEMPOTENCY_KEY_REUSED");
   }
-  return { receipt: existing, purchaseOrder: existing.purchaseOrder, idempotentReplay: true };
+  return { receipt: existing, purchaseOrder: withReconciliation(existing.purchaseOrder), idempotentReplay: true };
+}
+
+function withReconciliation(order) {
+  return order ? { ...order, reconciliation: summarizePurchaseOrderReconciliation(order) } : order;
 }
 
 export async function listPurchaseOrders(shopId, { status = "all", locationId, limit = 50 } = {}) {
-  return db.purchaseOrder.findMany({
+  const orders = await db.purchaseOrder.findMany({
     where: { shopId, ...(locationId && { locationId }), ...(status !== "all" && { status }) },
     orderBy: { createdAt: "desc" },
     take: Math.min(Math.max(Number(limit) || 50, 1), 100),
     include: detailInclude,
   });
+  return orders.map(withReconciliation);
 }
 
 export async function getPurchaseOrder(shopId, id, client = db) {
   const order = await client.purchaseOrder.findFirst({ where: { id, shopId }, include: detailInclude });
   if (!order) throw new AppError("Purchase order not found", 404, "PURCHASE_ORDER_NOT_FOUND");
-  return order;
+  return withReconciliation(order);
 }
 
 export async function getReorderSuggestions(shopId, requestedLocationId = null) {
   const location = await resolveOperationalLocation(shopId, requestedLocationId);
-  const [products, history] = await Promise.all([
-    db.product.findMany({ where: { shopId, deletedAt: null }, orderBy: { name: "asc" } }),
-    db.purchaseHistory.findMany({ where: { shopId }, orderBy: { createdAt: "desc" }, take: 1000 }),
+  const products = await db.product.findMany({ where: { shopId, deletedAt: null }, orderBy: { name: "asc" } });
+  if (products.length === 0) return [];
+  const productIds = products.map((product) => product.id);
+  const salesWindowStart = new Date(Date.now() - (REORDER_SALES_WINDOW_DAYS * 24 * 60 * 60 * 1000));
+  const [history, locationStocks, salesRows, openOrderRows] = await Promise.all([
+    db.purchaseHistory.findMany({
+      where: { shopId, productId: { in: productIds } },
+      orderBy: { createdAt: "desc" },
+      take: Math.min(Math.max(productIds.length * 5, 1000), 5000),
+    }),
+    db.locationStock.findMany({
+      where: { shopId, productId: { in: productIds } },
+      select: { locationId: true, productId: true, stockBaseQty: true },
+    }),
+    db.billItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        bill: {
+          shopId,
+          locationId: location.id,
+          status: "active",
+          billType: { in: ["normal_sale", "gst_invoice", "udhar_entry", "sales_return"] },
+          createdAt: { gte: salesWindowStart },
+        },
+      },
+      _sum: { quantityInBaseUnit: true },
+      _count: { _all: true },
+    }),
+    db.purchaseOrderItem.groupBy({
+      by: ["productId"],
+      where: {
+        productId: { in: productIds },
+        purchaseOrder: {
+          shopId,
+          locationId: location.id,
+          status: { in: ["draft", "sent", "partially_received"] },
+        },
+      },
+      _sum: { orderedBaseQty: true, receivedBaseQty: true },
+    }),
   ]);
   const latestByProduct = new Map();
   for (const row of history) if (!latestByProduct.has(row.productId)) latestByProduct.set(row.productId, row);
-  const rows = await Promise.all(products.map(async (product) => {
-    const stockBaseQty = await getLocationQuantity(db, shopId, location, product);
+  const salesByProduct = new Map(salesRows.map((row) => [row.productId, row]));
+  const openOrdersByProduct = new Map(openOrderRows.map((row) => [
+    row.productId,
+    round2(Math.max(0, Number(row._sum.orderedBaseQty || 0) - Number(row._sum.receivedBaseQty || 0))),
+  ]));
+  const locationStockByProduct = new Map();
+  const secondaryAllocatedByProduct = new Map();
+  for (const row of locationStocks) {
+    secondaryAllocatedByProduct.set(row.productId, round2((secondaryAllocatedByProduct.get(row.productId) || 0) + Number(row.stockBaseQty || 0)));
+    if (row.locationId === location.id) locationStockByProduct.set(row.productId, round2(Number(row.stockBaseQty || 0)));
+  }
+
+  const rows = products.map((product) => {
+    const stockBaseQty = location.isPrimary
+      ? round2(Number(product.stockBaseQty || 0) - Number(secondaryAllocatedByProduct.get(product.id) || 0))
+      : Number(locationStockByProduct.get(product.id) || 0);
     const threshold = Number(product.lowStockThreshold || 0);
-    if (threshold <= 0 || stockBaseQty > threshold) return null;
     const latest = latestByProduct.get(product.id);
-    const recommendedOrderBaseQty = round2(Number(product.reorderLevel || 0) > 0
-      ? Number(product.reorderLevel)
-      : Math.max((threshold * 2) - stockBaseQty, 1));
+    const sales = salesByProduct.get(product.id);
+    const recommendation = calculateReorderRecommendation({
+      stockBaseQty,
+      lowStockThreshold: threshold,
+      manualReorderBaseQty: product.reorderLevel,
+      openOrderBaseQty: openOrdersByProduct.get(product.id) || 0,
+      netSalesBaseQty: sales?._sum.quantityInBaseUnit || 0,
+      salesLineCount: sales?._count._all || 0,
+      baseUnit: product.baseUnit,
+    });
+    if (!recommendation) return null;
     return {
       productId: product.id,
       productName: product.name,
@@ -91,14 +166,14 @@ export async function getReorderSuggestions(shopId, requestedLocationId = null) 
       rateUnit: product.rateUnit,
       stockBaseQty,
       lowStockThreshold: threshold,
-      recommendedOrderBaseQty,
+      ...recommendation,
       expectedRate: round2(latest?.pricePerRateUnit ?? product.costPerRateUnit ?? 0),
       supplierId: latest?.supplierId ?? null,
       supplierName: latest?.supplierName ?? null,
       locationId: location.id,
       locationName: location.name,
     };
-  }));
+  });
   return rows.filter(Boolean);
 }
 
@@ -201,9 +276,33 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
           throw error;
         }
         const factor = rateUnitToBase(item.rateUnit, item.baseUnit);
-        return { input, item, lineAmount: multiplyMoney(input.actualRate, input.quantityBaseQty / factor) };
+        return {
+          input,
+          item,
+          lineAmount: multiplyMoney(input.actualRate, input.quantityBaseQty / factor),
+          expectedLineAmount: multiplyMoney(item.expectedRate, input.quantityBaseQty / factor),
+        };
       });
       const totalAmount = round2(lines.reduce((sum, line) => sum + line.lineAmount, 0));
+      const reconciliation = calculateReceiptReconciliation({
+        expectedAmounts: lines.map((line) => line.expectedLineAmount),
+        actualAmounts: lines.map((line) => line.lineAmount),
+        supplierInvoiceNumber: data.supplierInvoiceNumber,
+        supplierInvoiceAmount: data.supplierInvoiceAmount,
+        varianceReason: data.varianceReason,
+        approvedByUserId: userId,
+      });
+      if (reconciliation.approvalRequired) {
+        const error = new AppError("Explain the supplier invoice or PO-rate variance before approving this receipt", 422, "PURCHASE_VARIANCE_REASON_REQUIRED");
+        error.publicData = {
+          expectedGoodsAmount: reconciliation.expectedGoodsAmount,
+          goodsReceivedAmount: reconciliation.goodsReceivedAmount,
+          supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+          priceVarianceAmount: reconciliation.priceVarianceAmount,
+          invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
+        };
+        throw error;
+      }
       const paidAmount = round2(data.paidAmount ?? totalAmount);
       if (paidAmount < 0 || paidAmount > totalAmount) throw new AppError("Paid amount cannot exceed the receipt total", 422, "PURCHASE_RECEIPT_PAYMENT_INVALID");
       const dueAmount = round2(totalAmount - paidAmount);
@@ -217,6 +316,20 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
           supplierId: order.supplierId,
           receiptNumber: reference("GRN"),
           supplierInvoiceNumber: data.supplierInvoiceNumber || null,
+          supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+          expectedGoodsAmount: reconciliation.expectedGoodsAmount,
+          priceVarianceAmount: reconciliation.priceVarianceAmount,
+          invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
+          ...moneyShadows({
+            supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+            expectedGoodsAmount: reconciliation.expectedGoodsAmount,
+            priceVarianceAmount: reconciliation.priceVarianceAmount,
+            invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
+          }),
+          matchStatus: reconciliation.matchStatus,
+          varianceReason: reconciliation.hasVariance && data.varianceReason ? data.varianceReason.trim() : null,
+          varianceApprovedByUserId: reconciliation.hasVariance ? userId || null : null,
+          varianceApprovedAt: reconciliation.hasVariance ? new Date() : null,
           idempotencyKey: data.idempotencyKey || null,
           totalAmount,
           paidAmount,
@@ -332,7 +445,7 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
       });
       const fullReceipt = await tx.purchaseReceipt.findUnique({ where: { id: receipt.id }, include: { items: true } });
       const purchaseOrder = await tx.purchaseOrder.findUnique({ where: { id: order.id }, include: detailInclude });
-      return { receipt: fullReceipt, purchaseOrder, idempotentReplay: false, remainingLineCount: remaining };
+      return { receipt: fullReceipt, purchaseOrder: withReconciliation(purchaseOrder), idempotentReplay: false, remainingLineCount: remaining };
     });
   } catch (error) {
     if (error?.code === "P2002" && data.idempotencyKey) {
@@ -341,6 +454,63 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
     }
     throw error;
   }
+}
+
+export async function reconcilePurchaseReceipt(shopId, purchaseOrderId, receiptId, data, userId) {
+  await db.$transaction(async (tx) => {
+    const receipt = await tx.purchaseReceipt.findFirst({
+      where: { id: receiptId, shopId, purchaseOrderId },
+      include: { items: { include: { purchaseOrderItem: true } } },
+    });
+    if (!receipt) throw new AppError("Purchase receipt not found", 404, "PURCHASE_RECEIPT_NOT_FOUND");
+    const expectedAmounts = receipt.items.map((item) => {
+      const factor = rateUnitToBase(item.purchaseOrderItem.rateUnit, item.purchaseOrderItem.baseUnit);
+      return multiplyMoney(item.purchaseOrderItem.expectedRate, item.quantityBaseQty / factor);
+    });
+    const reconciliation = calculateReceiptReconciliation({
+      expectedAmounts,
+      actualAmounts: receipt.items.map((item) => item.lineAmount),
+      supplierInvoiceNumber: data.supplierInvoiceNumber,
+      supplierInvoiceAmount: data.supplierInvoiceAmount,
+      varianceReason: data.varianceReason,
+      approvedByUserId: userId,
+    });
+    if (!reconciliation.invoiceEvidenceComplete) {
+      throw new AppError("Supplier invoice number and total are both required to reconcile this receipt", 422, "PURCHASE_INVOICE_EVIDENCE_REQUIRED");
+    }
+    if (reconciliation.approvalRequired) {
+      const error = new AppError("Explain the supplier invoice or PO-rate variance before approving this receipt", 422, "PURCHASE_VARIANCE_REASON_REQUIRED");
+      error.publicData = {
+        expectedGoodsAmount: reconciliation.expectedGoodsAmount,
+        goodsReceivedAmount: reconciliation.goodsReceivedAmount,
+        supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+        priceVarianceAmount: reconciliation.priceVarianceAmount,
+        invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
+      };
+      throw error;
+    }
+    await tx.purchaseReceipt.update({
+      where: { id: receipt.id },
+      data: {
+        supplierInvoiceNumber: data.supplierInvoiceNumber.trim(),
+        supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+        expectedGoodsAmount: reconciliation.expectedGoodsAmount,
+        priceVarianceAmount: reconciliation.priceVarianceAmount,
+        invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
+        ...moneyShadows({
+          supplierInvoiceAmount: reconciliation.supplierInvoiceAmount,
+          expectedGoodsAmount: reconciliation.expectedGoodsAmount,
+          priceVarianceAmount: reconciliation.priceVarianceAmount,
+          invoiceVarianceAmount: reconciliation.invoiceVarianceAmount,
+        }),
+        matchStatus: reconciliation.matchStatus,
+        varianceReason: reconciliation.hasVariance ? data.varianceReason.trim() : null,
+        varianceApprovedByUserId: reconciliation.hasVariance ? userId || null : null,
+        varianceApprovedAt: reconciliation.hasVariance ? new Date() : null,
+      },
+    });
+  });
+  return getPurchaseOrder(shopId, purchaseOrderId);
 }
 
 export async function cancelPurchaseOrder(shopId, id, reason) {

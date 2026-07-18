@@ -354,7 +354,7 @@ describe("front office local-first cashier flow", () => {
     const lastPayment = rows("payments").filter((row) => row.kind === "supplier_payment")[1];
     await reverseSupplierPaymentLocal(
       purchaseDisplayRow({ id: purchaseRowId, paid: 500, due: 0 }),
-      lastPayment,
+      { ...lastPayment, server_id: "reconciled_purchase_history_id" },
       { reason: "Duplicate UPI entry", ownerPin: "1234" },
     );
     expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
@@ -364,6 +364,7 @@ describe("front office local-first cashier flow", () => {
     }));
     expect(rows("payments").find((row) => row.id === lastPayment.id)).toEqual(expect.objectContaining({ status: "reversed" }));
     expect(rows("sync_outbox").filter((row) => row.operation_type === "REVERSE_SUPPLIER_PAYMENT")).toHaveLength(1);
+    expect(rows("sync_outbox").find((row) => row.operation_type === "REVERSE_SUPPLIER_PAYMENT")?.payload).toEqual(expect.objectContaining({ paymentId: lastPayment.id }));
   });
 
   it("recycle-bin move reverses udhar locally and restore re-applies it (mirrors server CANCEL/RESTORE)", async () => {

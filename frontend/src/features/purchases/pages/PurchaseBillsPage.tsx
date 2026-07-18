@@ -889,7 +889,7 @@ export default function PurchaseBillsPage() {
       </Dialog>
 
       <Dialog open={Boolean(payingRow)} onOpenChange={(open) => !open && setPayingRow(null)}>
-        <DialogContent className="h-[100dvh] w-screen max-w-none overflow-y-auto rounded-none border-0 sm:h-auto sm:max-h-[88vh] sm:w-full sm:max-w-lg sm:rounded-2xl sm:border">
+        <DialogContent className="max-h-[92vh] max-w-lg">
           <DialogHeader>
             <DialogTitle>Pay supplier</DialogTitle>
             <DialogDescription>
@@ -897,11 +897,12 @@ export default function PurchaseBillsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className={reversingPayment ? "hidden" : "contents"}>
             <div>
               <Label>Amount to pay now</Label>
               <Input
                 data-testid="input-purchase-pay-amount"
-                className="mt-1"
+                className="mt-1 h-11"
                 type="number"
                 inputMode="decimal"
                 min="0"
@@ -926,7 +927,7 @@ export default function PurchaseBillsPage() {
             <div>
               <Label>Payment mode</Label>
               <Select value={payMode} onValueChange={setPayMode}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="mt-1 h-11"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="upi">UPI / bank</SelectItem>
@@ -936,7 +937,7 @@ export default function PurchaseBillsPage() {
             </div>
             <div>
               <Label>Reference (optional)</Label>
-              <Input className="mt-1" value={payReference} onChange={(event) => setPayReference(event.target.value)} placeholder="UPI reference, cheque or note" maxLength={120} />
+              <Input className="mt-1 h-11" value={payReference} onChange={(event) => setPayReference(event.target.value)} placeholder="UPI reference, cheque or note" maxLength={120} />
             </div>
             <div className="border-t border-slate-200 pt-4">
               <div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-black text-slate-900">Payment history</p><p className="text-xs text-slate-500">Payments and reversals remain traceable.</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{supplierPayments.length}</span></div>
@@ -947,12 +948,13 @@ export default function PurchaseBillsPage() {
                 })}
               </div>
             </div>
-            {reversingPayment ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4"><p className="font-black text-rose-950">Reverse {fmt(Number(reversingPayment.amount ?? 0))}?</p><p className="mt-1 text-xs text-rose-800">The due is restored; the original payment remains in the audit trail.</p><div className="mt-3 space-y-3"><Input value={reversalReason} onChange={(event) => setReversalReason(event.target.value)} placeholder="Reversal reason" /><Input type="password" inputMode="numeric" value={reversalPin} onChange={(event) => setReversalPin(event.target.value)} placeholder="Owner PIN" /></div><div className="mt-3 grid grid-cols-2 gap-2"><Button variant="outline" className="h-11" onClick={() => setReversingPayment(null)}>Keep</Button><Button variant="destructive" className="h-11" onClick={() => void reversePayment()} disabled={saving}>Confirm</Button></div></div> : null}
+            </div>
+            {reversingPayment ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4"><p className="font-black text-rose-950">Reverse {fmt(Number(reversingPayment.amount ?? 0))}?</p><p className="mt-1 text-xs text-rose-800">The due is restored; the original payment remains in the audit trail.</p><div className="mt-3 space-y-3"><Input className="h-11" value={reversalReason} onChange={(event) => setReversalReason(event.target.value)} placeholder="Reversal reason" /><Input className="h-11" type="password" inputMode="numeric" value={reversalPin} onChange={(event) => setReversalPin(event.target.value)} placeholder="Owner PIN" /></div><div className="mt-3 grid grid-cols-2 gap-2"><Button variant="outline" className="h-11" onClick={() => setReversingPayment(null)}>Keep</Button><Button variant="destructive" className="h-11" onClick={() => void reversePayment()} disabled={saving}>Confirm</Button></div></div> : null}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPayingRow(null)} disabled={saving}>Cancel</Button>
-            {payingRow && payingRow.due > 0 ? <Button data-testid="button-record-purchase-payment" onClick={() => void savePaid()} disabled={saving}>{saving ? "Saving..." : "Record payment"}</Button> : null}
-          </DialogFooter>
+          {!reversingPayment ? <DialogFooter>
+            <Button className="h-11" variant="outline" onClick={() => setPayingRow(null)} disabled={saving}>Cancel</Button>
+            {!reversingPayment && payingRow && payingRow.due > 0 ? <Button className="h-11" data-testid="button-record-purchase-payment" onClick={() => void savePaid()} disabled={saving}>{saving ? "Saving..." : "Record payment"}</Button> : null}
+          </DialogFooter> : null}
         </DialogContent>
       </Dialog>
 

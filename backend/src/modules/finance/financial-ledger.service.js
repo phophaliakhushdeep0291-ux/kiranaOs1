@@ -9,7 +9,7 @@
 //   upi collected   = sum(upi_in)      bank collected  = sum(bank_in)
 //   udhar created   = sum(udhar_debit)
 //   udhar recovered = sum(udhar_credit)
-//   outstanding     = sum(udhar_debit) - sum(udhar_credit)
+//   outstanding     = sum(udhar_debit) - sum(udhar_credit) - sum(udhar_return_credit)
 //
 // Idempotency: every row's idempotencyKey is deterministic and `@@unique([shopId,
 // idempotencyKey])` enforces exactly-once. Create keys off the immutable bill id; cancel/
@@ -152,6 +152,88 @@ export async function postBillRestoredLedger(tx, { restoreAt, ...args }) {
   });
 }
 
+/**
+ * Post the economic effect of a finalized sale return. Return bills already
+ * store negative sale/tender amounts, so those values flow into the same KPI
+ * buckets as ordinary bill reversals. Udhar refunds are tracked separately
+ * from customer repayments: both reduce outstanding, but only a real payment
+ * belongs in the "udhar recovered" metric.
+ */
+export async function postSaleReturnLedger(tx, {
+  shopId,
+  bill,
+  refundMode,
+  refundAmount,
+  customerId = null,
+  businessDate,
+}) {
+  if (!bill?.id || !(Number(refundAmount) > 0)) return;
+  const date = businessDate ?? bill.createdAt ?? new Date();
+  const keyBase = `return:${bill.id}`;
+  const mode = String(refundMode ?? "").toLowerCase();
+  const rows = [ledgerRow({
+    shopId,
+    billId: bill.id,
+    customerId,
+    sourceType: "sale_return",
+    sourceId: bill.id,
+    entryType: "sale",
+    direction: "credit",
+    amount: Number(bill.grandTotal ?? -Math.abs(Number(refundAmount))),
+    businessDate: date,
+    idempotencyKey: `${keyBase}:sale`,
+  })];
+
+  const tender = TENDER_ENTRY[mode];
+  if (tender) {
+    const payment = (bill.payments ?? []).find((row) => String(row.mode).toLowerCase() === mode);
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      paymentId: payment?.id ?? null,
+      customerId,
+      sourceType: "sale_return",
+      sourceId: bill.id,
+      entryType: tender.entryType,
+      direction: tender.direction,
+      amount: Number(payment?.amount ?? -Math.abs(Number(refundAmount))),
+      paymentMode: mode,
+      businessDate: date,
+      idempotencyKey: `${keyBase}:${tender.entryType}`,
+    }));
+  } else if (mode === "udhar") {
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      customerId,
+      sourceType: "sale_return",
+      sourceId: bill.id,
+      entryType: "udhar_return_credit",
+      direction: "credit",
+      amount: Math.abs(Number(refundAmount)),
+      paymentMode: "credit",
+      businessDate: date,
+      idempotencyKey: `${keyBase}:udhar_return_credit`,
+    }));
+  } else if (mode === "gift_card") {
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      customerId,
+      sourceType: "sale_return",
+      sourceId: bill.id,
+      entryType: "gift_card_issued",
+      direction: "credit",
+      amount: Math.abs(Number(refundAmount)),
+      paymentMode: "gift_card",
+      businessDate: date,
+      idempotencyKey: `${keyBase}:gift_card_issued`,
+    }));
+  }
+
+  for (const row of rows) await tx.financialLedger.create({ data: row });
+}
+
 // Udhar khata payment: money in (cash_in/upi_in/bank_in) + outstanding down (udhar_credit).
 // sign=-1 reverses it (cash back out + outstanding restored). Keyed on the immutable
 // ledger entry id, which the caller already creates idempotently.
@@ -201,7 +283,7 @@ export async function postUdharPaymentLedger(tx, {
 }
 
 const PAISE_PER_RUPEE = 100;
-const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "bank_in", "udhar_debit", "udhar_credit"];
+const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "bank_in", "udhar_debit", "udhar_credit", "udhar_return_credit", "gift_card_issued"];
 
 /**
  * Summarize FinancialLedger rows into KPIs. Because a reversal is the SAME entryType with a
@@ -223,6 +305,7 @@ export function summarizeFinancialLedger(rows = []) {
   const rupees = (paise) => Number(paise) / PAISE_PER_RUPEE;
   const udharCreated = rupees(totals.udhar_debit);
   const udharRecovered = rupees(totals.udhar_credit);
+  const udharReturnCredits = rupees(totals.udhar_return_credit);
   return {
     sales: rupees(totals.sale),
     cashCollected: rupees(totals.cash_in),
@@ -230,6 +313,8 @@ export function summarizeFinancialLedger(rows = []) {
     bankCollected: rupees(totals.bank_in),
     udharCreated,
     udharRecovered,
-    outstanding: Math.round((udharCreated - udharRecovered) * PAISE_PER_RUPEE) / PAISE_PER_RUPEE,
+    udharReturnCredits,
+    giftCardIssued: rupees(totals.gift_card_issued),
+    outstanding: Math.round((udharCreated - udharRecovered - udharReturnCredits) * PAISE_PER_RUPEE) / PAISE_PER_RUPEE,
   };
 }

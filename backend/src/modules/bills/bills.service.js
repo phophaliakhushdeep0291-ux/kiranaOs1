@@ -4,7 +4,7 @@ import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMon
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
 import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
-import { postBillCancelledLedger, postBillCreatedLedger, postBillRestoredLedger } from "../finance/financial-ledger.service.js";
+import { postBillCancelledLedger, postBillCreatedLedger, postBillRestoredLedger, postSaleReturnLedger } from "../finance/financial-ledger.service.js";
 import {
   decrementLocationInventory,
   getLocationQuantity,
@@ -1050,10 +1050,13 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           })
         : null;
 
-      // NOTE: FinancialLedger is intentionally not posted for returns. It is append-only
-      // and not read by any report/dashboard — all user-facing KPIs derive from
-      // bill / udharLedger / stockLedger, which this return already reverses. Revisit
-      // if the FinancialLedger is ever wired into reporting.
+      await postSaleReturnLedger(tx, {
+        shopId,
+        bill: returnBill,
+        refundMode: normalizedRefundMode,
+        refundAmount,
+        customerId: resolvedCustomerId,
+      });
 
       return issuedGiftCard ? { ...returnBill, issuedGiftCard } : returnBill;
     });

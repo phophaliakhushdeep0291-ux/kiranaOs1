@@ -32,9 +32,37 @@ export interface PurchaseOrder {
   receipts: PurchaseReceipt[];
   location: { id: string; name: string; code: string };
   supplier?: { id: string; name: string; mobile?: string | null; address?: string | null } | null;
+  reconciliation: {
+    status: "not_received" | "partial_delivery" | "invoice_pending" | "matched" | "approved_variance";
+    allGoodsReceived: boolean;
+    receiptCount: number;
+    matchedCount: number;
+    approvedVarianceCount: number;
+    invoicePendingCount: number;
+    expectedGoodsAmount: number;
+    goodsReceivedAmount: number;
+    supplierInvoiceAmount: number;
+    priceVarianceAmount: number;
+    invoiceVarianceAmount: number;
+  };
 }
 export interface PurchaseReceiptItem { id: string; purchaseOrderItemId: string; productId: string; quantityBaseQty: number; actualRate: number; lineAmount: number }
-export interface PurchaseReceipt { id: string; receiptNumber: string; supplierInvoiceNumber?: string | null; totalAmount: number; dueAmount?: number; createdAt: string; items: PurchaseReceiptItem[] }
+export interface PurchaseReceipt {
+  id: string;
+  receiptNumber: string;
+  supplierInvoiceNumber?: string | null;
+  supplierInvoiceAmount?: number | null;
+  expectedGoodsAmount: number;
+  totalAmount: number;
+  priceVarianceAmount: number;
+  invoiceVarianceAmount?: number | null;
+  matchStatus: "invoice_pending" | "matched" | "approved_variance";
+  varianceReason?: string | null;
+  varianceApprovedAt?: string | null;
+  dueAmount?: number;
+  createdAt: string;
+  items: PurchaseReceiptItem[];
+}
 export interface PurchaseReturnItem {
   id: string;
   productId: string;
@@ -70,6 +98,18 @@ export interface ReorderSuggestion {
   stockBaseQty: number;
   lowStockThreshold: number;
   recommendedOrderBaseQty: number;
+  netSalesBaseQty: number;
+  salesLineCount: number;
+  salesWindowDays: number;
+  averageDailySalesBaseQty: number;
+  demandTargetBaseQty: number;
+  targetCoverageDays: number;
+  openOrderBaseQty: number;
+  coverageDaysRemaining: number | null;
+  forecastConfidence: "high" | "medium" | "low" | "no_history";
+  reasonCode: "demand_coverage" | "manual_reorder_floor" | "low_stock_floor";
+  explanation: string;
+  calculationVersion: "deterministic_reorder_v1";
   expectedRate: number;
   supplierId?: string | null;
   supplierName?: string | null;
@@ -79,7 +119,8 @@ export const listPurchaseOrders = () => apiRequest<PurchaseOrder[]>("/purchase-o
 export const getReorderSuggestions = () => apiRequest<ReorderSuggestion[]>("/purchase-orders/suggestions");
 export const createPurchaseOrder = (data: unknown) => apiRequest<PurchaseOrder>("/purchase-orders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 export const sendPurchaseOrder = (id: string, ownerPin: string) => apiRequest<PurchaseOrder>(`/purchase-orders/${id}/send`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: "{}" });
-export const receivePurchaseOrder = (id: string, data: unknown, ownerPin: string) => apiRequest<{ purchaseOrder: PurchaseOrder; receipt: { id: string; receiptNumber: string; totalAmount: number }; idempotentReplay: boolean }>(`/purchase-orders/${id}/receive`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+export const receivePurchaseOrder = (id: string, data: unknown, ownerPin: string) => apiRequest<{ purchaseOrder: PurchaseOrder; receipt: PurchaseReceipt; idempotentReplay: boolean }>(`/purchase-orders/${id}/receive`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+export const reconcilePurchaseReceipt = (purchaseOrderId: string, receiptId: string, data: unknown, ownerPin: string) => apiRequest<PurchaseOrder>(`/purchase-orders/${purchaseOrderId}/receipts/${receiptId}/reconcile`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
 export const cancelPurchaseOrder = (id: string, reason: string, ownerPin: string) => apiRequest<PurchaseOrder>(`/purchase-orders/${id}/cancel`, { method: "POST", ownerPin, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
 export const listPurchaseReturns = () => apiRequest<PurchaseReturn[]>("/purchase-returns?limit=200");
 export const createPurchaseReturn = (data: unknown, ownerPin: string) => apiRequest<PurchaseReturn>("/purchase-returns", { method: "POST", ownerPin, body: JSON.stringify(data) });

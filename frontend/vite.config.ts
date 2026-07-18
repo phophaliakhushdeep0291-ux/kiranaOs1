@@ -53,6 +53,14 @@ export default defineConfig({
     // KiranaOS is an installed/evergreen-browser POS; avoid shipping legacy
     // transforms that add weight without helping the supported runtime.
     target: "es2022",
+    // Release builds favor smaller payloads over the default minifier's speed.
+    // Two compression passes keep the full POS feature set inside the enforced
+    // raw and gzip budgets without changing runtime behavior.
+    minify: "terser",
+    terserOptions: {
+      compress: { passes: 2 },
+      format: { comments: false },
+    },
     outDir: path.resolve(projectRoot, "dist/public"),
     emptyOutDir: true,
     chunkSizeWarningLimit: 900,

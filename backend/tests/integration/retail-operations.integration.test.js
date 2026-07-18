@@ -187,7 +187,11 @@ if (ctx.skip) {
       const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
 
       const suggestions = assertSuccess(await ctx.get("/api/purchase-orders/suggestions", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
-      assert.equal(suggestions.find((row) => row.productId === product.id).recommendedOrderBaseQty, 7);
+      const reorderSuggestion = suggestions.find((row) => row.productId === product.id);
+      assert.equal(reorderSuggestion.recommendedOrderBaseQty, 10);
+      assert.equal(reorderSuggestion.reasonCode, "manual_reorder_floor");
+      assert.equal(reorderSuggestion.forecastConfidence, "no_history");
+      assert.equal(reorderSuggestion.calculationVersion, "deterministic_reorder_v1");
 
       const order = assertSuccess(await ctx.post("/api/purchase-orders", {
         supplierId: supplier.id,
@@ -205,6 +209,9 @@ if (ctx.skip) {
       assert.equal(order.paymentTerms, "Net 15 days");
       assert.equal(order.deliveryAddress, "Primary receiving bay, Pune");
       assert.equal(order.termsAndConditions, "Quote this PO on the supplier invoice.");
+
+      const coveredSuggestions = assertSuccess(await ctx.get("/api/purchase-orders/suggestions", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
+      assert.equal(coveredSuggestions.some((row) => row.productId === product.id), false, "an open supplier order must suppress duplicate replenishment");
 
       const tracked = assertSuccess(await ctx.patch(`/api/inventory-lots/products/${product.id}/tracking`, { enabled: true }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal(tracked.batchTrackingEnabled, true);
@@ -619,6 +626,9 @@ if (ctx.skip) {
       assert.equal(creditNote.items[0].gstRate, 18);
       assert.equal(creditNote.items[0].hsn, "1905", "later product edits must not rewrite a credit note's HSN");
 
+      const returnLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: creditNote.id }, orderBy: { entryType: "asc" } });
+      assert.deepEqual(returnLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", -10000n], ["sale", -10000n]], "the append-only financial ledger must reverse both revenue and refunded cash");
+
       const working = assertSuccess(await ctx.get("/api/compliance/gstr1-working?range=monthly", { token: auth.accessToken }));
       assert.equal(working.cdnr.length, 1);
       assert.equal(working.cdnr[0].noteNumber, creditNote.billNo);
@@ -697,6 +707,8 @@ if (ctx.skip) {
       assert.match(returnCredit.issuedGiftCard.code, /^KOS-/);
       assert.equal(returnCredit.issuedGiftCard.balance, 100);
       assert.equal(returnCredit.locationId, branch.id, "a cross-channel return must restock the accepting branch");
+      const giftReturnLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: returnCredit.id }, orderBy: { entryType: "asc" } });
+      assert.deepEqual(giftReturnLedger.map((row) => [row.entryType, row.amountPaise]), [["gift_card_issued", 10000n], ["sale", -10000n]], "store-credit returns must expose the new gift-value liability without fake cash movement");
 
       const repeatReturn = assertFailure(await ctx.post("/api/bills/returns", {
         refundMode: "cash",
