@@ -115,6 +115,13 @@ export interface StaffSalesRow {
   bills: number;
 }
 
+export interface ReportHourlySalesRow {
+  /** Local hour of day, 0–23. */
+  hour: number;
+  sales: number;
+  bills: number;
+}
+
 export interface ReportDiscountedBill {
   billId: string;
   billNo: string;
@@ -155,6 +162,7 @@ export interface LocalReportSnapshot {
   lowStock: ReportLowStockItem[];
   staffSales: StaffSalesRow[];
   discounts: ReportDiscountSummary;
+  hourlySales: ReportHourlySalesRow[];
   pendingSyncCount: number;
   failedSyncCount: number;
   conflictCount: number;
@@ -288,6 +296,22 @@ function billTotal(row: LocalBill): number {
  * bills (coupon + loyalty portions live inside it), so "manual" is derived by
  * subtracting those; line discounts are summed from the embedded items.
  */
+/** Sales bucketed by local hour of day — "when is the counter busy". */
+export function calculateHourlySales(bills: LocalBill[], range: DateRange): ReportHourlySalesRow[] {
+  const buckets = Array.from({ length: 24 }, (_, hour) => ({ hour, sales: 0, bills: 0 }));
+  for (const bill of bills) {
+    if (!isSaleBill(bill) || !isWithinRange(bill as RecordLike, range)) continue;
+    if (String(bill.billType ?? bill.bill_type ?? "").toLowerCase().includes("return")) continue;
+    const raw = rowDate(bill as RecordLike);
+    const time = new Date(raw).getTime();
+    if (!Number.isFinite(time)) continue;
+    const hour = new Date(time).getHours();
+    buckets[hour].sales = roundMoney(buckets[hour].sales + billTotal(bill));
+    buckets[hour].bills += 1;
+  }
+  return buckets;
+}
+
 export function calculateDiscountSummary(bills: LocalBill[], range: DateRange): ReportDiscountSummary {
   const saleBills = bills.filter((bill) =>
     isSaleBill(bill) &&
@@ -667,6 +691,7 @@ export async function buildLocalReportSnapshot(range: DateRange): Promise<LocalR
     lowStock,
     staffSales: calculateStaffSales(rows.bills, range),
     discounts: calculateDiscountSummary(rows.bills, range),
+    hourlySales: calculateHourlySales(rows.bills, range),
     pendingSyncCount: counters.pending,
     failedSyncCount: counters.failed,
     conflictCount: counters.conflicts,

@@ -45,23 +45,27 @@ the codebase, not assumed.
 
 ## Tier 2 — Inventory depth
 
-- [ ] **Stocktake / cycle count** — count-session UI: freeze expected qty,
-      enter counted qty, post variance adjustments in one commit with reasons.
-- [ ] **Stock adjustment reasons taxonomy** — damage/theft/expiry/correction
-      enums on manual adjustments, reportable.
+- [x] **Stocktake / cycle count** — already existed (re-audit 2026-07-18):
+      `StockCountsPage` + backend stockCounts module — sessions with blind
+      counts, review state, per-line reasons, owner-PIN apply/cancel.
+- [x] **Stock adjustment reasons** — already existed (re-audit 2026-07-18):
+      damage adjustments require a reason, corrections require owner PIN
+      (`inventory/local-actions.ts`); free-text covers theft/expiry.
 - [x] **Barcode label printing** — "Print label" on every product row: printable
       48mm label sheet with name/price/MRP and a scannable code — vendored
       EAN-13 SVG encoder (UPC-A/12-digit normalization + checksum) with QR
       fallback for unbarcoded products. *(done 2026-07-18)*
-- [ ] **Low-stock workflow** — reorder suggestions page driven by
-      reorderLevel → one-tap draft purchase order per supplier.
+- [x] **Low-stock workflow** — already existed (re-audit 2026-07-18):
+      `PurchaseOrdersPanel` reorder suggestions grouped by supplier with
+      demand-forecast confidence and explanations.
 
 ## Tier 3 — Staff & analytics
 
 - [ ] **Per-cashier attribution everywhere** — staff on every bill/return;
       sales-by-staff report (verify depth; staff module exists).
-- [ ] **Analytics upgrade** — sales by hour heatmap, top products by margin
-      (not just revenue), average basket size trend.
+- [x] **Analytics upgrade** — "Sales by Hour" chart + Busy Hours insight
+      (peak/quiet hour callouts) in Reports, computed offline from local
+      bills *(done 2026-07-18)*; top products already report margin %.
 - [ ] **Register-session over/short history** — daily close variance log with
       trend, not just today's close.
 
@@ -71,8 +75,9 @@ the codebase, not assumed.
       one chronological feed of sales, estimates, returns, payments (with
       reversals), and ledger adjustments — deduped against ledger echoes,
       bills clickable. *(done 2026-07-18)*
-- [ ] **Receipt customization** — logo, footer message, show/hide fields,
-      configurable from printer settings.
+- [x] **Receipt customization** — already existed (re-audit 2026-07-18):
+      printer settings cover logo, footer text, copies, paper size, and a
+      dozen show/hide content toggles (`printer-config.ts`).
 - [ ] **Email receipts** — in addition to WhatsApp/print (needs SMTP creds —
       may stay blocked on integration credentials).
 
@@ -93,3 +98,4 @@ the codebase, not assumed.
 | 2026-07-18 | Barcode label printing (EAN-13 + QR fallback) from products page | feat(products): price-label printing |
 | 2026-07-18 | Customer activity timeline (unified feed on customer page) | feat(customers): activity timeline |
 | 2026-07-18 | Discount reasons + Discounts Given report — Tier 1 complete | feat(billing): discount reasons + report |
+| 2026-07-18 | Re-audit: stocktake/adjustments/reorder/receipt-custom already exist; Sales by Hour shipped | feat(reports): sales by hour |

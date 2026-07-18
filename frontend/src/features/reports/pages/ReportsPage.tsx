@@ -77,6 +77,12 @@ function todayInput() {
   return toDateInputValue(new Date());
 }
 
+function hourLabel(hour: number) {
+  const normalized = ((hour % 24) + 24) % 24;
+  const twelveHour = normalized % 12 === 0 ? 12 : normalized % 12;
+  return `${twelveHour}${normalized < 12 ? "am" : "pm"}`;
+}
+
 function daysAgoInput(days: number) {
   const date = new Date();
   date.setDate(date.getDate() - days);
@@ -339,6 +345,19 @@ export default function ReportsPage() {
   }
 
   const trend = snapshot?.dailyTrend ?? [];
+  const hourlyChart = useMemo(
+    () => (snapshot?.hourlySales ?? []).map((row) => ({ ...row, label: hourLabel(row.hour) })),
+    [snapshot?.hourlySales],
+  );
+  const peakHour = useMemo(() => {
+    const withSales = (snapshot?.hourlySales ?? []).filter((row) => row.sales > 0);
+    return withSales.length ? withSales.reduce((best, row) => (row.sales > best.sales ? row : best)) : null;
+  }, [snapshot?.hourlySales]);
+  const quietHour = useMemo(() => {
+    const withSales = (snapshot?.hourlySales ?? []).filter((row) => row.sales > 0);
+    if (withSales.length < 2) return null;
+    return withSales.reduce((worst, row) => (row.sales < worst.sales ? row : worst));
+  }, [snapshot?.hourlySales]);
   const kpis = [
     {
       label: "Total Sales",
@@ -581,6 +600,40 @@ export default function ReportsPage() {
         <DenseTable title="Daily Closing Summary" action="View all" actionHref="/daily-closing" headers={["Date", "Sales (₹)", "Collection (₹)", "Expense (₹)", "Net Profit (₹)"]} loading={loading || expenses.isLoading} empty={!dailyRows.length}>
           {dailyRows.map((row) => <tr key={row.date}><Td strong>{new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</Td><Td right>{fmt(row.sales)}</Td><Td right>{fmt(row.collection)}</Td><Td right>{fmt(row.expense)}</Td><Td right strong>{fmt(row.net)}</Td></tr>)}
         </DenseTable>
+      </section>
+
+      <section className="grid items-start gap-3 md:grid-cols-2">
+        <Panel title="Sales by Hour" subtitle={peakHour ? `Peak ${hourLabel(peakHour.hour)} • ${fmt(peakHour.sales)} (${peakHour.bills} bills)` : "(No sales in this period)"} info action={<PeriodPill value={period} onChange={applyPeriod} />}>
+          <div className="h-[150px] px-2 pb-2">
+            {loading ? <Skeleton className="h-full" /> : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hourlyChart} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
+                  <XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={14} />
+                  <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
+                  <Tooltip content={<MoneyTooltip />} />
+                  <Bar dataKey="sales" name="Sales" radius={[3, 3, 0, 0]}>
+                    {hourlyChart.map((row) => <Cell key={row.label} fill={peakHour && row.hour === peakHour.hour ? "#075fff" : "#b9d1fb"} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </Panel>
+
+        <Panel title="Busy Hours Insight">
+          <div className="space-y-2 px-4 pb-4 pt-1 text-[12px] leading-relaxed text-[#42536f]">
+            {loading ? <Skeleton className="h-24" /> : peakHour ? (
+              <>
+                <p><strong className="text-[#101f40]">{hourLabel(peakHour.hour)}</strong> is your busiest hour — {fmt(peakHour.sales)} across {peakHour.bills} bill{peakHour.bills === 1 ? "" : "s"} in this period.</p>
+                {quietHour ? <p>Quietest selling hour with any sales: <strong className="text-[#101f40]">{hourLabel(quietHour.hour)}</strong> ({fmt(quietHour.sales)}). Schedule restocking, cleaning, or supplier calls there instead of the rush.</p> : null}
+                <p className="text-[11px] text-[#7a879f]">Counted from every non-cancelled sale in the selected period, using each bill's local time.</p>
+              </>
+            ) : (
+              <p>No sales recorded in the selected period yet — the hourly pattern appears after a few billing days.</p>
+            )}
+          </div>
+        </Panel>
       </section>
 
       <section className="grid items-start gap-3 xl:grid-cols-3 2xl:grid-cols-[0.9fr_1.1fr_1fr]">
