@@ -39,7 +39,7 @@ import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
@@ -728,7 +728,8 @@ export default function CustomersPage() {
             <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>All customers</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>With balance</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" onClick={exportCustomers} className="h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold"><Download size={16} />Export</Button>
-          <Button onClick={() => openPayment()} className="inline-flex h-11 items-center justify-center gap-2.5 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] px-[18px] text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[#0758df] hover:to-[#004ed0]"><Plus size={16} className="shrink-0" /><span>Record Payment</span></Button>
+          <Button variant="outline" onClick={() => openPayment()} className="h-11 gap-2 rounded-[10px] border-[#bfd4f5] bg-[#f7faff] px-3.5 text-[11px] font-bold text-[#174eaa] hover:bg-[#edf5ff]"><Wallet size={16} />Record Payment</Button>
+          <Button onClick={openCreate} className="inline-flex h-11 items-center justify-center gap-2.5 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] px-[18px] text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[#0758df] hover:to-[#004ed0]"><Plus size={16} className="shrink-0" /><span>Add Customer</span></Button>
         </div>
       </section>
 
@@ -1139,7 +1140,10 @@ export default function CustomersPage() {
 
       <Dialog open={customerOpen} onOpenChange={setCustomerOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>{editing ? "Edit customer" : "Add customer"}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit customer" : "Add customer"}</DialogTitle>
+            <DialogDescription>Save contact, credit, billing address, and optional GST identity for accurate invoices and customer ledgers.</DialogDescription>
+          </DialogHeader>
           <div className="grid gap-4 md:grid-cols-2">
             <div><Label>Name *</Label><Input className="mt-1" value={customerForm.name} onChange={(event) => setCustomerForm((form) => ({ ...form, name: event.target.value }))} /></div>
             <div><Label>Phone / number *</Label><Input className="mt-1" value={customerForm.mobile} onChange={(event) => setCustomerForm((form) => ({ ...form, mobile: event.target.value }))} /></div>
@@ -1163,7 +1167,10 @@ export default function CustomersPage() {
 
       <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Record customer payment</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Record customer payment</DialogTitle>
+            <DialogDescription>Record the amount received and its payment mode. The customer ledger will update locally and sync safely.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4">
             <div><Label>Customer *</Label><Select value={paymentForm.customerId} onValueChange={(value) => setPaymentForm((form) => ({ ...form, customerId: value }))}><SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger><SelectContent>{dedupedCustomers.map((customer) => <SelectItem key={customer.id} value={customer.id}>{customer.name} - {fmtMoney(customer.ledgerBalance)}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>Amount *</Label><Input type="number" className="mt-1" value={paymentForm.amount} onChange={(event) => setPaymentForm((form) => ({ ...form, amount: event.target.value }))} /></div>

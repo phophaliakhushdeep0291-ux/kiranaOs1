@@ -57,7 +57,8 @@ async function waitForPage(client, expression, timeout = 20_000) {
     if (await client.evaluate(`Boolean(${expression})`)) return;
     await sleep(150);
   }
-  throw new Error(`Timed out waiting for page condition: ${expression}`);
+  const diagnostic = await client.evaluate("({url:location.href,text:document.body?.innerText?.slice(0,1200),errors:window.__arthaQaErrors||[]})").catch(() => null);
+  throw new Error(`Timed out waiting for page condition: ${expression}; page=${JSON.stringify(diagnostic)}`);
 }
 
 async function navigate(client, url) {
@@ -95,9 +96,9 @@ async function main() {
 
     const runId = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
     const seeded = await client.evaluate(`(async()=>{
-      const api=${JSON.stringify(API_URL)},deviceId='purchase_receive_${runId}';
+      const api=${JSON.stringify(API_URL)},deviceId=localStorage.getItem('kiranaos_device_id')||localStorage.getItem('kirana-os:device-id:v1')||'purchase_receive_${runId}';
       const request=async(path,options={})=>{const response=await fetch(api+path,options);const json=await response.json();if(!response.ok)throw new Error(path+': '+JSON.stringify(json));return json.data??json};
-      const auth=await request('/auth/register',{method:'POST',headers:{'content-type':'application/json','x-device-id':deviceId},body:JSON.stringify({shopName:'Purchase Receive QA',ownerName:'Artha QA',city:'Pune',mobile:'9${runId.slice(-9)}',password:'Test@12345',ownerPin:'2468'})});
+      const auth=await request('/auth/register',{method:'POST',headers:{'content-type':'application/json','x-device-id':deviceId},body:JSON.stringify({shopName:'Purchase Receive QA',ownerName:'Artha QA',city:'Pune',address:'Focused live QA',mobile:'9${runId.slice(-9)}',password:'Test@12345',ownerPin:'2468'})});
       const headers={'content-type':'application/json',authorization:'Bearer '+(auth.accessToken??auth.token),'x-device-id':deviceId,'x-owner-pin':'2468'};
       localStorage.setItem('kiranaApiBaseUrl',api);localStorage.setItem('kiranaos_device_id',deviceId);localStorage.setItem('kirana-os:device-id:v1',deviceId);localStorage.setItem('kiranaos.auth.session.v1',JSON.stringify({accessToken:auth.accessToken??auth.token,refreshToken:auth.refreshToken,user:auth.user,shop:auth.shop}));
       const product=await request('/products',{method:'POST',headers,body:JSON.stringify({name:'QA Receiving Oil',category:'Grocery',displayUnit:'piece',baseUnit:'piece',rateUnit:'piece',stockBaseQty:24,costPerRateUnit:232,minPricePerRateUnit:250,defaultPricePerRateUnit:265,mrp:280,gstRate:5,lowStockThreshold:8})});

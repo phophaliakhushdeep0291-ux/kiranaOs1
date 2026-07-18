@@ -82,7 +82,7 @@ import { createBillLocalFirst } from "@/features/billing/local-actions";
 import { restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
-import { markPurchasePaidLocal, recordPurchasePaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
+import { markPurchasePaidLocal, recordPurchasePaymentLocal, reverseSupplierPaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { calculateLedgerBalance } from "@/features/ledger/accounting";
 
 function seedFrontOffice() {
@@ -347,8 +347,23 @@ describe("front office local-first cashier flow", () => {
       purchase_payment_status: "paid",
       purchase_payment_mode: "upi",
     }));
-    // Every payment goes to the server through the idempotent purchase-update op.
-    expect(rows("sync_outbox").filter((row) => row.operation_type === "UPDATE_PURCHASE_BILL")).toHaveLength(2);
+    // Every payment has an immutable local row and its own exactly-once server operation.
+    expect(rows("payments").filter((row) => row.kind === "supplier_payment")).toHaveLength(2);
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "RECORD_SUPPLIER_PAYMENT")).toHaveLength(2);
+
+    const lastPayment = rows("payments").filter((row) => row.kind === "supplier_payment")[1];
+    await reverseSupplierPaymentLocal(
+      purchaseDisplayRow({ id: purchaseRowId, paid: 500, due: 0 }),
+      lastPayment,
+      { reason: "Duplicate UPI entry", ownerPin: "1234" },
+    );
+    expect(rows("inventory_movements").find((row) => row.action === "purchase")).toEqual(expect.objectContaining({
+      purchase_paid_amount: 250,
+      purchase_due_amount: 250,
+      purchase_payment_status: "partial",
+    }));
+    expect(rows("payments").find((row) => row.id === lastPayment.id)).toEqual(expect.objectContaining({ status: "reversed" }));
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "REVERSE_SUPPLIER_PAYMENT")).toHaveLength(1);
   });
 
   it("recycle-bin move reverses udhar locally and restore re-applies it (mirrors server CANCEL/RESTORE)", async () => {

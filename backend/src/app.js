@@ -11,6 +11,7 @@ import { getRedisClient, getRedisStatus } from "./lib/redis.js";
 import { checkStorageHealth } from "./lib/objectStorage.js";
 import { getMetricsSnapshot, renderPrometheusMetrics, recordReadinessStatus } from "./lib/metrics.js";
 import { getErrorTrackingStatus } from "./lib/errorTracking.js";
+import { isAllowedCorsOrigin, parseAllowedOrigins } from "./lib/corsOrigins.js";
 
 // Module routes
 import authRoutes from "./modules/auth/auth.routes.js";
@@ -65,7 +66,7 @@ app.use(securityHeaders);
 app.use(requestLogger);
 
 // ── CORS ──────────────────────────────────────────────────────
-const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+const allowedOrigins = parseAllowedOrigins(env.ALLOWED_ORIGINS);
 
 function createCorsDeniedError(origin) {
   const error = new Error("CORS origin not allowed");
@@ -79,7 +80,7 @@ app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, curl)
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isAllowedCorsOrigin(origin, allowedOrigins, env.NODE_ENV)) {
         callback(null, true);
       } else {
         callback(createCorsDeniedError(origin));

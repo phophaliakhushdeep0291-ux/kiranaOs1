@@ -866,6 +866,52 @@ if (ctx.skip) {
       assert.equal(stocked.stockBaseQty, 7, "re-cancel doesn't restore stock twice and re-create doesn't deduct twice");
     });
 
+    test("supplier payment and owner reversal are append-only, exact-once, and restore due", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10 });
+      const purchase = await ctx.db.purchaseHistory.create({
+        data: {
+          shopId: tenant.shop.id,
+          productId: product.id,
+          supplierName: "Ledger Supplier",
+          qtyBase: 2,
+          pricePerRateUnit: 500,
+          totalCost: 1000,
+          billAmount: 1000,
+          purchasePaidAmount: 100,
+          purchaseDueAmount: 900,
+          purchasePaymentStatus: "partial",
+        },
+      });
+      const paymentEvent = {
+        eventId: "supplier-payment-proof-1",
+        type: "RECORD_SUPPLIER_PAYMENT",
+        payload: { purchaseHistoryId: purchase.id, paymentId: "local-supplier-payment-1", amount: 250, mode: "upi", reference: "UTR-1001" },
+      };
+      const first = assertSuccess(await ctx.post("/api/sync/push", { events: [paymentEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(first.results[0].success, true);
+      assertSuccess(await ctx.post("/api/sync/push", { events: [paymentEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      let updated = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
+      assert.equal(updated.purchasePaidAmount, 350);
+      assert.equal(updated.purchaseDueAmount, 650);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment" } }), 1, "event replay never duplicates payment");
+
+      const reverseEvent = {
+        eventId: "supplier-payment-reverse-proof-1",
+        type: "REVERSE_SUPPLIER_PAYMENT",
+        ownerPin: "1234",
+        payload: { paymentId: "local-supplier-payment-1", reason: "Duplicate UPI posting", ownerPin: "1234" },
+      };
+      assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assertSuccess(await ctx.post("/api/sync/push", { events: [reverseEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      updated = await ctx.db.purchaseHistory.findUnique({ where: { id: purchase.id } });
+      assert.equal(updated.purchasePaidAmount, 100);
+      assert.equal(updated.purchaseDueAmount, 900);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "supplier_payment_reversal" } }), 1, "reversal replay is exact-once");
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: { in: ["SUPPLIER_PAYMENT_RECORDED", "SUPPLIER_PAYMENT_REVERSED"] } } }), 2);
+    });
+
     test("push conflicts are persisted once with redacted snapshots and survive event replay", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const event = {

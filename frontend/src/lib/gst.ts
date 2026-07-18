@@ -8,8 +8,9 @@
  * - "exclusive" (B2B style): tax is ADDED on top of the entered price.
  * - "none": no GST anywhere.
  *
- * Counter sales are intra-state, so tax splits as CGST + SGST (each = gst/2).
- * sgst is computed as (gst − cgst) so the split always reconciles to the paisa.
+ * Intra-state sales split tax as CGST + SGST; interstate sales use IGST.
+ * The remainder component is derived from total GST so every split reconciles
+ * to the paisa, including signed credit-note lines.
  * Bill-level discount is a post-tax concession (the kirana "₹10 kam de do")
  * and does not change the per-line taxable values.
  */

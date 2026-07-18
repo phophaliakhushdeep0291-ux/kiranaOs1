@@ -30,6 +30,8 @@ const BACKEND_OPERATION_TYPE_MAP: Record<string, string> = {
   STOCK_CORRECTION: "ADJUST_STOCK",
   UPDATE_PURCHASE_BILL: "UPDATE_PURCHASE_BILL",
   DELETE_PURCHASE_BILL: "DELETE_PURCHASE_BILL",
+  RECORD_SUPPLIER_PAYMENT: "RECORD_SUPPLIER_PAYMENT",
+  REVERSE_SUPPLIER_PAYMENT: "REVERSE_SUPPLIER_PAYMENT",
 };
 
 const BACKEND_ENTITY_TYPE_MAP: Record<string, string> = {
@@ -41,6 +43,8 @@ const BACKEND_ENTITY_TYPE_MAP: Record<string, string> = {
   ADJUST_STOCK: "inventory_movement",
   UPDATE_PURCHASE_BILL: "purchase_history",
   DELETE_PURCHASE_BILL: "purchase_history",
+  RECORD_SUPPLIER_PAYMENT: "payment",
+  REVERSE_SUPPLIER_PAYMENT: "payment",
   DELETE_CUSTOMER: "customer",
   RESTORE_CUSTOMER: "customer",
 };
@@ -448,7 +452,7 @@ export function buildBackendSyncOperation(
 
   if (backendType === "CREATE_BILL") payload = normaliseCreateBillPayload(payload);
   if (backendType === "UDHAR_PAYMENT") payload = normalisePaymentPayload(payload);
-  if (backendType === "UPDATE_PURCHASE_BILL" || backendType === "DELETE_PURCHASE_BILL") {
+  if (backendType === "UPDATE_PURCHASE_BILL" || backendType === "DELETE_PURCHASE_BILL" || backendType === "RECORD_SUPPLIER_PAYMENT") {
     payload = normalisePurchaseLifecyclePayload(event, payload);
   }
   payload = normaliseBillLifecyclePayload(backendType, payload);

@@ -18,7 +18,7 @@ import {
 } from "@/features/finance/services/FinancialAggregationService";
 import { hydratePurchaseHistoryFromSyncPull } from "@/features/sync/cloud-hydration";
 import { useAuth } from "@/features/auth/useAuth";
-import { deletePurchaseLocal, recordPurchasePaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
+import { deletePurchaseLocal, listSupplierPaymentsLocal, recordPurchasePaymentLocal, reverseSupplierPaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
 import { createSupplierLocalFirst } from "@/features/suppliers/local-actions";
 import { offlineDB } from "@/lib/offline/db";
@@ -135,6 +135,11 @@ export default function PurchaseBillsPage() {
   });
   const [payMode, setPayMode] = useState("cash");
   const [payAmount, setPayAmount] = useState("");
+  const [payReference, setPayReference] = useState("");
+  const [supplierPayments, setSupplierPayments] = useState<Array<Record<string, unknown>>>([]);
+  const [reversingPayment, setReversingPayment] = useState<Record<string, unknown> | null>(null);
+  const [reversalReason, setReversalReason] = useState("");
+  const [reversalPin, setReversalPin] = useState("");
   const purchaseHydrationAttemptedRef = useRef(false);
   const snapshotRef = useRef<FinancialAggregationSnapshot | null>(null);
   const refreshTimer = useRef<number | null>(null);
@@ -404,6 +409,9 @@ export default function PurchaseBillsPage() {
     setPayingRow(row);
     setPayMode(row.paymentMode === "upi" ? "upi" : "cash");
     setPayAmount(String(row.due > 0 ? row.due : ""));
+    setPayReference("");
+    setReversingPayment(null);
+    void listSupplierPaymentsLocal(row).then(setSupplierPayments);
   }
 
   async function saveEdit() {
@@ -455,7 +463,7 @@ export default function PurchaseBillsPage() {
     }
     setSaving(true);
     try {
-      await recordPurchasePaymentLocal(payingRow, { amount, mode: payMode });
+      await recordPurchasePaymentLocal(payingRow, { amount, mode: payMode, reference: payReference });
       const remaining = Math.max(0, Math.round((payingRow.due - amount) * 100) / 100);
       await reloadSnapshot();
       setPayingRow(null);
@@ -467,6 +475,30 @@ export default function PurchaseBillsPage() {
       });
     } catch (error) {
       toast({ title: "Could not record payment", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reversePayment() {
+    if (!payingRow || !reversingPayment || saving) return;
+    if (reversalReason.trim().length < 3 || reversalPin.trim().length < 4) {
+      toast({ title: "Reason and owner PIN required", description: "Reversals are owner-approved and remain in the audit trail.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await reverseSupplierPaymentLocal(payingRow, reversingPayment, { reason: reversalReason, ownerPin: reversalPin });
+      await reloadSnapshot();
+      const refreshed = await listSupplierPaymentsLocal(payingRow);
+      setSupplierPayments(refreshed);
+      setReversingPayment(null);
+      setReversalReason("");
+      setReversalPin("");
+      setPayingRow(null);
+      toast({ title: "Supplier payment reversed", description: "The due was restored and an immutable reversal was queued for sync." });
+    } catch (error) {
+      toast({ title: "Could not reverse payment", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -623,14 +655,14 @@ export default function PurchaseBillsPage() {
                         <div><p className="text-[10px] font-bold uppercase text-[#8290a8]">Mode</p><p className="mt-1 text-xs font-black text-[#344668]">{modeLabel(row.paymentMode)}</p></div>
                       </div>
                       <div className="mt-3 grid grid-cols-3 gap-2">
-                        <Button variant="outline" className="h-9 rounded-[10px] text-[11px] font-bold" disabled={row.due <= 0 || saving} onClick={() => openPay(row)}>Pay</Button>
+                        <Button variant="outline" className="h-11 rounded-[10px] text-[11px] font-bold" disabled={saving} onClick={() => openPay(row)}>{row.due > 0 ? "Pay" : "Payments"}</Button>
                         <Button variant="outline" className="h-9 rounded-[10px] text-[11px] font-bold" disabled={saving} onClick={() => openEdit(row)}>Edit</Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273]" aria-label={`Actions for ${row.invoiceNumber}`}><MoreVertical size={15} className="mx-auto" /></button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem disabled={row.due <= 0 || saving} onClick={() => openPay(row)}><CheckCircle2 size={14} className="mr-2" /> Pay due</DropdownMenuItem>
+                            <DropdownMenuItem disabled={saving} onClick={() => openPay(row)}><CheckCircle2 size={14} className="mr-2" /> {row.due > 0 ? "Pay due" : "Payment history"}</DropdownMenuItem>
                             <DropdownMenuItem disabled={saving} onClick={() => openEdit(row)}><Pencil size={14} className="mr-2" /> Edit purchase</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-rose-600 focus:text-rose-700" disabled={saving} onClick={() => setDeletingRow(row)}><Trash2 size={14} className="mr-2" /> Delete purchase</DropdownMenuItem>
@@ -857,14 +889,14 @@ export default function PurchaseBillsPage() {
       </Dialog>
 
       <Dialog open={Boolean(payingRow)} onOpenChange={(open) => !open && setPayingRow(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="h-[100dvh] w-screen max-w-none overflow-y-auto rounded-none border-0 sm:h-auto sm:max-h-[88vh] sm:w-full sm:max-w-lg sm:rounded-2xl sm:border">
           <DialogHeader>
             <DialogTitle>Pay supplier</DialogTitle>
             <DialogDescription>
               {payingRow ? <>Due on this purchase: <span className="font-bold text-[#c2410c]">{fmt(payingRow.due)}</span>. Pay the full amount or a smaller part — the rest stays due.</> : null}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
               <Label>Amount to pay now</Label>
               <Input
@@ -876,14 +908,14 @@ export default function PurchaseBillsPage() {
                 value={payAmount}
                 onChange={(event) => setPayAmount(event.target.value)}
               />
-              <div className="mt-1.5 flex gap-1.5">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 {payingRow && payingRow.due > 0 && (
                   <>
-                    <button type="button" className="rounded-md border border-[#dbe4f0] px-2 py-1 text-[11px] font-bold text-[#405273] hover:bg-[#f4f7fc]" onClick={() => setPayAmount(String(payingRow.due))}>
+                    <button type="button" className="min-h-11 rounded-xl border border-[#dbe4f0] px-3 py-2 text-xs font-bold text-[#405273] hover:bg-[#f4f7fc]" onClick={() => setPayAmount(String(payingRow.due))}>
                       Full due {fmt(payingRow.due)}
                     </button>
                     {payingRow.due >= 2 && (
-                      <button type="button" className="rounded-md border border-[#dbe4f0] px-2 py-1 text-[11px] font-bold text-[#405273] hover:bg-[#f4f7fc]" onClick={() => setPayAmount(String(Math.round((payingRow.due / 2) * 100) / 100))}>
+                      <button type="button" className="min-h-11 rounded-xl border border-[#dbe4f0] px-3 py-2 text-xs font-bold text-[#405273] hover:bg-[#f4f7fc]" onClick={() => setPayAmount(String(Math.round((payingRow.due / 2) * 100) / 100))}>
                         Half {fmt(Math.round((payingRow.due / 2) * 100) / 100)}
                       </button>
                     )}
@@ -902,10 +934,24 @@ export default function PurchaseBillsPage() {
               </Select>
               <p className="mt-1.5 text-[11px] text-[#8290a8]">Paying part cash, part UPI? Record two payments — one in each mode.</p>
             </div>
+            <div>
+              <Label>Reference (optional)</Label>
+              <Input className="mt-1" value={payReference} onChange={(event) => setPayReference(event.target.value)} placeholder="UPI reference, cheque or note" maxLength={120} />
+            </div>
+            <div className="border-t border-slate-200 pt-4">
+              <div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-black text-slate-900">Payment history</p><p className="text-xs text-slate-500">Payments and reversals remain traceable.</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{supplierPayments.length}</span></div>
+              <div className="space-y-2">
+                {supplierPayments.length === 0 ? <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">No separate supplier payments recorded yet.</div> : supplierPayments.map((payment) => {
+                  const reversed = String(payment.status ?? "active") === "reversed";
+                  return <div key={String(payment.id)} className="rounded-xl border border-slate-200 p-3"><div className="flex items-start justify-between gap-3"><div><p className={cn("font-black", reversed ? "text-slate-400 line-through" : "text-slate-900")}>{fmt(Number(payment.amount ?? 0))}</p><p className="text-xs text-slate-500">{modeLabel(String(payment.mode ?? "cash"))} Â· {safeDate(String(payment.paid_at ?? payment.created_at ?? ""))}</p></div>{reversed ? <span className="text-xs font-bold text-rose-700">Reversed</span> : <Button variant="outline" className="h-11 text-xs text-rose-700" onClick={() => setReversingPayment(payment)}>Reverse</Button>}</div></div>;
+                })}
+              </div>
+            </div>
+            {reversingPayment ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-4"><p className="font-black text-rose-950">Reverse {fmt(Number(reversingPayment.amount ?? 0))}?</p><p className="mt-1 text-xs text-rose-800">The due is restored; the original payment remains in the audit trail.</p><div className="mt-3 space-y-3"><Input value={reversalReason} onChange={(event) => setReversalReason(event.target.value)} placeholder="Reversal reason" /><Input type="password" inputMode="numeric" value={reversalPin} onChange={(event) => setReversalPin(event.target.value)} placeholder="Owner PIN" /></div><div className="mt-3 grid grid-cols-2 gap-2"><Button variant="outline" className="h-11" onClick={() => setReversingPayment(null)}>Keep</Button><Button variant="destructive" className="h-11" onClick={() => void reversePayment()} disabled={saving}>Confirm</Button></div></div> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPayingRow(null)} disabled={saving}>Cancel</Button>
-            <Button data-testid="button-record-purchase-payment" onClick={() => void savePaid()} disabled={saving}>{saving ? "Saving..." : "Record payment"}</Button>
+            {payingRow && payingRow.due > 0 ? <Button data-testid="button-record-purchase-payment" onClick={() => void savePaid()} disabled={saving}>{saving ? "Saving..." : "Record payment"}</Button> : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>

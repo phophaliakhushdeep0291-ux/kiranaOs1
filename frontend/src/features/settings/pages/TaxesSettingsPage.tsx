@@ -14,6 +14,7 @@ import { Card, CardHead, Fld, Badge, RowToggle, Kpi } from "@/features/settings/
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import type { BillListResult } from "@/types/api";
+import { UpgradePrompt, useFeature } from "@/features/subscription";
 
 interface TaxConfig {
   mode: "exclusive" | "inclusive" | "none";
@@ -116,11 +117,12 @@ export default function TaxesSettingsPage() {
   const hsnInputRef = useRef<HTMLInputElement>(null);
   const rateInputRef = useRef<HTMLInputElement>(null);
   const seeded = useRef(false);
+  const gstReportsFeature = useFeature("gst_reports");
   // Real numbers from stored bills (gst + gstMode persisted per bill).
-  const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), retry: 1 });
+  const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), enabled: gstReportsFeature.allowed, retry: 1 });
   const readinessQ = useQuery({ queryKey: ["gst-compliance-readiness"], queryFn: () => apiRequest<ComplianceReadiness>("/compliance/readiness"), retry: 1 });
-  const hsnSummaryQ = useQuery({ queryKey: ["gst-hsn-summary"], queryFn: () => apiRequest<HsnSummary>("/compliance/hsn-summary"), retry: 1 });
-  const recentBillsQ = useQuery({ queryKey: ["gst-compliance-recent-bills"], queryFn: () => apiRequest<BillListResult>("/bills?status=active&page=1&limit=50"), enabled: ewayOpen, retry: 1 });
+  const hsnSummaryQ = useQuery({ queryKey: ["gst-hsn-summary"], queryFn: () => apiRequest<HsnSummary>("/compliance/hsn-summary"), enabled: gstReportsFeature.allowed, retry: 1 });
+  const recentBillsQ = useQuery({ queryKey: ["gst-compliance-recent-bills"], queryFn: () => apiRequest<BillListResult>("/bills?status=active&page=1&limit=50"), enabled: gstReportsFeature.allowed && ewayOpen, retry: 1 });
   const inr = (n?: number) => (n == null ? "—" : `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
   useEffect(() => {
@@ -290,9 +292,21 @@ export default function TaxesSettingsPage() {
 
       {/* HSN / Product Mapping */}
       <Card>
-        <CardHead icon={<Boxes size={15} />} title="HSN / Product Mapping" sub="Live classifications from the product catalogue" action={<button type="button" onClick={() => void hsnSummaryQ.refetch()} className="text-[12px] font-bold text-[#005dff] hover:underline">Refresh</button>} />
+        <CardHead
+          icon={<Boxes size={15} />}
+          title="HSN / Product Mapping"
+          sub="Live classifications from the product catalogue"
+          action={gstReportsFeature.allowed
+            ? <button type="button" onClick={() => void hsnSummaryQ.refetch()} className="text-[12px] font-bold text-[#005dff] hover:underline">Refresh</button>
+            : <UpgradePrompt compact featureName="gst_reports" description="HSN coverage and GST working papers are included in the Business plan." />}
+        />
         <div className="px-5 pb-5">
-          <div className="app-table-scroll overflow-x-auto rounded-[10px] border border-[#eef2f8]">
+          {!gstReportsFeature.loading && !gstReportsFeature.allowed ? (
+            <div className="rounded-[10px] border border-dashed border-[#cbd9ed] bg-[#f8fbff] px-4 py-6 text-center">
+              <p className="text-[13px] font-black text-[#17345f]">Business compliance workspace</p>
+              <p className="mx-auto mt-1 max-w-xl text-[12px] leading-5 text-[#64748b]">Upgrade to classify taxable products by HSN, measure coverage, and apply owner-approved category mappings.</p>
+            </div>
+          ) : <div className="app-table-scroll overflow-x-auto rounded-[10px] border border-[#eef2f8]">
             <table className="min-w-[680px] w-full text-[12px]">
               <thead className="bg-[#f7f9fd] text-[11px] uppercase tracking-wide text-[#64748b]">
                 <tr>
@@ -317,21 +331,37 @@ export default function TaxesSettingsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* GST Reports */}
         <Card>
-          <CardHead icon={<BarChart3 size={15} />} title="GST Reports" sub="This month" action={<span className="flex items-center gap-3"><button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Register</button><button onClick={exportGstr1Working} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> GSTR-1 working</button></span>} />
-          <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
-            <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
-            <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />
-            <Kpi label="GST split" value={gstQ.isLoading ? "…" : gstQ.data ? `C ${inr(gstQ.data.cgst)} · S ${inr(gstQ.data.sgst)} · I ${inr(gstQ.data.igst)}` : "—"} tone="amber" />
-            <Kpi label="Bills with GST" value={gstQ.isLoading ? "…" : gstQ.data ? String(gstQ.data.gstBills) : "—"} tone="violet" />
-          </div>
-          {gstQ.isError && <p className="px-5 pb-4 text-[11px] text-[#94a3b8]">Connect to the cloud to load this month's GST report.</p>}
+          <CardHead
+            icon={<BarChart3 size={15} />}
+            title="GST Reports"
+            sub="This month"
+            action={gstReportsFeature.allowed
+              ? <span className="flex items-center gap-3"><button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Register</button><button onClick={exportGstr1Working} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> GSTR-1 working</button></span>
+              : <UpgradePrompt compact featureName="gst_reports" description="GST registers and GSTR-1 working papers are included in the Business plan." />}
+          />
+          {!gstReportsFeature.loading && !gstReportsFeature.allowed ? (
+            <div className="px-5 pb-5">
+              <div className="rounded-[10px] border border-dashed border-[#cbd9ed] bg-[#f8fbff] px-4 py-6 text-center">
+                <p className="text-[13px] font-black text-[#17345f]">GST reporting is not in the {gstReportsFeature.plan.name} plan</p>
+                <p className="mx-auto mt-1 max-w-md text-[12px] leading-5 text-[#64748b]">Business adds GST registers, IGST/CGST/SGST totals, credit-note working papers, and accountant-ready CSV exports.</p>
+              </div>
+            </div>
+          ) : <>
+            <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
+              <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
+              <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />
+              <Kpi label="GST split" value={gstQ.isLoading ? "…" : gstQ.data ? `C ${inr(gstQ.data.cgst)} · S ${inr(gstQ.data.sgst)} · I ${inr(gstQ.data.igst)}` : "—"} tone="amber" />
+              <Kpi label="Bills with GST" value={gstQ.isLoading ? "…" : gstQ.data ? String(gstQ.data.gstBills) : "—"} tone="violet" />
+            </div>
+            {gstQ.isError && <p className="px-5 pb-4 text-[11px] font-semibold text-rose-600">Could not load this month's GST report: {gstQ.error instanceof Error ? gstQ.error.message : "Please retry."}</p>}
+          </>}
         </Card>
 
         {/* Compliance Settings */}
@@ -361,7 +391,7 @@ export default function TaxesSettingsPage() {
                   : "Blocked until a certified GSTN/GSP provider is connected"}
               pill={<Badge tone={readinessQ.data?.provider.legalSubmission ? "green" : readinessQ.data?.provider.configured ? "blue" : "amber"}>{readinessQ.data?.provider.legalSubmission ? "Connected" : readinessQ.data?.provider.configured ? "Sandbox" : "Not connected"}</Badge>}
             />
-            <RowToggle label="E-Way Bill" desc="Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP" pill={<Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> Prepare</Button>} />
+            <RowToggle label="E-Way Bill" desc="Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP" pill={gstReportsFeature.allowed ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> Prepare</Button> : <UpgradePrompt compact featureName="gst_reports" description="Audited e-way transport drafts are included in the Business plan." />} />
             <RowToggle label="Show GST breakup on bill" pill={<Switch checked={tax.showBreakup} onCheckedChange={(v) => update({ showBreakup: v })} />} />
             <RowToggle label="Round off tax amount" pill={<Switch checked={tax.roundOff} onCheckedChange={(v) => update({ roundOff: v })} />} />
             <RowToggle label="Lock tax after bill creation" pill={<Switch checked={tax.lockAfterBill} onCheckedChange={(v) => update({ lockAfterBill: v })} />} />

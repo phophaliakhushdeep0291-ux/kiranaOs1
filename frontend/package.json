@@ -16,7 +16,8 @@
                     "bundle:check":  "node scripts/check-bundle-size.mjs",
                     "app:check":  "node scripts/check-production-app.mjs",
                     "security:check":  "npm run bundle:check && npm run app:check",
-                    "prod:check":  "npm run typecheck && npm run test && npm run build && npm run security:check"
+                    "prod:check":  "npm run typecheck && npm run test && npm run build && npm run security:check",
+                    "qa:purchase-receive":  "node scripts/capture-purchase-receive-ui.mjs"
                 },
     "dependencies":  {
                          "@hookform/resolvers":  "^3.10.0",

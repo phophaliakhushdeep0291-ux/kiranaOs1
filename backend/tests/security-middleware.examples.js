@@ -1,5 +1,6 @@
 import assert from "assert";
 import fs from "fs";
+import { isAllowedCorsOrigin, parseAllowedOrigins } from "../src/lib/corsOrigins.js";
 
 const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const packageLock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
@@ -25,8 +26,14 @@ assert.ok(securitySource.includes("authLimiter"), "auth rate limiter should rema
 assert.ok(securitySource.includes("aiLimiter"), "AI rate limiter should remain");
 
 assert.ok(envSource.includes("ALLOWED_ORIGINS"), "CORS origins should come from env");
-assert.ok(appSource.includes("env.ALLOWED_ORIGINS.split"), "app CORS should use env.ALLOWED_ORIGINS");
+assert.ok(appSource.includes("parseAllowedOrigins(env.ALLOWED_ORIGINS)"), "app CORS should use env.ALLOWED_ORIGINS");
 assert.ok(appSource.includes("CORS_ORIGIN_DENIED"), "blocked CORS origins should return a stable production error code");
+const configuredOrigins = parseAllowedOrigins("http://localhost:5173, https://app.example.com");
+assert.equal(isAllowedCorsOrigin("http://127.0.0.1:5173", configuredOrigins, "development"), true, "development should accept an equivalent IPv4 loopback origin");
+assert.equal(isAllowedCorsOrigin("http://[::1]:5173", configuredOrigins, "development"), true, "development should accept an equivalent IPv6 loopback origin");
+assert.equal(isAllowedCorsOrigin("http://127.0.0.1:4173", configuredOrigins, "development"), false, "development loopback aliases must still match the configured port");
+assert.equal(isAllowedCorsOrigin("http://127.0.0.1:5173", configuredOrigins, "production"), false, "production must keep exact origin matching");
+assert.equal(isAllowedCorsOrigin("https://app.example.com", configuredOrigins, "production"), true, "production should accept an explicitly configured origin");
 assert.ok(appSource.includes("crypto.timingSafeEqual"), "metrics token checks should use constant-time comparison");
 assert.ok(appSource.includes('express.json({ limit: "2mb" })'), "JSON body size limit should exist");
 assert.ok(uploadSource.includes("25 * 1024 * 1024"), "AI upload size limit should exist");

@@ -3,7 +3,8 @@ import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged } from "@/lib/offline/instant-cache";
 import type { SupplierDueRow } from "@/features/finance/services/FinancialAggregationService";
 import { withLocalPurchaseOverride } from "@/features/purchases/sync-guards";
-import { buildOutboxOperation } from "@/features/sync/outbox";
+import { buildOutboxOperation, createOutboxId } from "@/features/sync/outbox";
+import { getOfflineScope } from "@/lib/offline/context";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
 
 type MutableRow = Record<string, unknown>;
@@ -337,7 +338,7 @@ export async function markPurchasePaidLocal(displayRow: SupplierDueRow, paymentM
  */
 export async function recordPurchasePaymentLocal(
   displayRow: SupplierDueRow,
-  payment: { amount: number; mode: string },
+  payment: { amount: number; mode: string; reference?: string },
 ) {
   const amount = roundMoney(Math.max(0, payment.amount));
   if (amount <= 0) throw new Error("Enter a payment amount greater than zero");
@@ -345,9 +346,11 @@ export async function recordPurchasePaymentLocal(
   if (due <= 0) throw new Error("This purchase has no due left");
   if (amount > due + 0.009) throw new Error(`Payment can't exceed the due amount (₹${due.toLocaleString("en-IN")})`);
 
+  const matches = await findMatchingPurchaseRows(displayRow);
+  if (matches.length === 0) throw new Error("Purchase row not found in local records");
   const paid = roundMoney(Math.min(displayRow.amount, roundMoney(displayRow.paid + amount)));
   const remaining = roundMoney(Math.max(0, displayRow.amount - paid));
-  return updatePurchaseLocal(displayRow, {
+  const patch: PurchaseEditInput = {
     supplierName: displayRow.supplierName,
     invoiceNumber: displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber,
     amount: displayRow.amount,
@@ -355,7 +358,74 @@ export async function recordPurchasePaymentLocal(
     due: remaining,
     paymentMode: payment.mode,
     status: remaining <= 0 ? "paid" : "partial",
+  };
+  const paymentId = createOutboxId("supplier_payment");
+  const now = new Date().toISOString();
+  const scope = getOfflineScope();
+  const locator = buildPurchaseSyncPayload(displayRow, patch, matches);
+  const paymentRow: MutableRow = {
+    id: paymentId,
+    local_id: paymentId,
+    purchase_history_id: locator.purchaseHistoryId ?? null,
+    purchase_bill_id: locator.purchaseBillId ?? null,
+    local_purchase_history_id: locator.localPurchaseHistoryId ?? displayRow.id,
+    supplier_id: displayRow.supplierId ?? null,
+    supplier_name: displayRow.supplierName,
+    amount,
+    mode: payment.mode,
+    reference: payment.reference?.trim() || null,
+    kind: "supplier_payment",
+    status: "active",
+    paid_at: now,
+    created_at: now,
+    sync_status: "pending_sync",
+    ...scope,
+  };
+  const outbox = buildOutboxOperation({
+    entity_type: "payment",
+    entity_id: paymentId,
+    operation_type: "RECORD_SUPPLIER_PAYMENT",
+    payload: { ...locator, paymentId, amount, mode: payment.mode, reference: payment.reference?.trim() || null, paidAt: now },
   });
+  await offlineDB.transaction(["purchase_bills", "inventory_movements", "payments", "sync_outbox"], async (tx) => {
+    for (const match of matches) await tx.put(match.tableName, withPurchasePatch(match.row, patch));
+    await tx.put("payments", paymentRow);
+    await tx.enqueueOutboxOperation(outbox);
+  });
+  emitLocalDataChanged({ type: "purchase", id: displayRow.id, action: "payment_recorded", count: matches.length });
+  return { paymentId, paid, due: remaining };
+}
+
+export async function listSupplierPaymentsLocal(displayRow: SupplierDueRow) {
+  const rows = filterRowsForCurrentScope(await offlineDB.getAll<MutableRow>("payments").catch(() => []));
+  return rows.filter((row) => String(row.kind ?? "") === "supplier_payment"
+    && [row.local_purchase_history_id, row.purchase_history_id, row.purchase_bill_id].map(String).includes(displayRow.id))
+    .sort((a, b) => String(b.paid_at ?? b.created_at).localeCompare(String(a.paid_at ?? a.created_at)));
+}
+
+export async function reverseSupplierPaymentLocal(
+  displayRow: SupplierDueRow,
+  paymentRow: MutableRow,
+  input: { reason: string; ownerPin: string },
+) {
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new Error("Enter a reversal reason");
+  const amount = roundMoney(readNumber(paymentRow, ["amount"]));
+  if (amount <= 0 || String(paymentRow.status ?? "active") === "reversed") throw new Error("This payment cannot be reversed");
+  const matches = await findMatchingPurchaseRows(displayRow);
+  if (matches.length === 0) throw new Error("Purchase row not found in local records");
+  const paid = roundMoney(Math.max(0, displayRow.paid - amount));
+  const due = roundMoney(Math.max(0, displayRow.amount - paid));
+  const patch: PurchaseEditInput = { supplierName: displayRow.supplierName, invoiceNumber: displayRow.invoiceNumber === "-" ? "" : displayRow.invoiceNumber, amount: displayRow.amount, paid, due, paymentMode: displayRow.paymentMode, status: paid > 0 ? "partial" : "due" };
+  const paymentId = readString(paymentRow, ["server_id", "id", "local_id"]);
+  const outbox = buildOutboxOperation({ entity_type: "payment", entity_id: paymentId, operation_type: "REVERSE_SUPPLIER_PAYMENT", payload: { paymentId, reason, ownerPin: input.ownerPin } });
+  await offlineDB.transaction(["purchase_bills", "inventory_movements", "payments", "sync_outbox"], async (tx) => {
+    for (const match of matches) await tx.put(match.tableName, withPurchasePatch(match.row, patch));
+    await tx.put("payments", { ...paymentRow, status: "reversed", reversed_at: new Date().toISOString(), reversal_reason: reason, sync_status: "pending_sync" });
+    await tx.enqueueOutboxOperation(outbox);
+  });
+  emitLocalDataChanged({ type: "purchase", id: displayRow.id, action: "payment_reversed", count: matches.length });
+  return { paymentId, paid, due };
 }
 
 export async function deletePurchaseLocal(displayRow: SupplierDueRow) {

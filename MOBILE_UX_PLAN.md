@@ -53,7 +53,8 @@ Use existing components and routes; avoid page rewrites where a shared primitive
 
 - 2026-07-18: Billing, Products, Inventory, Purchases, Reports, Settings and Sync overview routes passed automated live Chrome checks at 375, 390, 430 and 768 widths with zero horizontal document overflow or runtime errors.
 - 2026-07-18: The 390px purchase-order creation task passed full-screen geometry (390x844 at 0,0), 44px minimum control height, zero horizontal overflow and a sticky safe-area footer at the viewport edge. Artifact: `frontend/purchase-create-task-390.png`.
-- MQA-PUR-01 remains partially open until receipt, payment, stock mutation and duplicate-submission behavior are exercised end to end; overview/create-flow evidence alone does not prove inventory correctness.
+- 2026-07-18: Focused live receive QA completed a sent PO at 390px with a partial supplier payment. The task passed full-screen geometry, 44px controls, zero overflow and zero runtime errors; API reconciliation proved stock 24 -> 28, receipt total ₹920, paid ₹100, due ₹820 and retained supplier invoice `QA-SUP-1001`. Verifier: `frontend/scripts/capture-purchase-receive-ui.mjs`.
+- MQA-PUR-01 now covers create and receive/payment/stock mutation. It remains partially open for supplier-due settlement/reversal and a live lost-ack retry exercise; backend integration already proves strict duplicate prevention.
 
 ## Live audit procedure
 

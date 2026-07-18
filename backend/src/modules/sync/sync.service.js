@@ -29,7 +29,7 @@ import {
 } from "../../utils/syncRules.js";
 import { decodeCursor, encodeCursor, PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT } from "./sync.schema.js";
 import { moneyAmount, quantityAmount } from "../../utils/validationSchemas.js";
-import { moneyShadows, round2 } from "../../utils/money.js";
+import { moneyShadows, round2, toPaiseBigInt } from "../../utils/money.js";
 import { toBaseQty } from "../../utils/units.js";
 import { calculateCustomerUdharBalance, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import {
@@ -423,6 +423,23 @@ const purchaseBillLifecyclePayloadSchema = z.object({
   purchasePaymentStatus: z.string().optional(),
   purchasePaymentMode: z.string().optional().nullable(),
   match: z.record(z.any()).optional(),
+}).passthrough();
+
+const supplierPaymentPayloadSchema = z.object({
+  purchaseHistoryId: z.string().min(1).optional().nullable(),
+  purchaseBillId: z.string().min(1).optional().nullable(),
+  localPurchaseHistoryId: z.string().min(1).optional().nullable(),
+  paymentId: z.string().min(1),
+  amount: moneyAmount({ positive: true }),
+  mode: z.enum(["cash", "upi", "bank", "card"]).default("cash"),
+  reference: z.string().max(120).optional().nullable(),
+  paidAt: z.string().datetime().optional(),
+  match: z.record(z.any()).optional(),
+}).passthrough();
+
+const reverseSupplierPaymentPayloadSchema = z.object({
+  paymentId: z.string().min(1),
+  reason: z.string().trim().min(3).max(240),
 }).passthrough();
 
 
@@ -1104,6 +1121,11 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyUpdatePurchaseBill(shopId, event, context);
     case SYNC_EVENT_TYPES.DELETE_PURCHASE_BILL:
       return applyDeletePurchaseBill(shopId, event, context);
+    case SYNC_EVENT_TYPES.RECORD_SUPPLIER_PAYMENT:
+      return applyRecordSupplierPayment(shopId, event, user, context);
+    case SYNC_EVENT_TYPES.REVERSE_SUPPLIER_PAYMENT:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyReverseSupplierPayment(shopId, event, user);
     case SYNC_EVENT_TYPES.CREATE_SUPPLIER:
       return applyCreateSupplier(shopId, event);
     case SYNC_EVENT_TYPES.UPDATE_SUPPLIER:
@@ -2152,6 +2174,127 @@ function applyUpdatePurchaseBill(shopId, event, context) {
 
 function applyDeletePurchaseBill(shopId, event, context) {
   return applyPurchaseBillLifecycle(shopId, event, context, { deleted: true });
+}
+
+async function applyRecordSupplierPayment(shopId, event, user, context) {
+  const payload = supplierPaymentPayloadSchema.parse(getEventPayload(event));
+  const purchase = await findPurchaseHistoryTarget(shopId, payload, context);
+  if (!purchase) throw new AppError("Purchase bill not found for supplier payment", 404);
+  const amount = round2(payload.amount);
+  const currentDue = round2(Number(purchase.purchaseDueAmount ?? 0));
+  if (amount > currentDue) {
+    throw new AppError(`Supplier payment exceeds purchase due (${currentDue})`, 409, "PAYMENT_EXCEEDS_DUE");
+  }
+  const eventId = getClientEventId(event);
+  const idempotencyKey = `supplier-payment:${eventId}`;
+  const mode = payload.mode === "card" ? "bank" : payload.mode;
+  const businessDate = payload.paidAt ? new Date(payload.paidAt) : new Date();
+
+  return db.$transaction(async (tx) => {
+    const existing = await tx.financialLedger.findFirst({ where: { shopId, idempotencyKey } });
+    if (existing) {
+      return { type: event.type, paymentId: existing.sourceId, ledgerEntryId: existing.id, purchaseHistoryId: existing.purchaseBillId, idempotentReplay: true };
+    }
+    const ledger = await tx.financialLedger.create({
+      data: {
+        shopId,
+        supplierId: purchase.supplierId,
+        purchaseBillId: purchase.id,
+        sourceType: "supplier_payment",
+        sourceId: payload.paymentId,
+        entryType: "supplier_payment",
+        direction: "debit",
+        amountPaise: toPaiseBigInt(amount),
+        paymentMode: mode,
+        businessDate,
+        idempotencyKey,
+      },
+    });
+    const paid = round2(Number(purchase.purchasePaidAmount ?? 0) + amount);
+    const due = round2(Math.max(0, Number(purchase.billAmount ?? 0) - paid));
+    const updated = await tx.purchaseHistory.update({
+      where: { id: purchase.id },
+      data: {
+        purchasePaidAmount: paid,
+        purchaseDueAmount: due,
+        ...moneyShadows({ purchasePaidAmount: paid, purchaseDueAmount: due }),
+        purchasePaymentStatus: due <= 0 ? "paid" : "partial",
+        purchasePaymentMode: mode,
+      },
+    });
+    await createAuditLog({
+      shopId,
+      userId: user?.userId,
+      action: "SUPPLIER_PAYMENT_RECORDED",
+      entityType: "FinancialLedger",
+      entityId: ledger.id,
+      before: { paid: purchase.purchasePaidAmount, due: currentDue },
+      after: { paid, due },
+      metadata: { paymentId: payload.paymentId, purchaseHistoryId: purchase.id, amount, mode, reference: payload.reference ?? null },
+      client: tx,
+    });
+    return { type: event.type, paymentId: payload.paymentId, ledgerEntryId: ledger.id, purchaseHistoryId: purchase.id, amountPaid: amount, purchaseHistory: toSyncJsonSafe(updated) };
+  });
+}
+
+async function applyReverseSupplierPayment(shopId, event, user) {
+  const payload = reverseSupplierPaymentPayloadSchema.parse(getEventPayload(event));
+  const original = await db.financialLedger.findFirst({
+    where: { shopId, sourceType: "supplier_payment", OR: [{ id: payload.paymentId }, { sourceId: payload.paymentId }] },
+  });
+  if (!original || original.amountPaise <= 0n) throw new AppError("Supplier payment not found", 404);
+  const eventId = getClientEventId(event);
+  const idempotencyKey = `supplier-payment-reversal:${eventId}`;
+
+  return db.$transaction(async (tx) => {
+    const existing = await tx.financialLedger.findFirst({ where: { shopId, idempotencyKey } });
+    if (existing) return { type: event.type, paymentId: original.sourceId, reversalLedgerEntryId: existing.id, purchaseHistoryId: existing.purchaseBillId, idempotentReplay: true };
+    const priorReversal = await tx.financialLedger.findFirst({
+      where: { shopId, sourceType: "supplier_payment_reversal", sourceId: original.id },
+    });
+    if (priorReversal) throw new AppError("Supplier payment is already reversed", 409, "PAYMENT_ALREADY_REVERSED");
+    const purchase = await tx.purchaseHistory.findFirst({ where: { id: original.purchaseBillId, shopId } });
+    if (!purchase) throw new AppError("Purchase bill not found for supplier payment", 404);
+    const amount = Number(original.amountPaise) / 100;
+    const reversal = await tx.financialLedger.create({
+      data: {
+        shopId,
+        supplierId: original.supplierId,
+        purchaseBillId: purchase.id,
+        sourceType: "supplier_payment_reversal",
+        sourceId: original.id,
+        entryType: "supplier_payment",
+        direction: "credit",
+        amountPaise: -original.amountPaise,
+        paymentMode: original.paymentMode,
+        businessDate: new Date(),
+        idempotencyKey,
+      },
+    });
+    const paid = round2(Math.max(0, Number(purchase.purchasePaidAmount ?? 0) - amount));
+    const due = round2(Math.max(0, Number(purchase.billAmount ?? 0) - paid));
+    const updated = await tx.purchaseHistory.update({
+      where: { id: purchase.id },
+      data: {
+        purchasePaidAmount: paid,
+        purchaseDueAmount: due,
+        ...moneyShadows({ purchasePaidAmount: paid, purchaseDueAmount: due }),
+        purchasePaymentStatus: paid > 0 ? "partial" : "due",
+      },
+    });
+    await createAuditLog({
+      shopId,
+      userId: user?.userId,
+      action: "SUPPLIER_PAYMENT_REVERSED",
+      entityType: "FinancialLedger",
+      entityId: reversal.id,
+      before: { paid: purchase.purchasePaidAmount, due: purchase.purchaseDueAmount },
+      after: { paid, due },
+      metadata: { paymentId: original.sourceId, originalLedgerEntryId: original.id, amount, reason: payload.reason },
+      client: tx,
+    });
+    return { type: event.type, paymentId: original.sourceId, reversalLedgerEntryId: reversal.id, purchaseHistoryId: purchase.id, amountPaid: -amount, purchaseHistory: toSyncJsonSafe(updated) };
+  });
 }
 
 // Same stable-identity contract as ADJUST_STOCK/STOCK_PURCHASE, for a manual STOCK_SALE
