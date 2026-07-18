@@ -242,6 +242,108 @@ export async function loadCustomerDetail(customerId: string): Promise<CustomerDe
   return { customer, bills, payments, ledger: buildLedgerStatement(ledgerEntries), audit };
 }
 
+export type CustomerTimelineKind = "sale" | "estimate" | "return" | "payment" | "payment_reversed" | "adjustment";
+
+export interface CustomerTimelineEvent {
+  id: string;
+  /** ISO timestamp used for ordering (newest first in the returned array). */
+  at: string;
+  kind: CustomerTimelineKind;
+  title: string;
+  detail: string | null;
+  /**
+   * Signed for the shop's view of the relationship: sales positive, returns
+   * negative, payments negative (they reduce what the customer owes),
+   * adjustments carry their ledger sign.
+   */
+  amount: number;
+  /** Route to open when the event is clickable (bills only). */
+  href: string | null;
+}
+
+function eventDate(row: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return "";
+}
+
+function billTimelineKind(bill: Record<string, unknown>): CustomerTimelineKind {
+  const type = String(bill.billType ?? bill.bill_type ?? "").toLowerCase();
+  if (type.includes("return")) return "return";
+  if (type.includes("estimate")) return "estimate";
+  return "sale";
+}
+
+/**
+ * One chronological activity feed for a customer: every bill (sale, estimate,
+ * return), every payment (with reversals called out), and manual ledger
+ * adjustments. Bill/payment ledger echoes are deliberately EXCLUDED — those
+ * rows duplicate the bill and payment sources — so nothing appears twice.
+ */
+export function buildCustomerTimeline(data: Pick<CustomerDetailData, "bills" | "payments" | "ledger">): CustomerTimelineEvent[] {
+  const events: CustomerTimelineEvent[] = [];
+
+  for (const bill of data.bills) {
+    const kind = billTimelineKind(bill);
+    const total = readNumber(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount, 0);
+    const itemCount = Array.isArray(bill.items) ? bill.items.length : 0;
+    const status = String(bill.status ?? "").toLowerCase();
+    const number = String(bill.billNumber ?? bill.billNo ?? bill.id);
+    events.push({
+      id: `bill:${String(bill.id)}`,
+      at: eventDate(bill, ["createdAt", "created_at"]),
+      kind,
+      title: kind === "return" ? `Return ${number}` : kind === "estimate" ? `Estimate ${number}` : `Bill ${number}`,
+      detail: [
+        itemCount > 0 ? `${itemCount} item${itemCount === 1 ? "" : "s"}` : null,
+        String(bill.paymentMode ?? bill.refundMode ?? "") || null,
+        status === "cancelled" ? "cancelled" : null,
+      ].filter(Boolean).join(" · ") || null,
+      amount: kind === "return" ? -Math.abs(total) : Math.abs(total),
+      href: `/bills/${String(bill.id)}`,
+    });
+  }
+
+  for (const payment of data.payments) {
+    const reversed = Boolean(payment.reversed_at ?? payment.reversedAt);
+    const amount = readNumber(payment.amount, 0);
+    // Refund payment rows (negative, written by sale returns) already show as
+    // the return bill; skip them so the feed stays one-event-per-action.
+    if (amount < 0) continue;
+    const mode = String(payment.mode ?? "payment").toUpperCase();
+    events.push({
+      id: `payment:${String(payment.id)}`,
+      at: eventDate(payment, ["paidAt", "paid_at", "createdAt", "created_at"]),
+      kind: reversed ? "payment_reversed" : "payment",
+      title: reversed ? `Payment reversed (${mode})` : `Payment received (${mode})`,
+      detail: typeof payment.note === "string" && payment.note.trim() ? payment.note.trim() : null,
+      amount: reversed ? Math.abs(amount) : -Math.abs(amount),
+      href: null,
+    });
+  }
+
+  for (const row of data.ledger) {
+    const record = row as unknown as Record<string, unknown>;
+    const type = String(record.display_type ?? record.type ?? "").toLowerCase();
+    if (!type.includes("adjust")) continue;
+    events.push({
+      id: `ledger:${String(record.id)}`,
+      at: eventDate(record, ["display_date", "entry_at", "createdAt", "created_at"]),
+      kind: "adjustment",
+      title: "Ledger adjustment",
+      detail: typeof record.note === "string" && record.note.trim() ? record.note.trim() : null,
+      amount: readNumber(record.signed_amount, 0),
+      href: null,
+    });
+  }
+
+  return events
+    .filter((event) => event.at.length > 0)
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
+
 export function formatMoney(value: number): string {
   return `₹${Math.round(value).toLocaleString("en-IN")}`;
 }

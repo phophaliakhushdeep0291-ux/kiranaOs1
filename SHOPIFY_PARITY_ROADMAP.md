@@ -64,8 +64,10 @@ the codebase, not assumed.
 
 ## Tier 4 — Customer & receipts
 
-- [ ] **Customer timeline** — unified profile view: bills, returns, payments,
-      udhar, loyalty in one chronological feed.
+- [x] **Customer timeline** — "Activity timeline" card on the customer page:
+      one chronological feed of sales, estimates, returns, payments (with
+      reversals), and ledger adjustments — deduped against ledger echoes,
+      bills clickable. *(done 2026-07-18)*
 - [ ] **Receipt customization** — logo, footer message, show/hide fields,
       configurable from printer settings.
 - [ ] **Email receipts** — in addition to WhatsApp/print (needs SMTP creds —
@@ -86,3 +88,4 @@ the codebase, not assumed.
 | 2026-07-17 | Exchanges shipped in ReturnDialog; live browser QA of discounts + exchange | feat(returns): exchange flow |
 | 2026-07-18 | Line-item notes shipped full-stack (cart chip → receipt) | feat(billing): line-item notes |
 | 2026-07-18 | Barcode label printing (EAN-13 + QR fallback) from products page | feat(products): price-label printing |
+| 2026-07-18 | Customer activity timeline (unified feed on customer page) | feat(customers): activity timeline |

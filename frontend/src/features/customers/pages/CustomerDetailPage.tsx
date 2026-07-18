@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CalendarClock, CreditCard, FileText, Loader2, MessageCircle, RotateCcw, ShieldAlert } from "lucide-react";
+import { ArrowLeft, CalendarClock, CreditCard, FileText, Loader2, MessageCircle, RotateCcw, ShieldAlert, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { loadCustomerDetail, formatDateTime, formatMoney, formatShortDate } from "@/features/customers/customer-ledger-data";
+import { buildCustomerTimeline, loadCustomerDetail, formatDateTime, formatMoney, formatShortDate, type CustomerTimelineEvent } from "@/features/customers/customer-ledger-data";
 import { ledgerEntryLabel, normaliseLedgerType } from "@/features/ledger/accounting";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { createLedgerAdjustmentLocalFirst } from "@/features/ledger/local-actions";
@@ -41,6 +41,32 @@ function useCustomerDetail(id: string) {
 function readNumber(value: unknown): number {
   const num = Number(value ?? 0);
   return Number.isFinite(num) ? num : 0;
+}
+
+const TIMELINE_META: Record<CustomerTimelineEvent["kind"], { icon: typeof ShoppingBag; tone: string; badge: string }> = {
+  sale: { icon: ShoppingBag, tone: "text-foreground", badge: "bg-blue-50 text-blue-700" },
+  estimate: { icon: FileText, tone: "text-foreground", badge: "bg-slate-100 text-slate-600" },
+  return: { icon: RotateCcw, tone: "text-destructive", badge: "bg-red-50 text-red-600" },
+  payment: { icon: CreditCard, tone: "text-emerald-600", badge: "bg-emerald-50 text-emerald-700" },
+  payment_reversed: { icon: RotateCcw, tone: "text-amber-700", badge: "bg-amber-50 text-amber-700" },
+  adjustment: { icon: ShieldAlert, tone: "text-foreground", badge: "bg-violet-50 text-violet-700" },
+};
+
+function TimelineRow({ event }: { event: CustomerTimelineEvent }) {
+  const meta = TIMELINE_META[event.kind];
+  const Icon = meta.icon;
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <span className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg ${meta.badge}`}><Icon size={14} /></span>
+        <div className="min-w-0">
+          <p className="truncate font-medium">{event.title}</p>
+          <p className="text-xs text-muted-foreground">{formatDateTime(event.at)}{event.detail ? ` • ${event.detail}` : ""}</p>
+        </div>
+      </div>
+      <p className={`shrink-0 font-bold ${meta.tone}`}>{event.amount < 0 ? "−" : ""}{formatMoney(Math.abs(event.amount))}</p>
+    </div>
+  );
 }
 
 function billNumber(row: Record<string, unknown>): string {
@@ -75,6 +101,7 @@ export default function CustomerDetailPage() {
   const payments = data?.payments ?? [];
   const bills = data?.bills ?? [];
   const activePayments = useMemo(() => payments.filter((row) => !row.reversed_at && !row.reversedAt), [payments]);
+  const timeline = useMemo(() => buildCustomerTimeline({ bills, payments, ledger }), [bills, payments, ledger]);
   const reminder = useMutation({
     mutationFn: (customerId: string) => apiRequest<{
       status: string;
@@ -213,6 +240,18 @@ export default function CustomerDetailPage() {
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="space-y-5">
+        <Card>
+          <CardHeader><CardTitle>Activity timeline</CardTitle></CardHeader>
+          <CardContent className="space-y-2 max-h-[420px] overflow-auto" data-testid="customer-timeline">
+            {timeline.length === 0 ? <div className="text-center py-8 text-muted-foreground">No activity yet — bills, payments and adjustments will appear here.</div> : timeline.map((event) => {
+              const inner = <TimelineRow event={event} />;
+              return event.href
+                ? <Link key={event.id} href={event.href}><div className="rounded-lg border p-3 hover:bg-muted/40 cursor-pointer">{inner}</div></Link>
+                : <div key={event.id} className="rounded-lg border p-3">{inner}</div>;
+            })}
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader><CardTitle>Full ledger / customer statement</CardTitle></CardHeader>
           <CardContent className="space-y-2 max-h-[560px] overflow-auto">
@@ -227,6 +266,7 @@ export default function CustomerDetailPage() {
             })}
           </CardContent>
         </Card>
+        </div>
 
         <div className="space-y-5">
           <Card>
