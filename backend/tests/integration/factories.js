@@ -134,6 +134,9 @@ export function customerData(shopId, overrides = {}) {
     name: overrides.name || unique("Customer"),
     mobile: overrides.mobile === null ? null : overrides.mobile || uniqueMobile(),
     type: overrides.type || "regular",
+    address: overrides.address ?? null,
+    gstNumber: overrides.gstNumber ?? null,
+    stateCode: overrides.stateCode ?? null,
     udharAmount: overrides.udharAmount ?? 0,
     ...moneyShadows({ udharAmount: overrides.udharAmount ?? 0 }),
   };
@@ -180,8 +183,10 @@ export function billPayload(product, overrides = {}) {
   const quantity = overrides.quantity ?? 2;
   const rate = overrides.ratePerRateUnit ?? product.defaultPricePerRateUnit ?? 20;
   const total = quantity * rate;
+  const payable = Math.max(0, total - (overrides.lineDiscount ?? 0));
   return {
     billType: overrides.billType || "normal_sale",
+    gstMode: overrides.gstMode ?? "inclusive",
     customerId: overrides.customerId,
     customerName: overrides.customerName || "Walk-in",
     items: [
@@ -192,13 +197,15 @@ export function billPayload(product, overrides = {}) {
         enteredUnit: overrides.enteredUnit || product.rateUnit || "piece",
         ratePerRateUnit: rate,
         gstRate: overrides.gstRate ?? 0,
+        hsn: overrides.hsn ?? product.hsn ?? undefined,
+        lineDiscount: overrides.lineDiscount ?? 0,
       },
     ],
     discount: overrides.discount ?? 0,
-    actualAmount: overrides.actualAmount ?? total,
-    buyerPaidAmount: overrides.buyerPaidAmount ?? total,
+    actualAmount: overrides.actualAmount ?? payable,
+    buyerPaidAmount: overrides.buyerPaidAmount ?? payable,
     waivedAmount: overrides.waivedAmount ?? 0,
-    payments: overrides.payments ?? [{ mode: "cash", amount: total }],
+    payments: overrides.payments ?? [{ mode: "cash", amount: payable }],
   };
 }
 

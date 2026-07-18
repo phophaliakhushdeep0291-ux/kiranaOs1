@@ -52,11 +52,12 @@ interface GstReport {
   gstCollected: number;
   cgst: number;
   sgst: number;
+  igst: number;
 }
 interface ComplianceReadiness {
   score: number;
   legallyReady: boolean;
-  provider: { mode: string; configured: boolean; legalSubmission: boolean };
+  provider: { mode: string; providerName?: string | null; configured: boolean; certified?: boolean; legalSubmission: boolean };
   checks: Array<{ key: string; label: string; ready: boolean; detail: string }>;
   gaps: { missingHsn: Array<{ id: string; name: string }>; invalidHsn: Array<{ id: string; name: string }> };
 }
@@ -220,7 +221,7 @@ export default function TaxesSettingsPage() {
   async function exportGstReport() {
     try {
       const csv = await apiRequest<string>("/compliance/gst-register?range=monthly&format=csv");
-      downloadText(`kiranaos-gst-invoice-register-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      downloadText(`artha-gst-invoice-register-${new Date().toISOString().slice(0, 10)}.csv`, csv);
       toast({ title: "GST invoice register downloaded", description: "Line-level HSN and tax values are ready for accountant review." });
     } catch (error) {
       toast({ title: "Export unavailable", description: error instanceof Error ? error.message : "Could not export the GST register.", variant: "destructive" });
@@ -229,8 +230,8 @@ export default function TaxesSettingsPage() {
   async function exportGstr1Working() {
     try {
       const csv = await apiRequest<string>("/compliance/gstr1-working?range=monthly&format=csv");
-      downloadText(`kiranaos-gstr1-working-${new Date().toISOString().slice(0, 10)}.csv`, csv);
-      toast({ title: "GSTR-1 working papers downloaded", description: "B2B, B2CS and HSN sections include place-of-supply tax treatment. Review with your accountant before filing." });
+      downloadText(`artha-gstr1-working-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      toast({ title: "GSTR-1 working papers downloaded", description: "B2B, B2CS, CDNR, CDNUR and HSN sections include place-of-supply treatment and return netting. Review with your accountant before filing." });
     } catch (error) {
       toast({ title: "Export unavailable", description: error instanceof Error ? error.message : "Could not export GSTR-1 working papers.", variant: "destructive" });
     }
@@ -327,7 +328,7 @@ export default function TaxesSettingsPage() {
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
             <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
             <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />
-            <Kpi label="CGST / SGST" value={gstQ.isLoading ? "…" : gstQ.data ? `${inr(gstQ.data.cgst)} each` : "—"} tone="amber" />
+            <Kpi label="GST split" value={gstQ.isLoading ? "…" : gstQ.data ? `C ${inr(gstQ.data.cgst)} · S ${inr(gstQ.data.sgst)} · I ${inr(gstQ.data.igst)}` : "—"} tone="amber" />
             <Kpi label="Bills with GST" value={gstQ.isLoading ? "…" : gstQ.data ? String(gstQ.data.gstBills) : "—"} tone="violet" />
           </div>
           {gstQ.isError && <p className="px-5 pb-4 text-[11px] text-[#94a3b8]">Connect to the cloud to load this month's GST report.</p>}
@@ -351,7 +352,15 @@ export default function TaxesSettingsPage() {
                 ))}
               </div>
             </div>
-            <RowToggle label="E-Invoice / IRN" desc="Blocked until a certified GSTN/GSP provider is connected" pill={<Badge tone="amber">Not connected</Badge>} />
+            <RowToggle
+              label="E-Invoice / IRN"
+              desc={readinessQ.data?.provider.legalSubmission
+                ? `${readinessQ.data.provider.providerName || "Certified GSP"} is ready for legal submission`
+                : readinessQ.data?.provider.configured
+                  ? "Sandbox/configuration detected, but legal provider certification is not attested"
+                  : "Blocked until a certified GSTN/GSP provider is connected"}
+              pill={<Badge tone={readinessQ.data?.provider.legalSubmission ? "green" : readinessQ.data?.provider.configured ? "blue" : "amber"}>{readinessQ.data?.provider.legalSubmission ? "Connected" : readinessQ.data?.provider.configured ? "Sandbox" : "Not connected"}</Badge>}
+            />
             <RowToggle label="E-Way Bill" desc="Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP" pill={<Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> Prepare</Button>} />
             <RowToggle label="Show GST breakup on bill" pill={<Switch checked={tax.showBreakup} onCheckedChange={(v) => update({ showBreakup: v })} />} />
             <RowToggle label="Round off tax amount" pill={<Switch checked={tax.roundOff} onCheckedChange={(v) => update({ roundOff: v })} />} />

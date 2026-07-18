@@ -178,17 +178,21 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
   const wholesalePrice = round2(values.wholesalePrice || sellingPrice);
   const avgCost = round2(values.costPrice);
   const previousDefault = values.sellingUnits.find((row) => row.isDefault);
+  const defaultUnitCode = sellingUnitCode(values.unit, values.packSizeValue, values.packSizeUnit);
+  const defaultUnitId = previousDefault?.id && previousDefault.unitCode === defaultUnitCode
+    ? previousDefault.id
+    : undefined;
   const unitName = values.isLooseItem
     ? values.unit
     : sellingUnitName(values.unit, values.packSizeValue, values.packSizeUnit);
   const defaultSellingUnit: ProductSellingUnit = {
-    ...(previousDefault?.id ? { id: previousDefault.id } : {}),
+    ...(defaultUnitId ? { id: defaultUnitId } : {}),
     name: unitName,
     unitType: values.unit,
     // The code describes the actual pack. Keep the database id stable when editing,
     // but update the code when a 1 kg packet becomes a 500 g packet so billing and
     // barcode lookups cannot confuse the two sizes.
-    unitCode: sellingUnitCode(values.unit, values.packSizeValue, values.packSizeUnit),
+    unitCode: defaultUnitCode,
     packSizeValue: values.isLooseItem ? null : values.packSizeValue,
     packSizeUnit: values.isLooseItem ? null : values.packSizeUnit,
     conversionToBase,

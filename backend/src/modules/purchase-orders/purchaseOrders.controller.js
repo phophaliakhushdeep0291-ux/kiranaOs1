@@ -45,9 +45,11 @@ export async function receive(req, res, next) {
   try {
     await assertOrderAccess(req, "purchase");
     const data = await service.receivePurchaseOrder(req.shopId, req.params.id, req.body, req.user?.userId);
-    await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "PURCHASE_ORDER_RECEIVED", entityType: "PurchaseOrder", entityId: data.purchaseOrder.id, after: { status: data.purchaseOrder.status, receiptId: data.receipt.id, totalAmount: data.receipt.totalAmount }, metadata: { idempotentReplay: data.idempotentReplay }, req });
-    if (!data.idempotentReplay) await publishIntegrationEvent(req.shopId, "purchase_order.received", { id: data.purchaseOrder.id, orderNumber: data.purchaseOrder.orderNumber, receiptId: data.receipt.id, totalAmount: data.receipt.totalAmount, locationId: data.purchaseOrder.locationId, status: data.purchaseOrder.status }).catch(() => []);
-    res.status(201).json({ success: true, data });
+    if (!data.idempotentReplay) {
+      await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "PURCHASE_ORDER_RECEIVED", entityType: "PurchaseOrder", entityId: data.purchaseOrder.id, after: { status: data.purchaseOrder.status, receiptId: data.receipt.id, totalAmount: data.receipt.totalAmount }, req });
+      await publishIntegrationEvent(req.shopId, "purchase_order.received", { id: data.purchaseOrder.id, orderNumber: data.purchaseOrder.orderNumber, receiptId: data.receipt.id, totalAmount: data.receipt.totalAmount, locationId: data.purchaseOrder.locationId, status: data.purchaseOrder.status }).catch(() => []);
+    }
+    res.status(data.idempotentReplay ? 200 : 201).json({ success: true, data });
   } catch (error) { next(error); }
 }
 export async function cancel(req, res, next) {

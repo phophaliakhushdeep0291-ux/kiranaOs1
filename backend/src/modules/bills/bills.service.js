@@ -762,9 +762,12 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       // A return against an estimate must not post GST: the original kacha bill never entered
       // the GST report, so its reversal can't either — otherwise the report would show negative
       // tax with no positive side. Sales/stock/refund effects still apply in full.
-      const effectiveGstMode = original?.billType === "estimate" ? "none" : gstMode;
+      const effectiveGstMode = original?.billType === "estimate" ? "none" : original?.gstMode ?? gstMode;
 
-      const productIds = items.filter((i) => i.productId).map((i) => i.productId);
+      const productIds = [...new Set([
+        ...items.filter((i) => i.productId).map((i) => i.productId),
+        ...(original?.items ?? []).filter((i) => i.productId).map((i) => i.productId),
+      ])];
       const dbProducts = await tx.product.findMany({ where: { id: { in: productIds }, shopId } });
       const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
 
@@ -773,6 +776,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       let itemProfit = 0;
       const billItems = [];
       const restockPlan = []; // { product, qtyInBase, lineCost, damaged }
+      const originalItemById = new Map((original?.items ?? []).map((line) => [line.id, line]));
 
       const returnLineKey = (line) => [
         line.productId ? `product:${line.productId}` : `name:${String(line.name ?? "").trim().toLowerCase()}`,
@@ -780,31 +784,54 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       ].join("|");
 
       for (const item of items) {
-        const product = item.productId ? productMap[item.productId] : null;
-        if (item.productId && !product) throw new AppError(`Product not found: ${item.productId}`, 404);
+        let originalItem = item.originalBillItemId ? originalItemById.get(item.originalBillItemId) : null;
+        if (original && !originalItem) {
+          const candidates = original.items.filter((line) => returnLineKey(line) === returnLineKey(item));
+          if (candidates.length === 1) originalItem = candidates[0];
+        }
+        if (original && !originalItem) {
+          const err = new AppError("Return item could not be matched to one original bill line", 409);
+          err.code = "RETURN_LINE_NOT_ON_ORIGINAL_SALE";
+          throw err;
+        }
+        const effectiveProductId = originalItem?.productId ?? item.productId ?? null;
+        const product = effectiveProductId ? productMap[effectiveProductId] : null;
+        if (effectiveProductId && !product) throw new AppError(`Product not found: ${effectiveProductId}`, 404);
 
         // A return item may arrive without enteredUnit (older clients / quick returns). Fall back
         // to the product's units instead of letting toBaseQty throw "enteredUnit is required",
         // which previously left sale-return sync stuck failing forever.
-        const enteredUnit = item.enteredUnit || product?.rateUnit || product?.baseUnit || "piece";
-        const baseUnit = product?.baseUnit ?? enteredUnit;
-        const rateUnit = product?.rateUnit ?? enteredUnit;
-        const costPerRateUnit = product?.costPerRateUnit ?? 0;
-        const qtyInBase = product ? toBaseQty(item.quantity, enteredUnit, product.baseUnit) : item.quantity;
-        const qtyInRateUnit = product ? baseQtyToRateQty(qtyInBase, rateUnit, baseUnit) : item.quantity;
+        const enteredUnit = (originalItem?.enteredUnit ?? item.enteredUnit) || product?.rateUnit || product?.baseUnit || "piece";
+        const baseUnit = originalItem?.baseUnit ?? product?.baseUnit ?? enteredUnit;
+        const rateUnit = originalItem?.rateUnit ?? product?.rateUnit ?? enteredUnit;
+        const costPerRateUnit = Number(originalItem?.costPerRateUnit ?? product?.costPerRateUnit ?? 0);
+        const originalQuantity = Math.abs(Number(originalItem?.quantity ?? 0));
+        const returnFraction = originalItem ? Number(item.quantity) / Math.max(originalQuantity, 0.000001) : 0;
+        const qtyInBase = originalItem
+          ? round2(Math.abs(Number(originalItem.quantityInBaseUnit)) * returnFraction)
+          : product ? toBaseQty(item.quantity, enteredUnit, product.baseUnit) : item.quantity;
+        const qtyInRateUnit = originalItem
+          ? round2((Math.abs(Number(originalItem.lineTotal)) + Math.abs(Number(originalItem.lineDiscount ?? 0))) * returnFraction / Math.max(Math.abs(Number(originalItem.ratePerRateUnit)), 0.000001))
+          : product ? baseQtyToRateQty(qtyInBase, rateUnit, baseUnit) : item.quantity;
 
-        const grossLineTotal = multiplyMoney(item.ratePerRateUnit, qtyInRateUnit);
+        const authoritativeRate = Number(originalItem?.ratePerRateUnit ?? item.ratePerRateUnit);
+        const grossLineTotal = originalItem
+          ? round2((Math.abs(Number(originalItem.lineTotal)) + Math.abs(Number(originalItem.lineDiscount ?? 0))) * returnFraction)
+          : multiplyMoney(authoritativeRate, qtyInRateUnit);
         // Mirror of the sale path: a line sold with a per-line discount must
         // refund the discounted amount, not the sticker total.
-        const lineDiscount = Math.min(round2(Math.max(0, Number(item.lineDiscount ?? 0))), grossLineTotal);
-        const lineTotal = subtractMoney(grossLineTotal, lineDiscount);
-        const rate = Number(item.gstRate ?? product?.gstRate ?? 0);
+        const requestedLineDiscount = originalItem
+          ? round2(Math.abs(Number(originalItem.lineDiscount ?? 0)) * returnFraction)
+          : Number(item.lineDiscount ?? 0);
+        const lineDiscount = Math.min(round2(Math.max(0, requestedLineDiscount)), grossLineTotal);
+        const lineTotal = originalItem ? round2(Math.abs(Number(originalItem.lineTotal)) * returnFraction) : subtractMoney(grossLineTotal, lineDiscount);
+        const rate = Number(originalItem?.gstRate ?? item.gstRate ?? product?.gstRate ?? 0);
         const gstAmount = effectiveGstMode === "exclusive"
           ? multiplyMoney(lineTotal, rate / 100)
           : effectiveGstMode === "none" || rate <= 0
             ? 0
             : subtractMoney(lineTotal, round2(lineTotal / (1 + rate / 100)));
-        const lineCost = multiplyMoney(costPerRateUnit, qtyInRateUnit);
+        const lineCost = originalItem ? round2(Math.abs(Number(originalItem.lineCost)) * returnFraction) : multiplyMoney(costPerRateUnit, qtyInRateUnit);
         const lineProfit = subtractMoney(lineTotal, lineCost);
         const damaged = item.damaged === true;
 
@@ -814,23 +841,24 @@ export async function createSaleReturn(shopId, body, actor = {}) {
 
         // Stored NEGATIVE on the return bill so reports net the original sale down.
         billItems.push({
-          productId: item.productId ?? null,
-          name: product?.name ?? item.name ?? "Item",
+          productId: effectiveProductId,
+          originalBillItemId: originalItem?.id ?? null,
+          name: originalItem?.name ?? product?.name ?? item.name ?? "Item",
           quantity: -Math.abs(item.quantity),
           enteredUnit,
           baseUnit,
           quantityInBaseUnit: -Math.abs(qtyInBase),
           rateUnit,
-          ratePerRateUnit: item.ratePerRateUnit,
+          ratePerRateUnit: authoritativeRate,
           costPerRateUnit,
           gstRate: rate,
-          hsn: product?.hsn ?? item.hsn ?? null,
-          note: item.note || null,
+          hsn: originalItem?.hsn ?? product?.hsn ?? item.hsn ?? null,
+          note: (originalItem?.note ?? item.note) || null,
           lineDiscount: -lineDiscount,
           lineTotal: -lineTotal,
           lineCost: -lineCost,
           lineProfit: -lineProfit,
-          ...moneyShadows({ ratePerRateUnit: item.ratePerRateUnit, costPerRateUnit, lineDiscount: -lineDiscount, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
+          ...moneyShadows({ ratePerRateUnit: authoritativeRate, costPerRateUnit, lineDiscount: -lineDiscount, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
         });
 
         if (product) restockPlan.push({ product, qtyInBase: round2(qtyInBase), lineCost, damaged });
@@ -843,20 +871,21 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         });
         const availableByLine = new Map();
         for (const originalItem of original.items) {
-          const key = returnLineKey(originalItem);
           const soldQuantity = Math.abs(Number(originalItem.quantityInBaseUnit ?? originalItem.quantity ?? 0));
-          availableByLine.set(key, round2((availableByLine.get(key) ?? 0) + soldQuantity));
+          availableByLine.set(originalItem.id, soldQuantity);
         }
         for (const previousReturn of previouslyReturned) {
           for (const returnedItem of previousReturn.items) {
-            const key = returnLineKey(returnedItem);
+            const legacyCandidates = original.items.filter((line) => returnLineKey(line) === returnLineKey(returnedItem));
+            const key = returnedItem.originalBillItemId ?? (legacyCandidates.length === 1 ? legacyCandidates[0].id : null);
+            if (!key) continue;
             const returnedQuantity = Math.abs(Number(returnedItem.quantityInBaseUnit ?? returnedItem.quantity ?? 0));
             availableByLine.set(key, round2((availableByLine.get(key) ?? 0) - returnedQuantity));
           }
         }
         const requestedByLine = new Map();
         for (const returnedItem of billItems) {
-          const key = returnLineKey(returnedItem);
+          const key = returnedItem.originalBillItemId;
           const requestedQuantity = Math.abs(Number(returnedItem.quantityInBaseUnit ?? returnedItem.quantity ?? 0));
           requestedByLine.set(key, round2((requestedByLine.get(key) ?? 0) + requestedQuantity));
         }
@@ -873,8 +902,11 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       const grandTotalMagnitude = effectiveGstMode === "exclusive" ? addMoney(subtotal, totalGst) : subtotal;
       const refundAmount = round2(grandTotalMagnitude);
       const resolvedCustomerId = customerId ?? original?.customerId ?? null;
+      const returnCustomer = !original && resolvedCustomerId
+        ? await tx.customer.findFirst({ where: { id: resolvedCustomerId, shopId, deletedAt: null } })
+        : null;
 
-      const billNo = await generateBillNo(shopId, tx);
+      const billNo = await generateBillNo(shopId, tx, { billType: "sales_return" });
       const paymentRows = isCashLike
         ? [{
             shopId,
@@ -908,7 +940,10 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           billType: "sales_return",
           status: "active",
           customerId: resolvedCustomerId,
-          customerName: customerName ?? original?.customerName ?? "Walk-in",
+          customerName: original?.customerName ?? customerName ?? returnCustomer?.name ?? "Walk-in",
+          buyerGstin: original?.buyerGstin ?? returnCustomer?.gstNumber ?? null,
+          buyerStateCode: original?.buyerStateCode ?? returnCustomer?.stateCode ?? null,
+          buyerAddress: original?.buyerAddress ?? returnCustomer?.address ?? null,
           gstMode: effectiveGstMode,
           ...negativeMoney,
           ...moneyShadows(negativeMoney),

@@ -60,11 +60,23 @@ import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { cn } from "@/lib/utils";
 import {
-  INVENTORY_UNIT_CONVERSION as CONVERSION,
   buildUnitMismatchWarning,
   calculateInventoryPriceSuggestions,
   roundInventoryValue,
 } from "@/features/inventory/calculations";
+import {
+  activeInventorySellingUnits,
+  findInventorySellingUnit,
+  inventoryAverageUnitCost,
+  inventoryConversionToBase,
+  inventoryDisplayQuantity,
+  inventoryMovementUnit,
+  inventoryQuantityToBase,
+  inventorySimpleUnit,
+  inventoryStockValue,
+  inventoryUnitLabel,
+  mergeInventoryRows,
+} from "@/features/inventory/stock-display";
 import { PageShell, StatCard, StatsGrid } from "@/components/shared";
 import { offlineDB } from "@/lib/offline/db";
 
@@ -72,7 +84,7 @@ const UNITS = [
   "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
   "kg", "gram", "litre", "ml",
   "meter", "yard",
-  "packet", "box",
+  "packet", "pack", "pouch", "box", "carton", "bottle", "jar", "can", "sachet",
   "strip", "tablet", "bottle", "tube",
   "plate", "glass",
   "custom",
@@ -162,14 +174,6 @@ const initialForm: MovementForm = {
 
 function round2(value: number) {
   return roundInventoryValue(value);
-}
-
-function displayQtyFromBase(baseQty: number | undefined, unit: string | null | undefined) {
-  return round2(Number(baseQty || 0) / (CONVERSION[unit || "piece"] ?? 1));
-}
-
-function toBaseQty(quantity: number, unit: string) {
-  return round2(quantity * (CONVERSION[unit] ?? 1));
 }
 
 function isLowStock(product: InventoryItem) {
@@ -298,15 +302,13 @@ export default function InventoryPage() {
   const allInventoryRows = useMemo(() => {
     const inventoryRows = inventory.data ?? [];
     const productRows = (products.data ?? []) as unknown as InventoryItem[];
-    const sourceRows = inventoryRows.length > 0 ? inventoryRows : productRows.length > 0 ? productRows : localProductRows;
-    return sourceRows
-      .filter((item) => !(item as { deletedAt?: unknown; deleted_at?: unknown }).deletedAt && !(item as { deleted_at?: unknown }).deleted_at);
+    return mergeInventoryRows(productRows, inventoryRows, localProductRows);
   }, [inventory.data, localProductRows, products.data]);
 
   const filterOptions = useMemo(() => ({
     categories: [...new Set(allInventoryRows.map((item) => item.category?.trim()).filter(Boolean) as string[])].sort(),
     brands: [...new Set(allInventoryRows.map((item) => item.brand?.trim()).filter(Boolean) as string[])].sort(),
-    units: [...new Set(allInventoryRows.map((item) => (item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece").trim()).filter(Boolean))].sort(),
+    units: [...new Set(allInventoryRows.map((item) => inventoryUnitLabel(item).trim()).filter(Boolean))].sort(),
   }), [allInventoryRows]);
 
   const inventoryRows = useMemo(() => {
@@ -315,7 +317,7 @@ export default function InventoryPage() {
       .filter((item) => !q || [item.name, item.category, item.brand, item.barcode, item.sku, ...(item.aliases ?? [])].filter(Boolean).join(" ").toLowerCase().includes(q))
       .filter((item) => categoryFilter === "all" || item.category === categoryFilter)
       .filter((item) => brandFilter === "all" || item.brand === brandFilter)
-      .filter((item) => unitFilter === "all" || (item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece") === unitFilter)
+      .filter((item) => unitFilter === "all" || inventoryUnitLabel(item) === unitFilter)
       .filter((item) => {
         const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
         const qty = Number(item.stockBaseQty ?? 0);
@@ -331,8 +333,8 @@ export default function InventoryPage() {
   const stockStats = useMemo(() => {
     const rows = allInventoryRows;
     const tracked = rows.filter((item) => (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false);
-    const stockValue = tracked.reduce((sum, item) => sum + Number(item.stockBaseQty ?? 0) * Number(item.costPerRateUnit ?? item.costPrice ?? 0) / (CONVERSION[item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece"] ?? 1), 0);
-    const totalQuantity = tracked.reduce((sum, item) => sum + displayQtyFromBase(item.stockBaseQty, item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece"), 0);
+    const stockValue = tracked.reduce((sum, item) => sum + inventoryStockValue(item), 0);
+    const totalQuantity = tracked.reduce((sum, item) => sum + inventoryDisplayQuantity(item), 0);
     const soldLast30Days = movementRows
       .filter((row) => (row.action ?? row.type) === "sale" && safeDate(row.createdAt ?? row.created_at).getTime() >= Date.now() - 30 * 86_400_000)
       .reduce((sum, row) => sum + Math.abs(Number(row.quantityDelta ?? row.quantity_delta ?? 0)), 0);
@@ -384,7 +386,7 @@ export default function InventoryPage() {
               || aliases.some((alias) => alias.toLowerCase().includes(lookupName));
           })
         : undefined;
-      const unit = draft.unit ?? matchedProduct?.unit ?? matchedProduct?.displayUnit ?? matchedProduct?.rateUnit ?? "piece";
+      const unit = draft.unit ?? inventoryMovementUnit(matchedProduct) ?? "piece";
       setForm({
         ...initialForm,
         movementType: draft.movementType ?? "purchase",
@@ -419,7 +421,12 @@ export default function InventoryPage() {
 
   const selectedProduct = (products.data ?? []).find((product: Product) => product.id === form.productId);
   const selectedSupplier = (suppliers.data ?? []).find((supplier: Supplier) => supplier.id === form.supplierId);
-  const selectedProductUnit = selectedProduct?.unit ?? selectedProduct?.displayUnit ?? selectedProduct?.rateUnit ?? form.unit;
+  const selectedProductUnit = inventoryMovementUnit(selectedProduct) ?? form.unit;
+  const selectedProductSimpleUnit = selectedProduct ? inventorySimpleUnit(selectedProduct, form.unit) : form.unit;
+  const purchaseConversionToBase = selectedProduct ? inventoryConversionToBase(selectedProduct, form.unit) : undefined;
+  const selectedCostRateUnit = purchaseConversionToBase
+    ? selectedProductSimpleUnit
+    : selectedProduct?.rateUnit ?? selectedProduct?.unit ?? selectedProduct?.displayUnit ?? selectedProductSimpleUnit;
   const currentAverageCost = round2(Number(selectedProduct?.averageCostPrice ?? selectedProduct?.costPrice ?? selectedProduct?.costPerRateUnit ?? 0));
   const purchaseQuantity = Math.max(Number(form.quantity) || 0, 0);
   const priceSuggestions = calculateInventoryPriceSuggestions({
@@ -428,7 +435,9 @@ export default function InventoryPage() {
     purchaseQuantity,
     purchaseUnit: form.unit,
     productBaseUnit: selectedProduct?.baseUnit ?? selectedProductUnit,
-    productRateUnit: selectedProduct?.rateUnit ?? selectedProductUnit,
+    productRateUnit: selectedCostRateUnit,
+    purchaseConversionToBase,
+    rateConversionToBase: purchaseConversionToBase,
     purchaseUnitCost: Number(form.costPrice || 0) || undefined,
     billAmount: Number(form.billAmount || 0) || undefined,
     minMarginPercent: Number(form.minMarginPercent || 0) || undefined,
@@ -438,7 +447,19 @@ export default function InventoryPage() {
   const projectedAverageCost = form.movementType === "purchase" && selectedProduct ? priceSuggestions.projectedAverageCost : currentAverageCost;
   const minMarginSuggestion = priceSuggestions.minPriceSuggestion;
   const sellingMarginSuggestion = priceSuggestions.sellingPriceSuggestion;
-  const unitMismatchWarning = selectedProduct ? buildUnitMismatchWarning(form.unit, selectedProductUnit) : undefined;
+  const unitMismatchWarning = selectedProduct ? buildUnitMismatchWarning(selectedProductSimpleUnit, inventorySimpleUnit(selectedProduct, selectedProductUnit)) : undefined;
+  const movementUnitOptions = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const unit of activeInventorySellingUnits(selectedProduct)) {
+      options.set(unit.unitCode, unit.name);
+    }
+    for (const unit of UNITS) {
+      if (![...options.values()].some((label) => label.toLowerCase() === unit.toLowerCase())) {
+        options.set(unit, unit);
+      }
+    }
+    return [...options.entries()].map(([value, label]) => ({ value, label }));
+  }, [selectedProduct]);
   const purchaseBillAmount = form.billAmount ? round2(Number(form.billAmount)) : round2(purchaseQuantity * (purchaseUnitCost || 0));
   const purchasePaidAmount = form.movementType === "purchase"
     ? form.purchasePaymentStatus === "due"
@@ -462,7 +483,7 @@ export default function InventoryPage() {
       toast({ title: "Permission denied", description: manageInventory.reason, variant: "destructive" });
       return;
     }
-    const unit = product?.unit ?? product?.displayUnit ?? product?.rateUnit ?? "piece";
+    const unit = inventoryMovementUnit(product);
     setForm({
       ...initialForm,
       movementType: type,
@@ -480,9 +501,9 @@ export default function InventoryPage() {
   function exportInventory() {
     const header = ["Product", "SKU / Barcode", "Category", "Brand", "Unit", "Stock", "Cost Price", "Stock Value", "Status"];
     const lines = inventoryRows.map((item) => {
-      const unit = item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece";
-      const qty = displayQtyFromBase(item.stockBaseQty, unit);
-      const cost = round2(item.averageCostPrice ?? item.costPerRateUnit ?? item.costPrice ?? 0);
+      const unit = inventoryUnitLabel(item);
+      const qty = inventoryDisplayQuantity(item);
+      const cost = inventoryAverageUnitCost(item);
       const status = Number(item.stockBaseQty ?? 0) <= 0 ? "Out of stock" : isLowStock(item) ? "Low stock" : "In stock";
       return [item.name, item.sku ?? item.barcode ?? "", item.category ?? "", item.brand ?? "", unit, qty, cost, round2(qty * cost), status];
     });
@@ -531,13 +552,23 @@ export default function InventoryPage() {
 
   async function submitMovement(ownerPin?: string, ownerPinReason?: string) {
     const quantity = Number(form.quantity);
+    const baseQuantity = inventoryQuantityToBase(selectedProduct, quantity, form.unit);
+    const selectedSellingUnit = findInventorySellingUnit(selectedProduct, form.unit);
+    const syncEnteredUnit = selectedProduct?.baseUnit ?? selectedProductSimpleUnit ?? form.unit;
     const payload = {
       productId: form.productId,
       productName: selectedProduct?.name,
       quantity,
-      quantityDelta: form.movementType === "correction" ? toBaseQty(quantity, form.unit) : undefined,
+      quantityDelta: form.movementType === "correction" ? baseQuantity : undefined,
       enteredUnit: form.unit,
       unit: form.unit,
+      displayQuantity: quantity,
+      displayUnit: selectedProduct ? inventoryUnitLabel(selectedProduct, form.unit) : form.unit,
+      sellingUnitCode: selectedSellingUnit?.unitCode,
+      sellingUnitLabel: selectedSellingUnit?.name,
+      conversionToBase: selectedSellingUnit?.conversionToBase,
+      syncQuantityBase: Math.abs(baseQuantity),
+      syncEnteredUnit,
       supplierId: form.supplierId === "none" ? undefined : form.supplierId,
       supplierName: selectedSupplier?.name ?? (form.supplierName || undefined),
       billAmount: form.movementType === "purchase" ? purchaseBillAmount : form.billAmount ? Number(form.billAmount) : undefined,
@@ -595,7 +626,7 @@ export default function InventoryPage() {
 
   const isSaving = recordPurchase.isPending || recordDamage.isPending || stockCorrection.isPending || savingManualSale;
 
-  const lowStockRows = ((lowStock.data?.length ?? 0) > 0 ? lowStock.data ?? [] : allInventoryRows.filter(isLowStock))
+  const lowStockRows = ((lowStock.data?.length ?? 0) > 0 ? mergeInventoryRows(allInventoryRows, lowStock.data ?? []) : allInventoryRows.filter(isLowStock))
     .filter((item) => Number(item.stockBaseQty ?? 0) > 0)
     .sort((a, b) => Number(a.stockBaseQty ?? 0) - Number(b.stockBaseQty ?? 0));
   const recentMovements = [...movementRows]
@@ -675,9 +706,9 @@ export default function InventoryPage() {
                 )) : pagedInventoryRows.length === 0 ? (
                   <div className="px-4 py-12 text-center"><Package className="mx-auto text-[#a2aec0]" size={28} /><p className="mt-2 text-sm font-semibold text-[#243653]">No stock matches these filters</p><p className="mt-1 text-xs text-[#718096]">Clear a filter or add stock to continue.</p></div>
                 ) : pagedInventoryRows.map((item) => {
-                  const unit = item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece";
-                  const qty = displayQtyFromBase(item.stockBaseQty, unit);
-                  const cost = round2(item.averageCostPrice ?? item.costPerRateUnit ?? item.costPrice ?? 0);
+                  const unit = inventoryUnitLabel(item);
+                  const qty = inventoryDisplayQuantity(item);
+                  const cost = inventoryAverageUnitCost(item);
                   const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
                   const out = tracked && Number(item.stockBaseQty ?? 0) <= 0;
                   const low = tracked && !out && isLowStock(item);
@@ -708,9 +739,9 @@ export default function InventoryPage() {
                     {inventory.isLoading ? Array.from({ length: 7 }).map((_, index) => <tr key={index}><td colSpan={8} className="px-4 py-3"><Skeleton className="h-7 w-full" /></td></tr>) : pagedInventoryRows.length === 0 ? (
                       <tr><td colSpan={8} className="px-4 py-16 text-center"><Package className="mx-auto text-[#a2aec0]" size={28} /><p className="mt-2 text-sm font-semibold text-[#243653]">No stock matches these filters</p><p className="mt-1 text-xs text-[#718096]">Clear a filter or add stock to continue.</p></td></tr>
                     ) : pagedInventoryRows.map((item) => {
-                      const unit = item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece";
-                      const qty = displayQtyFromBase(item.stockBaseQty, unit);
-                      const cost = round2(item.averageCostPrice ?? item.costPerRateUnit ?? item.costPrice ?? 0);
+                      const unit = inventoryUnitLabel(item);
+                      const qty = inventoryDisplayQuantity(item);
+                      const cost = inventoryAverageUnitCost(item);
                       const tracked = (item.stockTrackingEnabled ?? item.trackStock ?? true) !== false;
                       const out = tracked && Number(item.stockBaseQty ?? 0) <= 0;
                       const low = tracked && !out && isLowStock(item);
@@ -745,8 +776,8 @@ export default function InventoryPage() {
                 <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Low Stock Alerts</h2><p className="mt-0.5 text-[11px] text-[#718096]">Items needing immediate attention</p></div><button type="button" onClick={() => setStockFilter("low")} className="text-[11px] font-semibold text-[#075fff]">View all</button></div>
                 <div className="mt-2 divide-y divide-[#edf1f6]">
                   {lowStockRows.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">All tracked products have healthy stock.</p> : lowStockRows.slice(0, 3).map((item) => {
-                    const unit = item.unit ?? item.displayUnit ?? item.rateUnit ?? "piece";
-                    return <div key={item.id} className="flex items-center gap-2.5 py-2.5"><InventoryProductAvatar item={item} compact /><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{item.name}</p><p className="mt-0.5 text-[10px] text-[#ff304f]">{displayQtyFromBase(item.stockBaseQty, unit)} {unit} left</p></div><Button variant="outline" size="sm" className="h-7 rounded-[7px] border-[#ffd7a6] bg-[#fff9ef] px-2.5 text-[10px] font-semibold text-[#f08a00]" onClick={() => openMovement("purchase", item)}>Reorder</Button></div>;
+                    const unit = inventoryUnitLabel(item);
+                    return <div key={item.id} className="flex items-center gap-2.5 py-2.5"><InventoryProductAvatar item={item} compact /><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-[#243653]">{item.name}</p><p className="mt-0.5 text-[10px] text-[#ff304f]">{inventoryDisplayQuantity(item)} {unit} left</p></div><Button variant="outline" size="sm" className="h-7 rounded-[7px] border-[#ffd7a6] bg-[#fff9ef] px-2.5 text-[10px] font-semibold text-[#f08a00]" onClick={() => openMovement("purchase", item)}>Reorder</Button></div>;
                   })}
                 </div>
               </section>
@@ -858,11 +889,11 @@ export default function InventoryPage() {
           <div className="space-y-4 mt-2">
             <div className="grid md:grid-cols-2 gap-3">
               <div><Label>Movement type</Label><Select value={form.movementType} onValueChange={(value) => setForm((current) => ({ ...current, movementType: value as MovementType }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="purchase">Purchase</SelectItem><SelectItem value="sale">Manual sale</SelectItem><SelectItem value="damage">Damage / wastage</SelectItem><SelectItem value="correction">Stock correction</SelectItem></SelectContent></Select></div>
-              <div><Label>Product *</Label><Select value={form.productId} onValueChange={(value) => { const product = (products.data ?? []).find((row: Product) => row.id === value); setForm((current) => ({ ...current, productId: value, unit: product?.unit ?? product?.displayUnit ?? product?.rateUnit ?? current.unit, costPrice: String(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? current.costPrice), minPrice: String(product?.minimumSellingPrice ?? product?.minPricePerRateUnit ?? current.minPrice), sellingPrice: String(product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? current.sellingPrice) })); }}><SelectTrigger className="mt-1"><SelectValue placeholder="Select product" /></SelectTrigger><SelectContent>{(products.data ?? []).map((product: Product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>Product *</Label><Select value={form.productId} onValueChange={(value) => { const product = (products.data ?? []).find((row: Product) => row.id === value); setForm((current) => ({ ...current, productId: value, unit: product ? inventoryMovementUnit(product) : current.unit, costPrice: String(product?.averageCostPrice ?? product?.costPrice ?? product?.costPerRateUnit ?? current.costPrice), minPrice: String(product?.minimumSellingPrice ?? product?.minPricePerRateUnit ?? current.minPrice), sellingPrice: String(product?.sellingPrice ?? product?.defaultPricePerRateUnit ?? current.sellingPrice) })); }}><SelectTrigger className="mt-1"><SelectValue placeholder="Select product" /></SelectTrigger><SelectContent>{(products.data ?? []).map((product: Product) => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent></Select></div>
             </div>
             <div className="grid md:grid-cols-3 gap-3">
               <div><Label>{form.movementType === "correction" ? "New stock / delta" : "Quantity"}</Label><Input type="number" step="0.01" className="mt-1" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} /></div>
-              <div><Label>Unit</Label><Select value={form.unit} onValueChange={(value) => setForm((current) => ({ ...current, unit: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent></Select>{unitMismatchWarning ? <p className="mt-1 text-xs text-orange-700">{unitMismatchWarning}</p> : null}</div>
+              <div><Label>Unit</Label><Select value={form.unit} onValueChange={(value) => setForm((current) => ({ ...current, unit: value }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{movementUnitOptions.map((unit) => <SelectItem key={unit.value} value={unit.value}>{unit.label}</SelectItem>)}</SelectContent></Select>{unitMismatchWarning ? <p className="mt-1 text-xs text-orange-700">{unitMismatchWarning}</p> : null}</div>
               <div><Label>Total bill amount</Label><Input type="number" step="0.01" className="mt-1" value={form.billAmount} onChange={(event) => setForm((current) => ({ ...current, billAmount: event.target.value }))} disabled={form.movementType !== "purchase"} /></div>
             </div>
             {form.movementType === "purchase" ? (

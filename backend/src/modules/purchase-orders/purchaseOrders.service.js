@@ -23,6 +23,35 @@ const detailInclude = {
   items: { orderBy: { productName: "asc" }, include: { product: { select: { batchTrackingEnabled: true } } } },
   receipts: { orderBy: { createdAt: "desc" }, include: { items: true } },
 };
+const receiptReplayInclude = {
+  items: { include: { inventoryLots: true } },
+  purchaseOrder: { include: detailInclude },
+};
+
+function replayMismatch(existing, purchaseOrderId, data) {
+  if (existing.purchaseOrderId !== purchaseOrderId) return true;
+  if ((existing.supplierInvoiceNumber || null) !== (data.supplierInvoiceNumber || null)) return true;
+  const expectedPaid = round2(data.paidAmount ?? existing.totalAmount);
+  if (round2(existing.paidAmount) !== expectedPaid) return true;
+  if ((existing.paymentMode || null) !== (expectedPaid > 0 ? data.paymentMode || null : null)) return true;
+  if (existing.items.length !== data.items.length) return true;
+  const stored = new Map(existing.items.map((item) => [item.purchaseOrderItemId, item]));
+  return data.items.some((input) => {
+    const item = stored.get(input.purchaseOrderItemId);
+    if (!item || round2(item.quantityBaseQty) !== round2(input.quantityBaseQty) || round2(item.actualRate) !== round2(input.actualRate)) return true;
+    const lot = item.inventoryLots[0];
+    if ((input.batchNumber || null) !== (lot?.batchNumber || null)) return true;
+    if ((input.manufacturedOn || null) !== (lot?.manufacturedOn?.toISOString().slice(0, 10) || null)) return true;
+    return (input.expiresOn || null) !== (lot?.expiresOn?.toISOString().slice(0, 10) || null);
+  });
+}
+
+function assertCompatibleReplay(existing, purchaseOrderId, data) {
+  if (replayMismatch(existing, purchaseOrderId, data)) {
+    throw new AppError("Idempotency key was already used for a different purchase receipt", 409, "IDEMPOTENCY_KEY_REUSED");
+  }
+  return { receipt: existing, purchaseOrder: existing.purchaseOrder, idempotentReplay: true };
+}
 
 export async function listPurchaseOrders(shopId, { status = "all", locationId, limit = 50 } = {}) {
   return db.purchaseOrder.findMany({
@@ -149,8 +178,8 @@ function paymentAllocation(total, paid, lines) {
 
 export async function receivePurchaseOrder(shopId, id, data, userId) {
   if (data.idempotencyKey) {
-    const existing = await db.purchaseReceipt.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include: { items: true, purchaseOrder: { include: detailInclude } } });
-    if (existing) return { receipt: existing, purchaseOrder: existing.purchaseOrder, idempotentReplay: true };
+    const existing = await db.purchaseReceipt.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include: receiptReplayInclude });
+    if (existing) return assertCompatibleReplay(existing, id, data);
   }
   try {
     return await db.$transaction(async (tx) => {
@@ -307,8 +336,8 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
     });
   } catch (error) {
     if (error?.code === "P2002" && data.idempotencyKey) {
-      const existing = await db.purchaseReceipt.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include: { items: true, purchaseOrder: { include: detailInclude } } });
-      if (existing) return { receipt: existing, purchaseOrder: existing.purchaseOrder, idempotentReplay: true };
+      const existing = await db.purchaseReceipt.findFirst({ where: { shopId, idempotencyKey: data.idempotencyKey }, include: receiptReplayInclude });
+      if (existing) return assertCompatibleReplay(existing, id, data);
     }
     throw error;
   }

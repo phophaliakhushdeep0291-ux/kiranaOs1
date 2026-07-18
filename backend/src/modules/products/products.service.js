@@ -491,8 +491,21 @@ function applyDefaultSellingUnitToProduct(product, units) {
 }
 
 async function writeSellingUnits(tx, shopId, productId, units) {
-  await tx.productSellingUnit.updateMany({ where: { shopId, productId }, data: { isDefault: false } });
+  const existingUnits = await tx.productSellingUnit.findMany({
+    where: { shopId, productId },
+    select: { id: true, unitCode: true },
+  });
+  const incomingCodes = units.map((unit) => unit.unitCode);
+  await tx.productSellingUnit.updateMany({
+    where: { shopId, productId, unitCode: { notIn: incomingCodes } },
+    data: { isDefault: false, isActive: false },
+  });
+  await tx.productSellingUnit.updateMany({
+    where: { shopId, productId, unitCode: { in: incomingCodes } },
+    data: { isDefault: false },
+  });
   for (const unit of units) {
+    const idBelongsToDifferentCode = unit.id && existingUnits.some((existing) => existing.id === unit.id && existing.unitCode !== unit.unitCode);
     const data = {
       name: unit.name,
       unitType: unit.unitType,
@@ -516,7 +529,7 @@ async function writeSellingUnits(tx, shopId, productId, units) {
     await tx.productSellingUnit.upsert({
       where: { shopId_productId_unitCode: { shopId, productId, unitCode: unit.unitCode } },
       update: data,
-      create: { ...(unit.id ? { id: unit.id } : {}), shopId, productId, unitCode: unit.unitCode, ...data },
+      create: { ...(unit.id && !idBelongsToDifferentCode ? { id: unit.id } : {}), shopId, productId, unitCode: unit.unitCode, ...data },
     });
   }
 }

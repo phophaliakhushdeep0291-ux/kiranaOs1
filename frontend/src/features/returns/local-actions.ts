@@ -18,12 +18,15 @@ const CUSTOMER_CACHE_KEY = "customers";
 export type RefundMode = "cash" | "upi" | "bank" | "udhar";
 
 export interface SaleReturnItemInput {
+  originalBillItemId?: string;
   productId?: string;
   name: string;
   quantity: number;
   enteredUnit: string;
   ratePerRateUnit: number;
   gstRate?: number;
+  hsn?: string;
+  lineDiscount?: number;
   damaged?: boolean;
 }
 
@@ -93,7 +96,10 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
     throw new Error("Select a customer to refund a return to udhar");
   }
 
-  const gstMode = input.gstMode ?? "inclusive";
+  const originalBill = input.originalBillId
+    ? await offlineDB.getAll<Bill & Record<string, unknown>>("bills").then((rows) => rows.find((row) => row.id === input.originalBillId || row.local_id === input.originalBillId || row.server_id === input.originalBillId)).catch(() => undefined)
+    : undefined;
+  const gstMode = originalBill?.billType === "estimate" ? "none" : originalBill?.gstMode ?? input.gstMode ?? "inclusive";
   // "Cash-like" = an immediate tender refund (money goes back out now) vs. reducing udhar.
   const isCashLike = refundMode === "cash" || refundMode === "upi" || refundMode === "bank";
   const now = new Date().toISOString();
@@ -111,7 +117,9 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
     const rate = readNumber(item.ratePerRateUnit, 0);
     const gstRate = readNumber(item.gstRate ?? product?.gstRate, 0);
     const cost = readNumber((product as { costPerRateUnit?: number } | undefined)?.costPerRateUnit, 0);
-    const lineTotal = roundMoney(qty * rate);
+    const grossLineTotal = roundMoney(qty * rate);
+    const lineDiscount = Math.min(Math.max(readNumber(item.lineDiscount, 0), 0), grossLineTotal);
+    const lineTotal = roundMoney(grossLineTotal - lineDiscount);
     const lineCost = roundMoney(qty * cost);
     const lineProfit = roundMoney(lineTotal - lineCost);
     subtotal = roundMoney(subtotal + lineTotal);
@@ -123,6 +131,8 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
       bill_id: billId,
       productId: item.productId ?? null,
       product_id: item.productId ?? null,
+      originalBillItemId: item.originalBillItemId ?? null,
+      original_bill_item_id: item.originalBillItemId ?? null,
       name: item.name,
       quantity: -Math.abs(qty),
       enteredUnit: item.enteredUnit,
@@ -131,6 +141,9 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
       rate_per_rate_unit: rate,
       gstRate,
       gst_rate: gstRate,
+      hsn: item.hsn ?? product?.hsn ?? null,
+      lineDiscount: -lineDiscount,
+      line_discount: -lineDiscount,
       lineTotal: -lineTotal,
       line_total: -lineTotal,
       damaged: item.damaged === true,
@@ -165,6 +178,9 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
     customerId: input.customerId ?? existingCustomer?.id ?? null,
     customerName: input.customerName ?? existingCustomer?.name ?? "Walk-in",
     customerMobile: input.customerMobile ?? (existingCustomer?.mobile as string | undefined) ?? null,
+    buyerGstin: originalBill?.buyerGstin ?? existingCustomer?.gstNumber ?? null,
+    buyerStateCode: originalBill?.buyerStateCode ?? existingCustomer?.stateCode ?? null,
+    buyerAddress: originalBill?.buyerAddress ?? existingCustomer?.address ?? null,
     subtotal: -subtotal,
     discount: 0,
     gst: -totalGst,
@@ -289,6 +305,7 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
       ownerPin: input.ownerPin,
       reason: input.reason ?? null,
       items: items.map((item) => ({
+        originalBillItemId: item.originalBillItemId ?? null,
         productId: item.productId ?? null,
         localProductId: item.productId ?? null,
         name: item.name,
@@ -296,6 +313,8 @@ export async function createSaleReturnLocalFirst(input: SaleReturnInput): Promis
         enteredUnit: item.enteredUnit,
         ratePerRateUnit: readNumber(item.ratePerRateUnit, 0),
         gstRate: readNumber(item.gstRate ?? findCachedProduct(item.productId)?.gstRate, 0),
+        hsn: item.hsn ?? findCachedProduct(item.productId)?.hsn ?? null,
+        lineDiscount: readNumber(item.lineDiscount, 0),
         damaged: item.damaged === true,
       })),
     },

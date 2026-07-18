@@ -5,6 +5,7 @@ import { offlineDB } from "@/lib/offline/db";
 import { getMutationOptions, getQueryOptions, type MutationHookOptions, type QueryHookOptions } from "@/lib/api/query-options";
 import * as inventoryApi from "@/features/inventory/api";
 import { recordDamageLocalFirst, recordPurchaseLocalFirst, recordSaleLocalFirst, stockCorrectionLocalFirst } from "@/features/inventory/local-actions";
+import { normalizeInventoryItem } from "@/features/inventory/stock-display";
 import type { InventoryItem, LedgerResult, Product, QueryParams, StockMovementInput } from "@/types/api";
 
 const INVENTORY_CACHE_KEY = "inventory";
@@ -37,13 +38,14 @@ function isNetworkLikeError(error: unknown) {
 }
 
 function readCachedInventory(): InventoryItem[] {
-  return readInstantCache<InventoryItem[]>(INVENTORY_CACHE_KEY, readInstantCache<Product[]>(PRODUCTS_CACHE_KEY, []) as InventoryItem[]);
+  return readInstantCache<InventoryItem[]>(INVENTORY_CACHE_KEY, readInstantCache<Product[]>(PRODUCTS_CACHE_KEY, []) as InventoryItem[])
+    .map((item) => normalizeInventoryItem(item));
 }
 
 function productRowsToInventory(rows: Product[]): InventoryItem[] {
   return rows
     .filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null)
-    .map((product) => product as unknown as InventoryItem);
+    .map((product) => normalizeInventoryItem(product));
 }
 
 async function readInventoryFromIndexedDB(): Promise<InventoryItem[]> {
@@ -60,7 +62,7 @@ export function useGetInventory(options?: QueryHookOptions<InventoryResponse, In
   return useQuery<InventoryResponse, ApiClientError, InventoryResponse, InventoryQueryKey>({
     ...extra,
     queryKey: getGetInventoryQueryKey(),
-    initialData: extra.initialData ?? cached,
+    initialData: extra.initialData ?? (cached.length > 0 ? cached : undefined),
     queryFn: async () => {
       const liveCached = readCachedInventory();
       if (liveCached.length === 0) {
@@ -77,7 +79,7 @@ export function useGetInventory(options?: QueryHookOptions<InventoryResponse, In
         return fromDB;
       }
       try {
-        const fresh = await inventoryApi.getInventory();
+        const fresh = (await inventoryApi.getInventory()).map((item) => normalizeInventoryItem(item));
         writeInstantCache(INVENTORY_CACHE_KEY, fresh);
         return fresh;
       } catch (error) {
@@ -112,7 +114,7 @@ export function useGetLowStock(options?: QueryHookOptions<InventoryResponse, Low
   return useQuery<InventoryResponse, ApiClientError, InventoryResponse, LowStockQueryKey>({
     ...extra,
     queryKey: getGetLowStockQueryKey(),
-    initialData: extra.initialData ?? cached,
+    initialData: extra.initialData ?? (cached.length > 0 ? cached : undefined),
     queryFn: async () => {
       const liveCached = readCachedLowStock();
       if (liveCached.length === 0) {
@@ -124,7 +126,7 @@ export function useGetLowStock(options?: QueryHookOptions<InventoryResponse, Low
         return readLowStockFromIndexedDB();
       }
       try {
-        return await inventoryApi.getLowStock();
+        return (await inventoryApi.getLowStock()).map((item) => normalizeInventoryItem(item));
       } catch (error) {
         if (liveCached.length > 0) return liveCached;
         if (isNetworkLikeError(error)) return readLowStockFromIndexedDB();

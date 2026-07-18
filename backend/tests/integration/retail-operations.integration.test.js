@@ -57,9 +57,12 @@ if (ctx.skip) {
 
     test("enforces the subscribed store limit", async () => {
       const { tenant, auth } = await ownerContext();
-      assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken }));
-      assertSuccess(await ctx.post("/api/stores", { name: "Second Store", code: "S02" }, { token: auth.accessToken }), 201);
-      const blocked = assertFailure(await ctx.post("/api/stores", { name: "Third Store", code: "S03" }, { token: auth.accessToken }), 403);
+      const current = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken }));
+      assert.ok(current.usage.maximum >= current.usage.current);
+      for (let number = current.usage.current + 1; number <= current.usage.maximum; number += 1) {
+        assertSuccess(await ctx.post("/api/stores", { name: `Store ${number}`, code: `S${String(number).padStart(2, "0")}` }, { token: auth.accessToken }), 201);
+      }
+      const blocked = assertFailure(await ctx.post("/api/stores", { name: "Over Limit Store", code: "OVER" }, { token: auth.accessToken }), 403);
       assert.equal(blocked.code, "STORE_LIMIT_REACHED");
     });
 
@@ -213,18 +216,45 @@ if (ctx.skip) {
       const firstReceiptPayload = {
         idempotencyKey: `po-receipt-${order.id}-1`,
         supplierInvoiceNumber: "SUP-1001",
-        paidAmount: 68,
+        paidAmount: 20,
         paymentMode: "cash",
+        updateCost: true,
         items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 4, actualRate: 17, batchNumber: "OIL-EARLY", manufacturedOn: "2026-05-01", expiresOn: "2026-08-01" }],
       };
       const partial = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.equal(partial.purchaseOrder.status, "partially_received");
       assert.equal(partial.purchaseOrder.items[0].receivedBaseQty, 4);
-      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 7);
+      assert.equal(partial.receipt.totalAmount, 68);
+      assert.equal(partial.receipt.paidAmount, 20);
+      assert.equal(partial.receipt.dueAmount, 48);
+      const productAfterPartial = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(productAfterPartial.stockBaseQty, 7);
+      assert.equal(productAfterPartial.costPerRateUnit, 18.29, "receipt must apply weighted-average cost when requested");
+      const partialHistory = await ctx.db.purchaseHistory.findFirst({ where: { purchaseReceiptId: partial.receipt.id } });
+      assert.equal(partialHistory.purchasePaymentStatus, "partial");
+      assert.equal(partialHistory.purchasePaidAmount, 20);
+      assert.equal(partialHistory.purchaseDueAmount, 48);
 
-      const replay = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      const replay = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 200);
       assert.equal(replay.idempotentReplay, true);
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 7, "receipt retry must not add stock twice");
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "PURCHASE_ORDER_RECEIVED", entityId: order.id } }), 1, "receipt retry must not duplicate the owner audit event");
+      assert.equal(await ctx.db.purchaseHistory.count({ where: { purchaseReceiptId: partial.receipt.id } }), 1, "receipt retry must not duplicate supplier due history");
+      const changedReplay = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receive`, {
+        ...firstReceiptPayload,
+        paidAmount: 21,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(changedReplay.code, "IDEMPOTENCY_KEY_REUSED");
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 7, "changed replay payload must not mutate stock");
+
+      const otherOrder = assertSuccess(await ctx.post("/api/purchase-orders", {
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        items: [{ productId: product.id, orderedBaseQty: 1, expectedRate: 17 }],
+      }, { token: auth.accessToken, headers: { "x-location-id": primary.id } }), 201);
+      await ctx.post(`/api/purchase-orders/${otherOrder.id}/send`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      const crossOrderReplay = assertFailure(await ctx.post(`/api/purchase-orders/${otherOrder.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(crossOrderReplay.code, "IDEMPOTENCY_KEY_REUSED", "one receipt key cannot alias another purchase order");
 
       const overReceipt = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receive`, {
         idempotencyKey: `po-receipt-${order.id}-over`, paidAmount: 133, paymentMode: "cash",
@@ -526,6 +556,79 @@ if (ctx.skip) {
 
       const disabled = assertFailure(await ctx.post(`/api/compliance/e-invoices/${bill.id}/sandbox`, {}, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 503);
       assert.equal(disabled.code, "GST_PROVIDER_NOT_CONFIGURED");
+    });
+
+    test("creates authoritative GST credit notes from immutable original sale lines", async () => {
+      const { tenant, auth } = await ownerContext();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, {
+        name: "Registered Buyer",
+        gstNumber: "29AAPFU0939F1ZR",
+        stateCode: "29",
+        address: "Bengaluru, Karnataka",
+      });
+      const product = await createProduct(ctx.db, tenant.shop.id, {
+        name: "Taxed Biscuits",
+        stockBaseQty: 20,
+        defaultPricePerRateUnit: 118,
+        costPerRateUnit: 60,
+        gstRate: 18,
+        hsn: "1905",
+      });
+      const sale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        billType: "gst_invoice",
+        gstMode: "inclusive",
+        customerId: customer.id,
+        customerName: customer.name,
+        quantity: 2,
+        ratePerRateUnit: 118,
+        gstRate: 18,
+        hsn: "1905",
+        lineDiscount: 36,
+      }), { token: auth.accessToken }), 201);
+      assert.equal(sale.grandTotal, 200);
+      assert.equal(sale.items[0].lineDiscount, 36);
+      assert.equal(sale.items[0].hsn, "1905");
+
+      await ctx.db.product.update({ where: { id: product.id }, data: { hsn: "9999", gstRate: 5, defaultPricePerRateUnit: 999 } });
+      const creditNote = assertSuccess(await ctx.post("/api/bills/returns", {
+        refundMode: "cash",
+        returnOfBillId: sale.id,
+        reason: "One pack returned",
+        gstMode: "none",
+        items: [{
+          originalBillItemId: sale.items[0].id,
+          productId: product.id,
+          name: "Manipulated client label",
+          quantity: 1,
+          enteredUnit: "piece",
+          ratePerRateUnit: 999,
+          lineDiscount: 0,
+          gstRate: 0,
+          hsn: "9999",
+          damaged: false,
+        }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+
+      assert.match(creditNote.billNo, /^RET-\d{4}-000001$/);
+      assert.equal(creditNote.grandTotal, -100, "refund must use the original line's net value");
+      assert.equal(creditNote.gst, -15.25, "return must reverse the original inclusive GST mode and rate");
+      assert.equal(creditNote.buyerGstin, "29AAPFU0939F1ZR");
+      assert.equal(creditNote.items[0].originalBillItemId, sale.items[0].id);
+      assert.equal(creditNote.items[0].ratePerRateUnit, 118);
+      assert.equal(creditNote.items[0].lineDiscount, -18);
+      assert.equal(creditNote.items[0].gstRate, 18);
+      assert.equal(creditNote.items[0].hsn, "1905", "later product edits must not rewrite a credit note's HSN");
+
+      const working = assertSuccess(await ctx.get("/api/compliance/gstr1-working?range=monthly", { token: auth.accessToken }));
+      assert.equal(working.cdnr.length, 1);
+      assert.equal(working.cdnr[0].noteNumber, creditNote.billNo);
+      assert.equal(working.cdnr[0].noteValue, 100);
+      assert.equal(working.cdnr[0].buyerGstin, "29AAPFU0939F1ZR");
+      assert.equal(working.b2b.length, 1, "the credit note must not be double-counted as a B2B invoice");
+      const gstReport = assertSuccess(await ctx.get("/api/reports/gst?range=monthly", { token: auth.accessToken }));
+      assert.equal(gstReport.cgst, 0);
+      assert.equal(gstReport.sgst, 0);
+      assert.equal(gstReport.igst, gstReport.gstCollected, "interstate invoice and return tax must remain IGST after netting");
     });
 
     test("issues and atomically redeems gift value across branches with cancellation recovery", async () => {

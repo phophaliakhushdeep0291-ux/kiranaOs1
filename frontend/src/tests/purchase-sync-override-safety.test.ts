@@ -94,6 +94,31 @@ describe("purchase sync override safety", () => {
     expect(operation?.payload.purchasePaymentMode).toBeUndefined();
   });
 
+  it("uses packaged movement base quantity and base unit for backend stock sync", () => {
+    const operation = buildBackendSyncOperation({
+      operation_type: "STOCK_PURCHASE",
+      entity_type: "inventory_movement",
+      entity_id: "stock_purchase_packet",
+      payload: {},
+    } as never, {
+      productId: "product_packet",
+      quantity: 3,
+      enteredUnit: "packet-1-kg",
+      displayQuantity: 3,
+      displayUnit: "packet 1 kg",
+      syncQuantityBase: 3_000,
+      syncEnteredUnit: "gram",
+      billAmount: 180,
+    });
+
+    expect(operation?.payload).toEqual(expect.objectContaining({
+      quantity: 3_000,
+      enteredUnit: "gram",
+      displayQuantity: 3,
+      displayUnit: "packet 1 kg",
+    }));
+  });
+
   it("repairs queued purchase edit payment fields before backend sync", () => {
     const operation = buildBackendSyncOperation({
       operation_type: "UPDATE_PURCHASE_BILL",

@@ -42,7 +42,7 @@ Any failure is red. Skips require a written exception below; P0 financial, migra
 | Cancel/refund/return exact reversal | BILL-006 | Not verified |
 | Offline bill survives reload and syncs once | SYNC-001..002 / MQA-SYNC-01 | Not verified |
 | Two-device duplicate/conflict proof | SYNC-002..003 | Not verified |
-| Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Create-PO mobile task verified; receipt/payment/stock reconciliation remains not verified |
+| Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Backend proof verifies partial due, weighted cost, exact stock, lots, audit uniqueness and strict replay identity; create-PO mobile task verified. Live receive/payment UI and supplier settlement/reversal remain open. |
 | Daily closing and GST sample reconciliation | RPT-001..002 | Not verified |
 | 375/390/430/768 mobile matrix | QUAL-003 / all MQA flows | Overview routes for Billing, Products, Inventory, Purchases, Reports, Settings and Sync pass overflow/runtime smoke; Customers has separate multi-width evidence. Full transactional flows remain open. |
 | Backup restore proof and rollback rehearsal | SYNC-005 | Not verified |

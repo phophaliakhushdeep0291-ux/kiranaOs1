@@ -301,6 +301,77 @@ describe("inventory reliability business rules", () => {
     ]));
   });
 
+  it("converts packaged purchase quantities through the selected selling unit", async () => {
+    dbState.committed.products = [{
+      id: "product_packet",
+      name: "Atta 1kg",
+      unit: "packet",
+      displayUnit: "packet 1 kg",
+      baseUnit: "gram",
+      rateUnit: "packet",
+      stockBaseQty: 10_000,
+      stockQuantity: 10,
+      lowStockThreshold: 2_000,
+      costPerRateUnit: 50,
+      costPrice: 50,
+      averageCostPrice: 50,
+      sellingUnits: [{
+        id: "unit_packet_1kg",
+        name: "packet 1 kg",
+        unitType: "packet",
+        unitCode: "packet-1-kg",
+        packSizeValue: 1,
+        packSizeUnit: "kg",
+        conversionToBase: 1_000,
+        defaultPrice: 62,
+        minimumPrice: 58,
+        maximumPrice: 70,
+        costPrice: 50,
+        isDefault: true,
+        isActive: true,
+      }],
+    }];
+
+    const result = await recordPurchaseLocalFirst({
+      productId: "product_packet",
+      quantity: 3,
+      unit: "packet-1-kg",
+      costPerRateUnit: 60,
+    });
+
+    expect(result.product).toEqual(expect.objectContaining({
+      stockBaseQty: 13_000,
+      stockQuantity: 13,
+      displayUnit: "packet 1 kg",
+      averageCostPrice: 52.31,
+    }));
+    expect(tableRows("inventory_movements")).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "purchase",
+        quantity_delta: 3_000,
+        stock_before: 10_000,
+        stock_after: 13_000,
+        unit: "packet 1 kg",
+        selling_unit_code: "packet-1-kg",
+        conversion_to_base: 1_000,
+        bill_amount: 180,
+      }),
+    ]));
+    expect(tableRows("sync_outbox")).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        operation_type: "STOCK_PURCHASE",
+        payload: expect.objectContaining({
+          quantity: 3_000,
+          enteredUnit: "gram",
+          displayQuantity: 3,
+          displayUnit: "packet 1 kg",
+          syncQuantityBase: 3_000,
+          syncEnteredUnit: "gram",
+        }),
+      }),
+    ]));
+  });
+
   it("shows a clear unit mismatch warning for incompatible unit families", async () => {
     expect(buildUnitMismatchWarning("litre", "kg")).toMatch(/Unit mismatch warning/i);
 

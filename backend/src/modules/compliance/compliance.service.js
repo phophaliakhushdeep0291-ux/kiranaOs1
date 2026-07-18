@@ -93,18 +93,21 @@ export async function getReadiness(shopId) {
 }
 
 function taxableForLine(line, gstMode) {
-  const total = Number(line.lineTotal) || 0;
+  const total = Math.abs(Number(line.lineTotal) || 0);
   const rate = Number(line.gstRate) || 0;
   if (gstMode === "none" || rate <= 0) return total;
   return gstMode === "exclusive" ? total : total / (1 + rate / 100);
 }
 
 export function calculateLineTaxBreakdown(line, gstMode, sellerStateCode = "", buyerStateCode = "") {
-  const taxableValue = taxableForLine(line, gstMode);
+  const sign = Number(line.lineTotal) < 0 ? -1 : 1;
+  const taxableMagnitude = taxableForLine(line, gstMode);
   const rate = Number(line.gstRate) || 0;
-  const tax = gstMode === "exclusive"
-    ? taxableValue * rate / 100
-    : Math.max(0, Number(line.lineTotal) - taxableValue);
+  const taxMagnitude = gstMode === "exclusive"
+    ? taxableMagnitude * rate / 100
+    : Math.max(0, Math.abs(Number(line.lineTotal)) - taxableMagnitude);
+  const taxableValue = taxableMagnitude * sign;
+  const tax = taxMagnitude * sign;
   const normalizedBuyerState = String(buyerStateCode || "").padStart(2, "0");
   const placeOfSupply = normalizedBuyerState !== "00" ? normalizedBuyerState : sellerStateCode;
   const interstate = Boolean(placeOfSupply && sellerStateCode && placeOfSupply !== sellerStateCode);
@@ -114,7 +117,7 @@ export function calculateLineTaxBreakdown(line, gstMode, sellerStateCode = "", b
     placeOfSupply,
     supplyType: interstate ? "interstate" : "intrastate",
     cgst: interstate ? 0 : Number((tax / 2).toFixed(2)),
-    sgst: interstate ? 0 : Number((tax / 2).toFixed(2)),
+    sgst: interstate ? 0 : Number((tax - Number((tax / 2).toFixed(2))).toFixed(2)),
     igst: interstate ? Number(tax.toFixed(2)) : 0,
     lineTotal: Number((taxableValue + tax).toFixed(2)),
   };
@@ -132,11 +135,12 @@ export function buildInvoiceTaxSnapshot(bill, sellerStateCode = "") {
     tax: calculateLineTaxBreakdown(item, bill.gstMode, sellerStateCode, bill.buyerStateCode),
   }));
   const grossInvoiceValue = Number(grossLines.reduce((sum, row) => sum + row.tax.lineTotal, 0).toFixed(2));
-  let remainingDiscount = Math.min(Math.max(Number(bill.discount ?? 0), 0), grossInvoiceValue);
+  const allocatableGrossValue = Math.max(0, grossInvoiceValue);
+  let remainingDiscount = Math.min(Math.max(Number(bill.discount ?? 0), 0), allocatableGrossValue);
   const lines = grossLines.map((row, index) => {
     const allocatedDiscount = index === grossLines.length - 1
       ? remainingDiscount
-      : Math.min(remainingDiscount, Number((Number(bill.discount ?? 0) * row.tax.lineTotal / Math.max(grossInvoiceValue, 0.01)).toFixed(2)));
+      : Math.min(remainingDiscount, Number((Number(bill.discount ?? 0) * Math.max(0, row.tax.lineTotal) / Math.max(allocatableGrossValue, 0.01)).toFixed(2)));
     remainingDiscount = Number((remainingDiscount - allocatedDiscount).toFixed(2));
     return {
       ...row,
@@ -163,17 +167,34 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
     include: { items: { include: { product: { select: { hsn: true } } } }, payments: true },
   })]);
   const sellerStateCode = validateGstin(shop?.gstNumber).stateCode || "";
+  const originalIds = [...new Set(bills.map((bill) => bill.returnOfBillId).filter(Boolean))];
+  const originalBills = originalIds.length > 0
+    ? await db.bill.findMany({ where: { shopId, id: { in: originalIds } }, select: { id: true, billNo: true, createdAt: true, buyerGstin: true, buyerStateCode: true, buyerAddress: true, customerName: true, grandTotal: true } })
+    : [];
+  const originalById = new Map(originalBills.map((bill) => [bill.id, bill]));
   const rows = [];
   for (const bill of bills) {
-    const snapshot = buildInvoiceTaxSnapshot(bill, sellerStateCode);
+    const original = bill.returnOfBillId ? originalById.get(bill.returnOfBillId) : null;
+    const effectiveBill = original ? {
+      ...bill,
+      buyerGstin: bill.buyerGstin || original.buyerGstin,
+      buyerStateCode: bill.buyerStateCode || original.buyerStateCode,
+      buyerAddress: bill.buyerAddress || original.buyerAddress,
+      customerName: bill.customerName || original.customerName,
+    } : bill;
+    const snapshot = buildInvoiceTaxSnapshot(effectiveBill, sellerStateCode);
     for (const { item, tax, discount, grossLineTotal, netLineTotal } of snapshot.lines) {
       rows.push({
         invoiceNumber: bill.billNo,
         invoiceDate: bill.createdAt.toISOString().slice(0, 10),
         invoiceType: bill.billType,
-        customerName: bill.customerName,
-        buyerGstin: bill.buyerGstin || "",
-        buyerStateCode: bill.buyerStateCode || "",
+        documentType: bill.billType === "sales_return" ? "credit_note" : "invoice",
+        originalInvoiceNumber: original?.billNo || "",
+        originalInvoiceDate: original?.createdAt?.toISOString().slice(0, 10) || "",
+        originalInvoiceValue: Number(original?.grandTotal ?? 0),
+        customerName: effectiveBill.customerName,
+        buyerGstin: effectiveBill.buyerGstin || "",
+        buyerStateCode: effectiveBill.buyerStateCode || "",
         sellerStateCode,
         placeOfSupply: tax.placeOfSupply,
         supplyType: tax.supplyType,
@@ -202,22 +223,47 @@ function csvCell(value) {
 }
 
 export function registerToCsv(register) {
-  const keys = ["invoiceNumber", "invoiceDate", "invoiceType", "customerName", "buyerGstin", "sellerStateCode", "placeOfSupply", "supplyType", "hsn", "description", "quantity", "unit", "gstRate", "taxableValue", "cgst", "sgst", "igst", "grossLineTotal", "discount", "lineTotal", "paymentModes"];
-  const labels = ["Invoice Number", "Invoice Date", "Invoice Type", "Customer", "Buyer GSTIN", "Seller State", "Place of Supply", "Supply Type", "HSN", "Description", "Quantity", "Unit", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Gross Line Total", "Post-tax Discount", "Net Line Total", "Payment Modes"];
+  const keys = ["invoiceNumber", "invoiceDate", "invoiceType", "documentType", "originalInvoiceNumber", "originalInvoiceDate", "customerName", "buyerGstin", "sellerStateCode", "placeOfSupply", "supplyType", "hsn", "description", "quantity", "unit", "gstRate", "taxableValue", "cgst", "sgst", "igst", "grossLineTotal", "discount", "lineTotal", "paymentModes"];
+  const labels = ["Document Number", "Document Date", "Bill Type", "Document Type", "Original Invoice Number", "Original Invoice Date", "Customer", "Buyer GSTIN", "Seller State", "Place of Supply", "Supply Type", "HSN", "Description", "Quantity", "Unit", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Gross Line Total", "Post-tax Discount", "Net Line Total", "Payment Modes"];
   return [labels.join(","), ...register.rows.map((row) => keys.map((key) => csvCell(row[key])).join(","))].join("\r\n");
 }
 
-export async function getGstr1WorkingPapers(shopId, query = {}) {
-  const register = await getGstInvoiceRegister(shopId, query);
+export function buildGstr1WorkingFromRegister(register) {
   const invoiceMap = new Map();
   const b2csMap = new Map();
+  const cdnrMap = new Map();
+  const cdnurMap = new Map();
   const hsnMap = new Map();
   for (const row of register.rows) {
-    if (row.buyerGstin) {
+    const isCreditNote = row.documentType === "credit_note";
+    const cdnurEligible = isCreditNote && !row.buyerGstin && row.supplyType === "interstate" && Math.abs(Number(row.originalInvoiceValue ?? 0)) > 100000;
+    if (isCreditNote && (row.buyerGstin || cdnurEligible)) {
+      const targetMap = row.buyerGstin ? cdnrMap : cdnurMap;
+      const note = targetMap.get(row.invoiceNumber) ?? {
+        noteNumber: row.invoiceNumber,
+        noteDate: row.invoiceDate,
+        noteType: "C",
+        buyerGstin: row.buyerGstin,
+        customerName: row.customerName,
+        placeOfSupply: row.placeOfSupply,
+        originalInvoiceNumber: row.originalInvoiceNumber,
+        originalInvoiceDate: row.originalInvoiceDate,
+        taxableValue: 0,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        noteValue: 0,
+      };
+      for (const key of ["taxableValue", "cgst", "sgst", "igst", "noteValue"]) {
+        const source = key === "noteValue" ? row.lineTotal : row[key];
+        note[key] = Number((note[key] + Math.abs(Number(source))).toFixed(2));
+      }
+      targetMap.set(row.invoiceNumber, note);
+    } else if (row.buyerGstin && !isCreditNote) {
       const invoice = invoiceMap.get(row.invoiceNumber) ?? { invoiceNumber: row.invoiceNumber, invoiceDate: row.invoiceDate, buyerGstin: row.buyerGstin, customerName: row.customerName, placeOfSupply: row.placeOfSupply, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, invoiceValue: 0 };
       for (const key of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "invoiceValue"]) invoice[key] = Number((invoice[key] + Number(key === "invoiceValue" ? row.lineTotal : key === "postTaxDiscount" ? row.discount : row[key])).toFixed(2));
       invoiceMap.set(row.invoiceNumber, invoice);
-    } else {
+    } else if (!row.buyerGstin) {
       const key = `${row.placeOfSupply}:${row.gstRate}`;
       const summary = b2csMap.get(key) ?? { placeOfSupply: row.placeOfSupply, gstRate: row.gstRate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, invoiceValue: 0 };
       for (const field of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "invoiceValue"]) summary[field] = Number((summary[field] + Number(field === "invoiceValue" ? row.lineTotal : field === "postTaxDiscount" ? row.discount : row[field])).toFixed(2));
@@ -229,15 +275,31 @@ export async function getGstr1WorkingPapers(shopId, query = {}) {
     for (const field of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "totalValue"]) hsn[field] = Number((hsn[field] + Number(field === "totalValue" ? row.lineTotal : field === "postTaxDiscount" ? row.discount : row[field])).toFixed(2));
     hsnMap.set(hsnKey, hsn);
   }
-  return { schemaVersion: "kiranaos-gstr1-working-v1", filingWarning: "Accountant working papers only; review before filing on GSTN", from: register.from, to: register.to, b2b: [...invoiceMap.values()], b2cs: [...b2csMap.values()], hsn: [...hsnMap.values()] };
+  return {
+    schemaVersion: "artha-gstr1-working-v2",
+    filingWarning: "Accountant working papers only; review GSTN classification before filing. Registered credit notes are separated as CDNR; eligible large interstate unregistered notes as CDNUR; smaller B2C returns are netted into B2CS.",
+    from: register.from,
+    to: register.to,
+    b2b: [...invoiceMap.values()],
+    b2cs: [...b2csMap.values()],
+    cdnr: [...cdnrMap.values()],
+    cdnur: [...cdnurMap.values()],
+    hsn: [...hsnMap.values()],
+  };
+}
+
+export async function getGstr1WorkingPapers(shopId, query = {}) {
+  return buildGstr1WorkingFromRegister(await getGstInvoiceRegister(shopId, query));
 }
 
 export function gstr1WorkingToCsv(working) {
-  const header = ["Section", "Invoice Number", "Invoice Date", "Buyer GSTIN", "Place of Supply", "HSN", "Description", "Unit", "GST Rate", "Quantity", "Taxable Value", "CGST", "SGST", "IGST", "Post-tax Discount", "Invoice/Total Value"];
+  const header = ["Section", "Document Number", "Document Date", "Buyer GSTIN", "Place of Supply", "Original Invoice Number", "Original Invoice Date", "HSN", "Description", "Unit", "GST Rate", "Quantity", "Taxable Value", "CGST", "SGST", "IGST", "Post-tax Discount", "Invoice/Note Value"];
   const rows = [
-    ...working.b2b.map((row) => ["B2B", row.invoiceNumber, row.invoiceDate, row.buyerGstin, row.placeOfSupply, "", row.customerName, "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
-    ...working.b2cs.map((row) => ["B2CS", "", "", "", row.placeOfSupply, "", "", "", row.gstRate, "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
-    ...working.hsn.map((row) => ["HSN", "", "", "", "", row.hsn, row.description, row.unit, row.gstRate, row.quantity, row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.totalValue]),
+    ...working.b2b.map((row) => ["B2B", row.invoiceNumber, row.invoiceDate, row.buyerGstin, row.placeOfSupply, "", "", "", row.customerName, "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
+    ...working.b2cs.map((row) => ["B2CS", "", "", "", row.placeOfSupply, "", "", "", "", "", row.gstRate, "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
+    ...(working.cdnr ?? []).map((row) => ["CDNR", row.noteNumber, row.noteDate, row.buyerGstin, row.placeOfSupply, row.originalInvoiceNumber, row.originalInvoiceDate, "", row.customerName, "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, "", row.noteValue]),
+    ...(working.cdnur ?? []).map((row) => ["CDNUR", row.noteNumber, row.noteDate, "", row.placeOfSupply, row.originalInvoiceNumber, row.originalInvoiceDate, "", row.customerName, "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, "", row.noteValue]),
+    ...working.hsn.map((row) => ["HSN", "", "", "", "", "", "", row.hsn, row.description, row.unit, row.gstRate, row.quantity, row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.totalValue]),
   ];
   return [header.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\r\n");
 }
@@ -248,7 +310,7 @@ function canonicalPayload(bill, shop) {
   return {
     schemaVersion: "kiranaos-gst-sandbox-v1",
     seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
-    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
+    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, documentType: bill.billType === "sales_return" ? "credit_note" : "invoice", documentTypeCode: bill.billType === "sales_return" ? "CRN" : "INV", originalInvoiceId: bill.returnOfBillId ?? null, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
     items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
   };
 }

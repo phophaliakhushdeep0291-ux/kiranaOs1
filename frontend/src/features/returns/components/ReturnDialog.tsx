@@ -54,6 +54,9 @@ export interface ReturnLineInput {
   costPerRateUnit?: number;
   originalUnitPrice?: number;
   gstRate?: number;
+  hsn?: string;
+  lineDiscount?: number;
+  soldLineTotal?: number;
 }
 
 interface ReturnDialogProps {
@@ -88,8 +91,15 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
 
   const getQty = (i: number) => (qty[i] ?? 0);
   const refundTotal = useMemo(
-    () => round2(lines.reduce((sum, line, i) => sum + getQty(i) * Number(line.ratePerRateUnit || 0), 0)),
-    [lines, qty],
+    () => round2(lines.reduce((sum, line, i) => {
+      const returnQty = getQty(i);
+      const fraction = line.soldQty > 0 ? returnQty / line.soldQty : 1;
+      const soldNet = typeof line.soldLineTotal === "number" && Number.isFinite(line.soldLineTotal) ? Math.abs(line.soldLineTotal) : Math.max(0, line.soldQty * Number(line.ratePerRateUnit || 0) - Number(line.lineDiscount || 0));
+      const net = round2(soldNet * fraction);
+      const tax = gstMode === "exclusive" ? round2(net * Number(line.gstRate ?? 0) / 100) : 0;
+      return sum + net + tax;
+    }, 0)),
+    [gstMode, lines, qty],
   );
   const hasCustomer = Boolean(customerId);
   const selectedCount = lines.filter((_, i) => getQty(i) > 0).length;
@@ -156,6 +166,8 @@ export function ReturnDialog({ open, onOpenChange, lines, customerId, customerNa
         costPerRateUnit: line.costPerRateUnit,
         originalUnitPrice: line.originalUnitPrice,
         gstRate: line.gstRate ?? 0,
+        hsn: line.hsn,
+        lineDiscount: line.soldQty > 0 ? round2(Number(line.lineDiscount ?? 0) * returnQty / line.soldQty) : 0,
         damaged: isDamaged,
       }));
     if (items.length === 0) {

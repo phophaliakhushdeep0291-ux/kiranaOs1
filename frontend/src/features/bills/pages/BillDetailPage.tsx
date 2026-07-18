@@ -176,6 +176,9 @@ export default function BillDetailPage() {
     costPerRateUnit: readNumber(item.costPerRateUnit ?? item.cost_per_rate_unit, 0) || undefined,
     originalUnitPrice: readNumber(item.originalUnitPrice ?? item.original_unit_price, 0) || undefined,
     gstRate: readNumber(item.gstRate ?? item.gst_rate, 0),
+    hsn: String(item.hsn ?? "") || undefined,
+    lineDiscount: readNumber(item.lineDiscount ?? item.line_discount, 0),
+    soldLineTotal: Math.abs(readNumber(item.lineTotal ?? item.line_total, 0)),
   })), [visibleItems]);
 
   function printBill() {

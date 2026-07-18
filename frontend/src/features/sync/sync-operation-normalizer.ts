@@ -88,9 +88,9 @@ function normaliseStockPayload(
       productId: payload.productId ?? payload.product_id,
       localProductId: payload.localProductId ?? payload.local_product_id,
       quantity: isDamage
-        ? Math.abs(readNumber(payload.quantity ?? quantityDelta, quantityDelta))
+        ? Math.abs(readNumber(payload.syncQuantityBase ?? payload.quantityBase ?? payload.quantity ?? quantityDelta, quantityDelta))
         : payload.quantity,
-      enteredUnit: payload.enteredUnit ?? payload.unit,
+      enteredUnit: payload.syncEnteredUnit ?? payload.enteredUnit ?? payload.unit,
       newStockBaseQty: isDamage
         ? payload.newStockBaseQty
         : readNumber(payload.newStockBaseQty ?? stockAfter, readNumber(stockAfter, 0)),
@@ -107,8 +107,8 @@ function normaliseStockPayload(
       ...purchaseFields,
       productId: payload.productId ?? payload.product_id,
       localProductId: payload.localProductId ?? payload.local_product_id,
-      quantity: Math.abs(readNumber(payload.quantity ?? payload.quantityDelta ?? payload.quantity_delta, 0)),
-      enteredUnit: payload.enteredUnit ?? payload.unit,
+      quantity: Math.abs(readNumber(payload.syncQuantityBase ?? payload.quantityBase ?? payload.quantity ?? payload.quantityDelta ?? payload.quantity_delta, 0)),
+      enteredUnit: payload.syncEnteredUnit ?? payload.enteredUnit ?? payload.unit,
       note: payload.note ?? payload.reason,
     };
   }

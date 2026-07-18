@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { writeFile, mkdtemp } from "node:fs/promises";
+import { writeFile, mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -7,6 +7,7 @@ const FRONTEND_URL = process.env.QA_FRONTEND_URL || "http://localhost:5173";
 const API_URL = process.env.QA_API_URL || "http://localhost:3000/api";
 const CHROME_PATH = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const DEBUG_PORT = Number(process.env.QA_DEBUG_PORT || 9452);
+const OUTPUT_DIR = path.resolve(process.env.QA_OUTPUT_DIR || ".");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class CdpClient {
@@ -109,7 +110,8 @@ async function capture(client, file, width, height) {
     fromSurface: true,
     captureBeyondViewport: false,
   });
-  await writeFile(path.resolve(file), Buffer.from(image.data, "base64"));
+  await mkdir(OUTPUT_DIR, { recursive: true });
+  await writeFile(path.join(OUTPUT_DIR, file), Buffer.from(image.data, "base64"));
   return metrics;
 }
 

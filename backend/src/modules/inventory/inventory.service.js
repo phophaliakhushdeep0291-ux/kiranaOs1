@@ -64,6 +64,7 @@ export async function getInventory(shopId, requestedLocationId = null) {
   const products = await db.product.findMany({
     where: { shopId, deletedAt: null },
     orderBy: { name: "asc" },
+    include: { sellingUnits: { where: { isActive: true }, orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
   });
   return Promise.all(products.map(async (p) => {
     const stockBaseQty = await getLocationQuantity(db, shopId, location, p);
@@ -71,14 +72,36 @@ export async function getInventory(shopId, requestedLocationId = null) {
       id: p.id,
       name: p.name,
       category: p.category,
+      brand: p.brand,
+      barcode: p.barcode,
+      sku: p.sku,
+      aliases: JSON.parse(p.aliasesJson ?? "[]"),
+      imageUrl: p.imageUrl,
       stockBaseQty,
       locationId: location.id,
       locationName: location.name,
+      unit: p.rateUnit,
       baseUnit: p.baseUnit,
       displayUnit: p.displayUnit,
+      rateUnit: p.rateUnit,
+      sellingUnits: p.sellingUnits,
       costPerRateUnit: p.costPerRateUnit,
+      costPrice: p.costPerRateUnit,
+      averageCostPrice: p.costPerRateUnit,
+      minPricePerRateUnit: p.minPricePerRateUnit,
+      minimumSellingPrice: p.minPricePerRateUnit,
       defaultPricePerRateUnit: p.defaultPricePerRateUnit,
+      sellingPrice: p.defaultPricePerRateUnit,
+      mrp: p.mrp,
+      gstRate: p.gstRate,
+      hsn: p.hsn,
+      reorderLevel: p.reorderLevel,
+      description: p.description,
+      isLooseItem: p.isLooseItem,
+      batchTrackingEnabled: p.batchTrackingEnabled,
       lowStockThreshold: p.lowStockThreshold,
+      stockTrackingEnabled: true,
+      trackStock: true,
       isLowStock: p.lowStockThreshold > 0 && stockBaseQty <= p.lowStockThreshold,
     };
   }));
@@ -157,7 +180,9 @@ export async function recordPurchase(shopId, data, identity = {}) {
     if (!product) throw new AppError("Product not found", 404);
 
     const qtyInBase = toBaseQty(quantity, enteredUnit, product.baseUnit);
-    const factor = rateUnitToBase(product.rateUnit, product.baseUnit);
+    const factor = Number(data.conversionToBase ?? data.conversion_to_base ?? 0) > 0
+      ? Number(data.conversionToBase ?? data.conversion_to_base)
+      : rateUnitToBase(product.rateUnit, product.baseUnit);
     const qtyInRateUnit = qtyInBase / factor;
     const pricePerRateUnit = round2(billAmount / qtyInRateUnit);
     const totalCost = multiplyMoney(pricePerRateUnit, qtyInRateUnit);
@@ -250,7 +275,8 @@ export async function recordPurchase(shopId, data, identity = {}) {
   }
 }
 
-export async function recordDamage(shopId, { productId, quantity, enteredUnit, note, locationId }, identity = {}) {
+export async function recordDamage(shopId, data, identity = {}) {
+  const { productId, quantity, enteredUnit, note, locationId } = data;
   const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
   try {
     return await db.$transaction(async (tx) => {
@@ -266,7 +292,9 @@ export async function recordDamage(shopId, { productId, quantity, enteredUnit, n
       if (!product) throw new AppError("Product not found", 404);
 
       const qtyInBase = toBaseQty(quantity, enteredUnit, product.baseUnit);
-      const factor = rateUnitToBase(product.rateUnit, product.baseUnit);
+      const factor = Number(data.conversionToBase ?? data.conversion_to_base ?? 0) > 0
+        ? Number(data.conversionToBase ?? data.conversion_to_base)
+        : rateUnitToBase(product.rateUnit, product.baseUnit);
       const qtyInRateUnit = qtyInBase / factor;
       const damageLossValue = multiplyMoney(product.costPerRateUnit, qtyInRateUnit);
 

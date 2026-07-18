@@ -5,6 +5,7 @@ import { AppError } from "../../middleware/error.js";
 import { env } from "../../config/env.js";
 import { getReportRangeLimit } from "../feature-gates/featureGate.service.js";
 import { getLocationQuantity, resolveOperationalLocation } from "../stores/location-context.service.js";
+import { validateGstin } from "../../utils/gst.js";
 
 // Estimates (kacha bills) are full sales — stock, tender, udhar — so they count in every
 // sales/cash/P&L report. The one exception is GST: an estimate is not a tax document, so the
@@ -514,33 +515,46 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// GST REPORT — taxable sales + CGST/SGST collected for a period.
-// Counter sales are intra-state, so GST splits evenly into CGST + SGST.
+// GST REPORT — taxable sales + jurisdiction-aware GST collected for a period.
 // Taxable value depends on the bill's gstMode: exclusive bills carry tax on
 // top of the subtotal; inclusive bills carry it inside (taxable = subtotal − gst).
 // ─────────────────────────────────────────────────────────────
 export async function getGstReport(shopId, { range, from, to, locationId } = {}) {
   const { start, end } = getDateRange(range, from, to, env.DAILY_CLOSING_TIMEZONE);
 
-  const bills = await db.bill.findMany({
-    where: { shopId, ...(locationId && { locationId }), ...GST_BILL_FILTER, createdAt: { gte: start, lte: end } },
-    select: { subtotal: true, gst: true, gstMode: true },
-  });
+  const [shop, bills] = await Promise.all([
+    db.shop.findUnique({ where: { id: shopId }, select: { gstNumber: true } }),
+    db.bill.findMany({
+      where: { shopId, ...(locationId && { locationId }), ...GST_BILL_FILTER, createdAt: { gte: start, lte: end } },
+      select: { subtotal: true, gst: true, gstMode: true, buyerStateCode: true },
+    }),
+  ]);
+  const sellerStateCode = validateGstin(shop?.gstNumber).stateCode || "";
 
   let gstCollected = 0;
   let taxableSales = 0;
   let gstBills = 0;
+  let cgst = 0;
+  let sgst = 0;
+  let igst = 0;
   for (const bill of bills) {
     const gst = Number(bill.gst) || 0;
     gstCollected = addMoney(gstCollected, gst);
     const taxable = bill.gstMode === "exclusive"
       ? Number(bill.subtotal) || 0
-      : Math.max(0, subtractMoney(Number(bill.subtotal) || 0, gst));
+      : subtractMoney(Number(bill.subtotal) || 0, gst);
     taxableSales = addMoney(taxableSales, taxable);
-    if (gst > 0) gstBills += 1;
+    if (gst !== 0) gstBills += 1;
+    const buyerStateCode = String(bill.buyerStateCode || "");
+    const interstate = Boolean(sellerStateCode && /^\d{2}$/.test(buyerStateCode) && buyerStateCode !== sellerStateCode);
+    if (interstate) igst = addMoney(igst, gst);
+    else {
+      const central = round2(gst / 2);
+      cgst = addMoney(cgst, central);
+      sgst = addMoney(sgst, subtractMoney(gst, central));
+    }
   }
 
-  const cgst = round2(gstCollected / 2);
   return {
     range: range ?? "custom",
     from: start.toISOString(),
@@ -549,8 +563,9 @@ export async function getGstReport(shopId, { range, from, to, locationId } = {})
     gstBills,
     taxableSales: round2(taxableSales),
     gstCollected: round2(gstCollected),
-    cgst,
-    sgst: round2(subtractMoney(gstCollected, cgst)),
+    cgst: round2(cgst),
+    sgst: round2(sgst),
+    igst: round2(igst),
   };
 }
 

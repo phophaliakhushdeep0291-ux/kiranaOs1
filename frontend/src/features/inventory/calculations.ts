@@ -53,6 +53,8 @@ export type InventoryPriceSuggestionInput = {
   purchaseUnit: string;
   productBaseUnit?: string | null;
   productRateUnit?: string | null;
+  purchaseConversionToBase?: number | null;
+  rateConversionToBase?: number | null;
   purchaseUnitCost?: number | null;
   billAmount?: number | null;
   minMarginPercent?: number | null;
@@ -99,9 +101,23 @@ export function calculateInventoryPriceSuggestions(input: InventoryPriceSuggesti
   const currentStock = Math.max(Number(input.currentStockBaseQty || 0), 0);
   const currentAverageCost = roundInventoryValue(Number(input.currentAverageCost || 0));
   const purchaseQuantity = Math.max(Number(input.purchaseQuantity || 0), 0);
-  const purchaseBaseQty = toInventoryBaseQty(purchaseQuantity, input.purchaseUnit, input.productBaseUnit || input.purchaseUnit);
-  const purchaseQtyInRateUnit = Math.max(fromInventoryBaseQty(purchaseBaseQty, input.productBaseUnit || input.purchaseUnit, input.productRateUnit || input.productBaseUnit || input.purchaseUnit), 0);
-  const currentStockInRateUnit = Math.max(fromInventoryBaseQty(currentStock, input.productBaseUnit || input.productRateUnit || input.purchaseUnit, input.productRateUnit || input.productBaseUnit || input.purchaseUnit), 0);
+  const purchaseConversion = Number(input.purchaseConversionToBase || 0);
+  const rateConversion = Number(input.rateConversionToBase || 0);
+  const purchaseBaseQty = purchaseConversion > 0
+    ? roundInventoryValue(purchaseQuantity * purchaseConversion)
+    : toInventoryBaseQty(purchaseQuantity, input.purchaseUnit, input.productBaseUnit || input.purchaseUnit);
+  const purchaseQtyInRateUnit = Math.max(
+    rateConversion > 0
+      ? roundInventoryValue(purchaseBaseQty / rateConversion)
+      : fromInventoryBaseQty(purchaseBaseQty, input.productBaseUnit || input.purchaseUnit, input.productRateUnit || input.productBaseUnit || input.purchaseUnit),
+    0,
+  );
+  const currentStockInRateUnit = Math.max(
+    rateConversion > 0
+      ? roundInventoryValue(currentStock / rateConversion)
+      : fromInventoryBaseQty(currentStock, input.productBaseUnit || input.productRateUnit || input.purchaseUnit, input.productRateUnit || input.productBaseUnit || input.purchaseUnit),
+    0,
+  );
   const explicitUnitCost = Number(input.purchaseUnitCost || 0);
   const derivedUnitCost = Number(input.billAmount || 0) > 0 && purchaseQtyInRateUnit > 0 ? Number(input.billAmount) / purchaseQtyInRateUnit : 0;
   const purchaseUnitCost = roundInventoryValue(explicitUnitCost || derivedUnitCost);

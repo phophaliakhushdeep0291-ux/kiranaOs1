@@ -75,6 +75,41 @@ describe("packed product selling units", () => {
     ]);
   });
 
+  it("keeps the default selling-unit id only when the pack code is unchanged", () => {
+    const previousDefault: ProductSellingUnit = {
+      id: "unit_default",
+      name: "packet 500 gram",
+      unitType: "packet",
+      unitCode: "packet-500-gram",
+      packSizeValue: 500,
+      packSizeUnit: "gram",
+      conversionToBase: 500,
+      barcode: "PACK-500",
+      defaultPrice: 30,
+      minimumPrice: 25,
+      maximumPrice: 35,
+      costPrice: 24,
+      isDefault: true,
+      isActive: true,
+    };
+
+    const unchanged = formToInput(packedForm({ sellingUnits: [previousDefault] }));
+    expect(unchanged.sellingUnits?.[0]).toEqual(expect.objectContaining({
+      id: "unit_default",
+      unitCode: "packet-500-gram",
+    }));
+
+    const changed = formToInput(packedForm({
+      packSizeValue: 1,
+      packSizeUnit: "kg",
+      sellingUnits: [previousDefault],
+    }));
+    expect(changed.sellingUnits?.[0]).toEqual(expect.objectContaining({
+      unitCode: "packet-1-kg",
+    }));
+    expect(changed.sellingUnits?.[0].id).toBeUndefined();
+  });
+
   it("uses product plus selling unit as the cart identity", () => {
     const product = { id: "product_atta", name: "Test Atta", defaultPricePerRateUnit: 30 } as Product;
     const pack500 = { name: "packet 500 gram", unitType: "packet", unitCode: "packet-500-gram", conversionToBase: 500, defaultPrice: 30, isDefault: true, isActive: true } as ProductSellingUnit;

@@ -27,11 +27,13 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Tag,
   Trash2,
   Upload,
   XCircle,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { openLabelPrintWindow } from "@/features/products/label-print";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -289,6 +291,12 @@ export default function ProductsPage() {
     setOpen(true);
   };
 
+  const printLabel = (product: Product) => {
+    if (!openLabelPrintWindow([product])) {
+      toast({ title: "Pop-up blocked", description: "Allow pop-ups for this site to print price labels.", variant: "destructive" });
+    }
+  };
+
   function submitValues(values: ProductFormData, ownerPin?: string, reason?: string) {
     const input = formToInput(values, ownerPin, reason);
     if (editing) {
@@ -418,6 +426,7 @@ export default function ProductsPage() {
                     <DropdownMenuContent align="end" className="w-44">
                       <DropdownMenuItem onClick={() => openEdit(product)}><Pencil size={14} className="mr-2" /> Edit product</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setLocation(`/products/${product.id}/pricing`)}><Layers size={14} className="mr-2" /> Customer pricing</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => printLabel(product)}><Tag size={14} className="mr-2" /> Print label</DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(product)}><Trash2 size={14} className="mr-2" /> Recycle product</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -520,6 +529,9 @@ export default function ProductsPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setLocation(`/products/${product.id}/pricing`)}>
                               <Layers size={14} className="mr-2" /> Pricing
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => printLabel(product)}>
+                              <Tag size={14} className="mr-2" /> Print label
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive focus:text-destructive"
