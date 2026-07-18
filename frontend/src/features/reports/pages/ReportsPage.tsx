@@ -592,6 +592,11 @@ export default function ReportsPage() {
           {snapshot?.topCustomers.length ? <tr className="font-bold"><Td>Total Outstanding</Td><Td right>{fmt(snapshot.topCustomers.reduce((sum, row) => sum + row.balance, 0))}</Td><Td /><Td /></tr> : null}
         </DenseTable>
 
+        <DenseTable title="Sales by Staff" action="Manage staff" actionHref="/staff" headers={["Staff", "Bills", "Sales (₹)", "Avg bill (₹)"]} loading={loading} empty={!snapshot?.staffSales.length}>
+          {snapshot?.staffSales.slice(0, 5).map((row) => <tr key={row.staffId}><Td strong>{row.staffName}</Td><Td right>{row.bills}</Td><Td right strong>{fmt(row.sales)}</Td><Td right>{fmt(row.bills > 0 ? row.sales / row.bills : 0)}</Td></tr>)}
+          {snapshot?.staffSales.length ? <tr className="font-bold"><Td>Total</Td><Td right>{snapshot.staffSales.reduce((sum, row) => sum + row.bills, 0)}</Td><Td right>{fmt(snapshot.staffSales.reduce((sum, row) => sum + row.sales, 0))}</Td><Td /></tr> : null}
+        </DenseTable>
+
         <DenseTable title="Discounts Given" action="View bills" actionHref="/bills" headers={["Bill", "Date", "Discount (₹)", "Reason"]} loading={loading} empty={!snapshot?.discounts.recent.length}>
           {snapshot?.discounts.recent.slice(0, 5).map((row) => <tr key={row.billId}><Td strong>{row.billNo}</Td><Td>{row.at ? dateLabel(row.at.slice(0, 10)) : "—"}</Td><Td right strong>{fmt(row.amount)}</Td><Td>{row.reason ?? "—"}</Td></tr>)}
           {snapshot && snapshot.discounts.total > 0 ? <tr className="font-bold"><Td>Total ({snapshot.discounts.discountedBillCount} bills)</Td><Td /><Td right>{fmt(snapshot.discounts.total)}</Td><Td>{[snapshot.discounts.manual > 0 ? `manual ${fmt(snapshot.discounts.manual)}` : null, snapshot.discounts.coupon > 0 ? `coupon ${fmt(snapshot.discounts.coupon)}` : null, snapshot.discounts.loyalty > 0 ? `loyalty ${fmt(snapshot.discounts.loyalty)}` : null, snapshot.discounts.line > 0 ? `line ${fmt(snapshot.discounts.line)}` : null].filter(Boolean).join(" · ") || "—"}</Td></tr> : null}

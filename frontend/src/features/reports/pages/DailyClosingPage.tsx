@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buildDailyClosingReport, toDateInputValue, type DailyClosingReport } from "@/features/reports/local-reporting";
+import { buildDrawerCount, loadDrawerCounts, saveDrawerCount, type DrawerCount } from "@/features/reports/drawer-counts";
 import { shareDailyClosingOnWhatsapp } from "@/features/reports/daily-summary-share";
 import { useAuth } from "@/features/auth/useAuth";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
@@ -61,6 +62,9 @@ export default function DailyClosingPage() {
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [report, setReport] = useState<DailyClosingReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [drawerCounts, setDrawerCounts] = useState<DrawerCount[]>([]);
+  const [countedDraft, setCountedDraft] = useState("");
+  const [savingCount, setSavingCount] = useState(false);
   const reportRef = useRef<DailyClosingReport | null>(null);
   const refreshTimer = useRef<number | null>(null);
 
@@ -95,6 +99,34 @@ export default function DailyClosingPage() {
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
   }, [load]);
+
+  useEffect(() => {
+    void loadDrawerCounts().then(setDrawerCounts);
+  }, []);
+
+  // Prefill the count input when switching to a date that was already counted.
+  useEffect(() => {
+    const existing = drawerCounts.find((row) => row.date === date);
+    setCountedDraft(existing ? String(existing.countedCash) : "");
+    // Only re-prime when the date changes — typing must not be overwritten.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
+  const savedCountForDate = drawerCounts.find((row) => row.date === date);
+  const countedValue = Number(countedDraft);
+  const liveVariance = countedDraft.trim() !== "" && Number.isFinite(countedValue) && report
+    ? Math.round((countedValue - report.expectedCashInDrawer) * 100) / 100
+    : null;
+
+  async function saveDrawerCountForDate() {
+    if (!report || countedDraft.trim() === "" || !Number.isFinite(countedValue) || countedValue < 0) return;
+    setSavingCount(true);
+    try {
+      setDrawerCounts(await saveDrawerCount(buildDrawerCount(date, report.expectedCashInDrawer, countedValue)));
+    } finally {
+      setSavingCount(false);
+    }
+  }
 
   const totalIncomingTender = (report?.cashReceived ?? 0) + (report?.upiReceived ?? 0) + (report?.bankReceived ?? 0);
   const cashPct = totalIncomingTender > 0 ? Math.round(((report?.cashReceived ?? 0) / totalIncomingTender) * 100) : 0;
@@ -220,6 +252,58 @@ export default function DailyClosingPage() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Drawer count: what's ACTUALLY in the drawer vs expected ───────── */}
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <div className="border-b px-5 py-3 sm:px-6">
+          <p className="app-muted-label">Count the drawer — over / short</p>
+        </div>
+        <div className="grid gap-4 p-5 sm:p-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div>
+            <Label className="app-muted-label" htmlFor="counted-cash">Counted cash for {date}</Label>
+            <div className="mt-1.5 flex gap-2">
+              <Input
+                id="counted-cash"
+                data-testid="input-counted-cash"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                placeholder="What is physically in the drawer?"
+                value={countedDraft}
+                onChange={(event) => setCountedDraft(event.target.value)}
+                className="h-10 rounded-xl"
+              />
+              <Button data-testid="button-save-drawer-count" onClick={() => void saveDrawerCountForDate()} disabled={savingCount || !report || countedDraft.trim() === ""} className="rounded-xl">
+                {savingCount ? "Saving..." : savedCountForDate ? "Update" : "Save"}
+              </Button>
+            </div>
+            {liveVariance !== null && (
+              <p className={cn("mt-2 text-sm font-bold", liveVariance === 0 ? "text-emerald-700" : liveVariance > 0 ? "text-sky-700" : "text-red-600")} data-testid="text-drawer-variance">
+                {liveVariance === 0 ? "Drawer matches expected — perfect close." : liveVariance > 0 ? `Over by ${fmt(liveVariance)} vs expected ${fmt(report?.expectedCashInDrawer)}.` : `Short by ${fmt(Math.abs(liveVariance))} vs expected ${fmt(report?.expectedCashInDrawer)}.`}
+              </p>
+            )}
+            <p className="mt-2 text-xs text-muted-foreground">Saved on this device and kept for 90 days — repeated shorts on the same weekday are worth investigating.</p>
+          </div>
+          <div>
+            <p className="app-muted-label">Over / short history</p>
+            {drawerCounts.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">No drawer counts saved yet. Count tonight's drawer to start the history.</p>
+            ) : (
+              <ul className="mt-2 divide-y" data-testid="drawer-count-history">
+                {drawerCounts.slice(0, 7).map((row) => (
+                  <li key={row.date} className="flex items-center justify-between gap-3 py-2 text-sm">
+                    <span className="font-semibold">{new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</span>
+                    <span className="text-xs text-muted-foreground">counted {fmt(row.countedCash)} / expected {fmt(row.expectedCash)}</span>
+                    <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-black", row.variance === 0 ? "bg-emerald-50 text-emerald-700" : row.variance > 0 ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-600")}>
+                      {row.variance === 0 ? "Exact" : row.variance > 0 ? `+${fmt(row.variance)}` : `−${fmt(Math.abs(row.variance))}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>

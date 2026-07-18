@@ -61,13 +61,17 @@ the codebase, not assumed.
 
 ## Tier 3 — Staff & analytics
 
-- [ ] **Per-cashier attribution everywhere** — staff on every bill/return;
-      sales-by-staff report (verify depth; staff module exists).
+- [x] **Per-cashier attribution** — bills already carry createdByUserId
+      (server-side attribution, Phase 12); the computed sales-by-staff data
+      is now RENDERED as a "Sales by Staff" report table (bills, sales, avg
+      bill per cashier). *(done 2026-07-19)*
 - [x] **Analytics upgrade** — "Sales by Hour" chart + Busy Hours insight
       (peak/quiet hour callouts) in Reports, computed offline from local
       bills *(done 2026-07-18)*; top products already report margin %.
-- [ ] **Register-session over/short history** — daily close variance log with
-      trend, not just today's close.
+- [x] **Register over/short history** — Daily Closing gained "Count the
+      drawer": type the physically counted cash, get an instant over/short
+      verdict vs expected, and a 90-day per-date variance history (offline,
+      device-local). *(done 2026-07-19)*
 
 ## Tier 4 — Customer & receipts
 
@@ -78,8 +82,9 @@ the codebase, not assumed.
 - [x] **Receipt customization** — already existed (re-audit 2026-07-18):
       printer settings cover logo, footer text, copies, paper size, and a
       dozen show/hide content toggles (`printer-config.ts`).
-- [ ] **Email receipts** — in addition to WhatsApp/print (needs SMTP creds —
-      may stay blocked on integration credentials).
+- [ ] **Email receipts** — BLOCKED: needs SMTP/provider credentials only the
+      owner can supply (Settings → Integrations). Everything else on this
+      roadmap is done; revisit when credentials exist.
 
 ## Explicitly out of scope
 
@@ -99,3 +104,4 @@ the codebase, not assumed.
 | 2026-07-18 | Customer activity timeline (unified feed on customer page) | feat(customers): activity timeline |
 | 2026-07-18 | Discount reasons + Discounts Given report — Tier 1 complete | feat(billing): discount reasons + report |
 | 2026-07-18 | Re-audit: stocktake/adjustments/reorder/receipt-custom already exist; Sales by Hour shipped | feat(reports): sales by hour |
+| 2026-07-19 | Sales by Staff table + drawer count over/short history — ROADMAP COMPLETE (email receipts blocked on creds) | feat(reports): staff sales + drawer counts |
