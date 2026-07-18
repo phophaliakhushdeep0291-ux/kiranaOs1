@@ -58,6 +58,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
       rate: item.rate,
       total: cartItemNet(item),
       lineDiscount: cartItemLineDiscount(item),
+      note: item.note ?? null,
       hsn: item.product.hsn ?? null,
     })),
     subtotal: bill.subtotal,

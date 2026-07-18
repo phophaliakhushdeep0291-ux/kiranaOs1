@@ -418,6 +418,8 @@ export interface BillInputItem {
   ratePerRateUnit: number;
   /** Flat rupee discount applied to the whole line (not per unit). */
   lineDiscount?: number;
+  /** Free-text callout for this line ("no bag", weight callout) — printed on the receipt. */
+  note?: string;
   originalUnitPrice?: number;
   appliedPricingRuleId?: string;
   appliedPricingRuleType?: string;

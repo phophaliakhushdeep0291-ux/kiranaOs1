@@ -34,8 +34,9 @@ the codebase, not assumed.
       same tender so the drawer nets to the difference (offline-capable, no
       schema change). Both entry points (standalone return + bill detail)
       inherit it. *(done 2026-07-17)*
-- [ ] **Line-item notes** — per-line note (e.g. "no bag", weight callout)
-      stored on the bill item and printed on the receipt.
+- [x] **Line-item notes** — per-line note chip in the cart ("no bag"), stored
+      on BillItem (both schemas + migrations), flows through offline path and
+      sync, printed under the item on receipts. *(done 2026-07-18)*
 - [ ] **Discount reasons + report** — optional reason chip on cart/line
       discounts; discounts-given report by staff/day.
 
@@ -81,3 +82,4 @@ the codebase, not assumed.
 |---|---|---|
 | 2026-07-17 | Roadmap created; per-line discounts shipped full-stack | feat(billing): per-line discounts |
 | 2026-07-17 | Exchanges shipped in ReturnDialog; live browser QA of discounts + exchange | feat(returns): exchange flow |
+| 2026-07-18 | Line-item notes shipped full-stack (cart chip → receipt) | feat(billing): line-item notes |

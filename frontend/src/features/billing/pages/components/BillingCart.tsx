@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BadgePercent, Loader2, Pencil, Scale, ShoppingCart, X } from "lucide-react";
+import { BadgePercent, Loader2, Pencil, Scale, ShoppingCart, StickyNote, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cartItemGross, cartItemLineDiscount, cartItemNet, productMinSellingPrice, roundMoney } from "../billing-calculations";
 import { cartItemKey, type CartItem } from "../billing-types";
@@ -12,12 +12,13 @@ interface BillingCartProps {
   onUpdateRate: (lineKey: string, nextRate: number) => void;
   onUpdateUnit: (lineKey: string, unit: string) => void;
   onUpdateLineDiscount: (lineKey: string, amount: number) => void;
+  onUpdateLineNote: (lineKey: string, note: string) => void;
   onReadScale: (lineKey: string, billingUnit: string) => void;
   scaleReadingLineKey: string | null;
   onRemoveItem: (lineKey: string) => void;
 }
 
-export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onUpdateLineDiscount, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
+export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onUpdateLineDiscount, onUpdateLineNote, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
@@ -42,6 +43,7 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onU
           onUpdateRate={onUpdateRate}
           onUpdateUnit={onUpdateUnit}
           onUpdateLineDiscount={onUpdateLineDiscount}
+          onUpdateLineNote={onUpdateLineNote}
           onReadScale={onReadScale}
           scaleReading={scaleReadingLineKey === cartItemKey(item)}
           onRemoveItem={onRemoveItem}
@@ -57,6 +59,7 @@ function CartRow({
   onUpdateRate,
   onUpdateUnit,
   onUpdateLineDiscount,
+  onUpdateLineNote,
   onReadScale,
   scaleReading,
   onRemoveItem,
@@ -66,6 +69,7 @@ function CartRow({
   onUpdateRate: (id: string, rate: number) => void;
   onUpdateUnit: (id: string, unitCode: string) => void;
   onUpdateLineDiscount: (id: string, amount: number) => void;
+  onUpdateLineNote: (id: string, note: string) => void;
   onReadScale: (id: string, billingUnit: string) => void;
   scaleReading: boolean;
   onRemoveItem: (id: string) => void;
@@ -76,6 +80,9 @@ function CartRow({
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [discountDraft, setDiscountDraft] = useState<string>("");
   const discountInputRef = useRef<HTMLInputElement | null>(null);
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState<string>("");
+  const noteInputRef = useRef<HTMLInputElement | null>(null);
   const lineGross = cartItemGross(item);
   const lineDiscount = cartItemLineDiscount(item);
   const lineTotal = cartItemNet(item);
@@ -144,6 +151,23 @@ function CartRow({
       discountInputRef.current?.select();
     }
   }, [editingDiscount]);
+
+  function startEditNote() {
+    setNoteDraft(item.note ?? "");
+    setEditingNote(true);
+  }
+
+  function commitNote() {
+    onUpdateLineNote(lineKey, noteDraft);
+    setEditingNote(false);
+  }
+
+  useEffect(() => {
+    if (editingNote) {
+      noteInputRef.current?.focus();
+      noteInputRef.current?.select();
+    }
+  }, [editingNote]);
 
   return (
     <div
@@ -264,6 +288,46 @@ function CartRow({
           >
             <BadgePercent size={10} aria-hidden="true" />
             Line off
+          </button>
+        )}
+        {editingNote ? (
+          <div className="mt-1 inline-flex h-[26px] w-full max-w-[220px] items-center gap-1 rounded-[7px] border border-[#0057ff] bg-white px-1.5 shadow-sm ring-2 ring-[#0057ff]/15">
+            <StickyNote size={11} className="shrink-0 text-[#8290a8]" aria-hidden="true" />
+            <input
+              ref={noteInputRef}
+              data-testid={`line-note-input-${item.product.id}`}
+              type="text"
+              maxLength={200}
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              onBlur={commitNote}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); commitNote(); }
+                if (e.key === "Escape") { setEditingNote(false); }
+              }}
+              placeholder="e.g. no bag"
+              className="w-full border-0 bg-transparent p-0 text-[11px] font-semibold text-[#13274d] focus:outline-none"
+            />
+          </div>
+        ) : item.note ? (
+          <button
+            data-testid={`line-note-edit-${item.product.id}`}
+            onClick={startEditNote}
+            className="mt-1 inline-flex max-w-full items-center gap-1 rounded-[6px] bg-[#fff8e6] px-1.5 py-[2px] text-left text-[10px] font-bold leading-none text-[#9a6b00] transition-colors hover:bg-[#fdf0cf]"
+            title="Tap to edit this line's note"
+          >
+            <StickyNote size={10} className="shrink-0" aria-hidden="true" />
+            <span className="truncate">{item.note}</span>
+          </button>
+        ) : (
+          <button
+            data-testid={`line-note-add-${item.product.id}`}
+            onClick={startEditNote}
+            className="group ml-1 mt-1 inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[10px] font-bold leading-none text-[#9aa7bd] transition-colors hover:bg-[#eef4ff] hover:text-[#0057ff]"
+            title="Add a note for this line (prints on the receipt)"
+          >
+            <StickyNote size={10} aria-hidden="true" />
+            Note
           </button>
         )}
         {/* Smart Pricing explanation — why this rate (only when a rule beat the default). */}

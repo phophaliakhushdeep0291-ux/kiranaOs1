@@ -10,6 +10,8 @@ export interface CartItem {
   manualRate?: boolean;
   /** Flat rupee discount for this whole line (not per unit). */
   lineDiscount?: number;
+  /** Free-text callout for this line ("no bag", weight callout) — printed on the receipt. */
+  note?: string;
   /** Smart Adaptive Pricing — why this rate was chosen (for the cart chip). */
   pricing?: LinePricingMeta;
 }

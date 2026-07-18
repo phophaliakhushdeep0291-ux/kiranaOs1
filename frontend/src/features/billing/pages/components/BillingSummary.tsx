@@ -104,6 +104,7 @@ interface BillingSummaryProps {
   onUpdateRate: (productId: string, rate: number) => void;
   onUpdateUnit: (productId: string, unit: string) => void;
   onUpdateLineDiscount: (lineKey: string, amount: number) => void;
+  onUpdateLineNote: (lineKey: string, note: string) => void;
   onReadScale: (lineKey: string, billingUnit: string) => void;
   scaleReadingLineKey: string | null;
   onRemoveItem: (productId: string) => void;
@@ -202,6 +203,7 @@ export function BillingSummary({
   onUpdateRate,
   onUpdateUnit,
   onUpdateLineDiscount,
+  onUpdateLineNote,
   onReadScale,
   scaleReadingLineKey,
   onRemoveItem,
@@ -444,6 +446,7 @@ export function BillingSummary({
               onUpdateRate={onUpdateRate}
               onUpdateUnit={onUpdateUnit}
               onUpdateLineDiscount={onUpdateLineDiscount}
+              onUpdateLineNote={onUpdateLineNote}
               onReadScale={onReadScale}
               scaleReadingLineKey={scaleReadingLineKey}
               onRemoveItem={onRemoveItem}

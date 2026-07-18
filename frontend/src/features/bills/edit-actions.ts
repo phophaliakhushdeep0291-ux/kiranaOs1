@@ -54,6 +54,7 @@ export function billItemsToInput(itemRows: AnyRow[]): BillInputItem[] {
       enteredUnit: str(row.enteredUnit ?? row.entered_unit ?? row.unit) || "piece",
       ratePerRateUnit: readNumber(row.ratePerRateUnit ?? row.rate_per_rate_unit ?? row.rate, 0),
       lineDiscount: readNumber(row.lineDiscount ?? row.line_discount, 0) || undefined,
+      note: str(row.note) || undefined,
       originalUnitPrice: readNumber(row.originalUnitPrice ?? row.original_unit_price, 0) || undefined,
       appliedPricingRuleId: str(row.appliedPricingRuleId ?? row.applied_pricing_rule_id) || undefined,
       appliedPricingRuleType: str(row.appliedPricingRuleType ?? row.applied_pricing_rule_type) || undefined,

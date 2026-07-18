@@ -211,6 +211,7 @@ function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode
       rate_per_rate_unit: item.ratePerRateUnit,
       lineDiscount,
       line_discount: lineDiscount,
+      note: item.note ?? null,
       originalUnitPrice: item.originalUnitPrice ?? item.ratePerRateUnit,
       original_unit_price: item.originalUnitPrice ?? item.ratePerRateUnit,
       appliedPricingRuleId: item.appliedPricingRuleId ?? null,

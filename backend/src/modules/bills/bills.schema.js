@@ -14,6 +14,8 @@ const billItemSchema = z.object({
   // Flat rupee discount applied to this whole line (not per unit). GST is
   // computed on the discounted line total (discount reduces taxable value).
   lineDiscount: moneyAmount().default(0),
+  // Free-text callout for this line ("no bag", weight callout) — printed on the receipt.
+  note: z.string().trim().max(200).optional(),
   originalUnitPrice: moneyAmount().optional(),
   appliedPricingRuleId: z.string().optional(),
   appliedPricingRuleType: z.string().optional(),

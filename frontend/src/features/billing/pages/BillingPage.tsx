@@ -962,6 +962,14 @@ export default function Billing() {
     }));
   }
 
+  function updateLineNote(lineKey: string, nextNote: string) {
+    setCart((previous) => previous.map((item) => {
+      if (cartItemKey(item) !== lineKey) return item;
+      const trimmed = nextNote.trim().slice(0, 200);
+      return { ...item, note: trimmed || undefined };
+    }));
+  }
+
   function updateUnit(lineKey: string, unitCode: string) {
     setCart((previous) => {
       const current = previous.find((item) => cartItemKey(item) === lineKey);
@@ -1233,6 +1241,7 @@ export default function Billing() {
           enteredUnit: item.unit,
           ratePerRateUnit: item.rate,
           lineDiscount: cartItemLineDiscount(item),
+          note: item.note?.trim() || undefined,
           originalUnitPrice: item.pricing?.originalUnitPrice,
           appliedPricingRuleId: item.pricing?.appliedRuleId ?? undefined,
           appliedPricingRuleType: item.pricing?.appliedRuleType,
@@ -1613,6 +1622,7 @@ export default function Billing() {
         onUpdateRate={updateRate}
         onUpdateUnit={updateUnit}
         onUpdateLineDiscount={updateLineDiscount}
+        onUpdateLineNote={updateLineNote}
         onReadScale={(lineKey, billingUnit) => void readCartLineFromScale(lineKey, billingUnit)}
         scaleReadingLineKey={scaleReadingLineKey}
         onRemoveItem={removeItem}
