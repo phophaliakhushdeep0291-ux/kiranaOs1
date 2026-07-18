@@ -109,7 +109,7 @@ export const saleReturnSchema = z.object({
   customerName: z.string().trim().min(1).max(160).optional(),
   returnOfBillId: z.string().min(1).optional(),
   reason: z.string().trim().min(3).max(500),
-  items: z.array(billItemSchema.extend({ damaged: z.boolean().default(false) })).min(1, "At least one item required"),
+  items: z.array(billItemSchema.extend({ originalBillItemId: z.string().min(1).optional(), damaged: z.boolean().default(false) })).min(1, "At least one item required"),
   localBillId: z.string().min(1).optional(),
   clientBillId: z.string().min(1).optional(),
   idempotencyKey: z.string().min(1).optional(),

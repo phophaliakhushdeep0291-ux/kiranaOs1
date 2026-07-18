@@ -3,4 +3,10 @@ ALTER TABLE "BillItem" ADD COLUMN "originalBillItemId" TEXT;
 ALTER TABLE "BillCounter" ADD COLUMN "returnLastNumber" INTEGER NOT NULL DEFAULT 0;
 
 -- Best-effort history bootstrap. Future invoices capture HSN when the bill is
--- created so later product edits cannot rewrite an 
+-- created so later product edits cannot rewrite an old tax document.
+UPDATE "BillItem" AS bill_item
+SET "hsn" = product."hsn"
+FROM "Product" AS product
+WHERE product."id" = bill_item."productId";
+
+CREATE INDEX "BillItem_originalBillItemId_idx" ON "BillItem"("originalBillItemId");

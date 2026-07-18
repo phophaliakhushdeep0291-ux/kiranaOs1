@@ -263,6 +263,7 @@ model BillCounter {
   shopId             String   @unique
   lastNumber         Int      @default(0)
   estimateLastNumber Int      @default(0)
+  returnLastNumber   Int      @default(0)
   updatedAt          DateTime @updatedAt
 
   shop Shop @relation(fields: [shopId], references: [id])
@@ -551,6 +552,7 @@ model BillItem {
   costPerRateUnitPaise      BigInt?
   gstRate                   Float   @default(0)
   hsn                       String?
+  originalBillItemId        String?
   note                      String?
   lineDiscount              Float   @default(0)
   lineDiscountPaise         BigInt?
@@ -577,6 +579,7 @@ model BillItem {
   lotAllocations BillItemLotAllocation[]
 
   @@index([billId])
+  @@index([originalBillItemId])
 }
 
 // ─────────────────────────────────────────────
