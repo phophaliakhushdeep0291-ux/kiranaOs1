@@ -158,11 +158,18 @@ describe("stock adjustment transaction safety", () => {
     }));
   });
 
-  it("damage decreases stock and requires a reason", async () => {
-    await expect(recordDamageLocalFirst({ productId: "product_1", quantity: 1, unit: "kg" })).rejects.toThrow(/reason/i);
+  it("damage requires owner PIN and a reason before any stock write", async () => {
+    // No PIN → rejected before any stock write. The server sync handler requires
+    // an owner PIN for damage; without this guard the movement saved locally but
+    // its STOCK_DAMAGE sync op failed forever ("Owner PIN required"), diverging
+    // local stock from the server.
+    await expect(recordDamageLocalFirst({ productId: "product_1", quantity: 1, unit: "kg", reason: "Packet damaged" })).rejects.toThrow(/Owner PIN/i);
+    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
+    // PIN present but no reason → still rejected.
+    await expect(recordDamageLocalFirst({ productId: "product_1", quantity: 1, unit: "kg", ownerPin: "1234" })).rejects.toThrow(/reason/i);
     expect(tableRows("inventory_movements")).toHaveLength(0);
 
-    const result = await recordDamageLocalFirst({ productId: "product_1", quantity: 3, unit: "kg", reason: "Packet damaged" });
+    const result = await recordDamageLocalFirst({ productId: "product_1", quantity: 3, unit: "kg", reason: "Packet damaged", ownerPin: "1234" });
 
     expect(result.success).toBe(true);
     expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 7 }));
@@ -247,13 +254,13 @@ describe("inventory reliability business rules", () => {
   });
 
   it("enforces negative stock policy unless an explicit override is present, and stores a clear warning when overridden", async () => {
-    await expect(recordDamageLocalFirst({ productId: "product_1", quantity: 11, unit: "kg", reason: "Leaked bag" })).rejects.toThrow(/Negative stock is not allowed/i);
+    await expect(recordDamageLocalFirst({ productId: "product_1", quantity: 11, unit: "kg", reason: "Leaked bag", ownerPin: "1234" })).rejects.toThrow(/Negative stock is not allowed/i);
     expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 10 }));
     expect(tableRows("inventory_movements")).toHaveLength(0);
 
     dbState.committed.products = [{ ...productRow, allowNegativeStock: true }];
 
-    await recordDamageLocalFirst({ productId: "product_1", quantity: 12, unit: "kg", reason: "Owner approved shortage", allowNegativeStock: true });
+    await recordDamageLocalFirst({ productId: "product_1", quantity: 12, unit: "kg", reason: "Owner approved shortage", allowNegativeStock: true, ownerPin: "1234" });
 
     expect(tableRows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: -2 }));
     expect(tableRows("inventory_movements")).toEqual(expect.arrayContaining([

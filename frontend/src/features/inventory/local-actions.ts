@@ -64,8 +64,11 @@ function assertStockMovementRules(input: {
 }) {
   if (!input.product) throw new Error("Product not found in local records");
 
-  if (input.movementType === "correction" && !input.ownerPin?.trim()) {
-    throw new Error("Owner PIN is required for stock correction");
+  // The server sync handler requires an owner PIN for BOTH correction and damage
+  // stock adjustments. Enforce it locally too, so we never persist a movement whose
+  // sync op the server will reject forever ("Owner PIN required for this synced action").
+  if ((input.movementType === "correction" || input.movementType === "damage") && !input.ownerPin?.trim()) {
+    throw new Error(`Owner PIN is required for stock ${input.movementType === "damage" ? "damage write-off" : "correction"}`);
   }
 
   if (input.movementType === "damage" && !input.reason?.trim()) {

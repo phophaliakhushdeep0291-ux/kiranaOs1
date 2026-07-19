@@ -542,7 +542,11 @@ export default function InventoryPage() {
       toast({ title: "Permission denied", description: manageInventory.reason, variant: "destructive" });
       return;
     }
-    if (form.movementType === "correction") {
+    // Damage and correction both adjust stock outside a sale — the server sync
+    // handler requires an owner PIN for both, so collect it here. Without this a
+    // damage write-off saves locally but its sync op fails forever ("Owner PIN
+    // required"), diverging local stock from the server.
+    if (form.movementType === "correction" || form.movementType === "damage") {
       setOwnerPinOpen(true);
       return;
     }
@@ -934,8 +938,8 @@ export default function InventoryPage() {
                 <div className="grid md:grid-cols-[1fr_1fr_auto] gap-3"><div><Label>Minimum price</Label><Input type="number" step="0.01" value={form.minPrice} onChange={(event) => setForm((current) => ({ ...current, minPrice: event.target.value }))} /></div><div><Label>Selling price</Label><Input type="number" step="0.01" value={form.sellingPrice} onChange={(event) => setForm((current) => ({ ...current, sellingPrice: event.target.value }))} /></div><Button type="button" variant="outline" className="self-end" onClick={applyMarginPrices}>Apply margin</Button></div>
               </div>
             ) : null}
-            {form.movementType === "correction" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> Stock correction requires owner PIN and creates a pending sync correction.</div> : null}
-            <div><Label>Reason / note</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="e.g. physical count, damaged packet" />{form.movementType === "correction" ? <p className="mt-1 text-xs text-orange-700">Owner password/PIN will be asked after you click Save locally.</p> : null}</div>
+            {form.movementType === "correction" || form.movementType === "damage" ? <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900 flex gap-2"><ShieldAlert size={16} /> {form.movementType === "damage" ? "Damage write-off" : "Stock correction"} requires owner PIN and creates a pending sync adjustment.</div> : null}
+            <div><Label>Reason / note</Label><Input className="mt-1" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="e.g. physical count, damaged packet" />{form.movementType === "correction" || form.movementType === "damage" ? <p className="mt-1 text-xs text-orange-700">Owner password/PIN will be asked after you click Save locally.</p> : null}</div>
             <div className="sticky bottom-0 z-10 -mx-4 flex gap-3 border-t bg-background/95 px-4 py-3 pt-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
               <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button className="flex-1" onClick={handleSubmit} disabled={isSaving}>{isSaving ? <Loader2 size={14} className="animate-spin" /> : "Save locally"}</Button>
