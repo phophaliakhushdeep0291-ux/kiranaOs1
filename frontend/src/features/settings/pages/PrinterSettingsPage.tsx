@@ -10,35 +10,11 @@ import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Fld, Badge, RowToggle } from "@/features/settings/ui";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { DEFAULT_PRINTER_CONFIG, PRINTER_CONNECTION_LABELS, type PrinterConfig, type PrinterConnection } from "@/features/settings/printer-config";
-import { buildReceiptHtml, openConfiguredReceiptWindow, type ReceiptPaperSize, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
+import { buildReceiptHtml, openConfiguredReceiptWindow, type ReceiptPaperSize } from "@/features/receipts/receipt-print";
+import { sampleReceiptSnapshot } from "@/features/settings/receipt-preview-sample";
 import { checkHardwareBridge, getHardwareBridgeToken, openCashDrawerViaHardwareBridge, readScaleViaHardwareBridge, setHardwareBridgeToken, type HardwareBridgeHealth } from "@/features/hardware/local-hardware-bridge";
 
-function sampleSnapshot(shop: ReturnType<typeof useGetShop>["data"], cfg: PrinterConfig): ReceiptSnapshot {
-  return {
-    billNo: "PREVIEW-001",
-    createdAt: new Date().toISOString(),
-    billTypeLabel: "Sample receipt",
-    copyLabel: cfg.customerCopy ? "Customer copy" : "Shop copy",
-    customerName: "Walk-in customer",
-    customerMobile: cfg.showCustomerPhone ? "9876543210" : "",
-    rows: [
-      { name: "Tata Salt 1kg", quantity: 2, unit: "pkt", rate: 28, total: 56 },
-      { name: "Aashirvaad Atta 5kg", quantity: 1, unit: "bag", rate: 245, total: 245 },
-      { name: "Amul Butter 100g", quantity: 3, unit: "pcs", rate: 62, total: 186 },
-    ],
-    subtotal: 487, discount: cfg.showDiscount ? 7 : 0, total: 480, paid: 480, credit: 0,
-    payments: [{ mode: "cash", amount: 480 }],
-    shop: {
-      name: shop?.name ?? "My Store",
-      address: shop?.address ?? null,
-      city: shop?.city ?? null,
-      phone: shop?.phone ?? null,
-      gstNumber: cfg.showGst ? (shop?.gstNumber ?? null) : null,
-      cashierName: cfg.showCashier ? "Counter 1" : null,
-    },
-    footerNote: cfg.footerText || "Thank you for shopping with us.",
-  };
-}
+const sampleSnapshot = sampleReceiptSnapshot;
 
 type PrintJobStatus = "pending" | "sent" | "opened" | "failed" | "saved";
 

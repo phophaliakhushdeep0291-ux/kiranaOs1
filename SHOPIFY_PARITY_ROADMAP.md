@@ -131,8 +131,14 @@ automation re-firing the request, not from a product defect.
 
 ### 2B — Depth gaps (queue after 2A)
 
-- [ ] **Receipt preview in printer settings** — see the receipt as configured
-      without printing a real bill.
+- [x] **Receipt preview in printer settings** — the preview card already
+      existed, but four toggles changed nothing in it: `showHsn`,
+      `showGstBreakup`, `showReturnPolicy`, and the Phase 1 line
+      discount/note features were absent from the sample bill, so the preview
+      misrepresented what would print. Sample extracted to
+      `receipt-preview-sample.ts` (testable outside the settings screen) and
+      extended to exercise every toggle; 10 regression tests assert each one
+      visibly changes the output. *(done 2026-07-19, verified live)*
 - [ ] **Bulk price/stock edit** — multi-select on Products for price or stock
       changes (owner-PIN gated), instead of one-by-one edits.
 - [ ] **Held-bill expiry hygiene** — open bills currently live forever; warn
