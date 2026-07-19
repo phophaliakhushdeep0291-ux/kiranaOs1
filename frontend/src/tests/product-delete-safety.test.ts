@@ -172,6 +172,27 @@ describe("product local-first write safety", () => {
       .rejects.toThrow(/already exists/i);
   });
 
+  it("edits a synced product even though its merged/tombstoned twin shares the name", async () => {
+    // After a locally-created product syncs, reconcile keeps the server row active and
+    // tombstones the local optimistic row (snake_case deleted_at + merged_into_id, same
+    // name). The duplicate-name guard must ignore that twin — otherwise editing ANY
+    // synced product fails with "already exists".
+    mockState.products = [
+      { ...existingProduct, id: "cmr_server_1", local_id: "product_1", server_id: "cmr_server_1" },
+      {
+        ...existingProduct,
+        id: "product_1",
+        local_id: "product_1",
+        server_id: "cmr_server_1",
+        deleted_at: "2026-07-19T06:31:59.103Z",
+        merged_into_id: "cmr_server_1",
+      },
+    ];
+
+    await expect(updateProductLocalFirst("cmr_server_1", { ...baseProductInput, defaultPricePerRateUnit: 52 }))
+      .resolves.toEqual(expect.objectContaining({ id: "cmr_server_1", name: "Aashirvaad Atta" }));
+  });
+
   it("updates product offline with audit log and outbox in the same transaction", async () => {
     const updated = await updateProductLocalFirst("product_1", { ...baseProductInput, name: "Updated Atta", defaultPricePerRateUnit: 48 });
 

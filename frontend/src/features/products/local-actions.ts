@@ -184,11 +184,25 @@ async function assertNoLocalProductNameConflict(name: string, excludeId?: string
   const normalized = normalizeProductName(name);
   if (!normalized) return;
   const products = await offlineDB.getAll<Product>("products").catch(() => [] as Product[]);
-  const duplicate = products.find((row) =>
-    row.id !== excludeId
-    && !row.deletedAt
-    && row.status !== "deleted"
-    && normalizeProductName(row.name) === normalized);
+
+  // A row is "gone" if it was deleted (either casing) or is a merged twin — the local
+  // optimistic row that reconcile retires once its server copy arrives. Merged twins
+  // keep the SAME name, so counting them would make editing any synced product fail.
+  const isGone = (row: Record<string, unknown>) =>
+    Boolean(row.deletedAt ?? row.deleted_at ?? row.merged_into_id ?? row.mergedIntoId)
+    || row.status === "deleted";
+
+  // The same logical product can be stored under its local id and its server id.
+  // Treat any of them matching excludeId as "this is the product being edited".
+  const isSameEntity = (row: Record<string, unknown>) =>
+    Boolean(excludeId) && [row.id, row.local_id, row.server_id, row.localProductId, row.clientProductId]
+      .some((candidate) => typeof candidate === "string" && candidate === excludeId);
+
+  const duplicate = products.find((row) => {
+    const record = row as unknown as Record<string, unknown>;
+    if (isSameEntity(record) || isGone(record)) return false;
+    return normalizeProductName(row.name) === normalized;
+  });
   if (duplicate) {
     const error = new Error(
       `A product named "${duplicate.name}" already exists. To sell it in another pack size, edit that product and add a packaging under Selling units — don't create a duplicate.`,
