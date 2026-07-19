@@ -86,6 +86,61 @@ the codebase, not assumed.
       owner can supply (Settings → Integrations). Everything else on this
       roadmap is done; revisit when credentials exist.
 
+## Phase 2 — Prove it, then deepen
+
+Phase 1 shipped features; Phase 2 proves they survive a real counter and
+closes the polish gaps that separate "feature exists" from "shop trusts it".
+
+### 2A — Live verification of Phase 1 work
+
+Per-line discounts and exchanges were driven end-to-end in a browser against
+a real backend (2026-07-17). The rest shipped with unit tests + typecheck +
+build only, so drive each one live and record what was observed.
+
+- [x] **Line-item notes** — VERIFIED live 2026-07-19: typed "no bag please"
+      on one of two cart lines, saved, synced; server row shows
+      `note="no bag please"` on that BillItem and `null` on the other.
+- [x] **Discount reasons** — VERIFIED live 2026-07-19: ₹20 off with reason
+      "regular customer"; server bill shows `discount=20`,
+      `discountReason="regular customer"`, subtotal 150 → total 130.
+- [x] **Per-cashier attribution** — VERIFIED live 2026-07-19: the synced bill
+      carries `createdByUserId` from server-side auth context.
+- [ ] **Discounts Given report UI** — split rendering not yet driven live.
+- [ ] **Barcode label printing** — print a label for a barcoded and an
+      unbarcoded product; confirm EAN-13 vs QR fallback renders.
+- [ ] **Customer activity timeline** — bill + payment + return for one
+      customer, confirm one event each, correct signs, no ledger echoes.
+- [ ] **Sales by Hour / Sales by Staff** — confirm buckets and attribution
+      against known bills.
+- [ ] **Drawer over/short** — save a count, confirm variance + history
+      survive a reload.
+
+**Environment note (2026-07-19):** live QA shares one browser preview and one
+dev backend with other concurrent sessions. Mid-run, another session's shop
+replaced the auth/session state and forced a logout, so the remaining 2A
+items were deferred rather than verified against contended state. Re-run 2A
+when no other session is driving the preview.
+
+**Non-finding (recorded so it is not re-investigated):** registering twice
+with the same mobile creates two shops. That is intentional — mobile is
+unique per shop (`@@unique([shopId, mobile])`), one owner may hold several
+shop tenants, and login offers a shop chooser. The register button is
+already `disabled` while the request is in flight, so double-taps are
+guarded client-side; the duplicate observed during QA came from the test
+automation re-firing the request, not from a product defect.
+
+### 2B — Depth gaps (queue after 2A)
+
+- [ ] **Receipt preview in printer settings** — see the receipt as configured
+      without printing a real bill.
+- [ ] **Bulk price/stock edit** — multi-select on Products for price or stock
+      changes (owner-PIN gated), instead of one-by-one edits.
+- [ ] **Held-bill expiry hygiene** — open bills currently live forever; warn
+      or auto-archive stale ones so the switcher stays usable.
+- [ ] **Offline-first coverage for expenses/offers** — both are online-only
+      today (noted in project-prod-readiness); a kirana counter is offline
+      often enough that this matters.
+
 ## Explicitly out of scope
 
 - Shopify-style ecommerce storefront/theme system (QR self-order catalog
