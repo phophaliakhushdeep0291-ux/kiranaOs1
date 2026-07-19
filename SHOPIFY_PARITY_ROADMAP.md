@@ -166,3 +166,5 @@ automation re-firing the request, not from a product defect.
 | 2026-07-18 | Discount reasons + Discounts Given report — Tier 1 complete | feat(billing): discount reasons + report |
 | 2026-07-18 | Re-audit: stocktake/adjustments/reorder/receipt-custom already exist; Sales by Hour shipped | feat(reports): sales by hour |
 | 2026-07-19 | Sales by Staff table + drawer count over/short history — ROADMAP COMPLETE (email receipts blocked on creds) | feat(reports): staff sales + drawer counts |
+| 2026-07-19 | Phase 2 opened; notes + discount reasons + staff attribution verified live | docs(roadmap): phase 2 |
+| 2026-07-19 | Receipt preview toggles fixed (4 toggles were inert) + 10 regression tests | fix(settings): receipt preview toggles |
