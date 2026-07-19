@@ -48,7 +48,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useToast } from "@/hooks/use-toast";
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
-import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
+import { dedupeBillsForDisplay, isMergedBillTwin } from "@/features/sync/bill-reconciliation";
 import { annotateBillSyncStatuses, repairStaleSyncedBillOutboxFailures } from "@/features/sync/sync-status-repair";
 import type { PendingSyncEvent } from "@/lib/offline/db";
 import { openPrintableBill, buildPrintableBillSnapshot } from "@/features/bills/print";
@@ -151,6 +151,14 @@ function billCredit(bill: BillRecord) {
 
 function isDeleted(bill: BillRecord) {
   return typeof bill.deleted_at === "string" || typeof bill.deletedAt === "string";
+}
+
+// A merged twin is the local optimistic bill row after its server copy synced back:
+// reconcile sets deleted_at AND merged_into_id on it. It is NOT a user-deleted bill,
+// so it must never show in the recycle bin (every synced bill would otherwise leave a
+// phantom there). Shared predicate — the rest of the app already treats it as "gone".
+function isMergedTwin(bill: BillRecord) {
+  return isMergedBillTwin(bill as unknown as Record<string, unknown>);
 }
 
 function isEstimateBill(bill: BillRecord) {
@@ -336,9 +344,9 @@ async function loadBills(): Promise<BillRecord[]> {
   for (const row of cached) merged.set(row.id, row);
   for (const row of dbRows) merged.set(row.id, row);
   const rows = Array.from(merged.values());
-  const displayRows = dedupeBillsForDisplay(rows.filter((row) => !isDeleted(row))) as unknown as BillRecord[];
+  const displayRows = dedupeBillsForDisplay(rows.filter((row) => !isDeleted(row) && !isMergedTwin(row))) as unknown as BillRecord[];
   const annotatedDisplayRows = annotateBillSyncStatuses(displayRows, outboxRows) as BillRecord[];
-  const deletedRows = annotateBillSyncStatuses(rows.filter(isDeleted), outboxRows) as BillRecord[];
+  const deletedRows = annotateBillSyncStatuses(rows.filter((row) => isDeleted(row) && !isMergedTwin(row)), outboxRows) as BillRecord[];
   return [...annotatedDisplayRows, ...deletedRows].sort((a, b) => billDate(b).localeCompare(billDate(a)));
 }
 
@@ -484,7 +492,7 @@ export default function BillsPage() {
 
   const counts = useMemo(() => ({
     pending: bills.filter((bill) => ["pending_sync", "syncing", "failed", "conflict"].includes(syncStatusOf(bill)) && !isDeleted(bill)).length,
-    deleted: bills.filter(isDeleted).length,
+    deleted: bills.filter((bill) => isDeleted(bill) && !isMergedTwin(bill)).length,
     estimates: activeEstimateRows(bills).length,
   }), [bills]);
 

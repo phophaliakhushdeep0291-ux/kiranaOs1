@@ -168,6 +168,17 @@ export function isBillSynced(bill: Record<string, unknown>): boolean {
   return true;
 }
 
+/**
+ * A "merged twin" is the local optimistic bill row after its server copy has
+ * synced back: reconcile stamps merged_into_id (and deleted_at) on it. It is a
+ * sync artifact, NOT a user-deleted bill, so it must never appear in the recycle
+ * bin. Financial aggregation, reports, and sales already exclude merged_into_id;
+ * this predicate lets the Bills recycle-bin view apply the same rule.
+ */
+export function isMergedBillTwin(bill: Record<string, unknown>): boolean {
+  return typeof bill.merged_into_id === "string" || typeof bill.mergedIntoId === "string";
+}
+
 export function withBillSyncFlag<T extends object>(bill: T): T & { isSynced: boolean; is_synced: boolean } {
   const synced = isBillSynced(bill as Record<string, unknown>);
   return {

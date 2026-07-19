@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dedupeBillsForDisplay,
   isLikelySyncedCopyOfPendingBill,
+  isMergedBillTwin,
 } from "@/features/sync/bill-reconciliation";
 
 describe("offline bill sync deduplication", () => {
@@ -142,6 +143,27 @@ describe("offline bill sync deduplication", () => {
 
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => row.id).sort()).toEqual(["server_bill_first", "server_bill_second"]);
+  });
+
+  it("flags reconcile merge-tombstones so the recycle bin can exclude them", () => {
+    // After a synced bill's echo arrives, reconcile stamps merged_into_id +
+    // deleted_at on the local optimistic row. The recycle bin filters
+    // isDeleted && !isMergedTwin, so a merge-tombstone must be recognisable —
+    // otherwise every synced bill leaves a phantom "deleted" entry.
+    const mergeTombstone = { id: "bill_local_1", billNo: "PENDING-ABC123", deleted_at: "2026-06-07T02:20:41.000Z", merged_into_id: "server_bill_1" };
+    const userDeleted = { id: "server_bill_2", billNo: "KOS-2026-000020", deleted_at: "2026-06-08T10:00:00.000Z" };
+    const activeBill = { id: "server_bill_1", billNo: "KOS-2026-000004" };
+
+    expect(isMergedBillTwin(mergeTombstone)).toBe(true);
+    expect(isMergedBillTwin({ ...activeBill, mergedIntoId: "server_bill_1", deletedAt: "2026-06-07T02:20:41.000Z" })).toBe(true); // camelCase variant
+    expect(isMergedBillTwin(userDeleted)).toBe(false);  // a real user delete stays in the recycle bin
+    expect(isMergedBillTwin(activeBill)).toBe(false);
+
+    // The recycle-bin predicate the Bills page uses: deleted AND not a merge twin.
+    const inRecycleBin = [mergeTombstone, userDeleted, activeBill].filter(
+      (b) => (typeof b.deleted_at === "string" || typeof (b as { deletedAt?: unknown }).deletedAt === "string") && !isMergedBillTwin(b),
+    );
+    expect(inRecycleBin.map((b) => b.id)).toEqual(["server_bill_2"]);
   });
 
 });
