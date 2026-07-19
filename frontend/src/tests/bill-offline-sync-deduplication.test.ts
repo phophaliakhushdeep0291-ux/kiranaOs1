@@ -155,7 +155,8 @@ describe("offline bill sync deduplication", () => {
     const activeBill = { id: "server_bill_1", billNo: "KOS-2026-000004" };
 
     expect(isMergedBillTwin(mergeTombstone)).toBe(true);
-    expect(isMergedBillTwin({ ...activeBill, mergedIntoId: "server_bill_1", deletedAt: "2026-06-07T02:20:41.000Z" })).toBe(true); // camelCase variant
+    // camelCase variant — a DIFFERENT id than the row's own, i.e. a genuine twin.
+    expect(isMergedBillTwin({ id: "bill_local_9", mergedIntoId: "server_bill_1", deletedAt: "2026-06-07T02:20:41.000Z" })).toBe(true);
     expect(isMergedBillTwin(userDeleted)).toBe(false);  // a real user delete stays in the recycle bin
     expect(isMergedBillTwin(activeBill)).toBe(false);
 
@@ -164,6 +165,39 @@ describe("offline bill sync deduplication", () => {
       (b) => (typeof b.deleted_at === "string" || typeof (b as { deletedAt?: unknown }).deletedAt === "string") && !isMergedBillTwin(b),
     );
     expect(inRecycleBin.map((b) => b.id)).toEqual(["server_bill_2"]);
+  });
+
+  it("never treats a bill pointing at ITSELF as a merged twin", () => {
+    // Observed live after an offline bill synced: the surviving server row inherited
+    // merged_into_id from the tombstone it replaced, so it pointed at its own id.
+    // merged_into_id is the app-wide "this row is gone" marker (financial aggregation,
+    // reports, sales, the bills list), so a self-reference would erase a REAL bill from
+    // the list AND from sales totals.
+    const survivor = {
+      id: "cmrs6m2ik0060u66k5s9b2iz1",
+      server_id: "cmrs6m2ik0060u66k5s9b2iz1",
+      billNo: "KOS-2026-000001",
+      grandTotal: 100,
+      deleted_at: null,
+      status: "active",
+      merged_into_id: "cmrs6m2ik0060u66k5s9b2iz1", // ← points at itself
+    };
+    expect(isMergedBillTwin(survivor)).toBe(false);
+
+    // A genuine tombstone (points at a DIFFERENT row) is still a twin.
+    const tombstone = {
+      id: "bill_local_1",
+      billNo: "PENDING-5A5A3A",
+      deleted_at: "2026-07-19T19:21:34.635Z",
+      merged_into_id: "cmrs6m2ik0060u66k5s9b2iz1",
+    };
+    expect(isMergedBillTwin(tombstone)).toBe(true);
+
+    // The survivor must stay in the active list; only the tombstone drops out.
+    const active = [survivor, tombstone].filter(
+      (b) => !(typeof b.deleted_at === "string") && !isMergedBillTwin(b),
+    );
+    expect(active.map((b) => b.billNo)).toEqual(["KOS-2026-000001"]);
   });
 
 });

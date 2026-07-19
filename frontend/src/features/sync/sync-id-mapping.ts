@@ -340,6 +340,8 @@ function mergeServerIntoLocal(
     localRow.createdAt ??
     now;
   const updatedAt = serverEntity.updated_at ?? serverEntity.updatedAt ?? now;
+  const rawMergedInto = localRow.merged_into_id ?? localRow.mergedIntoId;
+  const inheritedMergedInto = typeof rawMergedInto === "string" ? rawMergedInto : null;
   const merged = {
     ...localRow,
     ...serverEntity,
@@ -387,6 +389,14 @@ function mergeServerIntoLocal(
       typeof localRow.device_id === "string"
         ? localRow.device_id
         : scope.device_id,
+    // merged_into_id is LOCAL bookkeeping meaning "this row was retired into another".
+    // The winner is built by spreading the local row, which may already be a tombstone
+    // pointing at this very server id — and the server entity has no value to override
+    // it. Left as-is the surviving row points at ITSELF, and every consumer that treats
+    // merged_into_id as "gone" (financial aggregation, reports, sales, the bills list)
+    // silently drops a real bill. A row can never be a twin of itself, so clear it.
+    merged_into_id: inheritedMergedInto === serverId ? null : (localRow.merged_into_id ?? null),
+    mergedIntoId: inheritedMergedInto === serverId ? null : (localRow.mergedIntoId ?? null),
   } as OfflineRow;
 
   return protectLocalUdharFields(localRow, serverEntity, merged);

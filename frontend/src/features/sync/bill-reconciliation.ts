@@ -176,7 +176,15 @@ export function isBillSynced(bill: Record<string, unknown>): boolean {
  * this predicate lets the Bills recycle-bin view apply the same rule.
  */
 export function isMergedBillTwin(bill: Record<string, unknown>): boolean {
-  return typeof bill.merged_into_id === "string" || typeof bill.mergedIntoId === "string";
+  const mergedInto = typeof bill.merged_into_id === "string"
+    ? bill.merged_into_id
+    : typeof bill.mergedIntoId === "string" ? bill.mergedIntoId : null;
+  if (!mergedInto) return false;
+  // A row can never be a twin of ITSELF. The surviving row can inherit this marker
+  // from the tombstone it replaced (same id), and treating that as "merged away"
+  // would hide a real bill from the list.
+  const self = [bill.id, bill.local_id, bill.server_id].filter((v) => typeof v === "string");
+  return !self.includes(mergedInto);
 }
 
 export function withBillSyncFlag<T extends object>(bill: T): T & { isSynced: boolean; is_synced: boolean } {
