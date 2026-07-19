@@ -324,6 +324,48 @@ function tombstoneBillEchoRow(row: MutableRow, winner: MutableRow): MutableRow {
   };
 }
 
+/**
+ * One-time self-heal: clear merged_into_id that points at the row's OWN id.
+ *
+ * A synced row used to inherit merged_into_id from the tombstone it replaced — and
+ * that value was the very server id it was just given, so the survivor pointed at
+ * itself. merged_into_id is the app-wide "this row is gone" marker (financial
+ * aggregation, reports, sales, the bills list), so such a row silently disappeared
+ * from lists AND from sales totals. mergeServerIntoLocal no longer creates these,
+ * but devices that already synced still carry them, so scrub them on load.
+ */
+async function repairSelfReferencingMergedRows(): Promise<number> {
+  await dexieDB.open();
+  const tables = ["bills", "payments", "customer_ledger", "bill_items", "inventory_movements", "products", "customers"] as const;
+  let repaired = 0;
+
+  for (const tableName of tables) {
+    const table = dexieDB.table(tableName);
+    if (!table) continue;
+    const rows = filterRowsForCurrentScope(
+      await table.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+    ) as MutableRow[];
+
+    for (const row of rows) {
+      const mergedInto = readStringFrom(row, ["merged_into_id", "mergedIntoId"]);
+      if (!mergedInto) continue;
+      const selfIds = [
+        readStringFrom(row, ["id"]),
+        readStringFrom(row, ["local_id"]),
+        readStringFrom(row, ["server_id"]),
+      ].filter(Boolean);
+      if (!selfIds.includes(mergedInto)) continue; // genuine twin — leave it alone
+
+      const rowId = readStringFrom(row, ["id"]);
+      if (!rowId) continue;
+      await table.put({ ...row, merged_into_id: null, mergedIntoId: null, updated_at: nowIso(), updatedAt: nowIso() })
+        .catch(() => undefined);
+      repaired += 1;
+    }
+  }
+  return repaired;
+}
+
 async function repairDuplicateBillEchoRows(): Promise<number> {
   await dexieDB.open();
   const rows = filterRowsForCurrentScope(
@@ -716,7 +758,10 @@ let hardeningInFlight: Promise<LocalDataHardeningResult> | null = null;
 export async function hardenLocalFinancialData(): Promise<LocalDataHardeningResult> {
   if (hardeningInFlight) return hardeningInFlight;
   hardeningInFlight = (async () => {
-    const billsMerged = await repairDuplicateBillEchoRows().catch(() => 0);
+    // Run FIRST: a row wrongly marked "merged into itself" is invisible to the
+    // repairs below (and to every list/total), so un-hide it before they run.
+    const selfMergesCleared = await repairSelfReferencingMergedRows().catch(() => 0);
+    const billsMerged = (await repairDuplicateBillEchoRows().catch(() => 0)) + selfMergesCleared;
     const paymentsMerged = (await repairDuplicateFinancialEchoTable("payments").catch(() => 0)) +
       (await repairExactDuplicatePaymentRows().catch(() => 0));
     const ledgerMerged = (await repairMappedBillLedgerEchoRows().catch(() => 0)) +
