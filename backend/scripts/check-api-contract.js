@@ -56,6 +56,7 @@ const requiredEndpoints = [
   "POST /api/customers/:id/udhar-payment/:ledgerId/reverse",
   "POST /api/inventory/correction",
   "POST /api/purchase-orders/:id/receipts/:receiptId/reconcile",
+  "GET /api/accounting/control",
   "GET /api/sync/status",
   "POST /api/sync/retry",
   "POST /api/sync/ack",
@@ -93,6 +94,7 @@ const deviceRequiredPrefixes = [
   "/api/jobs",
   "/api/reminders",
   "/api/purchase-orders",
+  "/api/accounting",
   "/api/ai"
 ];
 for (const prefix of deviceRequiredPrefixes) {
@@ -214,6 +216,14 @@ for (const guarantee of ["never changes stock", "tenant and location access", "o
   }
 }
 
+const accountingControl = contract.endpoints.find((endpoint) => endpoint.path === "/api/accounting/control");
+if (!accountingControl?.roles?.includes("owner") || accountingControl.roles.length !== 1) fail("accounting control must be owner-only");
+for (const field of ["data.status", "data.calculationVersion", "data.scope", "data.trialBalance.accounts", "data.coverage.unmappedRows", "data.exceptions", "data.limitations"]) {
+  if (!accountingControl?.responseMustInclude?.includes(field)) fail(`accounting control contract must require ${field}`);
+}
+for (const guarantee of ["integer-paise", "debit equals credit", "purchase receipts", "GST input credit is never inferred", "unmapped rows", "shop-wide", "statutory completeness"]) {
+  if (!accountingControl?.integrityGuarantees?.some((item) => item.includes(guarantee))) fail(`accounting control contract must guarantee ${guarantee}`);
+}
 const confirmBill = contract.endpoints.find((endpoint) => endpoint.path === "/api/bills/confirm");
 for (const guarantee of ["recomputed by the server", "same transaction as the bill", "conditional atomic claim", "cancellation and restoration"]) {
   if (!confirmBill?.transactionGuarantees?.some((item) => item.includes(guarantee))) {

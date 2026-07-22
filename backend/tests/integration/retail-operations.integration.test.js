@@ -246,6 +246,12 @@ if (ctx.skip) {
       assert.equal(partialHistory.purchasePaymentStatus, "partial");
       assert.equal(partialHistory.purchasePaidAmount, 20);
       assert.equal(partialHistory.purchaseDueAmount, 48);
+      const partialJournal = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, sourceType: "purchase_receipt", sourceId: partial.receipt.id }, orderBy: { entryType: "asc" } });
+      assert.deepEqual(partialJournal.map((row) => [row.entryType, row.direction, row.amountPaise]), [
+        ["cash_out", "credit", 2000n],
+        ["inventory_purchase", "debit", 6800n],
+        ["supplier_payable", "credit", 4800n],
+      ], "partial receipt must balance inventory against exact paid and due legs");
 
       const outsider = await ownerContext();
       const crossTenantReconcile = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${partial.receipt.id}/reconcile`, {
@@ -285,6 +291,7 @@ if (ctx.skip) {
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 7, "receipt retry must not add stock twice");
       assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "PURCHASE_ORDER_RECEIVED", entityId: order.id } }), 1, "receipt retry must not duplicate the owner audit event");
       assert.equal(await ctx.db.purchaseHistory.count({ where: { purchaseReceiptId: partial.receipt.id } }), 1, "receipt retry must not duplicate supplier due history");
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "purchase_receipt", sourceId: partial.receipt.id } }), 3, "receipt retry must not duplicate journal legs");
       const changedReplay = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receive`, {
         ...firstReceiptPayload,
         paidAmount: 21,
@@ -320,6 +327,11 @@ if (ctx.skip) {
       assert.equal(completed.receipt.expectedGoodsAmount, 108);
       assert.equal(completed.receipt.priceVarianceAmount, 6);
       assert.equal(completed.purchaseOrder.reconciliation.invoicePendingCount, 1);
+      const completedJournal = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, sourceType: "purchase_receipt", sourceId: completed.receipt.id }, orderBy: { entryType: "asc" } });
+      assert.deepEqual(completedJournal.map((row) => [row.entryType, row.direction, row.amountPaise]), [
+        ["bank_out", "credit", 11400n],
+        ["inventory_purchase", "debit", 11400n],
+      ], "fully paid receipt must balance inventory against the selected bank tender");
 
       const unexplainedSecondVariance = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${completed.receipt.id}/reconcile`, {
         supplierInvoiceNumber: "SUP-1001-B", supplierInvoiceAmount: 114,
@@ -371,6 +383,11 @@ if (ctx.skip) {
       assert.equal(supplierReturn.refundAmount, 38);
       assert.equal(supplierReturn.supplierCreditAmount, 0);
       assert.equal(supplierReturn.items[0].quantityBaseQty, 2);
+      const purchaseReturnJournal = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, sourceType: "purchase_return", sourceId: supplierReturn.id }, orderBy: { entryType: "asc" } });
+      assert.deepEqual(purchaseReturnJournal.map((row) => [row.entryType, row.direction, row.amountPaise]), [
+        ["bank_refund_in", "debit", 3800n],
+        ["inventory_purchase_return", "credit", 3800n],
+      ], "supplier refund must balance the inventory reduction against bank value received");
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 10);
       const afterSupplierReturnLots = await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } });
       assert.deepEqual(afterSupplierReturnLots.map((lot) => lot.availableBaseQty), [3, 4], "supplier return must remove stock from its received batch first");
@@ -387,6 +404,11 @@ if (ctx.skip) {
         reason: "Wrong supplier shipment selected",
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin, headers: { "x-location-id": primary.id } }));
       assert.equal(cancelledSupplierReturn.status, "cancelled");
+      const cancelledReturnJournal = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, sourceType: "purchase_return_cancel", sourceId: supplierReturn.id }, orderBy: { entryType: "asc" } });
+      assert.deepEqual(cancelledReturnJournal.map((row) => [row.entryType, row.amountPaise]), [
+        ["bank_refund_in", -3800n],
+        ["inventory_purchase_return", -3800n],
+      ], "purchase-return cancellation must append exact negated legs");
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 12, "void must restore branch and global stock");
       const afterSupplierReturnVoidLots = await ctx.db.inventoryLot.findMany({ where: { productId: product.id }, orderBy: { expiresOn: "asc" } });
       assert.deepEqual(afterSupplierReturnVoidLots.map((lot) => lot.availableBaseQty), [3, 6], "void must restore the exact supplier-return batch allocation");
@@ -396,8 +418,58 @@ if (ctx.skip) {
       assert.equal(replayedVoid.idempotentReplay, true);
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 12, "void retry must not restore stock twice");
 
+      const purchaseControl = assertSuccess(await ctx.get("/api/accounting/control?from=2020-01-01T00%3A00%3A00.000Z&to=2030-01-01T00%3A00%3A00.000Z", { token: auth.accessToken }));
+      assert.equal(purchaseControl.status, "balanced");
+      assert.equal(purchaseControl.coverage.unmappedRows, 0);
+      assert.equal(purchaseControl.trialBalance.difference.paise, 0);
+
       const cannotCancel = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/cancel`, { reason: "Too late" }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
       assert.equal(cannotCancel.code, "PURCHASE_ORDER_NOT_CANCELLABLE");
+    });
+
+    test("keeps paid and pending expense lifecycle postings balanced without hiding reversals", async () => {
+      const { tenant, auth } = await ownerContext();
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+      const headers = { "x-location-id": primary.id };
+
+      const paid = assertSuccess(await ctx.post("/api/expenses", {
+        title: "Store electricity",
+        amount: 100,
+        category: "utilities",
+        paymentMode: "cash",
+        status: "paid",
+      }, { token: auth.accessToken, headers }), 201);
+      const pending = assertSuccess(await ctx.post("/api/expenses", {
+        title: "Monthly maintenance",
+        amount: 50,
+        category: "maintenance",
+        paymentMode: "bank",
+        status: "pending",
+      }, { token: auth.accessToken, headers }), 201);
+
+      const updated = assertSuccess(await ctx.patch(`/api/expenses/${paid.id}`, {
+        amount: 120,
+        paymentMode: "bank",
+      }, { token: auth.accessToken, headers }));
+      assert.equal(updated.amount, 120);
+      assert.equal(updated.paymentMode, "bank");
+      assertSuccess(await ctx.delete(`/api/expenses/${pending.id}`, { token: auth.accessToken, headers }));
+      assertSuccess(await ctx.post(`/api/expenses/${pending.id}/restore`, {}, { token: auth.accessToken, headers }));
+
+      const rows = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, sourceType: { in: ["expense", "expense_update", "expense_delete", "expense_restore"] } } });
+      assert.equal(rows.length, 12, "two creates, one four-leg replacement, one delete reversal and one restore must all remain append-only");
+      assert.equal(rows.filter((row) => row.sourceType === "expense_update").length, 4);
+      assert.equal(rows.filter((row) => row.sourceType === "expense_delete").every((row) => row.amountPaise < 0n), true);
+      assert.equal(rows.filter((row) => row.sourceType === "expense_restore").every((row) => row.amountPaise > 0n), true);
+
+      const expenseControl = assertSuccess(await ctx.get("/api/accounting/control?from=2020-01-01T00%3A00%3A00.000Z&to=2030-01-01T00%3A00%3A00.000Z", { token: auth.accessToken }));
+      assert.equal(expenseControl.status, "balanced");
+      assert.equal(expenseControl.coverage.sourceGroups, 5);
+      assert.equal(expenseControl.coverage.balancedGroups, 5);
+      assert.equal(expenseControl.trialBalance.difference.paise, 0);
+      assert.equal(expenseControl.trialBalance.accounts.find((account) => account.code === "6000").debitBalance.paise, 17000);
+      assert.equal(expenseControl.trialBalance.accounts.find((account) => account.code === "2300").creditBalance.paise, 5000);
+      assert.equal(expenseControl.trialBalance.accounts.find((account) => account.code === "1020").creditBalance.paise, 12000);
     });
 
     test("runs a blind stock count through review and guarded variance posting", async () => {
@@ -685,7 +757,7 @@ if (ctx.skip) {
       assert.equal(creditNote.items[0].hsn, "1905", "later product edits must not rewrite a credit note's HSN");
 
       const returnLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: creditNote.id }, orderBy: { entryType: "asc" } });
-      assert.deepEqual(returnLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", -10000n], ["sale", -10000n]], "the append-only financial ledger must reverse both revenue and refunded cash");
+      assert.deepEqual(returnLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", -10000n], ["gst_output", -1525n], ["gst_sales_reclassification", -1525n], ["sale", -10000n]], "the append-only financial ledger must reverse tender, net revenue and aggregate output GST without rewriting the original sale");
 
       const working = assertSuccess(await ctx.get("/api/compliance/gstr1-working?range=monthly", { token: auth.accessToken }));
       assert.equal(working.cdnr.length, 1);
@@ -731,6 +803,29 @@ if (ctx.skip) {
       assert.equal(bill.giftCardAmount, 75);
       assert.equal(bill.payments.some((payment) => payment.mode === "gift_card" && payment.provider === "gift_card_ledger"), true);
       assert.equal((await ctx.db.giftCard.findUnique({ where: { id: issued.id } })).balancePaise, 17500n);
+      const giftSaleLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: bill.id }, orderBy: { entryType: "asc" } });
+      assert.deepEqual(giftSaleLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", 2500n], ["gift_card_redeemed", 7500n], ["sale", 10000n]], "gift redemption must debit stored-value liability instead of disappearing from accounting");
+      const firstControl = assertSuccess(await ctx.get("/api/accounting/control?from=2020-01-01T00%3A00%3A00.000Z&to=2030-01-01T00%3A00%3A00.000Z", { token: auth.accessToken }));
+      assert.equal(firstControl.status, "balanced");
+      assert.equal(firstControl.scope, "shop");
+      assert.equal(firstControl.coverage.unmappedRows, 0);
+      assert.equal(firstControl.trialBalance.difference.paise, 0);
+      assert.ok(firstControl.limitations.some((item) => item.includes("does not claim statutory books are complete")));
+
+      const waivedSale = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 1,
+        ratePerRateUnit: 100,
+        payments: [{ mode: "cash", amount: 95 }],
+        actualAmount: 100,
+        buyerPaidAmount: 95,
+        waivedAmount: 5,
+      }), { token: auth.accessToken }), 201);
+      const waivedLedger = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: waivedSale.id }, orderBy: { entryType: "asc" } });
+      assert.deepEqual(waivedLedger.map((row) => [row.entryType, row.amountPaise]), [["cash_in", 9500n], ["sale", 10000n], ["waiver_expense", 500n]], "waived money must be an explicit debit leg");
+      const controlWithWaiver = assertSuccess(await ctx.get("/api/accounting/control?from=2020-01-01T00%3A00%3A00.000Z&to=2030-01-01T00%3A00%3A00.000Z", { token: auth.accessToken }));
+      assert.equal(controlWithWaiver.status, "balanced");
+      assert.equal(controlWithWaiver.coverage.balancedGroups, 2);
+      assert.equal(controlWithWaiver.trialBalance.difference.paise, 0);
 
       const overspend = assertFailure(await ctx.post("/api/bills/confirm", billPayload(product, {
         payments: [{ mode: "gift_card", amount: 200, giftCardCode: issued.code }],

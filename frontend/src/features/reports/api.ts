@@ -100,3 +100,60 @@ export async function getTopProducts(params?: QueryParams) {
 export function getPaymentSummary(params?: QueryParams) {
   return apiRequest<PaymentSummary>(`/reports/payment-summary${buildQuery(params)}`);
 }
+
+export interface AccountingMoneyEvidence {
+  paise: number;
+  amount: number;
+}
+
+export interface AccountingControlAccount {
+  code: string;
+  name: string;
+  category: "asset" | "liability" | "income" | "expense";
+  debitActivity: AccountingMoneyEvidence;
+  creditActivity: AccountingMoneyEvidence;
+  debitBalance: AccountingMoneyEvidence;
+  creditBalance: AccountingMoneyEvidence;
+}
+
+export interface AccountingControlReport {
+  status: "balanced" | "attention_required" | "no_data";
+  calculationVersion: string;
+  scope: "shop";
+  periodActivity: { debit: AccountingMoneyEvidence; credit: AccountingMoneyEvidence; difference: AccountingMoneyEvidence };
+  trialBalance: {
+    debit: AccountingMoneyEvidence;
+    credit: AccountingMoneyEvidence;
+    difference: AccountingMoneyEvidence;
+    accounts: AccountingControlAccount[];
+  };
+  coverage: {
+    ledgerRows: number;
+    mappedRows: number;
+    unmappedRows: number;
+    sourceGroups: number;
+    balancedGroups: number;
+    exceptionGroups: number;
+  };
+  exceptions: Array<{
+    sourceType: string;
+    sourceId: string | null;
+    businessDate: string | null;
+    debit: AccountingMoneyEvidence;
+    credit: AccountingMoneyEvidence;
+    difference: AccountingMoneyEvidence;
+    unmappedEntryTypes: string[];
+  }>;
+  unmapped: Array<{
+    id: string | null;
+    sourceType: string;
+    sourceId: string | null;
+    entryType: string;
+    amount: AccountingMoneyEvidence;
+  }>;
+  limitations: string[];
+}
+
+export function getAccountingControl(params: { from: string; to: string }) {
+  return apiRequest<AccountingControlReport>(`/accounting/control${buildQuery(params)}`);
+}

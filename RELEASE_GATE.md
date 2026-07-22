@@ -1,8 +1,8 @@
 # Release Gate
 
-Current decision: **NO-GO — baseline evidence not yet recorded**  
+Current decision: **NO-GO — candidate/external/manual evidence incomplete**
 Gate owner: Release owner  
-Last evaluated: 2026-07-18
+Last evaluated: 2026-07-22
 
 No new feature should enter a release branch while the P0 production gate is red. This document records the decision; `PRODUCTION_CHECKLIST.md` contains the full operational checklist.
 
@@ -22,12 +22,12 @@ Run against a clean checkout with supported Node versions and frozen installs.
 
 | Gate | Command/evidence | Status |
 |---|---|---|
-| Frontend typecheck | `cd frontend && pnpm run typecheck` | Local baseline passed 2026-07-18 |
-| Frontend tests | `cd frontend && npm run test` | Local baseline passed 2026-07-18: 647 passed, 1 skipped |
-| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local baseline passed 2026-07-18; two-pass release minification: 2785.4 kB raw / 827.6 kB gzip |
+| Frontend typecheck | `cd frontend && npm run typecheck` | Local baseline passed 2026-07-22 |
+| Frontend tests | `cd frontend && npm run test` | Local baseline passed 2026-07-22: 682 passed, 1 skipped |
+| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local baseline passed 2026-07-22: 2825.9 kB raw / 838.0 kB gzip; bundle budget and production-app check passed |
 | Backend tests | `cd backend && npm test` | Local baseline passed 2026-07-18, including AI hallucination, GST, loyalty and payment integrity suites |
 | Backend production check | `cd backend && npm run prod:check` | Local baseline passed after Railway packaging fix |
-| Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 153 passed, 1 PostgreSQL-only suite skipped |
+| Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 153 passed, 1 PostgreSQL-only suite skipped; focused owner-RBAC expansion passed 13/13 |
 | Migration safety | `cd backend && npm run migration:safety` | Local baseline passed, 0 warnings |
 | Existing release gate | `cd backend && npm run release:gate` | Local baseline passed; human approval warning remains |
 | CI certification | `.github/workflows/release-certification.yml` run URL | Candidate run URL not recorded |
@@ -49,7 +49,9 @@ Any failure is red. Skips require a written exception below; P0 financial, migra
 
 Supplier settlement/reversal addendum (2026-07-18): dedicated immutable payment and owner-gated reversal events pass focused frontend tests (8/8), backend sync integration (37/37), and live 390px settlement/reversal capture, including exact-event replay, due restoration and zero visual/runtime errors. MQA-PUR-01 is closed for this release scope.
 
-Replenishment and return-ledger addendum (2026-07-18): deterministic 30-day net-sales recommendations now expose their inputs, evidence strength, calculation version, branch stock, open-order coverage and editable quantity; supplier groups cannot be silently combined into one PO. Sale returns now post explicit revenue/tender or gift-liability reversals to the append-only financial ledger. The combined backend suite, 153/154 SQLite integration tests (one expected PostgreSQL-only skip), 647 frontend tests (one skip), typecheck, production build, bundle budget and production-app check pass. This is local proof only and does not replace PostgreSQL concurrency, provider, deployment, backup/restore or human release evidence.
+Replenishment and return-ledger addendum (2026-07-18): deterministic 30-day net-sales recommendations now expose their inputs, evidence strength, calculation version, branch stock, open-order coverage and editable quantity; supplier groups cannot be silently combined into one PO. Sale returns now post explicit revenue/tender or gift-liability reversals to the append-only financial ledger. The combined backend suite, 153/154 SQLite integration tests (one expected PostgreSQL-only skip), 682 frontend tests (one skip), typecheck, production build, bundle budget and production-app check pass. This is local proof only and does not replace PostgreSQL concurrency, provider, deployment, backup/restore or human release evidence.
+
+Accounting-integrity addendum (2026-07-22): bill postings now balance cash, UPI, bank, receivables, gift-card redemption/return liability and explicit waiver expense legs; supplier payments and reversals are projected into fixed debit/credit accounts. The owner-only shop control returns integer-paise trial-balance evidence, balanced source groups, coverage, unmapped rows and visible exceptions without inventing balancing entries. Contract coverage is 140 endpoints. This is a ledger control, not statutory-complete accounting: inventory valuation/COGS, purchase principal/AP, operating expenses, GST input/output liability, bank-statement matching, TDS/TCS and statutory statements remain open.
 
 ## Defect thresholds
 

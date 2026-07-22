@@ -18,16 +18,27 @@
 import { toPaiseBigInt } from "../../utils/money.js";
 
 const TENDER_ENTRY = {
-  cash: { entryType: "cash_in", direction: "credit" },
-  upi: { entryType: "upi_in", direction: "credit" },
-  bank: { entryType: "bank_in", direction: "credit" },
+  cash: { entryType: "cash_in", direction: "debit" },
+  upi: { entryType: "upi_in", direction: "debit" },
+  bank: { entryType: "bank_in", direction: "debit" },
+  gift_card: { entryType: "gift_card_redeemed", direction: "debit" },
+};
+
+const OUTFLOW_ENTRY = {
+  cash: { entryType: "cash_out", direction: "credit" },
+  upi: { entryType: "upi_out", direction: "credit" },
+  bank: { entryType: "bank_out", direction: "credit" },
+  card: { entryType: "bank_out", direction: "credit" },
+  other: { entryType: "other_out", direction: "credit" },
 };
 
 function ledgerRow({
   shopId,
   customerId = null,
+  supplierId = null,
   billId = null,
   paymentId = null,
+  purchaseBillId = null,
   sourceType,
   sourceId,
   entryType,
@@ -40,8 +51,10 @@ function ledgerRow({
   return {
     shopId,
     customerId,
+    supplierId,
     billId,
     paymentId,
+    purchaseBillId,
     sourceType,
     sourceId,
     entryType,
@@ -60,6 +73,7 @@ async function postBillEffectLedger(tx, {
   bill,
   tenderPayments = [],
   creditAmount = 0,
+  waivedAmount = 0,
   customerId = null,
   keyBase,
   sourceType,
@@ -118,6 +132,49 @@ async function postBillEffectLedger(tx, {
       paymentMode: "credit",
       businessDate: date,
       idempotencyKey: `${keyBase}:udhar_debit`,
+    }));
+  }
+
+  if (waivedAmount > 0) {
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      customerId,
+      sourceType,
+      sourceId: bill.id,
+      entryType: "waiver_expense",
+      direction: "debit",
+      amount: sign * Number(waivedAmount),
+      businessDate: date,
+      idempotencyKey: `${keyBase}:waiver_expense`,
+    }));
+  }
+
+  const gstAmount = Number(bill.gst ?? 0);
+  if (gstAmount !== 0) {
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      customerId,
+      sourceType,
+      sourceId: bill.id,
+      entryType: "gst_output",
+      direction: "credit",
+      amount: sign * gstAmount,
+      businessDate: date,
+      idempotencyKey: `${keyBase}:gst_output`,
+    }));
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      customerId,
+      sourceType,
+      sourceId: bill.id,
+      entryType: "gst_sales_reclassification",
+      direction: "debit",
+      amount: sign * gstAmount,
+      businessDate: date,
+      idempotencyKey: `${keyBase}:gst_sales_reclassification`,
     }));
   }
 
@@ -183,6 +240,34 @@ export async function postSaleReturnLedger(tx, {
     businessDate: date,
     idempotencyKey: `${keyBase}:sale`,
   })];
+
+  const gstAmount = Number(bill.gst ?? 0);
+  if (gstAmount !== 0) {
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      customerId,
+      sourceType: "sale_return",
+      sourceId: bill.id,
+      entryType: "gst_output",
+      direction: "credit",
+      amount: gstAmount,
+      businessDate: date,
+      idempotencyKey: `${keyBase}:gst_output`,
+    }));
+    rows.push(ledgerRow({
+      shopId,
+      billId: bill.id,
+      customerId,
+      sourceType: "sale_return",
+      sourceId: bill.id,
+      entryType: "gst_sales_reclassification",
+      direction: "debit",
+      amount: gstAmount,
+      businessDate: date,
+      idempotencyKey: `${keyBase}:gst_sales_reclassification`,
+    }));
+  }
 
   const tender = TENDER_ENTRY[mode];
   if (tender && mode !== "gift_card") {
@@ -282,8 +367,179 @@ export async function postUdharPaymentLedger(tx, {
   }
 }
 
+function purchaseRefundEntry(mode) {
+  const normalized = String(mode ?? "supplier_credit").toLowerCase();
+  if (normalized === "cash") return { entryType: "cash_refund_in", direction: "debit" };
+  if (normalized === "bank") return { entryType: "bank_refund_in", direction: "debit" };
+  if (normalized === "upi") return { entryType: "upi_refund_in", direction: "debit" };
+  return { entryType: "supplier_credit_receivable", direction: "debit" };
+}
+
+export async function postPurchaseReceiptLedger(tx, { shopId, receipt, supplierId = null, businessDate }) {
+  const total = Number(receipt?.totalAmount ?? 0);
+  if (!receipt?.id || !(total > 0)) return;
+  const paid = Number(receipt.paidAmount ?? 0);
+  const due = Number(receipt.dueAmount ?? Math.max(0, total - paid));
+  const date = businessDate ?? receipt.createdAt ?? new Date();
+  const keyBase = `purchase-receipt:${receipt.id}`;
+  const common = {
+    shopId,
+    supplierId,
+    purchaseBillId: receipt.id,
+    sourceType: "purchase_receipt",
+    sourceId: receipt.id,
+    businessDate: date,
+  };
+  const rows = [ledgerRow({
+    ...common,
+    entryType: "inventory_purchase",
+    direction: "debit",
+    amount: total,
+    idempotencyKey: `${keyBase}:inventory_purchase`,
+  })];
+  if (paid > 0) {
+    const outflow = OUTFLOW_ENTRY[String(receipt.paymentMode ?? "other").toLowerCase()] ?? OUTFLOW_ENTRY.other;
+    rows.push(ledgerRow({
+      ...common,
+      entryType: outflow.entryType,
+      direction: outflow.direction,
+      amount: paid,
+      paymentMode: String(receipt.paymentMode ?? "other").toLowerCase(),
+      idempotencyKey: `${keyBase}:${outflow.entryType}`,
+    }));
+  }
+  if (due > 0) {
+    rows.push(ledgerRow({
+      ...common,
+      entryType: "supplier_payable",
+      direction: "credit",
+      amount: due,
+      idempotencyKey: `${keyBase}:supplier_payable`,
+    }));
+  }
+  for (const row of rows) await tx.financialLedger.create({ data: row });
+}
+
+async function postPurchaseReturnEffectLedger(tx, {
+  shopId,
+  purchaseReturn,
+  sign,
+  sourceType,
+  keyBase,
+  businessDate,
+}) {
+  const total = Number(purchaseReturn?.totalAmount ?? 0);
+  if (!purchaseReturn?.id || !(total > 0)) return;
+  const supplierCredit = Number(purchaseReturn.supplierCreditAmount ?? 0);
+  const refund = Number(purchaseReturn.refundAmount ?? 0);
+  const common = {
+    shopId,
+    supplierId: purchaseReturn.supplierId ?? null,
+    purchaseBillId: purchaseReturn.purchaseReceiptId ?? null,
+    sourceType,
+    sourceId: purchaseReturn.id,
+    businessDate: businessDate ?? new Date(),
+  };
+  const rows = [ledgerRow({
+    ...common,
+    entryType: "inventory_purchase_return",
+    direction: "credit",
+    amount: sign * total,
+    idempotencyKey: `${keyBase}:inventory_purchase_return`,
+  })];
+  if (supplierCredit > 0) {
+    rows.push(ledgerRow({
+      ...common,
+      entryType: "supplier_payable_reduction",
+      direction: "debit",
+      amount: sign * supplierCredit,
+      idempotencyKey: `${keyBase}:supplier_payable_reduction`,
+    }));
+  }
+  if (refund > 0) {
+    const refundEntry = purchaseRefundEntry(purchaseReturn.refundMode);
+    rows.push(ledgerRow({
+      ...common,
+      entryType: refundEntry.entryType,
+      direction: refundEntry.direction,
+      amount: sign * refund,
+      paymentMode: String(purchaseReturn.refundMode ?? "supplier_credit").toLowerCase(),
+      idempotencyKey: `${keyBase}:${refundEntry.entryType}`,
+    }));
+  }
+  for (const row of rows) await tx.financialLedger.create({ data: row });
+}
+
+export async function postPurchaseReturnCreatedLedger(tx, { shopId, purchaseReturn, businessDate }) {
+  return postPurchaseReturnEffectLedger(tx, {
+    shopId,
+    purchaseReturn,
+    sign: 1,
+    sourceType: "purchase_return",
+    keyBase: `purchase-return:${purchaseReturn?.id}`,
+    businessDate: businessDate ?? purchaseReturn?.createdAt,
+  });
+}
+
+export async function postPurchaseReturnCancelledLedger(tx, { shopId, purchaseReturn, businessDate }) {
+  const date = businessDate ?? new Date();
+  return postPurchaseReturnEffectLedger(tx, {
+    shopId,
+    purchaseReturn,
+    sign: -1,
+    sourceType: "purchase_return_cancel",
+    keyBase: `purchase-return:${purchaseReturn?.id}:cancel`,
+    businessDate: date,
+  });
+}
+
+export async function postExpenseEffectLedger(tx, {
+  shopId,
+  expense,
+  sign = 1,
+  sourceType = "expense",
+  sourceId,
+  keyBase,
+  businessDate,
+}) {
+  const amount = Number(expense?.amount ?? 0);
+  if (!expense?.id || !(amount > 0)) return;
+  const common = {
+    shopId,
+    sourceType,
+    sourceId: sourceId ?? expense.id,
+    businessDate: businessDate ?? expense.spentAt ?? new Date(),
+  };
+  const rows = [ledgerRow({
+    ...common,
+    entryType: "operating_expense",
+    direction: "debit",
+    amount: sign * amount,
+    idempotencyKey: `${keyBase}:operating_expense`,
+  })];
+  if (String(expense.status).toLowerCase() === "pending") {
+    rows.push(ledgerRow({
+      ...common,
+      entryType: "expense_payable",
+      direction: "credit",
+      amount: sign * amount,
+      idempotencyKey: `${keyBase}:expense_payable`,
+    }));
+  } else {
+    const outflow = OUTFLOW_ENTRY[String(expense.paymentMode ?? "other").toLowerCase()] ?? OUTFLOW_ENTRY.other;
+    rows.push(ledgerRow({
+      ...common,
+      entryType: outflow.entryType,
+      direction: outflow.direction,
+      amount: sign * amount,
+      paymentMode: String(expense.paymentMode ?? "other").toLowerCase(),
+      idempotencyKey: `${keyBase}:${outflow.entryType}`,
+    }));
+  }
+  for (const row of rows) await tx.financialLedger.create({ data: row });
+}
 const PAISE_PER_RUPEE = 100;
-const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "bank_in", "udhar_debit", "udhar_credit", "udhar_return_credit", "gift_card_issued"];
+const SUMMARY_ENTRY_TYPES = ["sale", "cash_in", "upi_in", "bank_in", "udhar_debit", "udhar_credit", "udhar_return_credit", "gift_card_issued", "gift_card_redeemed", "waiver_expense"];
 
 /**
  * Summarize FinancialLedger rows into KPIs. Because a reversal is the SAME entryType with a
@@ -315,6 +571,8 @@ export function summarizeFinancialLedger(rows = []) {
     udharRecovered,
     udharReturnCredits,
     giftCardIssued: rupees(totals.gift_card_issued),
+    giftCardRedeemed: rupees(totals.gift_card_redeemed),
+    waiverExpense: rupees(totals.waiver_expense),
     outstanding: Math.round((udharCreated - udharRecovered - udharReturnCredits) * PAISE_PER_RUPEE) / PAISE_PER_RUPEE,
   };
 }

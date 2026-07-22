@@ -177,6 +177,14 @@ if (ctx.skip) {
       assertFailure(await ctx.get("/api/reports/pnl?range=daily", { token: staffAuth.accessToken }), 403);
     });
 
+    test("accounting control is shop-wide and owner-only", async () => {
+      const { ownerAuth, staffAuth } = await authPair();
+      assertFailure(await ctx.get("/api/accounting/control", { token: staffAuth.accessToken }), 403);
+      const control = assertSuccess(await ctx.get("/api/accounting/control", { token: ownerAuth.accessToken }));
+      assert.equal(control.scope, "shop");
+      assert.equal(control.status, "no_data");
+      assert.equal(control.calculationVersion, "accounting-control-v2");
+    });
     test("payment summary remains accessible to staff", async () => {
       const { staffAuth } = await authPair();
       const data = assertSuccess(await ctx.get("/api/reports/payment-summary", { token: staffAuth.accessToken }));

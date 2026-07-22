@@ -1,9 +1,11 @@
+import crypto from "crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { round2 } from "../../utils/money.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
+import { postExpenseEffectLedger } from "../finance/financial-ledger.service.js";
 
 function normalize(data) {
   const out = { ...data };
@@ -40,24 +42,85 @@ export async function getExpense(shopId, id) {
 
 export async function createExpense(shopId, data) {
   const payload = normalize(data);
-  const location = await resolveOperationalLocation(shopId, payload.locationId);
-  return db.expense.create({ data: { ...payload, locationId: location.id, shopId, spentAt: payload.spentAt ?? new Date() } });
+  return db.$transaction(async (tx) => {
+    const location = await resolveOperationalLocation(shopId, payload.locationId, tx);
+    const expense = await tx.expense.create({ data: { ...payload, locationId: location.id, shopId, spentAt: payload.spentAt ?? new Date() } });
+    await postExpenseEffectLedger(tx, {
+      shopId,
+      expense,
+      keyBase: `expense:${expense.id}:create`,
+      businessDate: expense.spentAt,
+    });
+    return expense;
+  });
 }
 
 export async function updateExpense(shopId, id, data) {
-  await getExpense(shopId, id);
-  return db.expense.update({ where: { id }, data: normalize(data) });
+  const payload = normalize(data);
+  return db.$transaction(async (tx) => {
+    const existing = await tx.expense.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!existing) throw new AppError("Expense not found", 404);
+    const operationAt = new Date();
+    const operationId = crypto.randomUUID();
+    const sourceId = `${existing.id}:${operationId}`;
+    await postExpenseEffectLedger(tx, {
+      shopId,
+      expense: existing,
+      sign: -1,
+      sourceType: "expense_update",
+      sourceId,
+      keyBase: `expense:${existing.id}:update:${operationId}:old`,
+      businessDate: operationAt,
+    });
+    const updated = await tx.expense.update({ where: { id: existing.id }, data: payload });
+    await postExpenseEffectLedger(tx, {
+      shopId,
+      expense: updated,
+      sourceType: "expense_update",
+      sourceId,
+      keyBase: `expense:${existing.id}:update:${operationId}:new`,
+      businessDate: operationAt,
+    });
+    return updated;
+  });
 }
 
 export async function softDeleteExpense(shopId, id) {
-  const expense = await getExpense(shopId, id);
-  return db.expense.update({ where: { id: expense.id }, data: { deletedAt: new Date() } });
+  return db.$transaction(async (tx) => {
+    const expense = await tx.expense.findFirst({ where: { id, shopId, deletedAt: null } });
+    if (!expense) throw new AppError("Expense not found", 404);
+    const operationAt = new Date();
+    const operationId = crypto.randomUUID();
+    await postExpenseEffectLedger(tx, {
+      shopId,
+      expense,
+      sign: -1,
+      sourceType: "expense_delete",
+      sourceId: `${expense.id}:${operationId}`,
+      keyBase: `expense:${expense.id}:delete:${operationId}`,
+      businessDate: operationAt,
+    });
+    return tx.expense.update({ where: { id: expense.id }, data: { deletedAt: operationAt } });
+  });
 }
 
 export async function restoreExpense(shopId, id) {
-  const expense = await db.expense.findFirst({ where: { id, shopId, deletedAt: { not: null } } });
-  if (!expense) throw new AppError("Deleted expense not found in recycle bin", 404);
-  return db.expense.update({ where: { id: expense.id }, data: { deletedAt: null } });
+  return db.$transaction(async (tx) => {
+    const expense = await tx.expense.findFirst({ where: { id, shopId, deletedAt: { not: null } } });
+    if (!expense) throw new AppError("Deleted expense not found in recycle bin", 404);
+    const operationAt = new Date();
+    const operationId = crypto.randomUUID();
+    const restored = await tx.expense.update({ where: { id: expense.id }, data: { deletedAt: null } });
+    await postExpenseEffectLedger(tx, {
+      shopId,
+      expense: restored,
+      sourceType: "expense_restore",
+      sourceId: `${expense.id}:${operationId}`,
+      keyBase: `expense:${expense.id}:restore:${operationId}`,
+      businessDate: operationAt,
+    });
+    return restored;
+  });
 }
 
 export async function getExpenseSummary(shopId, { from, to, locationId } = {}) {

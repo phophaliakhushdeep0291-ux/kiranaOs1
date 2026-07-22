@@ -5,6 +5,7 @@ import { moneyShadows, multiplyMoney, round2, weightedAvgCost } from "../../util
 import { rateUnitToBase } from "../../utils/units.js";
 import { getLocationQuantity, incrementLocationInventory, resolveOperationalLocation } from "../stores/location-context.service.js";
 import { recordReceiptLot } from "../inventory-lots/inventoryLots.service.js";
+import { postPurchaseReceiptLedger } from "../finance/financial-ledger.service.js";
 import {
   calculateReorderRecommendation,
   REORDER_SALES_WINDOW_DAYS,
@@ -445,6 +446,12 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
         data: { status: completed ? "received" : "partially_received", ...(completed && { receivedAt: new Date() }) },
       });
       const fullReceipt = await tx.purchaseReceipt.findUnique({ where: { id: receipt.id }, include: { items: true } });
+      await postPurchaseReceiptLedger(tx, {
+        shopId,
+        receipt: fullReceipt,
+        supplierId: order.supplierId,
+        businessDate: fullReceipt.createdAt,
+      });
       const purchaseOrder = await tx.purchaseOrder.findUnique({ where: { id: order.id }, include: detailInclude });
       return { receipt: fullReceipt, purchaseOrder: withReconciliation(purchaseOrder), idempotentReplay: false, remainingLineCount: remaining };
     });

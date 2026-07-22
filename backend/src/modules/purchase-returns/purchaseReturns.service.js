@@ -4,6 +4,7 @@ import { AppError } from "../../middleware/error.js";
 import { moneyShadows, multiplyMoney, round2 } from "../../utils/money.js";
 import { rateUnitToBase } from "../../utils/units.js";
 import { decrementLocationInventory, incrementLocationInventory } from "../stores/location-context.service.js";
+import { postPurchaseReturnCancelledLedger, postPurchaseReturnCreatedLedger } from "../finance/financial-ledger.service.js";
 
 const include = { location: true, supplier: true, purchaseReceipt: true, items: { include: { product: true, purchaseReceiptItem: true } } };
 const ref = () => `PR-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
@@ -68,6 +69,7 @@ export async function createPurchaseReturn(shopId, data, userId, requestedLocati
     }
     const dueAmount = round2(Math.max(0, Number(receipt.dueAmount || 0) - supplierCreditAmount));
     await tx.purchaseReceipt.update({ where: { id: receipt.id }, data: { dueAmount, ...moneyShadows({ dueAmount }) } });
+    await postPurchaseReturnCreatedLedger(tx, { shopId, purchaseReturn, businessDate: purchaseReturn.createdAt });
     return tx.purchaseReturn.findUnique({ where: { id: purchaseReturn.id }, include });
     });
     return { ...created, idempotentReplay: false };
@@ -128,7 +130,9 @@ export async function cancelPurchaseReturn(shopId, id, reason, userId, requested
     }
     const restoredDue = round2(Math.min(Number(purchaseReturn.purchaseReceipt.totalAmount), Number(purchaseReturn.purchaseReceipt.dueAmount || 0) + Number(purchaseReturn.supplierCreditAmount || 0)));
     await tx.purchaseReceipt.update({ where: { id: purchaseReturn.purchaseReceiptId }, data: { dueAmount: restoredDue, ...moneyShadows({ dueAmount: restoredDue }) } });
-    const cancelled = await tx.purchaseReturn.update({ where: { id: purchaseReturn.id }, data: { status: "cancelled", cancelledAt: new Date(), cancelledByUserId: userId || null, cancellationReason: reason } });
+    const cancelledAt = new Date();
+    await postPurchaseReturnCancelledLedger(tx, { shopId, purchaseReturn, businessDate: cancelledAt });
+    const cancelled = await tx.purchaseReturn.update({ where: { id: purchaseReturn.id }, data: { status: "cancelled", cancelledAt, cancelledByUserId: userId || null, cancellationReason: reason } });
     return { ...cancelled, location: purchaseReturn.location, supplier: purchaseReturn.supplier, purchaseReceipt: purchaseReturn.purchaseReceipt, items: purchaseReturn.items, idempotentReplay: false };
   });
 }

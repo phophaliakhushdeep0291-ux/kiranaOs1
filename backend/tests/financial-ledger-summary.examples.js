@@ -53,7 +53,7 @@ assert.equal(s.giftCardIssued, 25, "gift-card return liability is visible");
 s = summarizeFinancialLedger([{ entryType: "mystery", amountPaise: P(999) }, { entryType: "sale", amountPaise: P(5) }]);
 assert.equal(s.sales, 5, "unknown entryType ignored");
 assert.deepEqual(summarizeFinancialLedger([]), {
-  sales: 0, cashCollected: 0, upiCollected: 0, bankCollected: 0, udharCreated: 0, udharRecovered: 0, udharReturnCredits: 0, giftCardIssued: 0, outstanding: 0,
+  sales: 0, cashCollected: 0, upiCollected: 0, bankCollected: 0, udharCreated: 0, udharRecovered: 0, udharReturnCredits: 0, giftCardIssued: 0, giftCardRedeemed: 0, waiverExpense: 0, outstanding: 0,
 }, "empty ledger = all zeros");
 
 // Accepts number / numeric-string amountPaise too (not just BigInt).

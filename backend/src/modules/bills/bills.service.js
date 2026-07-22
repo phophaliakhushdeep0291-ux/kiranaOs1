@@ -543,6 +543,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       bill,
       tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
       creditAmount,
+      waivedAmount,
       customerId: customerId ?? null,
     });
 
@@ -683,6 +684,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
         bill,
         tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
         creditAmount: Number(bill.creditAmount ?? 0),
+        waivedAmount: Number(bill.waivedAmount ?? 0),
         customerId: bill.customerId ?? null,
         reversalAt: cancelledAt,
       });
@@ -1190,6 +1192,7 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
         bill,
         tenderPayments: Array.isArray(bill.payments) ? bill.payments : [],
         creditAmount: Number(bill.creditAmount ?? 0),
+        waivedAmount: Number(bill.waivedAmount ?? 0),
         customerId: bill.customerId ?? null,
         restoreAt: restoredAt,
       });

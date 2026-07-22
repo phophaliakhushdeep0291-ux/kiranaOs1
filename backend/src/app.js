@@ -44,6 +44,7 @@ import purchaseOrderRoutes from "./modules/purchase-orders/purchaseOrders.routes
 import giftCardRoutes from "./modules/gift-cards/giftCards.routes.js";
 import inventoryLotsRoutes from "./modules/inventory-lots/inventoryLots.routes.js";
 import purchaseReturnsRoutes from "./modules/purchase-returns/purchaseReturns.routes.js";
+import accountingRoutes from "./modules/finance/accounting.routes.js";
 
 const app = express();
 
@@ -223,6 +224,7 @@ app.use("/api/purchase-orders", purchaseOrderRoutes);
 app.use("/api/gift-cards", giftCardRoutes);
 app.use("/api/inventory-lots", inventoryLotsRoutes);
 app.use("/api/purchase-returns", purchaseReturnsRoutes);
+app.use("/api/accounting", accountingRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/ai", aiRoutes);
