@@ -100,7 +100,7 @@ import { createBillLocalFirst } from "@/features/billing/local-actions";
 import { cancelBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { readCustomerLedgerEntries } from "@/features/ledger/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
-import { loadCustomerDetail, loadCustomersWithLedger } from "@/features/customers/customer-ledger-data";
+import { applyAuthoritativeUdharSummary, loadCustomerDetail, loadCustomersWithLedger } from "@/features/customers/customer-ledger-data";
 
 function resetTables() {
   dbState.idCounter = 0;
@@ -481,4 +481,75 @@ describe("customer ledger correctness", () => {
       ledger_only: true,
     }));
   });
+
+  it("uses the server ledger summary when a synced device has stale zero-balance ledger rows", async () => {
+    seedLedger({
+      id: "ledger_stale_bill",
+      type: "BILL",
+      source_type: "bill",
+      amount: 200,
+      entry_at: "2026-06-06T10:00:00.000Z",
+      created_at: "2026-06-06T10:00:00.000Z",
+    });
+    seedLedger({
+      id: "ledger_stale_payment",
+      type: "PAYMENT",
+      source_type: "payment",
+      amount: 200,
+      entry_at: "2026-06-07T10:00:00.000Z",
+      created_at: "2026-06-07T10:00:00.000Z",
+    });
+
+    const local = await loadCustomersWithLedger();
+    const reconciled = applyAuthoritativeUdharSummary(local, {
+      totalOutstanding: 1466,
+      customers: [{ customerId: "customer_1", customerName: "Ramesh", amount: 1466, outstanding: 1466 }],
+    });
+
+    expect(local[0].ledgerBalance).toBe(0);
+    expect(reconciled[0]).toEqual(expect.objectContaining({
+      ledgerBalance: 1466,
+      totalUdhar: 1466,
+      udharAmount: 1466,
+      balance_source: "server_ledger_summary",
+    }));
+  });
+
+  it("does not overwrite an unsynced offline balance with an older server summary", async () => {
+    seedCustomer({ udharAmount: 350, totalUdhar: 350, sync_status: "pending_sync" });
+    const local = await loadCustomersWithLedger();
+    const pendingLocal = [{
+      ...local[0],
+      ledgerBalance: 350,
+      udharAmount: 350,
+      totalUdhar: 350,
+      sync_status: "pending_sync",
+    }];
+    const reconciled = applyAuthoritativeUdharSummary(pendingLocal, {
+      totalOutstanding: 500,
+      customers: [{ customerId: "customer_1", customerName: "Ramesh", amount: 500, outstanding: 500 }],
+    });
+
+    expect(reconciled[0].ledgerBalance).toBe(350);
+    expect(reconciled[0].balance_source).not.toBe("server_ledger_summary");
+  });
+
+  it("reconciles a synced local ID through its server customer mapping", async () => {
+    const local = await loadCustomersWithLedger();
+    const reconciled = applyAuthoritativeUdharSummary([{
+      ...local[0],
+      id: "local_customer_1",
+      server_id: "customer_1",
+      sync_status: "synced",
+    }], {
+      totalOutstanding: 500,
+      customers: [{ customerId: "customer_1", customerName: "Ramesh", amount: 500, outstanding: 500 }],
+    });
+
+    expect(reconciled[0].ledgerBalance).toBe(500);
+    expect(reconciled[0].balance_source).toBe("server_ledger_summary");
+    expect(reconciled).toHaveLength(1);
+  });
+
+
 });

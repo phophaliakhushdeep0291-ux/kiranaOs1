@@ -83,10 +83,10 @@ if (skipGenerate) {
 
 if (isPostgres) {
   console.log("Preparing PostgreSQL integration test database with prisma-postgres/schema.prisma");
-  if (!skipGenerate) runPrisma(["generate", ...schemaArgs]);
   // migrate reset is destructive, so test-db-utils only allows clear test/CI DB names
   // and requires ALLOW_POSTGRES_TEST_DB=true before this path can run.
-  runPrisma(["migrate", "reset", "--force", "--skip-seed", ...(skipGenerate ? ["--skip-generate"] : []), ...schemaArgs]);
+  runPrisma(["migrate", "reset", "--force", "--skip-seed", "--skip-generate", ...schemaArgs]);
+  if (!skipGenerate) runPrisma(["generate", ...schemaArgs]);
 } else {
   ensureSqliteDatabaseFile();
   if (!skipGenerate) runPrisma(["generate", ...(useIsolatedClient ? ["--generator", "integrationClient"] : [])]);

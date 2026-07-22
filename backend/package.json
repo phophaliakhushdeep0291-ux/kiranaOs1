@@ -52,7 +52,7 @@
     "contract:check": "node scripts/check-api-contract.js",
     "contract:smoke": "node scripts/e2e-contract-smoke.js",
     "setup:test-db:postgres": "node scripts/run-with-env.js ALLOW_POSTGRES_TEST_DB=true REQUIRE_POSTGRES_TEST_DB=true -- node scripts/setup-test-db.js",
-    "test:postgres": "node scripts/run-with-env.js ALLOW_POSTGRES_TEST_DB=true REQUIRE_POSTGRES_TEST_DB=true FORCE_DB_TESTS=true -- node scripts/run-integration-tests.js",
+    "test:postgres": "node -r dotenv/config scripts/run-with-env.js ALLOW_POSTGRES_TEST_DB=true REQUIRE_POSTGRES_TEST_DB=true FORCE_DB_TESTS=true -- node scripts/run-integration-tests.js",
     "proof:postgres": "node scripts/postgres-production-proof.js",
     "razorpay:fixtures": "node scripts/razorpay-fixture-proof.js",
     "proof:ops": "node scripts/production-proof-suite.js",

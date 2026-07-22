@@ -52,15 +52,18 @@ import { recordPaymentLocalFirst } from "@/features/payments/local-actions";
 import { useOfflineStatus } from "@/features/sync";
 import { dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import {
+  applyAuthoritativeUdharSummary,
   loadCustomerDetail,
   loadCustomersWithLedger,
   formatShortDate,
   type CustomerWithLedger,
 } from "@/features/customers/customer-ledger-data";
+import { getUdharSummary } from "@/features/ledger/api";
 import type { CustomerInput } from "@/types/api";
 import { offlineDB } from "@/lib/offline/db";
 import { cn } from "@/lib/utils";
 import { validateGstin } from "@/lib/gstin";
+import { isBrowserOnline } from "@/lib/api/http";
 
 interface CustomerFormState {
   name: string;
@@ -104,7 +107,19 @@ function useCustomersLedgerList() {
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
   }, [queryClient]);
-  return useQuery({ queryKey: ["customers-ledger-list"], queryFn: loadCustomersWithLedger, staleTime: 1_500 });
+  return useQuery({
+    queryKey: ["customers-ledger-list"],
+    queryFn: async () => {
+      const localCustomers = await loadCustomersWithLedger();
+      if (!isBrowserOnline()) return localCustomers;
+      try {
+        return applyAuthoritativeUdharSummary(localCustomers, await getUdharSummary());
+      } catch {
+        return localCustomers;
+      }
+    },
+    staleTime: 1_500,
+  });
 }
 
 function money(value: unknown) {

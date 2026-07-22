@@ -1,6 +1,6 @@
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
-import type { Bill, Customer } from "@/types/api";
+import type { Bill, Customer, UdharSummary } from "@/types/api";
 import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/ledger/accounting";
 import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
@@ -16,6 +16,91 @@ export interface CustomerDetailData {
   payments: Array<Record<string, unknown>>;
   ledger: LedgerStatementRow[];
   audit: Array<Record<string, unknown>>;
+}
+
+const LOCAL_BALANCE_STATUSES = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
+
+function customerIdentityValues(customer: Customer & Record<string, unknown>): string[] {
+  return [customer.id, customer.local_id, customer.localId, customer.server_id, customer.serverId]
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function hasPendingLocalBalance(customer: CustomerWithLedger): boolean {
+  const status = String(customer.sync_status ?? "").toLowerCase();
+  const hasMappedServerIdentity = typeof customer.server_id === "string" || typeof customer.serverId === "string";
+  return LOCAL_BALANCE_STATUSES.has(status)
+    || (String(customer.id).startsWith("local_") && !hasMappedServerIdentity)
+    || customer.isSynced === false
+    || customer.is_synced === false;
+}
+
+function withAuthoritativeBalance(customer: CustomerWithLedger, balance: number): CustomerWithLedger {
+  const authoritative = roundMoney(Math.max(0, balance));
+  const unchanged = Math.abs(authoritative - customer.ledgerBalance) < 0.005;
+  const metrics = unchanged
+    ? customer.ledgerMetrics
+    : {
+        ...customer.ledgerMetrics,
+        balance: authoritative,
+        ageing: { total: authoritative, zeroToSeven: authoritative, sevenToThirty: 0, thirtyPlus: 0 },
+        isBadCustomer: authoritative > readNumber(customer.udharLimit, Number.POSITIVE_INFINITY),
+      };
+  return {
+    ...customer,
+    type: authoritative > 0 ? "udhar" : customer.type === "udhar" ? "regular" : customer.type,
+    ledgerBalance: authoritative,
+    totalUdhar: authoritative,
+    udharAmount: authoritative,
+    ledgerMetrics: metrics,
+    balance_source: "server_ledger_summary",
+  };
+}
+
+/**
+ * Reconcile the device ledger view with the server's ledger-derived summary.
+ * Pending local writes remain device-authoritative until they sync; every other
+ * customer uses the server value, including an omitted summary row meaning zero.
+ */
+export function applyAuthoritativeUdharSummary(
+  customers: CustomerWithLedger[],
+  summary: UdharSummary,
+): CustomerWithLedger[] {
+  const balances = new Map(summary.customers.map((customer) => [customer.customerId, customer.outstanding]));
+  const matchedServerIds = new Set<string>();
+  const reconciled = customers.map((customer) => {
+    const serverId = customerIdentityValues(customer).find((id) => balances.has(id));
+    if (serverId) matchedServerIds.add(serverId);
+    if (hasPendingLocalBalance(customer)) return customer;
+    return withAuthoritativeBalance(customer, serverId ? Number(balances.get(serverId) ?? 0) : 0);
+  });
+
+  for (const serverCustomer of summary.customers) {
+    if (matchedServerIds.has(serverCustomer.customerId)) continue;
+    const balance = roundMoney(Math.max(0, Number(serverCustomer.outstanding ?? 0)));
+    reconciled.push({
+      id: serverCustomer.customerId,
+      name: serverCustomer.customerName,
+      mobile: serverCustomer.mobile ?? null,
+      type: balance > 0 ? "udhar" : "regular",
+      udharAmount: balance,
+      totalUdhar: balance,
+      ledgerBalance: balance,
+      sync_status: "synced",
+      balance_source: "server_ledger_summary",
+      ledger_only: true,
+      ledgerMetrics: {
+        balance,
+        ageing: { total: balance, zeroToSeven: balance, sevenToThirty: 0, thirtyPlus: 0 },
+        paymentCount: 0,
+        billCount: 0,
+        trustScore: 100,
+        isBadCustomer: false,
+        warning: null,
+      },
+    });
+  }
+
+  return reconciled.sort((a, b) => b.ledgerBalance - a.ledgerBalance || a.name.localeCompare(b.name));
 }
 
 

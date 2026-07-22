@@ -185,7 +185,7 @@ export async function postSaleReturnLedger(tx, {
   })];
 
   const tender = TENDER_ENTRY[mode];
-  if (tender) {
+  if (tender && mode !== "gift_card") {
     const payment = (bill.payments ?? []).find((row) => String(row.mode).toLowerCase() === mode);
     rows.push(ledgerRow({
       shopId,

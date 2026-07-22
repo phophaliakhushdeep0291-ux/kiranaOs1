@@ -8,6 +8,7 @@ function read(file) {
 const pkg = JSON.parse(read("package.json"));
 assert.ok(pkg.scripts["proof:postgres"], "proof:postgres script must exist");
 assert.ok(pkg.scripts["test:postgres"], "test:postgres script must exist");
+assert.ok(pkg.scripts["test:postgres"].includes("-r dotenv/config"), "test:postgres must load the documented local test URL before safety validation");
 assert.ok(pkg.scripts["setup:test-db:postgres"], "setup:test-db:postgres script must exist");
 
 const testDbUtils = read("scripts/test-db-utils.js");
@@ -25,6 +26,9 @@ const setupDb = read("scripts/setup-test-db.js");
 assert.ok(setupDb.includes("prisma-postgres/schema.prisma"), "setup-test-db must support PostgreSQL schema");
 assert.ok(setupDb.includes("migrate", "reset"), "setup-test-db must use Prisma migrations for Postgres test DB");
 assert.ok(setupDb.includes("--skip-seed"), "Postgres test reset must skip seed by default");
+const postgresResetIndex = setupDb.indexOf('runPrisma(["migrate", "reset"');
+const postgresGenerateIndex = setupDb.indexOf('runPrisma(["generate", ...schemaArgs])');
+assert.ok(postgresResetIndex >= 0 && postgresGenerateIndex > postgresResetIndex, "Postgres setup must authenticate/reset before regenerating the shared Prisma client");
 
 const proofRunner = read("scripts/postgres-production-proof.js");
 for (const command of [
