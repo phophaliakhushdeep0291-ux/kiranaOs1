@@ -204,6 +204,7 @@ if (ctx.skip) {
         items: [{ productId: product.id, orderedBaseQty: 10, expectedRate: 18 }],
       }, { token: auth.accessToken, headers: { "x-location-id": primary.id } }), 201);
       assert.equal(order.status, "draft");
+      assert.equal(order.reconciliation.status, "not_received");
       assert.equal(order.expectedTotal, 180);
       assert.equal(order.vendorReference, "QUOTE-RW-42");
       assert.equal(order.paymentTerms, "Net 15 days");
@@ -234,6 +235,10 @@ if (ctx.skip) {
       assert.equal(partial.receipt.totalAmount, 68);
       assert.equal(partial.receipt.paidAmount, 20);
       assert.equal(partial.receipt.dueAmount, 48);
+      assert.equal(partial.receipt.matchStatus, "invoice_pending");
+      assert.equal(partial.receipt.expectedGoodsAmount, 72);
+      assert.equal(partial.receipt.priceVarianceAmount, -4);
+      assert.equal(partial.purchaseOrder.reconciliation.status, "invoice_pending");
       const productAfterPartial = await ctx.db.product.findUnique({ where: { id: product.id } });
       assert.equal(productAfterPartial.stockBaseQty, 7);
       assert.equal(productAfterPartial.costPerRateUnit, 18.29, "receipt must apply weighted-average cost when requested");
@@ -241,6 +246,39 @@ if (ctx.skip) {
       assert.equal(partialHistory.purchasePaymentStatus, "partial");
       assert.equal(partialHistory.purchasePaidAmount, 20);
       assert.equal(partialHistory.purchaseDueAmount, 48);
+
+      const outsider = await ownerContext();
+      const crossTenantReconcile = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${partial.receipt.id}/reconcile`, {
+        supplierInvoiceNumber: "SUP-1001", supplierInvoiceAmount: 68, varianceReason: "Should never be accepted",
+      }, { token: outsider.auth.accessToken, ownerPin: outsider.tenant.ownerPin }), 404);
+      assert.equal(crossTenantReconcile.code, "PURCHASE_ORDER_NOT_FOUND");
+
+      const unexplainedFirstVariance = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${partial.receipt.id}/reconcile`, {
+        supplierInvoiceNumber: "SUP-1001", supplierInvoiceAmount: 68,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 422);
+      assert.equal(unexplainedFirstVariance.code, "PURCHASE_VARIANCE_REASON_REQUIRED");
+      assert.deepEqual({
+        expectedGoodsAmount: unexplainedFirstVariance.expectedGoodsAmount,
+        goodsReceivedAmount: unexplainedFirstVariance.goodsReceivedAmount,
+        supplierInvoiceAmount: unexplainedFirstVariance.supplierInvoiceAmount,
+        priceVarianceAmount: unexplainedFirstVariance.priceVarianceAmount,
+        invoiceVarianceAmount: unexplainedFirstVariance.invoiceVarianceAmount,
+      }, {
+        expectedGoodsAmount: 72,
+        goodsReceivedAmount: 68,
+        supplierInvoiceAmount: 68,
+        priceVarianceAmount: -4,
+        invoiceVarianceAmount: 0,
+      });
+
+      const reconciledFirst = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${partial.receipt.id}/reconcile`, {
+        supplierInvoiceNumber: "SUP-1001", supplierInvoiceAmount: 68, varianceReason: "Supplier promotional price approved",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      const reconciledFirstReceipt = reconciledFirst.receipts.find((row) => row.id === partial.receipt.id);
+      assert.equal(reconciledFirstReceipt.matchStatus, "approved_variance");
+      assert.equal(reconciledFirstReceipt.varianceReason, "Supplier promotional price approved");
+      assert.equal(reconciledFirst.reconciliation.status, "partial_delivery");
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "PURCHASE_RECEIPT_RECONCILED", entityId: partial.receipt.id } }), 1);
 
       const replay = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 200);
       assert.equal(replay.idempotentReplay, true);
@@ -278,6 +316,26 @@ if (ctx.skip) {
       assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 13);
       assert.equal(await ctx.db.purchaseReceipt.count({ where: { purchaseOrderId: order.id } }), 2);
       assert.equal(await ctx.db.purchaseHistory.count({ where: { purchaseOrderId: order.id } }), 2);
+      assert.equal(completed.receipt.matchStatus, "invoice_pending");
+      assert.equal(completed.receipt.expectedGoodsAmount, 108);
+      assert.equal(completed.receipt.priceVarianceAmount, 6);
+      assert.equal(completed.purchaseOrder.reconciliation.invoicePendingCount, 1);
+
+      const unexplainedSecondVariance = assertFailure(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${completed.receipt.id}/reconcile`, {
+        supplierInvoiceNumber: "SUP-1001-B", supplierInvoiceAmount: 114,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 422);
+      assert.equal(unexplainedSecondVariance.code, "PURCHASE_VARIANCE_REASON_REQUIRED");
+      const fullyReconciled = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receipts/${completed.receipt.id}/reconcile`, {
+        supplierInvoiceNumber: "SUP-1001-B", supplierInvoiceAmount: 114, varianceReason: "Supplier list-price increase approved",
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(fullyReconciled.reconciliation.status, "approved_variance");
+      assert.equal(fullyReconciled.reconciliation.invoicePendingCount, 0);
+      assert.equal(fullyReconciled.reconciliation.approvedVarianceCount, 2);
+      assert.equal(fullyReconciled.reconciliation.expectedGoodsAmount, 180);
+      assert.equal(fullyReconciled.reconciliation.goodsReceivedAmount, 182);
+      assert.equal(fullyReconciled.reconciliation.supplierInvoiceAmount, 182);
+      assert.equal(fullyReconciled.reconciliation.priceVarianceAmount, 2);
+      assert.equal(await ctx.db.auditLog.count({ where: { shopId: tenant.shop.id, action: "PURCHASE_RECEIPT_RECONCILED" } }), 2);
 
       const lots = assertSuccess(await ctx.get("/api/inventory-lots?status=all", { token: auth.accessToken, headers: { "x-location-id": primary.id } }));
       assert.deepEqual(lots.map((lot) => lot.batchNumber), ["OIL-EARLY", "OIL-LATE"]);

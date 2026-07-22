@@ -278,6 +278,18 @@ POST /api/payment-provider/manual/activate
 
 Manual activation stays disabled by default and should not be exposed to normal tenants in production.
 
+### Three-way purchase reconciliation
+
+Purchase receipts expose deterministic PO-rate, goods-received, and supplier-invoice totals. Goods may be received before the invoice arrives, but that GRN remains explicitly `invoice_pending`; the server never invents invoice evidence or labels an unmatched receipt as complete.
+
+```text
+POST /api/purchase-orders/:id/receipts/:receiptId/reconcile
+```
+
+This endpoint requires `Authorization`, `x-device-id`, owner/admin role, branch purchase access, the `purchase_entry` feature, and owner PIN. Exact matches become `matched`. Any PO-rate or invoice-total difference requires a written `varianceReason` and is stored as `approved_variance` with the approving user and timestamp. Reconciliation updates invoice evidence only: it never changes stock, supplier payments, purchase history, or the original GRN. The response includes the independently auditable inputs and variances, and the action produces both an audit log and an integration event.
+
+Receive idempotency compares stock/payment-affecting inputs only. Attaching an invoice later therefore cannot make a safe replay of the original GRN add stock again or fail merely because reconciliation metadata changed.
+
 ## Frontend release gate
 
 Before a frontend build is considered compatible with this backend, verify:

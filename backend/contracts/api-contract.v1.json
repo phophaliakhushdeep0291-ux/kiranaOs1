@@ -1231,6 +1231,7 @@
     { "method": "POST", "path": "/api/purchase-orders", "authRequired": true, "deviceRequired": true, "feature": "purchase_entry", "purpose": "create supplier purchase order" },
     { "method": "POST", "path": "/api/purchase-orders/:id/send", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "approve and mark purchase order sent" },
     { "method": "POST", "path": "/api/purchase-orders/:id/receive", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "atomically receive partial or complete supplier stock" },
+    { "method": "POST", "path": "/api/purchase-orders/:id/receipts/:receiptId/reconcile", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "roles": ["owner", "admin"], "feature": "purchase_entry", "requestFields": ["supplierInvoiceNumber", "supplierInvoiceAmount", "varianceReason"], "responseMustInclude": ["data.reconciliation.status", "data.reconciliation.expectedGoodsAmount", "data.reconciliation.goodsReceivedAmount", "data.reconciliation.supplierInvoiceAmount", "data.reconciliation.priceVarianceAmount", "data.reconciliation.invoiceVarianceAmount"], "transactionGuarantees": ["never changes stock or payment history", "tenant and location access checked before reconciliation", "rate or invoice variance requires an owner-approved reason", "audit and integration events expose reconciliation status without secrets"], "purpose": "three-way match PO rates, received goods, and supplier invoice evidence" },
     { "method": "POST", "path": "/api/purchase-orders/:id/cancel", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "cancel unreceived purchase-order balance" },
     { "method": "GET", "path": "/api/inventory/counts", "authRequired": true, "deviceRequired": true, "purpose": "list branch stock-count sessions" },
     { "method": "POST", "path": "/api/inventory/counts", "authRequired": true, "deviceRequired": true, "feature": "stock_adjustment", "purpose": "start a blind or visible stock count" },
@@ -1246,5 +1247,5 @@
     { "method": "POST", "path": "/api/purchase-returns", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "return received stock and settle supplier due or refund" },
     { "method": "POST", "path": "/api/purchase-returns/:id/cancel", "authRequired": true, "deviceRequired": true, "ownerPinRequired": true, "feature": "purchase_entry", "purpose": "void supplier return and restore exact stock, batches, and supplier due" }
   ],
-  "latestPatch": "retail parity: purchase orders, stock counts, store value, returns, and FEFO batch-expiry control"
+  "latestPatch": "procurement parity: deterministic replenishment and owner-audited three-way PO, GRN, and supplier-invoice reconciliation"
 }

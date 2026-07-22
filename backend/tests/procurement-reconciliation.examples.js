@@ -3,6 +3,7 @@ import {
   calculateReceiptReconciliation,
   summarizePurchaseOrderReconciliation,
 } from "../src/modules/purchase-orders/procurementReconciliation.js";
+import { WEBHOOK_EVENTS } from "../src/modules/integrations/integrations.schemas.js";
 
 const matched = calculateReceiptReconciliation({
   expectedAmounts: [100, 50],
@@ -80,5 +81,7 @@ const pendingSummary = summarizePurchaseOrderReconciliation({
 });
 assert.equal(pendingSummary.status, "invoice_pending");
 assert.equal(pendingSummary.invoicePendingCount, 1);
+
+assert.equal(WEBHOOK_EVENTS.includes("purchase_receipt.reconciled"), true, "reconciliation must be a subscribable signed-webhook event");
 
 console.log("Procurement reconciliation examples passed");

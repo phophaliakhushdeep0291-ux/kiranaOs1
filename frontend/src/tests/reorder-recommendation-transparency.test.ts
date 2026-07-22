@@ -35,3 +35,31 @@ describe("purchase reorder recommendation transparency", () => {
     ]) expect(apiSource).toContain(field);
   });
 });
+
+describe("three-way purchase reconciliation UX", () => {
+  it("keeps missing supplier evidence visibly pending and supports later reconciliation", () => {
+    expect(panelSource).toContain("Missing invoices remain visibly pending");
+    expect(panelSource).toContain("Reconcile invoice");
+    expect(panelSource).toContain("Without both invoice number and total");
+  });
+
+  it("shows PO, GRN and invoice values and requires an approval reason for differences", () => {
+    expect(panelSource).toContain("Goods receipt");
+    expect(panelSource).toContain("Supplier invoice");
+    expect(panelSource).toContain("Variance approval reason *");
+    expect(panelSource).toContain("Approve variance");
+  });
+
+  it("types the complete auditable reconciliation evidence returned by the API", () => {
+    for (const field of [
+      "expectedGoodsAmount",
+      "goodsReceivedAmount",
+      "supplierInvoiceAmount",
+      "priceVarianceAmount",
+      "invoiceVarianceAmount",
+      "matchStatus",
+      "varianceReason",
+    ]) expect(apiSource).toContain(field);
+    expect(apiSource).toContain("reconcilePurchaseReceipt");
+  });
+});

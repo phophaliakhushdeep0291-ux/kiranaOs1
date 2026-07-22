@@ -55,6 +55,7 @@ const requiredEndpoints = [
   "POST /api/customers/:id/udhar-payment",
   "POST /api/customers/:id/udhar-payment/:ledgerId/reverse",
   "POST /api/inventory/correction",
+  "POST /api/purchase-orders/:id/receipts/:receiptId/reconcile",
   "GET /api/sync/status",
   "POST /api/sync/retry",
   "POST /api/sync/ack",
@@ -91,6 +92,7 @@ const deviceRequiredPrefixes = [
   "/api/sync",
   "/api/jobs",
   "/api/reminders",
+  "/api/purchase-orders",
   "/api/ai"
 ];
 for (const prefix of deviceRequiredPrefixes) {
@@ -191,6 +193,25 @@ for (const guarantee of ["temporary file", "removed", "not logged"]) {
 const verifyPayment = contract.endpoints.find((endpoint) => endpoint.path === "/api/subscription/verify-payment");
 for (const requirement of ["signature", "orderId", "paymentId", "amount", "currency", "localTransaction"]) {
   if (!verifyPayment?.paymentVerification?.includes(requirement)) fail(`payment verification missing ${requirement}`);
+}
+
+const purchaseReconciliation = contract.endpoints.find((endpoint) => endpoint.path === "/api/purchase-orders/:id/receipts/:receiptId/reconcile");
+if (!purchaseReconciliation?.ownerPinRequired) fail("purchase reconciliation must require owner PIN");
+if (!purchaseReconciliation?.roles?.includes("owner") || !purchaseReconciliation?.roles?.includes("admin")) fail("purchase reconciliation must require owner/admin role");
+for (const field of [
+  "data.reconciliation.status",
+  "data.reconciliation.expectedGoodsAmount",
+  "data.reconciliation.goodsReceivedAmount",
+  "data.reconciliation.supplierInvoiceAmount",
+  "data.reconciliation.priceVarianceAmount",
+  "data.reconciliation.invoiceVarianceAmount",
+]) {
+  if (!purchaseReconciliation?.responseMustInclude?.includes(field)) fail(`purchase reconciliation contract must require ${field}`);
+}
+for (const guarantee of ["never changes stock", "tenant and location access", "owner-approved reason", "audit and integration events"]) {
+  if (!purchaseReconciliation?.transactionGuarantees?.some((item) => item.includes(guarantee))) {
+    fail(`purchase reconciliation contract must guarantee ${guarantee}`);
+  }
 }
 
 const confirmBill = contract.endpoints.find((endpoint) => endpoint.path === "/api/bills/confirm");

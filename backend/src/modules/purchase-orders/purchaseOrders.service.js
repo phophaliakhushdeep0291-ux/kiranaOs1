@@ -38,10 +38,10 @@ const receiptReplayInclude = {
 
 function replayMismatch(existing, purchaseOrderId, data) {
   if (existing.purchaseOrderId !== purchaseOrderId) return true;
-  if ((existing.supplierInvoiceNumber || null) !== (data.supplierInvoiceNumber || null)) return true;
-  const expectedInvoiceAmount = data.supplierInvoiceAmount === undefined ? null : round2(data.supplierInvoiceAmount);
-  if ((existing.supplierInvoiceAmount === null ? null : round2(existing.supplierInvoiceAmount)) !== expectedInvoiceAmount) return true;
-  if ((existing.varianceReason || null) !== (data.varianceReason || null)) return true;
+  // Invoice evidence is deliberately mutable after a GRN because goods often
+  // arrive before the supplier invoice. Receive idempotency therefore compares
+  // only stock/payment-affecting inputs; later reconciliation must not turn a
+  // safe retry of the original receipt into an idempotency conflict.
   const expectedPaid = round2(data.paidAmount ?? existing.totalAmount);
   if (round2(existing.paidAmount) !== expectedPaid) return true;
   if ((existing.paymentMode || null) !== (expectedPaid > 0 ? data.paymentMode || null : null)) return true;
@@ -204,7 +204,7 @@ export async function createPurchaseOrder(shopId, data, userId) {
       };
     });
     const expectedTotal = round2(items.reduce((sum, item) => sum + item.expectedAmount, 0));
-    return tx.purchaseOrder.create({
+    const order = await tx.purchaseOrder.create({
       data: {
         shopId,
         locationId: location.id,
@@ -224,6 +224,7 @@ export async function createPurchaseOrder(shopId, data, userId) {
       },
       include: detailInclude,
     });
+    return withReconciliation(order);
   });
 }
 
