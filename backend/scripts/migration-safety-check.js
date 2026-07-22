@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import process from "process";
+import crypto from "crypto";
 
 const root = process.cwd();
 const migrationRoot = path.join(root, "prisma-postgres", "migrations");
@@ -8,6 +9,14 @@ const allowDestructive = String(process.env.ALLOW_DESTRUCTIVE_MIGRATION || "").t
 
 const errors = [];
 const warnings = [];
+
+// These migrations were both deployed with the 000062 prefix. Prisma keys
+// migrations by the complete directory name, so renaming either one breaks
+// existing databases even though a fresh database appears healthy.
+const immutableHistoricalMigrations = new Map([
+  ["000062_bill_discount_reason", "4e683f98814ad0f93949f325086f9534a88d7b5a2547a83e7c88cf491232792d"],
+  ["000062_bill_item_hsn_snapshot", "9d9f8794a63074a281530bdf78dc0aecc78a44838f326d06fbdf3844a443b249"],
+]);
 
 function fail(message) { errors.push(message); }
 function warn(message) { warnings.push(message); }
@@ -21,6 +30,16 @@ if (!fs.existsSync(migrationRoot)) {
     .map((entry) => entry.name)
     .sort();
 
+
+  for (const [dir, expectedChecksum] of immutableHistoricalMigrations) {
+    const sqlFile = path.join(migrationRoot, dir, "migration.sql");
+    if (!fs.existsSync(sqlFile)) {
+      fail(`Immutable production migration is missing or renamed: ${dir}`);
+      continue;
+    }
+    const checksum = crypto.createHash("sha256").update(fs.readFileSync(sqlFile)).digest("hex");
+    if (checksum !== expectedChecksum) fail(`Immutable production migration was modified: ${dir}`);
+  }
   if (!migrationDirs.length) fail("No PostgreSQL migration directories found");
 
   const seenPrefixes = new Set();
@@ -33,10 +52,11 @@ if (!fs.existsSync(migrationRoot)) {
     }
 
     const prefix = Number(match[1]);
-    if (seenPrefixes.has(prefix)) fail(`Duplicate migration numeric prefix: ${match[1]}`);
+    const isHistoricalDuplicate = immutableHistoricalMigrations.has(dir);
+    if (seenPrefixes.has(prefix) && !isHistoricalDuplicate) fail(`Duplicate migration numeric prefix: ${match[1]}`);
     seenPrefixes.add(prefix);
 
-    if (previousPrefix && prefix <= previousPrefix) {
+    if (previousPrefix && (prefix < previousPrefix || (prefix === previousPrefix && !isHistoricalDuplicate))) {
       fail(`Migration prefixes must be strictly increasing: ${dir}`);
     }
     previousPrefix = prefix;
