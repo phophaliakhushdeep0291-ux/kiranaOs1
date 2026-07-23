@@ -2,6 +2,7 @@ import type { AuthResponse } from "@/types/api";
 import { clearAuthStorage, getAuthValue, loadAuthSession, saveAuthSession } from "@/lib/storage/auth-storage";
 import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
 import { withCrossTabLock } from "@/lib/browser/multiTabCoordinator";
+import { getActiveLocationId } from "@/features/stores/location-context";
 
 export interface ApiErrorData {
   message?: string;
@@ -330,7 +331,6 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   if (ownerPin) headers.set("x-owner-pin", ownerPin);
   if (!headers.has("x-location-id")) {
     try {
-      const { getActiveLocationId } = await import("@/features/stores/location-context");
       const locationId = getActiveLocationId();
       if (locationId) headers.set("x-location-id", locationId);
     } catch {

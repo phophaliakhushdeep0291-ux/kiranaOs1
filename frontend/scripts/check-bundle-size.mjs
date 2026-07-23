@@ -8,7 +8,10 @@ const assetsDir = join(scriptDir, "..", "dist", "public", "assets");
 const MAX_JS_CHUNK_BYTES = 900 * 1024;
 // Raw size catches accidental dependency growth; gzip tracks the bytes users
 // actually download. Keep both ceilings so minifier-friendly bloat cannot hide.
-const MAX_TOTAL_JS_BYTES = 2.76 * 1024 * 1024;
+// Raised from 2.76 -> 2.80 MB for legitimate feature growth (per-line discounts,
+// discount reasons, sales-by-hour reporting). No new dependency was added and the
+// gzip ceiling below is unchanged, so a real regression still trips the guard.
+const MAX_TOTAL_JS_BYTES = 2.80 * 1024 * 1024;
 const MAX_TOTAL_GZIP_BYTES = 850 * 1024;
 
 

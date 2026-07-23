@@ -13,6 +13,7 @@ import { usePanelResize, PanelResizeHandle } from "@/hooks/use-panel-resize";
 import { cn } from "@/lib/utils";
 import { BadgePercent, CheckCircle2, IndianRupee, Loader2, Pencil, Percent, Plus, Tag, Ticket, Trash2, X, XCircle } from "lucide-react";
 import { listOffers, createOffer, updateOffer, deleteOffer, applyOffer } from "@/features/offers/api";
+import { useOfflineStatus } from "@/features/sync";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import type { ApplyOfferResult, Offer, OfferInput } from "@/types/api";
 
@@ -49,6 +50,7 @@ type OfferFormData = z.infer<typeof offerFormSchema>;
 export default function OffersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isOnline } = useOfflineStatus();
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Offer | null>(null);
   const [deleting, setDeleting] = useState<Offer | null>(null);
@@ -57,15 +59,29 @@ export default function OffersPage() {
   const offersQ = useQuery({ queryKey: ["offers"], queryFn: listOffers });
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["offers"] });
 
+  // Offers are online-first (they validate coupon codes server-side). Offline
+  // they can't be saved, so say so plainly rather than a misleading "Try again".
+  const offlineNotice = () => toast({
+    title: "You're offline",
+    description: "Offers need a connection right now. Reconnect and save again — your typed details stay in the form.",
+    variant: "destructive",
+  });
+
   const saveMut = useMutation({
     mutationFn: (vars: { id?: string; data: OfferInput }) => (vars.id ? updateOffer(vars.id, vars.data) : createOffer(vars.data)),
     onSuccess: () => { invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Offer updated" : "Offer created" }); },
-    onError: (err: unknown) => toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
+    onError: (err: unknown) => {
+      if (!isOnline) return offlineNotice();
+      toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+    },
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteOffer(id),
     onSuccess: () => { invalidate(); setDeleting(null); toast({ title: "Offer moved to recycle bin" }); },
-    onError: (err: unknown) => toast({ title: "Could not delete", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
+    onError: (err: unknown) => {
+      if (!isOnline) return offlineNotice();
+      toast({ title: "Could not delete", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+    },
   });
   const toggleActive = (o: Offer) => saveMut.mutate({ id: o.id, data: { active: !o.active } as OfferInput });
 

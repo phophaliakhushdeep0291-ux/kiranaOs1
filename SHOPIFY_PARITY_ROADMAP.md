@@ -149,9 +149,20 @@ automation re-firing the request, not from a product defect.
       "stale" marker with a parked-age tooltip in the switcher; bills over 7
       days are auto-archived on load (with a toast) so the capped bar stays
       usable. Pure helpers in `open-bills.ts` (8 tests). *(done 2026-07-20)*
-- [ ] **Offline-first coverage for expenses/offers** — both are online-only
-      today (noted in project-prod-readiness); a kirana counter is offline
-      often enough that this matters.
+- [~] **Offline-first coverage for expenses/offers** — PARTIAL. Shipped the
+      safe half: recording an expense/offer offline now shows a clear "You're
+      offline — reconnect and save again, your typed details stay" message
+      instead of a misleading "Try again" that never would. *(2026-07-20)*
+
+      The full offline-first pipeline (local write + outbox replay) is
+      DEFERRED, not skipped: it needs new backend sync operation types AND
+      expenses post into the P&L / financial ledger, which the other active
+      session is *currently* restructuring (`feat(accounting): integrate
+      accounting control and financial ledger updates`). Building offline
+      expense posting against a moving ledger is a correctness collision, not
+      just a merge risk. Revisit once the accounting work has settled, then
+      mirror the bill outbox pattern (CREATE_EXPENSE sync op + normalizer +
+      local store + read-merge).
 
 ## Explicitly out of scope
 
@@ -176,3 +187,4 @@ automation re-firing the request, not from a product defect.
 | 2026-07-19 | Receipt preview toggles fixed (4 toggles were inert) + 10 regression tests | fix(settings): receipt preview toggles |
 | 2026-07-20 | Bulk price/stock edit on Products (select → edit dialog, min-price floor) | feat(products): bulk price/stock edit |
 | 2026-07-20 | Held-bill expiry hygiene (stale marker + auto-archive) | feat(billing): held-bill hygiene |
+| 2026-07-20 | Expenses/offers show a clear offline message; full pipeline deferred (ledger being restructured) | fix(expenses): offline messaging |

@@ -18,6 +18,7 @@ import {
   Package, Pencil, PieChart as PieIcon, Plus, Receipt, Search, Smartphone, Trash2, Truck, Users, Wallet, Wrench, X, Zap,
 } from "lucide-react";
 import { listExpenses, getExpenseOverview, createExpense, updateExpense, deleteExpense } from "@/features/expenses/api";
+import { useOfflineStatus } from "@/features/sync";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import type { Expense, ExpenseInput } from "@/types/api";
 
@@ -67,6 +68,7 @@ type ExpenseFormData = z.infer<typeof expenseFormSchema>;
 export default function ExpensesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isOnline } = useOfflineStatus();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [rangeOption, setRangeOption] = useState("this-month");
@@ -84,15 +86,29 @@ export default function ExpensesPage() {
 
   const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ["expenses"] }); void queryClient.invalidateQueries({ queryKey: ["expense-overview"] }); };
 
+  // Expenses are online-first (unlike bills). Offline they can't be saved yet,
+  // so say so plainly instead of a misleading "Try again" that won't help.
+  const offlineNotice = () => toast({
+    title: "You're offline",
+    description: "Expenses need a connection right now. Reconnect and save again — your typed details stay in the form.",
+    variant: "destructive",
+  });
+
   const saveMut = useMutation({
     mutationFn: (vars: { id?: string; data: ExpenseInput }) => (vars.id ? updateExpense(vars.id, vars.data) : createExpense(vars.data)),
     onSuccess: () => { invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved" }); },
-    onError: (err: unknown) => toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
+    onError: (err: unknown) => {
+      if (!isOnline) return offlineNotice();
+      toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+    },
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteExpense(id),
     onSuccess: () => { invalidate(); setDeleting(null); toast({ title: "Expense moved to recycle bin" }); },
-    onError: (err: unknown) => toast({ title: "Could not delete", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" }),
+    onError: (err: unknown) => {
+      if (!isOnline) return offlineNotice();
+      toast({ title: "Could not delete", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
+    },
   });
 
   const rows = expensesQ.data ?? [];
