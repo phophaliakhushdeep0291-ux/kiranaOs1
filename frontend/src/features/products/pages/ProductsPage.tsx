@@ -517,7 +517,17 @@ export default function ProductsPage() {
                   const brandLine = product.brand ?? product.aliases?.[0] ?? "";
                   const mrp = product.mrp && product.mrp > 0 ? product.mrp : productRetailPrice(product);
                   return (
-                    <tr key={product.id} className="border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe]" data-testid={`row-product-${product.id}`}>
+                    <tr key={product.id} className={`border-b border-[#f1f4f8] last:border-0 transition-colors hover:bg-[#f9fbfe] ${selectedIds.has(product.id) ? "bg-[#f3f8ff]" : ""}`} data-testid={`row-product-${product.id}`}>
+                      <td className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${product.name}`}
+                          data-testid={`bulk-select-${product.id}`}
+                          className="h-4 w-4 cursor-pointer accent-[#0057ff]"
+                          checked={selectedIds.has(product.id)}
+                          onChange={() => toggleOne(product.id)}
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-[#f4f7fb] text-lg">
@@ -623,6 +633,36 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      {selectedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-4 z-50 mx-auto flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-2xl border border-[#d6e2f5] bg-white px-4 py-3 shadow-[0_16px_40px_rgba(15,40,90,0.18)]" data-testid="bulk-action-bar">
+          <span className="text-sm font-bold text-[#13274d]">{selectedIds.size} selected</span>
+          <button className="text-xs font-semibold text-[#536383] hover:underline" onClick={() => setSelectedIds(new Set())}>Clear</button>
+          <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => openLabelPrintWindow(selectedProducts) || toast({ title: "Pop-up blocked", description: "Allow pop-ups to print labels.", variant: "destructive" })}>
+              <Tag size={14} className="mr-1" />Labels
+            </Button>
+            <Button
+              size="sm"
+              data-testid="bulk-edit-open"
+              onClick={() => {
+                if (!manageProducts.allowed) { toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" }); return; }
+                setBulkOpen(true);
+              }}
+            >
+              <SlidersHorizontal size={14} className="mr-1" />Bulk edit
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <BulkEditDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        products={selectedProducts}
+        requiresOwnerPin={bulkNeedsOwnerPin}
+        onDone={() => { setSelectedIds(new Set()); queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() }); }}
+      />
 
       <ProductFormPanel
         open={open}

@@ -139,8 +139,12 @@ automation re-firing the request, not from a product defect.
       `receipt-preview-sample.ts` (testable outside the settings screen) and
       extended to exercise every toggle; 10 regression tests assert each one
       visibly changes the output. *(done 2026-07-19, verified live)*
-- [ ] **Bulk price/stock edit** — multi-select on Products for price or stock
-      changes (owner-PIN gated), instead of one-by-one edits.
+- [x] **Bulk price/stock edit** — row checkboxes + select-all on Products, a
+      floating action bar (bulk edit / print labels), and a dialog: raise or
+      cut price by % or ₹ or set absolute; set/increase/decrease stock. Prices
+      that would fall below a product's minimum are clamped up to it and
+      counted; owner-PIN gated when any selected product has a min price. Pure
+      math in `bulk-edit.ts` (11 tests). *(done 2026-07-20)*
 - [ ] **Held-bill expiry hygiene** — open bills currently live forever; warn
       or auto-archive stale ones so the switcher stays usable.
 - [ ] **Offline-first coverage for expenses/offers** — both are online-only
@@ -168,3 +172,4 @@ automation re-firing the request, not from a product defect.
 | 2026-07-19 | Sales by Staff table + drawer count over/short history — ROADMAP COMPLETE (email receipts blocked on creds) | feat(reports): staff sales + drawer counts |
 | 2026-07-19 | Phase 2 opened; notes + discount reasons + staff attribution verified live | docs(roadmap): phase 2 |
 | 2026-07-19 | Receipt preview toggles fixed (4 toggles were inert) + 10 regression tests | fix(settings): receipt preview toggles |
+| 2026-07-20 | Bulk price/stock edit on Products (select → edit dialog, min-price floor) | feat(products): bulk price/stock edit |
