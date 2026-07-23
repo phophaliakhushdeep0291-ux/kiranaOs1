@@ -19,7 +19,7 @@ import { toast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useListBills } from "@/features/bills/queries";
 import type { Bill, Product } from "@/lib/api/client";
-import { productSellingPrice } from "../billing-calculations";
+import { productSellingPrice, resolveScanMatch } from "../billing-calculations";
 
 /* ─── deterministic product placeholder colour ─── */
 const PLACEHOLDER_COLORS = [
@@ -297,6 +297,17 @@ export function BillingSearch({
                   placeholder="Search by product name, barcode or SKU"
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Scan-to-cart: a USB scanner types the barcode + Enter.
+                    // Add the matched product and clear so the next scan is ready.
+                    if (e.key !== "Enter") return;
+                    const match = resolveScanMatch(search, filteredProducts);
+                    if (match) {
+                      e.preventDefault();
+                      onAddProduct(match);
+                      onSearchChange("");
+                    }
+                  }}
                 />
                 <kbd className="ml-auto hidden shrink-0 items-center gap-1 rounded-[7px] border border-[#e1e8f2] bg-[#f4f7fb] px-2 py-1 text-[11px] font-bold text-[#45577a] sm:flex">
                   ⌘ K

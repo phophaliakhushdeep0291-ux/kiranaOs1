@@ -35,6 +35,29 @@ export function productSearchText(product: Product): string {
   ].join(" "));
 }
 
+/**
+ * Resolve a scanner/keyboard "enter" in the billing search to the one product
+ * to add to the cart, or null if it's ambiguous.
+ *
+ * A USB barcode scanner types the code and presses Enter, so the fast path is
+ * an exact barcode (or SKU) match — that wins even when several products are
+ * on screen. Failing that, if the current filter narrows to exactly one
+ * product, Enter adds it (type-a-few-letters-and-hit-enter). Anything else is
+ * ambiguous and returns null so nothing is added by accident.
+ */
+export function resolveScanMatch(rawSearch: string, filtered: Product[]): Product | null {
+  const term = rawSearch.trim();
+  if (!term) return null;
+  const lower = term.toLowerCase();
+  const exact = filtered.find(
+    (product) =>
+      (product.barcode && String(product.barcode).trim().toLowerCase() === lower) ||
+      (product.sku && String(product.sku).trim().toLowerCase() === lower),
+  );
+  if (exact) return exact;
+  return filtered.length === 1 ? filtered[0] : null;
+}
+
 export function productCostPrice(product: Product): number {
   return roundMoney(Number(product.averageCostPrice ?? product.costPrice ?? product.costPerRateUnit ?? 0));
 }

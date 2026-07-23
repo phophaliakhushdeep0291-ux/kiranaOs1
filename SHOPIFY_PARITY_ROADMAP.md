@@ -131,6 +131,14 @@ automation re-firing the request, not from a product defect.
 
 ### 2B — Depth gaps (queue after 2A)
 
+- [x] **Scan-to-cart via USB scanner** — the search input filtered on a
+      scanned barcode but never added the product; the cashier still had to
+      click. Enter now resolves an exact barcode/SKU match (scanner wins even
+      with several products on screen) or the sole filtered result, adds it
+      to the cart, and clears the box ready for the next scan. Ambiguous
+      input does nothing. Pure resolver `resolveScanMatch` (7 tests).
+      *(done 2026-07-20)*
+
 - [x] **Receipt preview in printer settings** — the preview card already
       existed, but four toggles changed nothing in it: `showHsn`,
       `showGstBreakup`, `showReturnPolicy`, and the Phase 1 line
@@ -188,3 +196,4 @@ automation re-firing the request, not from a product defect.
 | 2026-07-20 | Bulk price/stock edit on Products (select → edit dialog, min-price floor) | feat(products): bulk price/stock edit |
 | 2026-07-20 | Held-bill expiry hygiene (stale marker + auto-archive) | feat(billing): held-bill hygiene |
 | 2026-07-20 | Expenses/offers show a clear offline message; full pipeline deferred (ledger being restructured) | fix(expenses): offline messaging |
+| 2026-07-20 | Scan-to-cart: Enter adds exact barcode/SKU match from billing search | feat(billing): scan-to-cart |
