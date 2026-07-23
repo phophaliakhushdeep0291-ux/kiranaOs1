@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { openLabelPrintWindow } from "@/features/products/label-print";
+import { BulkEditDialog } from "./components/BulkEditDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -106,6 +107,8 @@ export default function ProductsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [pendingValues, setPendingValues] = useState<ProductFormData | null>(null);
   const [pinOpen, setPinOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -257,6 +260,38 @@ export default function ProductsPage() {
   const pagedRows = rows.slice((safePage - 1) * rowsPerPage, safePage * rowsPerPage);
   const firstRow = rows.length === 0 ? 0 : (safePage - 1) * rowsPerPage + 1;
   const lastRow = Math.min(safePage * rowsPerPage, rows.length);
+
+  // ── Bulk selection ─────────────────────────────────────────────
+  // Selection is keyed by product id and survives pagination; a filter change
+  // drops ids no longer visible so a hidden selection can't be edited blind.
+  const visibleIds = useMemo(() => new Set(rows.map((product) => product.id)), [rows]);
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const next = new Set([...current].filter((id) => visibleIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [visibleIds]);
+  const selectedProducts = useMemo(
+    () => rows.filter((product) => selectedIds.has(product.id)) as Array<Product & Record<string, unknown>>,
+    [rows, selectedIds],
+  );
+  const pageAllSelected = pagedRows.length > 0 && pagedRows.every((product) => selectedIds.has(product.id));
+  const toggleOne = (id: string) => setSelectedIds((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const togglePage = () => setSelectedIds((current) => {
+    const next = new Set(current);
+    if (pageAllSelected) pagedRows.forEach((product) => next.delete(product.id));
+    else pagedRows.forEach((product) => next.add(product.id));
+    return next;
+  });
+  // Some selected product sells near its minimum → bulk price change needs owner PIN.
+  const bulkNeedsOwnerPin = useMemo(
+    () => selectedProducts.some((product) => Number(product.minPricePerRateUnit ?? product.minimumSellingPrice ?? 0) > 0),
+    [selectedProducts],
+  );
 
   const isPending = createProduct.isPending || updateProduct.isPending;
 
@@ -439,6 +474,16 @@ export default function ProductsPage() {
           <table className="w-full min-w-[920px] text-left text-[13px]">
             <thead>
               <tr className="border-b-2 border-[#e6ecf4] bg-[#f9fbfd] text-[11px] font-bold uppercase tracking-wide text-[#7a89a3]">
+                <th className="px-3 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all products on this page"
+                    data-testid="bulk-select-page"
+                    className="h-4 w-4 cursor-pointer accent-[#0057ff]"
+                    checked={pageAllSelected}
+                    onChange={togglePage}
+                  />
+                </th>
                 <th className="px-4 py-3 font-bold">Product</th>
                 <th className="px-3 py-3 font-bold">Category</th>
                 <th className="px-3 py-3 font-bold">SKU / Barcode</th>
@@ -452,9 +497,9 @@ export default function ProductsPage() {
             </thead>
             <tbody>
               {products.isLoading && rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-16 text-center text-sm text-[#536383]">Loading products…</td></tr>
+                <tr><td colSpan={10} className="px-4 py-16 text-center text-sm text-[#536383]">Loading products…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-16 text-center">
+                <tr><td colSpan={10} className="px-4 py-16 text-center">
                   <p className="text-sm font-bold text-[#13274d]">No products found</p>
                   <p className="mt-1 text-xs text-[#536383]">Add a product or clear filters to see your catalogue.</p>
                 </td></tr>

@@ -916,6 +916,51 @@ describe("bill sync behavior", () => {
     expect(active.map((row) => row.clientPaymentId).sort()).toEqual(["payment_A", "payment_B"]);
   });
 
+  it("self-heals a bill wrongly marked as merged into itself, without touching genuine twins", async () => {
+    // Regression: a synced bill inherited merged_into_id from the tombstone it replaced,
+    // so it pointed at its OWN id. merged_into_id is the app-wide "this row is gone"
+    // marker, so such a bill vanished from lists AND sales totals. It must be healed.
+    dbState.putInto("bills", {
+      id: "server_bill_self",
+      server_id: "server_bill_self",
+      local_id: "bill_local_self",
+      billNo: "KOS-2026-000001",
+      grandTotal: 100,
+      status: "active",
+      deleted_at: null,
+      merged_into_id: "server_bill_self", // ← points at itself (the bug)
+      mergedIntoId: "server_bill_self",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+    });
+    // A GENUINE twin (tombstone pointing at a DIFFERENT row) must be left alone.
+    dbState.putInto("bills", {
+      id: "bill_local_twin",
+      local_id: "bill_local_twin",
+      billNo: "PENDING-TWIN",
+      grandTotal: 200,
+      deleted_at: "2026-06-07T09:00:00.000Z",
+      merged_into_id: "server_bill_twin",
+      mergedIntoId: "server_bill_twin",
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+    });
+
+    const result = await hardenLocalFinancialData();
+
+    expect(result.billsMerged).toBeGreaterThanOrEqual(1);
+    // The self-referential bill is healed and stays active/visible.
+    expect(scopedRows("bills")).toContainEqual(
+      expect.objectContaining({ id: "server_bill_self", merged_into_id: null, mergedIntoId: null, deleted_at: null }),
+    );
+    // The genuine twin is untouched.
+    expect(scopedRows("bills")).toContainEqual(
+      expect.objectContaining({ id: "bill_local_twin", merged_into_id: "server_bill_twin" }),
+    );
+  });
+
   it("product created offline merges with its synced server echo instead of conflicting", async () => {
     // Unsynced LOCAL create (no server_id). Its synced server copy arrives via pull, matched
     // back by clientProductId. Must merge, not raise a false conflict.
