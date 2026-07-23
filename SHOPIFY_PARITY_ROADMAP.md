@@ -145,8 +145,10 @@ automation re-firing the request, not from a product defect.
       that would fall below a product's minimum are clamped up to it and
       counted; owner-PIN gated when any selected product has a min price. Pure
       math in `bulk-edit.ts` (11 tests). *(done 2026-07-20)*
-- [ ] **Held-bill expiry hygiene** — open bills currently live forever; warn
-      or auto-archive stale ones so the switcher stays usable.
+- [x] **Held-bill expiry hygiene** — parked bills over 12h show an amber
+      "stale" marker with a parked-age tooltip in the switcher; bills over 7
+      days are auto-archived on load (with a toast) so the capped bar stays
+      usable. Pure helpers in `open-bills.ts` (8 tests). *(done 2026-07-20)*
 - [ ] **Offline-first coverage for expenses/offers** — both are online-only
       today (noted in project-prod-readiness); a kirana counter is offline
       often enough that this matters.
@@ -173,3 +175,4 @@ automation re-firing the request, not from a product defect.
 | 2026-07-19 | Phase 2 opened; notes + discount reasons + staff attribution verified live | docs(roadmap): phase 2 |
 | 2026-07-19 | Receipt preview toggles fixed (4 toggles were inert) + 10 regression tests | fix(settings): receipt preview toggles |
 | 2026-07-20 | Bulk price/stock edit on Products (select → edit dialog, min-price floor) | feat(products): bulk price/stock edit |
+| 2026-07-20 | Held-bill expiry hygiene (stale marker + auto-archive) | feat(billing): held-bill hygiene |

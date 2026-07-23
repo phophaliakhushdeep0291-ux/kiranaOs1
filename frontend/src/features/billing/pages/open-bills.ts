@@ -9,6 +9,11 @@ import type { BillingDraft, CartItem, HeldBill } from "./billing-types";
 
 export const MAX_OPEN_BILLS = 10;
 
+/** A parked bill older than this is shown with a "stale" marker in the switcher. */
+export const HELD_BILL_STALE_MS = 12 * 60 * 60 * 1000; // 12 hours
+/** A parked bill older than this is auto-archived on load — a week-old cart is abandoned. */
+export const HELD_BILL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 export const BILLING_DRAFT_KEY = "kirana-os:billing-draft:v1";
 
 /** offlineDB settings key holding the open-bills set. Shared by BillingPage and the QR importer. */
@@ -27,6 +32,43 @@ export function upsertOpenBill(list: HeldBill[], bill: HeldBill): HeldBill[] {
     return next;
   }
   return [bill, ...list].slice(0, MAX_OPEN_BILLS);
+}
+
+/** Milliseconds since a held bill was parked (0 if its timestamp is unreadable). */
+export function heldBillAgeMs(bill: HeldBill, now = Date.now()): number {
+  const parked = new Date(bill.createdAt).getTime();
+  if (!Number.isFinite(parked)) return 0;
+  return Math.max(0, now - parked);
+}
+
+/** A parked bill old enough to warn the cashier it may be forgotten. */
+export function isHeldBillStale(bill: HeldBill, now = Date.now()): boolean {
+  return heldBillAgeMs(bill, now) >= HELD_BILL_STALE_MS;
+}
+
+/** Short human age for the switcher tooltip: "5m", "3h", "2d". */
+export function formatHeldBillAge(bill: HeldBill, now = Date.now()): string {
+  const ms = heldBillAgeMs(bill, now);
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+/**
+ * Drop parked bills older than the max age on load. A week-old cart is
+ * abandoned, not "open" — keeping it wastes a switcher slot (the set is capped
+ * at MAX_OPEN_BILLS) and risks re-billing stale prices. Returns the survivors
+ * plus how many were archived, so the caller can persist and inform the user.
+ */
+export function pruneExpiredHeldBills(
+  bills: HeldBill[],
+  now = Date.now(),
+): { kept: HeldBill[]; archived: number } {
+  const kept = bills.filter((bill) => heldBillAgeMs(bill, now) < HELD_BILL_MAX_AGE_MS);
+  return { kept, archived: bills.length - kept.length };
 }
 
 export function billingDraftFromHeldBill(bill: HeldBill): BillingDraft {

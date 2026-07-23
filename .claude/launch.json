@@ -19,6 +19,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "backend", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "gta6-script-director",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "http-server", "C:/Users/phoph/Desktop/gta6-script-director", "-p", "8123", "-c-1"],
+      "port": 8123
     }
   ]
 }

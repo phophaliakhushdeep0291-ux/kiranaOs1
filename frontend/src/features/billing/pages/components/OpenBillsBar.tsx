@@ -6,6 +6,10 @@ export interface OpenBillChip {
   name: string;
   itemCount: number;
   active: boolean;
+  /** Parked long enough to warn the cashier it may be forgotten. */
+  stale?: boolean;
+  /** Human age for the tooltip, e.g. "3h ago". */
+  ageLabel?: string;
 }
 
 /**
@@ -28,15 +32,17 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
           type="button"
           onClick={() => { if (!bill.active) onSwitch(bill.id); }}
           aria-current={bill.active}
-          title={bill.active ? "Current bill" : `Switch to ${bill.name}`}
+          title={bill.active ? "Current bill" : `Switch to ${bill.name}${bill.ageLabel ? ` · parked ${bill.ageLabel}` : ""}`}
           className={cn(
             "flex shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] font-bold transition-colors",
             bill.active
               ? "border-[#0057ff] bg-white text-[#0057ff] shadow-[0_2px_8px_rgba(0,87,255,0.15)]"
-              : "border-[#dbe3ef] bg-white text-[#475569] hover:border-[#0057ff] hover:text-[#0057ff]",
+              : bill.stale
+                ? "border-amber-300 bg-amber-50 text-amber-700 hover:border-amber-400"
+                : "border-[#dbe3ef] bg-white text-[#475569] hover:border-[#0057ff] hover:text-[#0057ff]",
           )}
         >
-          <ReceiptText size={13} />
+          {bill.stale ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" /> : <ReceiptText size={13} />}
           <span className="max-w-[120px] truncate">{bill.name}</span>
           <span className="rounded-full bg-[#eef2f8] px-1.5 text-[10px] font-bold text-[#64748b]">{bill.itemCount}</span>
         </button>

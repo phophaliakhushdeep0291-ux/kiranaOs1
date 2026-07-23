@@ -16,7 +16,7 @@ import { BillingSearch } from "./components/BillingSearch";
 import { BillingSummary } from "./components/BillingSummary";
 import { OpenBillsBar, type OpenBillChip } from "./components/OpenBillsBar";
 import { BillingOrderQrButton } from "@/features/customer-order/BillingOrderQrButton";
-import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, newBillId, upsertOpenBill } from "./open-bills";
+import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills, upsertOpenBill } from "./open-bills";
 import { updateCustomerOrder } from "@/features/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
 import { billNeedsCustomer, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
@@ -471,7 +471,14 @@ export default function Billing() {
           setAllowAdvancePayment(draft.allowAdvancePayment ?? false);
           setDraftRestored(Boolean(draft.cart?.length));
         }
-        setHeldBills(held.slice(0, 10));
+        // Drop week-old parked carts on load — they're abandoned, not open, and
+        // waste a capped switcher slot. Persist the pruned set so it stays clean.
+        const { kept, archived } = pruneExpiredHeldBills(held);
+        setHeldBills(kept.slice(0, 10));
+        if (archived > 0) {
+          saveSettingList(HELD_BILLS_KEY, kept);
+          toast({ title: `${archived} old parked bill${archived === 1 ? "" : "s"} cleared`, description: "Bills parked over a week ago were archived to keep the open-bills bar usable." });
+        }
       })
       .finally(() => {
         if (active) setDraftHydrated(true);
@@ -1484,7 +1491,7 @@ export default function Billing() {
           <OpenBillsBar
             bills={[
               { id: activeBillId, name: resolvedCustomerName || "Walk-in", itemCount: cart.length, active: true },
-              ...heldBills.map((entry): OpenBillChip => ({ id: entry.id, name: entry.customerName?.trim() || "Walk-in", itemCount: entry.cart?.length ?? 0, active: false })),
+              ...heldBills.map((entry): OpenBillChip => ({ id: entry.id, name: entry.customerName?.trim() || "Walk-in", itemCount: entry.cart?.length ?? 0, active: false, stale: isHeldBillStale(entry), ageLabel: formatHeldBillAge(entry) })),
             ]}
             onSwitch={resumeHeldBill}
             onNew={newBill}
