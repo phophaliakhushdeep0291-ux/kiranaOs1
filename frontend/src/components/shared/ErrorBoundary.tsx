@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
 import { recoverFromStaleDeploy } from "@/lib/pwa/registerServiceWorker";
+import { reportClientError } from "@/lib/diagnostics";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -67,7 +68,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("App screen crashed", error, info.componentStack);
-    if (isChunkLoadError(error.message)) this.startChunkRecovery();
+    if (isChunkLoadError(error.message)) {
+      // Chunk errors are transient stale-deploy artifacts — recover, don't report.
+      this.startChunkRecovery();
+      return;
+    }
+    reportClientError({ source: "react-error-boundary", message: error.message, stack: error.stack });
   }
 
   componentWillUnmount(): void {

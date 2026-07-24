@@ -3,6 +3,7 @@ import { clearAuthStorage, getAuthValue, loadAuthSession, saveAuthSession } from
 import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
 import { withCrossTabLock } from "@/lib/browser/multiTabCoordinator";
 import { getActiveLocationId } from "@/features/stores/location-context";
+import { recordApiBreadcrumb } from "@/lib/diagnostics/telemetryBuffer";
 
 export interface ApiErrorData {
   message?: string;
@@ -342,6 +343,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   assertNoBackgroundCooldown(path, method, background);
 
   const url = `${getApiBaseUrl()}${path}`;
+  const startedAt = Date.now();
   let response = await fetch(url, { ...fetchOptions, headers });
   updateRateLimitCooldown(path, response);
 
@@ -360,6 +362,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
         // Fall through to the original 401 response.
       }
     }
+  }
+
+  // Breadcrumb for the diagnostics buffer (Report Issue + error context). Skip the
+  // diagnostics endpoints themselves so reporting can't record itself in a loop.
+  if (!path.startsWith("/diagnostics")) {
+    recordApiBreadcrumb({ method, path, status: response.status, durationMs: Date.now() - startedAt });
   }
 
   try {
