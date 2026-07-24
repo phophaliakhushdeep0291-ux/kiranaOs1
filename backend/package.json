@@ -27,6 +27,7 @@
     "test:ai-safety": "node tests/ai-hallucination-guard.examples.js",
     "test:retail-payment": "node tests/retail-payment-integrity.examples.js",
     "test:regression": "node tests/backend-regression.examples.js",
+    "test:diagnostics": "node tests/diagnostics-error-store.examples.js",
     "test:frontend-checklist": "node tests/frontend-manual-checklist.examples.js",
     "seed": "node prisma/seed.js",
     "prod:check": "node scripts/production-check.js",

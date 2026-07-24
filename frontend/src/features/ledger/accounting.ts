@@ -96,6 +96,36 @@ export function ledgerSignedAmount(entry: Partial<CustomerLedgerEntry>): number 
 }
 
 
+/**
+ * True for a manual ledger adjustment in EITHER representation:
+ *  - the local optimistic row (`type: "ADJUSTMENT"`, `source_type: "manual_adjustment"`), or
+ *  - the synced server echo (`type: "debit"|"payment"` with `mode: "adjustment"`).
+ *
+ * The server encodes an adjustment's direction in `type` (debit = increase,
+ * payment = decrease) with a positive `amount`, so `normaliseLedgerType` classes
+ * the synced row as BILL/PAYMENT. That keeps the balance sign correct but loses
+ * the "this was a manual adjustment" identity — which the statement label and the
+ * activity timeline need. Use this predicate for display; keep using
+ * `ledgerSignedAmount` for the running balance (its sign is already right).
+ */
+export function isManualAdjustmentEntry(entry: Partial<CustomerLedgerEntry>): boolean {
+  const record = entry as Record<string, unknown>;
+  const mode = String(record.mode ?? "").trim().toLowerCase();
+  const source = String(record.source_type ?? record.sourceType ?? "").trim().toLowerCase();
+  const rawType = String(record.type ?? "").trim().toUpperCase();
+  // display_type is the already-normalised label on a LedgerStatementRow.
+  const displayType = String(record.display_type ?? "").trim().toUpperCase();
+  return (
+    mode === "adjustment" ||
+    source === "adjustment" ||
+    source === "manual_adjustment" ||
+    rawType === "ADJUSTMENT" ||
+    rawType === "MANUAL_ADJUSTMENT" ||
+    displayType === "ADJUSTMENT" ||
+    displayType === "MANUAL_ADJUSTMENT"
+  );
+}
+
 function getStringField(row: Partial<CustomerLedgerEntry>, keys: string[]): string | null {
   const record = row as Record<string, unknown>;
   for (const key of keys) {

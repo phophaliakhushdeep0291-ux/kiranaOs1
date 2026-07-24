@@ -2,6 +2,9 @@ import { ZodError } from "zod";
 import { env } from "../config/env.js";
 import { logger } from "../lib/logger.js";
 import { captureRequestError } from "../lib/errorTracking.js";
+import { recordErrorEvent } from "../modules/diagnostics/diagnostics.service.js";
+
+const BACKEND_VERSION = process.env.APP_VERSION || "1.0.0";
 
 function baseError(req, message) {
   return {
@@ -31,6 +34,7 @@ function defaultCodeForStatus(statusCode) {
 
 function logUnhandledError(err, req) {
   captureRequestError(err, req);
+  persistBackendError(err, req);
   logger.error({
     type: "unhandled_error",
     requestId: req?.requestId,
@@ -43,6 +47,68 @@ function logUnhandledError(err, req) {
     errorMessage: err?.message,
     stack: env.NODE_ENV === "development" ? err?.stack : undefined,
   });
+}
+
+// Persist important (5xx / unknown) errors into our own store in addition to
+// Sentry, so support can query and group them without a third-party dependency.
+// Fire-and-forget and fully guarded: diagnostics must never turn an error
+// response into a crash (recordErrorEvent also swallows its own failures).
+function persistBackendError(err, req) {
+  try {
+    void recordErrorEvent({
+      source: "backend",
+      shopId: req?.user?.shopId ?? null,
+      userId: req?.user?.userId ?? req?.user?.id ?? null,
+      deviceId: req?.user?.deviceId ?? normalizeHeader(req?.headers?.["x-device-id"]),
+      message: err?.message,
+      stack: err?.stack,
+      errorCode: err?.code,
+      endpoint: buildEndpoint(req),
+      backendVersion: BACKEND_VERSION,
+      route: requestPathNoQuery(req),
+      ...parseErrorLocation(err?.stack),
+    });
+  } catch {
+    // Guard the synchronous throw paths; the async write is already swallowed.
+  }
+}
+
+function normalizeHeader(value) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
+function requestPathNoQuery(req) {
+  const url = req?.originalUrl || req?.url;
+  if (typeof url !== "string") return undefined;
+  const q = url.indexOf("?");
+  return q >= 0 ? url.slice(0, q) : url;
+}
+
+// Prefer the matched route pattern (e.g. "GET /api/bills/:id") over the concrete
+// URL so the same endpoint groups together regardless of path params.
+function buildEndpoint(req) {
+  if (!req) return undefined;
+  const routePattern = req.route?.path ? `${req.baseUrl || ""}${req.route.path}` : null;
+  const path = routePattern || requestPathNoQuery(req) || req.path;
+  return path ? `${req.method || "GET"} ${path}`.slice(0, 300) : undefined;
+}
+
+// Pull the first application stack frame (fn + file:line), skipping node internals.
+function parseErrorLocation(stack) {
+  if (typeof stack !== "string") return {};
+  const frames = stack.split("\n").slice(1);
+  const appFrame = frames.find((l) => /[\\/]src[\\/]/.test(l) && l.includes(" at "));
+  const frame = appFrame || frames.find((l) => l.trim().startsWith("at "));
+  if (!frame) return {};
+  const match = /at\s+(?:(.*?)\s+\()?(.*?):(\d+):(\d+)\)?\s*$/.exec(frame.trim());
+  if (!match) return {};
+  const [, fn, file, line] = match;
+  return {
+    functionName: fn ? fn.slice(0, 200) : undefined,
+    fileName: file ? file.replace(/^.*[\\/]/, "").slice(0, 400) : undefined,
+    lineNumber: line ? Number(line) : undefined,
+  };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLedgerStatement, calculateLedgerBalance, calculateUdharAgeing, dedupeLedgerEntries, ledgerSignedAmount, type CustomerLedgerEntry } from "@/features/ledger/accounting";
+import { buildLedgerStatement, calculateLedgerBalance, calculateUdharAgeing, dedupeLedgerEntries, isManualAdjustmentEntry, ledgerSignedAmount, type CustomerLedgerEntry } from "@/features/ledger/accounting";
 
 function entry(id: string, type: string, amount: number, daysAgo: number): CustomerLedgerEntry {
   const date = new Date(Date.UTC(2026, 5, 5));
@@ -148,6 +148,27 @@ describe("customer ledger accounting", () => {
     const rows = buildLedgerStatement([entry("b1", "BILL", 500, 2), entry("p1", "PAYMENT", 200, 1)]);
     expect(rows[0]?.running_balance).toBe(300);
     expect(rows[1]?.running_balance).toBe(500);
+  });
+
+  it("recognises a manual adjustment in both local and synced-echo shapes, and keeps the balance sign", () => {
+    // Local optimistic shape: type ADJUSTMENT, direction in the amount sign.
+    const localIncrease = { id: "adj_local_up", customerId: "c1", customer_id: "c1", type: "ADJUSTMENT", source_type: "manual_adjustment", amount: 100, entry_at: "2026-06-05T09:00:00.000Z" } as CustomerLedgerEntry;
+    const localDecrease = { id: "adj_local_down", customerId: "c1", customer_id: "c1", type: "ADJUSTMENT", source_type: "manual_adjustment", amount: -60, entry_at: "2026-06-05T09:00:00.000Z" } as CustomerLedgerEntry;
+    // Synced server echo: direction is in `type` (debit/payment), amount is positive, mode = adjustment.
+    const syncedIncrease = { id: "adj_srv_up", customerId: "c1", customer_id: "c1", type: "debit", mode: "adjustment", sourceType: "adjustment", amount: 100, entry_at: "2026-06-05T09:00:00.000Z", sync_status: "synced" } as unknown as CustomerLedgerEntry;
+    const syncedDecrease = { id: "adj_srv_down", customerId: "c1", customer_id: "c1", type: "payment", mode: "adjustment", sourceType: "adjustment", amount: 60, entry_at: "2026-06-05T09:00:00.000Z", sync_status: "synced" } as unknown as CustomerLedgerEntry;
+
+    for (const row of [localIncrease, localDecrease, syncedIncrease, syncedDecrease]) {
+      expect(isManualAdjustmentEntry(row)).toBe(true);
+    }
+    // A real cash payment must NOT be treated as an adjustment.
+    expect(isManualAdjustmentEntry({ id: "p", type: "PAYMENT", mode: "cash", amount: 60 } as unknown as CustomerLedgerEntry)).toBe(false);
+
+    // Sign survives regardless of representation: increases add to udhar, decreases subtract.
+    expect(ledgerSignedAmount(syncedIncrease)).toBe(100);
+    expect(ledgerSignedAmount(syncedDecrease)).toBe(-60);
+    expect(ledgerSignedAmount(localIncrease)).toBe(100);
+    expect(ledgerSignedAmount(localDecrease)).toBe(-60);
   });
 
   it("allocates payments against oldest udhar for ageing", () => {

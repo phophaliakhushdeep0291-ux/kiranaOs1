@@ -8,6 +8,7 @@ import {
   ArrowUpRight,
   Banknote,
   Bell,
+  BookOpen,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -1340,7 +1341,10 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
       <article className="min-h-[128px] overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex flex-col gap-4 p-[18px] sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[#0b63f6]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[#071b3a]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{risk.label}</span><button onClick={() => onEdit(customer)} title="Edit customer" className="grid h-7 w-7 place-items-center rounded-[8px] text-[#0b63f6] hover:bg-[#eef5ff]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
-          <InfoMini label="Last Payment" value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
+          <div className="flex items-center gap-3">
+            <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[#0b63f6] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_rgba(11,99,246,0.20)] transition-colors hover:bg-[#0057e7]"><BookOpen size={15} />View Ledger</Link>
+            <InfoMini label="Last Payment" value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
+          </div>
         </div>
         <div className="grid grid-cols-2 border-t border-[#e8edf4] sm:grid-cols-5"><CompactSummaryV3 label="Credit Limit" value={creditLimit > 0 ? fmtMoney(creditLimit) : "Not set"} /><CompactSummaryV3 label="Total Purchases" value={fmtMoney(outstanding + paid)} /><CompactSummaryV3 label="Total Paid" value={fmtMoney(paid)} /><CompactSummaryV3 label="Outstanding" value={fmtMoney(outstanding)} danger /><CompactSummaryV3 label="Overdue Days" value={`${overdueDays} Days`} danger={overdueDays > 0} /></div>
       </article>

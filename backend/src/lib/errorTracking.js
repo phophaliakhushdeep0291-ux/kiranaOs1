@@ -14,14 +14,14 @@ function stripQuery(value) {
   return queryIndex >= 0 ? value.slice(0, queryIndex) : value;
 }
 
-function sanitizeText(value) {
+export function sanitizeText(value) {
   if (typeof value !== "string") return value;
   return redactSensitive(value)
     .replace(EMAIL_PATTERN, "[REDACTED_EMAIL]")
     .replace(PHONE_PATTERN, "[REDACTED_PHONE]");
 }
 
-function sanitizeTelemetry(value, depth = 0, key = "") {
+export function sanitizeTelemetry(value, depth = 0, key = "") {
   if (value === null || value === undefined) return value;
   if (PRIVATE_CONTEXT_KEY.test(key)) return "[REDACTED]";
   if (depth > 8) return "[REDACTED_DEPTH]";

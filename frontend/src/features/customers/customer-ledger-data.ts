@@ -1,7 +1,7 @@
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
 import type { Bill, Customer, UdharSummary } from "@/types/api";
-import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/ledger/accounting";
+import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, isManualAdjustmentEntry, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/ledger/accounting";
 import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 
@@ -433,8 +433,10 @@ export function buildCustomerTimeline(data: Pick<CustomerDetailData, "bills" | "
 
   for (const row of data.ledger) {
     const record = row as unknown as Record<string, unknown>;
-    const type = String(record.display_type ?? record.type ?? "").toLowerCase();
-    if (!type.includes("adjust")) continue;
+    // Include manual adjustments in either shape (local "ADJUSTMENT" or the synced
+    // debit/payment echo carrying mode:"adjustment"). Bill/payment echoes are still
+    // excluded — they're already represented by the bills/payments feeds above.
+    if (!isManualAdjustmentEntry(row)) continue;
     events.push({
       id: `ledger:${String(record.id)}`,
       at: eventDate(record, ["display_date", "entry_at", "createdAt", "created_at"]),

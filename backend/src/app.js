@@ -45,6 +45,7 @@ import giftCardRoutes from "./modules/gift-cards/giftCards.routes.js";
 import inventoryLotsRoutes from "./modules/inventory-lots/inventoryLots.routes.js";
 import purchaseReturnsRoutes from "./modules/purchase-returns/purchaseReturns.routes.js";
 import accountingRoutes from "./modules/finance/accounting.routes.js";
+import diagnosticsRoutes from "./modules/diagnostics/diagnostics.routes.js";
 
 const app = express();
 
@@ -228,6 +229,7 @@ app.use("/api/accounting", accountingRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/diagnostics", diagnosticsRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────
 app.use((_req, res) => {

@@ -92,6 +92,9 @@ model Shop {
   giftCards                   GiftCard[]
   giftCardTransactions        GiftCardTransaction[]
   backupArtifacts             BackupArtifact[]
+  errorGroups                 ErrorGroup[]
+  errorEvents                 ErrorEvent[]
+  supportRequests             SupportRequest[]
 }
 
 // ─────────────────────────────────────────────
@@ -1764,6 +1767,89 @@ model SyncIdMapping {
   @@unique([shopId, entityType, localId])
   @@index([shopId, entityType, serverId])
   @@index([shopId, updatedAt, id])
+}
+
+// ─────────────────────────────────────────────
+// DIAGNOSTICS — own-backend error store (grouped) + support requests.
+// Errors are persisted in our own DB (in addition to Sentry) so support can
+// diagnose thousands of shops remotely. shopId is nullable because pre-auth
+// crashes and some backend 5xxs carry no tenant. Grouping is by a content-hash
+// `fingerprint` that bakes in the shop scope, so the upsert is atomic and can
+// never collide across tenants.
+// ─────────────────────────────────────────────
+model ErrorGroup {
+  id            String   @id @default(cuid())
+  shopId        String?
+  fingerprint   String   @unique
+  source        String // frontend | backend | worker
+  title         String
+  errorCode     String?
+  sampleMessage String
+  sampleStack   String?
+  count         Int      @default(1)
+  status        String   @default("open") // open | resolved | ignored
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop   Shop?        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  events ErrorEvent[]
+
+  @@index([shopId, lastSeenAt])
+  @@index([shopId, status, lastSeenAt])
+}
+
+model ErrorEvent {
+  id             String   @id @default(cuid())
+  groupId        String
+  shopId         String?
+  userId         String?
+  deviceId       String?
+  orgId          String?
+  source         String // frontend | backend | worker
+  message        String
+  stack          String?
+  errorCode      String?
+  endpoint       String?
+  functionName   String?
+  fileName       String?
+  lineNumber     Int?
+  appVersion     String?
+  backendVersion String?
+  os             String?
+  browser        String?
+  networkStatus  String? // online | offline
+  onlineMode     Boolean?
+  memoryUsageMb  Float?
+  route          String?
+  createdAt      DateTime @default(now())
+
+  group ErrorGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  shop  Shop?      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
+  @@index([shopId, createdAt])
+}
+
+model SupportRequest {
+  id            String   @id @default(cuid())
+  shopId        String
+  userId        String?
+  deviceId      String?
+  description   String
+  page          String?
+  appVersion    String?
+  status        String   @default("open") // open | triaged | resolved
+  contextJson   String   @default("{}") // recent errors, api requests, sync summary, device info
+  screenshotKey String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, status, createdAt])
+  @@index([shopId, createdAt])
 }
 
 // ─────────────────────────────────────────────

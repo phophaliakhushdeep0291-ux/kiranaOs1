@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { buildCustomerTimeline, loadCustomerDetail, reconcileCustomerWithAuthoritativeSummary, formatDateTime, formatMoney, formatShortDate, type CustomerTimelineEvent } from "@/features/customers/customer-ledger-data";
-import { ledgerEntryLabel, normaliseLedgerType } from "@/features/ledger/accounting";
+import { isManualAdjustmentEntry, ledgerEntryLabel, normaliseLedgerType } from "@/features/ledger/accounting";
 import { getUdharSummary } from "@/features/ledger/api";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { createLedgerAdjustmentLocalFirst } from "@/features/ledger/local-actions";
@@ -275,9 +275,10 @@ export default function CustomerDetailPage() {
           <CardContent className="space-y-2 max-h-[560px] overflow-auto">
             {ledger.length === 0 ? <div className="text-center py-8 text-muted-foreground">No ledger entries yet.</div> : ledger.map((entry) => {
               const type = normaliseLedgerType(entry.type, entry.source_type);
+              const label = isManualAdjustmentEntry(entry) ? "Manual adjustment" : ledgerEntryLabel(type);
               return <div key={entry.id} className="rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div><p className="font-medium">{ledgerEntryLabel(type)}</p><p className="text-xs text-muted-foreground">{formatDateTime(entry.display_date)} {entry.note ? `• ${entry.note}` : ""}</p></div>
+                  <div><p className="font-medium">{label}</p><p className="text-xs text-muted-foreground">{formatDateTime(entry.display_date)} {entry.note ? `• ${entry.note}` : ""}</p></div>
                   <div className="text-right"><p className={`font-bold ${entry.signed_amount < 0 ? "text-emerald-600" : "text-destructive"}`}>{entry.signed_amount < 0 ? "-" : "+"}{formatMoney(Math.abs(entry.signed_amount))}</p><p className="text-xs text-muted-foreground">Bal {formatMoney(entry.running_balance)}</p></div>
                 </div>
               </div>;

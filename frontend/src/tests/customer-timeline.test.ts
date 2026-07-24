@@ -58,6 +58,27 @@ describe("buildCustomerTimeline", () => {
     expect(events).toHaveLength(0);
   });
 
+  it("shows a synced manual adjustment (debit/payment echo carrying mode:adjustment)", () => {
+    const events = buildCustomerTimeline(input({
+      ledger: [
+        // After sync a reduce-udhar adjustment comes back as a PAYMENT-typed row with mode:"adjustment".
+        { id: "adj1", display_type: "PAYMENT", mode: "adjustment", signed_amount: -60, display_date: "2026-07-17T13:00:00Z", note: "goodwill" },
+      ] as never,
+    }));
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe("adjustment");
+    expect(events[0].amount).toBe(-60);
+  });
+
+  it("still excludes a real synced payment echo (mode not adjustment) from the timeline", () => {
+    const events = buildCustomerTimeline(input({
+      ledger: [
+        { id: "pay1", display_type: "PAYMENT", mode: "cash", signed_amount: -60, display_date: "2026-07-17T13:00:00Z" },
+      ] as never,
+    }));
+    expect(events).toHaveLength(0);
+  });
+
   it("labels estimates separately from pakka bills", () => {
     const events = buildCustomerTimeline(input({
       bills: [{ id: "b1", billNo: "EST-1", billType: "estimate", grandTotal: 80, createdAt: "2026-07-17T10:00:00Z" }] as never,
