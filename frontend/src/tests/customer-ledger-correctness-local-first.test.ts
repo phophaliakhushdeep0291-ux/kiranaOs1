@@ -100,7 +100,7 @@ import { createBillLocalFirst } from "@/features/billing/local-actions";
 import { cancelBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { readCustomerLedgerEntries } from "@/features/ledger/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
-import { applyAuthoritativeUdharSummary, loadCustomerDetail, loadCustomersWithLedger } from "@/features/customers/customer-ledger-data";
+import { applyAuthoritativeUdharSummary, reconcileCustomerWithAuthoritativeSummary, loadCustomerDetail, loadCustomersWithLedger } from "@/features/customers/customer-ledger-data";
 
 function resetTables() {
   dbState.idCounter = 0;
@@ -551,5 +551,51 @@ describe("customer ledger correctness", () => {
     expect(reconciled).toHaveLength(1);
   });
 
+  it("customer detail page shows the list's authoritative balance, not the stale local ledger sum", async () => {
+    // A synced device whose local ledger nets to zero (stale/missing rows) — the
+    // exact drift that made the customer ledger PAGE disagree with the main list.
+    seedLedger({
+      id: "ledger_detail_bill",
+      type: "BILL",
+      source_type: "bill",
+      amount: 200,
+      entry_at: "2026-06-06T10:00:00.000Z",
+      created_at: "2026-06-06T10:00:00.000Z",
+    });
+    seedLedger({
+      id: "ledger_detail_payment",
+      type: "PAYMENT",
+      source_type: "payment",
+      amount: 200,
+      entry_at: "2026-06-07T10:00:00.000Z",
+      created_at: "2026-06-07T10:00:00.000Z",
+    });
+    const summary = {
+      totalOutstanding: 1466,
+      customers: [{ customerId: "customer_1", customerName: "Ramesh", amount: 1466, outstanding: 1466 }],
+    };
+
+    const local = await loadCustomersWithLedger();
+    const listBalance = applyAuthoritativeUdharSummary(local, summary)[0].ledgerBalance;
+    const detailCustomer = reconcileCustomerWithAuthoritativeSummary(local[0], summary);
+
+    expect(local[0].ledgerBalance).toBe(0); // raw local ledger (what the page showed before the fix)
+    expect(detailCustomer.ledgerBalance).toBe(1466);
+    expect(detailCustomer.balance_source).toBe("server_ledger_summary");
+    // The whole point: the detail page and the list agree on the number.
+    expect(detailCustomer.ledgerBalance).toBe(listBalance);
+  });
+
+  it("customer detail reconciliation preserves an unsynced offline balance", async () => {
+    seedCustomer({ udharAmount: 350, totalUdhar: 350, sync_status: "pending_sync" });
+    const local = await loadCustomersWithLedger();
+    const detailCustomer = reconcileCustomerWithAuthoritativeSummary(
+      { ...local[0], ledgerBalance: 350, udharAmount: 350, totalUdhar: 350, sync_status: "pending_sync" },
+      { totalOutstanding: 500, customers: [{ customerId: "customer_1", customerName: "Ramesh", amount: 500, outstanding: 500 }] },
+    );
+
+    expect(detailCustomer.ledgerBalance).toBe(350);
+    expect(detailCustomer.balance_source).not.toBe("server_ledger_summary");
+  });
 
 });

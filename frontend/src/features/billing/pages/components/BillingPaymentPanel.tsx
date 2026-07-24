@@ -1,7 +1,7 @@
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
-import { clampAmount } from "../billing-calculations";
+import { clampAmount, computeChangeDue, suggestCashTenders } from "../billing-calculations";
 import { SPLIT_PAYMENT, type BillTypeSelection, type PaymentSelection } from "../billing-types";
 import { ArrowLeftRight, Banknote, Gift, Landmark, Loader2, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
@@ -82,6 +82,12 @@ export function BillingPaymentPanel({
   onLookupGiftCard,
 }: BillingPaymentPanelProps) {
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
+  // Cash-tendered → change-due calculator. Panel-local and informational only:
+  // it never changes what the bill records (the shop keeps grandTotal), it just
+  // tells the cashier how much cash to hand back.
+  const [cashTendered, setCashTendered] = useState<number | "">("");
+  const changeDue = typeof cashTendered === "number" ? computeChangeDue(cashTendered, grandTotal) : 0;
+  const tenderSuggestions = useMemo(() => suggestCashTenders(grandTotal), [grandTotal]);
   const upiAmount = paymentMode === SPLIT_PAYMENT ? splitUpi : grandTotal;
   const paymentConfig = getPaymentConfigSync();
   const upiUri = useMemo(() => buildUpiPaymentUri({ ...paymentConfig, amount: upiAmount }), [paymentConfig.upiId, paymentConfig.payeeName, upiAmount]);
@@ -218,6 +224,46 @@ export function BillingPaymentPanel({
                 : "Paid amount OK"}
             </p>
           )}
+        </div>
+      ) : null}
+
+      {/* Cash tendered → change due. Informational: does not change the bill. */}
+      {showPaymentMode && paymentMode === BillPaymentMode.cash && grandTotal > 0 ? (
+        <div className="rounded-xl border bg-muted/20 p-3" data-testid="cash-change-box">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Cash from customer (for change)</label>
+          <Input
+            data-testid="input-cash-tendered"
+            type="number"
+            inputMode="decimal"
+            className="h-10 font-semibold"
+            placeholder={fmtRs(grandTotal)}
+            value={cashTendered}
+            onChange={(e) => setCashTendered(e.target.value ? Number(e.target.value) : "")}
+          />
+          {tenderSuggestions.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {tenderSuggestions.map((amount) => (
+                <button
+                  key={amount}
+                  type="button"
+                  data-testid={`tender-chip-${amount}`}
+                  onClick={() => setCashTendered(amount)}
+                  className="rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#31527e] transition-colors hover:border-[#0057ff] hover:text-[#0057ff]"
+                >
+                  {fmtRs(amount)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {typeof cashTendered === "number" && cashTendered > 0 ? (
+            <p className={`mt-2 text-sm font-black ${changeDue > 0 ? "text-emerald-600" : "text-muted-foreground"}`} data-testid="text-change-due">
+              {cashTendered < grandTotal
+                ? `Short by ${fmtRs(grandTotal - cashTendered)}`
+                : changeDue > 0
+                  ? `Change to return: ${fmtRs(changeDue)}`
+                  : "Exact cash — no change"}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

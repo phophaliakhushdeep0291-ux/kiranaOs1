@@ -56,6 +56,29 @@ function withAuthoritativeBalance(customer: CustomerWithLedger, balance: number)
   };
 }
 
+function reconcileAgainstBalances(customer: CustomerWithLedger, balances: Map<string, number>): CustomerWithLedger {
+  if (hasPendingLocalBalance(customer)) return customer;
+  const serverId = customerIdentityValues(customer).find((id) => balances.has(id));
+  return withAuthoritativeBalance(customer, serverId ? Number(balances.get(serverId) ?? 0) : 0);
+}
+
+/**
+ * Reconcile ONE already-loaded customer against the server's ledger-derived
+ * summary, using the same rule as the customer list: a pending local write stays
+ * device-authoritative, an unmatched customer is treated as settled (zero), and
+ * every synced customer takes the server balance. Unlike
+ * {@link applyAuthoritativeUdharSummary} it never appends synthetic ledger-only
+ * rows, so the single-customer detail/ledger view can reuse the list's exact
+ * balance instead of the raw (and possibly stale) local ledger sum.
+ */
+export function reconcileCustomerWithAuthoritativeSummary(
+  customer: CustomerWithLedger,
+  summary: UdharSummary,
+): CustomerWithLedger {
+  const balances = new Map(summary.customers.map((row) => [row.customerId, row.outstanding]));
+  return reconcileAgainstBalances(customer, balances);
+}
+
 /**
  * Reconcile the device ledger view with the server's ledger-derived summary.
  * Pending local writes remain device-authoritative until they sync; every other
@@ -70,8 +93,7 @@ export function applyAuthoritativeUdharSummary(
   const reconciled = customers.map((customer) => {
     const serverId = customerIdentityValues(customer).find((id) => balances.has(id));
     if (serverId) matchedServerIds.add(serverId);
-    if (hasPendingLocalBalance(customer)) return customer;
-    return withAuthoritativeBalance(customer, serverId ? Number(balances.get(serverId) ?? 0) : 0);
+    return reconcileAgainstBalances(customer, balances);
   });
 
   for (const serverCustomer of summary.customers) {

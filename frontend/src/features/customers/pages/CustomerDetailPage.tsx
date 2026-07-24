@@ -11,14 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { buildCustomerTimeline, loadCustomerDetail, formatDateTime, formatMoney, formatShortDate, type CustomerTimelineEvent } from "@/features/customers/customer-ledger-data";
+import { buildCustomerTimeline, loadCustomerDetail, reconcileCustomerWithAuthoritativeSummary, formatDateTime, formatMoney, formatShortDate, type CustomerTimelineEvent } from "@/features/customers/customer-ledger-data";
 import { ledgerEntryLabel, normaliseLedgerType } from "@/features/ledger/accounting";
+import { getUdharSummary } from "@/features/ledger/api";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { createLedgerAdjustmentLocalFirst } from "@/features/ledger/local-actions";
 import { FeatureGate, UpgradePrompt } from "@/features/subscription";
 import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
-import { apiRequest } from "@/lib/api/http";
+import { apiRequest, isBrowserOnline } from "@/lib/api/http";
 
 interface PaymentFormState { amount: string; mode: "cash" | "upi" | "bank"; note: string }
 interface ReverseFormState { paymentId: string }
@@ -35,7 +36,24 @@ function useCustomerDetail(id: string) {
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
   }, [id, queryClient]);
-  return useQuery({ queryKey: ["customer-detail", id], queryFn: () => loadCustomerDetail(id), enabled: id.length > 0, staleTime: 1_500 });
+  return useQuery({
+    queryKey: ["customer-detail", id],
+    queryFn: async () => {
+      const detail = await loadCustomerDetail(id);
+      // Match the customers list: overlay the server's authoritative udhar summary
+      // so "Current udhar" here can't drift from the value shown on the main page.
+      // Offline (or if the summary call fails) we keep the local ledger view.
+      if (!detail || !isBrowserOnline()) return detail;
+      try {
+        const summary = await getUdharSummary();
+        return { ...detail, customer: reconcileCustomerWithAuthoritativeSummary(detail.customer, summary) };
+      } catch {
+        return detail;
+      }
+    },
+    enabled: id.length > 0,
+    staleTime: 1_500,
+  });
 }
 
 function readNumber(value: unknown): number {

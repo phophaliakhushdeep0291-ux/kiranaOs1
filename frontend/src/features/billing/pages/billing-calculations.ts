@@ -15,6 +15,32 @@ export function roundQuantity(value: number): number {
   return Math.round((n + Number.EPSILON) * 1000) / 1000 || 0;
 }
 
+/** Cash the shop must hand back when the customer tenders more than the bill. */
+export function computeChangeDue(cashTendered: number, grandTotal: number): number {
+  const change = roundMoney((Number(cashTendered) || 0) - (Number(grandTotal) || 0));
+  return change > 0 ? change : 0;
+}
+
+/**
+ * Quick-tender suggestions for a cash sale: the exact amount, then the next
+ * common Indian notes above it (₹50/100/200/500/2000) plus the round-up to the
+ * next ₹100. Deduped, sorted, capped — so the cashier taps instead of typing.
+ */
+export function suggestCashTenders(grandTotal: number, limit = 4): number[] {
+  const total = roundMoney(Number(grandTotal) || 0);
+  if (total <= 0) return [];
+  const notes = [50, 100, 200, 500, 2000];
+  const candidates = new Set<number>([total]);
+  // Next round ₹100 above the total (e.g. 457 → 500).
+  const roundUp = Math.ceil(total / 100) * 100;
+  if (roundUp > total) candidates.add(roundUp);
+  // Single notes larger than the total (customer pays with one note).
+  for (const note of notes) {
+    if (note > total) candidates.add(note);
+  }
+  return [...candidates].sort((a, b) => a - b).slice(0, limit);
+}
+
 export function normalizeSearchText(value: string): string {
   return value
     .toLowerCase()
