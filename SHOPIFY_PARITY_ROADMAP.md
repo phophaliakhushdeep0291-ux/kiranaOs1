@@ -138,6 +138,13 @@ automation re-firing the request, not from a product defect.
       to the cart, and clears the box ready for the next scan. Ambiguous
       input does nothing. Pure resolver `resolveScanMatch` (7 tests).
       *(done 2026-07-20)*
+- [x] **Cash tender + change-due** — the payment panel had an Amount-Received
+      field clamped to the total and no change calc, so a cash counter had no
+      "gave ₹500 for ₹457 → return ₹43". Added a cash-mode helper: quick-tender
+      chips (exact, next ₹100 round-up, larger notes) + a live verdict (change
+      to return / exact / short by X). Panel-local and informational — never
+      changes what the bill records. `computeChangeDue` + `suggestCashTenders`
+      (9 tests). *(done 2026-07-24)*
 
 - [x] **Receipt preview in printer settings** — the preview card already
       existed, but four toggles changed nothing in it: `showHsn`,
@@ -197,3 +204,4 @@ automation re-firing the request, not from a product defect.
 | 2026-07-20 | Held-bill expiry hygiene (stale marker + auto-archive) | feat(billing): held-bill hygiene |
 | 2026-07-20 | Expenses/offers show a clear offline message; full pipeline deferred (ledger being restructured) | fix(expenses): offline messaging |
 | 2026-07-20 | Scan-to-cart: Enter adds exact barcode/SKU match from billing search | feat(billing): scan-to-cart |
+| 2026-07-24 | Cash tender chips + change-due calculator in payment panel | feat(billing): cash change due |
