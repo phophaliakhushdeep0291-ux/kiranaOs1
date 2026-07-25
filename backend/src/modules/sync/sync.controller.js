@@ -3,6 +3,7 @@ import * as svc from "./sync.service.js";
 import { incrementMetric } from "../../lib/metrics.js";
 import { getEffectivePlan, isSubscriptionActive } from "../subscription/subscription.service.js";
 import { markDeviceSynced } from "../devices/devices.service.js";
+import { getSyncDiagnostics } from "./sync-diagnostics.service.js";
 
 // ── Sync logger ───────────────────────────────────────────────────────────────
 // Follows the same pattern as the global requestLogger in security.js:
@@ -56,6 +57,12 @@ export async function status(req, res, next) {
     const effectivePlan = await getEffectivePlan(req.shopId);
     const serverSeq = await svc.getCurrentServerSeq(req.shopId);
     res.json({ success: true, data: buildStatusPayload(req, effectivePlan, serverSeq) });
+  } catch (err) { next(err); }
+}
+
+export async function diagnostics(req, res, next) {
+  try {
+    res.json({ success: true, data: await getSyncDiagnostics(req.shopId) });
   } catch (err) { next(err); }
 }
 

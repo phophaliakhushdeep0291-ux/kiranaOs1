@@ -47,6 +47,7 @@ function checkPushBatchSize(req, res, next) {
 }
 
 router.get("/status", requireDeviceActivated(), ctrl.status);
+router.get("/diagnostics", requireDeviceActivated(), ctrl.diagnostics);
 router.post("/retry", requireDeviceActivated(), ctrl.retry);
 router.post("/ack", requireDeviceAllowedForSync(), validate(syncAckSchema), ctrl.ack);
 router.get("/devices", requireDeviceActivated(), requireRole("owner", "admin"), ctrl.devices);
