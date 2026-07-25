@@ -571,6 +571,17 @@ export default function ReportsPage() {
           ))}
         </MobileReportList>
 
+        <MobileReportList title="Sales by Staff" actionHref="/staff">
+          {(snapshot?.staffSales ?? []).slice(0, 5).map((row) => (
+            <MobileReportRow
+              key={row.staffId}
+              title={row.staffName}
+              subtitle={`${row.bills} bill${row.bills === 1 ? "" : "s"} • avg ${fmt(row.bills > 0 ? row.sales / row.bills : 0)}`}
+              value={fmt(row.sales)}
+            />
+          ))}
+        </MobileReportList>
+
         <MobileReportList title="Daily Closing Summary" actionHref="/daily-closing">
           {dailyRows.slice(0, 5).map((row) => (
             <MobileReportRow

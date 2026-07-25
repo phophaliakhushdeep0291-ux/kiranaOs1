@@ -110,10 +110,20 @@ build only, so drive each one live and record what was observed.
       unbarcoded product; confirm EAN-13 vs QR fallback renders.
 - [ ] **Customer activity timeline** — bill + payment + return for one
       customer, confirm one event each, correct signs, no ledger echoes.
-- [ ] **Sales by Hour / Sales by Staff** — confirm buckets and attribution
-      against known bills.
-- [ ] **Drawer over/short** — save a count, confirm variance + history
-      survive a reload.
+- [x] **Sales by Hour / Sales by Staff** — VERIFIED live 2026-07-25 (own
+      preview, 2 seeded bills totalling ₹185): Sales by Hour showed
+      "Peak 4pm • ₹185 (2 bills)"; Sales by Staff showed "Owner · 2 bills ·
+      ₹185 · ₹93 avg" (185/2). Discounts Given showed the ₹10 "loyal customer"
+      row. Scan-to-cart (barcode+Enter adds + clears; 3 repeat scans → qty 3)
+      and change-due (₹200 on ₹135 → "Change ₹65"; blank on the next bill,
+      confirming the reset fix) also verified in the same run.
+- [x] **Drawer over/short** — VERIFIED live 2026-07-25: counted ₹200 vs
+      expected ₹185 → "Over by ₹15"; saved; the "+₹15" history entry survived
+      a full page reload (offline settings store).
+
+**Live-QA finding (2026-07-25):** Sales by Staff renders only in the desktop
+DenseTable; on a phone it vanishes while Discounts/Top Products/Top Customers
+keep their mobile lists. Small responsive-parity gap — fix queued in 2B.
 
 **Environment note (2026-07-19):** live QA shares one browser preview and one
 dev backend with other concurrent sessions. Mid-run, another session's shop
