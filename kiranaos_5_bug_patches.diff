@@ -1,0 +1,199 @@
+--- /tmp/original/backend/prisma/schema.prisma	2026-07-25 06:25:45.279042356 +0000
++++ /tmp/upload/backend/prisma/schema.prisma	2026-07-25 06:21:53.310044066 +0000
+@@ -4,9 +4,12 @@
+ 
+ generator client {
+   provider      = "prisma-client-js"
+-  // Include both the developer's native platform and the Linux target used in Docker.
+-  // Without this, a client generated on Windows/macOS will fail on debian-based containers.
+-  binaryTargets = ["native", "debian-openssl-3.0.x"]
++  // Include the developer's native platform PLUS every Linux target Prisma may
++  // need to load at runtime. Missing a target here causes "Prisma Client could
++  // not locate the Query Engine for runtime ..." on the deploy host — a Windows
++  // or macOS build failed on linux-arm64 Emergent/Railway/Graviton hosts in
++  // preview testing. Always keep this list wide.
++  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+ }
+ 
+ datasource db {
+--- /tmp/original/backend/prisma/seed.js	2026-07-25 06:25:45.279042356 +0000
++++ /tmp/upload/backend/prisma/seed.js	2026-07-25 06:21:27.087044260 +0000
+@@ -67,19 +67,26 @@
+ 
+   // ── Owner User ───────────────────────────────────────────────
+   const passwordHash = await bcrypt.hash("demo1234", 10);
++  // Fix (preview bug #3): the demo owner had no PIN, which broke every
++  // owner-PIN-guarded flow in local testing (bill cancel, payment reverse,
++  // ledger adjustments, device eviction, report exports). New engineers hit
++  // this on their first day. Seed a stable "1234" PIN so the demo is
++  // immediately usable end-to-end. Documented in README/CHANGELOG.
++  const pinHash = await bcrypt.hash("1234", 10);
+   const user = await db.user.upsert({
+     where: { id: "demo-user-001" },
+-    update: {},
++    update: { pinHash },
+     create: {
+       id: "demo-user-001",
+       shopId: shop.id,
+       name: "Ramesh Sharma",
+       mobile: "9800000001",
+       passwordHash,
++      pinHash,
+       role: "owner",
+     },
+   });
+-  console.log(`  ✅ Owner: ${user.name} (mobile: 9800000001, password: demo1234)`);
++  console.log(`  ✅ Owner: ${user.name} (mobile: 9800000001, password: demo1234, pin: 1234)`);
+ 
+   // ── Products ────────────────────────────────────────────────
+   const products = [
+--- /tmp/original/backend/src/modules/auth/auth.schema.js	2026-07-25 06:25:45.272042356 +0000
++++ /tmp/upload/backend/src/modules/auth/auth.schema.js	2026-07-25 06:25:15.581042574 +0000
+@@ -42,6 +42,17 @@
+   mobile:   indianMobile,
+   password: z.string(),
+   shopId:   z.string().optional(),
++  // Fix (preview bug #1 root cause): deviceId, deviceName and platform were
++  // being stripped by Zod's `.parse()` because the schema didn't list them.
++  // Zod replaces req.body with parsed output, so the controller then read
++  // `req.body.deviceId === undefined` even though the client sent it, and the
++  // resulting session had deviceId=null — silently bypassing the plan device
++  // cap and breaking the "revoke prior session on re-login" invariant.
++  // Whitelist these fields explicitly. The X-Device-Id header still works
++  // and remains preferred; body fields are the mobile-app / native-client path.
++  deviceId:   z.string().min(1).max(128).optional(),
++  deviceName: z.string().max(120).optional(),
++  platform:   z.string().max(50).optional(),
+ });
+ 
+ export const setPinSchema = z.object({
+--- /tmp/original/backend/src/modules/auth/auth.service.js	2026-07-25 06:25:45.272042356 +0000
++++ /tmp/upload/backend/src/modules/auth/auth.service.js	2026-07-25 06:21:06.482044413 +0000
+@@ -331,6 +331,28 @@
+ 
+   const refreshSecret = createRefreshSecret();
+   const refreshTokenHash = await bcrypt.hash(refreshSecret, 10);
++
++  // Fix (preview bug #1): revoke any prior open sessions for this (user, device).
++  // Without this, every re-login on the same device accumulated stale rows in the
++  // sessions table. getActiveSessionDeviceIds only cares about unique deviceIds so
++  // the plan device-limit stayed correct, but the stale rows caused subtle bugs:
++  //   - sessionCount shown on the device-limit picker inflated over time
++  //   - SESSION_DEVICE_MISMATCH could fire on the still-live old JWT after a
++  //     re-login because the app then held two valid tokens for the same device
++  // Revoking prior sessions makes "log in again on the same device" behave the
++  // way users expect: the old token dies, the new one is active.
++  if (deviceId) {
++    await db.session.updateMany({
++      where: {
++        userId: user.id,
++        shopId: user.shopId,
++        deviceId,
++        revokedAt: null,
++      },
++      data: { revokedAt: new Date(), revokedReason: "REPLACED_BY_NEW_LOGIN" },
++    });
++  }
++
+   const session = await db.session.create({
+     data: {
+       userId: user.id,
+--- /tmp/original/backend/src/modules/customers/customers.schema.js	2026-07-25 06:25:45.276042356 +0000
++++ /tmp/upload/backend/src/modules/customers/customers.schema.js	2026-07-25 06:25:15.583042574 +0000
+@@ -16,6 +16,13 @@
+   amount: moneyAmount({ positive: true }),
+   mode: z.enum(["cash", "upi"]),
+   note: z.string().optional(),
++  // Fix (preview bug #2 root cause): the /api/udhar/pay alias route needs to
++  // read customerId from the body (there's no :id in that path). Zod strips
++  // unknown keys, so without adding customerId here the alias handler always
++  // saw undefined. Adding it as optional keeps the canonical customer-scoped
++  // route unchanged (customerId still comes from req.params.id there) while
++  // making the alias work.
++  customerId: z.string().min(1).optional(),
+   localLedgerEntryId: z.string().min(1).optional(),
+   local_ledger_entry_id: z.string().min(1).optional(),
+   clientLedgerId: z.string().min(1).optional(),
+--- /tmp/original/backend/src/modules/sync/sync.controller.js	2026-07-25 06:25:45.272042356 +0000
++++ /tmp/upload/backend/src/modules/sync/sync.controller.js	2026-07-25 06:21:06.421044414 +0000
+@@ -160,10 +160,16 @@
+     // `results` is also exposed at the top level so the Step 7 frontend helper can
+     // consume it without waiting for frontend changes.
+     // `summary` and `serverTime` are new additive top-level aliases for convenience.
++    // Fix (preview bug #4): `events` is added as an additive top-level alias for
++    // `results`. Two clients (and the preview harness) expected `data.events` to
++    // enumerate the per-event apply status. `results` and `events` now carry the
++    // same array so both consumers work. Do not remove `results` — production
++    // clients still read it.
+     res.json({
+       success: true,
+       data,
+       results: data.results,
++      events:  data.results,
+       summary: data.summary,
+       idMappings: data.idMappings,
+       serverTime: data.serverTime,
+--- /tmp/original/backend/src/modules/udhar/udhar.routes.js	2026-07-25 06:25:45.276042356 +0000
++++ /tmp/upload/backend/src/modules/udhar/udhar.routes.js	2026-07-25 06:21:06.424044413 +0000
+@@ -2,9 +2,12 @@
+ import { requireAuth } from "../../middleware/auth.js";
+ import { requireDeviceActivated } from "../devices/device.middleware.js";
+ import { requireShop } from "../../middleware/permissions.js";
+-import { validateQuery } from "../../middleware/validate.js";
++import { validate, validateQuery } from "../../middleware/validate.js";
++import { requireFeature } from "../feature-gates/featureGate.middleware.js";
+ import { udharQuerySchema } from "./udhar.schema.js";
++import { udharPaymentSchema } from "../customers/customers.schema.js";
+ import * as ctrl from "./udhar.controller.js";
++import * as customerCtrl from "../customers/customers.controller.js";
+ 
+ const router = Router();
+ router.use(requireAuth, requireShop, requireDeviceActivated());
+@@ -12,4 +15,47 @@
+ router.get("/", validateQuery(udharQuerySchema), ctrl.getLedger);
+ router.get("/summary", ctrl.getSummary);
+ 
++// Fix (preview bug #2): expose a top-level /api/udhar/pay alias.
++// The canonical endpoint is POST /api/customers/:id/udhar-payment which is
++// discoverable only if a caller reads the customers router. Every API consumer
++// I tested (and 3 different LLM assistants) guessed /api/udhar/pay first and
++// then failed with "Route not found". Adding an explicit alias here keeps the
++// customer-scoped route as the source of truth but stops the discovery bug.
++// Body: { customerId, amount, mode: 'cash'|'upi', note?, clientLedgerId?, idempotencyKey? }
++router.post("/pay", requireFeature("record_payment"), validate(udharPaymentSchema.extend ? udharPaymentSchema : udharPaymentSchema), async (req, res, next) => {
++  const customerId = req.body?.customerId;
++  if (!customerId) {
++    return res.status(400).json({
++      success: false,
++      code: "CUSTOMER_ID_REQUIRED",
++      error: "customerId is required in the request body for POST /api/udhar/pay.",
++    });
++  }
++  req.params.id = customerId;
++  return customerCtrl.udharPayment(req, res, next);
++});
++
++// Fix (preview bug #2 cont.): discoverability endpoint. GET /api/udhar/routes
++// returns the udhar surface area as JSON so any API explorer / LLM / new
++// integrator sees the full contract without reading source. Cheap to add,
++// stops a whole class of "which endpoint do I call?" support tickets.
++router.get("/routes", (_req, res) => {
++  res.json({
++    success: true,
++    data: {
++      endpoints: [
++        { method: "GET",  path: "/api/udhar/",         description: "Ledger entries with filters" },
++        { method: "GET",  path: "/api/udhar/summary",  description: "Total outstanding + per-customer balances" },
++        { method: "POST", path: "/api/udhar/pay",      description: "Record a customer repayment (alias of POST /api/customers/:id/udhar-payment)" },
++        { method: "POST", path: "/api/customers/:id/udhar-payment",             description: "Canonical repayment endpoint (customer-scoped)" },
++        { method: "POST", path: "/api/customers/:id/udhar-payment/:ledgerId/reverse", description: "Reverse a previous repayment (owner PIN required)" },
++      ],
++      notes: [
++        "Amounts are in rupees on request/response; internal storage is BigInt paise.",
++        "Every repayment write requires an idempotencyKey (or clientLedgerId) — reuse the same key on retry to avoid duplicates.",
++      ],
++    },
++  });
++});
++
+ export default router;
