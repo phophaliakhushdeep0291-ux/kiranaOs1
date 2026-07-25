@@ -1,4 +1,4 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Input } from "@/components/ui/input";
 import { BillInputBillType, BillPaymentMode } from "@/lib/api/client";
 import { clampAmount, computeChangeDue, suggestCashTenders } from "../billing-calculations";
@@ -86,6 +86,11 @@ export function BillingPaymentPanel({
   // it never changes what the bill records (the shop keeps grandTotal), it just
   // tells the cashier how much cash to hand back.
   const [cashTendered, setCashTendered] = useState<number | "">("");
+  // A saved or cleared bill drops grandTotal to 0. Reset the tendered helper so
+  // last customer's "change due" can't linger on the next sale's fresh total.
+  useEffect(() => {
+    if (grandTotal === 0) setCashTendered("");
+  }, [grandTotal]);
   const changeDue = typeof cashTendered === "number" ? computeChangeDue(cashTendered, grandTotal) : 0;
   const tenderSuggestions = useMemo(() => suggestCashTenders(grandTotal), [grandTotal]);
   const upiAmount = paymentMode === SPLIT_PAYMENT ? splitUpi : grandTotal;
