@@ -205,3 +205,4 @@ automation re-firing the request, not from a product defect.
 | 2026-07-20 | Expenses/offers show a clear offline message; full pipeline deferred (ledger being restructured) | fix(expenses): offline messaging |
 | 2026-07-20 | Scan-to-cart: Enter adds exact barcode/SKU match from billing search | feat(billing): scan-to-cart |
 | 2026-07-24 | Cash tender chips + change-due calculator in payment panel | feat(billing): cash change due |
+| 2026-07-25 | Self-review fix: reset cash-tendered helper between bills (stale change-due) | fix(billing): reset tendered |
