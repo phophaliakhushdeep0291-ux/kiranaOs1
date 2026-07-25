@@ -6,8 +6,12 @@ import {
   hasActiveDuplicateProductName,
   normalizeProductName,
 } from "../../utils/productRecycleRules.js";
-import { moneyShadows } from "../../utils/money.js";
-import { resolveOperationalLocation } from "../stores/location-context.service.js";
+import { moneyShadows, round2 } from "../../utils/money.js";
+import {
+  getLocationQuantity,
+  resolveOperationalLocation,
+  setLocationInventory,
+} from "../stores/location-context.service.js";
 
 async function applyLocationInventory(shopId, products, locationId) {
   if (!locationId || products.length === 0) return products;
@@ -192,12 +196,54 @@ async function findExistingProductByIdentity(client, shopId, identity) {
   return null;
 }
 
+/**
+ * Apply a stock quantity supplied on a product edit as a real, recorded movement.
+ *
+ * Mirrors inventory.service.correctStock: the same setLocationInventory primitive
+ * (which is atomic and rejects a concurrent change with 409) plus an explicit
+ * StockLedger row, so "current stock == sum of recorded movements" continues to
+ * hold. A no-op change writes nothing rather than logging a zero-quantity row.
+ */
+async function applyStockCorrectionInTransaction(tx, shopId, productId, newStockBaseQty, locationId) {
+  const requested = Number(newStockBaseQty);
+  if (!Number.isFinite(requested)) return;
+
+  const location = await resolveOperationalLocation(shopId, locationId, tx);
+  const product = await tx.product.findFirst({ where: { id: productId, shopId, deletedAt: null } });
+  if (!product) return;
+
+  const currentQty = await getLocationQuantity(tx, shopId, location, product);
+  if (round2(currentQty) === round2(requested)) return;
+
+  const stockResult = await setLocationInventory(tx, { shopId, location, product, newStockBaseQty: requested });
+
+  await tx.stockLedger.create({
+    data: {
+      shopId,
+      locationId: location.id,
+      productId,
+      productName: product.name,
+      action: "correction",
+      changeBaseQty: stockResult.difference,
+      oldStockBaseQty: stockResult.oldStock,
+      newStockBaseQty: stockResult.newStock,
+      note: "Stock set from product edit",
+    },
+  });
+}
+
 export async function updateProduct(shopId, id, data) {
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const existing = await getProduct(shopId, id); // ensures it exists and belongs to shop
   if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id);
 
-  const { aliases, sellingUnits, baseUpdatedAt, ...rawRest } = data;
+  // Stock is never written by spreading the request body. On-hand quantity is
+  // authoritative state that must move through the shared inventory primitive so
+  // that a StockLedger row is recorded, LocationStock stays in step, and a
+  // concurrent sale cannot be silently overwritten. See docs/STABILIZATION_AUDIT.md
+  // P0-3. Bulk edit legitimately sets stock here, so the field is honoured — it is
+  // just no longer applied blindly.
+  const { aliases, sellingUnits, baseUpdatedAt, stockBaseQty: requestedStockBaseQty, ...rawRest } = data;
   const normalizedUnits = sellingUnits === undefined ? undefined : normalizeSellingUnits({ ...existing, ...rawRest }, sellingUnits);
   const rest = normalizedUnits ? applyDefaultSellingUnitToProduct(rawRest, normalizedUnits) : rawRest;
 
@@ -228,6 +274,9 @@ export async function updateProduct(shopId, id, data) {
       where: { id },
       data: updateData,
     });
+    if (requestedStockBaseQty !== undefined) {
+      await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, data.locationId ?? null);
+    }
     if (normalizedUnits) await writeSellingUnits(tx, shopId, id, normalizedUnits);
     return tx.product.findUnique({
       where: { id },
