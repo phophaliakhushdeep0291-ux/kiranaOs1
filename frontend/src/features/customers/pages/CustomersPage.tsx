@@ -60,6 +60,7 @@ import {
   type CustomerWithLedger,
 } from "@/features/customers/customer-ledger-data";
 import { getUdharSummary } from "@/features/ledger/api";
+import { isManualAdjustmentEntry } from "@/features/ledger/accounting";
 import type { CustomerInput } from "@/types/api";
 import { offlineDB } from "@/lib/offline/db";
 import { cn } from "@/lib/utils";
@@ -1413,6 +1414,10 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
   const toDate = rows.length > 0 ? formatShortDate(rows[0]?.display_date) : formatShortDate(new Date().toISOString());
   const badgeFor = (type: string) => type === "PAYMENT" ? "bg-[#dcfce7] text-[#16a34a]" : type.includes("OPEN") ? "bg-[#dbeafe] text-[#2563eb]" : type === "BILL" ? "bg-[#fee2e2] text-[#dc2626]" : "bg-[#f5f3ff] text-[#7c3aed]";
   const labelFor = (type: string) => type === "PAYMENT" ? "Payment" : type === "BILL" ? "Bill" : type.includes("OPEN") ? "Opening Balance" : type.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  // A synced manual adjustment echoes back typed as debit/payment (mode:"adjustment"),
+  // so display_type alone reads "Bill"/"Payment". Detect the adjustment and label it plainly.
+  const entryBadge = (row: CustomerLedgerRow) => isManualAdjustmentEntry(row) ? "bg-[#f5f3ff] text-[#7c3aed]" : badgeFor(String(row.display_type ?? "ENTRY").toUpperCase());
+  const entryLabel = (row: CustomerLedgerRow) => isManualAdjustmentEntry(row) ? "Adjustment" : labelFor(String(row.display_type ?? "ENTRY").toUpperCase());
   return (
     <section className="overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf4] px-[18px] py-4">
@@ -1431,7 +1436,6 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
             <div className="py-12 text-center text-[#71809a]">No ledger entries found.</div>
           ) : visibleRows.slice(0, 8).map((row) => {
             const signed = Number(row.signed_amount ?? 0);
-            const displayType = String(row.display_type ?? "ENTRY").toUpperCase();
             const isCredit = signed < 0;
             return (
               <div key={row.id} className="grid grid-cols-[34px_1fr_auto] gap-3 px-4 py-4">
@@ -1440,10 +1444,10 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
                 </span>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", badgeFor(displayType))}>{labelFor(displayType)}</span>
+                    <span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", entryBadge(row))}>{entryLabel(row)}</span>
                     <span className="text-[11px] font-semibold text-[#71809a]">{formatShortDate(row.display_date)}</span>
                   </div>
-                  <p className="mt-1 truncate text-[12px] font-bold text-[#102347]">{String(row.note || labelFor(displayType))}</p>
+                  <p className="mt-1 truncate text-[12px] font-bold text-[#102347]">{String(row.note || entryLabel(row))}</p>
                   <p className="mt-1 truncate text-[11px] text-[#60708e]">{String(row.source_id ?? "—")} • {String(row.mode ?? "System")}</p>
                 </div>
                 <div className="text-right">
@@ -1461,8 +1465,7 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
             <tbody className="divide-y divide-[#e8edf4]">
               {loading ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">Loading ledger...</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">No ledger entries found.</td></tr> : visibleRows.slice(0, 8).map((row) => {
                 const signed = Number(row.signed_amount ?? 0);
-                const displayType = String(row.display_type ?? "ENTRY").toUpperCase();
-                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", badgeFor(displayType))}>{labelFor(displayType)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[#0b63f6]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || labelFor(displayType))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[#071b3a]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title="Ledger actions" className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[#eef5ff] hover:text-[#0b63f6]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
+                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[#0b63f6]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[#071b3a]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title="Ledger actions" className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[#eef5ff] hover:text-[#0b63f6]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
               })}
             </tbody>
           </table>

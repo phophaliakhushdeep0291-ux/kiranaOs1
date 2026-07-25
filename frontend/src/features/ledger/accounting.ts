@@ -309,9 +309,30 @@ function shouldCollapseLedgerEcho(previous: Partial<CustomerLedgerEntry>, curren
   return oneLocal && oneServer;
 }
 
+// Per-adjustment-UNIQUE durable ids only (never customerId/sourceId/amount, which
+// are shared across a customer's adjustments and would wrongly collapse distinct ones).
+const ADJUSTMENT_IDENTITY_KEYS = [
+  "id", "local_id", "localId", "server_id", "serverId",
+  "clientLedgerId", "client_ledger_id",
+  "ledgerEntryId", "ledger_entry_id",
+  "localLedgerEntryId", "local_ledger_entry_id",
+  "idempotencyKey", "idempotency_key",
+] as const;
+
+function adjustmentIdentityTokens(entry: Partial<CustomerLedgerEntry>): string[] {
+  const record = entry as Record<string, unknown>;
+  const tokens: string[] = [];
+  for (const key of ADJUSTMENT_IDENTITY_KEYS) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim().length > 0) tokens.push(value.trim());
+  }
+  return tokens;
+}
+
 export function dedupeLedgerEntries<T extends CustomerLedgerEntry>(entries: T[]): T[] {
   const pickedByBusinessKey = new Map<string, T>();
   const pickedByEchoSignature = new Map<string, T>();
+  const claimedAdjustmentTokens = new Set<string>();
   const sorted = entries
     .filter((row) => row.deleted_at == null && row.deletedAt == null)
     .sort((a, b) => ledgerSyncPriority(b) - ledgerSyncPriority(a));
@@ -325,8 +346,15 @@ export function dedupeLedgerEntries<T extends CustomerLedgerEntry>(entries: T[])
     const previousByEcho = echoSignature ? pickedByEchoSignature.get(echoSignature) : undefined;
     if (previousByEcho && shouldCollapseLedgerEcho(previousByEcho, entry)) continue;
 
+    // A manual adjustment echoes back typed as debit/payment (mode:"adjustment"), so it never
+    // matches its local ADJUSTMENT twin by businessKey/echoSignature. Collapse the pair by any
+    // shared durable id (local id === echo.clientLedgerId), keeping the higher-priority (synced) row.
+    const adjustmentTokens = isManualAdjustmentEntry(entry) ? adjustmentIdentityTokens(entry) : [];
+    if (adjustmentTokens.some((token) => claimedAdjustmentTokens.has(token))) continue;
+
     pickedByBusinessKey.set(businessKey, entry);
     if (echoSignature) pickedByEchoSignature.set(echoSignature, entry);
+    for (const token of adjustmentTokens) claimedAdjustmentTokens.add(token);
   }
 
   return removeOpeningBalanceBillDuplicates(Array.from(pickedByBusinessKey.values()));

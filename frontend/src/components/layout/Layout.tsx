@@ -40,6 +40,7 @@ import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/
 import { useBusinessType } from "@/features/settings/business-types";
 import { useBusinessTypeServerSync } from "@/features/settings/business-type-sync";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
+import { ReportIssueButton } from "@/features/support";
 import { DemoModeBanner } from "@/features/demo/DemoModeBanner";
 import { SyncAlertBanner } from "@/features/sync/SyncAlertBanner";
 import { CommandPalette } from "./CommandPalette";
@@ -820,6 +821,7 @@ export function Layout({ children }: { children: ReactNode }) {
       </div>
 
       {cleanPath(loc) !== "/billing" && <VoiceAssistant />}
+      <ReportIssueButton />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );

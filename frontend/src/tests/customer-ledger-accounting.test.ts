@@ -171,6 +171,20 @@ describe("customer ledger accounting", () => {
     expect(ledgerSignedAmount(localDecrease)).toBe(-60);
   });
 
+  it("collapses a synced adjustment echo with its local optimistic row (no balance double-count)", () => {
+    const rows = dedupeLedgerEntries([
+      // Local optimistic manual adjustment (reduce udhar by 100), not yet synced.
+      { id: "ledger_x", customerId: "c1", customer_id: "c1", type: "ADJUSTMENT", source_type: "manual_adjustment", source_id: "manual_adjustment_y", amount: -100, sync_status: "pending_sync", entry_at: "2026-06-07T10:00:00.000Z" },
+      // Server echo of the SAME adjustment: debit/payment-typed, positive amount, mode:adjustment,
+      // clientLedgerId === the local row id (backend getLedgerAdjustmentIdentity keys off ledgerEntryId).
+      { id: "srv_1", server_id: "srv_1", customerId: "c1", customer_id: "c1", type: "payment", mode: "adjustment", sourceType: "adjustment", sourceId: "c1", amount: 100, clientLedgerId: "ledger_x", idempotencyKey: "ledger_x", sync_status: "synced", entry_at: "2026-06-07T10:00:05.000Z" },
+    ] as unknown as CustomerLedgerEntry[]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe("srv_1"); // the synced echo wins
+    expect(calculateLedgerBalance(rows)).toBe(-100); // not -200
+  });
+
   it("allocates payments against oldest udhar for ageing", () => {
     const now = new Date(Date.UTC(2026, 5, 5));
     const ageing = calculateUdharAgeing([
