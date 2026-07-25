@@ -164,6 +164,14 @@ automation re-firing the request, not from a product defect.
       `receipt-preview-sample.ts` (testable outside the settings screen) and
       extended to exercise every toggle; 10 regression tests assert each one
       visibly changes the output. *(done 2026-07-19, verified live)*
+- [x] **"You saved ₹X" on the receipt** — the "Show total savings" printer
+      toggle was dead (renderer never read it). Wired it: `computeBillSavings`
+      sums each line's MRP gap + line discount + the bill discount, printed as
+      a green "You saved" line. *(done 2026-07-25)*
+- [ ] **"Show previous udhar" on the receipt** — the second dead printer
+      toggle (`showPreviousUdhar`): switch exists, renderer ignores it. Needs
+      the customer's prior outstanding balance threaded into the receipt
+      snapshot from the billing flow (more involved than savings). Queued.
 - [x] **Bulk price/stock edit** — row checkboxes + select-all on Products, a
       floating action bar (bulk edit / print labels), and a dialog: raise or
       cut price by % or ₹ or set absolute; set/increase/decrease stock. Prices
