@@ -60,6 +60,44 @@ export function getSyncStatus(options: { background?: boolean } = {}) {
   return apiRequest<SyncStatusResponse>("/sync/status", { method: "GET", background: options.background });
 }
 
+export interface SyncFailureExplanation {
+  eventId?: string;
+  id?: string;
+  type?: string;
+  entityType?: string;
+  entityId?: string;
+  status?: string;
+  attempts?: number;
+  code: string;
+  explanation: string;
+  retryable: boolean;
+  action: string;
+  at: string;
+}
+
+export interface SyncDiagnostics {
+  lastSuccessfulSyncAt: string | null;
+  healthy: boolean;
+  counts: {
+    pending: number;
+    queueSize: number;
+    failed: number;
+    conflictEvents: number;
+    openConflicts: number;
+    synced: number;
+    needsAttention: number;
+    retriedEvents: number;
+    totalRetryAttempts: number;
+  };
+  recentFailures: SyncFailureExplanation[];
+  recentConflicts: SyncFailureExplanation[];
+  generatedAt: string;
+}
+
+export function getSyncDiagnostics(options: { background?: boolean } = {}) {
+  return apiRequest<SyncDiagnostics>("/sync/diagnostics", { method: "GET", background: options.background });
+}
+
 export function requestSyncRetry(body: SyncRetryRequest = {}) {
   return apiRequest<SyncStatusResponse>("/sync/retry", {
     method: "POST",

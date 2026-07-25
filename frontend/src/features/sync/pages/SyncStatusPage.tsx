@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SyncDiagnosticsSection } from "./SyncDiagnosticsSection";
 import { formatDistanceToNow } from "date-fns";
 import {
   AlertCircle,
@@ -1232,6 +1233,8 @@ export default function SyncStatusPage() {
       {snapshot.fleet && (
         <FleetHealthCard fleet={snapshot.fleet} currentDeviceId={snapshot.deviceId} />
       )}
+
+      <SyncDiagnosticsSection />
 
       <Card>
         <CardHeader>

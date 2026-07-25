@@ -29,6 +29,7 @@
     "test:regression": "node tests/backend-regression.examples.js",
     "test:diagnostics": "node tests/diagnostics-error-store.examples.js",
     "test:device-health": "node tests/device-health.examples.js",
+    "test:sync-diagnostics": "node tests/sync-diagnostics.examples.js",
     "test:frontend-checklist": "node tests/frontend-manual-checklist.examples.js",
     "seed": "node prisma/seed.js",
     "prod:check": "node scripts/production-check.js",
