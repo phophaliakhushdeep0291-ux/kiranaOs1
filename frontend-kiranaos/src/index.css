@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --brand:      #7C3AED;
+  --brand-fg:   #FFFFFF;
+  --ink:        #0F172A;
+  --ink-soft:   #475569;
+  --line:       #E2E8F0;
+  --surface:    #FFFFFF;
+  --surface-2:  #F8FAFC;
+  --danger:     #DC2626;
+  --success:    #16A34A;
+  --warning:    #D97706;
+}
+
+body {
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background: var(--surface-2);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* utilities used across the app */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 1px 2px rgb(0 0 0 / 4%); }
+.btn { display: inline-flex; align-items: center; gap: .5rem; padding: .55rem 1rem; border-radius: 8px; font-weight: 500; cursor: pointer; transition: transform .05s ease, opacity .15s ease; }
+.btn-primary { background: var(--brand); color: var(--brand-fg); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.btn-danger { background: var(--danger); color: white; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+.badge-udhar { background: #FEF3C7; color: #92400E; }
+.badge-paid  { background: #DCFCE7; color: #14532D; }
+.badge-partial { background: #DBEAFE; color: #1E3A8A; }

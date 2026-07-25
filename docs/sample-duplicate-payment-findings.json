@@ -1,0 +1,43 @@
+{
+  "shopId": "demo-shop-001",
+  "since": "2026-04-26T06:38:51.630Z",
+  "summary": {
+    "total": 1,
+    "byRule": {
+      "R1_EXACT_CLONE_SAME_DAY": 1
+    },
+    "bySeverity": {
+      "high": 1
+    }
+  },
+  "findings": [
+    {
+      "rule": "R1_EXACT_CLONE_SAME_DAY",
+      "severity": "high",
+      "subjects": [
+        "cmrzzj5eb000t1487h41pd39d",
+        "cmrzzzy8u0001pon63swk4dtg",
+        "cmrzzzy9k0003pon6kjyx0058"
+      ],
+      "riskScore": 80,
+      "reasons": [
+        "3 payments share (billId=cmrzzj5eb000p1487vpxxwqjj, mode=cash, amount=₹34, day=2026-07-25)",
+        "sum posted: ₹102 — verify against the bill's grandTotal"
+      ],
+      "evidence": {
+        "paymentIds": [
+          "cmrzzj5eb000t1487h41pd39d",
+          "cmrzzzy8u0001pon63swk4dtg",
+          "cmrzzzy9k0003pon6kjyx0058"
+        ],
+        "idempotencyKeys": [
+          "pv-cancel-25816:payment:0:cash",
+          "plant-dup-1a",
+          "plant-dup-1b"
+        ],
+        "billId": "cmrzzj5eb000p1487vpxxwqjj"
+      },
+      "detectedAt": "2026-07-25T06:38:51.646Z"
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+{
+  "shopId": "demo-shop-001",
+  "period": "2026-07",
+  "recipientGstin": "27DEMOK1234Z5Z9",
+  "summary": {
+    "total": 8,
+    "byMismatch": {
+      "M1_IN_REGISTER_NOT_IN_2A": 2,
+      "M2_IN_2A_NOT_IN_REGISTER": 3,
+      "M3_AMOUNT_MISMATCH": 1,
+      "M4_GSTIN_MISMATCH_FOR_SAME_SUPPLIER_NAME": 1,
+      "M5_CROSS_PERIOD_LATE_FILING": 1
+    },
+    "bySeverity": {
+      "high": 5,
+      "medium": 3
+    },
+    "itcAtRisk": 2822.03
+  },
+  "findings": [
+    {
+      "mismatch": "M1_IN_REGISTER_NOT_IN_2A",
+      "severity": "high",
+      "riskScore": 85,
+      "reasons": [
+        "Purchase invoice AWS/2026/0088 from Agarwal Whole Sale (GSTIN 24AAAAA0000A1Z0) is booked but NOT in GSTR-2A for 2026-07.",
+        "ITC of ₹1906.78 at risk — supplier likely hasn't filed GSTR-1.",
+        "Recommended: send email confirmation to supplier; block ITC until they file."
+      ],
+      "evidence": {
+        "purchaseId": "cms0036r00007j9y5weuvr781",
+        "invoiceNo": "AWS/2026/0088",
+        "gstin": "24AAAAA0000A1Z0",
+        "taxAtRisk": 1906.78
+      },
+      "detectedAt": "2026-07-25T06:41:10.169Z"
+    },
+    {
+      "mismatch": "M1_IN_REGISTER_NOT_IN_2A",
+      "severity": "high",
+      "riskScore": 85,
+      "reasons": [
+        "Purchase invoice KF/26/17 from Krishna Foods (GSTIN 29CCCCC2222C3Z2) is booked but NOT in GSTR-2A for 2026-07.",
+        "ITC of ₹915.25 at risk — supplier likely hasn't filed GSTR-1.",
+        "Recommended: send email confirmation to supplier; block ITC until they file."
+      ],
+      "evidence": {
+        "purchaseId": "cms0036rb000bj9y50yac3kk3",
+        "invoiceNo": "KF/26/17",
+        "gstin": "29CCCCC2222C3Z2",
+        "taxAtRisk": 915.25
+      },
+      "detectedAt": "2026-07-25T06:41:10.169Z"
+    },
+    {
+      "mismatch": "M2_IN_2A_NOT_IN_REGISTER",
+      "severity": "high",
+      "riskScore": 85,
+      "reasons": [
+        "Supplier Krishna Foods (GSTIN 29XXXCC2222C3Z9) filed invoice KF/26/17 against your GSTIN in GSTR-2A but you have NO purchase record.",
+        "Possible causes: (a) invoice booked in a different period, (b) invoice missed / lost, (c) supplier's GSTR-1 has your GSTIN by mistake, (d) fraud (ghost invoice).",
+        "Value: ₹6000 (tax ₹915.26)."
+      ],
+      "evidence": {
+        "supplierGstin": "29XXXCC2222C3Z9",
+        "invoiceNo": "KF/26/17",
+        "value": 6000
+      },
+      "detectedAt": "2026-07-25T06:41:10.169Z"
+    },
+    {
+      "mismatch": "M2_IN_2A_NOT_IN_REGISTER",
+      "severity": "high",
+      "riskScore": 85,
+      "reasons": [
+        "Supplier Ghost Vendor Ltd (GSTIN 07GHOSTSUP99Z1Z0) filed invoice GV/2026/99 against your GSTIN in GSTR-2A but you have NO purchase record.",
+        "Possible causes: (a) invoice booked in a different period, (b) invoice missed / lost, (c) supplier's GSTR-1 has your GSTIN by mistake, (d) fraud (ghost invoice).",
+        "Value: ₹99999 (tax ₹15254.24)."
+      ],
+      "evidence": {
+        "supplierGstin": "07GHOSTSUP99Z1Z0",
+        "invoiceNo": "GV/2026/99",
+        "value": 99999
+      },
+      "detectedAt": "2026-07-25T06:41:10.169Z"
+    },
+    {
+      "mismatch": "M2_IN_2A_NOT_IN_REGISTER",
+      "severity": "high",
+      "riskScore": 85,
+      "reasons": [
+        "Supplier Agarwal Whole Sale (GSTIN 24AAAAA0000A1Z0) filed invoice AWS/2026/0055 against your GSTIN in GSTR-2A but you have NO purchase record.",
+        "Possible causes: (a) invoice booked in a different period, (b) invoice missed / lost, (c) supplier's GSTR-1 has your GSTIN by mistake, (d) fraud (ghost invoice).",
+        "Value: ₹4200 (tax ₹640.68)."
+      ],
+      "evidence": {
+        "supplierGstin": "24AAAAA0000A1Z0",
+        "invoiceNo": "AWS/2026/0055",
+        "value": 4200
+      },
+      "detectedAt": "2026-07-25T06:41:10.169Z"
+    },
+    {
+      "mismatch": "M3_AMOUNT_MISMATCH",
+      "severity": "medium",
+      "riskScore": 60,
+      "reasons": [
+        "Invoice PT/2026/0033 from GSTIN 27BBBBB1111B2Z1: taxable diff ₹-423.73, tax diff ₹-76.28.",
+        "Register says taxable=₹6779.66, tax=₹1220.34. 2A says taxable=₹7203.39, tax=₹1296.62."
+      ],
+      "evidence": {
+        "purchaseId": "cms0036r60009j9y5davaz7op",
+        "invoiceNo": "PT/2026/0033",
+        "deltas": {
+          "taxable": -423.73,
+          "tax": -76.28
+        }
+      },
+      "detectedAt": "2026-07-25T06:41:10.169Z"
+    },
+    {
+      "mismatch": "M4_GSTIN_MISMATCH_FOR_SAME_SUPPLIER_NAME",
+      "severity": "medium",
+      "riskScore": 60,
+      "reasons": [
+        "Supplier \"Krishna Foods\" appears in your vendor master with GSTIN 29CCCCC2222C3Z2, but their GSTR-2A entry uses GSTIN 29XXXCC2222C3Z9.",
+        "Possible causes: (a) supplier has multiple registrations, (b) master data error, (c) impersonation."
+      ],
+      "evidence": {
+        "supplierName": "Krishna Foods",
+        "bookGstin": "29CCCCC2222C3Z2",
+        "filedGstin": "29XXXCC2222C3Z9"
+      },
+      "detectedAt": "2026-07-25T06:41:10.169Z"
+    },
+    {
+      "mismatch": "M5_CROSS_PERIOD_LATE_FILING",
+      "severity": "medium",
+      "riskScore": 60,
+      "reasons": [
+        "Invoice AWS/2026/0055 from Agarwal Whole Sale dated 2026-05-20 appeared in GSTR-2A for 2026-07.",
+        "Sec 16(4) time-limit implications — ITC must be claimed by Oct/Nov following FY end."
+      ],
+      "evidence": {
+        "invoiceNo": "AWS/2026/0055",
+        "invoiceDate": "2026-05-20",
+        "appearedInPeriod": "2026-07"
+      },
+      "detectedAt": "2026-07-25T06:41:10.169Z"
+    }
+  ]
+}
