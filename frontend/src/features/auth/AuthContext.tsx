@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AUTH_SESSION_EXPIRED_EVENT, DEVICE_SESSION_REVOKED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type Shop, type User } from "@/lib/api/client";
 import { AUTH_SESSION_STORAGE_KEY, clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
 import { writeAuditLog } from "@/features/audit-logs/local-actions";
-import { activateDevice, heartbeatDevice } from "@/features/devices/api";
+import { activateDevice, heartbeatDevice, reportDeviceHealth } from "@/features/devices/api";
+import { collectDeviceHealth } from "@/lib/device-health/collectDeviceHealth";
 import { ensureCurrentDeviceRegistered, writeOfflineLicenseToken } from "@/features/devices/license";
 import { getOfflineScope } from "@/lib/offline/context";
 import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
@@ -221,9 +222,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!accessToken || !user) return;
+    const reportHealth = async () => {
+      try {
+        await reportDeviceHealth(await collectDeviceHealth());
+      } catch {
+        // Device-health telemetry is best-effort and must never disrupt the session.
+      }
+    };
     const sendHeartbeat = () => {
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
       void heartbeatDevice().catch(() => undefined);
+      void reportHealth();
     };
     sendHeartbeat();
     const timer = window.setInterval(sendHeartbeat, 5 * 60 * 1000);

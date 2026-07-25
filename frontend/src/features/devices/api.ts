@@ -1,6 +1,7 @@
 import { apiRequest } from "@/lib/api/http";
 import { getOfflineScope } from "@/lib/offline/context";
 import type { OfflineLicenseToken } from "@/features/devices/license";
+import type { DeviceHealthPayload } from "@/lib/device-health/collectDeviceHealth";
 
 export interface DeviceDto {
   id: string;
@@ -133,4 +134,39 @@ export function heartbeatDevice(deviceId = getOfflineScope().device_id) {
     method: "POST",
     body: JSON.stringify({ deviceId }),
   });
+}
+
+export interface DeviceHealthDto {
+  deviceId: string;
+  overallStatus: string;
+  healthScore: number | null;
+  printerStatus: string | null;
+  printerName: string | null;
+  scannerStatus: string | null;
+  online: boolean | null;
+  networkType: string | null;
+  dbStatus: string | null;
+  storageUsedMb: number | null;
+  storageQuotaMb: number | null;
+  appVersion: string | null;
+  os: string | null;
+  browser: string | null;
+  batteryLevel: number | null;
+  batteryCharging: boolean | null;
+  ramUsedMb: number | null;
+  ramLimitMb: number | null;
+  createdAt: string;
+}
+
+export function reportDeviceHealth(payload: DeviceHealthPayload) {
+  // Best-effort telemetry: never block the app or trigger a refresh storm on failure.
+  return apiRequest("/devices/health", { method: "POST", body: JSON.stringify(payload), skipRefresh: true, background: true });
+}
+
+export function getDevicesHealth() {
+  return apiRequest<DeviceHealthDto[]>("/devices/health");
+}
+
+export function getMyDeviceHealth() {
+  return apiRequest<DeviceHealthDto | null>("/devices/health/me");
 }

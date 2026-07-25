@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
-import { Ban, CheckCircle2, Clock3, Laptop, LogOut, MonitorSmartphone, Pencil, RefreshCcw, ShieldCheck, Smartphone, Trash2, Wifi, WifiOff } from "lucide-react";
+import { Activity, Ban, CheckCircle2, Clock3, Laptop, LogOut, MonitorSmartphone, Pencil, RefreshCcw, ShieldCheck, Smartphone, Trash2, Wifi, WifiOff } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { LoadingSkeleton, PageHeader, PageShell, StatCard, StatsGrid } from "@/components/shared";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionSnapshot, PlanBadge } from "@/features/subscription";
-import { blockDevice, getCurrentDevice, listDevices, logoutDevice, reactivateDevice, removeDevice, renameDevice, type DeviceDto, type DeviceManagementSnapshot } from "@/features/devices/api";
+import { blockDevice, getCurrentDevice, getDevicesHealth, getMyDeviceHealth, listDevices, logoutDevice, reactivateDevice, removeDevice, renameDevice, type DeviceDto, type DeviceHealthDto, type DeviceManagementSnapshot } from "@/features/devices/api";
 import { getOfflineScope } from "@/lib/offline/context";
 import { listCachedDevices } from "@/features/devices/license";
 import { DEVICE_SESSION_REVOKED_EVENT } from "@/lib/api/client";
@@ -60,6 +60,51 @@ function statusStyle(status: string) {
   return "border-amber-200 bg-amber-50 text-amber-800";
 }
 
+function healthTone(status: string) {
+  if (status === "healthy") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "degraded") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (status === "critical") return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+}
+
+function usedPct(used?: number | null, total?: number | null) {
+  if (typeof used !== "number" || typeof total !== "number" || total <= 0) return null;
+  return Math.round((used / total) * 100);
+}
+
+// Compact per-device health line (Diagnostics §4): overall score + the raw signals
+// the shopkeeper cares about — printer, network, storage, battery, memory.
+function DeviceHealthStrip({ health }: { health?: DeviceHealthDto }) {
+  if (!health) return null;
+  const storagePct = usedPct(health.storageUsedMb, health.storageQuotaMb);
+  const ramPct = usedPct(health.ramUsedMb, health.ramLimitMb);
+  const items: { label: string; value: string }[] = [];
+  if (health.printerStatus) items.push({ label: "Printer", value: health.printerStatus.replace(/_/g, " ") });
+  if (typeof health.online === "boolean") items.push({ label: "Network", value: health.online ? (health.networkType ?? "online") : "offline" });
+  if (storagePct !== null) items.push({ label: "Storage used", value: `${storagePct}%` });
+  if (typeof health.batteryLevel === "number") items.push({ label: "Battery", value: `${health.batteryLevel}%${health.batteryCharging ? " (charging)" : ""}` });
+  if (ramPct !== null) items.push({ label: "Memory used", value: `${ramPct}%` });
+
+  return (
+    <div className="xl:col-span-full">
+      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[#e8edf4] bg-[#f8fafd] px-3 py-2 text-xs">
+        <span className="flex items-center gap-1.5 font-bold text-[#102347]">
+          <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className={`rounded-full border px-2 py-0.5 ${healthTone(health.overallStatus)}`}>
+            {health.overallStatus}{typeof health.healthScore === "number" ? ` · ${health.healthScore}/100` : ""}
+          </span>
+        </span>
+        {items.map((item) => (
+          <span key={item.label} className="text-[#60708e]">
+            {item.label}: <span className="font-semibold text-[#102347]">{item.value}</span>
+          </span>
+        ))}
+        <span className="ml-auto text-[11px] text-[#8a97ab]">Health {relative(health.createdAt)}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function DevicesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -78,6 +123,17 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
   const [submitting, setSubmitting] = useState(false);
   const canManageDevices = user?.role === "owner" || user?.role === "admin";
 
+  const [healthByDevice, setHealthByDevice] = useState<Record<string, DeviceHealthDto>>({});
+
+  const loadHealth = useCallback(async () => {
+    try {
+      const rows = canManageDevices ? await getDevicesHealth() : await getMyDeviceHealth().then((row) => (row ? [row] : []));
+      setHealthByDevice(Object.fromEntries(rows.map((row) => [row.deviceId, row])));
+    } catch {
+      setHealthByDevice({});
+    }
+  }, [canManageDevices]);
+
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setRefreshing(true);
     try {
@@ -92,6 +148,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
           }));
       setData(snapshot);
       setOfflineFallback(false);
+      void loadHealth();
     } catch {
       const cached = await listCachedDevices().catch(() => []);
       const maxDevices = subscription?.plan.maxDevices ?? 1;
@@ -119,7 +176,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       setLoading(false);
       setRefreshing(false);
     }
-  }, [canManageDevices, currentDeviceId, subscription]);
+  }, [canManageDevices, currentDeviceId, subscription, loadHealth]);
 
   useEffect(() => { void refresh(true); }, [refresh]);
 
@@ -300,6 +357,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
                   )}
                   <Button size={current ? "sm" : "icon"} variant="outline" title={current ? "Log out and remove this device" : "Remove device"} className="text-rose-600 hover:text-rose-700" onClick={() => openProtectedAction(device, "remove")} disabled={offlineFallback || status === "revoked"}><Trash2 className={current ? "mr-1.5 h-4 w-4" : "h-4 w-4"} />{current ? "Log out & remove" : null}</Button>
                 </div> : null}
+                <DeviceHealthStrip health={healthByDevice[id]} />
               </article>
             );
           })}
