@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireOwnerPin, requireShop } from "../../middleware/permissions.js";
 import { validate, validateQuery } from "../../middleware/validate.js";
 import { requireDeviceActivated } from "./device.middleware.js";
-import { activateDeviceSchema, heartbeatSchema, licenseQuerySchema, logoutDeviceSchema, renameDeviceSchema } from "./devices.schemas.js";
+import { activateDeviceSchema, deviceHealthSchema, heartbeatSchema, licenseQuerySchema, logoutDeviceSchema, renameDeviceSchema } from "./devices.schemas.js";
 import * as ctrl from "./devices.controller.js";
 
 const router = Router();
@@ -21,6 +21,9 @@ router.post("/:deviceId/block", requireRole("owner", "admin"), requireOwnerPin, 
 router.post("/:deviceId/unblock", requireRole("owner", "admin"), requireOwnerPin, ctrl.unblock);
 router.post("/:deviceId/reactivate", requireRole("owner", "admin"), requireOwnerPin, ctrl.unblock);
 router.post("/heartbeat", validate(heartbeatSchema), ctrl.heartbeat);
+router.post("/health", validate(deviceHealthSchema), ctrl.reportHealth);
+router.get("/health", requireRole("owner", "admin"), ctrl.listHealth);
+router.get("/health/me", ctrl.myHealth);
 router.get("/license", validateQuery(licenseQuerySchema), requireDeviceActivated(), ctrl.license);
 
 export default router;

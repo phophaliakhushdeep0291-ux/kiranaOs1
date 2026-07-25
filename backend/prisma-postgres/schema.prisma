@@ -90,6 +90,7 @@ model Shop {
   errorGroups                 ErrorGroup[]
   errorEvents                 ErrorEvent[]
   supportRequests             SupportRequest[]
+  deviceHealthSnapshots       DeviceHealthSnapshot[]
 }
 
 // ─────────────────────────────────────────────
@@ -1832,6 +1833,44 @@ model SupportRequest {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId, status, createdAt])
+  @@index([shopId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// DEVICE HEALTH — per-device runtime health snapshots (Diagnostics §4).
+// Time-series; "current health" is the latest row per (shopId, deviceId).
+// overallStatus/healthScore are computed server-side from the raw signals so
+// dashboards and the store health score have a single source of truth.
+// ─────────────────────────────────────────────
+model DeviceHealthSnapshot {
+  id              String   @id @default(cuid())
+  shopId          String
+  deviceId        String
+  userId          String?
+  overallStatus   String   @default("unknown") // healthy | degraded | critical | unknown
+  healthScore     Int? // 0-100, server-computed
+  printerStatus   String? // ready | offline | error | not_configured
+  printerName     String?
+  scannerStatus   String? // connected | disconnected | not_configured
+  online          Boolean?
+  networkType     String? // effectiveType: 4g | 3g | wifi | slow-2g …
+  dbStatus        String? // ok | degraded | error
+  storageUsedMb   Float?
+  storageQuotaMb  Float?
+  appVersion      String?
+  os              String?
+  browser         String?
+  batteryLevel    Int? // 0-100
+  batteryCharging Boolean?
+  ramUsedMb       Float?
+  ramLimitMb      Float?
+  cpuPercent      Float?
+  extraJson       String?
+  createdAt       DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, deviceId, createdAt])
   @@index([shopId, createdAt])
 }
 

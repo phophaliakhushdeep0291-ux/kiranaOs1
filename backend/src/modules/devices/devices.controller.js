@@ -1,4 +1,12 @@
 import * as service from "./devices.service.js";
+import * as healthService from "./deviceHealth.service.js";
+
+function resolveHealthDeviceId(req) {
+  const fromSession = req.user?.deviceId;
+  const raw = req.headers["x-device-id"] ?? req.body?.deviceId;
+  const fromHeader = Array.isArray(raw) ? raw[0] : raw;
+  return fromSession ?? (typeof fromHeader === "string" && fromHeader.trim() ? fromHeader.trim() : null);
+}
 
 export async function list(req, res, next) {
   try {
@@ -67,6 +75,26 @@ export async function current(req, res, next) {
 export async function heartbeat(req, res, next) {
   try { res.json({ success: true, data: await service.heartbeat(req.shopId, req.headers["x-device-id"] ?? req.body.deviceId) }); }
   catch (err) { next(err); }
+}
+
+export async function reportHealth(req, res, next) {
+  try {
+    const deviceId = resolveHealthDeviceId(req);
+    const result = await healthService.recordHealth({ ...req.body, shopId: req.shopId, deviceId, userId: req.user?.userId ?? null });
+    res.status(202).json({ success: true, data: result ?? { recorded: false } });
+  } catch (err) { next(err); }
+}
+
+export async function listHealth(req, res, next) {
+  try { res.json({ success: true, data: await healthService.listLatestHealthPerDevice({ shopId: req.shopId }) }); }
+  catch (err) { next(err); }
+}
+
+export async function myHealth(req, res, next) {
+  try {
+    const deviceId = resolveHealthDeviceId(req);
+    res.json({ success: true, data: await healthService.getLatestHealthForDevice({ shopId: req.shopId, deviceId }) });
+  } catch (err) { next(err); }
 }
 
 export async function license(req, res, next) {
