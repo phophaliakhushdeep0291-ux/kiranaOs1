@@ -12,7 +12,7 @@ import { getPrinterConfigSync } from "@/features/settings/printer-config";
 import { getTaxConfigSync } from "@/features/settings/tax-config";
 import { computeGstBreakdown } from "@/lib/gst";
 import { gstStateCode } from "@/lib/gstin";
-import { cartItemLineDiscount, cartItemNet } from "./billing-calculations";
+import { cartItemLineDiscount, cartItemNet, computeBillSavings } from "./billing-calculations";
 import type { PrintableBill } from "./billing-types";
 
 function billTypeLabel(type: PrintableBill["billType"]) {
@@ -77,6 +77,8 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
       ? { mode: breakdown.mode, gst: breakdown.gst, cgst: breakdown.cgst, sgst: breakdown.sgst, igst: breakdown.igst, supplyType: breakdown.supplyType, byRate: breakdown.byRate.map(({ rate, taxable, cgst, sgst, igst }) => ({ rate, taxable, cgst, sgst, igst })) }
       : null,
     showHsn: printer.showHsn,
+    // "You saved ₹X" — MRP gaps + line/bill discounts, when the toggle is on.
+    savings: printer.showSavings ? computeBillSavings(bill.items, bill.discount) : undefined,
     // Udhar bills keep their record-keeping note; everything else uses the
     // shop's configured receipt footer (falling back to the friendly default).
     footerNote: [

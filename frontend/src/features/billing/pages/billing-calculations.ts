@@ -135,6 +135,23 @@ export function cartItemNet(item: CartItem): number {
   return roundMoney(cartItemGross(item) - cartItemLineDiscount(item));
 }
 
+/**
+ * Total rupees the customer saved on this bill — the "You saved ₹X" line on
+ * the receipt. Counts, per line, the gap below MRP (only when the product has
+ * an MRP above the sold rate) plus that line's own discount, then adds the
+ * bill-level discount. Never negative.
+ */
+export function computeBillSavings(cart: CartItem[], billDiscount: number): number {
+  const lineSavings = cart.reduce((sum, item) => {
+    const mrp = Number(item.product?.mrp) || 0;
+    const rate = Number(item.rate) || 0;
+    const qty = Number(item.quantity) || 0;
+    const mrpGap = mrp > rate ? roundMoney((mrp - rate) * qty) : 0;
+    return sum + mrpGap + cartItemLineDiscount(item);
+  }, 0);
+  return roundMoney(Math.max(0, lineSavings + (Number(billDiscount) || 0)));
+}
+
 export function cartItemProfit(item: CartItem): number {
   if (item.isCustom) return 0;
   return roundMoney((Number(item.rate) - productCostPrice(item.product)) * Number(item.quantity) - cartItemLineDiscount(item));

@@ -30,6 +30,11 @@ describe("receipt preview honours every toggle", () => {
     expect(html({ showReturnPolicy: false })).not.toContain("Returns accepted as per shop policy");
   });
 
+  it('"You saved" line appears only when showSavings is on', () => {
+    expect(html({ showSavings: true })).toContain("You saved");
+    expect(html({ showSavings: false })).not.toContain("You saved");
+  });
+
   it("GSTIN is hidden when showGst is off", () => {
     expect(html({ showGst: true })).toContain("22AAAAA0000A1Z5");
     expect(html({ showGst: false })).not.toContain("22AAAAA0000A1Z5");

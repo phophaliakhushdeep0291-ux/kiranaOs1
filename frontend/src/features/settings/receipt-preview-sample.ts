@@ -34,6 +34,8 @@ export function sampleReceiptSnapshot(
     credit: 0,
     payments: [{ mode: "cash", amount: 470 }],
     showHsn: cfg.showHsn,
+    // Sample "You saved" figure so the toggle visibly changes the preview.
+    savings: cfg.showSavings ? 63 : undefined,
     gst: cfg.showGstBreakup
       ? {
           mode: "inclusive" as const,

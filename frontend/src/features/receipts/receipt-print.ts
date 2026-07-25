@@ -64,6 +64,8 @@ export interface ReceiptSnapshot {
   gst?: ReceiptGstInfo | null;
   /** Show the HSN code under item names (GST invoices). */
   showHsn?: boolean;
+  /** Total the customer saved (MRP gap + discounts). Prints a "You saved" line when > 0. */
+  savings?: number;
 }
 
 export type ReceiptPaperSize = "58mm" | "80mm" | "A4";
@@ -254,6 +256,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
           <div class="line grand"><span>Total</span><strong>${formatReceiptMoney(snapshot.total)}</strong></div>
           <div class="line"><span>Paid</span><strong>${formatReceiptMoney(snapshot.paid)}</strong></div>
           <div class="line due"><span>Due / Udhar</span><strong>${formatReceiptMoney(snapshot.credit)}</strong></div>
+          ${Number(snapshot.savings) > 0 ? `<div class="line savings"><span>You saved</span><strong>${formatReceiptMoney(Number(snapshot.savings))}</strong></div>` : ""}
         </section>
         ${gstSection(snapshot)}
         ${paymentRows(snapshot)}
@@ -442,6 +445,8 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
     }
     .grand span { color: #ffffff; }
     .due strong { color: #991b1b; }
+    .savings { margin-top: 6px; }
+    .savings span, .savings strong { color: #047857; font-weight: 800; }
     .section-title {
       margin-top: 10px;
       color: #6b7280;
