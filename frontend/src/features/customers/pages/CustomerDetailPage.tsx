@@ -200,7 +200,7 @@ export default function CustomerDetailPage() {
     }
     setSaving(true);
     try {
-      await createLedgerAdjustmentLocalFirst({ customerId: customer.id, amount, ownerPin: adjust.ownerPin, note: adjust.note });
+      await createLedgerAdjustmentLocalFirst({ customerId: customer.id, amount, ownerPin: adjust.ownerPin, note: adjust.note, expectedOutstanding: Math.max(0, Number(customer.ledgerBalance ?? 0)) });
       toast({ title: "Ledger adjustment saved", description: "Append-only correction added locally." });
       setAdjustOpen(false);
       setAdjust({ amount: "", ownerPin: "", note: "" });

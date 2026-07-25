@@ -98,7 +98,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 import { offlineDB } from "@/lib/offline/db";
 import { createBillLocalFirst } from "@/features/billing/local-actions";
 import { cancelBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
-import { readCustomerLedgerEntries } from "@/features/ledger/local-actions";
+import { createLedgerAdjustmentLocalFirst, readCustomerLedgerEntries } from "@/features/ledger/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { applyAuthoritativeUdharSummary, reconcileCustomerWithAuthoritativeSummary, loadCustomerDetail, loadCustomersWithLedger } from "@/features/customers/customer-ledger-data";
 
@@ -243,6 +243,27 @@ describe("customer ledger correctness", () => {
 
     expect(calculateLedgerBalance(ledger)).toBe(425);
     expect(normaliseLedgerType("CORRECTION")).toBe("CORRECTION");
+  });
+
+  it("adjustment validates against the authoritative balance, not the stale local ledger", async () => {
+    // Repro of the live report: the udhar page shows ₹630 (authoritative /udhar/summary),
+    // but the local ledger has drifted to 0. customer_1 is seeded with no ledger rows.
+    // Without the authoritative hint the guard uses the local sum (0) and wrongly blocks it.
+    await expect(
+      createLedgerAdjustmentLocalFirst({ customerId: "customer_1", amount: -630, ownerPin: "1234", note: "clear udhar" }),
+    ).rejects.toThrow(/Maximum reduction is Rs 0/);
+
+    // With the displayed authoritative balance passed in, the same reduction is allowed
+    // (the backend re-checks against the true server balance on sync).
+    const entry = await createLedgerAdjustmentLocalFirst({
+      customerId: "customer_1",
+      amount: -630,
+      ownerPin: "1234",
+      note: "clear udhar",
+      expectedOutstanding: 630,
+    });
+    expect(entry).toEqual(expect.objectContaining({ type: "ADJUSTMENT", amount: -630 }));
+    expect(scopedRows("sync_outbox").some((row) => row.operation_type === "CREATE_LEDGER_ADJUSTMENT")).toBe(true);
   });
 
   it("CANCELLED_BILL reverses udhar impact by appending a correction without mutating the original BILL ledger entry", async () => {

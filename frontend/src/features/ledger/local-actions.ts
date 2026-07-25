@@ -117,6 +117,15 @@ export async function createLedgerAdjustmentLocalFirst(input: {
   amount: number;
   note?: string;
   ownerPin: string;
+  /**
+   * The outstanding balance the operator is actually looking at (the authoritative
+   * `/udhar/summary` value the udhar page overlays). The local ledger can be stale
+   * or diverged from the server, so validating a reduction against the raw local
+   * sum alone wrongly blocks a legitimate adjustment (e.g. "Maximum reduction is
+   * Rs 0" while ₹630 is displayed). We guard against the max of the two and let the
+   * backend's own negative-balance check be the final authority on sync.
+   */
+  expectedOutstanding?: number;
 }): Promise<CustomerLedgerEntry> {
   parseOrThrow(ownerPinRequiredActionSchema, {
     action: "ledger_adjustment",
@@ -126,7 +135,8 @@ export async function createLedgerAdjustmentLocalFirst(input: {
   });
   const amount = roundMoney(readNumber(input.amount, 0));
   if (amount === 0) throw new Error("Adjustment amount cannot be zero");
-  const currentBalance = roundMoney(Math.max(0, calculateLedgerBalance(await readCustomerLedgerEntries(input.customerId))));
+  const ledgerBalance = roundMoney(Math.max(0, calculateLedgerBalance(await readCustomerLedgerEntries(input.customerId))));
+  const currentBalance = roundMoney(Math.max(ledgerBalance, Math.max(0, readNumber(input.expectedOutstanding, 0))));
   if (roundMoney(currentBalance + amount) < 0) {
     const error = new Error(`Adjustment would make udhar negative. Maximum reduction is Rs ${currentBalance.toLocaleString("en-IN")}`);
     (error as Error & { code?: string }).code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
