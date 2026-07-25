@@ -27,7 +27,17 @@ export async function requireAuth(req, _res, next) {
       err.code = "INVALID_TOKEN_PAYLOAD";
       throw err;
     }
-    if (payload.tokenType && payload.tokenType !== "ACCESS") {
+    // Fail closed on token type. This check used to be `payload.tokenType && ...`,
+    // which let any token WITHOUT a tokenType through — including the device-limit
+    // replacement challenge token, which is signed with the same JWT_SECRET but
+    // carries no sessionId, so it bypassed every session/device/revocation check
+    // below. See docs/STABILIZATION_AUDIT.md P0-2.
+    if (payload.tokenType !== "ACCESS") {
+      throw new AppError("Invalid access token type", 401, "INVALID_TOKEN_TYPE");
+    }
+    // Single-purpose tokens (device-limit replacement, password reset, ...) are
+    // never bearer credentials, regardless of how they are otherwise shaped.
+    if (payload.purpose) {
       throw new AppError("Invalid access token type", 401, "INVALID_TOKEN_TYPE");
     }
 
