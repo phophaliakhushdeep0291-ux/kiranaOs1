@@ -13,13 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { buildCustomerTimeline, loadCustomerDetail, reconcileCustomerWithAuthoritativeSummary, formatDateTime, formatMoney, formatShortDate, type CustomerTimelineEvent } from "@/features/customers/customer-ledger-data";
 import { isManualAdjustmentEntry, ledgerEntryLabel, normaliseLedgerType } from "@/features/ledger/accounting";
-import { getUdharSummary } from "@/features/ledger/api";
+import { resolveAuthoritativeUdharSummary } from "@/features/ledger/authoritative-balances";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { createLedgerAdjustmentLocalFirst } from "@/features/ledger/local-actions";
 import { FeatureGate, UpgradePrompt } from "@/features/subscription";
 import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
-import { apiRequest, isBrowserOnline } from "@/lib/api/http";
+import { apiRequest } from "@/lib/api/http";
 
 interface PaymentFormState { amount: string; mode: "cash" | "upi" | "bank"; note: string }
 interface ReverseFormState { paymentId: string }
@@ -42,14 +42,12 @@ function useCustomerDetail(id: string) {
       const detail = await loadCustomerDetail(id);
       // Match the customers list: overlay the server's authoritative udhar summary
       // so "Current udhar" here can't drift from the value shown on the main page.
-      // Offline (or if the summary call fails) we keep the local ledger view.
-      if (!detail || !isBrowserOnline()) return detail;
-      try {
-        const summary = await getUdharSummary();
-        return { ...detail, customer: reconcileCustomerWithAuthoritativeSummary(detail.customer, summary) };
-      } catch {
-        return detail;
-      }
+      // Offline we reuse the last summary this device saw, for the same reason —
+      // the raw local ledger is the one source that can be silently wrong.
+      if (!detail) return detail;
+      const { summary } = await resolveAuthoritativeUdharSummary();
+      if (!summary) return detail;
+      return { ...detail, customer: reconcileCustomerWithAuthoritativeSummary(detail.customer, summary) };
     },
     enabled: id.length > 0,
     staleTime: 1_500,
@@ -167,7 +165,13 @@ export default function CustomerDetailPage() {
     }
     setSaving(true);
     try {
-      await recordPaymentLocalFirst(customer.id, { amount, mode: payment.mode, note: payment.note.trim() || undefined });
+      await recordPaymentLocalFirst(
+        customer.id,
+        { amount, mode: payment.mode, note: payment.note.trim() || undefined },
+        // The displayed balance is the authoritative one; the device ledger can
+        // be drifted and would otherwise reject a legitimate collection.
+        { expectedOutstanding: outstanding },
+      );
       toast({ title: "Payment recorded", description: "Ledger updated locally. Billing still works offline." });
       setPaymentOpen(false);
       setPayment({ amount: "", mode: "cash", note: "" });

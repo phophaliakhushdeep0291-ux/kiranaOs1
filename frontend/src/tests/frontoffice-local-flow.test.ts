@@ -65,6 +65,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_${++dbState.idCounter}`),
   emitLocalDataChanged: vi.fn(),
   normaliseInstantCacheValue: vi.fn((value: unknown) => value),
+  readIndexedRecentCache: vi.fn(async (key: string, fallback: unknown) => clone((dbState.instant[key] as unknown[]) ?? fallback)),
   readInstantCache: vi.fn((key: string, fallback: unknown) => clone((dbState.instant[key] as unknown[]) ?? fallback)),
   upsertCachedListItem: vi.fn((key: string, item: Record<string, unknown>, maxItems = 500) => {
     const current = (dbState.instant[key] ?? []) as Array<Record<string, unknown>>;

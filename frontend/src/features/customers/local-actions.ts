@@ -24,7 +24,7 @@ type CustomerLocalRecord = Customer & {
 };
 
 export function normaliseLocalCustomer(customer: Customer): Customer {
-  const udhar = readNumber(customer.udharAmount ?? customer.totalUdhar, 0);
+  const udhar = Math.max(0, readNumber(customer.udharAmount ?? customer.totalUdhar, 0));
   return { ...customer, udharAmount: udhar, totalUdhar: udhar };
 }
 

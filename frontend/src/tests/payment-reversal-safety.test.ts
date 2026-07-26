@@ -97,8 +97,10 @@ vi.mock("@/lib/offline/db", () => ({
 vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_${++dbState.idCounter}`),
   emitLocalDataChanged: vi.fn(),
+  readIndexedRecentCache: vi.fn(async (_key: string, fallback: unknown) => fallback),
   readInstantCache: vi.fn((_key: string, fallback: unknown) => fallback),
   upsertCachedListItem: vi.fn(),
+  writeInstantCache: vi.fn(),
 }));
 
 import { offlineDB } from "@/lib/offline/db";
@@ -228,7 +230,9 @@ describe("payment reversal transaction safety", () => {
         id: "customer_1",
         udharAmount: 500,
         totalUdhar: 500,
-        sync_status: "pending_sync",
+        // Derived from the correction entry, not an independent customer edit.
+        sync_status: "synced",
+        balance_derived_from_local_ledger: true,
       }),
     );
 

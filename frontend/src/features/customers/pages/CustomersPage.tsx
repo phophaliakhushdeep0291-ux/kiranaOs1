@@ -57,15 +57,16 @@ import {
   loadCustomerDetail,
   loadCustomersWithLedger,
   formatShortDate,
+  toLedgerDriftCandidates,
   type CustomerWithLedger,
 } from "@/features/customers/customer-ledger-data";
-import { getUdharSummary } from "@/features/ledger/api";
+import { resolveAuthoritativeUdharSummary } from "@/features/ledger/authoritative-balances";
+import { repairLedgerDriftFromServer } from "@/features/ledger/ledger-drift-repair";
 import { isManualAdjustmentEntry } from "@/features/ledger/accounting";
 import type { CustomerInput } from "@/types/api";
 import { offlineDB } from "@/lib/offline/db";
 import { cn } from "@/lib/utils";
 import { validateGstin } from "@/lib/gstin";
-import { isBrowserOnline } from "@/lib/api/http";
 
 interface CustomerFormState {
   name: string;
@@ -113,12 +114,23 @@ function useCustomersLedgerList() {
     queryKey: ["customers-ledger-list"],
     queryFn: async () => {
       const localCustomers = await loadCustomersWithLedger();
-      if (!isBrowserOnline()) return localCustomers;
-      try {
-        return applyAuthoritativeUdharSummary(localCustomers, await getUdharSummary());
-      } catch {
-        return localCustomers;
+      // The server's ledger summary is authoritative. Offline we reuse the last
+      // one this device saw rather than the raw local ledger, so the balances
+      // don't change the moment the connection does.
+      const { summary, source } = await resolveAuthoritativeUdharSummary();
+      if (!summary) return localCustomers;
+      // A synced customer whose local ledger disagrees with the server means the
+      // device replica is wrong. Overlaying the right number here would hide it
+      // from this page while every other reader stays broken, so repair the
+      // ledger itself and re-read it.
+      if (source === "server") {
+        const repaired = await repairLedgerDriftFromServer(
+          toLedgerDriftCandidates(localCustomers),
+          summary,
+        ).catch(() => false);
+        if (repaired) return applyAuthoritativeUdharSummary(await loadCustomersWithLedger(), summary);
       }
+      return applyAuthoritativeUdharSummary(localCustomers, summary);
     },
     staleTime: 1_500,
   });
@@ -676,7 +688,9 @@ export default function CustomersPage() {
       toast({ title: "Enter a valid cash or UPI split", variant: "destructive" });
       return;
     }
-    const customer = dedupedCustomers.find((row) => row.id === paymentForm.customerId);
+    const customer =
+      dedupedCustomers.find((row) => row.id === paymentForm.customerId) ??
+      selectedCustomer;
     const outstanding = Math.max(0, Number(customer?.ledgerBalance ?? 0));
     if (amount > outstanding + 0.001) {
       toast({
@@ -688,12 +702,14 @@ export default function CustomersPage() {
     }
     setSaving(true);
     try {
+      // Validate against the balance the operator can see (the authoritative
+      // summary this page overlays), not the device ledger — it can be drifted.
       if (paymentForm.mode === "split") {
         const baseNote = paymentForm.note.trim();
-        if (cashAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: cashAmount, mode: "cash", note: baseNote ? `${baseNote} (split cash)` : "Split payment - cash" });
-        if (upiAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : "Split payment - UPI" });
+        if (cashAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: cashAmount, mode: "cash", note: baseNote ? `${baseNote} (split cash)` : "Split payment - cash" }, { expectedOutstanding: outstanding });
+        if (upiAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : "Split payment - UPI" }, { expectedOutstanding: Math.max(0, outstanding - cashAmount) });
       } else {
-        await recordPaymentLocalFirst(paymentForm.customerId, { amount, mode: paymentForm.mode, note: paymentForm.note.trim() || undefined });
+        await recordPaymentLocalFirst(paymentForm.customerId, { amount, mode: paymentForm.mode, note: paymentForm.note.trim() || undefined }, { expectedOutstanding: outstanding });
       }
       toast({ title: "Payment recorded", description: "Ledger updated locally. Sync will upload this safely." });
       setPaymentOpen(false);

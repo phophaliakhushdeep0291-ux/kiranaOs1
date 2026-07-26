@@ -95,7 +95,8 @@ async function importProducts() {
 async function importCustomers() {
   const rows = await apiRequest<Customer[]>(`/customers?limit=${DIRECT_IMPORT_LIMIT}`, { method: "GET", cache: "no-store", background: true });
   const customers = Array.isArray(rows) ? rows.map((customer) => {
-    const udhar = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
+    const parsed = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
+    const udhar = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
     return { ...customer, udharAmount: udhar, totalUdhar: udhar };
   }) : [];
   if (customers.length > 0) {
@@ -169,6 +170,15 @@ async function importInventory() {
   const merged = await preserveLocalPending("products", products, PRODUCT_ID_KEYS);
   await offlineDB.putMany("products", merged);
   return products.length;
+}
+
+/**
+ * Replace the device's udhar ledger with the server snapshot (pending local work
+ * survives). Exported so a detected balance drift can repair the ledger without
+ * waiting for a full cloud bootstrap — see `ledger-drift-repair.ts`.
+ */
+export async function resyncUdharLedgerFromServer(): Promise<number> {
+  return importUdharLedger();
 }
 
 async function importUdharLedger() {

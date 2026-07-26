@@ -67,12 +67,15 @@ vi.mock("@/lib/offline/db", () => ({
 vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_${++dbState.idCounter}`),
   emitLocalDataChanged: vi.fn(),
+  readIndexedRecentCache: vi.fn(async (_key: string, fallback: unknown) => fallback),
   readInstantCache: vi.fn((_key: string, fallback: unknown) => fallback),
   upsertCachedListItem: vi.fn(),
+  writeInstantCache: vi.fn(),
 }));
 
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache, upsertCachedListItem } from "@/lib/offline/instant-cache";
+import { AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY } from "@/features/ledger/authoritative-balances";
 import { getLocalUdharSummary, recordPaymentLocalFirst } from "@/features/payments/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
@@ -105,7 +108,16 @@ describe("payment recording transaction safety", () => {
 
     expect(tableRows("payments")).toHaveLength(1);
     expect(tableRows("payments")[0]).toEqual(expect.objectContaining({ id: "payment_1", customer_id: "customer_1", amount: 200, mode: "cash", status: "active" }));
-    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ id: "customer_1", udharAmount: 300, totalUdhar: 300, sync_status: "pending_sync" }));
+    // The cached balance is derived from the ledger entry, not an independent
+    // customer edit, so the row keeps its sync status instead of being pinned to
+    // "pending_sync" forever (nothing queues a CUSTOMER op to clear it).
+    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({
+      id: "customer_1",
+      udharAmount: 300,
+      totalUdhar: 300,
+      sync_status: "synced",
+      balance_derived_from_local_ledger: true,
+    }));
   });
 
   it("rejects udhar overpayment before writing local rows", async () => {
@@ -117,6 +129,61 @@ describe("payment recording transaction safety", () => {
     expect(tableRows("customer_ledger").filter((row) => row.type === "PAYMENT")).toHaveLength(0);
     expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 500, totalUdhar: 500 }));
     expect(tableRows("sync_outbox")).toHaveLength(0);
+  });
+
+  it("uses cached server udhar summary when the local ledger is stale at zero", async () => {
+    dbState.committed.customers = [
+      { id: "customer_1", name: "Ramesh", type: "udhar", udharAmount: 0, totalUdhar: 0, trustScore: 70, sync_status: "synced" },
+    ];
+    dbState.committed.customer_ledger = [];
+    mockedReadInstantCache.mockImplementation((key: string, fallback: unknown) => {
+      if (key === AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY) {
+        return {
+          capturedAt: "2026-01-01T00:00:00.000Z",
+          summary: {
+            totalOutstanding: 300,
+            customers: [
+              { customerId: "customer_1", customerName: "Ramesh", amount: 300, outstanding: 300 },
+            ],
+          },
+        };
+      }
+      return fallback;
+    });
+
+    const result = await recordPaymentLocalFirst("customer_1", { amount: 150, mode: "cash" });
+
+    expect(result).toEqual(expect.objectContaining({ success: true, amount: 150 }));
+    expect(tableRows("customer_ledger").find((row) => row.type === "PAYMENT")).toEqual(
+      expect.objectContaining({ amount: 150, balance_after: 150 }),
+    );
+    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 150, totalUdhar: 150 }));
+  });
+
+  it("subtracts pending local payments from the cached server balance before validating again", async () => {
+    dbState.committed.customers = [
+      { id: "customer_1", name: "Ramesh", type: "udhar", udharAmount: 0, totalUdhar: 0, trustScore: 70, sync_status: "synced" },
+    ];
+    dbState.committed.customer_ledger = [];
+    mockedReadInstantCache.mockImplementation((key: string, fallback: unknown) => {
+      if (key === AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY) {
+        return {
+          capturedAt: "2026-01-01T00:00:00.000Z",
+          summary: {
+            totalOutstanding: 300,
+            customers: [
+              { customerId: "customer_1", customerName: "Ramesh", amount: 300, outstanding: 300 },
+            ],
+          },
+        };
+      }
+      return fallback;
+    });
+
+    await recordPaymentLocalFirst("customer_1", { amount: 150, mode: "cash" });
+
+    await expect(recordPaymentLocalFirst("customer_1", { amount: 200, mode: "cash" }))
+      .rejects.toMatchObject({ code: "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING" });
   });
 
   it("allows two same-amount payments that exactly clear the balance", async () => {

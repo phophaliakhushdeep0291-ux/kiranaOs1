@@ -298,7 +298,50 @@ GET /api/accounting/control?from=<ISO timestamp>&to=<ISO timestamp>
 
 This shop-wide endpoint requires `Authorization`, `x-device-id`, and owner role. It projects append-only `FinancialLedger` rows through fixed account mappings with integer-paise arithmetic. A source group is `balanced` only when total debit equals total credit, every row is mapped, and the group has at least one accounting line. Supplier-payment rows expand into payable and tender legs; gift-card redemption and waived checkout amounts are explicit debit legs.
 
-Clients must display `coverage`, `exceptions`, `unmapped`, `calculationVersion`, `scope`, and `limitations` with the trial balance. They must never auto-balance an unknown event, hide a historical difference, substitute an offline estimate, or call this a statutory-complete set of books. Version `accounting-control-v2` adds gross-cost inventory/payable/tender legs for purchase receipts, exact purchase-return/cancellation legs, paid or accrued operating-expense lifecycles, and aggregate GST-output reclassification while preserving gross-sales KPIs. It does not infer GST input credit from source records that lack immutable tax evidence. Historical purchases/expenses before v2, sales COGS, non-purchase stock valuation, component GST journal accounts, bank-statement matching, TDS, TCS, and statutory statements remain explicit limitations.
+Clients must display `coverage`, `exceptions`, `unmapped`, `calculationVersion`, `scope`, and `limitations` with the trial balance. They must never auto-balance an unknown event, hide a historical difference, substitute an offline estimate, or call this a statutory-complete set of books. Version `accounting-control-v2` adds gross-cost inventory/payable/tender legs for purchase receipts, exact purchase-return/cancellation legs, paid or accrued operating-expense lifecycles, and aggregate GST-output reclassification while preserving gross-sales KPIs. It does not infer GST input credit from source records that lack immutable tax evidence. Historical purchases/expenses before v2, sales COGS, non-purchase stock valuation, component GST journal accounts, live bank/provider feeds, TDS, TCS, and statutory statements remain explicit limitations. Imported CSV statement matching is covered separately by bank-reconciliation-v1 below.
+### Bank and UPI statement reconciliation
+
+```text
+GET  /api/accounting/bank-statements
+POST /api/accounting/bank-statements/import                 # owner PIN
+GET  /api/accounting/bank-reconciliation
+POST /api/accounting/bank-transactions/:id/match            # owner PIN
+POST /api/accounting/bank-transactions/:id/unmatch          # owner PIN
+POST /api/accounting/bank-transactions/:id/ignore           # owner PIN
+POST /api/accounting/bank-transactions/:id/restore          # owner PIN
+```
+
+All seven endpoints require `Authorization`, `x-device-id`, owner role, shop
+context, and the `csv_import_export` plan feature. Every mutation additionally
+requires owner PIN. The import accepts CSV evidence only; it is not a live bank
+or payment-provider connection. The complete file is parsed before any write,
+dates must be unambiguous, money is converted directly to integer paise, and
+SHA-256 file/transaction fingerprints make exact retries observable and prevent
+silent duplicate rows. One malformed row rejects the whole import.
+
+`GET /api/accounting/bank-reconciliation` returns version
+`bank-reconciliation-v1`, shop-wide integer-paise totals, active allocations,
+exact candidate evidence, allocation options, pagination, coverage and visible
+limitations. Suggestions require the same account direction, an amount equal to
+the remaining statement value, and a deterministic ±3-day window. A reference
+match may rank evidence but never relaxes amount or direction. Equal top scores
+are explicitly `ambiguous`. The engine always returns `autoMatch: false`; only an
+owner-confirmed POST creates an allocation.
+
+One statement row can explicitly allocate several whole ledger impacts whose
+sum does not exceed its amount. A ledger impact can belong to only one active
+statement match and cannot be split across statement rows in v1. Partial,
+multi-row, or outside-window matching requires a note. Optimistic state checks
+and unique active keys reject concurrent reuse. Unmatch reverses allocation
+records rather than deleting them; ignore and restore also produce append-only
+reconciliation events plus the central tenant audit log. Encrypted tenant
+backups include imports, transactions, allocations, and events.
+
+Clients must show that this is CSV/manual reconciliation, never label a
+suggestion as confirmed, never infer missing historical ledger events, and never
+hide ambiguity, remaining amounts, candidate-scan truncation, or coverage
+limitations.
+
 ## Frontend release gate
 
 Before a frontend build is considered compatible with this backend, verify:
