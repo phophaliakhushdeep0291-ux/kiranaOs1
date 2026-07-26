@@ -91,6 +91,18 @@ model Shop {
   errorEvents                 ErrorEvent[]
   supportRequests             SupportRequest[]
   deviceHealthSnapshots       DeviceHealthSnapshot[]
+  auditRules                  AuditRule[]
+  auditRuns                   AuditRun[]
+  auditEvaluations            AuditEvaluation[]
+  auditFindings               AuditFinding[]
+  auditFindingRules           AuditFindingRule[]
+  auditEvidenceRequirements   AuditEvidenceRequirement[]
+  auditEvidence               AuditEvidence[]
+  auditFindingStatusHistory   AuditFindingStatusHistory[]
+  auditReviews                AuditReview[]
+  auditCases                  AuditCase[]
+  auditCaseFindings           AuditCaseFinding[]
+  auditBaselines              AuditBaseline[]
 }
 
 // ─────────────────────────────────────────────
@@ -2103,4 +2115,302 @@ model DeviceLicense {
 
   @@index([shopId, deviceId])
   @@index([validUntil])
+}
+
+// ─────────────────────────────────────────────
+// FINANCIAL ASSURANCE ENGINE — continuous financial-control monitoring.
+// These tables store findings, evidence and review trails ABOUT canonical
+// transactions; they are strictly read-only toward financial truth and are
+// never a source for balances, stock or reports. Findings are never deleted;
+// status history rows are append-only. See docs/AI_AUDIT_ARCHITECTURE.md.
+// ─────────────────────────────────────────────
+model AuditRule {
+  id              String   @id @default(cuid())
+  shopId          String
+  ruleCode        String
+  enabled         Boolean  @default(true)
+  weightOverride  Int?
+  thresholdsJson  String   @default("{}")
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, ruleCode])
+  @@index([shopId, enabled])
+}
+
+model AuditRun {
+  id                String    @id @default(cuid())
+  shopId            String
+  runType           String // TRANSACTION_TRIGGERED | SCHEDULED | MANUAL
+  status            String    @default("RUNNING") // RUNNING | COMPLETED | FAILED | PARTIAL
+  engineVersion     String
+  rulesetVersion    String
+  scopeJson         String    @default("{}")
+  periodFrom        DateTime?
+  periodTo          DateTime?
+  entitiesEvaluated Int       @default(0)
+  findingsCreated   Int       @default(0)
+  findingsUpdated   Int       @default(0)
+  summaryJson       String    @default("{}")
+  error             String?
+  triggeredByUserId String?
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  shop        Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  evaluations AuditEvaluation[]
+
+  @@index([shopId, createdAt])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, runType, createdAt])
+}
+
+// Immutable record of one deterministic evaluation of one entity: the input
+// snapshot hash plus the full result JSON make every risk score reproducible
+// even after the underlying transaction is later edited.
+model AuditEvaluation {
+  id                     String   @id @default(cuid())
+  shopId                 String
+  auditRunId             String
+  sourceEntityType       String
+  sourceEntityId         String
+  inputHash              String
+  engineVersion          String
+  rulesetVersion         String
+  triggeredRuleCodesJson String   @default("[]")
+  riskScore              Int      @default(0)
+  resultJson             String   @default("{}")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  shop Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  run  AuditRun @relation(fields: [auditRunId], references: [id], onDelete: Cascade)
+
+  @@unique([auditRunId, sourceEntityType, sourceEntityId])
+  @@index([shopId, sourceEntityType, sourceEntityId, createdAt])
+  @@index([shopId, createdAt])
+}
+
+model AuditFinding {
+  id                 String    @id @default(cuid())
+  shopId             String
+  dedupeKey          String // `${sourceEntityType}:${sourceEntityId}` — one finding per entity
+  sourceEntityType   String
+  sourceEntityId     String
+  sourceEventType    String?
+  firstAuditRunId    String?
+  lastAuditRunId     String?
+  lastEvaluationId   String?
+  title              String
+  status             String    @default("OPEN") // OPEN | EVIDENCE_REQUESTED | UNDER_REVIEW | CONFIRMED_ISSUE | FALSE_POSITIVE | CORRECTED | ACCEPTED_RISK | CLOSED
+  primaryCategory    String?
+  riskScore          Int       @default(0)
+  riskLevel          String    @default("LOW") // LOW | MEDIUM | HIGH | CRITICAL
+  confidence         Float     @default(1)
+  amountPaise        BigInt?
+  scoreBreakdownJson String    @default("{}")
+  aiExplanation      String?
+  aiExplanationLang  String?
+  assignedReviewerId String?
+  occurredAt         DateTime?
+  resolvedAt         DateTime?
+  resolutionType     String?
+  reopenCount        Int       @default(0)
+  engineVersion      String
+  rulesetVersion     String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  shop                 Shop                        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  rules                AuditFindingRule[]
+  evidence             AuditEvidence[]
+  evidenceRequirements AuditEvidenceRequirement[]
+  statusHistory        AuditFindingStatusHistory[]
+  reviews              AuditReview[]
+  caseLinks            AuditCaseFinding[]
+
+  @@unique([shopId, dedupeKey])
+  @@index([shopId, status, createdAt])
+  @@index([shopId, riskLevel, status])
+  @@index([shopId, sourceEntityType, sourceEntityId])
+  @@index([shopId, assignedReviewerId, status])
+  @@index([shopId, createdAt])
+}
+
+model AuditFindingRule {
+  id                String   @id @default(cuid())
+  shopId            String
+  findingId         String
+  ruleCode          String
+  ruleVersion       Int
+  category          String
+  severity          String
+  scoreContribution Int
+  detailsJson       String   @default("{}")
+  active            Boolean  @default(true) // still triggering as of the last evaluation
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  shop    Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  finding AuditFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@unique([findingId, ruleCode])
+  @@index([shopId, ruleCode, createdAt])
+}
+
+model AuditEvidenceRequirement {
+  id                String    @id @default(cuid())
+  shopId            String
+  findingId         String
+  evidenceType      String
+  description       String
+  status            String    @default("REQUESTED") // REQUESTED | PROVIDED | VERIFIED | REJECTED | INSUFFICIENT | NOT_APPLICABLE
+  requestedByUserId String?
+  dueAt             DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  shop     Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  finding  AuditFinding    @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  evidence AuditEvidence[]
+
+  @@index([shopId, status, createdAt])
+  @@index([findingId])
+}
+
+model AuditEvidence {
+  id                    String    @id @default(cuid())
+  shopId                String
+  findingId             String
+  requirementId         String?
+  evidenceType          String
+  referenceKind         String    @default("text") // text | reference | url | file | transaction_ref
+  referenceValue        String
+  originalFilename      String?
+  mimeType              String?
+  sizeBytes             Int?
+  checksumSha256        String?
+  storageKey            String?
+  uploadedByUserId      String?
+  verificationStatus    String    @default("PROVIDED") // PROVIDED | VERIFIED | REJECTED | INSUFFICIENT | NOT_APPLICABLE
+  verifiedByUserId      String?
+  verifiedAt            DateTime?
+  extractedMetadataJson String    @default("{}")
+  reviewerNotes         String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  shop        Shop                      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  finding     AuditFinding              @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  requirement AuditEvidenceRequirement? @relation(fields: [requirementId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, findingId, createdAt])
+  @@index([shopId, verificationStatus, createdAt])
+}
+
+// Append-only: rows are created on every finding status transition and never
+// updated or deleted. updatedAt exists for model-shape consistency only.
+model AuditFindingStatusHistory {
+  id              String   @id @default(cuid())
+  shopId          String
+  findingId       String
+  previousStatus  String?
+  newStatus       String
+  changedByUserId String?
+  changedByRole   String?
+  comment         String?
+  evidenceId      String?
+  approvalLevel   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  shop    Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  finding AuditFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, findingId, createdAt])
+  @@index([shopId, createdAt])
+}
+
+model AuditReview {
+  id             String   @id @default(cuid())
+  shopId         String
+  findingId      String
+  reviewerUserId String?
+  reviewerRole   String?
+  decision       String // CONFIRMED_ISSUE | FALSE_POSITIVE | ACCEPTED_RISK | CORRECTED | NEEDS_MORE_EVIDENCE
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  shop    Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  finding AuditFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, findingId, createdAt])
+}
+
+model AuditCase {
+  id              String    @id @default(cuid())
+  shopId          String
+  title           String
+  summary         String?
+  status          String    @default("OPEN") // OPEN | UNDER_REVIEW | CLOSED
+  riskLevel       String    @default("LOW")
+  createdByUserId String?
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop     Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  findings AuditCaseFinding[]
+
+  @@index([shopId, status, createdAt])
+}
+
+model AuditCaseFinding {
+  id        String   @id @default(cuid())
+  shopId    String
+  caseId    String
+  findingId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shop    Shop         @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  case    AuditCase    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  finding AuditFinding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, findingId])
+  @@index([shopId, findingId])
+}
+
+// Shop-specific behavioral baselines from robust statistics. INSUFFICIENT_DATA
+// baselines must never contribute to a risk score.
+model AuditBaseline {
+  id             String   @id @default(cuid())
+  shopId         String
+  metricKey      String
+  scopeKey       String   @default("global")
+  windowDays     Int      @default(90)
+  sampleCount    Int      @default(0)
+  minimumSamples Int      @default(30)
+  status         String   @default("INSUFFICIENT_DATA") // OK | INSUFFICIENT_DATA
+  median         Float?
+  p25            Float?
+  p75            Float?
+  p90            Float?
+  p99            Float?
+  mean           Float?
+  statsJson      String   @default("{}")
+  computedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, metricKey, scopeKey])
+  @@index([shopId, computedAt])
 }

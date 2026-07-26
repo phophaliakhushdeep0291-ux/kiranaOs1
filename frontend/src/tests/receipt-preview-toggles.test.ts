@@ -35,6 +35,11 @@ describe("receipt preview honours every toggle", () => {
     expect(html({ showSavings: false })).not.toContain("You saved");
   });
 
+  it("struck-through MRP appears only when showMrp is on", () => {
+    expect(html({ showMrp: true })).toContain("MRP <s>");
+    expect(html({ showMrp: false })).not.toContain("MRP <s>");
+  });
+
   it("GSTIN is hidden when showGst is off", () => {
     expect(html({ showGst: true })).toContain("22AAAAA0000A1Z5");
     expect(html({ showGst: false })).not.toContain("22AAAAA0000A1Z5");

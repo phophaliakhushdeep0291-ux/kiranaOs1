@@ -64,6 +64,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
       total: cartItemNet(item),
       lineDiscount: cartItemLineDiscount(item),
       note: item.note ?? null,
+      mrp: item.product.mrp ?? null,
       hsn: item.product.hsn ?? null,
     })),
     subtotal: bill.subtotal,
@@ -77,6 +78,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
       ? { mode: breakdown.mode, gst: breakdown.gst, cgst: breakdown.cgst, sgst: breakdown.sgst, igst: breakdown.igst, supplyType: breakdown.supplyType, byRate: breakdown.byRate.map(({ rate, taxable, cgst, sgst, igst }) => ({ rate, taxable, cgst, sgst, igst })) }
       : null,
     showHsn: printer.showHsn,
+    showMrp: printer.showMrp,
     // "You saved ₹X" — MRP gaps + line/bill discounts, when the toggle is on.
     savings: printer.showSavings ? computeBillSavings(bill.items, bill.discount) : undefined,
     // Udhar bills keep their record-keeping note; everything else uses the

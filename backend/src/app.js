@@ -46,6 +46,7 @@ import inventoryLotsRoutes from "./modules/inventory-lots/inventoryLots.routes.j
 import purchaseReturnsRoutes from "./modules/purchase-returns/purchaseReturns.routes.js";
 import accountingRoutes from "./modules/finance/accounting.routes.js";
 import diagnosticsRoutes from "./modules/diagnostics/diagnostics.routes.js";
+import platformAdminRoutes from "./modules/platform-admin/platformAdmin.routes.js";
 
 const app = express();
 
@@ -230,6 +231,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/diagnostics", diagnosticsRoutes);
+app.use("/api/platform-admin", platformAdminRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────
 app.use((_req, res) => {
