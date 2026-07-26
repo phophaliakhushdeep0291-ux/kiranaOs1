@@ -6,8 +6,12 @@ const purchaseDueDate = z.string()
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Purchase due date must be YYYY-MM-DD")
   .optional();
+const idempotencyKey = z.string().trim().min(8).max(160);
+const clientMovementId = z.string().trim().min(8).max(160).optional();
 
 export const purchaseSchema = z.object({
+  idempotencyKey,
+  clientMovementId,
   locationId: z.string().min(1).optional(),
   productId: z.string(),
   supplierId: z.string().optional(),
@@ -57,6 +61,8 @@ export const purchaseSchema = z.object({
 });
 
 export const damageSchema = z.object({
+  idempotencyKey,
+  clientMovementId,
   locationId: z.string().min(1).optional(),
   productId: z.string(),
   quantity: quantityAmount({ positive: true }),
@@ -65,6 +71,8 @@ export const damageSchema = z.object({
 });
 
 export const correctionSchema = z.object({
+  idempotencyKey,
+  clientMovementId,
   locationId: z.string().min(1).optional(),
   productId: z.string(),
   newStockBaseQty: quantityAmount(),

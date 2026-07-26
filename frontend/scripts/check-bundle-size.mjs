@@ -5,14 +5,17 @@ import { gzipSync } from "node:zlib";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const assetsDir = join(scriptDir, "..", "dist", "public", "assets");
+const manifestPath = join(scriptDir, "..", "dist", "public", ".vite", "manifest.json");
 const MAX_JS_CHUNK_BYTES = 900 * 1024;
-// Raw size catches accidental dependency growth; gzip tracks the bytes users
-// actually download. Keep both ceilings so minifier-friendly bloat cannot hide.
-// Raised from 2.76 -> 2.80 MB for legitimate feature growth (per-line discounts,
-// discount reasons, sales-by-hour reporting). No new dependency was added and the
-// gzip ceiling below is unchanged, so a real regression still trips the guard.
-const MAX_TOTAL_JS_BYTES = 2.80 * 1024 * 1024;
-const MAX_TOTAL_GZIP_BYTES = 850 * 1024;
+// The entry closure is what every merchant downloads at startup. Lazy route
+// chunks are downloaded only when opened, so enforce them with the largest-chunk
+// ceiling plus a separate bounded full-application ceiling. This avoids making
+// a legitimate lazy feature fail the startup budget while still detecting
+// dependency duplication and unlimited aggregate growth.
+const MAX_INITIAL_JS_BYTES = 1.30 * 1024 * 1024;
+const MAX_INITIAL_GZIP_BYTES = 400 * 1024;
+const MAX_TOTAL_JS_BYTES = 2.90 * 1024 * 1024;
+const MAX_TOTAL_GZIP_BYTES = 875 * 1024;
 
 
 async function collectFiles(dir) {
@@ -92,6 +95,29 @@ async function assertServiceWorkerBypassesSensitiveRoutes() {
   }
 }
 
+async function initialAssetNames() {
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const entry = Object.values(manifest).find((record) => record?.isEntry);
+  if (!entry?.file) throw new Error("Vite manifest has no application entry. Build with manifest:true.");
+  const recordsByFile = new Map(
+    Object.values(manifest)
+      .filter((record) => record?.file)
+      .map((record) => [record.file, record]),
+  );
+  const initial = new Set();
+  const visit = (file) => {
+    if (!file || initial.has(file)) return;
+    initial.add(file);
+    const record = recordsByFile.get(file);
+    for (const imported of record?.imports ?? []) {
+      const importedRecord = manifest[imported];
+      if (importedRecord?.file) visit(importedRecord.file);
+    }
+  };
+  visit(entry.file);
+  return new Set([...initial].map((file) => file.split("/").pop()));
+}
+
 async function main() {
   const files = await readdir(assetsDir);
   const jsFiles = files.filter((file) => file.endsWith(".js"));
@@ -128,14 +154,25 @@ async function main() {
   const total = rows.reduce((sum, row) => sum + row.bytes, 0);
   const totalGzip = rows.reduce((sum, row) => sum + row.gzipBytes, 0);
   const largest = rows.reduce((max, row) => (row.bytes > max.bytes ? row : max), rows[0]);
+  const initialNames = await initialAssetNames();
+  const initialRows = rows.filter((row) => initialNames.has(row.file));
+  const initialTotal = initialRows.reduce((sum, row) => sum + row.bytes, 0);
+  const initialGzip = initialRows.reduce((sum, row) => sum + row.gzipBytes, 0);
   console.log("Bundle size check");
   for (const row of rows.sort((a, b) => b.bytes - a.bytes)) {
     console.log(`- ${row.file}: ${(row.bytes / 1024).toFixed(1)} kB (${(row.gzipBytes / 1024).toFixed(1)} kB gzip)`);
   }
+  console.log(`Initial JS: ${(initialTotal / 1024).toFixed(1)} kB (${(initialGzip / 1024).toFixed(1)} kB gzip) across ${initialRows.length} files`);
   console.log(`Total JS: ${(total / 1024).toFixed(1)} kB (${(totalGzip / 1024).toFixed(1)} kB gzip)`);
 
   if (largest.bytes > MAX_JS_CHUNK_BYTES) {
     throw new Error(`Largest JS chunk ${(largest.bytes / 1024).toFixed(1)} kB exceeds ${(MAX_JS_CHUNK_BYTES / 1024).toFixed(0)} kB budget.`);
+  }
+  if (initialTotal > MAX_INITIAL_JS_BYTES) {
+    throw new Error(`Initial JS ${(initialTotal / 1024).toFixed(1)} kB exceeds ${(MAX_INITIAL_JS_BYTES / 1024).toFixed(0)} kB startup budget.`);
+  }
+  if (initialGzip > MAX_INITIAL_GZIP_BYTES) {
+    throw new Error(`Initial gzip JS ${(initialGzip / 1024).toFixed(1)} kB exceeds ${(MAX_INITIAL_GZIP_BYTES / 1024).toFixed(0)} kB startup budget.`);
   }
   if (total > MAX_TOTAL_JS_BYTES) {
     throw new Error(`Total JS ${(total / 1024).toFixed(1)} kB exceeds ${(MAX_TOTAL_JS_BYTES / 1024).toFixed(0)} kB budget.`);

@@ -58,6 +58,7 @@ export default defineConfig({
     // Two compression passes keep the full POS feature set inside the enforced
     // raw and gzip budgets without changing runtime behavior.
     minify: "terser",
+    manifest: true,
     terserOptions: {
       compress: { passes: 2 },
       format: { comments: false },

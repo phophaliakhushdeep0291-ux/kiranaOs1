@@ -2,11 +2,13 @@ import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { Redirect, Route, Switch, useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import NotFound from "@/components/shared/NotFound";
-import { ErrorBoundary, PageLoading, RouteTransition } from "@/components/shared";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import { PageLoading } from "@/components/shared/PageLoading";
+import { RouteTransition } from "@/components/shared/RouteTransition";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLandingRoute } from "@/features/settings/landing-page";
 import { stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
-import { FeatureGate } from "@/features/subscription";
+import { FeatureGate } from "@/features/subscription/components/FeatureGate";
 import type { FeatureName } from "@/features/subscription/plans";
 
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));

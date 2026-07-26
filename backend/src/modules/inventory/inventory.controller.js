@@ -2,6 +2,16 @@ import * as svc from "./inventory.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 
+function movementIdentity(req) {
+  const deviceHeader = req.headers?.["x-device-id"];
+  return {
+    idempotencyKey: req.body.idempotencyKey,
+    clientMovementId: req.body.clientMovementId ?? req.body.idempotencyKey,
+    sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
+    locationId: requestLocationId(req),
+  };
+}
+
 export async function getInventory(req, res, next) {
   try {
     const data = await svc.getInventory(req.shopId, requestLocationId(req));
@@ -18,15 +28,23 @@ export async function getLowStock(req, res, next) {
 
 export async function purchase(req, res, next) {
   try {
-    const data = await svc.recordPurchase(req.shopId, { ...req.body, locationId: requestLocationId(req) });
-    res.status(201).json({ success: true, data });
+    const data = await svc.recordPurchase(
+      req.shopId,
+      { ...req.body, locationId: requestLocationId(req) },
+      movementIdentity(req),
+    );
+    res.status(data.idempotentReplay ? 200 : 201).json({ success: true, data });
   } catch (err) { next(err); }
 }
 
 export async function damage(req, res, next) {
   try {
-    const data = await svc.recordDamage(req.shopId, { ...req.body, locationId: requestLocationId(req) });
-    await createAuditLog({
+    const data = await svc.recordDamage(
+      req.shopId,
+      { ...req.body, locationId: requestLocationId(req) },
+      movementIdentity(req),
+    );
+    if (!data.idempotentReplay) await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,
       action: "STOCK_DAMAGED",
@@ -53,8 +71,12 @@ export async function damage(req, res, next) {
 
 export async function correction(req, res, next) {
   try {
-    const data = await svc.correctStock(req.shopId, { ...req.body, locationId: requestLocationId(req) });
-    await createAuditLog({
+    const data = await svc.correctStock(
+      req.shopId,
+      { ...req.body, locationId: requestLocationId(req) },
+      movementIdentity(req),
+    );
+    if (!data.idempotentReplay) await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,
       action: "STOCK_CORRECTED",

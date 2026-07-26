@@ -1563,6 +1563,9 @@ async function applyAdjustStock(shopId, event, context) {
     }
 
     const parsed = damageSchema.parse({
+      idempotencyKey: identity.idempotencyKey,
+      clientMovementId: identity.clientMovementId,
+      locationId: payload.locationId,
       productId: payload.productId,
       quantity: payload.quantity,
       enteredUnit: payload.enteredUnit,
@@ -1577,6 +1580,9 @@ async function applyAdjustStock(shopId, event, context) {
   }
 
   const parsed = correctionSchema.parse({
+    idempotencyKey: identity.idempotencyKey,
+    clientMovementId: identity.clientMovementId,
+    locationId: payload.locationId,
     productId: payload.productId,
     newStockBaseQty: payload.newStockBaseQty,
     note: payload.note,

@@ -89,7 +89,8 @@ if (ctx.skip) {
     test("stock purchase increases stock", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 5, costPerRateUnit: 10 });
-      const result = assertSuccess(await ctx.post("/api/inventory/purchase", {
+      const purchaseRequest = {
+        idempotencyKey: "products-purchase-proof-1",
         productId: product.id,
         supplierName: "Test Supplier",
         quantity: 3,
@@ -102,7 +103,8 @@ if (ctx.skip) {
         purchaseDueAmount: 15,
         purchaseDueDate: "2026-06-15",
         updateCost: false,
-      }, { token: ownerAuth.accessToken }), 201);
+      };
+      const result = assertSuccess(await ctx.post("/api/inventory/purchase", purchaseRequest, { token: ownerAuth.accessToken }), 201);
       assert.equal(result.newStock, 8);
       assert.equal(result.invoiceNumber, "SUP-1001");
       assert.equal(result.purchasePaymentStatus, "partial");
@@ -126,12 +128,18 @@ if (ctx.skip) {
       const summary = assertSuccess(await ctx.get(`/api/reports/payment-summary?${todayRangeQuery()}`, { token: ownerAuth.accessToken }));
       assert.equal(summary.purchaseCashPaid, 30);
       assert.equal(summary.purchaseDue, 15);
+
+      const replay = assertSuccess(await ctx.post("/api/inventory/purchase", purchaseRequest, { token: ownerAuth.accessToken }), 200);
+      assert.equal(replay.idempotentReplay, true);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, idempotencyKey: purchaseRequest.idempotencyKey } }), 1);
+      assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id, productId: product.id } }), 1);
     });
 
     test("stock damage decreases stock", async () => {
       const { tenant, ownerAuth } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 5 });
       const result = assertSuccess(await ctx.post("/api/inventory/damage", {
+        idempotencyKey: "products-damage-proof-1",
         productId: product.id,
         quantity: 2,
         enteredUnit: "piece",

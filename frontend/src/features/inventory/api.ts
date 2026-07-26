@@ -1,4 +1,5 @@
 import { apiRequest, buildQuery } from "@/lib/api/http";
+import { safeRandomUUID } from "@/lib/safe-uuid";
 import type { InventoryItem, LedgerResult, QueryParams, StockMovementInput } from "@/types/api";
 
 export function getInventory() {
@@ -14,27 +15,39 @@ export function getStockLedger(params?: QueryParams) {
 }
 
 export function recordPurchase(data: StockMovementInput) {
+  const payload = withMovementIdentity(data, "purchase");
   return apiRequest<unknown>("/inventory/purchase", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
     ownerPin: data.ownerPin,
   });
 }
 
 export function recordDamage(data: StockMovementInput) {
+  const payload = withMovementIdentity(data, "damage");
   return apiRequest<unknown>("/inventory/damage", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
     ownerPin: data.ownerPin,
   });
 }
 
 export function stockCorrection(data: StockMovementInput) {
+  const payload = withMovementIdentity(data, "correction");
   return apiRequest<unknown>("/inventory/correction", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify(payload),
     ownerPin: data.ownerPin,
   });
+}
+
+function withMovementIdentity(data: StockMovementInput, action: string): StockMovementInput {
+  const idempotencyKey = data.idempotencyKey || `inventory:${action}:${safeRandomUUID()}`;
+  return {
+    ...data,
+    idempotencyKey,
+    clientMovementId: data.clientMovementId || idempotencyKey,
+  };
 }
 
 export type StockCountStatus = "counting" | "review" | "applied" | "cancelled";

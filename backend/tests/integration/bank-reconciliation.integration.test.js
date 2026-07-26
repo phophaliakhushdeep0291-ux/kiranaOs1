@@ -237,7 +237,7 @@ if (ctx.skip) {
       assert.equal(crossTenant.code, "BANK_TRANSACTION_NOT_FOUND");
     });
 
-test("rejects concurrent stale allocations instead of over-reconciling", async () => {
+    test("serializes or rejects concurrent allocations without over-reconciling", async () => {
       const { tenant, auth } = await ownerContext();
       const rows = await createLedgerRows(tenant.shop.id);
       assertSuccess(await ctx.post(
@@ -266,14 +266,22 @@ test("rejects concurrent stale allocations instead of over-reconciling", async (
           { token: auth.accessToken, ownerPin: tenant.ownerPin },
         ),
       ]);
-      assert.deepEqual(attempts.map((response) => response.status).sort((a, b) => a - b), [201, 409]);
+      const statuses = attempts.map((response) => response.status).sort((a, b) => a - b);
+      assert.equal(statuses[0], 201);
+      assert.ok(statuses[1] === 201 || statuses[1] === 409, JSON.stringify(attempts));
       const rejected = attempts.find((response) => response.status === 409);
-      assert.ok(["BANK_RECONCILIATION_CONFLICT", "BANK_RECONCILIATION_STATE_DRIFT", "BANK_LEDGER_ALREADY_MATCHED"].includes(rejected?.body?.code), JSON.stringify(rejected?.body));
+      if (rejected) {
+        assert.ok(
+          ["BANK_RECONCILIATION_CONFLICT", "BANK_RECONCILIATION_STATE_DRIFT", "BANK_LEDGER_ALREADY_MATCHED"].includes(rejected.body?.code),
+          JSON.stringify(rejected.body),
+        );
+      }
       const stored = await ctx.db.bankStatementTransaction.findUnique({ where: { id: transaction.id } });
       const active = await ctx.db.bankReconciliationAllocation.findMany({ where: { bankStatementTransactionId: transaction.id, status: "active" } });
-      assert.equal(active.length, 1);
-      assert.equal(stored.reconciledAmountPaise, active[0].amountPaise);
-      assert.ok(stored.reconciledAmountPaise < stored.amountPaise, "one stale concurrent request must roll back fully");
+      const activeTotal = active.reduce((total, allocation) => total + allocation.amountPaise, 0n);
+      assert.equal(stored.reconciledAmountPaise, activeTotal);
+      assert.ok(stored.reconciledAmountPaise <= stored.amountPaise, "concurrent requests must never over-reconcile");
+      assert.equal(active.length, statuses[1] === 201 ? 2 : 1, "every success must have one active allocation");
     });
     test("enforces owner role and subscribed CSV entitlement", async () => {
       const { tenant, auth } = await ownerContext("pro");

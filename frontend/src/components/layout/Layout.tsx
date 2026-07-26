@@ -11,7 +11,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/useAuth";
-import { useOfflineStatus } from "@/features/sync";
+import { useOfflineStatus } from "@/features/sync/useOfflineStatus";
 import {
   BarChart3,
   Bell,
@@ -36,7 +36,9 @@ import {
   Wallet,
   WifiOff,
 } from "lucide-react";
-import { PlanBadge, SubscriptionStatusBanner, useSubscriptionSnapshot } from "@/features/subscription";
+import { PlanBadge } from "@/features/subscription/components/PlanBadge";
+import { SubscriptionStatusBanner } from "@/features/subscription/components/SubscriptionStatusBanner";
+import { useSubscriptionSnapshot } from "@/features/subscription/access";
 import { useBusinessType } from "@/features/settings/business-types";
 import { useBusinessTypeServerSync } from "@/features/settings/business-type-sync";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";

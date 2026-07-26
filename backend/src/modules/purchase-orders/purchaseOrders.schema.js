@@ -33,7 +33,7 @@ export const createPurchaseOrderSchema = z.object({
 });
 
 export const receivePurchaseOrderSchema = z.object({
-  idempotencyKey: z.string().trim().min(8).max(160).optional(),
+  idempotencyKey: z.string().trim().min(8).max(160),
   supplierInvoiceNumber: z.string().trim().max(100).optional(),
   supplierInvoiceAmount: moneyAmount({ positive: true }).optional(),
   varianceReason: z.string().trim().min(3).max(500).optional(),
