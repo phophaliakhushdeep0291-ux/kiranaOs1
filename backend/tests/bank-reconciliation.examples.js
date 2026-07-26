@@ -26,7 +26,7 @@ assert.equal(parsed.rows[1].transactionDate.toISOString().slice(0, 10), "2026-07
 
 parsed = parseBankStatementCsv(
   "Transaction Date,Description,Amount\r\n"
-  + "2026-07-22,Incoming transfer,500\r\n"
+  + "2026-07-22,Incoming transfer,+500\r\n"
   + "22-07-2026,Outgoing transfer,-125.4\r\n",
   account,
 );
@@ -51,6 +51,16 @@ assert.equal(rejected?.publicData?.importedRowCount, 0, "one invalid row must re
 assert.equal(rejected?.publicData?.invalidRowCount, 1);
 assert.equal(rejected?.publicData?.rowErrors?.[0]?.rowNumber, 3);
 
+assert.throws(
+  () => parseBankStatementCsv("Date,Description,Amount\n2026-07-20,Direction is ambiguous,100", account),
+  (error) => error.code === "BANK_STATEMENT_INVALID" && error.publicData?.rowErrors?.[0]?.message.includes("Unsigned amount"),
+  "an unsigned single amount must never be guessed as money in",
+);
+assert.throws(
+  () => parseBankStatementCsv('Date,Description,Debit,Credit\n2026-07-20,Bad grouping,,"1,2,3.00"', account),
+  (error) => error.code === "BANK_STATEMENT_INVALID" && error.publicData?.rowErrors?.[0]?.message.includes("comma grouping"),
+  "malformed numeric grouping must never be normalized into another value",
+);
 assert.throws(
   () => parseBankStatementCsv('Date,Description,Amount\n2026-07-20,"Unclosed,100', account),
   (error) => error.code === "BANK_STATEMENT_INVALID",
@@ -106,6 +116,8 @@ assert.equal(candidates.autoMatched, false, "the engine must never perform an au
 assert.equal(candidates.suggestions.length, 3, "only exact amount/direction candidates inside the date window are suggestions");
 assert.equal(candidates.suggestions[0].ledgerRowId, "exact-reference", "reference evidence deterministically ranks the strongest candidate");
 assert.equal(candidates.suggestions.some((candidate) => candidate.ledgerRowId === "outside-window"), false);
+assert.equal(candidates.allocationOptions.some((candidate) => candidate.ledgerRowId === "outside-window"), true, "outside-suggestion-window rows stay available only as explicit manual options");
+assert.equal(candidates.allocationOptions.find((candidate) => candidate.ledgerRowId === "outside-window")?.confidence, "eligible_manual_allocation");
 assert.equal(candidates.allocationOptions.some((candidate) => candidate.ledgerRowId === "partial"), true, "smaller exact-direction rows remain available for explicit multi-allocation");
 
 candidates = buildBankCandidateSuggestions(
@@ -117,6 +129,11 @@ candidates = buildBankCandidateSuggestions(
 );
 assert.equal(candidates.suggestions[0].ambiguous, true);
 assert.equal(candidates.suggestions[1].ambiguous, true);
+candidates = buildBankCandidateSuggestions(
+  transaction,
+  [ledger("calendar-boundary", "bank_in", 10000n, "2026-07-23T23:59:59.000Z")],
+);
+assert.equal(candidates.suggestions[0]?.ledgerRowId, "calendar-boundary", "the date window must compare calendar days, not time-of-day drift");
 
 candidates = buildBankCandidateSuggestions(
   transaction,
@@ -158,4 +175,12 @@ for (const path of [
   ]) assert.ok(migration.includes(table), `${path} must create ${table}`);
 }
 
+const backupSource = fs.readFileSync(new URL("../src/modules/backups/backup.service.js", import.meta.url), "utf8");
+for (const model of [
+  "bankStatementImport.findMany",
+  "bankStatementTransaction.findMany",
+  "bankReconciliationAllocation.findMany",
+  "bankReconciliationEvent.findMany",
+]) assert.ok(backupSource.includes(model), `encrypted tenant backup must include ${model}`);
+assert.ok(backupSource.includes('BACKUP_SCHEMA_VERSION = "2026-07-26"'));
 console.log("bank-reconciliation.examples.js OK");

@@ -16,6 +16,7 @@ import {
   readNumber,
   roundMoney,
 } from "@/lib/offline/actions/utils";
+import { formatMoney, moneyExceeds, subtractMoney } from "@/lib/money";
 import { normaliseLocalCustomer } from "@/features/customers/local-actions";
 import { readCustomerLedgerEntries } from "@/features/ledger/local-actions";
 import {
@@ -461,16 +462,16 @@ export async function recordPaymentLocalFirst(
       )
     : Math.max(ledgerBalance, expectedOutstanding));
   const outstanding = roundMoney(Math.max(0, currentBalance));
-  if (amount > outstanding + 0.001) {
+  if (moneyExceeds(amount, outstanding)) {
     const error = new Error(
-      `Payment ₹${amount.toLocaleString("en-IN")} exceeds outstanding udhar ₹${outstanding.toLocaleString("en-IN")}`,
+      `Payment ${formatMoney(amount)} exceeds outstanding udhar ${formatMoney(outstanding)}`,
     );
     (error as Error & { code?: string }).code = "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING";
     throw error;
   }
   // Never below zero: with a drifted ledger the authoritative base is the honest
   // starting point, and a negative "balance after" would only deepen the drift.
-  const nextBalance = roundMoney(Math.max(0, currentBalance - amount));
+  const nextBalance = Math.max(0, subtractMoney(currentBalance, amount));
   const note = typeof validated.note === "string" ? validated.note : undefined;
   const paidAt = typeof validated.paidAt === "string" ? validated.paidAt : now;
 

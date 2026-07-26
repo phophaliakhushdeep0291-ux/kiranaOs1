@@ -1,7 +1,8 @@
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
+import { formatMoney as formatRupees } from "@/lib/money";
 import type { Bill, Customer, UdharSummary } from "@/types/api";
-import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, isManualAdjustmentEntry, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/ledger/accounting";
+import { buildLedgerStatement, calculateTrustScore, dedupeLedgerEntries, getLedgerDate, isManualAdjustmentEntry, normaliseLedgerType, roundMoney, type CustomerLedgerEntry, type LedgerMetrics, type LedgerStatementRow } from "@/features/ledger/accounting";
 import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 
@@ -238,6 +239,38 @@ function getPaymentCustomerId(row: Record<string, unknown>): string | null {
   ]);
 }
 
+function paymentFromLedger(entry: CustomerLedgerEntry): Record<string, unknown> | null {
+  const record = entry as Record<string, unknown>;
+  if (normaliseLedgerType(entry.type, entry.source_type) !== "PAYMENT") return null;
+  if (isManualAdjustmentEntry(entry) || isDeleted(record)) return null;
+  const mode = String(record.mode ?? record.payment_mode ?? "").trim().toLowerCase();
+  if (!["cash", "upi", "bank"].includes(mode)) return null;
+  const amount = roundMoney(Math.abs(Number(entry.amount ?? 0)));
+  if (amount <= 0) return null;
+  const paymentId = readStringField(record, [
+    "payment_id",
+    "paymentId",
+    "source_id",
+    "sourceId",
+    "client_payment_id",
+    "clientPaymentId",
+  ]);
+  const paidAt = getLedgerDate(entry);
+  return {
+    id: paymentId ?? `ledger-payment:${entry.id}`,
+    customer_id: getCustomerId(entry),
+    amount,
+    mode,
+    note: typeof entry.note === "string" ? entry.note : null,
+    paid_at: paidAt,
+    created_at: paidAt,
+    reversed_at: entry.reversed_at ?? null,
+    ledger_entry_id: entry.id,
+    sync_status: entry.sync_status ?? "synced",
+    derived_from_ledger: true,
+  };
+}
+
 function uniqueById<T extends { id: string }>(rows: T[]): T[] {
   const map = new Map<string, T>();
   for (const row of rows) map.set(row.id, { ...map.get(row.id), ...row });
@@ -384,13 +417,15 @@ export async function loadCustomerDetail(customerId: string): Promise<CustomerDe
       return id ? ids.has(id) : false;
     })
     .sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")));
-  const payments = dedupePaymentsForDisplay(
-    (await offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []))
-      .filter((payment) => {
-        const id = getPaymentCustomerId(payment);
-        return id ? ids.has(id) : false;
-      }),
-  )
+  const storedPayments = (await offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []))
+    .filter((payment) => {
+      const id = getPaymentCustomerId(payment);
+      return id ? ids.has(id) : false;
+    });
+  const ledgerPayments = ledgerEntries
+    .map(paymentFromLedger)
+    .filter((payment): payment is Record<string, unknown> => payment !== null);
+  const payments = dedupePaymentsForDisplay([...storedPayments, ...ledgerPayments])
     .sort((a, b) => String(b.paidAt ?? b.paid_at ?? b.createdAt ?? b.created_at ?? "").localeCompare(String(a.paidAt ?? a.paid_at ?? a.createdAt ?? a.created_at ?? "")));
   const audit = (await offlineDB.getAll<Record<string, unknown>>("local_audit_logs").catch(() => []))
     .filter((row) => String(row.entity_id ?? "") === customer.id || String(row.customerId ?? row.customer_id ?? "") === customer.id)
@@ -503,7 +538,7 @@ export function buildCustomerTimeline(data: Pick<CustomerDetailData, "bills" | "
 }
 
 export function formatMoney(value: number): string {
-  return `₹${Math.round(value).toLocaleString("en-IN")}`;
+  return formatRupees(value);
 }
 
 export function formatShortDate(value: unknown): string {

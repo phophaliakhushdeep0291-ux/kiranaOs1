@@ -1,6 +1,7 @@
 import { resyncUdharLedgerFromServer } from "@/features/sync/cloud-hydration";
 import { refreshBusinessCaches } from "@/features/sync/sync-reconcile";
 import { roundMoney } from "@/features/ledger/accounting";
+import { toPaise } from "@/lib/money";
 import type { UdharSummary } from "@/types/api";
 
 /**
@@ -14,9 +15,6 @@ import type { UdharSummary } from "@/types/api";
  * This repairs the cause: re-pull the server's ledger snapshot, which replaces
  * the synced rows and keeps pending local work.
  */
-
-/** Rupee-level tolerance; sub-rupee gaps are rounding, not drift. */
-const DRIFT_TOLERANCE = 1;
 
 /** A repair is a full ledger re-download, so never hammer it. */
 const REPAIR_COOLDOWN_MS = 10 * 60 * 1000;
@@ -64,7 +62,7 @@ export function detectLedgerDrift(
     // balances), so a non-zero local balance is still drift.
     const serverBalance = matchedId ? serverBalances.get(matchedId) ?? 0 : 0;
     const localBalance = roundMoney(candidate.localBalance);
-    if (Math.abs(localBalance - serverBalance) < DRIFT_TOLERANCE) continue;
+    if (toPaise(localBalance) === toPaise(serverBalance)) continue;
     drifts.push({
       customerId: matchedId ?? candidate.ids[0] ?? "",
       localBalance,

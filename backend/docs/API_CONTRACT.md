@@ -321,8 +321,7 @@ silent duplicate rows. One malformed row rejects the whole import.
 
 `GET /api/accounting/bank-reconciliation` returns version
 `bank-reconciliation-v1`, shop-wide integer-paise totals, active allocations,
-exact candidate evidence, allocation options, pagination, coverage and visible
-limitations. Suggestions require the same account direction, an amount equal to
+["data.calculationVersion", "data.scope", "data.autoMatch", "data.summary", "data.transactions", "data.candidateCoverage", "data.limitations"] Suggestions require the same account direction, an amount equal to
 the remaining statement value, and a deterministic ±3-day window. A reference
 match may rank evidence but never relaxes amount or direction. Equal top scores
 are explicitly `ambiguous`. The engine always returns `autoMatch: false`; only an

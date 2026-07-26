@@ -254,7 +254,7 @@ for (const guarantee of ["all-or-nothing", "SHA-256", "integer-paise", "duplicat
   if (!statementImport?.integrityGuarantees?.some((item) => item.includes(guarantee))) fail(`statement import must guarantee ${guarantee}`);
 }
 const bankReconciliation = contract.endpoints.find((endpoint) => endpoint.path === "/api/accounting/bank-reconciliation");
-for (const field of ["data.calculationVersion", "data.scope", "data.autoMatch", "data.summary", "data.transactions", "data.limitations"]) {
+for (const field of ["data.calculationVersion", "data.scope", "data.autoMatch", "data.summary", "data.transactions", "data.candidateCoverage", "data.limitations"]) {
   if (!bankReconciliation?.responseMustInclude?.includes(field)) fail(`bank reconciliation contract must require ${field}`);
 }
 for (const guarantee of ["never auto-matches", "exact amount and direction", "ambiguous", "shop-wide", "limitations"]) {

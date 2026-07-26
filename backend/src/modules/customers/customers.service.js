@@ -1,6 +1,6 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { moneyShadows, round2, toPaiseBigInt } from "../../utils/money.js";
+import { moneyShadows, round2, toPaise, toPaiseBigInt } from "../../utils/money.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import {
   calculateCustomerUdharBalance,
@@ -231,7 +231,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
       }
 
     const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customerId);
-    if (currentBalance.balance < paymentAmount) {
+    if (toPaise(currentBalance.balance) < toPaise(paymentAmount)) {
       const err = new AppError(
         `Payment ₹${paymentAmount} exceeds outstanding udhar ₹${currentBalance.balance}`,
         409

@@ -25,7 +25,70 @@ if (ctx.skip) {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const other = await createTenant(ctx.db, { ownerPin: "5678" });
       const ownProduct = await createProduct(ctx.db, tenant.shop.id, { name: "Backup Rice" });
-      const otherProduct = await createProduct(ctx.db, other.shop.id, { name: "Other Shop Secret" });
+      const otherProduct = await createProduct(ctx.db, other.shop.id, { name: "Other Shop Secret" });      const ledgerRow = await ctx.db.financialLedger.create({ data: {
+        shopId: tenant.shop.id,
+        sourceType: "backup_reconciliation",
+        sourceId: "backup-bank-source",
+        entryType: "bank_in",
+        direction: "debit",
+        amountPaise: 12_300n,
+        paymentMode: "bank",
+        businessDate: new Date("2026-07-20T12:00:00.000Z"),
+        idempotencyKey: "backup-reconciliation-ledger",
+      } });
+      const statementImport = await ctx.db.bankStatementImport.create({ data: {
+        shopId: tenant.shop.id,
+        accountType: "bank",
+        accountName: "Backup bank evidence",
+        fileName: "backup-bank.csv",
+        statementFrom: new Date("2026-07-20T12:00:00.000Z"),
+        statementTo: new Date("2026-07-20T12:00:00.000Z"),
+        rowCount: 1,
+        importedCount: 1,
+        duplicateCount: 0,
+        fingerprint: "backup-import-fingerprint",
+      } });
+      const statementTransaction = await ctx.db.bankStatementTransaction.create({ data: {
+        shopId: tenant.shop.id,
+        importId: statementImport.id,
+        rowNumber: 2,
+        transactionDate: new Date("2026-07-20T12:00:00.000Z"),
+        description: "Backup settlement evidence",
+        reference: "BACKUP-123",
+        direction: "credit",
+        amountPaise: 12_300n,
+        fingerprint: "backup-transaction-fingerprint",
+        matchStatus: "matched",
+        reconciledAmountPaise: 12_300n,
+      } });
+      const allocation = await ctx.db.bankReconciliationAllocation.create({ data: {
+        shopId: tenant.shop.id,
+        bankStatementTransactionId: statementTransaction.id,
+        ledgerRowId: ledgerRow.id,
+        amountPaise: 12_300n,
+        activeLedgerKey: ledgerRow.id,
+        activeBankLedgerKey: `${statementTransaction.id}:${ledgerRow.id}`,
+        method: "manual_exact_direction",
+        evidenceJson: JSON.stringify({ autoMatched: false }),
+      } });
+      const reconciliationEvent = await ctx.db.bankReconciliationEvent.create({ data: {
+        shopId: tenant.shop.id,
+        bankStatementTransactionId: statementTransaction.id,
+        action: "match",
+        payloadJson: JSON.stringify({ autoMatched: false }),
+      } });
+      await ctx.db.bankStatementImport.create({ data: {
+        shopId: other.shop.id,
+        accountType: "bank",
+        accountName: "Other Bank Secret",
+        fileName: "other-bank.csv",
+        statementFrom: new Date("2026-07-20T12:00:00.000Z"),
+        statementTo: new Date("2026-07-20T12:00:00.000Z"),
+        rowCount: 0,
+        importedCount: 0,
+        duplicateCount: 0,
+        fingerprint: "other-backup-import-fingerprint",
+      } });
       const artifact = await ctx.db.backupArtifact.create({
         data: {
           shopId: tenant.shop.id,
@@ -46,11 +109,15 @@ if (ctx.skip) {
       assert.equal(snapshot.manifest.shopId, tenant.shop.id);
       assert.equal(snapshot.manifest.credentialsExcluded.includes("passwordHash"), true);
       assert.equal(snapshot.data.products.some((row) => row.id === ownProduct.id), true);
-      assert.equal(snapshot.data.products.some((row) => row.id === otherProduct.id), false);
+      assert.equal(snapshot.data.products.some((row) => row.id === otherProduct.id), false);      assert.equal(snapshot.data.bankStatementImports.some((row) => row.id === statementImport.id), true);
+      assert.equal(snapshot.data.bankStatementTransactions.some((row) => row.id === statementTransaction.id), true);
+      assert.equal(snapshot.data.bankReconciliationAllocations.some((row) => row.id === allocation.id), true);
+      assert.equal(snapshot.data.bankReconciliationEvents.some((row) => row.id === reconciliationEvent.id), true);
       const serialized = JSON.stringify(snapshot);
       assert.equal(serialized.includes("passwordHash"), true, "manifest documents intentional credential exclusion");
       assert.equal(serialized.includes(tenant.owner.passwordHash), false, "credential hashes are never present in the artifact");
       assert.equal(serialized.includes("Other Shop Secret"), false, "another tenant's data is never present");
+      assert.equal(serialized.includes("Other Bank Secret"), false, "another tenant's statement evidence is never present");
     });
 
     test("expired backup cleanup deletes the object but preserves auditable metadata", async () => {

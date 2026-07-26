@@ -29,7 +29,7 @@ import {
 } from "../../utils/syncRules.js";
 import { decodeCursor, encodeCursor, PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT } from "./sync.schema.js";
 import { moneyAmount, quantityAmount } from "../../utils/validationSchemas.js";
-import { moneyShadows, round2, toPaiseBigInt } from "../../utils/money.js";
+import { addMoney, moneyShadows, round2, toPaise, toPaiseBigInt } from "../../utils/money.js";
 import { toBaseQty } from "../../utils/units.js";
 import { calculateCustomerUdharBalance, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import {
@@ -1784,8 +1784,8 @@ async function applyLedgerAdjustment(shopId, event, context) {
       if (!customer) throw new AppError("Customer not found", 404);
 
       const currentBalance = await calculateCustomerUdharBalance(tx, shopId, customer.id);
-      const nextBalance = round2(currentBalance.balance + amount);
-      if (nextBalance < 0) {
+      const nextBalance = addMoney(currentBalance.balance, amount);
+      if (toPaise(nextBalance) < 0) {
         const err = new AppError("Ledger adjustment would make udhar balance negative", 409);
         err.code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
         err.meta = { outstanding: currentBalance.balance, attemptedAdjustment: amount, rawBalance: currentBalance.rawBalance };

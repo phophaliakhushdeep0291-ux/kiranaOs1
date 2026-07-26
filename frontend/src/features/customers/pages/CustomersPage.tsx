@@ -65,6 +65,13 @@ import { repairLedgerDriftFromServer } from "@/features/ledger/ledger-drift-repa
 import { isManualAdjustmentEntry } from "@/features/ledger/accounting";
 import type { CustomerInput } from "@/types/api";
 import { offlineDB } from "@/lib/offline/db";
+import {
+  addMoney,
+  formatMoney as formatRupees,
+  moneyExceeds,
+  roundMoney,
+  subtractMoney,
+} from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { validateGstin } from "@/lib/gstin";
 
@@ -138,11 +145,11 @@ function useCustomersLedgerList() {
 
 function money(value: unknown) {
   const num = Number(value ?? 0);
-  return Number.isFinite(num) ? Math.round(num) : 0;
+  return Number.isFinite(num) ? roundMoney(num) : 0;
 }
 
 function fmtMoney(value: unknown) {
-  return `₹${money(value).toLocaleString("en-IN")}`;
+  return formatRupees(money(value));
 }
 
 function initials(name: string) {
@@ -647,7 +654,7 @@ export default function CustomersPage() {
     const digits = mobileDigits();
     if (!digits) { toast({ title: "No mobile number", description: "Add a mobile number to send a WhatsApp reminder.", variant: "destructive" }); return; }
     const balance = Math.max(0, money(selectedCustomer?.ledgerBalance));
-    const text = encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ₹${balance.toLocaleString("en-IN")} hai. Kripya payment kar dein. Dhanyavaad!`);
+    const text = encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ${fmtMoney(balance)} hai. Kripya payment kar dein. Dhanyavaad!`);
     window.open(`https://wa.me/91${digits}?text=${text}`, "_blank", "noopener");
   }
 
@@ -655,7 +662,7 @@ export default function CustomersPage() {
     const digits = mobileDigits();
     if (!digits) { toast({ title: "No mobile number", variant: "destructive" }); return; }
     const balance = Math.max(0, money(selectedCustomer?.ledgerBalance));
-    window.location.href = `sms:+91${digits}?body=${encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ₹${balance.toLocaleString("en-IN")} hai.`)}`;
+    window.location.href = `sms:+91${digits}?body=${encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ${fmtMoney(balance)} hai.`)}`;
   }
 
   function quickCall() {
@@ -670,16 +677,16 @@ export default function CustomersPage() {
     if (!popup) { toast({ title: "Allow pop-ups", description: "Enable pop-ups to print the statement.", variant: "destructive" }); return; }
     const rows = (selectedDetail.data?.ledger ?? []).map((row) => {
       const signed = Number(row.signed_amount ?? 0);
-      return `<tr><td>${formatShortDate(row.display_date)}</td><td>${String(row.note || row.source_id || row.display_type)}</td><td style="text-align:right">${signed > 0 ? signed.toLocaleString("en-IN") : "-"}</td><td style="text-align:right">${signed < 0 ? Math.abs(signed).toLocaleString("en-IN") : "-"}</td><td style="text-align:right">${money(row.running_balance).toLocaleString("en-IN")}</td></tr>`;
+      return `<tr><td>${formatShortDate(row.display_date)}</td><td>${String(row.note || row.source_id || row.display_type)}</td><td style="text-align:right">${signed > 0 ? fmtMoney(signed) : "-"}</td><td style="text-align:right">${signed < 0 ? fmtMoney(Math.abs(signed)) : "-"}</td><td style="text-align:right">${fmtMoney(row.running_balance)}</td></tr>`;
     }).join("");
-    popup.document.write(`<!doctype html><html><head><title>Khata Statement — ${selectedCustomer.name}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>Khata Statement — ${selectedCustomer.name}</h1><p>${selectedCustomer.mobile ?? ""}</p><p>As on ${formatShortDate(new Date().toISOString())} · Outstanding: <strong class="due">₹${Math.max(0, money(selectedCustomer.ledgerBalance)).toLocaleString("en-IN")}</strong></p><table><thead><tr><th>Date</th><th>Particulars</th><th style="text-align:right">Udhar (₹)</th><th style="text-align:right">Paid (₹)</th><th style="text-align:right">Balance (₹)</th></tr></thead><tbody>${rows || `<tr><td colspan="5">No ledger entries</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
+    popup.document.write(`<!doctype html><html><head><title>Khata Statement — ${selectedCustomer.name}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>Khata Statement — ${selectedCustomer.name}</h1><p>${selectedCustomer.mobile ?? ""}</p><p>As on ${formatShortDate(new Date().toISOString())} · Outstanding: <strong class="due">${fmtMoney(Math.max(0, money(selectedCustomer.ledgerBalance)))}</strong></p><table><thead><tr><th>Date</th><th>Particulars</th><th style="text-align:right">Udhar (₹)</th><th style="text-align:right">Paid (₹)</th><th style="text-align:right">Balance (₹)</th></tr></thead><tbody>${rows || `<tr><td colspan="5">No ledger entries</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
     popup.document.close();
   }
 
   async function recordPayment() {
-    const cashAmount = paymentForm.mode === "split" ? Number(paymentForm.cashAmount || 0) : 0;
-    const upiAmount = paymentForm.mode === "split" ? Number(paymentForm.upiAmount || 0) : 0;
-    const amount = paymentForm.mode === "split" ? cashAmount + upiAmount : Number(paymentForm.amount);
+    const cashAmount = paymentForm.mode === "split" ? money(paymentForm.cashAmount) : 0;
+    const upiAmount = paymentForm.mode === "split" ? money(paymentForm.upiAmount) : 0;
+    const amount = paymentForm.mode === "split" ? addMoney(cashAmount, upiAmount) : money(paymentForm.amount);
     if (!paymentForm.customerId || !Number.isFinite(amount) || amount <= 0) {
       toast({ title: "Select customer and amount", variant: "destructive" });
       return;
@@ -691,8 +698,8 @@ export default function CustomersPage() {
     const customer =
       dedupedCustomers.find((row) => row.id === paymentForm.customerId) ??
       selectedCustomer;
-    const outstanding = Math.max(0, Number(customer?.ledgerBalance ?? 0));
-    if (amount > outstanding + 0.001) {
+    const outstanding = Math.max(0, money(customer?.ledgerBalance));
+    if (moneyExceeds(amount, outstanding)) {
       toast({
         title: "Amount exceeds outstanding udhar",
         description: `${customer?.name ?? "This customer"} owes ${fmtMoney(outstanding)}. Enter that amount or less.`,
@@ -707,7 +714,7 @@ export default function CustomersPage() {
       if (paymentForm.mode === "split") {
         const baseNote = paymentForm.note.trim();
         if (cashAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: cashAmount, mode: "cash", note: baseNote ? `${baseNote} (split cash)` : "Split payment - cash" }, { expectedOutstanding: outstanding });
-        if (upiAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : "Split payment - UPI" }, { expectedOutstanding: Math.max(0, outstanding - cashAmount) });
+        if (upiAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : "Split payment - UPI" }, { expectedOutstanding: Math.max(0, subtractMoney(outstanding, cashAmount)) });
       } else {
         await recordPaymentLocalFirst(paymentForm.customerId, { amount, mode: paymentForm.mode, note: paymentForm.note.trim() || undefined }, { expectedOutstanding: outstanding });
       }
@@ -1336,23 +1343,23 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
       </div>
     );
   }
-  const outstanding = Math.max(0, customer.ledgerBalance);
+  const outstanding = Math.max(0, money(customer.ledgerBalance));
   const paid = paymentRows.reduce((sum, row) => sum + paymentAmount(row), 0);
-  const paymentTotal = paymentForm.mode === "split" ? money(paymentForm.cashAmount) + money(paymentForm.upiAmount) : money(paymentForm.amount);
+  const paymentTotal = paymentForm.mode === "split" ? addMoney(paymentForm.cashAmount, paymentForm.upiAmount) : money(paymentForm.amount);
   const overdueDays = customerOverdueDays(customer);
   const chooseAmount = (requested: number) => onPaymentChange((form) => {
     const value = Math.min(requested, outstanding);
     if (form.mode !== "split") return { ...form, amount: String(value) };
     const cash = Math.round(value * 0.4);
-    return { ...form, amount: String(value), cashAmount: String(cash), upiAmount: String(value - cash) };
+    return { ...form, amount: String(value), cashAmount: String(cash), upiAmount: String(subtractMoney(value, cash)) };
   });
   const setTotal = (raw: string) => onPaymentChange((form) => {
     if (form.mode !== "split") return { ...form, amount: raw };
     const total = money(raw);
     const cash = Math.round(total * 0.4);
-    return { ...form, amount: raw, cashAmount: total > 0 ? String(cash) : "", upiAmount: total > 0 ? String(total - cash) : "" };
+    return { ...form, amount: raw, cashAmount: total > 0 ? String(cash) : "", upiAmount: total > 0 ? String(subtractMoney(total, cash)) : "" };
   });
-  const invalidAmount = paymentTotal <= 0 || paymentTotal > outstanding + 0.01;
+  const invalidAmount = paymentTotal <= 0 || moneyExceeds(paymentTotal, outstanding);
   return (
     <section className="min-w-0 space-y-5">
       <article className="min-h-[128px] overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -1368,12 +1375,12 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
 
       <article className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <h2 className="text-[15px] font-extrabold text-[#071b3a]">Record Udhar Payment</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]"><div><p className="text-[10px] font-bold uppercase text-[#75839d]">Amount Due</p><p className="mt-1.5 text-[19px] font-black text-rose-600">{fmtMoney(outstanding)}</p></div><div><Label className="text-[10px] font-bold text-[#52627e]">Payment Amount <span className="text-rose-500">*</span></Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#52627e]">₹</span><Input id="customer-payment-amount" type="number" min="0" max={outstanding} value={paymentForm.amount} onChange={(event) => setTotal(event.target.value)} className="h-10 rounded-[10px] border-[#dfe7f2] pl-8 text-[13px] font-bold" placeholder="0" /></div></div></div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]"><div><p className="text-[10px] font-bold uppercase text-[#75839d]">Amount Due</p><p className="mt-1.5 text-[19px] font-black text-rose-600">{fmtMoney(outstanding)}</p></div><div><Label className="text-[10px] font-bold text-[#52627e]">Payment Amount <span className="text-rose-500">*</span></Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#52627e]">₹</span><Input id="customer-payment-amount" type="number" inputMode="decimal" min="0" step="0.01" max={outstanding} value={paymentForm.amount} onChange={(event) => setTotal(event.target.value)} className="h-10 rounded-[10px] border-[#dfe7f2] pl-8 text-[13px] font-bold" placeholder="0.00" /></div></div></div>
         <div className="mt-3 grid grid-cols-[1.45fr_repeat(4,1fr)] gap-2"><button onClick={() => chooseAmount(outstanding)} className="min-h-9 rounded-[8px] border border-[#0b63f6] bg-[#eef5ff] px-1 text-[9px] font-bold text-[#0b63f6]">Full Due ({fmtMoney(outstanding)})</button>{[500,1000,2000].map((amount) => <button key={amount} onClick={() => chooseAmount(amount)} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{fmtMoney(amount)}</button>)}<button onClick={() => document.getElementById("customer-payment-amount")?.focus()} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">Custom</button></div>
         <p className="mt-4 text-[10px] font-bold text-[#52627e]">Payment Mode</p>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['cash','Cash',<Banknote key="cash" size={15} />],['upi','UPI',<CreditCard key="upi" size={15} />],['bank','Bank',<Landmark key="bank" size={15} />],['split','Split',<ArrowLeftRight key="split" size={15} />]] as const).map(([mode,label,icon]) => <button key={mode} onClick={() => onPaymentChange((form) => ({ ...form, mode, ...(mode === "split" && money(form.amount) > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(Math.round(money(form.amount) * 0.4)), upiAmount: String(money(form.amount) - Math.round(money(form.amount) * 0.4)) } : {}) }))} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[#0b63f6] bg-[#eef5ff] text-[#0b63f6]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
-        {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" min="0" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(money(event.target.value) + money(form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" min="0" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(money(form.cashAmount) + money(event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[#071b3a]">{fmtMoney(paymentTotal)}</span></p></div>}
-        {paymentTotal > outstanding + 0.01 && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['cash','Cash',<Banknote key="cash" size={15} />],['upi','UPI',<CreditCard key="upi" size={15} />],['bank','Bank',<Landmark key="bank" size={15} />],['split','Split',<ArrowLeftRight key="split" size={15} />]] as const).map(([mode,label,icon]) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); const cash = Math.round(total * 0.4); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(cash), upiAmount: String(subtractMoney(total, cash)) } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[#0b63f6] bg-[#eef5ff] text-[#0b63f6]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
+        {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[#071b3a]">{fmtMoney(paymentTotal)}</span></p></div>}
+        {moneyExceeds(paymentTotal, outstanding) && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
         <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">Payment Note <span className="font-medium text-[#94a3b8]">(Optional)</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder="Payment note / reference" /></div>
         <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] text-[12px] font-bold shadow-[0_8px_18px_rgba(11,99,246,0.20)]"><CheckCircle2 size={16} />{saving ? "Saving..." : "Collect Payment"}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[#0b63f6]"><Bell size={16} />Send Reminder</Button></div>
         <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[#0b63f6]" />After payment, customer balance and ledger update automatically.</p>
