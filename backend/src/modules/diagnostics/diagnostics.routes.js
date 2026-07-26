@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireShop } from "../../middleware/permissions.js";
 import { validate } from "../../middleware/validate.js";
-import { errorReportSchema, supportRequestSchema } from "./diagnostics.schema.js";
+import { assistantSchema, errorReportSchema, supportRequestSchema } from "./diagnostics.schema.js";
 import * as ctrl from "./diagnostics.controller.js";
 
 const router = Router();
@@ -15,6 +15,7 @@ router.use(requireAuth, requireShop);
 // Ingest — any authenticated user of the shop.
 router.post("/errors", validate(errorReportSchema), ctrl.reportError);
 router.post("/support-requests", validate(supportRequestSchema), ctrl.createSupportRequest);
+router.post("/assistant", validate(assistantSchema), ctrl.assistant);
 
 // Read surfaces — owner only. These feed the internal admin dashboard (Phase 4).
 router.get("/errors", requireRole("owner"), ctrl.listErrors);

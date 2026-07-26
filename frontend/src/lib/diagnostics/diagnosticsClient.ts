@@ -63,6 +63,31 @@ export function buildSupportContext(): SupportRequestBundle {
   };
 }
 
+export interface AssistantAnswer {
+  focus: string;
+  topic: string;
+  answer: string;
+  steps: string[];
+  confidence: number;
+  confidenceLabel: string;
+  resolved: boolean;
+  escalate: boolean;
+  incidentReport: unknown | null;
+  aiProvider: string | null;
+  generatedAt: string;
+}
+
+/**
+ * askAssistant — the AI support assistant (§5). Sends the user's question and
+ * returns a grounded answer read from the shop's real diagnostics.
+ */
+export async function askAssistant(question: string): Promise<AssistantAnswer> {
+  return apiRequest<AssistantAnswer>("/diagnostics/assistant", {
+    method: "POST",
+    body: JSON.stringify({ question }),
+  });
+}
+
 export interface SubmitSupportInput {
   description: string;
   screenshot?: string;

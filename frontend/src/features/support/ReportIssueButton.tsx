@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { CheckCircle2, LifeBuoy, Loader2, ShieldCheck } from "lucide-react";
+import { CheckCircle2, LifeBuoy, Loader2, ShieldCheck, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -12,10 +12,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  askAssistant,
   collectDeviceContext,
   getRecentApiRequests,
   getRecentErrors,
   submitSupportRequest,
+  type AssistantAnswer,
   type SupportRequestResult,
 } from "@/lib/diagnostics";
 
@@ -33,6 +35,8 @@ export function ReportIssueButton() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SupportRequestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [assistantAnswer, setAssistantAnswer] = useState<AssistantAnswer | null>(null);
+  const [asking, setAsking] = useState(false);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);

@@ -40,3 +40,11 @@ export const supportRequestSchema = z.object({
   context: z.record(z.any()).optional(),
   screenshot: z.string().max(4_500_000).optional(),
 });
+
+/**
+ * assistantSchema — a natural-language troubleshooting question. The assistant
+ * reads the shop's real diagnostics to answer it (§5); the user types only this.
+ */
+export const assistantSchema = z.object({
+  question: z.string().trim().min(1).max(500),
+});

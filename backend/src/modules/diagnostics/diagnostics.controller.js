@@ -2,6 +2,7 @@ import * as svc from "./diagnostics.service.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { generateIncidentReport } from "./incident-report.service.js";
+import { answerSupportQuestion } from "./assistant.service.js";
 
 function headerDeviceId(req) {
   const raw = req.headers["x-device-id"];
@@ -126,6 +127,19 @@ export async function incidentReport(req, res, next) {
       problemSummary: typeof req.query.problem === "string" ? req.query.problem : "",
     });
     res.json({ success: true, data: report });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function assistant(req, res, next) {
+  try {
+    const result = await answerSupportQuestion({
+      shopId: req.shopId,
+      deviceId: resolveDeviceId(req),
+      question: req.body.question,
+    });
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
