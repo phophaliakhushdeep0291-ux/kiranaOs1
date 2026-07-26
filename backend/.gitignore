@@ -20,3 +20,11 @@ release-artifacts
 # src/modules/backups source is never hidden (deployment-readiness asserts this).
 /storage/backups/
 *.dump
+
+# Year-sim run outputs — scripts/year-sim/*.mjs regenerate this dir every run
+# (simulation-summary.json, crash.json, YEAR-REPORT.md, csvBills.csv, ...).
+# The .mjs scripts stay tracked; only their generated output is ignored.
+/scripts/year-sim/out/
+
+# Stray database / file backups (e.g. dev.db.before-*.bak from QA snapshots)
+*.bak

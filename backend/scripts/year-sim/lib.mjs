@@ -84,6 +84,17 @@ export function baseUnitsFor(mode) {
   return { baseUnit: "piece", rateUnit: "piece", displayUnit: "piece", factor: 1, isLoose: false };
 }
 
+/**
+ * Client-generated idempotency key. Purchases, damages, corrections, expenses
+ * and PO receipts all require one (min 8 chars) so a retried offline write
+ * cannot post twice.
+ */
+let idemCounter = 0;
+export function idem(prefix) {
+  idemCounter += 1;
+  return `sim-${prefix}-${Date.now().toString(36)}-${idemCounter.toString(36).padStart(4, "0")}`;
+}
+
 export function fmtINR(n) {
   const v = Math.round(Number(n) || 0);
   const s = String(Math.abs(v));

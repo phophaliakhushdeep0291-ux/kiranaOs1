@@ -229,5 +229,27 @@ if (failures?.length) {
   w();
 }
 
+w("## 13. Findings from the run");
+w();
+for (const f of [
+  ["Price edit does not move the selling unit's ceiling — product becomes unsellable",
+   "`PATCH /api/products/:id` with a new `defaultPricePerRateUnit`/`mrp` updates the Product row but leaves the auto-created default ProductSellingUnit untouched. Billing takes its ceiling from `sellingUnit.maximumPrice`, so every later sale of that item is rejected with `PRICE_ABOVE_CONFIGURED_MAXIMUM: exceeds the configured maximum of Rs <old MRP>` even though `GET /products` reports the new MRP. In the first full run this silently killed ~70% of sales from the October price revision onward (30 bills/day → 8). Workaround used here: re-send the full `sellingUnits` array with the patch."],
+  ["Unbounded data exports",
+   "`GET /reports/export/stock` has no row limit and no default date window (`exportStockLedgerData` → `findMany` with no `take`); one year of trading returned a 53 MB JSON body for 50,381 ledger rows. `GET /reports/export/udhar` likewise loads every customer with their entire ledger. Both are owner-facing buttons on a mobile PWA."],
+  ["Double-entry ledger balanced",
+   "`/api/accounting/control` reports `status: balanced` over the full year — period activity debit = credit = ₹68,86,587.30, trial balance ₹53,74,141.90 on both sides, difference ₹0, across 51,758 FinancialLedger rows."],
+  ["Estimate handling matches the documented policy",
+   "Estimates carry EST- numbers, count toward sales (₹80,927 of the ₹52.85L total) and move stock/tender, but are excluded from the GST report (11,938 GST-scope bills = 12,073 − 135 estimates). Cancelled bills (9) drop out of sales entirely."],
+  ["Overselling is permitted by design and shows as negative stock",
+   "Ginger closed the year at −1,613 g. The counter never blocks a sale for missing stock; the deficit is left visible for reconciliation, and the low-stock/reorder reports pick it up."],
+  ["Server rejects udhar overpayment",
+   "A repayment larger than the outstanding khata is refused (`409 Payment ₹363.88 exceeds outstanding udhar ₹350.88`) — the server ledger stays authoritative when a client's cached balance drifts."],
+  ["Async CSV export jobs need Redis",
+   "`POST /reports/exports` returns `503 Report export queue is disabled` unless `QUEUES_ENABLED`/`REDIS_URL` are set. The synchronous `/reports/export/*` endpoints are the only working path in this configuration."],
+]) {
+  w(`**${f[0]}.** ${f[1]}`);
+  w();
+}
+
 fs.writeFileSync(path.join(OUT, "YEAR-REPORT.md"), lines.join("\n"));
 console.log(lines.join("\n"));

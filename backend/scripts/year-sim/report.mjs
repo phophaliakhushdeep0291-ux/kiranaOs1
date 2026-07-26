@@ -50,7 +50,7 @@ async function main() {
 
   // month-by-month P&L (the monthly-breakdown report excludes operating expenses)
   const months = [];
-  for (let m = 0; m < 12; m += 1) {
+  for (let m = 0; m < 13; m += 1) {
     const start = new Date(2025, 6 + m, 1);
     const end = new Date(2025, 7 + m, 0);
     const fromIso = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-01`;

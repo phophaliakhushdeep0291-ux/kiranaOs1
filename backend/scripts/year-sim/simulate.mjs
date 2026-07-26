@@ -21,7 +21,7 @@ import {
 } from "./catalog.mjs";
 import {
   makeRng, pick, between, intBetween, weightedPick, r2, toPaise, iso, addDays, atTime,
-  makeClient, baseUnitsFor, ApiError, OWNER_PIN,
+  makeClient, baseUnitsFor, ApiError, OWNER_PIN, idem,
 } from "./lib.mjs";
 
 const require = createRequire(import.meta.url);
@@ -59,29 +59,57 @@ const BACKDATE_MODELS = [
   "stockCountSession", "stockCountLine", "inventoryLot", "complianceDocument",
   "productSellingUnit", "billItemLotAllocation",
 ];
-const badModels = new Set();
+/**
+ * Only models that really carry a createdAt column, resolved from the Prisma
+ * datamodel. Issuing an updateMany against a model without the field is not
+ * merely wasteful: on this toolchain (Prisma 5.14 + SQLite on Windows) an
+ * invalid argument can panic the query engine, after which every later query
+ * fails until the process restarts. Never send the query in the first place.
+ */
+const { Prisma } = require("@prisma/client");
+const MODELS_WITH_CREATED_AT = new Set(
+  Prisma.dmmf.datamodel.models
+    .filter((model) => model.fields.some((field) => field.name === "createdAt"))
+    .map((model) => model.name[0].toLowerCase() + model.name.slice(1))
+);
+const backdateModels = BACKDATE_MODELS.filter((model) => MODELS_WITH_CREATED_AT.has(model));
+const skipped = BACKDATE_MODELS.filter((model) => !MODELS_WITH_CREATED_AT.has(model));
 
 /**
  * The day-by-day back-dating pass scans on createdAt. Without an index that is
  * a full table scan of Bill/StockLedger/AuditLog on every one of 365 days.
  */
 async function indexCreatedAt() {
-  for (const model of BACKDATE_MODELS) {
+  log(`Back-dating ${backdateModels.length} models${skipped.length ? ` (no createdAt column: ${skipped.join(", ")})` : ""}`);
+  for (const model of backdateModels) {
     const table = model[0].toUpperCase() + model.slice(1);
-    try {
-      await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "sim_${table}_createdAt" ON "${table}"("createdAt")`);
-    } catch { /* table has no createdAt column */ }
+    await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "sim_${table}_createdAt" ON "${table}"("createdAt")`);
   }
 }
 
+/**
+ * Raw UPDATE rather than updateMany: the typed path panics the query engine on
+ * this toolchain (Prisma 5.14 + SQLite + Node 24 on Windows) often enough to
+ * kill a 15-minute run. A Rust panic poisons the client, so recreate it and
+ * retry once before giving up.
+ */
+let dbRef = db;
 async function backdate(mark, ts) {
-  for (const model of BACKDATE_MODELS) {
-    if (badModels.has(model)) continue;
-    try {
-      await db[model].updateMany({ where: { createdAt: { gte: mark } }, data: { createdAt: ts } });
-    } catch (err) {
-      badModels.add(model);
-      log(`  (backdate skipped for ${model}: ${err.message.split("\n")[0]})`);
+  for (const model of backdateModels) {
+    const table = model[0].toUpperCase() + model.slice(1);
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        await dbRef.$executeRawUnsafe(
+          `UPDATE "${table}" SET "createdAt" = ? WHERE "createdAt" >= ?`,
+          ts, mark,
+        );
+        break;
+      } catch (err) {
+        if (attempt >= 1) throw err;
+        log(`  (engine fault on ${table}, reconnecting: ${String(err.message).split("\n")[0].slice(0, 70)})`);
+        try { await dbRef.$disconnect(); } catch { /* already dead */ }
+        dbRef = new PrismaClient();
+      }
     }
   }
 }
@@ -297,6 +325,8 @@ async function restock(product, date, { multiplier = 2.5 } = {}) {
 
   try {
     await owner.post("/inventory/purchase", {
+      idempotencyKey: idem("purchase"),
+      clientMovementId: idem("mv-purchase"),
       productId: product.id,
       supplierId: supplier.id,
       supplierName: supplier.name,
@@ -576,7 +606,7 @@ async function collectUdhar(date) {
 // ── expenses ───────────────────────────────────────────────────────
 async function postExpense(date, body) {
   try {
-    await owner.post("/expenses", { ...body, spentAt: new Date(atTime(date, 11, 0)).toISOString() });
+    await owner.post("/expenses", { idempotencyKey: idem("expense"), ...body, spentAt: new Date(atTime(date, 11, 0)).toISOString() });
     stats.expenses += 1;
     stats.expenseValue += body.amount;
   } catch (err) { recordError("expense", err); }
@@ -616,6 +646,8 @@ async function writeOffDamage(date) {
     const qty = product.isLoose ? r2(between(rng, 0.25, 2)) : intBetween(rng, 1, 4);
     try {
       await owner.post("/inventory/damage", {
+        idempotencyKey: idem("damage"),
+        clientMovementId: idem("mv-damage"),
         productId: product.id, quantity: qty, enteredUnit: product.rateUnit,
         note: pick(rng, ["Expired stock", "Leaked packet", "Spoiled in transit", "Rat damage", "Broken seal"]),
       });
@@ -634,6 +666,8 @@ async function stockCorrection(date) {
     const target = Math.max(0, Math.round(product.stock + drift));
     try {
       await owner.post("/inventory/correction", {
+        idempotencyKey: idem("correction"),
+        clientMovementId: idem("mv-correction"),
         productId: product.id, newStockBaseQty: target,
         note: `Shelf recount ${iso(date)}`,
       });
