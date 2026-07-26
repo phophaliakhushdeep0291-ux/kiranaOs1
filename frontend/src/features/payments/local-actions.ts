@@ -23,8 +23,12 @@ import {
   buildLedgerStatement,
   dedupeLedgerEntries,
   calculateTrustScore,
+  getLedgerCustomerId,
+  getLedgerDate,
+  ledgerSignedAmount,
   type CustomerLedgerEntry,
 } from "@/features/ledger/accounting";
+import { readCachedAuthoritativeSummary } from "@/features/ledger/authoritative-balances";
 import type { Customer, UdharPaymentInput } from "@/types/api";
 import {
   buildAuditLogOutboxInput,
@@ -42,6 +46,37 @@ export interface LocalPaymentResult {
   pendingSync: true;
 }
 
+const PENDING_LEDGER_STATUSES = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
+
+/**
+ * Unsynced local movement for a customer since the server snapshot was taken.
+ * Entries older than the snapshot are already reflected in it, so counting them
+ * again would double them; entries after it are this device's own work and must
+ * show immediately (a payment collected offline has to move the number).
+ */
+function pendingLedgerDeltasSince(
+  entries: CustomerLedgerEntry[],
+  capturedAt: string | null,
+): Map<string, number> {
+  const deltas = new Map<string, number>();
+  if (!capturedAt) return deltas;
+  for (const entry of entries) {
+    const status = String(entry.sync_status ?? "").toLowerCase();
+    if (!PENDING_LEDGER_STATUSES.has(status)) continue;
+    if (getLedgerDate(entry) <= capturedAt) continue;
+    const id = getLedgerCustomerId(entry);
+    if (!id) continue;
+    deltas.set(id, roundMoney((deltas.get(id) ?? 0) + ledgerSignedAmount(entry)));
+  }
+  return deltas;
+}
+
+/**
+ * The udhar summary without touching the network. Prefers the last snapshot the
+ * server gave this device (plus any local movement since) over the raw device
+ * ledger, which can have drifted — the offline page must show the same number
+ * as the online one.
+ */
 export function getLocalUdharSummary() {
   const customers = readInstantCache<Customer[]>(CUSTOMER_CACHE_KEY, []).map(
     normaliseLocalCustomer,
@@ -49,6 +84,32 @@ export function getLocalUdharSummary() {
   const ledgerEntries = dedupeLedgerEntries(
     readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []),
   );
+  const authoritative = readCachedAuthoritativeSummary();
+  if (authoritative) {
+    const deltas = pendingLedgerDeltasSince(ledgerEntries, authoritative.capturedAt);
+    const byId = new Map(
+      authoritative.summary.customers.map((row) => [row.customerId, { ...row }]),
+    );
+    for (const customer of customers) {
+      const delta = deltas.get(customer.id);
+      if (delta === undefined || delta === 0) continue;
+      const existing = byId.get(customer.id);
+      const outstanding = roundMoney(Math.max(0, (existing?.outstanding ?? 0) + delta));
+      byId.set(customer.id, {
+        customerId: customer.id,
+        customerName: customer.name,
+        mobile: customer.mobile ?? undefined,
+        ...existing,
+        amount: outstanding,
+        outstanding,
+      });
+    }
+    const rows = [...byId.values()].filter((row) => row.outstanding > 0);
+    return {
+      totalOutstanding: roundMoney(rows.reduce((sum, row) => sum + row.outstanding, 0)),
+      customers: rows,
+    };
+  }
   const ledgerGroups = new Map<string, CustomerLedgerEntry[]>();
   for (const entry of ledgerEntries) {
     const id = typeof entry.customerId === "string" && entry.customerId.length > 0
@@ -184,9 +245,24 @@ function buildPaymentLedgerEntry(input: {
   ) as unknown as CustomerLedgerEntry;
 }
 
+export interface RecordPaymentOptions {
+  /**
+   * The outstanding balance the operator is actually looking at — the
+   * authoritative `/udhar/summary` value the udhar pages overlay. The device
+   * ledger can be stale or drifted (an old bug left balances at zero on some
+   * shops), and validating only against the raw local sum then rejects a
+   * legitimate collection with "Payment ₹150 exceeds outstanding udhar ₹0"
+   * while the very same screen shows ₹300 due. Guard against the larger of the
+   * two and let the backend's own check be the final authority on sync — the
+   * same rule `createLedgerAdjustmentLocalFirst` already uses.
+   */
+  expectedOutstanding?: number;
+}
+
 export async function recordPaymentLocalFirst(
   customerId: string,
   data: UdharPaymentInput,
+  options: RecordPaymentOptions = {},
 ): Promise<LocalPaymentResult> {
   const validated = parseOrThrow(paymentRecordingSchema, {
     ...data,
@@ -202,12 +278,15 @@ export async function recordPaymentLocalFirst(
   if (!existing) throw new Error("Customer not found in local records");
 
   const existingLedgerEntries = await readCustomerLedgerEntries(customerId);
-  const currentBalance = calculateLedgerBalance(existingLedgerEntries);
+  const ledgerBalance = calculateLedgerBalance(existingLedgerEntries);
   // Guard against overpayment: a udhar payment can never exceed the customer's
   // outstanding balance. The backend already rejects this
   // (UDHAR_PAYMENT_EXCEEDS_OUTSTANDING); the offline path must enforce the same
   // rule so it can't drive the balance negative or queue an event that will fail
   // to sync. A tiny epsilon absorbs paise-level float drift.
+  const currentBalance = roundMoney(
+    Math.max(ledgerBalance, Math.max(0, readNumber(options.expectedOutstanding, 0))),
+  );
   const outstanding = roundMoney(Math.max(0, currentBalance));
   if (amount > outstanding + 0.001) {
     const error = new Error(
@@ -216,7 +295,9 @@ export async function recordPaymentLocalFirst(
     (error as Error & { code?: string }).code = "UDHAR_PAYMENT_EXCEEDS_OUTSTANDING";
     throw error;
   }
-  const nextBalance = roundMoney(currentBalance - amount);
+  // Never below zero: with a drifted ledger the authoritative base is the honest
+  // starting point, and a negative "balance after" would only deepen the drift.
+  const nextBalance = roundMoney(Math.max(0, currentBalance - amount));
   const note = typeof validated.note === "string" ? validated.note : undefined;
   const paidAt = typeof validated.paidAt === "string" ? validated.paidAt : now;
 
@@ -277,8 +358,14 @@ export async function recordPaymentLocalFirst(
     updated_at: now,
     trustScore: metrics.trustScore,
     badCustomer: metrics.isBadCustomer,
-    sync_status: "pending_sync" as const,
-  } as Customer & Record<string, unknown>;
+    // The cached balance is an optimistic projection of the ledger entry below,
+    // not an independent customer edit — no CUSTOMER op is queued for it. Marking
+    // the row pending left it stuck there forever (nothing flips it back), and a
+    // "pending" customer is treated as device-authoritative, which pinned the page
+    // to the stale local sum even after the server had the payment.
+    sync_status: String((existing as unknown as Record<string, unknown>).sync_status ?? "synced"),
+    balance_derived_from_local_ledger: true,
+  } as unknown as Customer & Record<string, unknown>;
 
   const auditLog = buildAuditLogRow({
     action: "payment_recorded",
@@ -471,8 +558,10 @@ export async function reversePaymentWithOwnerPinLocalFirst(input: {
     updated_at: now,
     trustScore: metrics.trustScore,
     badCustomer: metrics.isBadCustomer,
-    sync_status: "pending_sync" as const,
-  } as Customer & Record<string, unknown>;
+    // Derived balance, not a customer edit — see recordPaymentLocalFirst.
+    sync_status: String((existingCustomer as unknown as Record<string, unknown>).sync_status ?? "synced"),
+    balance_derived_from_local_ledger: true,
+  } as unknown as Customer & Record<string, unknown>;
 
   const auditLog = buildAuditLogRow({
     action: "payment_reversed",

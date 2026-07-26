@@ -121,13 +121,23 @@ async function buildBillContext(shopId, billId, client) {
     financialLedgerRows,
     createdByUser,
   ] = await Promise.all([
+    // Deliberately unscoped by shopId: a product row that resolves to another
+    // shop is exactly what the cross-shop-reference rule must detect. Only
+    // identity columns are selected, so no other tenant's data is exposed.
     productIds.length
-      ? client.product.findMany({ where: { shopId, id: { in: productIds } } })
+      ? client.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, shopId: true, name: true, isLooseItem: true, baseUnit: true, deletedAt: true, costPerRateUnit: true },
+        })
       : Promise.resolve([]),
     client.udharLedger.findMany({ where: { shopId, billId: bill.id } }),
     client.stockLedger.findMany({ where: { shopId, billId: bill.id } }),
+    // Also unscoped on purpose, for the same cross-shop check.
     bill.customerId
-      ? client.customer.findFirst({ where: { id: bill.customerId } })
+      ? client.customer.findFirst({
+          where: { id: bill.customerId },
+          select: { id: true, shopId: true, name: true, mobile: true, udharAmount: true, deletedAt: true },
+        })
       : Promise.resolve(null),
     client.bill.findMany({
       where: {
@@ -264,13 +274,21 @@ async function buildCustomerContext(shopId, customerId, client) {
       where: { shopId, customerId, creditAmount: { gt: 0 } },
       select: { id: true, billNo: true, status: true, creditAmount: true, grandTotal: true, createdAt: true },
     }),
-    customer.mobile
-      ? client.customer.findMany({
-          where: { shopId, id: { not: customerId }, mobile: customer.mobile, deletedAt: null },
-          select: { id: true, name: true, mobile: true },
-          take: 5,
-        })
-      : Promise.resolve([]),
+    // Duplicate-identity candidates. Mobile is unique per shop among live rows,
+    // so exact-mobile matches only surface soft-deleted twins; same-name rows
+    // are the realistic duplicate signal. Comparison happens in the rule.
+    client.customer.findMany({
+      where: {
+        shopId,
+        id: { not: customerId },
+        OR: [
+          { name: customer.name },
+          ...(customer.mobile ? [{ mobile: customer.mobile }] : []),
+        ],
+      },
+      select: { id: true, name: true, mobile: true, deletedAt: true, udharAmount: true },
+      take: 10,
+    }),
   ]);
 
   const billIds = [...new Set(ledger.map((l) => l.billId).filter(Boolean))];
@@ -302,7 +320,7 @@ async function buildProductContext(shopId, productId, client) {
   const product = await client.product.findFirst({ where: { id: productId, shopId } });
   if (!product) throw new AuditContextError("Product not found in this shop", "ENTITY_NOT_FOUND");
 
-  const [settings, baselines, movements, locationStocks] = await Promise.all([
+  const [settings, baselines, movements, locationStocks, lockedClosings] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
     client.stockLedger.findMany({
@@ -310,6 +328,12 @@ async function buildProductContext(shopId, productId, client) {
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
     client.locationStock.findMany({ where: { shopId, productId } }),
+    client.dailyClosingSnapshot.findMany({
+      where: { shopId, lockedAt: { not: null } },
+      select: { id: true, date: true, lockedAt: true },
+      orderBy: { date: "desc" },
+      take: 120,
+    }),
   ]);
 
   const billIds = [...new Set(movements.map((m) => m.billId).filter(Boolean))];
@@ -330,6 +354,7 @@ async function buildProductContext(shopId, productId, client) {
     product,
     movements,
     locationStocks,
+    lockedClosings,
     referencedBills: new Map(referencedBills.map((b) => [b.id, b])),
     inputHash: computeInputHash({
       product: { id: product.id, stockBaseQty: product.stockBaseQty, deletedAt: product.deletedAt },
@@ -371,29 +396,70 @@ async function buildPurchaseContext(shopId, entityId, client) {
         : Promise.resolve([]),
     ]);
 
-    const supplierHistory = receipt.supplierId
-      ? await client.purchaseHistory.findMany({
-          where: { shopId, supplierId: receipt.supplierId },
-          select: { totalCost: true, createdAt: true },
-          orderBy: { createdAt: "desc" },
-          take: 200,
-        })
-      : [];
+    const [supplierHistory, sameAmountSameDay, returns, closingSnapshot, priorNegativeSales] = await Promise.all([
+      receipt.supplierId
+        ? client.purchaseHistory.findMany({
+            where: { shopId, supplierId: receipt.supplierId },
+            select: { totalCost: true, createdAt: true },
+            orderBy: { createdAt: "desc" },
+            take: 200,
+          })
+        : Promise.resolve([]),
+      client.purchaseReceipt.findMany({
+        where: {
+          shopId,
+          id: { not: receipt.id },
+          totalAmount: receipt.totalAmount,
+          ...(receipt.supplierId ? { supplierId: receipt.supplierId } : {}),
+          createdAt: { gte: startOfDay(receipt.createdAt), lte: endOfDay(receipt.createdAt) },
+        },
+        select: { id: true, receiptNumber: true, totalAmount: true, createdAt: true, supplierInvoiceNumber: true },
+        take: 10,
+      }),
+      client.purchaseReturn.findMany({
+        where: { shopId, purchaseReceiptId: receipt.id },
+        include: { items: true },
+      }),
+      client.dailyClosingSnapshot.findFirst({
+        where: { shopId, date: { gte: startOfDay(receipt.createdAt), lte: endOfDay(receipt.createdAt) } },
+        orderBy: { createdAt: "desc" },
+      }),
+      (async () => {
+        const productIds = [...new Set(receipt.items.map((item) => item.productId))];
+        if (!productIds.length) return [];
+        return client.stockLedger.findMany({
+          where: {
+            shopId,
+            productId: { in: productIds },
+            action: "sale",
+            newStockBaseQty: { lt: 0 },
+            createdAt: { lt: receipt.createdAt },
+          },
+          select: { id: true, productId: true, productName: true, newStockBaseQty: true, createdAt: true },
+          take: 20,
+        });
+      })(),
+    ]);
 
     return {
       shopId,
       entityType: ENTITY_TYPES.PURCHASE,
       entityId: receipt.id,
       purchaseKind: "receipt",
-      events: [EVENT_TYPES.PURCHASE_CREATED, EVENT_TYPES.STOCK_INCREASED],
+      events: [EVENT_TYPES.PURCHASE_CREATED, EVENT_TYPES.STOCK_INCREASED, ...(returns.length ? [EVENT_TYPES.PURCHASE_RETURNED] : [])],
       settings,
       baselines,
       receipt,
+      supplier: receipt.supplier ?? null,
       historyRows,
       stockRows,
       duplicateInvoices,
       supplierHistory,
-      inputHash: computeInputHash({ receipt, items: receipt.items, historyRows: historyRows.map((h) => h.id), stockRows: stockRows.map((s) => s.id) }),
+      sameAmountSameDay,
+      returns,
+      closingSnapshot,
+      priorNegativeSales,
+      inputHash: computeInputHash({ receipt, items: receipt.items, historyRows: historyRows.map((h) => h.id), stockRows: stockRows.map((s) => s.id), returnIds: returns.map((r) => r.id) }),
     };
   }
 
@@ -403,7 +469,7 @@ async function buildPurchaseContext(shopId, entityId, client) {
   });
   if (!history) throw new AuditContextError("Purchase not found in this shop", "ENTITY_NOT_FOUND");
 
-  const [stockRows, duplicateInvoices, productHistory] = await Promise.all([
+  const [stockRows, duplicateInvoices, productHistory, sameAmountSameDay, closingSnapshot, priorNegativeSales] = await Promise.all([
     client.stockLedger.findMany({
       where: {
         shopId,
@@ -433,6 +499,32 @@ async function buildPurchaseContext(shopId, entityId, client) {
       orderBy: { createdAt: "desc" },
       take: 200,
     }),
+    client.purchaseHistory.findMany({
+      where: {
+        shopId,
+        id: { not: history.id },
+        billAmount: history.billAmount,
+        supplierName: history.supplierName,
+        createdAt: { gte: startOfDay(history.createdAt), lte: endOfDay(history.createdAt) },
+      },
+      select: { id: true, billAmount: true, invoiceNumber: true, createdAt: true },
+      take: 10,
+    }),
+    client.dailyClosingSnapshot.findFirst({
+      where: { shopId, date: { gte: startOfDay(history.createdAt), lte: endOfDay(history.createdAt) } },
+      orderBy: { createdAt: "desc" },
+    }),
+    client.stockLedger.findMany({
+      where: {
+        shopId,
+        productId: history.productId,
+        action: "sale",
+        newStockBaseQty: { lt: 0 },
+        createdAt: { lt: history.createdAt },
+      },
+      select: { id: true, productId: true, productName: true, newStockBaseQty: true, createdAt: true },
+      take: 20,
+    }),
   ]);
 
   return {
@@ -444,9 +536,14 @@ async function buildPurchaseContext(shopId, entityId, client) {
     settings,
     baselines,
     history,
+    supplier: history.supplier ?? null,
     stockRows,
     duplicateInvoices,
     productHistory,
+    sameAmountSameDay,
+    closingSnapshot,
+    priorNegativeSales,
+    returns: [],
     inputHash: computeInputHash({ history, stockRows: stockRows.map((s) => s.id) }),
   };
 }
@@ -457,7 +554,7 @@ async function buildExpenseContext(shopId, expenseId, client) {
   if (!expense) throw new AuditContextError("Expense not found in this shop", "ENTITY_NOT_FOUND");
 
   const spentAt = new Date(expense.spentAt);
-  const [settings, baselines, duplicates, closingSnapshot, categoryExpenses] = await Promise.all([
+  const [settings, baselines, duplicates, closingSnapshot, categoryExpenses, recentExpenses] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
     client.expense.findMany({
@@ -485,6 +582,16 @@ async function buildExpenseContext(shopId, expenseId, client) {
       orderBy: { createdAt: "desc" },
       take: 200,
     }),
+    client.expense.findMany({
+      where: {
+        shopId,
+        deletedAt: null,
+        spentAt: { gte: new Date(spentAt.getTime() - 90 * 24 * 60 * 60 * 1000), lte: spentAt },
+      },
+      select: { id: true, amount: true, paymentMode: true, category: true, spentAt: true, vendor: true },
+      orderBy: { spentAt: "desc" },
+      take: 500,
+    }),
   ]);
 
   return {
@@ -498,6 +605,7 @@ async function buildExpenseContext(shopId, expenseId, client) {
     duplicates,
     closingSnapshot,
     categoryExpenses,
+    recentExpenses,
     inputHash: computeInputHash({ expense, duplicateIds: duplicates.map((d) => d.id), closingLockedAt: closingSnapshot?.lockedAt ?? null }),
   };
 }

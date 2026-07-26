@@ -171,6 +171,15 @@ async function importInventory() {
   return products.length;
 }
 
+/**
+ * Replace the device's udhar ledger with the server snapshot (pending local work
+ * survives). Exported so a detected balance drift can repair the ledger without
+ * waiting for a full cloud bootstrap — see `ledger-drift-repair.ts`.
+ */
+export async function resyncUdharLedgerFromServer(): Promise<number> {
+  return importUdharLedger();
+}
+
 async function importUdharLedger() {
   const result = await apiRequest<{ entries?: unknown[]; ledger?: unknown[]; total?: number }>(`/udhar?limit=${DIRECT_IMPORT_LIMIT}`, {
     method: "GET",

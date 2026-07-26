@@ -34,6 +34,23 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   AI_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(15 * 60 * 1000),
   AI_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(60),
+  // ── Financial Assurance Engine ──────────────────────────────
+  // The deterministic engine always runs. The AI layer only ever explains,
+  // summarizes and classifies, and defaults to "disabled" so no shop's data can
+  // reach an external provider without a deliberate configuration change.
+  //   disabled → deterministic fallback text only, no provider call at all
+  //   mock     → in-process deterministic provider (tests/dev)
+  //   groq / openai → external provider, redaction always applied first
+  AUDIT_AI_PROVIDER: z.enum(["disabled", "mock", "groq", "openai"]).default("disabled"),
+  AUDIT_AI_MODEL: z.string().optional(),
+  AUDIT_AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(12000),
+  AUDIT_AI_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(1),
+  // Consent gate: even with a provider configured, nothing is sent until the
+  // shop's own settings opt in (settingsJson.audit.aiExplanationsConsent).
+  AUDIT_AI_REQUIRE_SHOP_CONSENT: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  // Attachments are never sent unless this is explicitly turned on.
+  AUDIT_AI_ALLOW_ATTACHMENTS: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  AUDIT_TRANSACTION_TRIGGERED_ENABLED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
   OWNER_PIN_REQUIRED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
   LOG_LEVEL: z.enum(["silent", "error", "warn", "info", "debug"]).default("info"),
   ENABLE_DEVICE_LICENSE_SIGNING: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),

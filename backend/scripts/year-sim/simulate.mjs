@@ -263,10 +263,16 @@ async function addCustomers(defs) {
   }
 }
 
+const errorCodes = new Map();
+
 function recordError(where, err) {
   const detail = err instanceof ApiError ? `${err.status} ${JSON.stringify(err.body?.error ?? err.body)}` : err.message;
+  const code = err instanceof ApiError ? (err.body?.code ?? `HTTP_${err.status}`) : "CLIENT_ERROR";
+  const key = `${where}:${code}`;
+  errorCodes.set(key, (errorCodes.get(key) ?? 0) + 1);
   stats.apiErrors.push(`${where}: ${detail}`.slice(0, 400));
-  if (stats.apiErrors.length <= 25) log(`  ! ${where}: ${detail}`.slice(0, 300));
+  // log the first occurrence of every distinct failure, not the first N overall
+  if (errorCodes.get(key) === 1) log(`  ! ${where}: ${detail}`.slice(0, 300));
 }
 
 // ── purchases ──────────────────────────────────────────────────────
@@ -514,7 +520,12 @@ async function makeBill(date, hour, { billType = "normal_sale", client = owner, 
       customer.spent += grandTotal;
       customer.balance = r2(customer.balance + creditAmount);
     }
-    world.recentBills.push({ id: bill.id ?? bill.bill?.id, date: iso(date), total: grandTotal, lines, customer });
+    // keep the rate each line was actually sold at — a return has to quote the
+    // original line's price, not the product's current (possibly revised) price
+    const soldLines = lines.map(({ product, quantity }, index) => ({
+      product, quantity, rate: items[index]?.ratePerRateUnit ?? product.price,
+    }));
+    world.recentBills.push({ id: bill.id ?? bill.bill?.id, date: iso(date), total: grandTotal, lines: soldLines, customer });
     if (world.recentBills.length > 400) world.recentBills.shift();
     return bill;
   } catch (err) {
@@ -524,6 +535,19 @@ async function makeBill(date, hour, { billType = "normal_sale", client = owner, 
 }
 
 // ── udhar collections ──────────────────────────────────────────────
+/**
+ * Local balances drift from the server (a udhar-mode sales return credits the
+ * khata behind our back), and the server rightly rejects an overpayment. The
+ * server ledger is authoritative — re-read it instead of trusting local state.
+ */
+async function resyncUdharBalances() {
+  try {
+    const summary = await owner.get("/udhar/summary");
+    const byId = new Map((summary.customers ?? []).map((c) => [c.id, Number(c.udharAmount) || 0]));
+    for (const customer of world.customers) customer.balance = byId.get(customer.id) ?? 0;
+  } catch (err) { recordError("udhar-resync", err); }
+}
+
 async function collectUdhar(date) {
   const debtors = world.customers.filter((c) => c.balance > 20);
   if (!debtors.length) return;
@@ -686,6 +710,7 @@ async function runPurchaseOrder(date) {
     await owner.post(`/purchase-orders/${id}/receive`, {
       supplierInvoiceNumber: `INV-${intBetween(rng, 10000, 99999)}`,
       supplierInvoiceAmount: invoiceTotal,
+      varianceReason: "Depot rate revision and short supply on some lines",
       paidAmount: rng() < 0.5 ? invoiceTotal : r2(invoiceTotal / 2),
       paymentMode: "bank",
       dueDate: iso(addDays(date, 21)),
@@ -707,7 +732,9 @@ async function issueGiftCard(date) {
     const card = await owner.post("/gift-cards", {
       amount: pick(rng, [500, 1000, 1500, 2000]),
       customerId: customer?.id,
-      expiresOn: iso(addDays(date, 300)),
+      // validity is checked against real "now", so cards are issued with a
+      // long-dated expiry instead of simulated-date + 300 days
+      expiresOn: "2027-06-30",
       note: "Festival gift card",
     });
     const code = card.code ?? card.giftCard?.code;
@@ -738,7 +765,7 @@ async function makeReturn(date) {
         name: line.product.name,
         quantity,
         enteredUnit: line.product.rateUnit,
-        ratePerRateUnit: line.product.price,
+        ratePerRateUnit: line.rate ?? line.product.price,
         gstRate: line.product.gst,
         hsn: line.product.hsn,
         damaged,
@@ -767,10 +794,31 @@ async function reviseSellingPrices(date) {
     const price = r2(product.price * bump);
     const mrp = r2(Math.max(product.mrp * bump, price * 1.02));
     try {
+      // The product's selling units carry their own price ceiling and billing
+      // reads THAT, not product.mrp — so a price revision has to move both or
+      // the item becomes unsellable at its own new price.
+      const current = await owner.get(`/products/${product.id}`);
+      const units = (current.sellingUnits ?? []).map((unit) => ({
+        id: unit.id,
+        name: unit.name,
+        unitType: unit.unitType,
+        unitCode: unit.unitCode,
+        packSizeValue: unit.packSizeValue,
+        packSizeUnit: unit.packSizeUnit,
+        conversionToBase: unit.conversionToBase,
+        barcode: unit.barcode,
+        defaultPrice: price,
+        minimumPrice: r2(product.cost * 1.02),
+        maximumPrice: mrp,
+        costPrice: r2(product.cost),
+        isDefault: unit.isDefault,
+        isActive: unit.isActive,
+      }));
       await owner.patch(`/products/${product.id}`, {
         defaultPricePerRateUnit: price,
         mrp,
         minPricePerRateUnit: r2(product.cost * 1.02),
+        ...(units.length ? { sellingUnits: units } : {}),
       });
       product.price = price;
       product.mrp = mrp;
@@ -865,6 +913,7 @@ async function runDay(date, dayIndex) {
   if (rng() < 0.35) await makeBill(date, 12, { billType: "estimate" });
 
   // money in / money out
+  if (dayIndex % 15 === 7) await resyncUdharBalances();
   if (dayIndex % 3 === 1) await collectUdhar(date);
   await dailyExpenses(date);
 
@@ -948,7 +997,8 @@ async function finalise() {
     ownerPin: OWNER_PIN,
     apiCalls: owner.state.calls + staffClients.reduce((sum, s) => sum + s.client.state.calls, 0),
     period: { from: iso(START), to: iso(addDays(START, DAYS - 1)) },
-    stats: { ...stats, apiErrors: stats.apiErrors.slice(0, 60), apiErrorCount: stats.apiErrors.length },
+    stats: { ...stats, apiErrors: stats.apiErrors.slice(0, 40), apiErrorCount: stats.apiErrors.length },
+    errorCodes: Object.fromEntries([...errorCodes.entries()].sort((a, b) => b[1] - a[1])),
     dbCounts: counts,
   };
   fs.writeFileSync(path.join(OUT, "simulation-summary.json"), JSON.stringify(summary, null, 2));

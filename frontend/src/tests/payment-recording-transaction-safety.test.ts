@@ -105,7 +105,16 @@ describe("payment recording transaction safety", () => {
 
     expect(tableRows("payments")).toHaveLength(1);
     expect(tableRows("payments")[0]).toEqual(expect.objectContaining({ id: "payment_1", customer_id: "customer_1", amount: 200, mode: "cash", status: "active" }));
-    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ id: "customer_1", udharAmount: 300, totalUdhar: 300, sync_status: "pending_sync" }));
+    // The cached balance is derived from the ledger entry, not an independent
+    // customer edit, so the row keeps its sync status instead of being pinned to
+    // "pending_sync" forever (nothing queues a CUSTOMER op to clear it).
+    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({
+      id: "customer_1",
+      udharAmount: 300,
+      totalUdhar: 300,
+      sync_status: "synced",
+      balance_derived_from_local_ledger: true,
+    }));
   });
 
   it("rejects udhar overpayment before writing local rows", async () => {

@@ -46,7 +46,21 @@ async function main() {
   await grab("pnlMonthlyRange", () => client.get("/reports/pnl?range=monthly"));
   await grab("monthlyBreakdown2025", () => client.get("/reports/monthly-breakdown?year=2025&untilMonth=12"));
   await grab("monthlyBreakdown2026", () => client.get("/reports/monthly-breakdown?year=2026&untilMonth=7"));
-  await grab("topProducts", () => client.get(`/reports/top-products?from=${FROM}&to=${TO}&limit=25`));
+  await grab("topProducts", () => client.get(`/reports/top-products?from=${FROM}&to=${TO}&limit=100`));
+
+  // month-by-month P&L (the monthly-breakdown report excludes operating expenses)
+  const months = [];
+  for (let m = 0; m < 12; m += 1) {
+    const start = new Date(2025, 6 + m, 1);
+    const end = new Date(2025, 7 + m, 0);
+    const fromIso = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-01`;
+    const toIso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+    const label = start.toLocaleString("en-IN", { month: "short", year: "numeric" });
+    const pnl = await grab(`pnl_${fromIso.slice(0, 7)}`, () => client.get(`/reports/pnl?from=${fromIso}&to=${toIso}`));
+    const gst = await grab(`gst_${fromIso.slice(0, 7)}`, () => client.get(`/reports/gst?from=${fromIso}&to=${toIso}`));
+    months.push({ label, from: fromIso, to: toIso, pnl, gst });
+  }
+  results.monthlyPnl = months;
   await grab("paymentModes", () => client.get(`/reports/payment-modes?from=${FROM}&to=${TO}`));
   await grab("paymentSummary", () => client.get("/reports/payment-summary"));
   await grab("staffSales", () => client.get(`/reports/staff-sales?from=${FROM}&to=${TO}`));

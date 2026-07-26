@@ -6,7 +6,17 @@ import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 
 export interface CustomerWithLedger extends Customer, Record<string, unknown> {
+  /**
+   * What the customer owes, never negative — matching the server, which clamps
+   * at zero (`calculateCustomerUdharBalance`). A drifted device ledger can sum
+   * below zero; rendering that as "−₹330 outstanding" is meaningless and was how
+   * the offline view came to disagree with the server.
+   */
   ledgerBalance: number;
+  /** The unclamped device-ledger sum, kept for drift detection and repair. */
+  rawLedgerBalance: number;
+  /** True while this device holds udhar rows the server has not accepted yet. */
+  hasUnsyncedLedgerEntries?: boolean;
   ledgerMetrics: LedgerMetrics;
 }
 
@@ -25,13 +35,29 @@ function customerIdentityValues(customer: Customer & Record<string, unknown>): s
     .filter((value): value is string => typeof value === "string" && value.length > 0);
 }
 
+/** True while this device holds udhar movement the server has not accepted yet. */
+function hasUnsyncedLedgerEntries(entries: CustomerLedgerEntry[]): boolean {
+  return entries.some((entry) => LOCAL_BALANCE_STATUSES.has(String(entry.sync_status ?? "").toLowerCase()));
+}
+
+/**
+ * Whether the DEVICE's balance outranks the server's for this customer.
+ *
+ * Only two things earn that: a customer the server has never seen, and unsynced
+ * ledger movement this device is still holding. The customer row's own
+ * `sync_status` is deliberately NOT enough — a payment writes the derived
+ * balance onto the row without queueing a customer edit, so a row could sit at
+ * `pending_sync` forever with an empty outbox and permanently veto the server's
+ * balance (the reported ₹0 that would not go away).
+ */
 function hasPendingLocalBalance(customer: CustomerWithLedger): boolean {
-  const status = String(customer.sync_status ?? "").toLowerCase();
   const hasMappedServerIdentity = typeof customer.server_id === "string" || typeof customer.serverId === "string";
-  return LOCAL_BALANCE_STATUSES.has(status)
-    || (String(customer.id).startsWith("local_") && !hasMappedServerIdentity)
-    || customer.isSynced === false
-    || customer.is_synced === false;
+  if (!hasMappedServerIdentity) {
+    const status = String(customer.sync_status ?? "").toLowerCase();
+    if (String(customer.id).startsWith("local_") || LOCAL_BALANCE_STATUSES.has(status)) return true;
+    if (customer.isSynced === false || customer.is_synced === false) return true;
+  }
+  return customer.hasUnsyncedLedgerEntries === true;
 }
 
 function withAuthoritativeBalance(customer: CustomerWithLedger, balance: number): CustomerWithLedger {
@@ -49,11 +75,30 @@ function withAuthoritativeBalance(customer: CustomerWithLedger, balance: number)
     ...customer,
     type: authoritative > 0 ? "udhar" : customer.type === "udhar" ? "regular" : customer.type,
     ledgerBalance: authoritative,
+    rawLedgerBalance: customer.rawLedgerBalance ?? customer.ledgerBalance,
     totalUdhar: authoritative,
     udharAmount: authoritative,
     ledgerMetrics: metrics,
     balance_source: "server_ledger_summary",
   };
+}
+
+/**
+ * Shape the loaded customers for {@link detectLedgerDrift}. Uses the UNCLAMPED
+ * local sum so a ledger that has gone negative reads as the drift it is.
+ */
+export function toLedgerDriftCandidates(customers: CustomerWithLedger[]): Array<{
+  ids: string[];
+  localBalance: number;
+  hasPendingLocalWork: boolean;
+}> {
+  return customers
+    .filter((customer) => customer.ledger_only !== true)
+    .map((customer) => ({
+      ids: customerIdentityValues(customer),
+      localBalance: Number(customer.rawLedgerBalance ?? customer.ledgerBalance ?? 0),
+      hasPendingLocalWork: hasPendingLocalBalance(customer),
+    }));
 }
 
 function reconcileAgainstBalances(customer: CustomerWithLedger, balances: Map<string, number>): CustomerWithLedger {
@@ -107,6 +152,7 @@ export function applyAuthoritativeUdharSummary(
       udharAmount: balance,
       totalUdhar: balance,
       ledgerBalance: balance,
+      rawLedgerBalance: balance,
       sync_status: "synced",
       balance_source: "server_ledger_summary",
       ledger_only: true,
@@ -305,11 +351,14 @@ export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
       return id ? ids.has(id) : false;
     });
     const metrics = metricsWithCustomerBalanceFallback(customer, entries);
+    const balance = roundMoney(Math.max(0, metrics.balance));
     return {
       ...customer,
-      ledgerBalance: metrics.balance,
-      totalUdhar: metrics.balance,
-      udharAmount: metrics.balance,
+      ledgerBalance: balance,
+      rawLedgerBalance: metrics.balance,
+      hasUnsyncedLedgerEntries: hasUnsyncedLedgerEntries(entries),
+      totalUdhar: balance,
+      udharAmount: balance,
       ledgerMetrics: metrics,
     };
   }).sort((a, b) => b.ledgerBalance - a.ledgerBalance || a.name.localeCompare(b.name));

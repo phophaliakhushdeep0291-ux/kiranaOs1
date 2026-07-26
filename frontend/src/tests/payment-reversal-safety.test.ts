@@ -228,7 +228,9 @@ describe("payment reversal transaction safety", () => {
         id: "customer_1",
         udharAmount: 500,
         totalUdhar: 500,
-        sync_status: "pending_sync",
+        // Derived from the correction entry, not an independent customer edit.
+        sync_status: "synced",
+        balance_derived_from_local_ledger: true,
       }),
     );
 

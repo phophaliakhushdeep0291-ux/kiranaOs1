@@ -2,7 +2,9 @@ import { offlineDB } from "@/lib/offline/db";
 import { hydrateInstantCacheFromIndexedDB, migrateLegacyInstantCache, RECENT_CACHE_DAYS } from "@/lib/offline/instant-cache";
 import { billsRepository, customersRepository, idMappingsRepository, inventoryMovementsRepository, productsRepository, settingsRepository } from "@/lib/offline/repositories";
 
-const BUSINESS_CACHE_KEYS = ["products", "customers", "bills", "inventory"] as const;
+// The udhar summary snapshot is hydrated here too so a cold start while offline
+// shows the server's balances instead of the (possibly drifted) device ledger.
+const BUSINESS_CACHE_KEYS = ["products", "customers", "bills", "inventory", "udhar_authoritative_summary"] as const;
 const LEGACY_ID_MAP_KEY = "kirana-os:sync-local-id-map:v1";
 const LEGACY_BILLING_DRAFT_KEY = "kirana-os:billing-draft:v1";
 const LEGACY_BUYING_AVG_CACHE_KEY = "kirana-os:buying-average-cache:v3";

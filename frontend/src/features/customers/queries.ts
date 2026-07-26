@@ -5,6 +5,7 @@ import { getMutationOptions, getQueryOptions, type MutationHookOptions, type Que
 import { readInstantCache, writeInstantCache } from "@/lib/offline/instant-cache";
 import * as customersApi from "@/features/customers/api";
 import * as ledgerApi from "@/features/ledger/api";
+import { cacheAuthoritativeSummary } from "@/features/ledger/authoritative-balances";
 import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/customers/local-actions";
 import { getLocalUdharLedger, getLocalUdharSummary, recordPaymentLocalFirst } from "@/features/payments/local-actions";
 import type { Customer, CustomerInput, CustomerKhataResult, LedgerResult, QueryParams, UdharSummary } from "@/types/api";
@@ -16,7 +17,12 @@ export type ListCustomersResponse = Customer[];
 export interface CreateCustomerVariables { data: CustomerInput }
 export interface UpdateCustomerVariables { id: string; data: CustomerInput }
 export interface DeleteCustomerVariables { id: string; ownerPin: string; reason?: string }
-export interface RecordUdharPaymentVariables { id: string; data: { amount: number; mode: string; note?: string } }
+export interface RecordUdharPaymentVariables {
+  id: string;
+  data: { amount: number; mode: string; note?: string };
+  /** The authoritative balance shown to the operator; see RecordPaymentOptions. */
+  expectedOutstanding?: number;
+}
 export interface CustomerKhataView extends CustomerKhataResult {
   entries: unknown[];
   totalOutstanding: number;
@@ -156,7 +162,7 @@ export function useGetCustomerKhata(
 export function useRecordUdharPayment(options?: MutationHookOptions<unknown, RecordUdharPaymentVariables>) {
   return useMutation<unknown, ApiClientError, RecordUdharPaymentVariables>({
     ...getMutationOptions<unknown, RecordUdharPaymentVariables>(options),
-    mutationFn: ({ id, data }) => recordPaymentLocalFirst(id, data),
+    mutationFn: ({ id, data, expectedOutstanding }) => recordPaymentLocalFirst(id, data, { expectedOutstanding }),
   });
 }
 
@@ -168,9 +174,13 @@ export function useGetUdharSummary(options?: QueryHookOptions<UdharSummary, Udha
     queryKey: getGetUdharSummaryQueryKey(),
     initialData: extra.initialData ?? cached,
     queryFn: async () => {
+      // Offline falls back to the last server snapshot (plus local movement
+      // since) rather than the raw device ledger — see authoritative-balances.
       if (!isBrowserOnline()) return getLocalUdharSummary();
       try {
-        return await ledgerApi.getUdharSummary();
+        const summary = await ledgerApi.getUdharSummary();
+        cacheAuthoritativeSummary(summary);
+        return summary;
       } catch (error) {
         if (isNetworkLikeError(error)) return getLocalUdharSummary();
         throw error;

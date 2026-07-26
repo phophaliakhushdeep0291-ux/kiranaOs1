@@ -266,6 +266,30 @@ describe("customer ledger correctness", () => {
     expect(scopedRows("sync_outbox").some((row) => row.operation_type === "CREATE_LEDGER_ADJUSTMENT")).toBe(true);
   });
 
+  it("payment validates against the authoritative balance, not the drifted local ledger", async () => {
+    // Live repro: /udhar/summary says ₹300 and the page shows ₹300, but this
+    // device's ledger has drifted to zero, so collecting ₹150 was rejected with
+    // "Payment ₹150 exceeds outstanding udhar ₹0" against a visible ₹300 due.
+    await expect(
+      recordPaymentLocalFirst("customer_1", { amount: 150, mode: "cash" }),
+    ).rejects.toThrow(/exceeds outstanding udhar ₹0/);
+
+    const result = await recordPaymentLocalFirst(
+      "customer_1",
+      { amount: 150, mode: "cash" },
+      { expectedOutstanding: 300 },
+    );
+
+    expect(result).toEqual(expect.objectContaining({ success: true, amount: 150 }));
+    expect(scopedRows("customer_ledger").find((row) => row.type === "PAYMENT")).toEqual(
+      expect.objectContaining({ amount: 150, balance_after: 150 }),
+    );
+    // The guard still holds — it just measures against the authoritative number.
+    await expect(
+      recordPaymentLocalFirst("customer_1", { amount: 900, mode: "cash" }, { expectedOutstanding: 300 }),
+    ).rejects.toThrow(/exceeds outstanding udhar ₹300/);
+  });
+
   it("CANCELLED_BILL reverses udhar impact by appending a correction without mutating the original BILL ledger entry", async () => {
     putInto("bills", {
       id: "bill_credit_1",
@@ -534,6 +558,37 @@ describe("customer ledger correctness", () => {
       udharAmount: 1466,
       balance_source: "server_ledger_summary",
     }));
+  });
+
+  it("still uses the server balance when the customer row is stuck at pending_sync with nothing unsynced", async () => {
+    // Recording a payment used to stamp the customer row "pending_sync" for a
+    // balance it only DERIVED from the ledger. Nothing queues a customer op to
+    // clear that flag, so the row stayed pending forever and permanently vetoed
+    // the server's balance — the udhar page kept showing ₹0.
+    seedCustomer({ sync_status: "pending_sync", server_id: "server_customer_1" });
+    seedLedger({ id: "ledger_synced_bill", type: "BILL", source_type: "bill", amount: 100, entry_at: "2026-06-06T10:00:00.000Z" });
+
+    const reconciled = applyAuthoritativeUdharSummary(await loadCustomersWithLedger(), {
+      totalOutstanding: 300,
+      customers: [{ customerId: "server_customer_1", customerName: "Ramesh", amount: 300, outstanding: 300 }],
+    });
+
+    expect(reconciled[0]).toEqual(expect.objectContaining({ ledgerBalance: 300, balance_source: "server_ledger_summary" }));
+  });
+
+  it("keeps the device balance while it holds unsynced udhar movement", async () => {
+    seedCustomer({ sync_status: "pending_sync", server_id: "server_customer_1" });
+    seedLedger({ id: "ledger_synced_bill", type: "BILL", source_type: "bill", amount: 500, entry_at: "2026-06-06T10:00:00.000Z" });
+    // Collected offline and not yet pushed: this device legitimately leads.
+    seedLedger({ id: "ledger_offline_payment", type: "PAYMENT", source_type: "payment", amount: 200, entry_at: "2026-06-07T10:00:00.000Z", sync_status: "pending_sync" });
+
+    const reconciled = applyAuthoritativeUdharSummary(await loadCustomersWithLedger(), {
+      totalOutstanding: 500,
+      customers: [{ customerId: "server_customer_1", customerName: "Ramesh", amount: 500, outstanding: 500 }],
+    });
+
+    expect(reconciled[0]).toEqual(expect.objectContaining({ ledgerBalance: 300 }));
+    expect(reconciled[0].balance_source).toBeUndefined();
   });
 
   it("does not overwrite an unsynced offline balance with an older server summary", async () => {
