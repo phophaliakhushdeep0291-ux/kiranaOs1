@@ -688,7 +688,9 @@ export default function CustomersPage() {
       toast({ title: "Enter a valid cash or UPI split", variant: "destructive" });
       return;
     }
-    const customer = dedupedCustomers.find((row) => row.id === paymentForm.customerId);
+    const customer =
+      dedupedCustomers.find((row) => row.id === paymentForm.customerId) ??
+      selectedCustomer;
     const outstanding = Math.max(0, Number(customer?.ledgerBalance ?? 0));
     if (amount > outstanding + 0.001) {
       toast({

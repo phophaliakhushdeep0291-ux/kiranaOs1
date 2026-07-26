@@ -14,7 +14,7 @@ import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
 const BACKUP_FORMAT = "kiranaos_aes256gcm_gzip_v1";
-const BACKUP_SCHEMA_VERSION = "2026-07-15";
+const BACKUP_SCHEMA_VERSION = "2026-07-26";
 const BACKUP_HEADER = Buffer.from("KOSB1", "ascii");
 const MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
 
@@ -132,6 +132,10 @@ async function buildShopSnapshot(shopId, client = db) {
     reminderTemplates,
     reminderLogs,
     financialLedger,
+    bankStatementImports,
+    bankStatementTransactions,
+    bankReconciliationAllocations,
+    bankReconciliationEvents,
     subscriptions,
     paymentTransactions,
   ] = await Promise.all([
@@ -170,6 +174,10 @@ async function buildShopSnapshot(shopId, client = db) {
     client.reminderTemplate.findMany({ where: { shopId } }),
     client.reminderLog.findMany({ where: { shopId } }),
     client.financialLedger.findMany({ where: { shopId } }),
+    client.bankStatementImport.findMany({ where: { shopId } }),
+    client.bankStatementTransaction.findMany({ where: { shopId } }),
+    client.bankReconciliationAllocation.findMany({ where: { shopId } }),
+    client.bankReconciliationEvent.findMany({ where: { shopId } }),
     client.subscription.findMany({ where: { shopId } }),
     client.paymentTransaction.findMany({ where: { shopId } }),
   ]);
@@ -208,6 +216,10 @@ async function buildShopSnapshot(shopId, client = db) {
     reminderTemplates,
     reminderLogs,
     financialLedger,
+    bankStatementImports,
+    bankStatementTransactions,
+    bankReconciliationAllocations,
+    bankReconciliationEvents,
     subscriptions,
     paymentTransactions,
   };

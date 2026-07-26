@@ -89,6 +89,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_${++dbState.idCounter}`),
   emitLocalDataChanged: vi.fn(),
   normaliseInstantCacheValue: vi.fn((value: unknown) => value),
+  readIndexedRecentCache: vi.fn(async (_key: string, fallback: unknown) => fallback),
   readInstantCache: vi.fn((_key: string, fallback: unknown) => fallback),
   upsertCachedListItem: vi.fn(),
   writeInstantCache: vi.fn(),

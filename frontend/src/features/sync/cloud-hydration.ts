@@ -95,7 +95,8 @@ async function importProducts() {
 async function importCustomers() {
   const rows = await apiRequest<Customer[]>(`/customers?limit=${DIRECT_IMPORT_LIMIT}`, { method: "GET", cache: "no-store", background: true });
   const customers = Array.isArray(rows) ? rows.map((customer) => {
-    const udhar = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
+    const parsed = Number(customer.udharAmount ?? customer.totalUdhar ?? 0);
+    const udhar = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
     return { ...customer, udharAmount: udhar, totalUdhar: udhar };
   }) : [];
   if (customers.length > 0) {

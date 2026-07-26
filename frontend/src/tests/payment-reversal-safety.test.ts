@@ -97,8 +97,10 @@ vi.mock("@/lib/offline/db", () => ({
 vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_${++dbState.idCounter}`),
   emitLocalDataChanged: vi.fn(),
+  readIndexedRecentCache: vi.fn(async (_key: string, fallback: unknown) => fallback),
   readInstantCache: vi.fn((_key: string, fallback: unknown) => fallback),
   upsertCachedListItem: vi.fn(),
+  writeInstantCache: vi.fn(),
 }));
 
 import { offlineDB } from "@/lib/offline/db";

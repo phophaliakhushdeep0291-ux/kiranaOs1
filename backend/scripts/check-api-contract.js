@@ -57,6 +57,13 @@ const requiredEndpoints = [
   "POST /api/inventory/correction",
   "POST /api/purchase-orders/:id/receipts/:receiptId/reconcile",
   "GET /api/accounting/control",
+  "GET /api/accounting/bank-statements",
+  "POST /api/accounting/bank-statements/import",
+  "GET /api/accounting/bank-reconciliation",
+  "POST /api/accounting/bank-transactions/:id/match",
+  "POST /api/accounting/bank-transactions/:id/unmatch",
+  "POST /api/accounting/bank-transactions/:id/ignore",
+  "POST /api/accounting/bank-transactions/:id/restore",
   "GET /api/sync/status",
   "POST /api/sync/retry",
   "POST /api/sync/ack",
@@ -224,6 +231,41 @@ for (const field of ["data.status", "data.calculationVersion", "data.scope", "da
 for (const guarantee of ["integer-paise", "debit equals credit", "purchase receipts", "GST input credit is never inferred", "unmapped rows", "shop-wide", "statutory completeness"]) {
   if (!accountingControl?.integrityGuarantees?.some((item) => item.includes(guarantee))) fail(`accounting control contract must guarantee ${guarantee}`);
 }
+const bankPaths = [
+  "/api/accounting/bank-statements",
+  "/api/accounting/bank-statements/import",
+  "/api/accounting/bank-reconciliation",
+  "/api/accounting/bank-transactions/:id/match",
+  "/api/accounting/bank-transactions/:id/unmatch",
+  "/api/accounting/bank-transactions/:id/ignore",
+  "/api/accounting/bank-transactions/:id/restore",
+];
+for (const path of bankPaths) {
+  const endpoint = contract.endpoints.find((item) => item.path === path);
+  if (!endpoint?.roles?.includes("owner") || endpoint.roles.length !== 1) fail(`${path} must be owner-only`);
+  if (endpoint?.feature !== "csv_import_export") fail(`${path} must require csv_import_export`);
+}
+for (const path of bankPaths.filter((path) => !path.endsWith("bank-statements") && !path.endsWith("bank-reconciliation"))) {
+  const endpoint = contract.endpoints.find((item) => item.path === path);
+  if (!endpoint?.ownerPinRequired) fail(`${path} must require owner PIN`);
+}
+const statementImport = contract.endpoints.find((endpoint) => endpoint.path === "/api/accounting/bank-statements/import");
+for (const guarantee of ["all-or-nothing", "SHA-256", "integer-paise", "duplicate rows"]) {
+  if (!statementImport?.integrityGuarantees?.some((item) => item.includes(guarantee))) fail(`statement import must guarantee ${guarantee}`);
+}
+const bankReconciliation = contract.endpoints.find((endpoint) => endpoint.path === "/api/accounting/bank-reconciliation");
+for (const field of ["data.calculationVersion", "data.scope", "data.autoMatch", "data.summary", "data.transactions", "data.limitations"]) {
+  if (!bankReconciliation?.responseMustInclude?.includes(field)) fail(`bank reconciliation contract must require ${field}`);
+}
+for (const guarantee of ["never auto-matches", "exact amount and direction", "ambiguous", "shop-wide", "limitations"]) {
+  if (!bankReconciliation?.integrityGuarantees?.some((item) => item.includes(guarantee))) fail(`bank reconciliation must guarantee ${guarantee}`);
+}
+const bankMatch = contract.endpoints.find((endpoint) => endpoint.path === "/api/accounting/bank-transactions/:id/match");
+for (const guarantee of ["one active statement match", "multi-row allocations", "optimistic", "append-only"]) {
+  if (!bankMatch?.transactionGuarantees?.some((item) => item.includes(guarantee))) fail(`bank match must guarantee ${guarantee}`);
+}
+const bankUnmatch = contract.endpoints.find((endpoint) => endpoint.path === "/api/accounting/bank-transactions/:id/unmatch");
+if (!bankUnmatch?.transactionGuarantees?.some((item) => item.includes("reversed rather than deleted"))) fail("bank unmatch must retain reversed evidence");
 const confirmBill = contract.endpoints.find((endpoint) => endpoint.path === "/api/bills/confirm");
 for (const guarantee of ["recomputed by the server", "same transaction as the bill", "conditional atomic claim", "cancellation and restoration"]) {
   if (!confirmBill?.transactionGuarantees?.some((item) => item.includes(guarantee))) {

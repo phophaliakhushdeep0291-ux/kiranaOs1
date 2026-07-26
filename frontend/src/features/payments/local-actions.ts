@@ -28,8 +28,12 @@ import {
   ledgerSignedAmount,
   type CustomerLedgerEntry,
 } from "@/features/ledger/accounting";
-import { readCachedAuthoritativeSummary } from "@/features/ledger/authoritative-balances";
-import type { Customer, UdharPaymentInput } from "@/types/api";
+import {
+  authoritativeOutstandingFor,
+  loadCachedAuthoritativeSummary,
+  readCachedAuthoritativeSummary,
+} from "@/features/ledger/authoritative-balances";
+import type { Customer, UdharPaymentInput, UdharSummary } from "@/types/api";
 import {
   buildAuditLogOutboxInput,
   buildAuditLogRow,
@@ -47,6 +51,87 @@ export interface LocalPaymentResult {
 }
 
 const PENDING_LEDGER_STATUSES = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
+
+type CustomerRecord = Customer & Record<string, unknown>;
+
+function readStringField(row: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+
+function customerIdentitySet(
+  customer: CustomerRecord | undefined,
+  fallbackId?: string,
+): Set<string> {
+  return new Set(
+    [
+      fallbackId,
+      customer?.id,
+      customer?.local_id,
+      customer?.localId,
+      customer?.server_id,
+      customer?.serverId,
+    ].filter((value): value is string => typeof value === "string" && value.length > 0),
+  );
+}
+
+function expandIdsWithMappings(
+  ids: Set<string>,
+  mappings: Array<Record<string, unknown>>,
+): Set<string> {
+  const expanded = new Set(ids);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const mapping of mappings) {
+      const entityType = String(mapping.entity_type ?? mapping.entityType ?? "");
+      if (entityType && entityType !== "customer" && entityType !== "customers") continue;
+      const localId = readStringField(mapping, ["local_id", "localId"]);
+      const serverId = readStringField(mapping, ["server_id", "serverId"]);
+      if (!localId || !serverId) continue;
+      if (expanded.has(localId) && !expanded.has(serverId)) {
+        expanded.add(serverId);
+        changed = true;
+      }
+      if (expanded.has(serverId) && !expanded.has(localId)) {
+        expanded.add(localId);
+        changed = true;
+      }
+    }
+  }
+  return expanded;
+}
+
+function uniqueById<T extends { id?: unknown }>(rows: T[]): T[] {
+  const map = new Map<string, T>();
+  for (const row of rows) {
+    if (typeof row.id !== "string" || row.id.length === 0) continue;
+    map.set(row.id, { ...map.get(row.id), ...row });
+  }
+  return [...map.values()];
+}
+
+function pendingDeltaForIds(deltas: Map<string, number>, ids: Set<string>): number {
+  let total = 0;
+  for (const id of ids) total = roundMoney(total + (deltas.get(id) ?? 0));
+  return total;
+}
+
+function normaliseOutstandingRow(
+  row: UdharSummary["customers"][number],
+  outstanding: number,
+): UdharSummary["customers"][number] {
+  const value = roundMoney(Math.max(0, outstanding));
+  return {
+    ...row,
+    amount: value,
+    outstanding: value,
+  };
+}
 
 /**
  * Unsynced local movement for a customer since the server snapshot was taken.
@@ -77,78 +162,80 @@ function pendingLedgerDeltasSince(
  * ledger, which can have drifted — the offline page must show the same number
  * as the online one.
  */
-export function getLocalUdharSummary() {
-  const customers = readInstantCache<Customer[]>(CUSTOMER_CACHE_KEY, []).map(
-    normaliseLocalCustomer,
+function buildLocalUdharSummary(input: {
+  customers: CustomerRecord[];
+  ledgerEntries: CustomerLedgerEntry[];
+  authoritative: ReturnType<typeof readCachedAuthoritativeSummary>;
+  idMappings?: Array<Record<string, unknown>>;
+}): UdharSummary {
+  const customers = input.customers.map((customer) =>
+    normaliseLocalCustomer(customer) as CustomerRecord,
   );
-  const ledgerEntries = dedupeLedgerEntries(
-    readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []),
-  );
-  const authoritative = readCachedAuthoritativeSummary();
+  const ledgerEntries = dedupeLedgerEntries(input.ledgerEntries);
+  const idMappings = input.idMappings ?? [];
+  const authoritative = input.authoritative;
   if (authoritative) {
     const deltas = pendingLedgerDeltasSince(ledgerEntries, authoritative.capturedAt);
-    const byId = new Map(
-      authoritative.summary.customers.map((row) => [row.customerId, { ...row }]),
-    );
+    const rows = new Map<string, UdharSummary["customers"][number]>();
+    const handledCustomerIds = new Set<string>();
+
+    for (const row of authoritative.summary.customers) {
+      const customer = customers.find((candidate) =>
+        expandIdsWithMappings(customerIdentitySet(candidate), idMappings).has(row.customerId),
+      );
+      const ids = expandIdsWithMappings(
+        customerIdentitySet(customer, row.customerId),
+        idMappings,
+      );
+      ids.forEach((id) => handledCustomerIds.add(id));
+      const outstanding = roundMoney(
+        Math.max(0, Number(row.outstanding ?? 0) + pendingDeltaForIds(deltas, ids)),
+      );
+      if (outstanding > 0) rows.set(row.customerId, normaliseOutstandingRow(row, outstanding));
+    }
+
     for (const customer of customers) {
-      const delta = deltas.get(customer.id);
-      if (delta === undefined || delta === 0) continue;
-      const existing = byId.get(customer.id);
-      const outstanding = roundMoney(Math.max(0, (existing?.outstanding ?? 0) + delta));
-      byId.set(customer.id, {
+      const ids = expandIdsWithMappings(customerIdentitySet(customer), idMappings);
+      if ([...ids].some((id) => handledCustomerIds.has(id))) continue;
+      const outstanding = roundMoney(Math.max(0, pendingDeltaForIds(deltas, ids)));
+      if (outstanding <= 0) continue;
+      rows.set(customer.id, {
         customerId: customer.id,
         customerName: customer.name,
         mobile: customer.mobile ?? undefined,
-        ...existing,
         amount: outstanding,
         outstanding,
       });
     }
-    const rows = [...byId.values()].filter((row) => row.outstanding > 0);
+    const summaryRows = [...rows.values()].filter((row) => row.outstanding > 0);
     return {
-      totalOutstanding: roundMoney(rows.reduce((sum, row) => sum + row.outstanding, 0)),
-      customers: rows,
+      totalOutstanding: roundMoney(summaryRows.reduce((sum, row) => sum + row.outstanding, 0)),
+      customers: summaryRows,
     };
   }
-  const ledgerGroups = new Map<string, CustomerLedgerEntry[]>();
-  for (const entry of ledgerEntries) {
-    const id = typeof entry.customerId === "string" && entry.customerId.length > 0
-      ? entry.customerId
-      : typeof entry.customer_id === "string" && entry.customer_id.length > 0
-        ? entry.customer_id
-        : null;
-    if (!id) continue;
-    const group = ledgerGroups.get(id) ?? [];
-    group.push(entry);
-    ledgerGroups.set(id, group);
-  }
-  const ledgerBalances = new Map(
-    [...ledgerGroups.entries()].map(([customerId, entries]) => [
-      customerId,
-      roundMoney(calculateLedgerBalance(entries)),
-    ]),
-  );
+
   const rows = customers
-    .map((customer) => ({
-      customerId: customer.id,
-      customerName: customer.name,
-      mobile: customer.mobile ?? undefined,
-      amount: roundMoney(
-        ledgerBalances.get(customer.id) ?? readNumber(customer.udharAmount ?? customer.totalUdhar, 0),
-      ),
-      outstanding: roundMoney(
-        ledgerBalances.get(customer.id) ?? readNumber(customer.udharAmount ?? customer.totalUdhar, 0),
-      ),
-      dueDate: (customer as unknown as Record<string, unknown>).dueDate as
-        | string
-        | undefined,
-      promiseToPayDate: (customer as unknown as Record<string, unknown>)
-        .promiseToPayDate as string | undefined,
-      trustScore: readNumber(
-        (customer as unknown as Record<string, unknown>).trustScore,
-        75,
-      ),
-    }))
+    .map((customer) => {
+      const ids = expandIdsWithMappings(customerIdentitySet(customer), idMappings);
+      const customerLedger = ledgerEntries.filter((entry) => {
+        const id = getLedgerCustomerId(entry);
+        return id ? ids.has(id) : false;
+      });
+      const rawBalance = customerLedger.length > 0
+        ? calculateLedgerBalance(customerLedger)
+        : readNumber(customer.udharAmount ?? customer.totalUdhar, 0);
+      const outstanding = roundMoney(Math.max(0, rawBalance));
+      return {
+        customerId: customer.id,
+        customerName: customer.name,
+        mobile: customer.mobile ?? undefined,
+        amount: outstanding,
+        outstanding,
+        dueDate: customer.dueDate as string | undefined,
+        promiseToPayDate: customer.promiseToPayDate as string | undefined,
+        trustScore: readNumber(customer.trustScore, 75),
+      };
+    })
     .filter((row) => row.outstanding > 0);
   return {
     totalOutstanding: roundMoney(
@@ -156,6 +243,35 @@ export function getLocalUdharSummary() {
     ),
     customers: rows,
   };
+}
+
+export function getLocalUdharSummary(): UdharSummary {
+  return buildLocalUdharSummary({
+    customers: readInstantCache<CustomerRecord[]>(CUSTOMER_CACHE_KEY, []),
+    ledgerEntries: readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []),
+    authoritative: readCachedAuthoritativeSummary(),
+  });
+}
+
+export async function getLocalUdharSummaryAsync(): Promise<UdharSummary> {
+  const [dbCustomers, dbLedger, idMappings, authoritative] = await Promise.all([
+    offlineDB.getAll<CustomerRecord>("customers").catch(() => []),
+    offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []),
+    offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []),
+    loadCachedAuthoritativeSummary(),
+  ]);
+  return buildLocalUdharSummary({
+    customers: uniqueById([
+      ...readInstantCache<CustomerRecord[]>(CUSTOMER_CACHE_KEY, []),
+      ...dbCustomers,
+    ]),
+    ledgerEntries: dedupeLedgerEntries([
+      ...readInstantCache<CustomerLedgerEntry[]>("customer_ledger", []),
+      ...dbLedger,
+    ]),
+    authoritative,
+    idMappings,
+  });
 }
 
 export function getLocalUdharLedger(limit = 50) {
@@ -256,7 +372,48 @@ export interface RecordPaymentOptions {
    * two and let the backend's own check be the final authority on sync — the
    * same rule `createLedgerAdjustmentLocalFirst` already uses.
    */
+  // This hint never overrules a cached authoritative server balance.
   expectedOutstanding?: number;
+}
+
+function hasPendingLedgerWork(entries: CustomerLedgerEntry[]): boolean {
+  return entries.some((entry) =>
+    PENDING_LEDGER_STATUSES.has(String(entry.sync_status ?? "").toLowerCase()),
+  );
+}
+
+function isLocalOnlyCustomer(customer: CustomerRecord): boolean {
+  const hasServerIdentity =
+    typeof customer.server_id === "string" ||
+    typeof customer.serverId === "string";
+  if (hasServerIdentity) return false;
+  const status = String(customer.sync_status ?? "").toLowerCase();
+  return (
+    String(customer.id ?? "").startsWith("local_") ||
+    customer.isSynced === false ||
+    customer.is_synced === false ||
+    PENDING_LEDGER_STATUSES.has(status)
+  );
+}
+
+async function resolveCachedAuthoritativePaymentBalance(input: {
+  customerId: string;
+  customer: CustomerRecord;
+  ledgerEntries: CustomerLedgerEntry[];
+}): Promise<number | null> {
+  const cached = await loadCachedAuthoritativeSummary();
+  if (!cached) return null;
+  const mappings = await offlineDB
+    .getAll<Record<string, unknown>>("id_mappings")
+    .catch(() => []);
+  const ids = expandIdsWithMappings(
+    customerIdentitySet(input.customer, input.customerId),
+    mappings,
+  );
+  const base = authoritativeOutstandingFor(cached.summary, [...ids]);
+  if (base === null) return null;
+  const deltas = pendingLedgerDeltasSince(input.ledgerEntries, cached.capturedAt);
+  return roundMoney(Math.max(0, base + pendingDeltaForIds(deltas, ids)));
 }
 
 export async function recordPaymentLocalFirst(
@@ -278,15 +435,31 @@ export async function recordPaymentLocalFirst(
   if (!existing) throw new Error("Customer not found in local records");
 
   const existingLedgerEntries = await readCustomerLedgerEntries(customerId);
-  const ledgerBalance = calculateLedgerBalance(existingLedgerEntries);
+  const ledgerBalance = roundMoney(calculateLedgerBalance(existingLedgerEntries));
+  const authoritativeBalance = await resolveCachedAuthoritativePaymentBalance({
+    customerId,
+    customer: existing as CustomerRecord,
+    ledgerEntries: existingLedgerEntries,
+  });
+  const expectedOutstanding = Math.max(
+    0,
+    readNumber(options.expectedOutstanding, 0),
+  );
+  const localCanLead =
+    hasPendingLedgerWork(existingLedgerEntries) ||
+    isLocalOnlyCustomer(existing as CustomerRecord);
   // Guard against overpayment: a udhar payment can never exceed the customer's
   // outstanding balance. The backend already rejects this
   // (UDHAR_PAYMENT_EXCEEDS_OUTSTANDING); the offline path must enforce the same
   // rule so it can't drive the balance negative or queue an event that will fail
   // to sync. A tiny epsilon absorbs paise-level float drift.
-  const currentBalance = roundMoney(
-    Math.max(ledgerBalance, Math.max(0, readNumber(options.expectedOutstanding, 0))),
-  );
+  const currentBalance = roundMoney(authoritativeBalance !== null
+    ? Math.max(
+        authoritativeBalance,
+        localCanLead ? ledgerBalance : 0,
+        localCanLead ? expectedOutstanding : 0,
+      )
+    : Math.max(ledgerBalance, expectedOutstanding));
   const outstanding = roundMoney(Math.max(0, currentBalance));
   if (amount > outstanding + 0.001) {
     const error = new Error(

@@ -103,6 +103,10 @@ model Shop {
   auditCases                  AuditCase[]
   auditCaseFindings           AuditCaseFinding[]
   auditBaselines              AuditBaseline[]
+  bankStatementImports        BankStatementImport[]
+  bankStatementTransactions   BankStatementTransaction[]
+  bankReconciliationAllocations BankReconciliationAllocation[]
+  bankReconciliationEvents    BankReconciliationEvent[]
 }
 
 // ─────────────────────────────────────────────
@@ -1738,7 +1742,8 @@ model FinancialLedger {
   reversedById   String?
   createdAt      DateTime @default(now())
 
-  shop Shop @relation(fields: [shopId], references: [id])
+  shop                          Shop                           @relation(fields: [shopId], references: [id])
+  bankReconciliationAllocations BankReconciliationAllocation[]
 
   @@unique([shopId, idempotencyKey])
   @@index([shopId, businessDate])
@@ -1747,6 +1752,103 @@ model FinancialLedger {
   @@index([shopId, sourceType, sourceId])
 }
 
+model BankStatementImport {
+  id               String   @id @default(cuid())
+  shopId           String
+  accountType      String
+  accountName      String
+  accountLast4     String?
+  fileName         String
+  statementFrom    DateTime
+  statementTo      DateTime
+  rowCount         Int
+  importedCount    Int
+  duplicateCount   Int
+  status           String   @default("processed")
+  fingerprint      String
+  importedByUserId String?
+  createdAt        DateTime @default(now())
+
+  shop         Shop                       @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  transactions BankStatementTransaction[]
+
+  @@unique([shopId, fingerprint])
+  @@index([shopId, createdAt])
+  @@index([shopId, accountType, statementFrom, statementTo])
+}
+
+model BankStatementTransaction {
+  id                    String    @id @default(cuid())
+  shopId                String
+  importId              String
+  rowNumber             Int
+  transactionDate       DateTime
+  description           String
+  reference             String?
+  direction             String
+  amountPaise           BigInt
+  balancePaise          BigInt?
+  fingerprint           String
+  matchStatus           String    @default("unmatched")
+  reconciledAmountPaise BigInt    @default(0)
+  ignoredReason         String?
+  ignoredByUserId       String?
+  ignoredAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  shop        Shop                           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  import      BankStatementImport            @relation(fields: [importId], references: [id], onDelete: Cascade)
+  allocations BankReconciliationAllocation[]
+  events      BankReconciliationEvent[]
+
+  @@unique([shopId, fingerprint])
+  @@index([shopId, transactionDate])
+  @@index([shopId, matchStatus, transactionDate])
+  @@index([importId, rowNumber])
+}
+
+model BankReconciliationAllocation {
+  id                         String    @id @default(cuid())
+  shopId                     String
+  bankStatementTransactionId String
+  ledgerRowId                String
+  amountPaise                BigInt
+  activeLedgerKey            String?   @unique
+  activeBankLedgerKey        String?   @unique
+  method                     String
+  evidenceJson               String    @default("{}")
+  status                     String    @default("active")
+  matchedByUserId            String?
+  matchedAt                  DateTime  @default(now())
+  reversedByUserId           String?
+  reversedAt                 DateTime?
+  reversalReason             String?
+
+  shop            Shop                     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  bankTransaction BankStatementTransaction @relation(fields: [bankStatementTransactionId], references: [id], onDelete: Cascade)
+  ledgerRow       FinancialLedger          @relation(fields: [ledgerRowId], references: [id], onDelete: Restrict)
+
+  @@index([shopId, status, matchedAt])
+  @@index([bankStatementTransactionId, status])
+  @@index([ledgerRowId, status])
+}
+
+model BankReconciliationEvent {
+  id                         String   @id @default(cuid())
+  shopId                     String
+  bankStatementTransactionId String
+  action                     String
+  payloadJson                String   @default("{}")
+  userId                     String?
+  createdAt                  DateTime @default(now())
+
+  shop            Shop                     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  bankTransaction BankStatementTransaction @relation(fields: [bankStatementTransactionId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, createdAt])
+  @@index([bankStatementTransactionId, createdAt])
+}
 model SyncIdMapping {
   id            String   @id @default(cuid())
   shopId        String

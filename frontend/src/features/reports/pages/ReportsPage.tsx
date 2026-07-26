@@ -55,6 +55,7 @@ import {
 } from "@/features/reports/local-reporting";
 import { recordDataExportLocalFirst } from "@/features/reports/local-actions";
 import { AccountingControlPanel } from "@/features/reports/components/AccountingControlPanel";
+import { BankReconciliationPanel } from "@/features/reports/components/BankReconciliationPanel";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseSummary } from "@/types/api";
@@ -482,6 +483,8 @@ export default function ReportsPage() {
       </section>
 
       <AccountingControlPanel from={range.from} to={range.to} />
+
+      <BankReconciliationPanel from={range.from} to={range.to} />
 
       <section className="grid items-stretch gap-3 xl:grid-cols-3 2xl:grid-cols-[1.05fr_1.05fr_1.12fr]">
         <Panel title="Sales Trend" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
