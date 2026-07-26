@@ -1114,6 +1114,37 @@ function paymentBillDisplaySignature(payment: Record<string, unknown>): string |
   return `payment-display:${billKey}|${mode}|${amount.toFixed(2)}|${fiveMinuteBucket}`;
 }
 
+function paymentBillEchoBaseSignature(payment: Record<string, unknown>): string | null {
+  const billId = getStringFrom(payment, [
+    "bill_id",
+    "billId",
+    "localBillId",
+    "local_bill_id",
+    "serverBillId",
+    "server_bill_id",
+  ]);
+  const customerId = getStringFrom(payment, ["customer_id", "customerId"]);
+  const mode = getStringFrom(payment, ["mode"])?.toLowerCase();
+  const amount = getNumberFrom(payment, ["amount"]);
+  if (!mode || amount === undefined || amount <= 0) return null;
+  return `payment-bill-echo:${billId ?? `customer:${customerId ?? "walk-in"}`}|${mode}|${amount.toFixed(2)}`;
+}
+
+function paymentTimeMs(payment: Record<string, unknown>): number {
+  const raw = getStringFrom(payment, ["paid_at", "paidAt", "created_at", "createdAt"]);
+  const time = raw ? new Date(raw).getTime() : NaN;
+  return Number.isFinite(time) ? time : NaN;
+}
+
+function isNearPaymentEcho(previous: Record<string, unknown>, current: Record<string, unknown>): boolean {
+  if (!shouldCollapsePaymentEcho(previous, current)) return false;
+  const previousTime = paymentTimeMs(previous);
+  const currentTime = paymentTimeMs(current);
+  return Number.isFinite(previousTime) &&
+    Number.isFinite(currentTime) &&
+    Math.abs(previousTime - currentTime) <= 5 * 60 * 1000;
+}
+
 function shouldCollapsePaymentEcho(previous: Record<string, unknown>, current: Record<string, unknown>): boolean {
   const previousMode = getStringFrom(previous, ["mode"])?.toLowerCase();
   const currentMode = getStringFrom(current, ["mode"])?.toLowerCase();
@@ -1130,6 +1161,7 @@ export function dedupePaymentsForDisplay<T extends object>(payments: T[]): T[] {
   const seenIdentity = new Set<string>();
   const pickedByEchoSignature = new Map<string, T>();
   const pickedByDisplaySignature = new Map<string, T>();
+  const pickedByBillEchoBase = new Map<string, T[]>();
   const picked: T[] = [];
 
   for (const payment of candidates.sort((a, b) => {
@@ -1152,6 +1184,19 @@ export function dedupePaymentsForDisplay<T extends object>(payments: T[]): T[] {
       continue;
     }
 
+    // Fixed time buckets alone miss a local/server pair that straddles a
+    // five-minute boundary (for example 10:04:59 and 10:05:02). Compare the
+    // actual timestamps for the same bill/mode/amount before counting both.
+    const billEchoBase = paymentBillEchoBaseSignature(record);
+    const nearbyBillEcho = billEchoBase
+      ? (pickedByBillEchoBase.get(billEchoBase) ?? []).find((previous) =>
+          isNearPaymentEcho(previous as Record<string, unknown>, record))
+      : undefined;
+    if (nearbyBillEcho) {
+      identityKeys.forEach((key) => seenIdentity.add(key));
+      continue;
+    }
+
     const echoSignature = paymentEchoSignature(record);
     const previousEcho = echoSignature ? pickedByEchoSignature.get(echoSignature) : undefined;
     if (previousEcho && shouldCollapsePaymentEcho(previousEcho as Record<string, unknown>, record)) {
@@ -1165,6 +1210,11 @@ export function dedupePaymentsForDisplay<T extends object>(payments: T[]): T[] {
     }
     if (displaySignature && !pickedByDisplaySignature.has(displaySignature)) {
       pickedByDisplaySignature.set(displaySignature, payment);
+    }
+    if (billEchoBase) {
+      const existing = pickedByBillEchoBase.get(billEchoBase) ?? [];
+      existing.push(payment);
+      pickedByBillEchoBase.set(billEchoBase, existing);
     }
     picked.push(payment);
   }

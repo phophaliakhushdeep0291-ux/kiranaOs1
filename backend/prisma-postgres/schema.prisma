@@ -525,6 +525,7 @@ model Bill {
   cancelledReason       String?
   returnOfBillId        String? // set on billType "sales_return": the original sale this return reverses
   refundMode            String? // cash | upi | bank | udhar | gift_card
+  businessDate          DateTime  @default(now()) // when the sale happened; differs from createdAt for delayed offline sync
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -545,6 +546,9 @@ model Bill {
   @@index([shopId, createdByUserId, createdAt])
   @@index([shopId, status, createdAt])
   @@index([shopId, locationId, status, createdAt])
+  @@index([shopId, businessDate])
+  @@index([shopId, status, businessDate])
+  @@index([shopId, locationId, status, businessDate])
   @@index([shopId, returnOfBillId])
   @@index([shopId, offerId, status])
   @@index([shopId, updatedAt, id])
@@ -1005,6 +1009,7 @@ model UdharLedger {
   reversedReason     String?
   reversalOfLedgerId String?
   reversedByUserId   String?
+  businessDate       DateTime  @default(now()) // economic event time; preserves offline payment/sale timing
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -1016,6 +1021,8 @@ model UdharLedger {
   @@unique([shopId, idempotencyKey])
   @@index([shopId, customerId, createdAt])
   @@index([shopId, locationId, createdAt])
+  @@index([shopId, customerId, businessDate])
+  @@index([shopId, locationId, businessDate])
   @@index([shopId, reversalOfLedgerId])
   @@index([shopId, sourceType, sourceId])
   @@index([shopId, updatedAt, id])

@@ -390,8 +390,8 @@ function normalizeEmbeddedPayments(bill: RecordLike): LocalPayment[] {
     bill_id: payment.bill_id ?? payment.billId ?? billId,
     customerId: payment.customerId ?? payment.customer_id ?? customerId,
     customer_id: payment.customer_id ?? payment.customerId ?? customerId,
-    paidAt: payment.paidAt ?? payment.paid_at ?? payment.createdAt ?? payment.created_at ?? bill.createdAt ?? bill.created_at,
-    paid_at: payment.paid_at ?? payment.paidAt ?? payment.created_at ?? payment.createdAt ?? bill.created_at ?? bill.createdAt,
+    paidAt: payment.paidAt ?? payment.paid_at ?? payment.createdAt ?? payment.created_at ?? bill.businessDate ?? bill.business_date ?? bill.createdAt ?? bill.created_at,
+    paid_at: payment.paid_at ?? payment.paidAt ?? payment.created_at ?? payment.createdAt ?? bill.business_date ?? bill.businessDate ?? bill.created_at ?? bill.createdAt,
   }));
 }
 

@@ -265,7 +265,7 @@ function dateFromInput(value: string, endOfDay = false): Date {
 }
 
 function rowDate(row: RecordLike): string {
-  return readString(row, ["createdAt", "created_at", "billDate", "bill_date", "updatedAt", "updated_at"]);
+  return readString(row, ["businessDate", "business_date", "createdAt", "created_at", "billDate", "bill_date", "updatedAt", "updated_at"]);
 }
 
 function isWithinRange(row: RecordLike, range: DateRange): boolean {

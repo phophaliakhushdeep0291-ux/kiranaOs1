@@ -45,9 +45,23 @@ assert.match(inventoryController, /STOCK_DAMAGED[\s\S]*damageLossValue[\s\S]*old
 assert.match(inventoryService, /productName: product\.name[\s\S]*oldStockBaseQty[\s\S]*newStockBaseQty/, "inventory service must return stock metadata for audit");
 
 assert.ok(permissions.includes("OWNER_PIN_VERIFIED"), "successful owner PIN verification must be audited");
-assert.match(permissions, /const ok = await bcrypt\.compare\(ownerPin, owner\.pinHash\);[\s\S]*if \(!ok\) throw new AppError\("Wrong owner PIN", 403\);[\s\S]*await logOwnerPinVerified\(req\);/, "owner PIN audit must happen only after successful bcrypt compare");
+const pinCompareAt = permissions.indexOf("const ok = await bcrypt.compare(ownerPin, owner.pinHash);");
+const pinFailureAt = permissions.indexOf("if (!ok)", pinCompareAt);
+const pinVerifiedAt = permissions.indexOf("await logOwnerPinVerified(req);", pinFailureAt);
+assert.ok(
+  pinCompareAt >= 0 && pinFailureAt > pinCompareAt && pinVerifiedAt > pinFailureAt,
+  "owner PIN audit must happen only after successful bcrypt compare and failure handling"
+);
+assert.match(
+  permissions.slice(pinFailureAt, pinVerifiedAt),
+  /logOwnerPinFailure[\s\S]*throwPinFailureOrLockout/,
+  "wrong owner PIN must be recorded and rejected (or locked out) before success is audited"
+);
 const ownerPinAuditBlock = permissions.match(/async function logOwnerPinVerified\(req\) \{[\s\S]*?\n\}/)?.[0] ?? "";
-assert.ok(ownerPinAuditBlock.includes("OWNER_PIN_VERIFIED"), "owner PIN audit helper must contain OWNER_PIN_VERIFIED action");
+assert.ok(
+  ownerPinAuditBlock.includes("OWNER_PIN_VERIFIED") || ownerPinAuditBlock.includes("OWNER_PIN_SUCCESS_ACTION"),
+  "owner PIN audit helper must use the verified-success audit action"
+);
 assert.ok(!ownerPinAuditBlock.includes("ownerPin"), "owner PIN audit metadata must not log the PIN value");
 
 for (const action of [

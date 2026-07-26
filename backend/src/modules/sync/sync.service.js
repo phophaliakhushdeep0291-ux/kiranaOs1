@@ -1160,6 +1160,8 @@ async function applyCreateBill(shopId, event, user, context) {
   const bill = await confirmBill(shopId, parsed, {
     userId: user?.userId ?? null,
     deviceId: billIdentity.sourceDeviceId ?? user?.deviceId ?? null,
+    isOfflineReplay: true,
+    businessDate: event.client_created_at ?? event.clientCreatedAt ?? event.createdAt ?? new Date().toISOString(),
     // Replayed offline sale: the goods already left the counter, so never drop it for
     // being stock-short — record it and flag any shortfall for reconciliation.
     allowStockShortfall: true,
@@ -1656,6 +1658,8 @@ async function applyUdharPayment(shopId, event, context) {
   const data = await recordUdharPayment(shopId, payload.customerId, parsedPayment, {
     deviceId: paymentIdentity.sourceDeviceId ?? context?.user?.deviceId ?? null,
     locationId: payload.locationId ?? payload.location_id ?? payment.locationId ?? payment.location_id ?? null,
+    isOfflineReplay: true,
+    businessDate: event.client_created_at ?? event.clientCreatedAt ?? event.createdAt ?? new Date().toISOString(),
   });
   return {
     type: event.type,

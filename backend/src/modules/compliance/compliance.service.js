@@ -162,14 +162,14 @@ export function buildInvoiceTaxSnapshot(bill, sellerStateCode = "") {
 export async function getGstInvoiceRegister(shopId, query = {}) {
   const { start, end } = getDateRange(query.range === "custom" ? null : query.range, query.from, query.to, env.DAILY_CLOSING_TIMEZONE);
   const [shop, bills] = await Promise.all([db.shop.findUnique({ where: { id: shopId }, select: { gstNumber: true } }), db.bill.findMany({
-    where: { shopId, ...(query.locationId && { locationId: query.locationId }), status: "active", billType: { not: "estimate" }, createdAt: { gte: start, lte: end } },
-    orderBy: { createdAt: "asc" },
+    where: { shopId, ...(query.locationId && { locationId: query.locationId }), status: "active", billType: { not: "estimate" }, businessDate: { gte: start, lte: end } },
+    orderBy: { businessDate: "asc" },
     include: { items: { include: { product: { select: { hsn: true } } } }, payments: true },
   })]);
   const sellerStateCode = validateGstin(shop?.gstNumber).stateCode || "";
   const originalIds = [...new Set(bills.map((bill) => bill.returnOfBillId).filter(Boolean))];
   const originalBills = originalIds.length > 0
-    ? await db.bill.findMany({ where: { shopId, id: { in: originalIds } }, select: { id: true, billNo: true, createdAt: true, buyerGstin: true, buyerStateCode: true, buyerAddress: true, customerName: true, grandTotal: true } })
+    ? await db.bill.findMany({ where: { shopId, id: { in: originalIds } }, select: { id: true, billNo: true, businessDate: true, buyerGstin: true, buyerStateCode: true, buyerAddress: true, customerName: true, grandTotal: true } })
     : [];
   const originalById = new Map(originalBills.map((bill) => [bill.id, bill]));
   const rows = [];
@@ -186,11 +186,11 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
     for (const { item, tax, discount, grossLineTotal, netLineTotal } of snapshot.lines) {
       rows.push({
         invoiceNumber: bill.billNo,
-        invoiceDate: bill.createdAt.toISOString().slice(0, 10),
+        invoiceDate: bill.businessDate.toISOString().slice(0, 10),
         invoiceType: bill.billType,
         documentType: bill.billType === "sales_return" ? "credit_note" : "invoice",
         originalInvoiceNumber: original?.billNo || "",
-        originalInvoiceDate: original?.createdAt?.toISOString().slice(0, 10) || "",
+        originalInvoiceDate: original?.businessDate?.toISOString().slice(0, 10) || "",
         originalInvoiceValue: Number(original?.grandTotal ?? 0),
         customerName: effectiveBill.customerName,
         buyerGstin: effectiveBill.buyerGstin || "",
@@ -310,7 +310,7 @@ function canonicalPayload(bill, shop) {
   return {
     schemaVersion: "kiranaos-gst-sandbox-v1",
     seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
-    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, documentType: bill.billType === "sales_return" ? "credit_note" : "invoice", documentTypeCode: bill.billType === "sales_return" ? "CRN" : "INV", originalInvoiceId: bill.returnOfBillId ?? null, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
+    invoice: { number: bill.billNo, date: bill.businessDate.toISOString(), type: bill.billType, documentType: bill.billType === "sales_return" ? "credit_note" : "invoice", documentTypeCode: bill.billType === "sales_return" ? "CRN" : "INV", originalInvoiceId: bill.returnOfBillId ?? null, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
     items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
   };
 }
@@ -405,7 +405,7 @@ function canonicalEWayPayload(bill, shop, transport) {
     supplyType: "outward",
     seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
     buyer: { name: bill.customerName, gstin: bill.buyerGstin, stateCode: bill.buyerStateCode, address: bill.buyerAddress },
-    invoice: { number: bill.billNo, date: bill.createdAt.toISOString(), type: bill.billType, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
+    invoice: { number: bill.billNo, date: bill.businessDate.toISOString(), type: bill.billType, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
     transport: {
       mode: transport.transportMode,
       transporterId: transport.transporterId || null,

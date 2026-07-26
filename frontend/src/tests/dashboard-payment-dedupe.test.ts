@@ -8,6 +8,9 @@ describe("dashboard payment dedupe", () => {
     // (30) at write time AND getLocalDashboardSnapshot prunes again on read against the real
     // clock, so any hardcoded past date silently drops the bill and the snapshot reads 0.
     const now = new Date();
+    // Deliberately straddle a five-minute bucket boundary. The local optimistic
+    // payment and server echo are only three seconds apart and must still merge.
+    now.setHours(12, 4, 59, 0);
     const at = (msAfter: number) => new Date(now.getTime() + msAfter).toISOString();
     const billTime = at(0);
 

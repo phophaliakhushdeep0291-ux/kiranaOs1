@@ -121,7 +121,7 @@ export function billRecordToShareInput(
     shopName: opts.shopName || "My Shop",
     shopLocation: opts.shopLocation,
     billNo: str(bill.billNo ?? bill.billNumber ?? bill.bill_no ?? bill.id, "—"),
-    dateIso: str(bill.createdAt ?? bill.created_at) || undefined,
+    dateIso: str(bill.businessDate ?? bill.business_date ?? bill.createdAt ?? bill.created_at) || undefined,
     items,
     total,
     paid,

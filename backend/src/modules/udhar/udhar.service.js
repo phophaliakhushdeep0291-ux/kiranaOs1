@@ -8,14 +8,14 @@ export async function getUdharLedger(shopId, { from, to, customerId, type, page,
     ...(customerId && { customerId }),
     ...(type !== "all" && { type }),
     ...(from && to && {
-      createdAt: { gte: new Date(from), lte: new Date(to) },
+      businessDate: { gte: new Date(from), lte: new Date(to) },
     }),
   };
 
   const [entries, total] = await Promise.all([
     db.udharLedger.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { businessDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,
     }),

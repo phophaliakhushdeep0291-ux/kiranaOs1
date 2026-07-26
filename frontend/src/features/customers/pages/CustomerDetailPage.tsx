@@ -318,7 +318,7 @@ export default function CustomerDetailPage() {
           <Card>
             <CardHeader><CardTitle>Recent bills</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {bills.slice(0, 8).map((bill) => <Link key={String(bill.id)} href={`/bills/${String(bill.id)}`}><div className="rounded-lg border p-3 hover:bg-muted/40 cursor-pointer"><div className="flex justify-between"><span className="font-medium">{billNumber(bill)}</span><span className="font-semibold">{formatMoney(readNumber(bill.grandTotal ?? bill.totalAmount))}</span></div><p className="text-xs text-muted-foreground">{formatDateTime(bill.createdAt ?? bill.created_at)} • {String(bill.status ?? bill.billType ?? "bill")}</p></div></Link>)}
+              {bills.slice(0, 8).map((bill) => <Link key={String(bill.id)} href={`/bills/${String(bill.id)}`}><div className="rounded-lg border p-3 hover:bg-muted/40 cursor-pointer"><div className="flex justify-between"><span className="font-medium">{billNumber(bill)}</span><span className="font-semibold">{formatMoney(readNumber(bill.grandTotal ?? bill.totalAmount))}</span></div><p className="text-xs text-muted-foreground">{formatDateTime(bill.businessDate ?? bill.business_date ?? bill.createdAt ?? bill.created_at)} • {String(bill.status ?? bill.billType ?? "bill")}</p></div></Link>)}
               {bills.length === 0 ? <p className="text-sm text-muted-foreground">No bills linked.</p> : null}
             </CardContent>
           </Card>

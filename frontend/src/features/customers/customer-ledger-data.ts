@@ -333,14 +333,8 @@ function ledgerCustomerMobile(entry?: CustomerLedgerEntry): string | null {
 }
 
 function syntheticCustomerFromLedger(customerId: string, entries: CustomerLedgerEntry[]): Customer & Record<string, unknown> {
-  const latest = [...entries].sort((a, b) => String(b.createdAt ?? b.created_at ?? b.entry_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? a.entry_at ?? "")))[0];
-  const at = typeof latest?.createdAt === "string"
-    ? latest.createdAt
-    : typeof latest?.created_at === "string"
-      ? latest.created_at
-      : typeof latest?.entry_at === "string"
-        ? latest.entry_at
-        : new Date().toISOString();
+  const latest = [...entries].sort((a, b) => getLedgerDate(b).localeCompare(getLedgerDate(a)))[0];
+  const at = latest ? getLedgerDate(latest) : new Date().toISOString();
   return {
     id: customerId,
     name: ledgerCustomerName(latest) ?? "Ledger customer",
@@ -416,7 +410,7 @@ export async function loadCustomerDetail(customerId: string): Promise<CustomerDe
       const id = getBillCustomerId(bill);
       return id ? ids.has(id) : false;
     })
-    .sort((a, b) => String(b.createdAt ?? b.created_at ?? "").localeCompare(String(a.createdAt ?? a.created_at ?? "")));
+    .sort((a, b) => String(b.businessDate ?? b.business_date ?? b.createdAt ?? b.created_at ?? "").localeCompare(String(a.businessDate ?? a.business_date ?? a.createdAt ?? a.created_at ?? "")));
   const storedPayments = (await offlineDB.getAll<Record<string, unknown>>("payments").catch(() => []))
     .filter((payment) => {
       const id = getPaymentCustomerId(payment);
@@ -484,7 +478,7 @@ export function buildCustomerTimeline(data: Pick<CustomerDetailData, "bills" | "
     const number = String(bill.billNumber ?? bill.billNo ?? bill.id);
     events.push({
       id: `bill:${String(bill.id)}`,
-      at: eventDate(bill, ["createdAt", "created_at"]),
+      at: eventDate(bill, ["businessDate", "business_date", "createdAt", "created_at"]),
       kind,
       title: kind === "return" ? `Return ${number}` : kind === "estimate" ? `Estimate ${number}` : `Bill ${number}`,
       detail: [
@@ -523,7 +517,7 @@ export function buildCustomerTimeline(data: Pick<CustomerDetailData, "bills" | "
     if (!isManualAdjustmentEntry(row)) continue;
     events.push({
       id: `ledger:${String(record.id)}`,
-      at: eventDate(record, ["display_date", "entry_at", "createdAt", "created_at"]),
+      at: eventDate(record, ["display_date", "businessDate", "business_date", "entry_at", "createdAt", "created_at"]),
       kind: "adjustment",
       title: "Ledger adjustment",
       detail: typeof record.note === "string" && record.note.trim() ? record.note.trim() : null,

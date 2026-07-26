@@ -158,6 +158,74 @@ function normalizePurchasePayment(data) {
   };
 }
 
+function sameReplayNumber(actual, expected) {
+  if (expected === undefined) return true;
+  return Math.abs(Number(actual ?? 0) - Number(expected)) <= 0.000001;
+}
+
+function assertCompatibleInventoryReplay(existing, expected) {
+  const mismatch =
+    existing.action !== expected.action ||
+    existing.productId !== expected.productId ||
+    (expected.locationId !== undefined && existing.locationId !== expected.locationId) ||
+    !sameReplayNumber(existing.changeBaseQty, expected.changeBaseQty) ||
+    !sameReplayNumber(existing.newStockBaseQty, expected.newStockBaseQty) ||
+    !sameReplayNumber(existing.purchaseBillAmount, expected.purchaseBillAmount) ||
+    !sameReplayNumber(existing.purchasePaidAmount, expected.purchasePaidAmount) ||
+    !sameReplayNumber(existing.purchaseDueAmount, expected.purchaseDueAmount) ||
+    (expected.purchasePaymentMode !== undefined &&
+      (existing.purchasePaymentMode ?? null) !== (expected.purchasePaymentMode ?? null));
+
+  if (mismatch) {
+    throw new AppError(
+      "Idempotency key was already used for a different inventory movement",
+      409,
+      "IDEMPOTENCY_KEY_REUSED"
+    );
+  }
+}
+
+async function replayQuantityInBase(client, shopId, productId, quantity, enteredUnit) {
+  const product = await client.product.findFirst({ where: { id: productId, shopId } });
+  return product ? toBaseQty(quantity, enteredUnit, product.baseUnit) : undefined;
+}
+
+async function assertCompatiblePurchaseReplay(client, shopId, existing, data, locationId) {
+  const purchasePayment = normalizePurchasePayment(data);
+  assertCompatibleInventoryReplay(existing, {
+    action: "purchase",
+    productId: data.productId,
+    locationId,
+    changeBaseQty: await replayQuantityInBase(
+      client,
+      shopId,
+      data.productId,
+      data.quantity,
+      data.enteredUnit
+    ),
+    purchaseBillAmount: data.billAmount,
+    purchasePaidAmount: purchasePayment.purchasePaidAmount,
+    purchaseDueAmount: purchasePayment.purchaseDueAmount,
+    purchasePaymentMode: purchasePayment.purchasePaymentMode,
+  });
+}
+
+async function assertCompatibleDamageReplay(client, shopId, existing, data, locationId) {
+  const quantityInBase = await replayQuantityInBase(
+    client,
+    shopId,
+    data.productId,
+    data.quantity,
+    data.enteredUnit
+  );
+  assertCompatibleInventoryReplay(existing, {
+    action: "damage",
+    productId: data.productId,
+    locationId,
+    changeBaseQty: quantityInBase === undefined ? undefined : -quantityInBase,
+  });
+}
+
 export async function recordPurchase(shopId, data, identity = {}) {
   const {
     productId, supplierId, supplierName,
@@ -171,7 +239,10 @@ export async function recordPurchase(shopId, data, identity = {}) {
     const location = await resolveOperationalLocation(shopId, data.locationId ?? identity.locationId ?? null, tx);
     if (idempotencyKey) {
       const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
-      if (existing) return purchaseReplay(tx, shopId, existing);
+      if (existing) {
+        await assertCompatiblePurchaseReplay(tx, shopId, existing, data, location.id);
+        return purchaseReplay(tx, shopId, existing);
+      }
     }
 
     const product = await tx.product.findFirst({
@@ -269,7 +340,16 @@ export async function recordPurchase(shopId, data, identity = {}) {
   } catch (error) {
     if (isUniqueConstraintError(error) && idempotencyKey) {
       const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
-      if (existing) return purchaseReplay(db, shopId, existing);
+      if (existing) {
+        await assertCompatiblePurchaseReplay(
+          db,
+          shopId,
+          existing,
+          data,
+          data.locationId ?? identity.locationId ?? existing.locationId
+        );
+        return purchaseReplay(db, shopId, existing);
+      }
     }
     throw error;
   }
@@ -283,7 +363,10 @@ export async function recordDamage(shopId, data, identity = {}) {
       const location = await resolveOperationalLocation(shopId, locationId ?? identity.locationId ?? null, tx);
       if (idempotencyKey) {
         const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
-        if (existing) return stockAdjustmentReplay(existing);
+        if (existing) {
+          await assertCompatibleDamageReplay(tx, shopId, existing, data, location.id);
+          return stockAdjustmentReplay(existing);
+        }
       }
 
       const product = await tx.product.findFirst({
@@ -338,7 +421,16 @@ export async function recordDamage(shopId, data, identity = {}) {
   } catch (error) {
     if (isUniqueConstraintError(error) && idempotencyKey) {
       const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
-      if (existing) return stockAdjustmentReplay(existing);
+      if (existing) {
+        await assertCompatibleDamageReplay(
+          db,
+          shopId,
+          existing,
+          data,
+          locationId ?? identity.locationId ?? existing.locationId
+        );
+        return stockAdjustmentReplay(existing);
+      }
     }
     throw error;
   }
@@ -351,7 +443,15 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
       const location = await resolveOperationalLocation(shopId, locationId ?? identity.locationId ?? null, tx);
       if (idempotencyKey) {
         const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
-        if (existing) return stockAdjustmentReplay(existing);
+        if (existing) {
+          assertCompatibleInventoryReplay(existing, {
+            action: "correction",
+            productId,
+            locationId: location.id,
+            newStockBaseQty,
+          });
+          return stockAdjustmentReplay(existing);
+        }
       }
 
       const product = await tx.product.findFirst({
@@ -395,7 +495,15 @@ export async function correctStock(shopId, { productId, newStockBaseQty, note, l
   } catch (error) {
     if (isUniqueConstraintError(error) && idempotencyKey) {
       const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
-      if (existing) return stockAdjustmentReplay(existing);
+      if (existing) {
+        assertCompatibleInventoryReplay(existing, {
+          action: "correction",
+          productId,
+          locationId: locationId ?? identity.locationId ?? existing.locationId,
+          newStockBaseQty,
+        });
+        return stockAdjustmentReplay(existing);
+      }
     }
     throw error;
   }

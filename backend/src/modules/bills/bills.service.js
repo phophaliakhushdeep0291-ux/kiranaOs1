@@ -17,6 +17,35 @@ import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftC
 import { allocateLotsForBill, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
 
+const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
+const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
+
+function resolveBillBusinessDate(actor = {}) {
+  const receivedAt = new Date();
+  if (actor?.isOfflineReplay !== true) return receivedAt;
+
+  const candidate = actor?.businessDate instanceof Date
+    ? new Date(actor.businessDate.getTime())
+    : new Date(actor?.businessDate);
+  const timestamp = candidate.getTime();
+  if (!Number.isFinite(timestamp)) {
+    const error = new AppError("Offline bill transaction time is invalid", 400);
+    error.code = "OFFLINE_BILL_DATE_INVALID";
+    throw error;
+  }
+  if (timestamp > receivedAt.getTime() + OFFLINE_BILL_FUTURE_TOLERANCE_MS) {
+    const error = new AppError("Offline bill transaction time is too far in the future", 409);
+    error.code = "OFFLINE_BILL_DATE_IN_FUTURE";
+    throw error;
+  }
+  if (timestamp < receivedAt.getTime() - OFFLINE_BILL_MAX_AGE_MS) {
+    const error = new AppError("Offline bill is older than the supported recovery window", 409);
+    error.code = "OFFLINE_BILL_DATE_TOO_OLD";
+    throw error;
+  }
+  return candidate;
+}
+
 // ─────────────────────────────────────────────────────────────
 // LIST BILLS
 // ─────────────────────────────────────────────────────────────
@@ -27,7 +56,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
     ...(customerId && { customerId }),
     ...(locationId && { locationId }),
     ...(from && to && {
-      createdAt: { gte: new Date(from), lte: new Date(to) },
+      businessDate: { gte: new Date(from), lte: new Date(to) },
     }),
   };
 
@@ -35,7 +64,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
     db.bill.findMany({
       where,
       include: { items: true, payments: true, location: true, giftCardTransactions: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { businessDate: "desc" },
       skip: (page - 1) * limit,
       take: limit,
     }),
@@ -87,6 +116,7 @@ export async function confirmBill(shopId, body, actor = {}) {
   // never from frontend/offline payload attribution fields.
   const createdByUserId = actor?.userId ?? null;
   const deviceId = actor?.deviceId ?? null;
+  const businessDate = resolveBillBusinessDate(actor);
   // Offline-origin bills (replayed from a device's sync queue) represent sales that
   // already physically happened, so they must never be dropped for being stock-short.
   // The online counter path leaves this false and still rejects overselling live.
@@ -447,6 +477,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         clientBillId: billIdentity.clientBillId,
         idempotencyKey: billIdentity.idempotencyKey,
         sourceDeviceId: billIdentity.sourceDeviceId,
+        businessDate,
         items: { create: billItems },
         payments: { create: paymentRows },
       },
@@ -524,6 +555,7 @@ export async function confirmBill(shopId, body, actor = {}) {
           sourceDeviceId: billIdentity.sourceDeviceId,
           sourceType: "bill",
           sourceId: bill.id,
+          businessDate: bill.businessDate,
           note: `Bill ${bill.billNo}`,
         },
       });

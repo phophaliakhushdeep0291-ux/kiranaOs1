@@ -145,7 +145,7 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
 
   return {
     billNo: bill.billNumber ?? bill.billNo ?? bill.id,
-    createdAt: bill.createdAt,
+    createdAt: bill.businessDate ?? bill.business_date ?? bill.createdAt,
     customerName: bill.customerName ?? "Walk-in",
     customerMobile: bill.customerMobile ?? null,
     buyerGstin: bill.buyerGstin ?? null,

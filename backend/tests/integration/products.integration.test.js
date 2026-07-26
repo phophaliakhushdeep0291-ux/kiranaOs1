@@ -133,6 +133,14 @@ if (ctx.skip) {
       assert.equal(replay.idempotentReplay, true);
       assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, idempotencyKey: purchaseRequest.idempotencyKey } }), 1);
       assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id, productId: product.id } }), 1);
+
+      const changedReplay = assertFailure(await ctx.post("/api/inventory/purchase", {
+        ...purchaseRequest,
+        quantity: 4,
+      }, { token: ownerAuth.accessToken }), 409);
+      assert.equal(changedReplay.code, "IDEMPOTENCY_KEY_REUSED");
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, idempotencyKey: purchaseRequest.idempotencyKey } }), 1);
+      assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id, productId: product.id } }), 1);
     });
 
     test("stock damage decreases stock", async () => {
@@ -146,6 +154,17 @@ if (ctx.skip) {
         note: "broken",
       }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }));
       assert.equal(result.newStockBaseQty, 3);
+
+      const changedReplay = assertFailure(await ctx.post("/api/inventory/damage", {
+        idempotencyKey: "products-damage-proof-1",
+        productId: product.id,
+        quantity: 1,
+        enteredUnit: "piece",
+        note: "changed retry",
+      }, { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(changedReplay.code, "IDEMPOTENCY_KEY_REUSED");
+      const refreshed = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(refreshed.stockBaseQty, 3);
     });
 
     test("stock correction requires PIN for staff", async () => {

@@ -124,3 +124,39 @@ Acceptance:
 - AI audit/review quality, model choice, provider behavior, prompts, and merchant
   UX. Deterministic assurance checks remain in place, but the AI layer is not
   part of this stabilization pass.
+
+## Execution status — 2026-07-26
+
+Completed in this stabilization pass:
+
+- Tenant-scoped failed-job visibility, retry, and discard; tenant routes cannot
+  pause or resume platform-wide queues.
+- Persistent Owner PIN failure auditing and lockout.
+- Frontend route splitting plus initial and total bundle budgets.
+- Expense, purchase receipt, inventory movement, and offline replay
+  idempotency, including `409 IDEMPOTENCY_KEY_REUSED` for changed replays.
+- Separate sale/payment `businessDate` storage in SQLite and PostgreSQL,
+  historical backfill, shop-date report filtering, and offline device-time
+  preservation.
+- Customer, bill, GST, closing, and local dashboard date alignment.
+- Local/server payment echo de-duplication across time-bucket boundaries.
+
+Local certification is green on the working tree. Evidence:
+
+- Backend source/calculation suite: passed.
+- SQLite integration: 168 passed, 1 intentionally skipped PostgreSQL-only
+  concurrency test.
+- Frontend: 750 passed, 1 intentionally skipped; typecheck, production build,
+  bundle/security, and app checks passed.
+- Both Prisma schemas, migration safety, API contract (147 endpoints),
+  production readiness, Razorpay fixtures, and local object storage passed.
+- Report:
+  `backend/release-artifacts/release-certification-latest.md`.
+
+Still required before the Paid Gate:
+
+- Run the PostgreSQL concurrency suite against an isolated production-like test
+  database.
+- Run Redis worker/heartbeat, Railway/Vercel live smoke, cloud object storage,
+  backup/restore, Docker, and two-physical-device offline proofs.
+- Attach approval and rollback metadata to the exact clean commit.

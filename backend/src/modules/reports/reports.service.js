@@ -95,7 +95,7 @@ function activeSalesWhere(shopId, start, end, locationId = null) {
     shopId,
     ...(locationId && { locationId }),
     ...REAL_SALE_BILL_FILTER,
-    createdAt: { gte: start, lte: end },
+    businessDate: { gte: start, lte: end },
   };
 }
 
@@ -160,12 +160,12 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
       include: { payments: true },
     }),
     db.bill.findMany({
-      where: { shopId, ...(locationId && { locationId }), status: "cancelled", createdAt: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), status: "cancelled", businessDate: { gte: start, lte: end } },
       select: { id: true, grandTotal: true },
     }),
-    db.bill.count({ where: { shopId, ...(locationId && { locationId }), billType: "estimate", createdAt: { gte: start, lte: end } } }),
+    db.bill.count({ where: { shopId, ...(locationId && { locationId }), billType: "estimate", businessDate: { gte: start, lte: end } } }),
     db.udharLedger.findMany({
-      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, businessDate: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
     countPendingSync(shopId),
@@ -240,11 +240,11 @@ export async function getSalesSummary(shopId, { range, from, to, locationId, inc
     db.bill.findMany({
       where: activeSalesWhere(shopId, start, end, locationId),
       include: { payments: true },
-      orderBy: { createdAt: "asc" },
+      orderBy: { businessDate: "asc" },
     }),
     db.bill.findMany({
-      where: { shopId, ...(locationId && { locationId }), status: "cancelled", createdAt: { gte: start, lte: end } },
-      select: { grandTotal: true, createdAt: true },
+      where: { shopId, ...(locationId && { locationId }), status: "cancelled", businessDate: { gte: start, lte: end } },
+      select: { grandTotal: true, businessDate: true },
     }),
   ]);
 
@@ -252,7 +252,7 @@ export async function getSalesSummary(shopId, { range, from, to, locationId, inc
   const totalSales = sumMoney(bills.map((b) => b.grandTotal));
   const daily = new Map();
   for (const b of bills) {
-    const key = groupByDay(b.createdAt);
+    const key = groupByDay(b.businessDate);
     const row = daily.get(key) ?? { date: key, totalSalesPaise: 0, totalBills: 0, cashSalesPaise: 0, upiSalesPaise: 0, bankSalesPaise: 0, udharSalesPaise: 0 };
     row.totalSalesPaise += toPaise(b.grandTotal);
     row.totalBills += 1;
@@ -296,10 +296,10 @@ export async function getPaymentModeReport(shopId, { from, to, locationId } = {}
     db.bill.findMany({
       where: activeSalesWhere(shopId, start, end, locationId),
       include: { payments: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { businessDate: "desc" },
     }),
     db.udharLedger.findMany({
-      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, businessDate: { gte: start, lte: end }, reversedAt: null },
       select: { amount: true, mode: true },
     }),
   ]);
@@ -363,7 +363,7 @@ export async function getUdharAgeing(shopId) {
     include: {
       udharLedger: {
         where: { type: "debit" },
-        orderBy: { createdAt: "asc" },
+        orderBy: { businessDate: "asc" },
         take: 1,
       },
     },
@@ -379,7 +379,7 @@ export async function getUdharAgeing(shopId) {
   };
 
   const rows = customers.map((c) => {
-    const oldest = c.udharLedger[0]?.createdAt ?? c.createdAt;
+    const oldest = c.udharLedger[0]?.businessDate ?? c.createdAt;
     const ageDays = Math.max(0, Math.floor((now.getTime() - new Date(oldest).getTime()) / 86_400_000));
     const bucket = resolveBucket(ageDays);
     const amountPaise = toPaise(c.udharAmount);
@@ -426,7 +426,7 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
         shopId,
         ...(locationId && { locationId }),
         status: "active",
-        createdAt: { gte: start, lte: end },
+        businessDate: { gte: start, lte: end },
       },
       include: { payments: true },
     }),
@@ -435,7 +435,7 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
         shopId,
         ...(locationId && { locationId }),
         status: "cancelled",
-        createdAt: { gte: start, lte: end },
+        businessDate: { gte: start, lte: end },
       },
       select: { grandTotal: true, creditAmount: true },
     }),
@@ -458,7 +458,7 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
         // payment reversals, negative-balance repairs, and pre-existing opening balances —
         // which would otherwise inflate the metric (e.g. every clamp adds a system_repair).
         mode: { in: ["credit", "adjustment"] },
-        createdAt: { gte: start, lte: end },
+        businessDate: { gte: start, lte: end },
       },
       select: { amount: true },
     }),
@@ -469,7 +469,7 @@ export async function getPnL(shopId, { range, from, to, locationId }) {
         type: "payment",
         mode: { not: "reversal" },
         reversedAt: null,
-        createdAt: { gte: start, lte: end },
+        businessDate: { gte: start, lte: end },
       },
       select: { amount: true },
     }),
@@ -525,7 +525,7 @@ export async function getGstReport(shopId, { range, from, to, locationId } = {})
   const [shop, bills] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { gstNumber: true } }),
     db.bill.findMany({
-      where: { shopId, ...(locationId && { locationId }), ...GST_BILL_FILTER, createdAt: { gte: start, lte: end } },
+      where: { shopId, ...(locationId && { locationId }), ...GST_BILL_FILTER, businessDate: { gte: start, lte: end } },
       select: { subtotal: true, gst: true, gstMode: true, buyerStateCode: true },
     }),
   ]);
@@ -579,8 +579,8 @@ export async function getMonthlyBreakdown(shopId, { year, untilMonth, locationId
   const end = dateRangeForDateOnly(`${year}-${String(untilMonth).padStart(2, "0")}-${String(daysInUntilMonth).padStart(2, "0")}`, tz).end;
   const [bills, damageRows] = await Promise.all([
     db.bill.findMany({
-      where: { shopId, ...(locationId && { locationId }), status: "active", createdAt: { gte: start, lte: end } },
-      select: { grandTotal: true, grossProfit: true, createdAt: true },
+      where: { shopId, ...(locationId && { locationId }), status: "active", businessDate: { gte: start, lte: end } },
+      select: { grandTotal: true, grossProfit: true, businessDate: true },
     }),
     db.stockLedger.findMany({
       where: { shopId, ...(locationId && { locationId }), action: "damage", createdAt: { gte: start, lte: end } },
@@ -590,7 +590,7 @@ export async function getMonthlyBreakdown(shopId, { year, untilMonth, locationId
 
   const months = [];
   for (let m = 1; m <= untilMonth; m++) {
-    const monthBills = bills.filter((b) => monthInShopTz(b.createdAt, tz) === m);
+    const monthBills = bills.filter((b) => monthInShopTz(b.businessDate, tz) === m);
     const monthDamage = damageRows.filter((d) => monthInShopTz(d.createdAt, tz) === m);
     const grossSales = sumMoney(monthBills.map((b) => b.grandTotal));
     const grossProfit = sumMoney(monthBills.map((b) => b.grossProfit));
@@ -660,7 +660,7 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
   const [products, soldItems] = await Promise.all([
     db.product.findMany({ where: { shopId }, orderBy: { name: "asc" } }),
     db.billItem.findMany({
-      where: { bill: { shopId, ...(locationId && { locationId }), status: "active", createdAt: { gte: since } } },
+      where: { bill: { shopId, ...(locationId && { locationId }), status: "active", businessDate: { gte: since } } },
       select: { productId: true, name: true, quantityInBaseUnit: true, lineTotal: true },
     }),
   ]);
@@ -721,7 +721,7 @@ export async function getStaffSales(shopId, { from, to, locationId } = {}) {
   await enforceReportRangeLimit(shopId, { start, end }, "custom");
 
   const bills = await db.bill.findMany({
-    where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end } },
+    where: { shopId, ...(locationId && { locationId }), businessDate: { gte: start, lte: end } },
     include: { payments: true },
   });
 
@@ -798,7 +798,7 @@ export async function getPaymentSummary(shopId, { from, to, locationId }) {
   const [payments, bills, oldUdharRecovered, purchases] = await Promise.all([
     db.payment.findMany({
       where: {
-        bill: { shopId, ...(locationId && { locationId }), status: "active", createdAt: { gte: start, lte: end } },
+        bill: { shopId, ...(locationId && { locationId }), status: "active", businessDate: { gte: start, lte: end } },
       },
       select: { mode: true, amount: true },
     }),
@@ -807,7 +807,7 @@ export async function getPaymentSummary(shopId, { from, to, locationId }) {
       select: { creditAmount: true },
     }),
     db.udharLedger.findMany({
-      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, createdAt: { gte: start, lte: end }, reversedAt: null },
+      where: { shopId, ...(locationId && { locationId }), type: "payment", mode: { in: ["cash", "upi", "bank"] }, businessDate: { gte: start, lte: end }, reversedAt: null },
       select: { mode: true, amount: true },
     }),
     db.stockLedger.findMany({
@@ -896,13 +896,13 @@ export async function exportBillsData(shopId, { from, to, status, locationId }) 
     shopId,
     ...(locationId && { locationId }),
     ...(status && status !== "all" ? { status } : {}),
-    ...(from && to ? { createdAt: { gte: new Date(from), lte: new Date(to) } } : {}),
+    ...(from && to ? { businessDate: { gte: new Date(from), lte: new Date(to) } } : {}),
   };
 
   const bills = await db.bill.findMany({
     where,
     include: { items: true, payments: true },
-    orderBy: { createdAt: "desc" },
+    orderBy: { businessDate: "desc" },
   });
 
   const rows = [];
@@ -910,8 +910,8 @@ export async function exportBillsData(shopId, { from, to, status, locationId }) 
     for (const item of b.items) {
       rows.push({
         billNo: b.billNo,
-        date: b.createdAt.toISOString().split("T")[0],
-        time: b.createdAt.toTimeString().slice(0, 5),
+        date: b.businessDate.toISOString().split("T")[0],
+        time: b.businessDate.toTimeString().slice(0, 5),
         billType: b.billType,
         status: b.status,
         customerName: b.customerName,
@@ -933,8 +933,8 @@ export async function exportBillsData(shopId, { from, to, status, locationId }) 
     if (!b.items.length) {
       rows.push({
         billNo: b.billNo,
-        date: b.createdAt.toISOString().split("T")[0],
-        time: b.createdAt.toTimeString().slice(0, 5),
+        date: b.businessDate.toISOString().split("T")[0],
+        time: b.businessDate.toTimeString().slice(0, 5),
         billType: b.billType,
         status: b.status,
         customerName: b.customerName,
@@ -972,7 +972,7 @@ export async function exportUdharData(shopId) {
   const customers = await db.customer.findMany({
     where: { shopId, deletedAt: null },
     include: {
-      udharLedger: { orderBy: { createdAt: "asc" } },
+      udharLedger: { orderBy: { businessDate: "asc" } },
     },
   });
 
@@ -983,7 +983,7 @@ export async function exportUdharData(shopId) {
     type: c.type,
     outstandingBalance: c.udharAmount,
     entries: c.udharLedger.map((e) => ({
-      date: e.createdAt.toISOString().split("T")[0],
+      date: e.businessDate.toISOString().split("T")[0],
       type: e.type,
       amount: e.amount,
       mode: e.mode,

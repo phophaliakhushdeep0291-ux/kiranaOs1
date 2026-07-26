@@ -517,6 +517,8 @@ export interface Bill {
   giftCardAmount?: number;
   refundMode?: "cash" | "upi" | "bank" | "udhar" | "gift_card";
   returnOfBillId?: string | null;
+  businessDate?: string;
+  business_date?: string;
   createdAt?: string;
   updatedAt?: string;
   items?: unknown[];

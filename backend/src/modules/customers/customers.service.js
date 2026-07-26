@@ -11,6 +11,32 @@ import {
 import { postUdharPaymentLedger } from "../finance/financial-ledger.service.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 
+const OFFLINE_LEDGER_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
+const OFFLINE_LEDGER_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
+
+function resolveLedgerBusinessDate(actor = {}) {
+  const receivedAt = new Date();
+  if (actor?.isOfflineReplay !== true) return receivedAt;
+  const candidate = new Date(actor?.businessDate);
+  const timestamp = candidate.getTime();
+  if (!Number.isFinite(timestamp)) {
+    const error = new AppError("Offline payment transaction time is invalid", 400);
+    error.code = "OFFLINE_PAYMENT_DATE_INVALID";
+    throw error;
+  }
+  if (timestamp > receivedAt.getTime() + OFFLINE_LEDGER_FUTURE_TOLERANCE_MS) {
+    const error = new AppError("Offline payment transaction time is too far in the future", 409);
+    error.code = "OFFLINE_PAYMENT_DATE_IN_FUTURE";
+    throw error;
+  }
+  if (timestamp < receivedAt.getTime() - OFFLINE_LEDGER_MAX_AGE_MS) {
+    const error = new AppError("Offline payment is older than the supported recovery window", 409);
+    error.code = "OFFLINE_PAYMENT_DATE_TOO_OLD";
+    throw error;
+  }
+  return candidate;
+}
+
 async function lockCustomerUdharBalance(tx, shopId, customerId) {
   if (!/^postgres(?:ql)?:\/\//i.test(process.env.DATABASE_URL || "")) return;
   await tx.$queryRawUnsafe(
@@ -191,7 +217,7 @@ export async function getKhata(shopId, customerId) {
 
   const ledger = await db.udharLedger.findMany({
     where: { shopId, customerId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { businessDate: "asc" },
   });
 
   return { customer, ledger };
@@ -206,6 +232,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
   const customer = await getCustomer(shopId, customerId);
   const paymentAmount = round2(amount);
   const identity = normalizeLedgerIdentity(input, actor, "udhar-payment");
+  const businessDate = resolveLedgerBusinessDate(actor);
   // Resolve lazy primary-location creation outside the balance transaction so
   // a concurrent uniqueness race cannot abort PostgreSQL's transaction state.
   const operationalLocation = await resolveOperationalLocation(shopId, input.locationId ?? actor.locationId ?? null);
@@ -256,6 +283,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
         sourceDeviceId: identity.sourceDeviceId,
         sourceType: "udhar_payment",
         sourceId: identity.sourceId,
+        businessDate,
         note: note ?? "Manual payment",
       },
     });
@@ -267,6 +295,7 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
       customerId,
       amount: paymentAmount,
       mode,
+      businessDate,
       sign: 1,
     });
 

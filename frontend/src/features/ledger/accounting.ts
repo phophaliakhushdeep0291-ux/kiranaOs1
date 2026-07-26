@@ -18,6 +18,8 @@ export interface CustomerLedgerEntry extends Record<string, unknown> {
   paymentId?: string | null;
   payment_id?: string | null;
   entry_at?: string;
+  businessDate?: string;
+  business_date?: string;
   createdAt?: string;
   created_at?: string;
   reversed_at?: string | null;
@@ -65,7 +67,7 @@ export function getLedgerCustomerId(entry: Partial<CustomerLedgerEntry>): string
 }
 
 export function getLedgerDate(entry: Partial<CustomerLedgerEntry>): string {
-  const raw = entry.entry_at ?? entry.createdAt ?? entry.created_at;
+  const raw = entry.businessDate ?? entry.business_date ?? entry.entry_at ?? entry.createdAt ?? entry.created_at;
   return typeof raw === "string" && raw.length > 0 ? raw : new Date(0).toISOString();
 }
 

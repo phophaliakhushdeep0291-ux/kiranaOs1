@@ -119,6 +119,7 @@ export interface Bill extends LocalEntityMeta {
   paid_amount: Money;
   credit_amount: Money;
   gross_profit?: Money | null;
+  business_date?: ISODateTimeString;
   cancelled_at?: ISODateTimeString | null;
   cancelled_by?: EntityId | null;
 }

@@ -22,7 +22,7 @@ function isNetworkLikeError(error: unknown) {
 
 function billCreatedAtMs(bill: Bill): number {
   const record = bill as Bill & { created_at?: unknown; billDate?: unknown; date?: unknown };
-  const raw = bill.createdAt ?? record.created_at ?? record.billDate ?? record.date;
+  const raw = bill.businessDate ?? bill.business_date ?? bill.createdAt ?? record.created_at ?? record.billDate ?? record.date;
   const parsed = typeof raw === "string" || raw instanceof Date ? new Date(raw).getTime() : 0;
   return Number.isFinite(parsed) ? parsed : 0;
 }

@@ -412,7 +412,7 @@ export default function CustomersPage() {
     const paymentsByDay = new Map(days.map((day) => [day, 0]));
     const customersByDay = new Map(days.map((day) => [day, 0]));
     for (const row of allLedger) {
-      const date = getDate(row, ["entry_at", "createdAt", "created_at"]).slice(0, 10);
+      const date = getDate(row, ["businessDate", "business_date", "entry_at", "createdAt", "created_at"]).slice(0, 10);
       if (ledgerByDay.has(date)) ledgerByDay.set(date, (ledgerByDay.get(date) ?? 0) + ledgerSignedAmount(row));
     }
     for (const row of allPayments) {
@@ -443,7 +443,7 @@ export default function CustomersPage() {
     const previousFromKey = inputDate(previousFrom);
     const previousToKey = inputDate(previousTo);
     const previousPayments = allPayments.filter((payment) => inDateRange(paymentDate(payment), previousFromKey, previousToKey)).reduce((sum, payment) => sum + paymentAmount(payment), 0);
-    const currentLedgerMovement = allLedger.filter((row) => inDateRange(getDate(row, ["entry_at", "createdAt", "created_at"]), rangeFrom, rangeTo)).reduce((sum, row) => sum + ledgerSignedAmount(row), 0);
+    const currentLedgerMovement = allLedger.filter((row) => inDateRange(getDate(row, ["businessDate", "business_date", "entry_at", "createdAt", "created_at"]), rangeFrom, rangeTo)).reduce((sum, row) => sum + ledgerSignedAmount(row), 0);
     const priorOutstanding = Math.max(0, totals.totalUdhar - currentLedgerMovement);
     const customersAtPreviousEnd = dedupedCustomers.filter((customer) => {
       const created = new Date(String(customer.createdAt ?? customer.created_at ?? 0)).getTime();
@@ -1018,7 +1018,7 @@ export default function CustomersPage() {
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[#eef5ff] text-[#075cf7]"><FileText size={15} /></span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-[12.5px] font-black text-[#102347]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</p>
-                            <p className="text-[11px] text-[#94a3b8]">{formatShortDate(getDate(bill, ["createdAt", "created_at"]))}</p>
+                            <p className="text-[11px] text-[#94a3b8]">{formatShortDate(getDate(bill, ["businessDate", "business_date", "createdAt", "created_at"]))}</p>
                           </div>
                           <span className="text-[13px] font-black text-[#102347]">{fmtMoney(getAmount(bill, ["grandTotal", "grand_total", "totalAmount", "total_amount"]))}</span>
                           <span className={cn("rounded-[7px] px-2 py-[3px] text-[10.5px] font-black", money(bill.creditAmount) > 0 ? CHIP_TONES.red : CHIP_TONES.green)}>{money(bill.creditAmount) > 0 ? "Due" : "Paid"}</span>
@@ -1163,7 +1163,7 @@ export default function CustomersPage() {
               <div className="space-y-3">
                 {billRows.slice(0, 5).map((bill, index) => (
                   <div key={String(bill.id ?? index)} className="flex items-center justify-between gap-3 text-[12px]">
-                    <span className="text-[#52627e]">{formatShortDate(bill.createdAt ?? bill.created_at)}</span>
+                    <span className="text-[#52627e]">{formatShortDate(bill.businessDate ?? bill.business_date ?? bill.createdAt ?? bill.created_at)}</span>
                     <span className="font-semibold text-[#102347]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</span>
                     <span className={cn("rounded-[7px] px-2 py-[3px] text-[10px] font-black", money(bill.creditAmount) > 0 ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700")}>
                       {money(bill.creditAmount) > 0 ? "Due" : "Paid"}

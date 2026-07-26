@@ -57,7 +57,7 @@ function billNo(bill: BillRecord) {
 }
 
 function billDate(bill: BillRecord) {
-  return String(bill.createdAt ?? bill.created_at ?? "");
+  return String(bill.businessDate ?? bill.business_date ?? bill.createdAt ?? bill.created_at ?? "");
 }
 
 function billTotal(bill: BillRecord) {

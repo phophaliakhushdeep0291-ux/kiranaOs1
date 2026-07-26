@@ -369,6 +369,100 @@ if (ctx.skip) {
       assert.equal(refreshedProduct.stockBaseQty, 8);
     });
 
+    test("delayed offline bills and udhar payments retain their original business dates", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id);
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 60 });
+      const billBusinessDate = "2026-01-15T10:30:00.000Z";
+      const paymentBusinessDate = "2026-01-16T09:15:00.000Z";
+      const localBillId = "local-bill-business-date-1";
+
+      const billResponse = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          eventId: "create-bill-business-date-1",
+          type: "CREATE_BILL",
+          client_created_at: billBusinessDate,
+          payload: {
+            localBillId,
+            clientBillId: localBillId,
+            idempotencyKey: "create-bill:test:business-date:1",
+            bill: {
+              ...billPayload(product, {
+                quantity: 1,
+                ratePerRateUnit: 60,
+                customerId: customer.id,
+                customerName: customer.name,
+                buyerPaidAmount: 0,
+                payments: [],
+              }),
+              localBillId,
+              clientBillId: localBillId,
+              idempotencyKey: "create-bill:test:business-date:1",
+              creditAmount: 60,
+              creditPayments: [{ mode: "credit", amount: 60 }],
+              paymentStatus: "credit",
+            },
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(billResponse.summary.synced, 1);
+
+      const billId = billResponse.results[0].result.billId;
+      const bill = await ctx.db.bill.findUnique({ where: { id: billId } });
+      assert.equal(bill.businessDate.toISOString(), billBusinessDate, "bill keeps the device sale time, not the later sync time");
+
+      const billUdhar = await ctx.db.udharLedger.findFirst({
+        where: { shopId: tenant.shop.id, billId, type: "debit" },
+      });
+      assert.equal(billUdhar.businessDate.toISOString(), billBusinessDate, "bill debt stays on the same business day");
+
+      const saleLedger = await ctx.db.financialLedger.findFirst({
+        where: { shopId: tenant.shop.id, sourceType: "bill", sourceId: billId, entryType: "sale" },
+      });
+      assert.equal(saleLedger.businessDate.toISOString(), billBusinessDate, "financial sale posting uses the original business day");
+
+      const report = assertSuccess(await ctx.get(
+        "/api/reports/sales-summary?from=2026-01-15&to=2026-01-15",
+        { token: ownerAuth.accessToken, headers: deviceHeaders },
+      ));
+      assert.equal(report.totalBills, 1, "historical report finds the delayed offline sale on its actual day");
+      assert.equal(report.totalSalesPaise, 6000);
+
+      const paymentResponse = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          eventId: "udhar-payment-business-date-1",
+          type: "UDHAR_PAYMENT",
+          client_created_at: paymentBusinessDate,
+          payload: {
+            customerId: customer.id,
+            localPaymentId: "local-payment-business-date-1",
+            localLedgerEntryId: "local-ledger-business-date-1",
+            idempotencyKey: "record-payment:test:business-date:1",
+            payment: {
+              amount: 20,
+              mode: "cash",
+              localPaymentId: "local-payment-business-date-1",
+              localLedgerEntryId: "local-ledger-business-date-1",
+              idempotencyKey: "record-payment:test:business-date:1",
+            },
+          },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(paymentResponse.summary.synced, 1);
+
+      const paymentLedger = await ctx.db.udharLedger.findFirst({
+        where: {
+          shopId: tenant.shop.id,
+          customerId: customer.id,
+          type: "payment",
+          clientLedgerId: "local-ledger-business-date-1",
+        },
+      });
+      assert.equal(paymentLedger.businessDate.toISOString(), paymentBusinessDate, "repayment keeps the device payment time");
+      const refreshedCustomer = await ctx.db.customer.findUnique({ where: { id: customer.id } });
+      assert.equal(refreshedCustomer.udharAmount, 40);
+    });
+
     test("offline CREATE_BILL with insufficient stock is recorded (not dropped), stock goes negative for reconcile", async () => {
       // The sale already happened at the counter offline; the server must record it rather
       // than reject + drop it. Stock is allowed to go negative so the shopkeeper sees the exact

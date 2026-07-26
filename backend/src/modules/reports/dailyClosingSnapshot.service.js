@@ -112,12 +112,12 @@ export async function getSnapshotStaleness(shopId, date, snapshot, locationId = 
 
   const [billChange, udharChange, stockChange] = await Promise.all([
     db.bill.findFirst({
-      where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
+      where: { shopId, ...(locationId && { locationId }), businessDate: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),
     db.udharLedger.findFirst({
-      where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
+      where: { shopId, ...(locationId && { locationId }), businessDate: { gte: start, lte: end }, updatedAt: { gt: generatedAt } },
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),

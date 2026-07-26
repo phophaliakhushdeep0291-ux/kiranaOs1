@@ -1724,15 +1724,40 @@ if (exists("scripts/verify-export-flow.js")) {
 
 if (exists("src/modules/jobs/jobs.routes.js")) {
   const routes = read("src/modules/jobs/jobs.routes.js");
-  for (const snippet of ["/queues/:queueName", "/queues/:queueName/failed", "/queues/:queueName/pause", "/queues/:queueName/resume", "requireRole(\"owner\", \"admin\")"]) {
+  for (const snippet of [
+    "/queues/:queueName",
+    "/queues/:queueName/failed",
+    "/:queueName/:jobId/retry",
+    "/:queueName/:jobId/discard",
+    "requireRole(\"owner\", \"admin\")",
+    "requireOwnerPin",
+  ]) {
     if (!routes.includes(snippet)) errors.push(`jobs.routes.js missing Phase 16 queue admin route: ${snippet}`);
+  }
+  if (/queues\/:queueName\/(pause|resume)/.test(routes)) {
+    errors.push("jobs.routes.js must not expose platform-wide queue pause/resume controls to tenant users");
   }
 }
 
 if (exists("src/modules/jobs/jobs.controller.js")) {
   const controller = read("src/modules/jobs/jobs.controller.js");
-  for (const snippet of ["payloadsExposed: false", "QUEUE_ALIASES", "queueDetail", "queueFailed", "pauseQueue", "resumeQueue"]) {
+  for (const snippet of [
+    "payloadsExposed: false",
+    "QUEUE_ALIASES",
+    "queueDetail",
+    "queueFailed",
+    "getShopQueueDetail",
+    "retryFailedJob",
+    "discardFailedJob",
+    "req.shopId",
+  ]) {
     if (!controller.includes(snippet)) errors.push(`jobs.controller.js missing Phase 16 safe queue admin behavior: ${snippet}`);
+  }
+  if (controller.includes("pauseQueue") || controller.includes("resumeQueue")) {
+    errors.push("jobs.controller.js must not expose platform-wide queue pause/resume operations");
+  }
+  if (controller.includes("job.data")) {
+    errors.push("jobs.controller.js must not expose raw failed-job payloads");
   }
 }
 

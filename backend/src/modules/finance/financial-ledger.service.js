@@ -81,7 +81,7 @@ async function postBillEffectLedger(tx, {
   businessDate,
 }) {
   if (!bill?.id) return;
-  const date = businessDate ?? bill.createdAt ?? new Date();
+  const date = businessDate ?? bill.businessDate ?? bill.createdAt ?? new Date();
   const rows = [];
 
   rows.push(ledgerRow({
@@ -225,7 +225,7 @@ export async function postSaleReturnLedger(tx, {
   businessDate,
 }) {
   if (!bill?.id || !(Number(refundAmount) > 0)) return;
-  const date = businessDate ?? bill.createdAt ?? new Date();
+  const date = businessDate ?? bill.businessDate ?? bill.createdAt ?? new Date();
   const keyBase = `return:${bill.id}`;
   const mode = String(refundMode ?? "").toLowerCase();
   const rows = [ledgerRow({
