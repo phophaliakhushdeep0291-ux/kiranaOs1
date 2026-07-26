@@ -1070,6 +1070,10 @@ model Expense {
   locationId        String?
   title             String
   amount            Float     @default(0)
+  amountPaise       BigInt?
+  idempotencyKey    String?
+  clientExpenseId   String?
+  sourceDeviceId    String?
   category          String    @default("general")
   paymentMode       String    @default("cash")
   vendor            String?
@@ -1091,6 +1095,8 @@ model Expense {
   @@index([shopId, spentAt])
   @@index([shopId, locationId, spentAt])
   @@index([shopId, updatedAt, id])
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, sourceDeviceId, clientExpenseId])
 }
 
 // ─────────────────────────────────────────────

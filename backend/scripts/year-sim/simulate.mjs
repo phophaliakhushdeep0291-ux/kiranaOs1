@@ -708,6 +708,7 @@ async function runPurchaseOrder(date) {
       return sum + line.actualRate * (line.quantityBaseQty / factor);
     }, 0));
     await owner.post(`/purchase-orders/${id}/receive`, {
+      idempotencyKey: `year-sim-po-receipt-${id}`,
       supplierInvoiceNumber: `INV-${intBetween(rng, 10000, 99999)}`,
       supplierInvoiceAmount: invoiceTotal,
       varianceReason: "Depot rate revision and short supply on some lines",

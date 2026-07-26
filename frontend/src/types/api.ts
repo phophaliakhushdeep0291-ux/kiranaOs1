@@ -246,6 +246,8 @@ export interface Expense {
 }
 
 export interface ExpenseInput {
+  idempotencyKey?: string;
+  clientExpenseId?: string;
   title: string;
   amount: number;
   category?: string;
@@ -612,6 +614,8 @@ export interface UdharPaymentInput {
 }
 
 export interface StockMovementInput {
+  idempotencyKey?: string;
+  clientMovementId?: string;
   locationId?: string;
   productId?: string;
   productName?: string;

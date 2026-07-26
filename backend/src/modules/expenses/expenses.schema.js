@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export const createExpenseSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(160),
+  clientExpenseId: z.string().trim().min(8).max(160).optional(),
   locationId: z.string().min(1).optional(),
   title: z.string().min(1).max(160),
   amount: z.coerce.number().finite().nonnegative(),
@@ -14,7 +16,9 @@ export const createExpenseSchema = z.object({
   spentAt: z.string().optional(),
 });
 
-export const updateExpenseSchema = createExpenseSchema.partial();
+export const updateExpenseSchema = createExpenseSchema
+  .omit({ idempotencyKey: true, clientExpenseId: true })
+  .partial();
 
 export const expenseQuerySchema = z.object({
   locationId: z.string().optional(),

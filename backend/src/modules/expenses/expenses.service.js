@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
-import { round2 } from "../../utils/money.js";
+import { moneyShadows, round2, toPaise } from "../../utils/money.js";
 import { dateRangeForDateOnly, formatDateInTimeZone } from "../../utils/dates.js";
 import { env } from "../../config/env.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
@@ -18,7 +18,23 @@ function normalize(data) {
 
 function dateRangeWhere(from, to) {
   if (!from && !to) return {};
-  return { spentAt: { ...(from && { gte: new Date(from) }), ...(to && { lte: new Date(to) }) } };
+  const spentAt = {};
+  if (from) spentAt.gte = expenseBoundary(from, "start");
+  if (to) spentAt.lte = expenseBoundary(to, "end");
+  return { spentAt };
+}
+
+function expenseBoundary(value, edge) {
+  const raw = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const range = dateRangeForDateOnly(raw, env.DAILY_CLOSING_TIMEZONE);
+    return edge === "start" ? range.start : range.end;
+  }
+  const parsed = new Date(raw);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new AppError(`Invalid expense ${edge} date`, 400, "INVALID_DATE_RANGE");
+  }
+  return parsed;
 }
 
 export async function listExpenses(shopId, { category, status, locationId, from, to, search } = {}) {
@@ -40,19 +56,72 @@ export async function getExpense(shopId, id) {
   return expense;
 }
 
-export async function createExpense(shopId, data) {
+function assertExpenseReplayCompatible(existing, payload, locationId) {
+  const same =
+    existing.title === payload.title &&
+    toPaise(Number(existing.amount)) === toPaise(Number(payload.amount)) &&
+    existing.category === payload.category &&
+    existing.paymentMode === payload.paymentMode &&
+    existing.status === payload.status &&
+    (existing.locationId ?? null) === (locationId ?? null) &&
+    (!payload.spentAt || existing.spentAt.getTime() === payload.spentAt.getTime());
+  if (!same) {
+    throw new AppError(
+      "Idempotency key was already used for a different expense",
+      409,
+      "IDEMPOTENCY_KEY_REUSED",
+    );
+  }
+}
+
+export async function createExpense(shopId, data, identity = {}) {
   const payload = normalize(data);
-  return db.$transaction(async (tx) => {
-    const location = await resolveOperationalLocation(shopId, payload.locationId, tx);
-    const expense = await tx.expense.create({ data: { ...payload, locationId: location.id, shopId, spentAt: payload.spentAt ?? new Date() } });
-    await postExpenseEffectLedger(tx, {
-      shopId,
-      expense,
-      keyBase: `expense:${expense.id}:create`,
-      businessDate: expense.spentAt,
+  const idempotencyKey = payload.idempotencyKey ?? identity.idempotencyKey;
+  if (!idempotencyKey) {
+    throw new AppError("Idempotency key is required", 400, "IDEMPOTENCY_KEY_REQUIRED");
+  }
+  const expenseIdentity = {
+    idempotencyKey,
+    clientExpenseId: payload.clientExpenseId ?? identity.clientExpenseId ?? idempotencyKey,
+    sourceDeviceId: identity.sourceDeviceId ?? null,
+  };
+
+  try {
+    return await db.$transaction(async (tx) => {
+      const location = await resolveOperationalLocation(shopId, payload.locationId, tx);
+      const existing = await tx.expense.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) {
+        assertExpenseReplayCompatible(existing, payload, location.id);
+        return { ...existing, idempotentReplay: true };
+      }
+      const expense = await tx.expense.create({
+        data: {
+          ...payload,
+          ...expenseIdentity,
+          ...moneyShadows({ amount: payload.amount }),
+          locationId: location.id,
+          shopId,
+          spentAt: payload.spentAt ?? new Date(),
+        },
+      });
+      await postExpenseEffectLedger(tx, {
+        shopId,
+        expense,
+        keyBase: `expense:${expense.id}:create`,
+        businessDate: expense.spentAt,
+      });
+      return { ...expense, idempotentReplay: false };
     });
-    return expense;
-  });
+  } catch (error) {
+    if (error?.code === "P2002") {
+      const existing = await db.expense.findFirst({ where: { shopId, idempotencyKey } });
+      if (existing) {
+        assertExpenseReplayCompatible(existing, payload, existing.locationId);
+        return { ...existing, idempotentReplay: true };
+      }
+    }
+    throw error;
+  }
 }
 
 export async function updateExpense(shopId, id, data) {
@@ -72,7 +141,10 @@ export async function updateExpense(shopId, id, data) {
       keyBase: `expense:${existing.id}:update:${operationId}:old`,
       businessDate: operationAt,
     });
-    const updated = await tx.expense.update({ where: { id: existing.id }, data: payload });
+    const updated = await tx.expense.update({
+      where: { id: existing.id },
+      data: { ...payload, ...moneyShadows({ amount: payload.amount }) },
+    });
     await postExpenseEffectLedger(tx, {
       shopId,
       expense: updated,

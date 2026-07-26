@@ -141,6 +141,7 @@ if (ctx.skip) {
       assert.equal(bill.locationId, branch.id);
 
       assertSuccess(await ctx.post("/api/inventory/purchase", {
+        idempotencyKey: "retail-operations-purchase-1",
         productId: product.id,
         supplierName: "Branch Supplier",
         quantity: 2,
@@ -433,6 +434,7 @@ if (ctx.skip) {
       const headers = { "x-location-id": primary.id };
 
       const paid = assertSuccess(await ctx.post("/api/expenses", {
+        idempotencyKey: "retail-expense-electricity-001",
         title: "Store electricity",
         amount: 100,
         category: "utilities",
@@ -440,6 +442,7 @@ if (ctx.skip) {
         status: "paid",
       }, { token: auth.accessToken, headers }), 201);
       const pending = assertSuccess(await ctx.post("/api/expenses", {
+        idempotencyKey: "retail-expense-maintenance-001",
         title: "Monthly maintenance",
         amount: 50,
         category: "maintenance",

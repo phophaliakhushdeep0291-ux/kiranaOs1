@@ -22,14 +22,23 @@ export async function create(req, res, next) {
   try {
     // Stamp who recorded it (display-only) without trusting client input.
     const user = req.user?.userId ? await db.user.findUnique({ where: { id: req.user.userId }, select: { name: true } }) : null;
-    const expense = await svc.createExpense(req.shopId, { ...req.body, locationId: requestLocationId(req), recordedBy: user?.name ?? null });
-    await createAuditLog({
+    const deviceHeader = req.headers?.["x-device-id"];
+    const expense = await svc.createExpense(
+      req.shopId,
+      { ...req.body, locationId: requestLocationId(req), recordedBy: user?.name ?? null },
+      {
+        idempotencyKey: req.body.idempotencyKey,
+        clientExpenseId: req.body.clientExpenseId ?? req.body.idempotencyKey,
+        sourceDeviceId: Array.isArray(deviceHeader) ? deviceHeader[0] : deviceHeader ?? null,
+      },
+    );
+    if (!expense.idempotentReplay) await createAuditLog({
       shopId: req.shopId, userId: req.user?.userId, action: "EXPENSE_CREATED",
       entityType: "Expense", entityId: expense.id,
       after: { id: expense.id, title: expense.title, amount: expense.amount, category: expense.category },
       req,
     });
-    res.status(201).json({ success: true, data: expense });
+    res.status(expense.idempotentReplay ? 200 : 201).json({ success: true, data: expense });
   } catch (err) { next(err); }
 }
 

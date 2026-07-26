@@ -154,9 +154,13 @@ if (ctx.skip) {
       };
       const event = { type: "ADJUST_STOCK", ownerPin: tenant.ownerPin, payload };
 
-      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const first = assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(first.summary.failed, 0, JSON.stringify(first.results));
+      assert.equal(first.summary.synced, 1, JSON.stringify(first.results));
       // Retry under a brand-new event id (event-level idempotency cannot catch this).
-      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      const replay = assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "dmg-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(replay.summary.failed, 0, JSON.stringify(replay.results));
+      assert.equal(replay.summary.synced, 1, JSON.stringify(replay.results));
 
       const fresh = await ctx.db.product.findUnique({ where: { id: product.id } });
       assert.equal(fresh.stockBaseQty, 7, "damage of 3 applied exactly once (10 → 7), not twice");
@@ -166,6 +170,34 @@ if (ctx.skip) {
       assert.equal(damageRows.length, 1, "exactly one damage ledger row despite the retry");
     });
 
+    test("ADJUST_STOCK correction replayed under a new event id applies once", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10 });
+      const payload = {
+        productId: product.id,
+        adjustmentType: "correction",
+        newStockBaseQty: 4,
+        idempotencyKey: "adjust-stock:test:correction:1",
+        clientMovementId: "adjust-stock:test:correction:1",
+        ownerPin: tenant.ownerPin,
+      };
+      const event = { type: "ADJUST_STOCK", ownerPin: tenant.ownerPin, payload };
+
+      const first = assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "correction-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(first.summary.failed, 0, JSON.stringify(first.results));
+      assert.equal(first.summary.synced, 1, JSON.stringify(first.results));
+      const replay = assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "correction-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(replay.summary.failed, 0, JSON.stringify(replay.results));
+      assert.equal(replay.summary.synced, 1, JSON.stringify(replay.results));
+
+      const fresh = await ctx.db.product.findUnique({ where: { id: product.id } });
+      assert.equal(fresh.stockBaseQty, 4, "correction must commit once and remain at the requested quantity");
+      const correctionRows = await ctx.db.stockLedger.findMany({
+        where: { shopId: tenant.shop.id, productId: product.id, action: "correction" },
+      });
+      assert.equal(correctionRows.length, 1, "exactly one correction ledger row must survive a replay");
+      assert.equal(correctionRows[0].idempotencyKey, payload.idempotencyKey);
+    });
     test("STOCK_PURCHASE replayed under a new event id applies stock + cost + history once", async () => {
       // A purchase that committed but lost its ack gets re-pushed under a new event id. A double
       // apply would over-increment stock, recompute weighted-average cost off the inflated base,

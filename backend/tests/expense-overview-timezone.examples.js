@@ -12,6 +12,9 @@ const src = fs.readFileSync("src/modules/expenses/expenses.service.js", "utf8");
 assert(src.includes("formatDateInTimeZone"), "expense overview must derive shop-timezone dates");
 assert(src.includes("dateRangeForDateOnly"), "expense overview must derive shop-timezone day boundaries");
 assert(src.includes("env.DAILY_CLOSING_TIMEZONE"), "expense overview must use the shop timezone");
+assert.match(src, /dateRangeWhere[\s\S]*expenseBoundary/, "expense list and summary filters must share timezone-aware boundaries");
+assert.match(src, /expenseBoundary[\s\S]*dateRangeForDateOnly\(raw,\s*env\.DAILY_CLOSING_TIMEZONE\)/, "date-only expense filters must use the configured shop timezone");
+assert.doesNotMatch(src, /function dateRangeWhere[\s\S]{0,240}new Date\(from\)/, "expense filters must not interpret date-only input as UTC midnight");
 
 for (const banned of ["getFullYear()", "getMonth()", "getDate()", "setHours("]) {
   assert(!src.includes(banned), `expenses.service.js must not use server-local ${banned} for bucketing`);

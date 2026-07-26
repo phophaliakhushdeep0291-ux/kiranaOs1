@@ -187,8 +187,8 @@ export default function ReportsPage() {
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
   const priorRange = useMemo(() => previousRange(range.from, range.to), [range.from, range.to]);
   const expenseParams = useMemo(() => ({
-    from: `${range.from}T00:00:00.000Z`,
-    to: `${range.to}T23:59:59.999Z`,
+    from: range.from,
+    to: range.to,
   }), [range.from, range.to]);
 
   const expenseSummary = useQuery({
@@ -198,7 +198,7 @@ export default function ReportsPage() {
   });
   const previousExpenseSummary = useQuery({
     queryKey: ["reports-expense-summary", priorRange],
-    queryFn: () => getExpenseSummaryOrEmpty({ from: `${priorRange.from}T00:00:00.000Z`, to: `${priorRange.to}T23:59:59.999Z` }),
+    queryFn: () => getExpenseSummaryOrEmpty({ from: priorRange.from, to: priorRange.to }),
     retry: false,
   });
   const expenses = useQuery({

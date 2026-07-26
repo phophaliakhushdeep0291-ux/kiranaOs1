@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api/http";
+import { safeRandomUUID } from "@/lib/safe-uuid";
 import type { Expense, ExpenseInput, ExpenseOverview, ExpenseSummary } from "@/types/api";
 
 function qs(params?: Record<string, string | undefined>) {
@@ -20,7 +21,15 @@ export function getExpenseOverview() {
 }
 
 export function createExpense(data: ExpenseInput) {
-  return apiRequest<Expense>("/expenses", { method: "POST", body: JSON.stringify(data) });
+  const idempotencyKey = data.idempotencyKey || `expense:${safeRandomUUID()}`;
+  return apiRequest<Expense>("/expenses", {
+    method: "POST",
+    body: JSON.stringify({
+      ...data,
+      idempotencyKey,
+      clientExpenseId: data.clientExpenseId || idempotencyKey,
+    }),
+  });
 }
 
 export function updateExpense(id: string, data: Partial<ExpenseInput>) {
