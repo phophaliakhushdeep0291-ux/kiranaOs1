@@ -19,7 +19,7 @@ assert.match(authService, /pinHash, role: "owner"/, "registered owner must store
 
 // Udhar overpay guard: ledger-derived, rounded, floored at 0, and exact remaining payment allowed.
 assert.match(customerService, /UDHAR_PAYMENT_EXCEEDS_OUTSTANDING/, "udhar overpay must be blocked with a coded error");
-assert.match(customerService, /currentBalance\.balance < paymentAmount/, "exact remaining payment must stay allowed (strict <, not <=)");
+assert.match(customerService, /toPaise\(currentBalance\.balance\) < toPaise\(paymentAmount\)/, "exact remaining payment must stay allowed with strict integer-paise comparison");
 assert.match(udharBalance, /balance: round2\(Math\.max\(0, rawBalance\)\)/, "udhar balance must be rounded and floored at 0 before comparison");
 
 // weightedAvgCost: overselling means stock/cost can be non-positive; those cases must

@@ -1,10 +1,8 @@
 import {
   discardFailedJob,
-  getAllQueueStatus,
+  getAllShopQueueStatus,
   getFailedJobs,
-  getQueueDetail,
-  pauseQueue,
-  resumeQueue,
+  getShopQueueDetail,
   retryFailedJob,
 } from "../../lib/queue.js";
 import { getWorkerHeartbeats } from "../../lib/workerHeartbeat.js";
@@ -40,9 +38,9 @@ function assertSafeQueue(queueName) {
   return resolved;
 }
 
-export async function status(_req, res, next) {
+export async function status(req, res, next) {
   try {
-    const data = await getAllQueueStatus();
+    const data = await getAllShopQueueStatus(req.shopId);
     res.json({ success: true, data: { ...data, serverTime: new Date().toISOString() } });
   } catch (error) {
     next(error);
@@ -101,7 +99,7 @@ export async function downloadShopBackup(req, res, next) {
 export async function queueDetail(req, res, next) {
   try {
     const queueName = assertSafeQueue(req.params.queueName);
-    const data = await getQueueDetail(queueName);
+    const data = await getShopQueueDetail(queueName, req.shopId);
     res.json({ success: true, data: { ...data, serverTime: new Date().toISOString() } });
   } catch (error) {
     next(error);
@@ -112,7 +110,9 @@ export async function failed(req, res, next) {
   try {
     const queueNames = req.query.queueName ? [assertSafeQueue(req.query.queueName)] : listQueueNames();
     const data = [];
-    for (const queueName of queueNames) data.push(await getFailedJobs(queueName, { start: 0, end: 20 }));
+    for (const queueName of queueNames) {
+      data.push(await getFailedJobs(queueName, { start: 0, end: 20, shopId: req.shopId }));
+    }
     res.json({ success: true, data: { queues: data, payloadsExposed: false, serverTime: new Date().toISOString() } });
   } catch (error) {
     next(error);
@@ -122,7 +122,11 @@ export async function failed(req, res, next) {
 export async function queueFailed(req, res, next) {
   try {
     const queueName = assertSafeQueue(req.params.queueName);
-    const data = await getFailedJobs(queueName, { start: req.query.start ?? 0, end: req.query.end ?? 20 });
+    const data = await getFailedJobs(queueName, {
+      start: req.query.start ?? 0,
+      end: req.query.end ?? 20,
+      shopId: req.shopId,
+    });
     res.json({ success: true, data: { ...data, payloadsExposed: false, serverTime: new Date().toISOString() } });
   } catch (error) {
     next(error);
@@ -131,7 +135,17 @@ export async function queueFailed(req, res, next) {
 
 export async function retry(req, res, next) {
   try {
-    const data = await retryFailedJob(assertSafeQueue(req.params.queueName), req.params.jobId);
+    const queueName = assertSafeQueue(req.params.queueName);
+    const data = await retryFailedJob(queueName, req.params.jobId, req.shopId);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "SHOP_JOB_RETRIED",
+      entityType: "BackgroundJob",
+      entityId: req.params.jobId,
+      metadata: { queueName },
+      req,
+    });
     res.json({ success: true, data });
   } catch (error) {
     next(error);
@@ -140,25 +154,17 @@ export async function retry(req, res, next) {
 
 export async function discard(req, res, next) {
   try {
-    const data = await discardFailedJob(assertSafeQueue(req.params.queueName), req.params.jobId);
-    res.json({ success: true, data });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function pause(req, res, next) {
-  try {
-    const data = await pauseQueue(assertSafeQueue(req.params.queueName));
-    res.json({ success: true, data });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function resume(req, res, next) {
-  try {
-    const data = await resumeQueue(assertSafeQueue(req.params.queueName));
+    const queueName = assertSafeQueue(req.params.queueName);
+    const data = await discardFailedJob(queueName, req.params.jobId, req.shopId);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "SHOP_JOB_DISCARDED",
+      entityType: "BackgroundJob",
+      entityId: req.params.jobId,
+      metadata: { queueName },
+      req,
+    });
     res.json({ success: true, data });
   } catch (error) {
     next(error);

@@ -299,6 +299,7 @@ GET /api/accounting/control?from=<ISO timestamp>&to=<ISO timestamp>
 This shop-wide endpoint requires `Authorization`, `x-device-id`, and owner role. It projects append-only `FinancialLedger` rows through fixed account mappings with integer-paise arithmetic. A source group is `balanced` only when total debit equals total credit, every row is mapped, and the group has at least one accounting line. Supplier-payment rows expand into payable and tender legs; gift-card redemption and waived checkout amounts are explicit debit legs.
 
 Clients must display `coverage`, `exceptions`, `unmapped`, `calculationVersion`, `scope`, and `limitations` with the trial balance. They must never auto-balance an unknown event, hide a historical difference, substitute an offline estimate, or call this a statutory-complete set of books. Version `accounting-control-v2` adds gross-cost inventory/payable/tender legs for purchase receipts, exact purchase-return/cancellation legs, paid or accrued operating-expense lifecycles, and aggregate GST-output reclassification while preserving gross-sales KPIs. It does not infer GST input credit from source records that lack immutable tax evidence. Historical purchases/expenses before v2, sales COGS, non-purchase stock valuation, component GST journal accounts, live bank/provider feeds, TDS, TCS, and statutory statements remain explicit limitations. Imported CSV statement matching is covered separately by bank-reconciliation-v1 below.
+
 ### Bank and UPI statement reconciliation
 
 ```text
@@ -321,8 +322,11 @@ silent duplicate rows. One malformed row rejects the whole import.
 
 `GET /api/accounting/bank-reconciliation` returns version
 `bank-reconciliation-v1`, shop-wide integer-paise totals, active allocations,
-["data.calculationVersion", "data.scope", "data.autoMatch", "data.summary", "data.transactions", "data.candidateCoverage", "data.limitations"] Suggestions require the same account direction, an amount equal to
-the remaining statement value, and a deterministic ±3-day window. A reference
+exact candidate evidence, allocation options, pagination, `candidateCoverage`, and
+visible limitations. Exact suggestions require the same account direction, an amount
+equal to the remaining statement value, and a deterministic ±3-calendar-day
+window. Manual allocation options are bounded to ±30 calendar days; selecting an
+outside-suggestion-window row requires a note. A reference
 match may rank evidence but never relaxes amount or direction. Equal top scores
 are explicitly `ambiguous`. The engine always returns `autoMatch: false`; only an
 owner-confirmed POST creates an allocation.

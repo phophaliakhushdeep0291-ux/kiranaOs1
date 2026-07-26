@@ -15,8 +15,6 @@ router.post("/backups", requireOwnerPin, ctrl.createShopBackup);
 router.get("/backups/:id/download", requireOwnerPin, ctrl.downloadShopBackup);
 router.get("/queues/:queueName", ctrl.queueDetail);
 router.get("/queues/:queueName/failed", ctrl.queueFailed);
-router.post("/queues/:queueName/pause", requireOwnerPin, ctrl.pause);
-router.post("/queues/:queueName/resume", requireOwnerPin, ctrl.resume);
 router.post("/:queueName/:jobId/retry", requireOwnerPin, ctrl.retry);
 router.post("/:queueName/:jobId/discard", requireOwnerPin, ctrl.discard);
 

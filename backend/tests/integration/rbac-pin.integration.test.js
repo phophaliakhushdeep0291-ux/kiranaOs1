@@ -133,6 +133,44 @@ if (ctx.skip) {
       assertFailure(await ctx.delete(`/api/customers/${customer.id}`, { token: staffAuth.accessToken }), 403);
     });
 
+    test("Owner PIN failures are audited and lock the caller across protected routes", async () => {
+      const { tenant, staff, staffAuth } = await authPair();
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        const response = await ctx.delete("/api/customers/missing-customer", {
+          token: staffAuth.accessToken,
+          ownerPin: "9999",
+        });
+        assert.equal(response.status, attempt < 5 ? 403 : 429, JSON.stringify(response.body));
+        if (attempt === 5) assert.equal(response.body?.code, "OWNER_PIN_LOCKED");
+      }
+
+      const failures = await ctx.db.auditLog.count({
+        where: {
+          shopId: tenant.shop.id,
+          userId: staff.staff.id,
+          action: "OWNER_PIN_VERIFICATION_FAILED",
+        },
+      });
+      assert.equal(failures, 5);
+
+      const lockedCorrectPin = await ctx.delete("/api/customers/missing-customer", {
+        token: staffAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+      });
+      assert.equal(lockedCorrectPin.status, 429);
+      assert.equal(lockedCorrectPin.body?.code, "OWNER_PIN_LOCKED");
+
+      await ctx.db.auditLog.updateMany({
+        where: { shopId: tenant.shop.id, action: "OWNER_PIN_VERIFICATION_FAILED" },
+        data: { createdAt: new Date(Date.now() - 16 * 60_000) },
+      });
+      const afterLockout = await ctx.delete("/api/customers/missing-customer", {
+        token: staffAuth.accessToken,
+        ownerPin: tenant.ownerPin,
+      });
+      assert.equal(afterLockout.status, 404, "expired lockout must allow the correct PIN through to the controller");
+    });
+
     test("customer DELETE with owner PIN succeeds when no udhar", async () => {
       const { tenant, staffAuth } = await authPair();
       const customer = await createCustomer(ctx.db, tenant.shop.id);

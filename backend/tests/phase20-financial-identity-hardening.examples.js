@@ -90,7 +90,7 @@ assert.match(
 );
 assert.match(
   customersService,
-  /currentBalance\.balance < paymentAmount/,
+  /toPaise\(currentBalance\.balance\) < toPaise\(paymentAmount\)/,
   "manual udhar payment must reject payments above ledger-derived outstanding"
 );
 assert.match(customersService, /UDHAR_PAYMENT_EXCEEDS_OUTSTANDING/, "manual udhar payment overpay must have explicit error code");

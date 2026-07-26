@@ -44,19 +44,18 @@ const jobsRoutes = read("src/modules/jobs/jobs.routes.js");
 for (const snippet of [
   "/queues/:queueName",
   "/queues/:queueName/failed",
-  "/queues/:queueName/pause",
-  "/queues/:queueName/resume",
   "requireRole(\"owner\", \"admin\")",
 ]) assert(jobsRoutes.includes(snippet), `jobs route missing ${snippet}`);
+assert.doesNotMatch(jobsRoutes, /queues\/:queueName\/(pause|resume)/, "tenant routes must not expose global queue pause/resume");
 
 const jobsController = read("src/modules/jobs/jobs.controller.js");
-for (const snippet of ["payloadsExposed: false", "QUEUE_ALIASES", "queueDetail", "queueFailed", "pauseQueue", "resumeQueue"]) {
+for (const snippet of ["payloadsExposed: false", "QUEUE_ALIASES", "queueDetail", "queueFailed", "getShopQueueDetail", "req.shopId"]) {
   assert(jobsController.includes(snippet), `jobs controller missing ${snippet}`);
 }
 assert(!jobsController.includes("job.data"), "failed job endpoints must not expose raw job payloads");
 
 const queue = read("src/lib/queue.js");
-for (const snippet of ["getQueueDetail", "pauseQueue", "resumeQueue", "recordQueueStatus", "SAFE_RETRY_QUEUE_SET"]) {
+for (const snippet of ["getQueueDetail", "pauseQueue", "resumeQueue", "recordQueueStatus", "SAFE_RETRY_QUEUE_SET", "jobBelongsToShop", "getShopJobs"]) {
   assert(queue.includes(snippet), `queue service missing ${snippet}`);
 }
 
