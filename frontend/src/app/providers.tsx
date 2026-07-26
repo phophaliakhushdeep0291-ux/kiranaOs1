@@ -48,6 +48,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Apply saved app preferences (compact density in particular) before the
+    // first paint of any page, not only after Settings has been opened.
+    getAppPreferences();
+    void loadSecurityPolicy();
     void initializeOfflineStorage()
       .then(() => hardenLocalFinancialData())
       .catch(() => {
@@ -57,8 +61,16 @@ export function AppProviders({ children }: { children: ReactNode }) {
     const timer = window.setInterval(() => {
       void hardenLocalFinancialData().catch(() => undefined);
     }, 30_000);
+    // Settings → Advanced → "Auto cleanup temp files". Off means expired caches
+    // and synced history are left alone until the owner runs it by hand.
+    const cleanupTimer = window.setInterval(() => {
+      if (!autoCleanupEnabled()) return;
+      void offlineDB.pruneExpiredRecentCache().catch(() => undefined);
+      void offlineDB.pruneSyncedHistory().catch(() => undefined);
+    }, 10 * 60_000);
     return () => {
       window.clearInterval(timer);
+      window.clearInterval(cleanupTimer);
       stopLeadership();
     };
   }, []);

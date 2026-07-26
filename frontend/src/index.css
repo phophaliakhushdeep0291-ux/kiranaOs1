@@ -1092,3 +1092,25 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Compact mode (Settings → Advanced → App Preferences) ──────────────────
+   One attribute on <html> tightens the whole app instead of every page
+   re-reading the preference. Chrome-height variables shrink so more of the
+   list is on screen, and the base type steps down a notch on desktop, where
+   a shopkeeper is usually looking at a long table rather than a phone. */
+html[data-density="compact"] {
+  --app-desktop-topbar-height: 60px;
+  --app-mobile-topbar-height: 72px;
+  --app-page-gutter: clamp(0.5rem, 0.4rem + 0.4vw, 0.875rem);
+}
+
+@media (min-width: 1024px) {
+  html[data-density="compact"] body {
+    font-size: 0.9375rem;
+  }
+
+  html[data-density="compact"] .app-docked-page {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+}

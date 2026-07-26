@@ -278,6 +278,7 @@ export async function updateProduct(shopId, id, data) {
       await applyStockCorrectionInTransaction(tx, shopId, id, requestedStockBaseQty, data.locationId ?? null);
     }
     if (normalizedUnits) await writeSellingUnits(tx, shopId, id, normalizedUnits);
+    else await syncDefaultSellingUnitPricing(tx, shopId, id, { ...existing, ...rest });
     return tx.product.findUnique({
       where: { id },
       include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
@@ -537,6 +538,39 @@ function applyDefaultSellingUnitToProduct(product, units) {
     defaultPricePerRateUnit: unit.defaultPrice,
     mrp: unit.maximumPrice ?? product.mrp ?? 0,
   };
+}
+
+/**
+ * A product's default selling unit is derived from the product's own price
+ * fields (see legacySellingUnit). Billing then reads its ceiling and cost from
+ * that unit, not from the product row — so an edit that changes price/MRP/cost
+ * without sending sellingUnits has to move the default unit too. Leaving it
+ * stale makes the item unsellable at its own new price
+ * ("exceeds the configured maximum of Rs <old MRP>"), and prices it against a
+ * stale cost. Only the default unit mirrors the product; alternate units
+ * (pack, dozen, bag) carry their own pricing and are left alone.
+ */
+async function syncDefaultSellingUnitPricing(tx, shopId, productId, product) {
+  const unit = await tx.productSellingUnit.findFirst({
+    where: { shopId, productId, isDefault: true },
+  });
+  if (!unit) return;
+
+  const defaultPrice = Number(product.defaultPricePerRateUnit ?? unit.defaultPrice ?? 0);
+  const minimumPrice = Number(product.minPricePerRateUnit ?? 0) || null;
+  const maximumPrice = Number(product.mrp ?? 0) || null;
+  const costPrice = Number(product.costPerRateUnit ?? 0) || null;
+
+  await tx.productSellingUnit.update({
+    where: { id: unit.id },
+    data: {
+      defaultPrice,
+      minimumPrice,
+      maximumPrice,
+      costPrice,
+      ...moneyShadows({ defaultPrice, minimumPrice, maximumPrice, costPrice }),
+    },
+  });
 }
 
 async function writeSellingUnits(tx, shopId, productId, units) {
