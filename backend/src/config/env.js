@@ -16,6 +16,9 @@ const envSchema = z.object({
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   OPENAI_TRANSCRIBE_MODEL: z.string().default("gpt-4o-mini-transcribe"),
   ALLOWED_ORIGINS: z.string().default("http://localhost:5500"),
+  // Comma-separated emails allowed into the internal cross-shop admin dashboard.
+  // Empty (default) = the feature is off and no one has platform-admin access.
+  PLATFORM_ADMIN_EMAILS: z.string().default(""),
   TEST_DATABASE_URL: z.string().optional(),
   API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(15 * 60 * 1000),
   API_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(1000),

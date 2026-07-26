@@ -118,6 +118,8 @@ async function buildBillContext(shopId, billId, client) {
     auditLogs,
     staffRecentBills,
     upiReferenceReuse,
+    financialLedgerRows,
+    createdByUser,
   ] = await Promise.all([
     productIds.length
       ? client.product.findMany({ where: { shopId, id: { in: productIds } } })
@@ -185,6 +187,16 @@ async function buildBillContext(shopId, billId, client) {
         take: 20,
       });
     })(),
+    client.financialLedger.findMany({
+      where: { shopId, billId: bill.id },
+      select: { id: true, entryType: true, direction: true, amountPaise: true, sourceType: true, businessDate: true },
+    }),
+    bill.createdByUserId
+      ? client.user.findFirst({
+          where: { id: bill.createdByUserId, shopId },
+          select: { id: true, role: true, name: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const events = deriveBillEvents(bill);
@@ -208,6 +220,8 @@ async function buildBillContext(shopId, billId, client) {
     auditLogs,
     staffRecentBills,
     upiReferenceReuse,
+    financialLedgerRows,
+    createdByUser,
     inputHash: computeInputHash({
       bill,
       items: bill.items,
@@ -216,6 +230,7 @@ async function buildBillContext(shopId, billId, client) {
       stockRows: stockRows.map((r) => ({ id: r.id, action: r.action, changeBaseQty: r.changeBaseQty })),
       duplicateIds: duplicateCandidates.map((b) => b.id),
       closingLockedAt: closingSnapshot?.lockedAt ?? null,
+      ledgerRows: financialLedgerRows.map((r) => `${r.entryType}:${r.amountPaise}`),
     }),
   };
 }
