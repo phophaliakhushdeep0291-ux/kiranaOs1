@@ -1,6 +1,7 @@
 import * as svc from "./diagnostics.service.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { generateIncidentReport } from "./incident-report.service.js";
 
 function headerDeviceId(req) {
   const raw = req.headers["x-device-id"];
@@ -36,6 +37,26 @@ export async function createSupportRequest(req, res, next) {
     if (req.body.screenshot) {
       screenshotKey = await svc.maybeUploadScreenshot(req.body.screenshot, { shopId: req.shopId });
     }
+    // Auto-attach a compact, deterministic diagnosis (§6) so a triaging developer
+    // sees the probable cause immediately. useAi:false keeps the report POST fast
+    // and free; the full report (with the LLM narrative) is one endpoint call away.
+    const incidentReport = await generateIncidentReport({
+      shopId: req.shopId,
+      deviceId: resolveDeviceId(req),
+      problemSummary: req.body.description,
+      useAi: false,
+    }).catch(() => null);
+    const serverDiagnosis = incidentReport
+      ? {
+          focus: incidentReport.focus,
+          possibleRootCause: incidentReport.possibleRootCause,
+          suggestedSolution: incidentReport.suggestedSolution,
+          confidenceScore: incidentReport.confidenceScore,
+          confidenceLabel: incidentReport.confidenceLabel,
+          topSignals: (incidentReport.signals ?? []).slice(0, 3),
+        }
+      : null;
+
     const request = await svc.createSupportRequest({
       shopId: req.shopId,
       userId: req.user?.userId ?? null,
@@ -43,7 +64,7 @@ export async function createSupportRequest(req, res, next) {
       description: req.body.description,
       page: req.body.page,
       appVersion: req.body.appVersion,
-      context: req.body.context,
+      context: { ...(req.body.context ?? {}), serverDiagnosis },
       screenshotKey,
     });
     await createAuditLog({
@@ -92,6 +113,19 @@ export async function listSupport(req, res, next) {
       success: true,
       data: await svc.listSupportRequests({ shopId: req.shopId, status: req.query.status, limit: req.query.limit }),
     });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function incidentReport(req, res, next) {
+  try {
+    const report = await generateIncidentReport({
+      shopId: req.shopId,
+      deviceId: resolveDeviceId(req),
+      problemSummary: typeof req.query.problem === "string" ? req.query.problem : "",
+    });
+    res.json({ success: true, data: report });
   } catch (err) {
     next(err);
   }

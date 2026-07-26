@@ -652,6 +652,28 @@ class OfflineDBFacade {
     await this.table(storeName).delete(key);
   }
 
+  /**
+   * Delete every current-scope row from each of the given stores. Resolves each
+   * store's real primary key from the Dexie schema (`schema.primKey.keyPath`)
+   * instead of guessing a field, so a SYNCED row — whose `id` is the server id but
+   * whose `local_id` is the original local id — is actually removed. A guessed
+   * `local_id` key never matched the `id` keyPath, which is why "Delete local
+   * offline data" left synced customers/bills/ledger rows behind.
+   */
+  async clearScopedData(storeNames: string[]): Promise<void> {
+    await this.init();
+    for (const storeName of storeNames) {
+      const table = this.table<Record<string, unknown>>(storeName);
+      const keyPath = table.schema.primKey.keyPath;
+      if (typeof keyPath !== "string") continue;
+      const rows = await this.getAll<Record<string, unknown>>(storeName).catch(() => []);
+      const keys = rows
+        .map((row) => row[keyPath])
+        .filter((key): key is string => typeof key === "string" && key.length > 0);
+      if (keys.length > 0) await table.bulkDelete(keys);
+    }
+  }
+
   async enqueueSyncEvent(
     event: Pick<PendingSyncEvent, "clientEventId" | "type" | "payload"> &
       Partial<PendingSyncEvent>,

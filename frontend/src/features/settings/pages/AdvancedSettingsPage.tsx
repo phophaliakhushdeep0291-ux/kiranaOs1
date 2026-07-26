@@ -15,6 +15,7 @@ import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/setting
 import { useAppLanguage, type AppLanguage } from "@/features/settings/i18n";
 import { setLandingPagePref } from "@/features/settings/landing-page";
 import { offlineDB } from "@/lib/offline/db";
+import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
 
 interface AdvConfig {
   retention: string;
@@ -196,25 +197,29 @@ export default function AdvancedSettingsPage() {
     }
   }
   async function clearScopedLocalData() {
-    for (const table of LOCAL_DATA_TABLES) {
-      const rows = await offlineDB.getAll<Record<string, unknown>>(table);
-      for (const row of rows) {
-        const key = row.key ?? row.clientEventId ?? row.local_id ?? row.localId ?? row.id;
-        if (typeof key === "string" && key.length > 0) await offlineDB.delete(table, key);
-      }
-    }
+    // Delete by each store's real primary key (see offlineDB.clearScopedData) so
+    // synced rows — where `id` ≠ `local_id` — are actually removed. The old guess
+    // deleted synced customers/bills/ledger by `local_id`, which no-ops, so the
+    // wipe left them behind.
+    await offlineDB.clearScopedData([...LOCAL_DATA_TABLES]);
+    // The instant cache (in-memory map + the settings-backed recent cache) mirrors
+    // these tables for instant paint. Without clearing it the just-wiped customers
+    // and ledgers repaint straight from memory and the wipe appears to do nothing.
+    clearInstantMemoryCache();
   }
   async function runDanger(key: string) {
     setDanger(null);
     if (key === "resetSettings") { patch({ printer: undefined, taxes: undefined, security: undefined, notifications: undefined, integrations: undefined, advanced: undefined, branding: undefined, hours: undefined, bank: undefined, storeProfile: undefined }); toast({ title: "Settings reset to defaults" }); return; }
     if (key === "clearCache") { await clearCache(); return; }
     if (key === "deleteLocal" || key === "factoryReset") {
+      // Wipe local DATA only. Do NOT delete the PWA app-shell cache here (that is
+      // what "Clean Cache" is for): removing the cached JS/HTML while the service
+      // worker is live can leave the reload with nothing to render — a blank screen.
       try {
-        if ("caches" in window) { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))); }
         await clearScopedLocalData();
       } catch { /* best effort */ }
       toast({ title: "Local data cleared", description: "The app will reload with a fresh local copy synced from the cloud." });
-      setTimeout(() => window.location.reload(), 1200);
+      setTimeout(() => window.location.reload(), 900);
       return;
     }
     toast({ title: "Request recorded", description: "This action needs owner approval from the backend." });

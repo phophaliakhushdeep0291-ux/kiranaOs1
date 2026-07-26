@@ -20,5 +20,6 @@ router.post("/support-requests", validate(supportRequestSchema), ctrl.createSupp
 router.get("/errors", requireRole("owner"), ctrl.listErrors);
 router.get("/errors/:id", requireRole("owner"), ctrl.getErrorGroup);
 router.get("/support-requests", requireRole("owner"), ctrl.listSupport);
+router.get("/incident-report", requireRole("owner"), ctrl.incidentReport);
 
 export default router;
