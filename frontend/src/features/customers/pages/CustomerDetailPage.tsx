@@ -22,6 +22,7 @@ import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { apiRequest } from "@/lib/api/http";
 import { moneyExceeds, roundMoney } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 interface PaymentFormState { amount: string; mode: "cash" | "upi" | "bank"; note: string }
 interface ReverseFormState { paymentId: string }
@@ -107,7 +108,7 @@ function billNumber(row: Record<string, unknown>): string {
 }
 
 function printStatement(customerName: string, ledgerRows: Array<{ display_date: string; display_type: string; signed_amount: number; running_balance: number; note?: string | null }>) {
-  const rows = ledgerRows.map((row) => `<tr><td>${formatDateTime(row.display_date)}</td><td>${row.display_type}</td><td>${row.note ?? ""}</td><td style="text-align:right">${formatMoney(row.signed_amount)}</td><td style="text-align:right">${formatMoney(row.running_balance)}</td></tr>`).join("");
+  const rows = ledgerRows.map((row) => `<tr><td>${formatDateTime(row.display_date)}</td><td>${row.display_type}</td><td>${row.note ?? ""}</td><td style="text-align:right">${formatMoney(row.signed_amount)}</td><td style="text-align:right">${formatMoney(Math.max(0, row.running_balance))}${row.running_balance < 0 ? " *" : ""}</td></tr>`).join("");
   const win = window.open("", "_blank", "width=720,height=840");
   if (!win) return false;
   win.document.write(`<!doctype html><html><head><title>${customerName} statement</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;font-size:12px}h1{font-size:20px}</style></head><body><h1>${customerName} - Customer Statement</h1><table><thead><tr><th>Date</th><th>Type</th><th>Note</th><th>Amount</th><th>Balance</th></tr></thead><tbody>${rows}</tbody></table><script>window.print()</script></body></html>`);
@@ -135,6 +136,10 @@ export default function CustomerDetailPage() {
   const bills = data?.bills ?? [];
   const activePayments = useMemo(() => payments.filter((row) => !row.reversed_at && !row.reversedAt), [payments]);
   const timeline = useMemo(() => buildCustomerTimeline({ bills, payments, ledger }), [bills, payments, ledger]);
+  const hasNegativeLedgerHistory = useMemo(
+    () => ledger.some((entry) => roundMoney(entry.running_balance) < 0),
+    [ledger],
+  );
   const reminder = useMutation({
     mutationFn: (customerId: string) => apiRequest<{
       status: string;
@@ -263,6 +268,7 @@ export default function CustomerDetailPage() {
       </div>
 
       {customer.ledgerMetrics.warning ? <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive font-medium">{customer.ledgerMetrics.warning}</CardContent></Card> : null}
+      {hasNegativeLedgerHistory ? <Card className="border-amber-300 bg-amber-50"><CardContent className="py-3 text-sm font-medium text-amber-900">Old overpayment data was detected in this ledger. Current udhar never goes below {formatMoney(0)}; affected historical balances are marked for reconciliation.</CardContent></Card> : null}
 
       <div className="grid gap-3 md:grid-cols-5">
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Current udhar</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-destructive">{formatMoney(Math.max(0, customer.ledgerBalance))}</CardContent></Card>
@@ -300,7 +306,7 @@ export default function CustomerDetailPage() {
               return <div key={entry.id} className="rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div><p className="font-medium">{label}</p><p className="text-xs text-muted-foreground">{formatDateTime(entry.display_date)} {entry.note ? `• ${entry.note}` : ""}</p></div>
-                  <div className="text-right"><p className={`font-bold ${entry.signed_amount < 0 ? "text-emerald-600" : "text-destructive"}`}>{entry.signed_amount < 0 ? "-" : "+"}{formatMoney(Math.abs(entry.signed_amount))}</p><p className="text-xs text-muted-foreground">Bal {formatMoney(entry.running_balance)}</p></div>
+                  <div className="text-right"><p className={`font-bold ${entry.signed_amount < 0 ? "text-emerald-600" : "text-destructive"}`}>{entry.signed_amount < 0 ? "-" : "+"}{formatMoney(Math.abs(entry.signed_amount))}</p><p className={cn("text-xs", entry.running_balance < 0 ? "font-semibold text-amber-700" : "text-muted-foreground")}>Bal {formatMoney(Math.max(0, entry.running_balance))}{entry.running_balance < 0 ? " · Reconcile" : ""}</p></div>
                 </div>
               </div>;
             })}

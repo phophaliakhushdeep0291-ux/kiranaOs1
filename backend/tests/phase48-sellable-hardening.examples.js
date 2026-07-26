@@ -36,9 +36,15 @@ assert.match(providerRoutes, /\/events\/:id\/retry"[\s\S]*?requireOwnerPin[\s\S]
 assert.match(providerRoutes, /\/manual\/activate"[\s\S]*?requireOwnerPin[\s\S]*?ctrl\.manualActivate/, "manual payment activation must require Owner PIN");
 
 const jobsRoutes = read("src/modules/jobs/jobs.routes.js");
-for (const route of ["pause", "resume", "retry", "discard"]) {
+for (const route of ["retry", "discard"]) {
   assert.match(jobsRoutes, new RegExp(`requireOwnerPin[\\s\\S]*?ctrl\\.${route}`), `job ${route} must require Owner PIN`);
 }
+assert.doesNotMatch(jobsRoutes, /ctrl\.(?:pause|resume)/, "tenant owners must not pause or resume shared global queues");
+
+const permissions = read("src/middleware/permissions.js");
+assert.match(permissions, /OWNER_PIN_VERIFICATION_FAILED/, "failed Owner PIN attempts must be audited");
+assert.match(permissions, /OWNER_PIN_LOCKED/, "repeated Owner PIN failures must trigger a stable lockout response");
+assert.match(permissions, /auditLog\.count/, "Owner PIN lockout must be persisted across backend replicas");
 
 const customersRoutes = read("src/modules/customers/customers.routes.js");
 const customersService = read("src/modules/customers/customers.service.js");

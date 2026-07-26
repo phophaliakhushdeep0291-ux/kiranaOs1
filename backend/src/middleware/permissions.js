@@ -50,12 +50,15 @@ export async function requireOwnerPin(req, _res, next) {
     // OWNER_PIN_REQUIRED=false only for trusted development/admin migration flows.
     if (!env.OWNER_PIN_REQUIRED && req.user.role === "owner") return next();
 
+    await assertOwnerPinAttemptAllowed(req, _res);
+
     const ownerPin = getOwnerPinFromRequest(req);
     if (!ownerPin) {
       throw new AppError("Owner PIN required", 403);
     }
     if (!/^\d{4}$/.test(ownerPin)) {
-      throw new AppError("Owner PIN must be exactly 4 digits", 400);
+      await logOwnerPinFailure(req, "INVALID_FORMAT");
+      await throwPinFailureOrLockout(req, _res, "Owner PIN must be exactly 4 digits", 400);
     }
 
     const owner = await db.user.findFirst({
@@ -67,13 +70,105 @@ export async function requireOwnerPin(req, _res, next) {
     if (!owner.pinHash) throw new AppError("Owner PIN not set yet", 400);
 
     const ok = await bcrypt.compare(ownerPin, owner.pinHash);
-    if (!ok) throw new AppError("Wrong owner PIN", 403);
+    if (!ok) {
+      await logOwnerPinFailure(req, "MISMATCH");
+      await throwPinFailureOrLockout(req, _res, "Wrong owner PIN", 403);
+    }
 
     await logOwnerPinVerified(req);
     return next();
   } catch (err) {
     return next(err);
   }
+}
+
+const OWNER_PIN_FAILURE_ACTION = "OWNER_PIN_VERIFICATION_FAILED";
+const OWNER_PIN_SUCCESS_ACTION = "OWNER_PIN_VERIFIED";
+
+async function getOwnerPinAttemptState(req, now = new Date()) {
+  const userId = req.user?.userId ?? req.user?.id ?? null;
+  const windowStart = new Date(now.getTime() - env.OWNER_PIN_LOCKOUT_MINUTES * 60_000);
+  const lastSuccess = userId
+    ? await db.auditLog.findFirst({
+        where: {
+          shopId: req.shopId,
+          userId,
+          action: OWNER_PIN_SUCCESS_ACTION,
+          createdAt: { gte: windowStart },
+        },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      })
+    : null;
+  const userFailureStart = lastSuccess?.createdAt && lastSuccess.createdAt > windowStart
+    ? lastSuccess.createdAt
+    : windowStart;
+  const [userFailures, shopFailures] = await Promise.all([
+    userId
+      ? db.auditLog.count({
+          where: {
+            shopId: req.shopId,
+            userId,
+            action: OWNER_PIN_FAILURE_ACTION,
+            createdAt: { gt: userFailureStart },
+          },
+        })
+      : Promise.resolve(env.OWNER_PIN_MAX_FAILURES),
+    db.auditLog.count({
+      where: {
+        shopId: req.shopId,
+        action: OWNER_PIN_FAILURE_ACTION,
+        createdAt: { gte: windowStart },
+      },
+    }),
+  ]);
+  return {
+    locked:
+      userFailures >= env.OWNER_PIN_MAX_FAILURES ||
+      shopFailures >= env.OWNER_PIN_SHOP_MAX_FAILURES,
+    userFailures,
+    shopFailures,
+    retryAfterSeconds: env.OWNER_PIN_LOCKOUT_MINUTES * 60,
+  };
+}
+
+async function assertOwnerPinAttemptAllowed(req, res) {
+  const state = await getOwnerPinAttemptState(req);
+  if (!state.locked) return state;
+  res?.setHeader?.("Retry-After", String(state.retryAfterSeconds));
+  throw new AppError(
+    `Owner PIN temporarily locked after repeated failures. Try again in ${env.OWNER_PIN_LOCKOUT_MINUTES} minutes.`,
+    429,
+    "OWNER_PIN_LOCKED",
+  );
+}
+
+async function throwPinFailureOrLockout(req, res, message, statusCode) {
+  const state = await getOwnerPinAttemptState(req);
+  if (state.locked) {
+    res?.setHeader?.("Retry-After", String(state.retryAfterSeconds));
+    throw new AppError(
+      `Owner PIN temporarily locked after repeated failures. Try again in ${env.OWNER_PIN_LOCKOUT_MINUTES} minutes.`,
+      429,
+      "OWNER_PIN_LOCKED",
+    );
+  }
+  throw new AppError(message, statusCode, statusCode === 400 ? "OWNER_PIN_INVALID_FORMAT" : "OWNER_PIN_INVALID");
+}
+
+async function logOwnerPinFailure(req, reason) {
+  await createAuditLog({
+    shopId: req.shopId,
+    userId: req.user?.userId ?? req.user?.id,
+    action: OWNER_PIN_FAILURE_ACTION,
+    entityType: "Security",
+    metadata: {
+      route: req.originalUrl ?? req.url,
+      method: req.method,
+      reason,
+    },
+    req,
+  });
 }
 
 /**
@@ -103,7 +198,7 @@ async function logOwnerPinVerified(req) {
     await createAuditLog({
       shopId: req.shopId,
       userId: req.user?.userId,
-      action: "OWNER_PIN_VERIFIED",
+      action: OWNER_PIN_SUCCESS_ACTION,
       entityType: "Security",
       metadata: {
         route: req.originalUrl ?? req.url,
@@ -123,3 +218,9 @@ function getOwnerPinFromRequest(req) {
   if (Array.isArray(raw)) return String(raw[0] ?? "").trim();
   return raw === undefined || raw === null ? "" : String(raw).trim();
 }
+
+export const __ownerPinInternals = {
+  getOwnerPinAttemptState,
+  OWNER_PIN_FAILURE_ACTION,
+  OWNER_PIN_SUCCESS_ACTION,
+};
