@@ -11,15 +11,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { buildCustomerTimeline, loadCustomerDetail, reconcileCustomerWithAuthoritativeSummary, formatDateTime, formatMoney, formatShortDate, type CustomerTimelineEvent } from "@/features/customers/customer-ledger-data";
+import { buildCustomerTimeline, loadCustomerDetail, reconcileCustomerWithAuthoritativeSummary, formatDateTime, formatMoney, formatShortDate, toLedgerDriftCandidates, type CustomerTimelineEvent } from "@/features/customers/customer-ledger-data";
 import { isManualAdjustmentEntry, ledgerEntryLabel, normaliseLedgerType } from "@/features/ledger/accounting";
 import { resolveAuthoritativeUdharSummary } from "@/features/ledger/authoritative-balances";
+import { repairLedgerDriftFromServer } from "@/features/ledger/ledger-drift-repair";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
 import { createLedgerAdjustmentLocalFirst } from "@/features/ledger/local-actions";
 import { FeatureGate, UpgradePrompt } from "@/features/subscription";
 import { usePermission } from "@/features/staff/permissions";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { apiRequest } from "@/lib/api/http";
+import { moneyExceeds, roundMoney } from "@/lib/money";
 
 interface PaymentFormState { amount: string; mode: "cash" | "upi" | "bank"; note: string }
 interface ReverseFormState { paymentId: string }
@@ -45,8 +47,23 @@ function useCustomerDetail(id: string) {
       // Offline we reuse the last summary this device saw, for the same reason —
       // the raw local ledger is the one source that can be silently wrong.
       if (!detail) return detail;
-      const { summary } = await resolveAuthoritativeUdharSummary();
+      const { summary, source } = await resolveAuthoritativeUdharSummary();
       if (!summary) return detail;
+      if (source === "server") {
+        const repaired = await repairLedgerDriftFromServer(
+          toLedgerDriftCandidates([detail.customer]),
+          summary,
+        ).catch(() => false);
+        if (repaired) {
+          const refreshed = await loadCustomerDetail(id);
+          if (refreshed) {
+            return {
+              ...refreshed,
+              customer: reconcileCustomerWithAuthoritativeSummary(refreshed.customer, summary),
+            };
+          }
+        }
+      }
       return { ...detail, customer: reconcileCustomerWithAuthoritativeSummary(detail.customer, summary) };
     },
     enabled: id.length > 0,
@@ -147,15 +164,15 @@ export default function CustomerDetailPage() {
 
   async function savePayment() {
     if (!customer) return;
-    const amount = Number(payment.amount);
+    const amount = roundMoney(Number(payment.amount));
     if (!Number.isFinite(amount) || amount <= 0) {
       toast({ title: "Enter valid amount", variant: "destructive" });
       return;
     }
     // Mirror the offline overpayment guard (recordPaymentLocalFirst /
     // UDHAR_PAYMENT_EXCEEDS_OUTSTANDING): collection can't exceed what is owed.
-    const outstanding = Math.max(0, Number(customer.ledgerBalance ?? 0));
-    if (amount > outstanding + 0.001) {
+    const outstanding = Math.max(0, roundMoney(Number(customer.ledgerBalance ?? 0)));
+    if (moneyExceeds(amount, outstanding)) {
       toast({
         title: "Amount exceeds outstanding udhar",
         description: `${customer.name} owes ${formatMoney(outstanding)}. Enter that amount or less.`,
@@ -197,14 +214,14 @@ export default function CustomerDetailPage() {
 
   async function saveAdjustment() {
     if (!customer) return;
-    const amount = Number(adjust.amount);
+    const amount = roundMoney(Number(adjust.amount));
     if (!Number.isFinite(amount) || amount === 0) {
       toast({ title: "Enter valid adjustment", description: "Use positive amount to increase udhar, negative to reduce.", variant: "destructive" });
       return;
     }
     setSaving(true);
     try {
-      await createLedgerAdjustmentLocalFirst({ customerId: customer.id, amount, ownerPin: adjust.ownerPin, note: adjust.note, expectedOutstanding: Math.max(0, Number(customer.ledgerBalance ?? 0)) });
+      await createLedgerAdjustmentLocalFirst({ customerId: customer.id, amount, ownerPin: adjust.ownerPin, note: adjust.note, expectedOutstanding: Math.max(0, roundMoney(Number(customer.ledgerBalance ?? 0))) });
       toast({ title: "Ledger adjustment saved", description: "Append-only correction added locally." });
       setAdjustOpen(false);
       setAdjust({ amount: "", ownerPin: "", note: "" });
@@ -241,7 +258,7 @@ export default function CustomerDetailPage() {
           </FeatureGate>
           <Button variant="outline" onClick={() => { const ok = printStatement(customer.name, ledger); if (!ok) toast({ title: "Print blocked", variant: "destructive" }); }}><FileText size={15} className="mr-1" />Statement</Button>
           <Button variant="outline" onClick={() => setAdjustOpen(true)}><ShieldAlert size={15} className="mr-1" />Adjustment</Button>
-          <Button onClick={() => setPaymentOpen(true)}><CreditCard size={15} className="mr-1" />Record payment</Button>
+          <Button disabled={customer.ledgerBalance <= 0} onClick={() => setPaymentOpen(true)} title={customer.ledgerBalance <= 0 ? "No pending udhar to collect" : undefined}><CreditCard size={15} className="mr-1" />Record payment</Button>
         </div>
       </div>
 
@@ -302,7 +319,7 @@ export default function CustomerDetailPage() {
           <Card>
             <CardHeader><CardTitle>Recent payments</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {payments.slice(0, 8).map((row) => <div key={String(row.id)} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><div><p className="font-medium">{formatMoney(readNumber(row.amount))} • {String(row.mode ?? "payment").toUpperCase()}</p><p className="text-xs text-muted-foreground">{formatDateTime(row.paidAt ?? row.paid_at ?? row.createdAt ?? row.created_at)} {row.reversed_at || row.reversedAt ? "• Reversed" : ""}</p></div>{!row.reversed_at && !row.reversedAt ? <Button size="sm" variant="outline" onClick={() => { if (!reversePaymentPermission.allowed) { toast({ title: "Permission denied", description: reversePaymentPermission.reason, variant: "destructive" }); return; } setReverse({ paymentId: String(row.id) }); setReverseOpen(true); }}><RotateCcw size={13} className="mr-1" />Reverse</Button> : <Badge variant="secondary">Reversed</Badge>}</div></div>)}
+              {payments.slice(0, 8).map((row) => <div key={String(row.id)} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><div><p className="font-medium">{formatMoney(readNumber(row.amount))} • {String(row.mode ?? "payment").toUpperCase()}</p><p className="text-xs text-muted-foreground">{formatDateTime(row.paidAt ?? row.paid_at ?? row.createdAt ?? row.created_at)} {row.reversed_at || row.reversedAt ? "• Reversed" : ""}</p></div>{!row.reversed_at && !row.reversedAt && row.derived_from_ledger !== true ? <Button size="sm" variant="outline" onClick={() => { if (!reversePaymentPermission.allowed) { toast({ title: "Permission denied", description: reversePaymentPermission.reason, variant: "destructive" }); return; } setReverse({ paymentId: String(row.id) }); setReverseOpen(true); }}><RotateCcw size={13} className="mr-1" />Reverse</Button> : <Badge variant="secondary">{row.derived_from_ledger === true && !row.reversed_at && !row.reversedAt ? "Ledger" : "Reversed"}</Badge>}</div></div>)}
               {payments.length === 0 ? <p className="text-sm text-muted-foreground">No payments yet.</p> : null}
               {activePayments.length === 0 && payments.length > 0 ? <p className="text-xs text-muted-foreground">All visible payments are corrected/reversed.</p> : null}
             </CardContent>
@@ -314,7 +331,7 @@ export default function CustomerDetailPage() {
         </div>
       </div>
 
-      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Amount *</Label><Input type="number" className="mt-1" value={payment.amount} onChange={(event) => setPayment((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Mode</Label><Select value={payment.mode} onValueChange={(value) => setPayment((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="bank">Bank</SelectItem></SelectContent></Select></div><div><Label>Note</Label><Input className="mt-1" value={payment.note} onChange={(event) => setPayment((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void savePayment()}>{saving ? "Saving..." : "Save offline"}</Button></div></DialogContent></Dialog>
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Amount *</Label><Input type="number" inputMode="decimal" min="0" step="0.01" max={Math.max(0, customer.ledgerBalance)} className="mt-1" value={payment.amount} onChange={(event) => setPayment((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Mode</Label><Select value={payment.mode} onValueChange={(value) => setPayment((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="bank">Bank</SelectItem></SelectContent></Select></div><div><Label>Note</Label><Input className="mt-1" value={payment.note} onChange={(event) => setPayment((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void savePayment()}>{saving ? "Saving..." : "Save offline"}</Button></div></DialogContent></Dialog>
       <OwnerPinModal
         open={reverseOpen}
         title="Reverse payment"
@@ -325,7 +342,7 @@ export default function CustomerDetailPage() {
         onCancel={() => setReverseOpen(false)}
         onConfirm={({ ownerPin, reason }) => void saveReverse(ownerPin, reason)}
       />
-      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Manual ledger adjustment</DialogTitle></DialogHeader><div className="space-y-4"><p className="text-sm text-muted-foreground">Positive amount increases udhar. Negative amount reduces udhar. This creates an append-only ledger correction.</p><div><Label>Amount *</Label><Input type="number" className="mt-1" value={adjust.amount} onChange={(event) => setAdjust((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Owner PIN *</Label><Input type="password" className="mt-1" value={adjust.ownerPin} onChange={(event) => setAdjust((form) => ({ ...form, ownerPin: event.target.value }))} /></div><div><Label>Reason</Label><Textarea className="mt-1" value={adjust.note} onChange={(event) => setAdjust((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setAdjustOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void saveAdjustment()}>{saving ? "Saving..." : "Save correction"}</Button></div></DialogContent></Dialog>
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Manual ledger adjustment</DialogTitle></DialogHeader><div className="space-y-4"><p className="text-sm text-muted-foreground">Positive amount increases udhar. Negative amount reduces udhar. This creates an append-only ledger correction.</p><div><Label>Amount *</Label><Input type="number" inputMode="decimal" step="0.01" className="mt-1" value={adjust.amount} onChange={(event) => setAdjust((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Owner PIN *</Label><Input type="password" className="mt-1" value={adjust.ownerPin} onChange={(event) => setAdjust((form) => ({ ...form, ownerPin: event.target.value }))} /></div><div><Label>Reason</Label><Textarea className="mt-1" value={adjust.note} onChange={(event) => setAdjust((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setAdjustOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void saveAdjustment()}>{saving ? "Saving..." : "Save correction"}</Button></div></DialogContent></Dialog>
     </div>
   );
 }

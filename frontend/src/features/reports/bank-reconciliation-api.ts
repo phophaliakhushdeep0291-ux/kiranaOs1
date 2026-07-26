@@ -89,6 +89,8 @@ export interface BankReconciliationReport {
     counts: Record<"unmatched" | "partial" | "matched" | "ignored", number>;
     total: ReconciliationMoney;
     reconciled: ReconciliationMoney;
+    ignored: ReconciliationMoney;
+    open: ReconciliationMoney;
     remaining: ReconciliationMoney;
   };
   pagination: {
@@ -98,7 +100,8 @@ export interface BankReconciliationReport {
     hasMore: boolean;
   };
   candidateCoverage: {
-    windowDays: number;
+    suggestionWindowDays: number;
+    manualAllocationWindowDays: number;
     ledgerRowsEvaluated: number;
     truncated: boolean;
   };

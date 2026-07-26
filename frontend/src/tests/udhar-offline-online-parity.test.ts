@@ -162,13 +162,19 @@ describe("udhar offline/online parity", () => {
     ).toEqual([]);
   });
 
-  it("treats a sub-rupee gap as rounding, not drift", () => {
+  it("treats a sub-rupee gap as real paise drift", () => {
     expect(
       detectLedgerDrift(
         [{ ids: ["customer_gops"], localBalance: 300.4, hasPendingLocalWork: false }],
         SERVER_SUMMARY,
       ),
-    ).toEqual([]);
+    ).toEqual([
+      {
+        customerId: "customer_gops",
+        localBalance: 300.4,
+        serverBalance: 300,
+      },
+    ]);
   });
 
   it("repairs drift by re-pulling the server ledger, then throttles repeat attempts", async () => {

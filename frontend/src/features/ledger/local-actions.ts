@@ -1,4 +1,5 @@
 import { offlineDB } from "@/lib/offline/db";
+import { addMoney, formatMoney, toPaise } from "@/lib/money";
 import { createLocalId, emitLocalDataChanged, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { enqueueOutboxOperation } from "@/features/sync/outbox";
@@ -137,8 +138,8 @@ export async function createLedgerAdjustmentLocalFirst(input: {
   if (amount === 0) throw new Error("Adjustment amount cannot be zero");
   const ledgerBalance = roundMoney(Math.max(0, calculateLedgerBalance(await readCustomerLedgerEntries(input.customerId))));
   const currentBalance = roundMoney(Math.max(ledgerBalance, Math.max(0, readNumber(input.expectedOutstanding, 0))));
-  if (roundMoney(currentBalance + amount) < 0) {
-    const error = new Error(`Adjustment would make udhar negative. Maximum reduction is Rs ${currentBalance.toLocaleString("en-IN")}`);
+  if (toPaise(addMoney(currentBalance, amount)) < 0) {
+    const error = new Error(`Adjustment would make udhar negative. Maximum reduction is ${formatMoney(currentBalance)}`);
     (error as Error & { code?: string }).code = "UDHAR_ADJUSTMENT_NEGATIVE_BALANCE";
     throw error;
   }

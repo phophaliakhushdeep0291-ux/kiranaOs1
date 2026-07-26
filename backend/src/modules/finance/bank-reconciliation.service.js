@@ -5,7 +5,7 @@ import { AppError } from "../../middleware/error.js";
 export const BANK_RECONCILIATION_VERSION = "bank-reconciliation-v1";
 export const BANK_RECONCILIATION_LIMITATIONS = [
   "This is a CSV/manual reconciliation control, not a live bank or payment-provider feed.",
-  "Candidate suggestions use recorded facts only and are never matched automatically; an owner must confirm every allocation.",
+  "Candidate suggestions use exact amount and direction within ±3 days and are never matched automatically; broader manual allocation options are bounded to ±30 days and require owner confirmation.",
   "Only direct bank/UPI impacts already recorded in FinancialLedger are eligible. Netted fees and settlement batches may require explicit multi-row allocation.",
   "A ledger impact can belong to only one active statement match and cannot be split across statement transactions in this version.",
   "Historical activity missing from FinancialLedger cannot be inferred or reconciled by this control.",
@@ -14,6 +14,8 @@ export const BANK_RECONCILIATION_LIMITATIONS = [
 const MAX_STATEMENT_ROWS = 5_000;
 const MAX_SAFE_PAISE = BigInt(Number.MAX_SAFE_INTEGER);
 const DAY_MS = 86_400_000;
+const SUGGESTION_WINDOW_DAYS = 3;
+const MANUAL_ALLOCATION_WINDOW_DAYS = 30;
 
 const HEADER_ALIASES = {
   date: ["date", "transactiondate", "valuedate", "postingdate"],
@@ -120,7 +122,6 @@ function parsePaise(raw, { allowBlank = false, allowSigned = false } = {}) {
   let value = original
     .replace(/₹/g, "")
     .replace(/\b(?:inr|rs\.?)\b/gi, "")
-    .replace(/,/g, "")
     .replace(/\s+/g, "");
   let negative = false;
   if (/^\(.*\)$/.test(value)) {
@@ -132,17 +133,32 @@ function parsePaise(raw, { allowBlank = false, allowSigned = false } = {}) {
     negative = !negative;
     value = value.slice(1);
   }
-  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) {
-    throw new Error("Amount must have at most two decimal places");
+  const decimal = /^(\d[\d,]*)(?:\.(\d{1,2}))?$/.exec(value);
+  if (!decimal) throw new Error("Amount must have at most two decimal places");
+  const wholeWithSeparators = decimal[1];
+  if (wholeWithSeparators.includes(",")) {
+    const westernGrouping = /^\d{1,3}(?:,\d{3})+$/.test(wholeWithSeparators);
+    const indianGrouping = /^\d{1,2}(?:,\d{2})*,\d{3}$/.test(wholeWithSeparators);
+    if (!westernGrouping && !indianGrouping) throw new Error("Amount contains invalid comma grouping");
   }
-  const [whole, fraction = ""] = value.split(".");
+  const whole = wholeWithSeparators.replace(/,/g, "");
+  const fraction = decimal[2] ?? "";
   let paise = (BigInt(whole) * 100n) + BigInt(fraction.padEnd(2, "0"));
   if (paise > MAX_SAFE_PAISE) throw new Error("Amount is too large");
   if (negative) paise = -paise;
   if (!allowSigned && paise < 0n) throw new Error("Amount cannot be negative in this column");
   return paise;
 }
-
+function explicitAmountDirection(raw) {
+  const value = String(raw ?? "").trim()
+    .replace(/₹/g, "")
+    .replace(/\b(?:inr|rs\.?)\b/gi, "")
+    .replace(/,/g, "")
+    .replace(/\s+/g, "");
+  if (/^\(.*\)$/.test(value) || value.startsWith("-")) return "debit";
+  if (value.startsWith("+")) return "credit";
+  return null;
+}
 function parseDirection(raw) {
   const value = normalizeHeader(raw);
   if (["credit", "cr", "deposit", "in", "incoming", "received"].includes(value)) return "credit";
@@ -222,13 +238,17 @@ export function parseBankStatementCsv(csvText, account = {}) {
         direction = debit > 0n ? "debit" : "credit";
         amountPaise = debit > 0n ? debit : credit;
       } else {
-        const signedAmount = parsePaise(cell(source, indexes.amount), { allowSigned: true });
+        const rawAmount = cell(source, indexes.amount);
+        const signedAmount = parsePaise(rawAmount, { allowSigned: true });
         if (signedAmount === 0n) throw new Error("Amount must be greater than zero");
+        const signedDirection = explicitAmountDirection(rawAmount);
         if (indexes.direction >= 0 && cell(source, indexes.direction)) {
           direction = parseDirection(cell(source, indexes.direction));
+          if (signedDirection && signedDirection !== direction) throw new Error("Amount sign conflicts with the direction column");
           amountPaise = signedAmount < 0n ? -signedAmount : signedAmount;
         } else {
-          direction = signedAmount < 0n ? "debit" : "credit";
+          if (!signedDirection) throw new Error("Unsigned amount requires an explicit debit/credit direction column");
+          direction = signedDirection;
           amountPaise = signedAmount < 0n ? -signedAmount : signedAmount;
         }
       }
@@ -305,7 +325,11 @@ export function bankImpactForLedgerRow(row, accountType) {
 }
 
 function dateDeltaDays(left, right) {
-  return Math.round(Math.abs(new Date(left).getTime() - new Date(right).getTime()) / DAY_MS);
+  const leftDate = new Date(left);
+  const rightDate = new Date(right);
+  const leftDay = Date.UTC(leftDate.getUTCFullYear(), leftDate.getUTCMonth(), leftDate.getUTCDate());
+  const rightDay = Date.UTC(rightDate.getUTCFullYear(), rightDate.getUTCMonth(), rightDate.getUTCDate());
+  return Math.abs(leftDay - rightDay) / DAY_MS;
 }
 
 function referenceMatches(transaction, row) {
@@ -313,7 +337,7 @@ function referenceMatches(transaction, row) {
   if (!needle || needle.length < 4) return false;
   return [row?.sourceId, row?.paymentId, row?.billId, row?.purchaseBillId, row?.id]
     .map(normalizeHeader)
-    .some((candidate) => candidate && (candidate.includes(needle) || needle.includes(candidate)));
+    .some((candidate) => candidate.length >= 4 && (candidate.includes(needle) || needle.includes(candidate)));
 }
 
 function publicLedgerCandidate(row, impact, transaction) {
@@ -334,7 +358,7 @@ function publicLedgerCandidate(row, impact, transaction) {
     exactAmount,
     referenceMatched,
     score,
-    confidence: exactAmount
+    confidence: exactAmount && delta <= SUGGESTION_WINDOW_DAYS
       ? (referenceMatched ? "exact_amount_date_reference" : "exact_amount_date")
       : "eligible_manual_allocation",
     reasons: [
@@ -350,7 +374,7 @@ function publicLedgerCandidate(row, impact, transaction) {
  * Deterministic, inspectable suggestions. Exact amount, direction, and a
  * three-day window are mandatory. Equal top scores are labeled ambiguous.
  */
-export function buildBankCandidateSuggestions(transaction, ledgerRows = [], activeLedgerRowIds = new Set()) {
+export function buildBankCandidateSuggestions(transaction, ledgerRows = [], activeLedgerRowIds = new Set(), allocationWindowDays = MANUAL_ALLOCATION_WINDOW_DAYS) {
   const remaining = asBigInt(transaction.remainingAmountPaise ?? transaction.amountPaise);
   const exact = [];
   const allocationOptions = [];
@@ -359,10 +383,10 @@ export function buildBankCandidateSuggestions(transaction, ledgerRows = [], acti
     const impact = bankImpactForLedgerRow(row, transaction.accountType);
     if (!impact || impact.direction !== transaction.direction) continue;
     const delta = dateDeltaDays(transaction.transactionDate, row.businessDate);
-    if (delta > 3 || impact.amountPaise > remaining) continue;
+    if (delta > allocationWindowDays || impact.amountPaise > remaining) continue;
     const candidate = publicLedgerCandidate(row, impact, { ...transaction, remainingAmountPaise: remaining });
     allocationOptions.push(candidate);
-    if (impact.amountPaise === remaining) exact.push(candidate);
+    if (delta <= SUGGESTION_WINDOW_DAYS && impact.amountPaise === remaining) exact.push(candidate);
   }
   const order = (left, right) => right.score - left.score
     || left.dateDeltaDays - right.dateDeltaDays
@@ -594,6 +618,7 @@ export async function getBankReconciliation(shopId, query = {}) {
       by: ["matchStatus"],
       where,
       _count: { _all: true },
+      _sum: { amountPaise: true, reconciledAmountPaise: true },
     }),
     db.bankStatementTransaction.findMany({
       where,
@@ -608,8 +633,8 @@ export async function getBankReconciliation(shopId, query = {}) {
   let candidateCoverageTruncated = false;
   if (records.length) {
     const times = records.map((record) => record.transactionDate.getTime());
-    const start = new Date(Math.min(...times) - (3 * DAY_MS));
-    const end = new Date(Math.max(...times) + (3 * DAY_MS));
+    const start = new Date(Math.min(...times) - (MANUAL_ALLOCATION_WINDOW_DAYS * DAY_MS));
+    const end = new Date(Math.max(...times) + (MANUAL_ALLOCATION_WINDOW_DAYS * DAY_MS));
     ledgerRows = await db.financialLedger.findMany({
       where: {
         shopId,
@@ -628,11 +653,14 @@ export async function getBankReconciliation(shopId, query = {}) {
     }
   }
   const ledgerIds = ledgerRows.map((row) => row.id);
-  const active = ledgerIds.length ? await db.bankReconciliationAllocation.findMany({
-    where: { shopId, status: "active", ledgerRowId: { in: ledgerIds } },
-    select: { ledgerRowId: true },
-  }) : [];
-  const activeLedgerRowIds = new Set(active.map((record) => record.ledgerRowId));
+  const activeLedgerRowIds = new Set();
+  for (let index = 0; index < ledgerIds.length; index += 400) {
+    const active = await db.bankReconciliationAllocation.findMany({
+      where: { shopId, status: "active", ledgerRowId: { in: ledgerIds.slice(index, index + 400) } },
+      select: { ledgerRowId: true },
+    });
+    for (const allocation of active) activeLedgerRowIds.add(allocation.ledgerRowId);
+  }
 
   const transactions = records.map((record) => {
     const remainingAmountPaise = asBigInt(record.amountPaise) - asBigInt(record.reconciledAmountPaise);
@@ -652,6 +680,9 @@ export async function getBankReconciliation(shopId, query = {}) {
   const counts = Object.fromEntries(statusGroups.map((group) => [group.matchStatus, group._count._all]));
   const totalPaise = asBigInt(aggregate._sum.amountPaise);
   const reconciledPaise = asBigInt(aggregate._sum.reconciledAmountPaise);
+  const ignoredGroup = statusGroups.find((group) => group.matchStatus === "ignored");
+  const ignoredPaise = asBigInt(ignoredGroup?._sum?.amountPaise);
+  const openPaise = totalPaise - reconciledPaise - ignoredPaise;
 
   return {
     calculationVersion: BANK_RECONCILIATION_VERSION,
@@ -667,6 +698,8 @@ export async function getBankReconciliation(shopId, query = {}) {
       },
       total: publicMoney(totalPaise),
       reconciled: publicMoney(reconciledPaise),
+      ignored: publicMoney(ignoredPaise),
+      open: publicMoney(openPaise),
       remaining: publicMoney(totalPaise - reconciledPaise),
     },
     pagination: {
@@ -676,7 +709,8 @@ export async function getBankReconciliation(shopId, query = {}) {
       hasMore: (query.offset ?? 0) + records.length < total,
     },
     candidateCoverage: {
-      windowDays: 3,
+      suggestionWindowDays: SUGGESTION_WINDOW_DAYS,
+      manualAllocationWindowDays: MANUAL_ALLOCATION_WINDOW_DAYS,
       ledgerRowsEvaluated: ledgerRows.length,
       truncated: candidateCoverageTruncated,
     },
@@ -685,6 +719,16 @@ export async function getBankReconciliation(shopId, query = {}) {
   };
 }
 
+async function runReconciliationTransaction(work) {
+  try {
+    return await db.$transaction(work, { isolationLevel: "Serializable", maxWait: 5_000, timeout: 15_000 });
+  } catch (error) {
+    if (["P1008", "P2028", "P2034"].includes(error?.code)) {
+      fail("Reconciliation changed concurrently; reload and retry", 409, "BANK_RECONCILIATION_CONFLICT");
+    }
+    throw error;
+  }
+}
 async function loadTransaction(shopId, transactionId) {
   const transaction = await db.bankStatementTransaction.findFirst({
     where: { id: transactionId, shopId },
@@ -763,7 +807,7 @@ export async function matchBankTransaction(shopId, transactionId, input, { userI
   const nextStatus = newReconciled === statementAmount ? "matched" : "partial";
 
   try {
-    await db.$transaction(async (tx) => {
+    await runReconciliationTransaction(async (tx) => {
       for (const item of evidence) {
         await tx.bankReconciliationAllocation.create({
           data: {
@@ -858,7 +902,7 @@ export async function unmatchBankTransaction(shopId, transactionId, input, { use
   const nextStatus = newReconciled > 0n ? "partial" : "unmatched";
   const now = new Date();
 
-  await db.$transaction(async (tx) => {
+  await runReconciliationTransaction(async (tx) => {
     const reversed = await tx.bankReconciliationAllocation.updateMany({
       where: { shopId, id: { in: selected.map((allocation) => allocation.id) }, status: "active" },
       data: {
@@ -924,7 +968,7 @@ export async function ignoreBankTransaction(shopId, transactionId, input, { user
     fail("Transaction is already ignored", 409, "BANK_TRANSACTION_ALREADY_IGNORED");
   }
   const now = new Date();
-  await db.$transaction(async (tx) => {
+  await runReconciliationTransaction(async (tx) => {
     const changed = await tx.bankStatementTransaction.updateMany({
       where: { id: transaction.id, shopId, matchStatus: transaction.matchStatus, reconciledAmountPaise: 0n },
       data: {
@@ -957,7 +1001,7 @@ export async function restoreBankTransaction(shopId, transactionId, input, { use
     fail("Only an ignored transaction can be restored", 409, "BANK_TRANSACTION_NOT_IGNORED");
   }
   const now = new Date();
-  await db.$transaction(async (tx) => {
+  await runReconciliationTransaction(async (tx) => {
     const changed = await tx.bankStatementTransaction.updateMany({
       where: { id: transaction.id, shopId, matchStatus: "ignored", reconciledAmountPaise: 0n },
       data: {

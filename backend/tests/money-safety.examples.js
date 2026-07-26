@@ -48,6 +48,13 @@ assert.doesNotMatch(suppliersService, /Math\.round\(\(prices\.reduce/, "supplier
 const udharService = read("src/modules/udhar/udhar.service.js");
 assert.match(udharService, /sumMoney\((customers|rows)\.map\(\(c\) => c\.udharAmount\)\)/, "udhar summary should use sumMoney");
 
+const customersService = read("src/modules/customers/customers.service.js");
+assert.match(customersService, /toPaise\(currentBalance\.balance\) < toPaise\(paymentAmount\)/, "udhar payment limits must compare integer paise");
+
+const syncService = read("src/modules/sync/sync.service.js");
+assert.match(syncService, /const nextBalance = addMoney\(currentBalance\.balance, amount\)/, "synced ledger adjustments must add integer paise");
+assert.match(syncService, /toPaise\(nextBalance\) < 0/, "synced ledger adjustment limits must compare integer paise");
+
 const moneyDocs = read("docs/MONEY_MIGRATION.md");
 for (const required of ["Float", "integer paise", "Bill", "BillItem", "Payment", "Product", "Customer", "StockLedger", "future migration"]) {
   assert.match(moneyDocs, new RegExp(required, "i"), `MONEY_MIGRATION.md should mention ${required}`);

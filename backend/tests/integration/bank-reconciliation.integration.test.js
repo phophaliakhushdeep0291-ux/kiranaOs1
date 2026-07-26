@@ -183,7 +183,9 @@ if (ctx.skip) {
         { reason: "Bank charge is not yet recorded as an operating expense" },
         { token: auth.accessToken, ownerPin: tenant.ownerPin },
       ));
-      assert.equal(ignored.matchStatus, "ignored");
+      assert.equal(ignored.matchStatus, "ignored");      view = assertSuccess(await ctx.get("/api/accounting/bank-reconciliation", { token: auth.accessToken }));
+      assert.equal(view.summary.ignored.paise, 1_000, "ignored value must remain explicit");
+      assert.equal(view.summary.open.paise, 6_000, "ignored rows must not inflate the actionable open total");
       const restored = assertSuccess(await ctx.post(
         `/api/accounting/bank-transactions/${fee.id}/restore`,
         { reason: "Expense will now be recorded before matching" },
@@ -235,6 +237,44 @@ if (ctx.skip) {
       assert.equal(crossTenant.code, "BANK_TRANSACTION_NOT_FOUND");
     });
 
+test("rejects concurrent stale allocations instead of over-reconciling", async () => {
+      const { tenant, auth } = await ownerContext();
+      const rows = await createLedgerRows(tenant.shop.id);
+      assertSuccess(await ctx.post(
+        "/api/accounting/bank-statements/import",
+        {
+          accountType: "bank",
+          accountName: "Concurrency account",
+          fileName: "concurrency.csv",
+          csvText: "Date,Description,Reference,Debit,Credit\n2026-07-20,Concurrent settlement,CON-100,,100.00",
+        },
+        { token: auth.accessToken, ownerPin: tenant.ownerPin },
+      ), 201);
+      const view = assertSuccess(await ctx.get("/api/accounting/bank-reconciliation", { token: auth.accessToken }));
+      const transaction = view.transactions.find((row) => row.reference === "CON-100");
+      assert.ok(transaction);
+
+      const attempts = await Promise.all([
+        ctx.post(
+          `/api/accounting/bank-transactions/${transaction.id}/match`,
+          { ledgerRowIds: [rows.incoming60.id], note: "Concurrent partial allocation A" },
+          { token: auth.accessToken, ownerPin: tenant.ownerPin },
+        ),
+        ctx.post(
+          `/api/accounting/bank-transactions/${transaction.id}/match`,
+          { ledgerRowIds: [rows.incoming40.id], note: "Concurrent partial allocation B" },
+          { token: auth.accessToken, ownerPin: tenant.ownerPin },
+        ),
+      ]);
+      assert.deepEqual(attempts.map((response) => response.status).sort((a, b) => a - b), [201, 409]);
+      const rejected = attempts.find((response) => response.status === 409);
+      assert.ok(["BANK_RECONCILIATION_CONFLICT", "BANK_RECONCILIATION_STATE_DRIFT", "BANK_LEDGER_ALREADY_MATCHED"].includes(rejected?.body?.code), JSON.stringify(rejected?.body));
+      const stored = await ctx.db.bankStatementTransaction.findUnique({ where: { id: transaction.id } });
+      const active = await ctx.db.bankReconciliationAllocation.findMany({ where: { bankStatementTransactionId: transaction.id, status: "active" } });
+      assert.equal(active.length, 1);
+      assert.equal(stored.reconciledAmountPaise, active[0].amountPaise);
+      assert.ok(stored.reconciledAmountPaise < stored.amountPaise, "one stale concurrent request must roll back fully");
+    });
     test("enforces owner role and subscribed CSV entitlement", async () => {
       const { tenant, auth } = await ownerContext("pro");
       const staffAccount = await createStaff(ctx.db, tenant.shop.id);

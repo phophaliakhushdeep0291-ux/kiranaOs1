@@ -211,6 +211,29 @@ describe("payment recording transaction safety", () => {
     expect(tableRows("sync_outbox").filter((row) => row.operation_type === "RECORD_PAYMENT")).toHaveLength(2);
   });
 
+  it("allows a rupee and paise split that exactly clears the balance", async () => {
+    dbState.committed.customers = [{ id: "customer_1", name: "Ramesh", type: "udhar", udharAmount: 121.5, totalUdhar: 121.5, trustScore: 70 }];
+    dbState.committed.customer_ledger = [
+      {
+        id: "ledger_bill_1",
+        customerId: "customer_1",
+        customer_id: "customer_1",
+        type: "BILL",
+        source_type: "bill",
+        amount: 121.5,
+        balance_after: 121.5,
+        created_at: "2026-06-01T10:00:00.000Z",
+        entry_at: "2026-06-01T10:00:00.000Z",
+      },
+    ];
+
+    await recordPaymentLocalFirst("customer_1", { amount: 49, mode: "cash" });
+    await recordPaymentLocalFirst("customer_1", { amount: 72.5, mode: "upi" });
+
+    expect(tableRows("payments").map((row) => row.amount)).toEqual([49, 72.5]);
+    expect(tableRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
+  });
+
   it("creates a payment ledger entry", async () => {
     await recordPaymentLocalFirst("customer_1", { amount: 125, mode: "upi" });
 

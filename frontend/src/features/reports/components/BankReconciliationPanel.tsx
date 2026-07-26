@@ -351,7 +351,7 @@ export function BankReconciliationPanel({ from, to }: { from: string; to: string
             <SummaryStat label="Rows in filter" value={String(report.summary.transactionCount)} detail={`${report.summary.counts.unmatched} unmatched`} />
             <SummaryStat label="Statement value" value={money(report.summary.total.amount)} detail="Imported evidence" />
             <SummaryStat label="Owner reconciled" value={money(report.summary.reconciled.amount)} detail={`${report.summary.counts.matched} fully matched`} good={report.summary.reconciled.paise > 0} />
-            <SummaryStat label="Remaining" value={money(report.summary.remaining.amount)} detail={`${report.summary.counts.partial} partial · ${report.summary.counts.ignored} ignored`} alert={report.summary.remaining.paise > 0} />
+            <SummaryStat label="Open to reconcile" value={money(report.summary.open.amount)} detail={`${report.summary.counts.partial} partial · ${money(report.summary.ignored.amount)} ignored`} alert={report.summary.open.paise > 0} />
           </section>
 
           <section className="border-b border-[#e7edf5] p-3 sm:p-4">
@@ -471,7 +471,7 @@ function TransactionCard({
             <div className="flex h-full min-h-24 items-center justify-center text-center"><div><CheckCircle2 className="mx-auto text-emerald-600" size={20} /><p className="mt-2 text-[11px] font-black text-emerald-900">Fully reconciled</p><p className="mt-1 text-[10px] text-emerald-700">Owner-confirmed links equal the statement amount.</p></div></div>
           ) : (
             <>
-              <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wide text-[#52617c]">Recorded ledger candidates</p><p className="mt-1 text-[9px] leading-4 text-[#7b879b]">Exact direction · within ±3 days · never auto-selected</p></div>{top ? <span className={cn("rounded-full px-2 py-1 text-[9px] font-extrabold", top.ambiguous ? "bg-amber-100 text-amber-900" : "bg-blue-100 text-blue-800")}>{top.ambiguous ? "Ambiguous tie" : "Exact candidate"}</span> : null}</div>
+              <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-wide text-[#52617c]">Recorded ledger candidates</p><p className="mt-1 text-[9px] leading-4 text-[#7b879b]">Suggestions: exact amount + direction within ±3 days · manual options up to ±30 days</p></div>{top ? <span className={cn("rounded-full px-2 py-1 text-[9px] font-extrabold", top.ambiguous ? "bg-amber-100 text-amber-900" : "bg-blue-100 text-blue-800")}>{top.ambiguous ? "Ambiguous tie" : "Exact candidate"}</span> : null}</div>
               {top ? (
                 <div className="mt-2 flex flex-col gap-2 rounded-[7px] border border-blue-200 bg-blue-50/70 p-2.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0"><p className="truncate text-[10px] font-black text-blue-950">{top.entryType} · {money(top.amount.amount)}</p><p className="mt-0.5 truncate text-[9px] text-blue-800">{top.referenceMatched ? "Reference + amount + direction + date evidence" : "Amount + direction + date evidence"} · {top.dateDeltaDays}d gap</p></div>

@@ -236,6 +236,32 @@ describe("customer ledger correctness", () => {
     expect(scopedRows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 300, totalUdhar: 300 }));
   });
 
+  it("shows ledger-backed payments when the payments cache missed the row", async () => {
+    seedLedger({
+      id: "ledger_payment_1",
+      type: "PAYMENT",
+      source_type: "payment",
+      source_id: "payment_missing_from_cache",
+      payment_id: "payment_missing_from_cache",
+      mode: "upi",
+      amount: 121.5,
+      balance_after: 0,
+      entry_at: "2026-06-06T09:00:00.000Z",
+      created_at: "2026-06-06T09:00:00.000Z",
+    });
+
+    const detail = await loadCustomerDetail("customer_1");
+
+    expect(detail?.payments).toEqual([
+      expect.objectContaining({
+        id: "payment_missing_from_cache",
+        amount: 121.5,
+        mode: "upi",
+        derived_from_ledger: true,
+      }),
+    ]);
+  });
+
   it("CORRECTION adjusts balance", () => {
     const ledger = [
       { id: "bill_ledger", type: "BILL", amount: 500, entry_at: "2026-06-06T08:00:00.000Z" },
@@ -252,7 +278,7 @@ describe("customer ledger correctness", () => {
     // Without the authoritative hint the guard uses the local sum (0) and wrongly blocks it.
     await expect(
       createLedgerAdjustmentLocalFirst({ customerId: "customer_1", amount: -630, ownerPin: "1234", note: "clear udhar" }),
-    ).rejects.toThrow(/Maximum reduction is Rs 0/);
+    ).rejects.toThrow(/Maximum reduction is ₹0/);
 
     // With the displayed authoritative balance passed in, the same reduction is allowed
     // (the backend re-checks against the true server balance on sync).
