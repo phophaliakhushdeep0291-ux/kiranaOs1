@@ -1,5 +1,7 @@
 import * as svc from "./bills.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
+import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
 import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
 import { assertLocationCapability } from "../stores/location-access.service.js";
@@ -78,6 +80,10 @@ export async function confirm(req, res, next) {
       }).catch(() => null);
     }
     res.status(201).json({ success: true, data });
+    // Post-commit, post-response: the assurance engine evaluates this sale
+    // without adding latency to billing and can never fail the bill.
+    scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.BILL, data.id, { userId: req.user?.userId });
+    if (data.customerId) scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.CUSTOMER, data.customerId, { userId: req.user?.userId });
   } catch (err) { next(err); }
 }
 
@@ -112,6 +118,8 @@ export async function saleReturn(req, res, next) {
       locationId: data.locationId,
     }).catch(() => []);
     res.status(201).json({ success: true, data });
+    scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.BILL, data.id, { userId: req.user?.userId });
+    if (data.returnOfBillId) scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.BILL, data.returnOfBillId, { userId: req.user?.userId });
   } catch (err) { next(err); }
 }
 
@@ -131,5 +139,9 @@ export async function cancel(req, res, next) {
       req,
     });
     res.json({ success: true, data });
+    // A cancellation must reverse ledger, stock and udhar effects; re-evaluate
+    // the bill (and the customer) so any incomplete reversal surfaces.
+    scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.BILL, data.id, { userId: req.user?.userId });
+    if (data.customerId) scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.CUSTOMER, data.customerId, { userId: req.user?.userId });
   } catch (err) { next(err); }
 }

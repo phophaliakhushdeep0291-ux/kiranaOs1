@@ -1,6 +1,8 @@
 import * as svc from "./inventory.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
+import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
+import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
 
 function movementIdentity(req) {
   const deviceHeader = req.headers?.["x-device-id"];
@@ -34,6 +36,10 @@ export async function purchase(req, res, next) {
       movementIdentity(req),
     );
     res.status(data.idempotentReplay ? 200 : 201).json({ success: true, data });
+    if (!data.idempotentReplay) {
+      scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.PRODUCT, data.productId, { userId: req.user?.userId });
+      if (data.purchaseHistoryId) scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.PURCHASE, data.purchaseHistoryId, { userId: req.user?.userId });
+    }
   } catch (err) { next(err); }
 }
 
@@ -94,6 +100,7 @@ export async function correction(req, res, next) {
       req,
     });
     res.json({ success: true, data });
+    scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.PRODUCT, data.productId, { userId: req.user?.userId });
   } catch (err) { next(err); }
 }
 

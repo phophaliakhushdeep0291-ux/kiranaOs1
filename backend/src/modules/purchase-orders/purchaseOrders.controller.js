@@ -3,6 +3,8 @@ import { requestLocationId } from "../stores/location-context.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { publishIntegrationEvent } from "../integrations/integrations.service.js";
 import { assertLocationCapability } from "../stores/location-access.service.js";
+import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
+import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
 
 async function assertOrderAccess(req, capability) {
   const order = await service.getPurchaseOrder(req.shopId, req.params.id);
@@ -50,6 +52,9 @@ export async function receive(req, res, next) {
       await publishIntegrationEvent(req.shopId, "purchase_order.received", { id: data.purchaseOrder.id, orderNumber: data.purchaseOrder.orderNumber, receiptId: data.receipt.id, totalAmount: data.receipt.totalAmount, locationId: data.purchaseOrder.locationId, status: data.purchaseOrder.status }).catch(() => []);
     }
     res.status(data.idempotentReplay ? 200 : 201).json({ success: true, data });
+    if (!data.idempotentReplay && data.receipt?.id) {
+      scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.PURCHASE, data.receipt.id, { userId: req.user?.userId });
+    }
   } catch (error) { next(error); }
 }
 export async function reconcileReceipt(req, res, next) {
@@ -79,6 +84,7 @@ export async function reconcileReceipt(req, res, next) {
       matchStatus: receipt?.matchStatus,
     }).catch(() => []);
     res.json({ success: true, data });
+    scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.PURCHASE, req.params.receiptId, { userId: req.user?.userId });
   } catch (error) { next(error); }
 }
 export async function cancel(req, res, next) {

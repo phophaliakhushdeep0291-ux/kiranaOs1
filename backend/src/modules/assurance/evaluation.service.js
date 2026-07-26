@@ -180,7 +180,9 @@ async function loadRuleOverrides(shopId, client) {
  * ruleError and the rest of the evaluation continues.
  */
 export async function evaluateEntity(shopId, entityType, entityId, options = {}) {
-  const { runId = null, client = db, overrides = null, actorUserId = null } = options;
+  // `rules` lets a caller evaluate an explicit subset (targeted re-checks, and
+  // fault-isolation tests) instead of the whole registry for the entity type.
+  const { runId = null, client = db, overrides = null, actorUserId = null, rules = null } = options;
   const normalizedType = String(entityType || "").toUpperCase();
   if (!Object.values(ENTITY_TYPES).includes(normalizedType)) {
     throw new AppError(`Unsupported audit entity type: ${entityType}`, 400, "UNSUPPORTED_AUDIT_ENTITY_TYPE");
@@ -190,7 +192,7 @@ export async function evaluateEntity(shopId, entityType, entityId, options = {})
   const ruleOverrides = overrides ?? (await loadRuleOverrides(shopId, client));
   const events = materializeEvents(ctx);
 
-  const candidateRules = rulesForEntityType(normalizedType).filter((rule) => {
+  const candidateRules = (rules ?? rulesForEntityType(normalizedType)).filter((rule) => {
     const shopEnabled = ruleOverrides.enabled.has(rule.ruleCode) ? ruleOverrides.enabled.get(rule.ruleCode) : rule.enabled;
     return shopEnabled;
   });
@@ -328,6 +330,10 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
       historyLabel: result.historyLabel,
       priorConfirmedFindings: result.priorConfirmedFindings,
       preClampScore: result.preClampScore,
+      modifiedScore: result.modifiedScore,
+      scoreFloor: result.scoreFloor,
+      scoreFloorRuleCode: result.scoreFloorRuleCode,
+      scoreFloorApplied: result.scoreFloorApplied,
       finalScore: result.finalScore,
       riskLevel: result.riskLevel,
       confidence: result.confidence,

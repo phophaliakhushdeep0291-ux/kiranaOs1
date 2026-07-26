@@ -21,7 +21,7 @@ export const syncIntegrityRules = [
   defineRule({
     ruleCode: "SYNC_DUPLICATE_OFFLINE_EVENT",
     name: "Duplicate offline sync event",
-    description: "More than one sync event row exists for the same client event id, so the same offline operation was submitted twice.",
+    description: "The same offline operation was submitted more than once — either under a repeated event id, or re-queued under a fresh event id with an identical request payload.",
     category: RULE_CATEGORIES.SYNC_INTEGRITY,
     severity: SEVERITY.HIGH,
     defaultWeight: 28,
@@ -31,14 +31,18 @@ export const syncIntegrityRules = [
     evidenceTypes: [EVIDENCE_TYPES.DEVICE_TIMESTAMP_METADATA],
     remediation: "Verify the underlying transaction exists exactly once. Idempotency keys should have collapsed the retry.",
     evaluate(ctx) {
-      const twins = ctx.sameEventId ?? [];
-      if (!twins.length) return passed;
+      const sameId = ctx.sameEventId ?? [];
+      const samePayload = ctx.sameRequestPayload ?? [];
+      if (!sameId.length && !samePayload.length) return passed;
       return triggered({
         eventId: ctx.syncEvent.eventId,
         type: ctx.syncEvent.type,
-        duplicateRowIds: twins.map((row) => row.id),
-        duplicateCount: twins.length,
-        statuses: [...new Set([ctx.syncEvent.status, ...twins.map((row) => row.status)])],
+        // `same_event_id` means the uniqueness guard was bypassed; `same_payload`
+        // means the client re-queued the same operation under a new id.
+        duplicateKind: sameId.length ? "same_event_id" : "same_request_payload",
+        duplicateRowIds: [...sameId, ...samePayload].map((row) => row.id),
+        duplicateCount: sameId.length + samePayload.length,
+        statuses: [...new Set([ctx.syncEvent.status, ...sameId.map((r) => r.status), ...samePayload.map((r) => r.status)])],
       });
     },
   }),
@@ -158,6 +162,9 @@ export const syncIntegrityRules = [
     category: RULE_CATEGORIES.SYNC_INTEGRITY,
     severity: SEVERITY.CRITICAL,
     defaultWeight: 45,
+    // Tenant isolation does not depend on the amount: a ₹50 cross-shop reference
+    // is as serious as a ₹50,000 one, so this rule declares a CRITICAL floor.
+    minimumRiskScore: 85,
     version: 1,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],

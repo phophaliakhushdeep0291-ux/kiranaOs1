@@ -165,6 +165,19 @@ function jsonReplacer(_key, value) {
 
 export async function resetDatabase(db) {
   await db.$transaction([
+    // Assurance tables first: they reference findings/runs which reference shops.
+    db.auditCaseFinding.deleteMany(),
+    db.auditCase.deleteMany(),
+    db.auditReview.deleteMany(),
+    db.auditFindingStatusHistory.deleteMany(),
+    db.auditEvidence.deleteMany(),
+    db.auditEvidenceRequirement.deleteMany(),
+    db.auditFindingRule.deleteMany(),
+    db.auditFinding.deleteMany(),
+    db.auditEvaluation.deleteMany(),
+    db.auditRun.deleteMany(),
+    db.auditBaseline.deleteMany(),
+    db.auditRule.deleteMany(),
     db.pricingDecisionEvent.deleteMany(),
     db.billItemLotAllocation.deleteMany(),
     db.inventoryLot.deleteMany(),

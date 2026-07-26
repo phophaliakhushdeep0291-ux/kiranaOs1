@@ -2,6 +2,8 @@ import db from "../../db.js";
 import * as svc from "./expenses.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { requestLocationId } from "../stores/location-context.service.js";
+import { scheduleAuditEvaluation } from "../assurance/assurance.hooks.js";
+import { ENTITY_TYPES } from "../assurance/assurance.constants.js";
 
 export async function list(req, res, next) {
   try { res.json({ success: true, data: await svc.listExpenses(req.shopId, { ...req.query, locationId: requestLocationId(req) }) }); }
@@ -39,12 +41,18 @@ export async function create(req, res, next) {
       req,
     });
     res.status(expense.idempotentReplay ? 200 : 201).json({ success: true, data: expense });
+    if (!expense.idempotentReplay) {
+      scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.EXPENSE, expense.id, { userId: req.user?.userId });
+    }
   } catch (err) { next(err); }
 }
 
 export async function update(req, res, next) {
-  try { res.json({ success: true, data: await svc.updateExpense(req.shopId, req.params.id, req.body) }); }
-  catch (err) { next(err); }
+  try {
+    const expense = await svc.updateExpense(req.shopId, req.params.id, req.body);
+    res.json({ success: true, data: expense });
+    scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.EXPENSE, req.params.id, { userId: req.user?.userId });
+  } catch (err) { next(err); }
 }
 
 export async function remove(req, res, next) {

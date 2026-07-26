@@ -57,29 +57,13 @@ export const billingRules = [
     },
   }),
 
-  defineRule({
-    ruleCode: "BILL_WEAK_IDEMPOTENCY",
-    name: "Offline bill has no durable idempotency identity",
-    description: "A bill that originated on a device carries neither an idempotency key nor a client bill id, so a sync retry cannot be de-duplicated.",
-    category: RULE_CATEGORIES.SYNC_INTEGRITY,
-    severity: SEVERITY.MEDIUM,
-    defaultWeight: 14,
-    version: 1,
-    applicableEntityTypes: BILL,
-    applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],
-    evidenceTypes: [EVIDENCE_TYPES.DEVICE_TIMESTAMP_METADATA],
-    remediation: "Check the device's app version; older clients did not send durable idempotency keys. Verify no duplicate of this sale exists.",
-    evaluate(ctx) {
-      const { bill } = ctx;
-      if (!bill.sourceDeviceId && !bill.deviceId) return passed;
-      if (bill.idempotencyKey || bill.clientBillId) return passed;
-      return triggered({
-        sourceDeviceId: bill.sourceDeviceId ?? bill.deviceId,
-        idempotencyKey: null,
-        clientBillId: null,
-      });
-    },
-  }),
+  // DEFERRED (was BILL_WEAK_IDEMPOTENCY): "a bill from the offline queue with no
+  // durable idempotency identity". Bill.sourceDeviceId is populated from the
+  // request's device header for EVERY sale, online or offline, and no column
+  // marks offline origin, so this rule could not distinguish an ordinary counter
+  // sale from an offline replay — it fired on essentially every bill. Duplicate
+  // retries are already covered by the @@unique idempotency constraints plus
+  // BILL_NEAR_DUPLICATE and BILL_SYNC_RETRY_STORM. See docs/AUDIT_LIMITATIONS.md.
 
   defineRule({
     ruleCode: "BILL_NEAR_DUPLICATE",
@@ -96,14 +80,38 @@ export const billingRules = [
     evaluate(ctx) {
       const candidates = ctx.duplicateCandidates ?? [];
       if (!candidates.length) return passed;
-      const signature = itemSignature(ctx.bill.items);
-      const matches = candidates.filter((candidate) => itemSignature(candidate.items) === signature);
+      const { bill } = ctx;
+      const signature = itemSignature(bill.items);
+      let matches = candidates.filter((candidate) => itemSignature(candidate.items) === signature);
       if (!matches.length) return passed;
+
+      // Two different walk-in customers buying the same item for the same amount
+      // minutes apart is ordinary kirana trade, not a duplicate. Without an
+      // identified customer the only trustworthy duplicate signal is the same
+      // device double-submitting within seconds, so the bar is much higher.
+      const WALKIN_WINDOW_SECONDS = 120;
+      const identifiedCustomer = Boolean(bill.customerId);
+      let windowSeconds = 10 * 60;
+      if (!identifiedCustomer) {
+        const device = bill.deviceId ?? bill.sourceDeviceId ?? null;
+        if (!device) return passed;
+        windowSeconds = WALKIN_WINDOW_SECONDS;
+        const billTime = new Date(bill.createdAt).getTime();
+        matches = matches.filter((candidate) => {
+          const sameDevice = (candidate.deviceId ?? candidate.sourceDeviceId ?? null) === device;
+          const secondsApart = Math.abs(new Date(candidate.createdAt).getTime() - billTime) / 1000;
+          return sameDevice && secondsApart <= WALKIN_WINDOW_SECONDS;
+        });
+        if (!matches.length) return passed;
+      }
+
       return triggered({
-        grandTotal: money(ctx.bill.grandTotal),
+        grandTotal: money(bill.grandTotal),
         itemSignature: signature,
         matchingBillIds: matches.map((b) => b.id),
-        windowMinutes: 10,
+        customerIdentified: identifiedCustomer,
+        windowSeconds,
+        windowMinutes: Number((windowSeconds / 60).toFixed(2)),
       });
     },
   }),
@@ -407,9 +415,9 @@ export const billingRules = [
   }),
 
   defineRule({
-    ruleCode: "BILL_RECORDED_AFTER_CLOSING_LOCK",
-    name: "Bill for a locked day was recorded after the closing lock",
-    description: "The bill belongs to a business day whose daily closing is locked, but it was recorded after the lock — so the locked closing figures no longer match the day's bills.",
+    ruleCode: "BILL_BACKDATED_INTO_LOCKED_DAY",
+    name: "Bill backdated into a locked day",
+    description: "The bill's own timestamp falls inside a locked business day and before the lock, but it only reached the server after that day was locked — so it silently changed figures that were already signed off.",
     category: RULE_CATEGORIES.CASH_CLOSING,
     severity: SEVERITY.HIGH,
     defaultWeight: 28,
@@ -417,18 +425,30 @@ export const billingRules = [
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],
     evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.DEVICE_TIMESTAMP_METADATA, EVIDENCE_TYPES.STAFF_EXPLANATION],
-    remediation: "Late offline sales are legitimate but the day's closing must be re-opened, refreshed and re-locked with owner approval.",
+    remediation: "Late offline sales are legitimate, but the affected day's closing must be re-opened, refreshed and re-locked with owner approval.",
     evaluate(ctx) {
       const snapshot = ctx.closingSnapshot;
       if (!snapshot?.lockedAt) return passed;
       const lockedAt = new Date(snapshot.lockedAt).getTime();
-      const recordedAt = new Date(ctx.bill.createdAt).getTime();
-      if (recordedAt <= lockedAt) return passed;
+      const billTime = new Date(ctx.bill.createdAt).getTime();
+      // A sale simply made later in the day is not backdated. That case is
+      // reported once on the closing itself (CLOSING_LATE_TRANSACTION_AFTER_LOCK)
+      // rather than on every bill, which would flood the shop with findings.
+      if (billTime > lockedAt) return passed;
+
+      // Bill timestamps are server-assigned, so the only way a bill can carry a
+      // pre-lock timestamp yet arrive post-lock is an offline replay. Without
+      // that trail there is nothing to prove and the rule stays silent.
+      const lateSyncEvents = (ctx.syncEvents ?? []).filter((event) => new Date(event.createdAt).getTime() > lockedAt);
+      if (!lateSyncEvents.length) return passed;
+
       return triggered({
         closingSnapshotId: snapshot.id,
-        closingLockedAt: new Date(snapshot.lockedAt).toISOString(),
-        billRecordedAt: new Date(ctx.bill.createdAt).toISOString(),
-        minutesAfterLock: Math.round((recordedAt - lockedAt) / 60000),
+        closingLockedAt: new Date(lockedAt).toISOString(),
+        billTimestamp: new Date(billTime).toISOString(),
+        syncedAfterLockAt: new Date(lateSyncEvents[0].createdAt).toISOString(),
+        minutesLate: Math.round((new Date(lateSyncEvents[0].createdAt).getTime() - lockedAt) / 60000),
+        syncEventIds: lateSyncEvents.map((event) => event.id),
         grandTotal: money(ctx.bill.grandTotal),
       });
     },

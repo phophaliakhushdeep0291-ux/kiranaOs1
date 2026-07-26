@@ -85,7 +85,20 @@ export function scoreFinding(triggeredRules, options = {}) {
   const history = historyModifierFor(priorConfirmedFindings);
 
   const preClampScore = baseScore * materiality.multiplier * history.multiplier;
-  const finalScore = Math.max(0, Math.min(100, Math.round(preClampScore)));
+  const modifiedScore = Math.max(0, Math.min(100, Math.round(preClampScore)));
+
+  // Some defects are severe regardless of the rupee amount — a cross-tenant
+  // reference matters whether the bill is ₹50 or ₹50,000, and the per-rule cap
+  // otherwise makes it impossible for one rule to reach CRITICAL on its own.
+  // A rule may therefore declare a floor. It is applied last, recorded here, and
+  // attributed to the rule that set it, so the score stays fully explainable.
+  const floorEntry = triggeredRules
+    .map(({ rule }) => ({ ruleCode: rule.ruleCode, floor: Number(rule.minimumRiskScore ?? 0) }))
+    .filter((entry) => Number.isFinite(entry.floor) && entry.floor > 0)
+    .sort((left, right) => right.floor - left.floor)[0] ?? null;
+
+  const appliedFloor = floorEntry && floorEntry.floor > modifiedScore ? floorEntry : null;
+  const finalScore = appliedFloor ? Math.min(100, appliedFloor.floor) : modifiedScore;
   const riskLevel = riskLevelForScore(finalScore);
   const confidence = computeConfidence(triggeredRules, options);
 
@@ -99,12 +112,18 @@ export function scoreFinding(triggeredRules, options = {}) {
     historyLabel: history.label,
     priorConfirmedFindings: history.priorConfirmedFindings,
     preClampScore: Number(preClampScore.toFixed(2)),
+    modifiedScore,
+    scoreFloor: floorEntry?.floor ?? null,
+    scoreFloorRuleCode: floorEntry?.ruleCode ?? null,
+    scoreFloorApplied: Boolean(appliedFloor),
     finalScore,
     riskLevel,
     confidence: confidence.value,
     confidenceReasons: confidence.reasons,
     triggeredRules: contributions,
-    formula: "final = clamp(round(min(100, Σ min(60, weight × severityMultiplier)) × materiality × history), 0, 100)",
+    formula:
+      "modified = clamp(round(min(100, Σ min(60, weight × severityMultiplier)) × materiality × history), 0, 100); " +
+      "final = max(modified, declared rule floor)",
   };
 }
 

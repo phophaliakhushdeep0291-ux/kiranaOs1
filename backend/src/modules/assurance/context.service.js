@@ -149,6 +149,7 @@ async function buildBillContext(shopId, billId, client) {
         createdAt: { gte: windowStart, lte: windowEnd },
       },
       include: { items: { select: { productId: true, quantity: true } } },
+      // deviceId/createdAt are needed by the walk-in duplicate guard.
       take: 10,
     }),
     client.bill.findMany({
@@ -470,15 +471,24 @@ async function buildPurchaseContext(shopId, entityId, client) {
   if (!history) throw new AuditContextError("Purchase not found in this shop", "ENTITY_NOT_FOUND");
 
   const [stockRows, duplicateInvoices, productHistory, sameAmountSameDay, closingSnapshot, priorNegativeSales] = await Promise.all([
+    // Prefer the explicit sourceType/sourceId link so a second purchase of the
+    // same product inside the window cannot be counted against this one. The
+    // time-window arm is only a fallback for legacy rows that predate the link.
     client.stockLedger.findMany({
       where: {
         shopId,
         productId: history.productId,
         action: "purchase",
-        createdAt: {
-          gte: new Date(new Date(history.createdAt).getTime() - DUPLICATE_WINDOW_MS),
-          lte: new Date(new Date(history.createdAt).getTime() + DUPLICATE_WINDOW_MS),
-        },
+        OR: [
+          { sourceType: "purchase", sourceId: history.id },
+          {
+            sourceId: null,
+            createdAt: {
+              gte: new Date(new Date(history.createdAt).getTime() - DUPLICATE_WINDOW_MS),
+              lte: new Date(new Date(history.createdAt).getTime() + DUPLICATE_WINDOW_MS),
+            },
+          },
+        ],
       },
     }),
     history.invoiceNumber
@@ -673,12 +683,30 @@ async function buildSyncEventContext(shopId, eventRowId, client) {
   const event = await client.offlineSyncEvent.findFirst({ where: { id: eventRowId, shopId } });
   if (!event) throw new AuditContextError("Sync event not found in this shop", "ENTITY_NOT_FOUND");
 
-  const [settings, baselines, sameEventId, conflicts] = await Promise.all([
+  const [settings, baselines, sameEventId, sameRequestPayload, conflicts] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
+    // Defensive: `@@unique([shopId, eventId])` should make this impossible, so a
+    // hit here means the constraint was bypassed (restore, import, migration).
     client.offlineSyncEvent.findMany({
       where: { shopId, eventId: event.eventId, id: { not: event.id } },
       select: { id: true, status: true, attempts: true, createdAt: true },
+      take: 10,
+    }),
+    // The realistic duplicate: a client re-queued the same operation under a
+    // fresh event id, so the uniqueness guard never saw it as a retry.
+    client.offlineSyncEvent.findMany({
+      where: {
+        shopId,
+        id: { not: event.id },
+        type: event.type,
+        requestJson: event.requestJson,
+        createdAt: {
+          gte: new Date(new Date(event.createdAt).getTime() - 60 * 60 * 1000),
+          lte: new Date(new Date(event.createdAt).getTime() + 60 * 60 * 1000),
+        },
+      },
+      select: { id: true, eventId: true, status: true, attempts: true, createdAt: true },
       take: 10,
     }),
     client.syncConflict.findMany({
@@ -696,8 +724,14 @@ async function buildSyncEventContext(shopId, eventRowId, client) {
     baselines,
     syncEvent: event,
     sameEventId,
+    sameRequestPayload,
     conflicts,
-    inputHash: computeInputHash({ event, sameEventIdIds: sameEventId.map((e) => e.id), conflictIds: conflicts.map((c) => c.id) }),
+    inputHash: computeInputHash({
+      event,
+      sameEventIdIds: sameEventId.map((e) => e.id),
+      samePayloadIds: sameRequestPayload.map((e) => e.id),
+      conflictIds: conflicts.map((c) => c.id),
+    }),
   };
 }
 
