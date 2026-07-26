@@ -23,9 +23,9 @@ export function sampleReceiptSnapshot(
     customerName: "Walk-in customer",
     customerMobile: cfg.showCustomerPhone ? "9876543210" : "",
     rows: [
-      { name: "Tata Salt 1kg", quantity: 2, unit: "pkt", rate: 28, total: 56, hsn: "2501" },
-      { name: "Aashirvaad Atta 5kg", quantity: 1, unit: "bag", rate: 245, total: 235, lineDiscount: 10, hsn: "1101" },
-      { name: "Amul Butter 100g", quantity: 3, unit: "pcs", rate: 62, total: 186, note: "no bag", hsn: "0405" },
+      { name: "Tata Salt 1kg", quantity: 2, unit: "pkt", rate: 28, total: 56, mrp: 30, hsn: "2501" },
+      { name: "Aashirvaad Atta 5kg", quantity: 1, unit: "bag", rate: 245, total: 235, lineDiscount: 10, mrp: 260, hsn: "1101" },
+      { name: "Amul Butter 100g", quantity: 3, unit: "pcs", rate: 62, total: 186, note: "no bag", mrp: 64, hsn: "0405" },
     ],
     subtotal: 477,
     discount: cfg.showDiscount ? 7 : 0,
@@ -34,6 +34,7 @@ export function sampleReceiptSnapshot(
     credit: 0,
     payments: [{ mode: "cash", amount: 470 }],
     showHsn: cfg.showHsn,
+    showMrp: cfg.showMrp,
     // Sample "You saved" figure so the toggle visibly changes the preview.
     savings: cfg.showSavings ? 63 : undefined,
     gst: cfg.showGstBreakup
