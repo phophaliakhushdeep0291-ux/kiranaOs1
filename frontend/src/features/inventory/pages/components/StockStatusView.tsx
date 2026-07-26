@@ -8,7 +8,14 @@ import { AlertTriangle, Boxes, ChevronLeft, ChevronRight, IndianRupee, Layers, M
 import { useDebounce } from "@/hooks/use-debounce";
 import { usePanelResize } from "@/hooks/use-panel-resize";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
-import { averageCost, fromBaseQty, isDeletedProduct, productDisplayUnit, toBaseQty } from "@/features/products/pages/product-pricing";
+import { isDeletedProduct } from "@/features/products/pages/product-pricing";
+import {
+  inventoryBaseQuantity,
+  inventoryDisplayQuantity,
+  inventoryStockValue,
+  inventoryUnitLabel,
+  mergeInventoryRows,
+} from "@/features/inventory/stock-display";
 import { productMatchesSearch } from "@/features/products/product-reliability";
 import { StockMovementDialog } from "./StockMovementDialog";
 
@@ -29,22 +36,18 @@ function categoryBadge(name: string) {
   return CATEGORY_BADGE[h % CATEGORY_BADGE.length];
 }
 
-function stockBaseQty(product: Product): number {
-  const record = product as unknown as Record<string, unknown>;
-  const baseQty = product.stockBaseQty ?? record.stock_base_qty ?? record.currentStockBaseQty ?? record.current_stock_base_qty;
-  if (baseQty != null) {
-    const base = Number(baseQty);
-    if (Number.isFinite(base)) return base;
-  }
-  const displayQty = Number(product.stockQuantity ?? record.stock_quantity ?? record.quantity ?? record.qty);
-  if (!Number.isFinite(displayQty)) return 0;
-  return toBaseQty(displayQty, productDisplayUnit(product));
-}
-
-function lowStock(product: Product): boolean {
-  const threshold = Number(product.lowStockThreshold ?? product.lowStockAlert ?? 0);
-  const stock = stockBaseQty(product);
-  return threshold > 0 && stock > 0 && stock <= threshold;
+// Stock quantity and value must respect each product's selling-unit conversion
+// (a "packet" of 6, a 500 g pack, etc.) exactly like the Inventory page. This page
+// previously used plain unit-family math (fromBaseQty/averageCost) that ignored
+// pack sizes, so a packed product's on-hand quantity and stock value came out wrong
+// and disagreed with the Inventory page. Reuse the shared inventory display helpers.
+function lowStock(item: InventoryItem): boolean {
+  if ((item.stockTrackingEnabled ?? item.trackStock ?? true) === false) return false;
+  // Both sides are base units; a positive threshold the on-hand qty has fallen to
+  // (but not to zero — that is "out of stock") counts as low.
+  const threshold = Number(item.lowStockThreshold ?? (item as unknown as Record<string, unknown>).low_stock_threshold ?? 0);
+  const base = inventoryBaseQuantity(item);
+  return threshold > 0 && base > 0 && base <= threshold;
 }
 
 export function StockStatusView({ mode }: { mode: "in" | "out" }) {
@@ -65,21 +68,16 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
     query: { placeholderData: (p: InventoryItem[] | undefined) => p ?? [], staleTime: 60_000 },
   });
 
-  const inventoryByProductId = useMemo(() => {
-    const map = new Map<string, InventoryItem>();
-    for (const item of inventory.data ?? []) {
-      const id = item.id || item.productId;
-      if (id) map.set(id, item);
-    }
-    return map;
-  }, [inventory.data]);
-
-  const all = useMemo(() => (products.data ?? [])
-    .filter((p) => !isDeletedProduct(p))
-    .map((product) => {
-      const stock = inventoryByProductId.get(product.id);
-      return stock ? { ...product, stockBaseQty: stock.stockBaseQty, lowStockThreshold: stock.lowStockThreshold, stockTrackingEnabled: stock.stockTrackingEnabled, trackStock: stock.trackStock } : product;
-    }), [products.data, inventoryByProductId]);
+  // Merge catalogue + authoritative inventory the same way the Inventory page does,
+  // so on-hand quantity, unit and stock value come from one normalised (selling-unit
+  // aware) source instead of being blended by hand and read with plain unit math.
+  const all = useMemo(
+    () => mergeInventoryRows(
+      (products.data ?? []) as unknown as InventoryItem[],
+      inventory.data ?? [],
+    ).filter((p) => !isDeletedProduct(p as unknown as Product)),
+    [products.data, inventory.data],
+  );
   const scoped = all;
 
   const suppliers = useMemo(() => [...new Set(scoped.map((p) => (p.brand ?? "").trim()).filter(Boolean))].sort(), [scoped]);
@@ -88,7 +86,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
     const q = debouncedSearch.toLowerCase();
     return scoped
       .filter((p) => {
-        const stock = stockBaseQty(p);
+        const stock = inventoryBaseQuantity(p);
         const low = lowStock(p);
         if (mode === "in" && statusF === "all") return stock > 0;
         if (mode === "out" && statusF === "all") return stock <= 0;
@@ -103,14 +101,14 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
         if (mode === "in") return (p.brand ?? "").trim() === extraF;
         return extraF === "loose" ? !!p.isLooseItem : !p.isLooseItem;
       })
-      .filter((p) => productMatchesSearch(p, q));
+      .filter((p) => productMatchesSearch(p as unknown as Product, q));
   }, [scoped, statusF, extraF, mode, debouncedSearch]);
 
   const stats = useMemo(() => {
-    const inStock = all.filter((p) => stockBaseQty(p) > 0);
-    const outOfStock = all.filter((p) => stockBaseQty(p) <= 0);
-    const totalQty = inStock.reduce((s, p) => s + fromBaseQty(stockBaseQty(p), productDisplayUnit(p)), 0);
-    const totalValue = inStock.reduce((s, p) => s + fromBaseQty(stockBaseQty(p), productDisplayUnit(p)) * averageCost(p), 0);
+    const inStock = all.filter((p) => inventoryBaseQuantity(p) > 0);
+    const outOfStock = all.filter((p) => inventoryBaseQuantity(p) <= 0);
+    const totalQty = inStock.reduce((s, p) => s + inventoryDisplayQuantity(p), 0);
+    const totalValue = inStock.reduce((s, p) => s + inventoryStockValue(p), 0);
     const cats = new Set(outOfStock.map((p) => (p.category ?? "general").trim() || "general"));
     const lowCount = all.filter((p) => lowStock(p)).length;
     return { inStockCount: inStock.length, outOfStockCount: outOfStock.length, totalQty: Math.round(totalQty), totalValue, cats: cats.size, lowCount };
@@ -247,10 +245,9 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
                 </td></tr>
               ) : (
                 pagedRows.map((p) => {
-                  const unit = productDisplayUnit(p);
-                  const baseQty = stockBaseQty(p);
-                  const qty = fromBaseQty(baseQty, unit);
-                  const value = qty * averageCost(p);
+                  const unit = inventoryUnitLabel(p);
+                  const qty = inventoryDisplayQuantity(p);
+                  const value = inventoryStockValue(p);
                   const cat = (p.category ?? "general").trim() || "general";
                   const low = lowStock(p);
                   const brand = p.brand ?? p.aliases?.[0] ?? "";
