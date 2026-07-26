@@ -168,6 +168,9 @@ automation re-firing the request, not from a product defect.
       toggle was dead (renderer never read it). Wired it: `computeBillSavings`
       sums each line's MRP gap + line discount + the bill discount, printed as
       a green "You saved" line. *(done 2026-07-25)*
+- [x] **"Show MRP" on the receipt** — third dead printer toggle. Now each line
+      prints its MRP struck-through under the name when the MRP beats the sold
+      rate. *(done 2026-07-26)*
 - [ ] **"Show previous udhar" on the receipt** — the second dead printer
       toggle (`showPreviousUdhar`): switch exists, renderer ignores it. Needs
       the customer's prior outstanding balance threaded into the receipt
