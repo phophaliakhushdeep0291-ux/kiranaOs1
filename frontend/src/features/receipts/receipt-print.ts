@@ -21,6 +21,8 @@ export interface ReceiptLine {
   lineDiscount?: number;
   /** Free-text line note ("no bag") — shown under the item name. */
   note?: string | null;
+  /** Product MRP — shown struck-through under the item when Show MRP is on and it beats the rate. */
+  mrp?: number | null;
   hsn?: string | null;
 }
 
@@ -64,6 +66,8 @@ export interface ReceiptSnapshot {
   gst?: ReceiptGstInfo | null;
   /** Show the HSN code under item names (GST invoices). */
   showHsn?: boolean;
+  /** Show each item's MRP (struck through) under its name. */
+  showMrp?: boolean;
   /** Total the customer saved (MRP gap + discounts). Prints a "You saved" line when > 0. */
   savings?: number;
 }
@@ -137,7 +141,7 @@ function paymentLabel(mode: string, fallback?: string | null) {
   return safeText(mode, "Payment");
 }
 
-function receiptRows(rows: ReceiptLine[], showHsn = false) {
+function receiptRows(rows: ReceiptLine[], showHsn = false, showMrp = false) {
   if (rows.length === 0) {
     return `<tr><td class="empty" colspan="4">No items recorded</td></tr>`;
   }
@@ -147,6 +151,7 @@ function receiptRows(rows: ReceiptLine[], showHsn = false) {
             <span class="serial">${index + 1}.</span>
             <span>${escapeHtml(safeText(item.name, "Item"))}</span>
             ${showHsn && item.hsn ? `<div class="hsn">HSN: ${escapeHtml(safeText(item.hsn))}</div>` : ""}
+            ${showMrp && Number(item.mrp) > Number(item.rate) ? `<div class="hsn">MRP <s>${formatReceiptMoney(Number(item.mrp))}</s></div>` : ""}
             ${Number(item.lineDiscount) > 0 ? `<div class="hsn">Less discount ${formatReceiptMoney(Number(item.lineDiscount))}</div>` : ""}
             ${cleanText(item.note) ? `<div class="hsn">${escapeHtml(cleanText(item.note))}</div>` : ""}
           </td>
@@ -247,7 +252,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
           <thead>
             <tr><th>Item</th><th class="right">Qty</th><th class="right">Rate</th><th class="right">Amt</th></tr>
           </thead>
-          <tbody>${receiptRows(snapshot.rows, Boolean(snapshot.showHsn))}</tbody>
+          <tbody>${receiptRows(snapshot.rows, Boolean(snapshot.showHsn), Boolean(snapshot.showMrp))}</tbody>
         </table>
         <section class="summary">
           <div class="line"><span>Subtotal</span><strong>${formatReceiptMoney(snapshot.subtotal)}</strong></div>

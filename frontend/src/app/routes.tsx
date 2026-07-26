@@ -62,6 +62,7 @@ const SyncStatusPage = lazy(() => import("@/features/sync/pages/SyncStatusPage")
 const PlansPage = lazy(() => import("@/features/subscription/pages/PlansPage"));
 const SubscriptionPage = lazy(() => import("@/features/subscription/pages/SubscriptionPage"));
 const DevicesPage = lazy(() => import("@/features/devices/pages/DevicesPage"));
+const PlatformAdminPage = lazy(() => import("@/features/platform-admin/pages/PlatformAdminPage"));
 const StaffPage = lazy(() => import("@/features/staff/pages/StaffPage"));
 const AuditLogsPage = lazy(() => import("@/features/audit-logs/pages/AuditLogsPage"));
 const RecycleBinPage = lazy(() => import("@/features/recycle-bin/pages/RecycleBinPage"));
@@ -345,6 +346,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/devices">
         <ProtectedRoute component={DevicesPage} />
+      </Route>
+      <Route path="/platform-admin">
+        <ProtectedRoute component={PlatformAdminPage} />
       </Route>
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} featureName="staff_login" />
