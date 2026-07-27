@@ -35,11 +35,20 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
 let cache: AppPreferences = { ...DEFAULT_APP_PREFERENCES };
 let hydrated = false;
 
+/** Storage is absent under SSR/tests and can throw in private mode. */
+function storage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
 function hydrate(): AppPreferences {
   if (hydrated) return cache;
   hydrated = true;
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = storage()?.getItem(KEY);
     if (raw) cache = { ...DEFAULT_APP_PREFERENCES, ...(JSON.parse(raw) as Partial<AppPreferences>) };
   } catch {
     /* keep defaults */
@@ -66,7 +75,7 @@ export function applyAppPreferences(partial: Partial<AppPreferences>): AppPrefer
   hydrate();
   cache = { ...cache, ...partial };
   try {
-    localStorage.setItem(KEY, JSON.stringify(cache));
+    storage()?.setItem(KEY, JSON.stringify(cache));
   } catch {
     /* preference still applies for this session */
   }
@@ -88,6 +97,7 @@ export function autoCleanupEnabled(): boolean {
  */
 export function playCounterBeep(kind: "success" | "error" = "success"): void {
   if (!hydrate().sound) return;
+  if (typeof window === "undefined") return;
   try {
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return;

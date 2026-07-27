@@ -628,17 +628,27 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
   const dayStart = startOfDay(new Date(snapshot.date));
   const dayEnd = endOfDay(new Date(snapshot.date));
 
-  const [settings, baselines, bills, payments, udharPayments, expenses, lateSyncEvents] = await Promise.all([
+  // Payments are loaded by the day's BILL ids, not by the payment's own date.
+  // This matches how the product computes a day's cash
+  // (reports.service.js#getDailyClosing sums every payment attached to that
+  // day's active bills). Filtering by payment date instead would report a false
+  // mismatch whenever a bill from one day is paid on the next, and would make
+  // the split-payment check see only part of a bill's tender.
+  const bills = await client.bill.findMany({
+    where: { shopId, createdAt: { gte: dayStart, lte: dayEnd } },
+    select: { id: true, billNo: true, billType: true, status: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true },
+  });
+  const dayBillIds = bills.map((bill) => bill.id);
+
+  const [settings, baselines, payments, udharPayments, expenses, lateSyncEvents] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
-    client.bill.findMany({
-      where: { shopId, createdAt: { gte: dayStart, lte: dayEnd } },
-      select: { id: true, billNo: true, billType: true, status: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true },
-    }),
-    client.payment.findMany({
-      where: { bill: { shopId }, createdAt: { gte: dayStart, lte: dayEnd } },
-      select: { id: true, billId: true, mode: true, amount: true, status: true, providerReference: true },
-    }),
+    dayBillIds.length
+      ? client.payment.findMany({
+          where: { billId: { in: dayBillIds } },
+          select: { id: true, billId: true, mode: true, amount: true, status: true, providerReference: true },
+        })
+      : Promise.resolve([]),
     client.udharLedger.findMany({
       where: { shopId, type: "payment", createdAt: { gte: dayStart, lte: dayEnd } },
       select: { id: true, amount: true, mode: true, reversedAt: true, billId: true },

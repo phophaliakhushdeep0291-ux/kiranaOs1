@@ -233,6 +233,11 @@ for future noise.
 3. **Stock movements after a lock.** `STOCK_CHANGED_AFTER_CLOSING_LOCK` skips
    `sale` movements for the same reason; only deliberate entries (corrections,
    damage, purchases) are reported.
+4. **A bill paid the next day.** The closing rules originally loaded payments by the
+   payment's own date, so a bill from one day settled on the next produced both a
+   false `CLOSING_CASH_FIGURE_STALE` and a false `CLOSING_SPLIT_PAYMENT_MISMATCH`.
+   The context now loads payments by the day's bill ids, which is exactly how
+   `reports.service.js#getDailyClosing` computes the day's cash.
 
 Remaining known noise sources, by design:
 
