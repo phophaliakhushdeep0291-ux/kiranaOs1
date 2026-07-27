@@ -45,6 +45,29 @@ function clean(value: string) {
   return value.trim();
 }
 
+interface StoredDoc {
+  name: string;
+  size: number;
+  type: string;
+  at: string;
+  dataUrl?: string;
+}
+
+/** Older builds stored the string "uploaded"; treat that as no real file. */
+function normaliseDoc(value: unknown): StoredDoc | null {
+  if (!value || typeof value !== "object") return null;
+  const doc = value as Partial<StoredDoc>;
+  if (typeof doc.name !== "string" || !doc.name) return null;
+  return { name: doc.name, size: Number(doc.size) || 0, type: String(doc.type ?? ""), at: String(doc.at ?? new Date().toISOString()), dataUrl: doc.dataUrl };
+}
+
+function formatFileSize(bytes: number) {
+  if (!bytes) return "size unknown";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function StoreProfilePage() {
   const { toast } = useToast();
   const { user, updateShop: updateAuthShop } = useAuth();
@@ -55,7 +78,7 @@ export default function StoreProfilePage() {
   const sp = (prefs.storeProfile ?? {}) as Record<string, string>;
   const hours = (prefs.hours ?? {}) as Record<string, DayHours>;
   const bank = (prefs.bank ?? {}) as Record<string, string>;
-  const docs = (prefs.docs ?? {}) as Record<string, string>;
+  const docs = (prefs.docs ?? {}) as Record<string, unknown>;
 
   const [biz, setBiz] = useState({ name: "", ownerName: "", phone: "", altPhone: "", email: "", gstNumber: "", pan: "", businessTypeKey: getStoredBusinessType() as BusinessType, currency: "₹ Indian Rupee" });
   const [addr, setAddr] = useState({ address: "", city: "", state: "", pincode: "", country: "India", deliveryRadius: "" });
@@ -63,6 +86,7 @@ export default function StoreProfilePage() {
   const [pinError, setPinError] = useState<string | null>(null);
   const seeded = useRef(false);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const docInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const updateShop = useUpdateShop({
     mutation: {
@@ -183,9 +207,55 @@ export default function StoreProfilePage() {
     const q = encodeURIComponent([addr.address, addr.city, addr.state, addr.pincode].filter(Boolean).join(", ") || "my shop");
     window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, "_blank", "noopener");
   }
-  function markDocUploaded(key: string) {
-    patch({ docs: { ...docs, [key]: "uploaded" } });
-    toast({ title: "Document marked uploaded", description: "Verification is completed by our team after review." });
+  /**
+   * Documents are held on this device until a verification service exists to
+   * receive them — so the row records the real file name, size and date rather
+   * than flipping a badge to "Uploaded" with nothing behind it.
+   */
+  function attachDocument(key: string, file?: File | null) {
+    if (!file) return;
+    const isAllowed = file.type.startsWith("image/") || file.type === "application/pdf";
+    if (!isAllowed) {
+      toast({ title: "Use a PDF or image", description: "Scans and photos of the document are accepted.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast({ title: "File is too large", description: "Keep each document under 4 MB.", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      patch({
+        docs: {
+          ...docs,
+          [key]: { name: file.name, size: file.size, type: file.type, at: new Date().toISOString(), dataUrl: String(reader.result || "") },
+        },
+      });
+      toast({ title: `${file.name} attached`, description: "Stored on this device. Send it to support when verification opens." });
+    };
+    reader.onerror = () => toast({ title: "Could not read that file", variant: "destructive" });
+    reader.readAsDataURL(file);
+  }
+
+  function removeDocument(key: string) {
+    const next = { ...docs };
+    delete next[key];
+    patch({ docs: next });
+    toast({ title: "Document removed" });
+  }
+
+  function openDocument(doc: StoredDoc) {
+    if (!doc.dataUrl) return;
+    const win = window.open();
+    if (!win) {
+      toast({ title: "Allow pop-ups", description: "Enable pop-ups to preview the document.", variant: "destructive" });
+      return;
+    }
+    win.document.write(
+      doc.type === "application/pdf"
+        ? `<iframe src="${doc.dataUrl}" style="border:0;width:100%;height:100%"></iframe>`
+        : `<img src="${doc.dataUrl}" style="max-width:100%" alt="">`,
+    );
   }
   function uploadLogo(file?: File | null) {
     if (!file) return;
@@ -217,7 +287,10 @@ export default function StoreProfilePage() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-display text-[20px] font-black tracking-tight text-[#0f1e3d]">{biz.name || shop?.name || "My Store"}</h2>
-                <Badge tone="green"><BadgeCheck size={12} /> Verified</Badge>
+                {/* GSTIN is the one identity claim the server actually validates. */}
+                {shop?.gstNumber
+                  ? <Badge tone="green"><BadgeCheck size={12} /> GST registered</Badge>
+                  : <Badge tone="gray">No GSTIN</Badge>}
                 <Badge tone="amber">{planName} Plan</Badge>
               </div>
               <p className="mt-0.5 text-[12px] text-[#52627e]">{BUSINESS_TYPE_DEFS[biz.businessTypeKey].label} · Store ID {storeId}</p>
@@ -332,19 +405,36 @@ export default function StoreProfilePage() {
           <CardHead icon={<FileText size={15} />} title="Verification Documents" sub="Upload for a verified badge" />
           <div className="px-5 pb-5">
             {DOCS.map((d) => {
-              const status = docs[d.key] ?? "missing";
+              const doc = normaliseDoc(docs[d.key]);
               return (
                 <div key={d.key} className="flex flex-wrap items-center gap-3 border-b border-[#eef2f8] py-2.5 last:border-0">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[#f4f7fb] text-[#536583]"><FileText size={14} /></span>
-                  <span className="flex-1 truncate text-[13px] font-bold text-[#102347]">{d.label}</span>
-                  {status === "uploaded"
-                    ? <Badge tone="green"><CheckCircle2 size={11} /> Uploaded</Badge>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-bold text-[#102347]">{d.label}</span>
+                    {doc ? <span className="block truncate text-[11px] text-[#64748b]">{doc.name} · {formatFileSize(doc.size)} · {new Date(doc.at).toLocaleDateString("en-IN")}</span> : null}
+                  </span>
+                  {doc
+                    ? <Badge tone="green"><CheckCircle2 size={11} /> Attached</Badge>
                     : <Badge tone="amber">Missing</Badge>}
-                  <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => markDocUploaded(d.key)}>Upload</Button>
+                  <input
+                    ref={(node) => { docInputRefs.current[d.key] = node; }}
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(event) => { attachDocument(d.key, event.target.files?.[0]); event.target.value = ""; }}
+                  />
+                  {doc ? (
+                    <span className="flex gap-2">
+                      <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => openDocument(doc)}>View</Button>
+                      <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold text-rose-600" onClick={() => removeDocument(d.key)}>Remove</Button>
+                    </span>
+                  ) : (
+                    <Button size="sm" variant="outline" className="h-8 rounded-[8px] text-[12px] font-bold" onClick={() => docInputRefs.current[d.key]?.click()}>Choose file</Button>
+                  )}
                 </div>
               );
             })}
-            <p className="mt-2 text-[11px] text-[#9aa6bb]">Documents are reviewed by our team for the verified badge.</p>
+            <p className="mt-2 text-[11px] text-[#9aa6bb]">Documents stay on this device — Artha has no verification upload service yet, so nothing is sent anywhere and no badge is granted automatically.</p>
           </div>
         </Card>
       </div>

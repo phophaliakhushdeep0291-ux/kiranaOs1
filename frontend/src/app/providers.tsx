@@ -17,6 +17,9 @@ import { CloudDataBootstrap } from "@/features/sync/CloudDataBootstrap";
 import { useMultiDeviceSync } from "@/lib/realtime/useMultiDeviceSync";
 import { startBackgroundLeadershipHeartbeat } from "@/lib/browser/multiTabCoordinator";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
+import { autoCleanupEnabled, getAppPreferences } from "@/features/settings/app-preferences";
+import { loadSecurityPolicy } from "@/features/settings/security-policy";
+import { offlineDB } from "@/lib/offline/db";
 
 function shouldRetryQuery(failureCount: number, error: unknown) {
   if (error instanceof ApiClientError) {

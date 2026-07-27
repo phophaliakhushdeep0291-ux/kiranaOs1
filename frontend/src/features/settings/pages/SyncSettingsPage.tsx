@@ -155,10 +155,10 @@ export default function SyncSettingsPage() {
           <CardHead icon={<RefreshCcw size={15} />} title="Sync Activity" sub="Recent sync events" />
           <div className="px-5 pb-4">
             {[
-              { text: lastSynced ? "Changes synced successfully" : "Waiting for first sync", ok: true, time: timeAgo(lastSynced) },
+              { text: lastSynced ? "Changes synced successfully" : "Waiting for first sync in this session", ok: true, time: timeAgo(lastSynced) },
               { text: `${pendingCount} change${pendingCount === 1 ? "" : "s"} queued to upload`, ok: pendingCount === 0, time: "now" },
-              { text: "Inventory & customers pulled", ok: true, time: "earlier" },
-              { text: failedCount ? `${failedCount} item(s) failed — will retry` : "No failures", ok: failedCount === 0, time: "—" },
+              { text: conflictCount ? `${conflictCount} conflict(s) need review` : "No conflicts to review", ok: conflictCount === 0, time: "now" },
+              { text: failedCount ? `${failedCount} item(s) failed — will retry` : "No failures", ok: failedCount === 0, time: "now" },
             ].map((a, i, arr) => (
               <div key={i} className={`flex items-center gap-3 py-2.5 ${i < arr.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${a.ok ? "bg-emerald-500" : "bg-amber-500"}`} />

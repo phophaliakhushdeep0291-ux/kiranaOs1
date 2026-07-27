@@ -28,25 +28,25 @@ function resolveDeviceId(device: DeviceDto) {
   return device.deviceId || device.device_id || device.id;
 }
 
+/**
+ * Only preferences something in the app actually reads live here. "Data
+ * retention" and "Compress local database" used to sit on this page as
+ * switches nothing consulted — retention is a server-side policy and Dexie has
+ * no compaction knob — so they were removed rather than left as decoration.
+ */
 interface AdvConfig {
-  retention: string;
-  recycleRetention: string;
   autoCleanup: boolean;
-  compressDb: boolean;
   dateFormat: string;
-  currencyFormat: string;
   landingPage: string;
   compactMode: boolean;
   shortcuts: boolean;
   sound: boolean;
-  defaultBilling: string;
   defaultPayment: string;
-  defaultCustomer: string;
 }
 const DEFAULT_ADV: AdvConfig = {
-  retention: "2 years", recycleRetention: "30 days", autoCleanup: true, compressDb: true,
-  dateFormat: "DD/MM/YYYY", currencyFormat: "₹ 1,23,456", landingPage: "Dashboard", compactMode: false, shortcuts: true, sound: true,
-  defaultBilling: "Fast Billing", defaultPayment: "Cash", defaultCustomer: "Walk-in Customer",
+  autoCleanup: true,
+  dateFormat: "DD/MM/YYYY", landingPage: "Dashboard", compactMode: false, shortcuts: true, sound: true,
+  defaultPayment: "Cash",
 };
 const DB_TOOLS = [
   { key: "health", label: "Check database health" },
@@ -336,10 +336,12 @@ export default function AdvancedSettingsPage() {
         <Card>
           <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button onClick={() => void optimizeDatabase()} className="text-[12px] font-bold text-[#005dff] hover:underline">Optimize</button>} />
           <div className="px-5 pb-5">
-            <RowToggle label="Data retention" pill={<Select value={adv.retention} onValueChange={(v) => update({ retention: v })}><SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["1 year", "2 years", "5 years", "Forever"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>} />
-            <RowToggle label="Recycle bin retention" pill={<Select value={adv.recycleRetention} onValueChange={(v) => update({ recycleRetention: v })}><SelectTrigger className="h-8 w-[120px] text-[12px]"><SelectValue /></SelectTrigger><SelectContent>{["7 days", "30 days", "90 days"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent></Select>} />
-            <RowToggle label="Auto cleanup temp files" pill={<Switch checked={adv.autoCleanup} onCheckedChange={(v) => update({ autoCleanup: v })} />} />
-            <RowToggle label="Compress local database" pill={<Switch checked={adv.compressDb} onCheckedChange={(v) => update({ compressDb: v })} />} last />
+            <RowToggle
+              label="Auto cleanup temp files"
+              desc="Prune expired caches and synced history every 10 minutes"
+              pill={<Switch checked={adv.autoCleanup} onCheckedChange={(v) => update({ autoCleanup: v })} />}
+              last
+            />
             <div className="mt-3 space-y-2">
               <div className="flex justify-between text-[11px] font-semibold text-[#64748b]">
                 <span>Storage used on this device</span>
