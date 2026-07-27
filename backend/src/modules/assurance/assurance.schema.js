@@ -131,3 +131,27 @@ export const listEvidenceRequestsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   status: z.nativeEnum(EVIDENCE_STATUS).optional(),
 });
+
+export const createCaseSchema = z.object({
+  title: z.string().min(3).max(200),
+  summary: z.string().min(3).max(2000).optional(),
+  findingIds: z.array(objectId).min(1).max(100),
+});
+
+export const updateCaseStatusSchema = z.object({
+  status: z.enum(["OPEN", "UNDER_REVIEW", "CLOSED"]),
+});
+
+export const proposeCasesQuerySchema = z.object({
+  minimumFindings: z.coerce.number().int().min(2).max(50).default(2),
+});
+
+export const classifyEvidenceSchema = z.object({
+  description: z.string().min(3).max(1000),
+});
+
+export const listCasesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  status: z.enum(["OPEN", "UNDER_REVIEW", "CLOSED"]).optional(),
+});

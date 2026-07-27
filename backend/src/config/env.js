@@ -51,6 +51,12 @@ const envSchema = z.object({
   // Attachments are never sent unless this is explicitly turned on.
   AUDIT_AI_ALLOW_ATTACHMENTS: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   AUDIT_TRANSACTION_TRIGGERED_ENABLED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  // Scheduled sweeps run on the shared jobs infrastructure, so they only exist
+  // when QUEUES_ENABLED is on and a worker is running.
+  AUDIT_SCHEDULED_RUNS_ENABLED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
+  AUDIT_SCHEDULED_RUN_INTERVAL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  // Overlap the window so a late offline sync is never skipped between ticks.
+  AUDIT_SCHEDULED_RUN_LOOKBACK_HOURS: z.coerce.number().int().min(1).max(720).default(26),
   OWNER_PIN_REQUIRED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
   OWNER_PIN_MAX_FAILURES: z.coerce.number().int().min(3).max(10).default(5),
   OWNER_PIN_SHOP_MAX_FAILURES: z.coerce.number().int().min(5).max(30).default(10),

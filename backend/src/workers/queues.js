@@ -5,6 +5,7 @@ import { handleExportsJob } from "./exports.worker.js";
 import { handleBackupJob } from "./backup.worker.js";
 import { handleSyncCleanupJob } from "./syncCleanup.worker.js";
 import { handleWebhookJob } from "./webhooks.worker.js";
+import { handleAssuranceJob } from "./assurance.worker.js";
 
 export const WORKER_REGISTRY = Object.freeze([
   { queueName: QUEUE_NAMES.reminderQueue, handler: handleReminderJob },
@@ -13,4 +14,5 @@ export const WORKER_REGISTRY = Object.freeze([
   { queueName: QUEUE_NAMES.backupQueue, handler: handleBackupJob },
   { queueName: QUEUE_NAMES.syncCleanupQueue, handler: handleSyncCleanupJob },
   { queueName: QUEUE_NAMES.webhooksQueue, handler: handleWebhookJob },
+  { queueName: QUEUE_NAMES.assuranceQueue, handler: handleAssuranceJob },
 ]);

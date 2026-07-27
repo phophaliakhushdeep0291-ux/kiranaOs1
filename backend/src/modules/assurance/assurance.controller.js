@@ -9,6 +9,9 @@ import { buildAssuranceReport } from "./report.service.js";
 import { recomputeShopBaselines } from "./baseline.service.js";
 import { auditAiStatus } from "./ai/audit-ai.service.js";
 import { CAPABILITIES, assertCapability, capabilitiesForRole } from "./assurance.permissions.js";
+import * as caseSvc from "./case.service.js";
+import { classifyEvidence as classifyEvidenceWithAi } from "./ai/audit-ai.service.js";
+import { EVIDENCE_TYPES } from "./assurance.constants.js";
 
 function actorFrom(req) {
   return { userId: req.user?.userId ?? null, role: req.user?.role ?? "staff" };
@@ -255,5 +258,89 @@ export async function explainFinding(req, res, next) {
   try {
     const data = await svc.generateFindingExplanation(req.shopId, actorFrom(req), req.params.id, req.body);
     res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+// ── investigation cases ───────────────────────────────────────
+
+export async function proposeCases(req, res, next) {
+  try {
+    const data = await caseSvc.proposeCases(req.shopId, actorFrom(req), req.query);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function listCases(req, res, next) {
+  try {
+    const data = await caseSvc.listCases(req.shopId, req.query);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function getCase(req, res, next) {
+  try {
+    const data = await caseSvc.getCase(req.shopId, actorFrom(req), req.params.id);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function createCase(req, res, next) {
+  try {
+    const actor = actorFrom(req);
+    const data = await caseSvc.createCase(req.shopId, actor, req.body);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: actor.userId,
+      action: "AUDIT_CASE_CREATED",
+      entityType: "AuditCase",
+      entityId: data.caseId,
+      metadata: { findingCount: data.findingCount, riskLevel: data.riskLevel },
+      req,
+    }).catch(() => null);
+    res.status(201).json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function summarizeCase(req, res, next) {
+  try {
+    const data = await caseSvc.generateCaseSummary(req.shopId, actorFrom(req), req.params.id);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function updateCaseStatus(req, res, next) {
+  try {
+    const actor = actorFrom(req);
+    const data = await caseSvc.closeCase(req.shopId, actor, req.params.id, req.body);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: actor.userId,
+      action: "AUDIT_CASE_STATUS_CHANGED",
+      entityType: "AuditCase",
+      entityId: req.params.id,
+      after: { status: data.status },
+      req,
+    }).catch(() => null);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+// ── evidence classification (advisory; a human still verifies) ──
+
+export async function classifyEvidence(req, res, next) {
+  try {
+    assertCapability(req.user?.role, CAPABILITIES.SUBMIT_EVIDENCE);
+    const data = await classifyEvidenceWithAi({
+      description: req.body.description,
+      allowedEvidenceTypes: Object.values(EVIDENCE_TYPES),
+    });
+    res.json({
+      success: true,
+      data: {
+        ...data,
+        advisory: true,
+        note: "Suggestion only. The evidence type you submit and its verification remain human decisions.",
+      },
+    });
   } catch (err) { next(err); }
 }

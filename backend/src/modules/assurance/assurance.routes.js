@@ -20,6 +20,11 @@ import {
   updateFindingStatusSchema,
   updateRuleSchema,
   verifyEvidenceSchema,
+  createCaseSchema,
+  updateCaseStatusSchema,
+  proposeCasesQuerySchema,
+  classifyEvidenceSchema,
+  listCasesQuerySchema,
 } from "./assurance.schema.js";
 
 const router = Router();
@@ -72,6 +77,17 @@ router.post("/findings/:id/explain", explainLimiter, validate(explainSchema), ct
 // ── evidence ──────────────────────────────────────────────────
 router.get("/evidence-requests", validateQuery(listEvidenceRequestsQuerySchema), ctrl.listEvidenceRequests);
 router.patch("/evidence/:evidenceId/verify", validate(verifyEvidenceSchema), ctrl.verifyEvidence);
+router.post("/evidence/classify", explainLimiter, validate(classifyEvidenceSchema), ctrl.classifyEvidence);
+
+// ── investigation cases ───────────────────────────────────────
+// Grouping is deterministic (shared customer/supplier/staff/day/rule); the AI
+// layer only narrates a case that a reviewer already created.
+router.get("/cases/proposals", validateQuery(proposeCasesQuerySchema), ctrl.proposeCases);
+router.get("/cases", validateQuery(listCasesQuerySchema), ctrl.listCases);
+router.get("/cases/:id", ctrl.getCase);
+router.post("/cases", validate(createCaseSchema), ctrl.createCase);
+router.post("/cases/:id/summary", explainLimiter, ctrl.summarizeCase);
+router.patch("/cases/:id/status", validate(updateCaseStatusSchema), ctrl.updateCaseStatus);
 
 // ── rules and thresholds (owner-configurable) ─────────────────
 router.get("/rules", ctrl.listRules);

@@ -5,6 +5,7 @@ export const QUEUE_NAMES = Object.freeze({
   backupQueue: "kiranaos-backups",
   syncCleanupQueue: "kiranaos-sync-cleanup",
   webhooksQueue: "kiranaos-webhooks",
+  assuranceQueue: "kiranaos-assurance",
 });
 
 export const JOB_NAMES = Object.freeze({
@@ -21,6 +22,8 @@ export const JOB_NAMES = Object.freeze({
   RUN_DATABASE_BACKUP: "RUN_DATABASE_BACKUP",
   CLEANUP_EXPIRED_BACKUPS: "CLEANUP_EXPIRED_BACKUPS",
   DELIVER_WEBHOOK: "DELIVER_WEBHOOK",
+  RUN_SCHEDULED_ASSURANCE: "RUN_SCHEDULED_ASSURANCE",
+  RECOMPUTE_ASSURANCE_BASELINES: "RECOMPUTE_ASSURANCE_BASELINES",
 });
 
 export function listQueueNames() {
