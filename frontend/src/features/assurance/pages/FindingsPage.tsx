@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -129,7 +129,7 @@ export default function FindingsPage({
             <li key={finding.findingId} className="rounded-xl border border-border bg-card p-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <Link to={`/assurance/findings/${finding.findingId}`} className="text-sm font-semibold hover:underline">
+                  <Link href={`/assurance/findings/${finding.findingId}`} className="text-sm font-semibold hover:underline">
                     {finding.title}
                   </Link>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">

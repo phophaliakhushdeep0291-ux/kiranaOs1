@@ -712,7 +712,10 @@ function runSuite() {
     const { shop, owner } = await createTenant(ctx.db);
     const product = await createProduct(ctx.db, shop.id);
 
-    const day = new Date();
+    // Anchor the scenario to a day that is unambiguously in the past. Using
+    // "today at noon" made the test depend on the wall clock: run before noon,
+    // the lock timestamp is in the future and nothing can be late relative to it.
+    const day = new Date(Date.now() - 24 * 60 * 60 * 1000);
     day.setHours(12, 0, 0, 0);
     const lockedAt = new Date(day.getTime());
 

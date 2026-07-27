@@ -164,6 +164,17 @@ function jsonReplacer(_key, value) {
 }
 
 export async function resetDatabase(db) {
+  // Creating a bill through the API queues a post-commit assurance evaluation
+  // that drains on a timer. Let it finish before deleting rows, otherwise the
+  // background audit write races this delete transaction (on SQLite that
+  // surfaces as a locking error on whichever statement gets there first).
+  try {
+    const { flushAuditQueue } = await import("../../src/modules/assurance/assurance.hooks.js");
+    await flushAuditQueue({ timeoutMs: 10000 });
+  } catch {
+    // The assurance module is optional for a reset; never block cleanup on it.
+  }
+
   await db.$transaction([
     // Assurance tables first: they reference findings/runs which reference shops.
     db.auditCaseFinding.deleteMany(),

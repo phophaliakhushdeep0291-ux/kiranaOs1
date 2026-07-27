@@ -34,6 +34,29 @@ const stats = {
   lastRunAt: null,
 };
 
+// Runtime override for the background hook.
+//
+// Two reasons this exists rather than being env-only:
+//   * operations can pause post-commit evaluation without a restart if a shop's
+//     data is being repaired or the database is under pressure;
+//   * the automatic hook is OFF in the test environment by default. Background
+//     writes that fire on a timer contend with a test's own writes (visibly so
+//     on SQLite, which serializes writers), which makes unrelated suites flaky.
+//     Tests that mean to exercise the hook opt in explicitly.
+let enabledOverride = null;
+
+function isEnabled() {
+  if (enabledOverride !== null) return enabledOverride;
+  if (env.NODE_ENV === "test") return false;
+  return env.AUDIT_TRANSACTION_TRIGGERED_ENABLED;
+}
+
+/** Pause or resume post-commit evaluation. Pass null to fall back to configuration. */
+export function setTransactionTriggeredEnabled(value) {
+  enabledOverride = value === null || value === undefined ? null : Boolean(value);
+  return isEnabled();
+}
+
 /**
  * Queue an entity for post-commit evaluation. Fire-and-forget by design:
  * returns immediately and never throws.
@@ -45,7 +68,7 @@ const stats = {
  */
 export function scheduleAuditEvaluation(shopId, entityType, entityId, actor = {}) {
   try {
-    if (!env.AUDIT_TRANSACTION_TRIGGERED_ENABLED) return false;
+    if (!isEnabled()) return false;
     if (!shopId || !entityType || !entityId) return false;
 
     if (queue.length >= MAX_QUEUE_LENGTH) {
@@ -145,5 +168,5 @@ export async function flushAuditQueue({ timeoutMs = 30000 } = {}) {
 }
 
 export function auditQueueStats() {
-  return { ...stats, pending: queue.length, draining, enabled: env.AUDIT_TRANSACTION_TRIGGERED_ENABLED };
+  return { ...stats, pending: queue.length, draining, enabled: isEnabled() };
 }

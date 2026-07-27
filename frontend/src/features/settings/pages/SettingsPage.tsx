@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useGetShop } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/useAuth";
 import { useSubscriptionSnapshot } from "@/features/subscription";
@@ -12,8 +13,21 @@ import {
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Info, Badge } from "@/features/settings/ui";
 import { DEFAULT_PRINTER_CONFIG, PRINTER_CONNECTION_LABELS, type PrinterConfig } from "@/features/settings/printer-config";
+import { appVersion, buildId } from "@/features/settings/app-info";
+import { checkOwnerPin } from "@/features/settings/api";
+import { listStaff } from "@/features/staff/api";
+import { listDevices } from "@/features/devices/api";
+import { getOfflineScope } from "@/lib/offline/context";
+import { apiRequest } from "@/lib/api/http";
 
 const PREFS_KEY = "kirana:settings-prefs:v1";
+
+interface IntegrationOverview {
+  maturityScore: number;
+  activeKeys: number;
+  activeWebhooks: number;
+  providers: { id: string; name: string; status: string }[];
+}
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -24,6 +38,20 @@ export default function SettingsPage() {
   const [gst, setGst] = useState({ mode: "Exclusive (Add to price)", rate: "18%" });
   const [notifCount, setNotifCount] = useState<number | null>(null);
   const [storeProfile, setStoreProfile] = useState<Record<string, unknown>>({});
+  const currentDeviceId = getOfflineScope().device_id;
+
+  const staffQ = useQuery({ queryKey: ["staff", "overview"], queryFn: listStaff, retry: 0 });
+  const devicesQ = useQuery({ queryKey: ["devices", "overview"], queryFn: listDevices, retry: 1 });
+  const integrationsQ = useQuery({ queryKey: ["integrations", "overview"], queryFn: () => apiRequest<IntegrationOverview>("/integrations/overview"), retry: 1 });
+  const pinQ = useQuery({ queryKey: ["owner-pin-status"], queryFn: checkOwnerPin, retry: 1 });
+
+  // The staff list is owner-only and plan-gated; a 403 means "can't tell", not zero.
+  const staffCounts = useMemo(() => {
+    const rows = staffQ.data;
+    if (!rows) return { total: "—", owner: "—", admin: "—", staff: "—" };
+    const by = (role: string) => String(rows.filter((r) => (r.role ?? "staff") === role).length);
+    return { total: String(rows.length), owner: by("owner"), admin: by("admin"), staff: by("staff") };
+  }, [staffQ.data]);
 
   useEffect(() => {
     void offlineDB.getSetting<Record<string, unknown>>(PREFS_KEY).then((p) => {
@@ -160,25 +188,37 @@ export default function SettingsPage() {
         <Card>
           <CardHead icon={<UsersRound size={15} />} title="Staff & Permissions" action={<Manage href="/settings/staff" label="Manage Staff" />} />
           <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-4">
-            <OverviewStat label="Total Staff" value="—" sub="Active users" />
-            <OverviewStat label="Cashiers" value="—" sub="Can create bills" />
-            <OverviewStat label="Managers" value="—" sub="Full access" />
-            <OverviewStat label="View Only" value="—" sub="Read access" />
+            <OverviewStat label="Total Staff" value={staffCounts.total} sub="Active users" />
+            <OverviewStat label="Cashiers" value={staffCounts.staff} sub="Can create bills" />
+            <OverviewStat label="Owners" value={staffCounts.owner} sub="Full access" />
+            <OverviewStat label="Admins" value={staffCounts.admin} sub="Manage & approve" />
           </div>
-          <p className="px-5 pb-4 text-[11px] text-[#9aa6bb]">Manage users, roles & permissions on the Staff page.</p>
+          <p className="px-5 pb-4 text-[11px] text-[#9aa6bb]">
+            {staffQ.isError ? "Staff list needs the Growth plan or an owner account — open the Staff page for details." : "Manage users, roles & permissions on the Staff page."}
+          </p>
         </Card>
 
         <Card>
-          <CardHead icon={<MonitorSmartphone size={15} />} title="Device Management" sub="Manage your billing devices" action={<Manage href="/settings/devices" label="View All" />} />
+          <CardHead icon={<MonitorSmartphone size={15} />} title="Device Management" sub={devicesQ.data ? `${devicesQ.data.devicesUsed} of ${devicesQ.data.plan.deviceLimit} device slots used` : "Manage your billing devices"} action={<Manage href="/settings/devices" label="View All" />} />
           <div className="px-5 pb-3">
-            <div className="flex items-center gap-3 py-2.5">
-              <MonitorSmartphone size={16} className="text-[#536583]" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-bold text-[#102347]">This Device</p>
-                <p className="text-[11px] text-[#64748b]">Web · Active session</p>
-              </div>
-              <Badge tone="green">Active</Badge>
-            </div>
+            {devicesQ.isLoading ? (
+              <p className="py-4 text-center text-[12px] text-[#64748b]">Loading devices…</p>
+            ) : devicesQ.isError ? (
+              <p className="py-4 text-center text-[12px] text-[#64748b]">Device list unavailable right now.</p>
+            ) : (devicesQ.data?.devices ?? []).slice(0, 3).map((device) => {
+              const id = device.deviceId || device.device_id || device.id;
+              const isCurrent = id === currentDeviceId;
+              return (
+                <div key={id} className="flex items-center gap-3 py-2.5">
+                  <MonitorSmartphone size={16} className="text-[#536583]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-bold text-[#102347]">{device.deviceName || device.device_name || "Unnamed device"}{isCurrent ? " · This device" : ""}</p>
+                    <p className="text-[11px] text-[#64748b]">{device.platform || device.operatingSystem || "web"} · {device.status === "active" ? "Active" : device.status || "Idle"}</p>
+                  </div>
+                  <Badge tone={device.status === "blocked" ? "red" : device.status === "active" ? "green" : "gray"}>{device.status === "blocked" ? "Blocked" : device.status === "active" ? "Active" : "Idle"}</Badge>
+                </div>
+              );
+            })}
             <Link href="/settings/devices" className="mt-1 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[#005dff] hover:underline">+ Manage Devices</Link>
           </div>
         </Card>
@@ -223,8 +263,8 @@ export default function SettingsPage() {
           <CardHead icon={<Shield size={15} />} title="Security & PIN" action={<Manage href="/settings/security" label="Manage" />} />
           <div className="px-5 pb-4">
             <div className="flex items-center justify-between">
-              <Info label="Owner PIN" value="••••• Set" />
-              <Badge tone="green">Protected</Badge>
+              <Info label="Owner PIN" value={pinQ.isLoading ? "Checking…" : pinQ.data?.hasPin ? "••••• Set" : "Not set"} />
+              <Badge tone={pinQ.data?.hasPin ? "green" : "amber"}>{pinQ.data?.hasPin ? "Protected" : "Set a PIN"}</Badge>
             </div>
             <p className="mt-2 text-[11px] text-[#64748b]">Sensitive actions require the owner PIN.</p>
           </div>
@@ -242,11 +282,15 @@ export default function SettingsPage() {
           <CardHead icon={<Plug size={15} />} title="Integrations" action={<Manage href="/settings/integrations" label="Manage" />} />
           <div className="px-5 pb-4">
             <div className="flex flex-wrap gap-1.5">
-              <Badge tone="green">WhatsApp</Badge>
-              <Badge tone="green">TallyPrime</Badge>
-              <Badge tone="amber">BharatPe</Badge>
+              {integrationsQ.isLoading ? <Badge tone="gray">Checking…</Badge>
+                : integrationsQ.isError ? <Badge tone="gray">Status unavailable</Badge>
+                : (integrationsQ.data?.providers ?? []).slice(0, 4).map((provider) => (
+                  <Badge key={provider.id} tone={provider.status === "ready" ? "green" : provider.status === "available" ? "blue" : "amber"}>{provider.name}</Badge>
+                ))}
             </div>
-            <p className="mt-2 text-[11px] text-[#64748b]">Connect billing, payments & accounting tools.</p>
+            <p className="mt-2 text-[11px] text-[#64748b]">
+              {integrationsQ.data ? `Readiness ${integrationsQ.data.maturityScore}/100 · ${integrationsQ.data.activeKeys} API key(s), ${integrationsQ.data.activeWebhooks} webhook(s).` : "Connect billing, payments & accounting tools."}
+            </p>
           </div>
         </Card>
       </div>
@@ -284,13 +328,13 @@ export default function SettingsPage() {
           <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#eef5ff] text-[#005dff]"><Settings2 size={16} /></span>
           <div>
             <p className="text-[13px] font-extrabold text-[#102347]">About Artha</p>
-            <p className="text-[11px] text-[#64748b]">Version 2.1.3 · You're up to date</p>
+            <p className="text-[11px] text-[#64748b]">Version {appVersion()} · build {buildId()}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] font-bold text-[#005dff]">
-          <Link href="/settings/sync" className="hover:underline">What's New</Link>
-          <Link href="/smart-tools" className="hover:underline">Help Center</Link>
-          <a href="mailto:support@kiranaos.local?subject=Artha%20support" className="hover:underline">Contact Support</a>
+          <Link href="/settings/advanced" className="hover:underline">Diagnostics</Link>
+          <Link href="/settings/setup" className="hover:underline">Setup checklist</Link>
+          <a href="mailto:support@kiranaos.app?subject=Artha%20support" className="hover:underline">Contact Support</a>
         </div>
       </div>
       </div>

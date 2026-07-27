@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { listEvidenceRequests, type EvidenceStatus } from "../api";
@@ -55,7 +55,7 @@ export default function EvidenceRequestsPage() {
                   <p className="text-sm font-semibold">{humanize(request.evidenceType)}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{request.description}</p>
                   {request.finding ? (
-                    <Link to={`/assurance/findings/${request.finding.findingId}`} className="mt-1 block text-xs font-medium text-primary hover:underline">
+                    <Link href={`/assurance/findings/${request.finding.findingId}`} className="mt-1 block text-xs font-medium text-primary hover:underline">
                       {request.finding.title}
                     </Link>
                   ) : null}

@@ -172,8 +172,8 @@ limitations, explanation fallback, baseline recompute).
 
 ## 5. Bugs found and fixed during implementation
 
-Testing surfaced four real defects in my own rules; all are fixed and the fixes are
-documented in the catalog:
+Testing surfaced six real defects in my own code; all are fixed and the rule-level
+fixes are documented in the catalog:
 
 1. **Walk-in duplicate false positive.** Two ordinary walk-in sales of the same item
    for the same amount were flagged as duplicates. `BILL_NEAR_DUPLICATE` now needs an
@@ -189,6 +189,22 @@ documented in the catalog:
    link, with the window only as a legacy fallback.
 4. **Undetectable rule removed.** `BILL_WEAK_IDEMPOTENCY` fired on nearly every
    bill; removed and documented as deferred.
+5. **Daily-closing payment window was wrong.** The closing context loaded payments
+   by the *payment's* own date, while the product computes a day's cash from every
+   payment attached to that day's bills (`reports.service.js#getDailyClosing`). A
+   bill from one day paid on the next would have produced a false
+   `CLOSING_CASH_FIGURE_STALE` **and** a false `CLOSING_SPLIT_PAYMENT_MISMATCH`
+   (the rule saw only part of the bill's tender). The context now loads payments by
+   the day's bill ids, matching the product's own formula.
+6. **Background hook contended with foreground writes.** The post-commit queue
+   drains on a 250 ms timer, so its audit writes could land in the middle of
+   another operation's transaction. On SQLite (which serializes writers) this made
+   unrelated test suites fail intermittently — 8 then 16 failures across billing and
+   loyalty, depending on timing. Fixed by (a) having the test harness quiesce the
+   queue before resetting the database and (b) disabling the automatic hook in the
+   test environment, with a documented `setTransactionTriggeredEnabled()` override
+   that the one test exercising the hook opts into. This is also a genuine operational
+   control: it lets an operator pause post-commit evaluation without a restart.
 
 One design gap was also closed: the 60-point per-rule cap made it impossible for a
 single rule to reach CRITICAL, so a cross-tenant data leak scored only HIGH. Rules
@@ -234,7 +250,16 @@ period run over a small shop completes in well under a second.
 after commit and never awaited by the request; the billing endpoint returns before
 any audit work starts (asserted by the transaction-triggered test, which must
 explicitly flush the queue before it can observe the run). Evaluation is read-only
-and touches no locks that billing needs.
+toward canonical data.
+
+**One caveat, found while fixing the test flakiness above:** the queue's audit
+writes are a separate transaction that can start while other work is in flight.
+On SQLite, which serializes writers, that can briefly block a foreground write —
+which is exactly what made unrelated suites fail. Production runs PostgreSQL with
+MVCC, where an audit write to `Audit*` tables does not block a billing write to
+`Bill`/`Payment`, so the effect should not appear there. It has not been measured
+under real PostgreSQL load, and `setTransactionTriggeredEnabled(false)` exists to
+pause the hook if it ever does.
 
 Cost characteristics: ~10–25 queries per entity, all on indexed
 `shopId`-prefixed paths. Period runs are capped at 2,000 entities per type with

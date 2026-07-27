@@ -1613,7 +1613,10 @@ function productUnitLabel(product: Product): string {
   const stock = product.stockBaseQty != null
     ? fromBaseQty(product.stockBaseQty, unit)
     : Number(product.stockQuantity ?? 0);
-  if (Number.isFinite(stock) && stock >= 0) return `${stock.toLocaleString("en-IN")} ${unit}`;
+  // Negative stock is real and worth seeing: the counter lets a sale through when
+  // a stock-in has not been recorded yet, and the deficit is what tells the owner
+  // to reconcile. Hiding it left the tile showing a bare unit ("kg") with no number.
+  if (Number.isFinite(stock)) return `${stock.toLocaleString("en-IN")} ${unit}`;
   return unit;
 }
 

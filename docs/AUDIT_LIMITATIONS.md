@@ -148,6 +148,12 @@ expense staff-permission checks (E5), counted-cash variance and repeated shortag
   (500 items) and sheds load rather than growing; anything dropped is picked up by
   the next manual/scheduled run over that period, because evaluation is
   idempotent. It is not a durable outbox, and it does not survive a restart.
+- **The automatic hook is off in the test environment** and can be paused at
+  runtime via `setTransactionTriggeredEnabled(false)`. Its writes are a separate
+  transaction that can start while other work is in flight; on SQLite (which
+  serializes writers) that can briefly block a foreground write. Production runs
+  PostgreSQL, where writes to `Audit*` tables do not block writes to canonical
+  tables, but this has not been measured under real production load.
 - **Period runs are capped** at 2,000 entities per type; the truncation is recorded
   in the run summary rather than hidden.
 - **No `AuditCase` grouping UI yet.** The tables exist; investigation-case grouping

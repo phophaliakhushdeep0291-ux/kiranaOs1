@@ -6,6 +6,7 @@ import { env } from "../../config/env.js";
 import { getReportRangeLimit } from "../feature-gates/featureGate.service.js";
 import { getLocationQuantity, resolveOperationalLocation } from "../stores/location-context.service.js";
 import { validateGstin } from "../../utils/gst.js";
+import { baseQtyToRateQty } from "../../utils/units.js";
 
 // Estimates (kacha bills) are full sales — stock, tender, udhar — so they count in every
 // sales/cash/P&L report. The one exception is GST: an estimate is not a tax document, so the
@@ -700,12 +701,43 @@ export async function getInventoryHealth(shopId, { includeCost = false, windowDa
 
   if (includeCost) {
     const branchStockByProduct = new Map(movementRows.map((row) => [row.productId, row.stockBaseQty]));
-    result.totalInventoryCostPaise = toPaise(sumMoney(activeProducts.map((p) => {
-      // costPerRateUnit is rate-unit based. Without conversion factors in report context,
-      // this is an estimate and intentionally marked as such.
-      return Number(branchStockByProduct.get(p.id) || 0) * Number(p.costPerRateUnit || 0);
-    })));
-    result.inventoryCostEstimate = true;
+    // Stock is held in base units (g, ml, piece) while cost and price are per
+    // rate unit (kg, l, piece). Multiplying the two directly values a 40 kg sack
+    // of atta as if it were 40,000 kg — on a real kirana catalogue that
+    // overstated closing stock by ~85x. Convert before valuing.
+    const valuation = activeProducts.map((p) => {
+      const rateQty = baseQtyToRateQty(Number(branchStockByProduct.get(p.id) || 0), p.rateUnit, p.baseUnit);
+      return {
+        category: p.category || "general",
+        costValue: rateQty * Number(p.costPerRateUnit || 0),
+        retailValue: rateQty * Number(p.defaultPricePerRateUnit || 0),
+      };
+    });
+
+    const byCategory = new Map();
+    for (const row of valuation) {
+      const entry = byCategory.get(row.category) ?? { category: row.category, costValue: 0, retailValue: 0, productCount: 0 };
+      entry.costValue += row.costValue;
+      entry.retailValue += row.retailValue;
+      entry.productCount += 1;
+      byCategory.set(row.category, entry);
+    }
+
+    const totalCost = sumMoney(valuation.map((row) => row.costValue));
+    const totalRetail = sumMoney(valuation.map((row) => row.retailValue));
+    result.totalInventoryCostPaise = toPaise(totalCost);
+    result.totalInventoryRetailPaise = toPaise(totalRetail);
+    result.potentialMarginPaise = toPaise(subtractMoney(totalRetail, totalCost));
+    result.inventoryValuationByCategory = [...byCategory.values()]
+      .map((entry) => ({
+        category: entry.category,
+        productCount: entry.productCount,
+        costValuePaise: toPaise(entry.costValue),
+        retailValuePaise: toPaise(entry.retailValue),
+      }))
+      .sort((a, b) => b.costValuePaise - a.costValuePaise);
+    // Unit-aware now; the only remaining approximation is weighted-average cost.
+    result.inventoryCostEstimate = false;
   }
 
   return result;
@@ -958,14 +990,42 @@ export async function exportBillsData(shopId, { from, to, status, locationId }) 
   return { rows, count: bills.length };
 }
 
-export async function exportStockLedgerData(shopId, { from, to, productId, locationId }) {
+/**
+ * Synchronous exports stream straight into an owner's phone, so they are
+ * bounded on both axes. Without this a year of trading returns every stock
+ * ledger row in one response — 50k rows and tens of megabytes on a mobile PWA.
+ * `truncated` tells the caller to narrow the range or use the async export job.
+ */
+export const SYNC_EXPORT_ROW_LIMIT = 10000;
+const SYNC_EXPORT_DEFAULT_WINDOW_DAYS = 90;
+
+function boundedExportWindow(from, to) {
+  if (from && to) return { gte: new Date(from), lte: new Date(to) };
+  if (from) return { gte: new Date(from) };
+  if (to) return { lte: new Date(to) };
+  // No window asked for: default to a recent window rather than all history.
+  const start = new Date();
+  start.setDate(start.getDate() - SYNC_EXPORT_DEFAULT_WINDOW_DAYS);
+  return { gte: start };
+}
+
+export async function exportStockLedgerData(shopId, { from, to, productId, locationId, limit } = {}) {
+  const take = Math.min(Number(limit) || SYNC_EXPORT_ROW_LIMIT, SYNC_EXPORT_ROW_LIMIT);
   const where = {
     shopId,
     ...(locationId && { locationId }),
     ...(productId ? { productId } : {}),
-    ...(from && to ? { createdAt: { gte: new Date(from), lte: new Date(to) } } : {}),
+    createdAt: boundedExportWindow(from, to),
   };
-  return db.stockLedger.findMany({ where, orderBy: { createdAt: "desc" } });
+  const rows = await db.stockLedger.findMany({ where, orderBy: { createdAt: "desc" }, take: take + 1 });
+  const truncated = rows.length > take;
+  return {
+    rows: truncated ? rows.slice(0, take) : rows,
+    count: truncated ? take : rows.length,
+    truncated,
+    limit: take,
+    defaultWindowDays: from || to ? null : SYNC_EXPORT_DEFAULT_WINDOW_DAYS,
+  };
 }
 
 export async function exportUdharData(shopId) {

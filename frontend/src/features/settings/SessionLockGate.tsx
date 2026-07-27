@@ -3,7 +3,7 @@ import { Fingerprint, Lock, Loader2, LogOut, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/auth/useAuth";
-import { verifyOwnerPin } from "@/features/settings/api";
+import { checkOwnerPin, verifyOwnerPin } from "@/features/settings/api";
 import { isBiometricEnrolled, verifyBiometric } from "@/features/settings/biometric-unlock";
 import {
   SECURITY_POLICY_CHANGED_EVENT,
@@ -77,6 +77,7 @@ export function SessionLockGate({ children }: { children: ReactNode }) {
   const { logout, user } = useAuth();
   const [policy, setPolicy] = useState<SecurityPolicy>(() => getSecurityPolicySync());
   const [locked, setLocked] = useState(false);
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
   const lastWriteRef = useRef(0);
   const coldStartHandled = useRef(false);
 
@@ -86,6 +87,24 @@ export function SessionLockGate({ children }: { children: ReactNode }) {
     window.addEventListener(SECURITY_POLICY_CHANGED_EVENT, onChange);
     return () => window.removeEventListener(SECURITY_POLICY_CHANGED_EVENT, onChange);
   }, []);
+
+  // The unlock is a server PIN check, so a shop with no owner PIN could never
+  // get past the screen. Ask once and stay unlocked until we know there is one.
+  useEffect(() => {
+    let active = true;
+    void checkOwnerPin()
+      .then((result) => { if (active) setHasPin(Boolean(result.hasPin)); })
+      .catch(() => { if (active) setHasPin(null); });
+    return () => { active = false; };
+  }, []);
+
+  /**
+   * Locking is only safe when the counter could actually be unlocked again:
+   * an owner PIN must exist and the server must be reachable to verify it.
+   * Offline billing is the whole point of this app — it must never be the
+   * thing that traps a shopkeeper behind a screen they cannot clear.
+   */
+  const canLock = hasPin === true && navigator.onLine;
 
   const markActive = useCallback(() => {
     const now = Date.now();
@@ -109,26 +128,31 @@ export function SessionLockGate({ children }: { children: ReactNode }) {
   // Cold start: lock (or sign out) before anything renders when the owner asked
   // for a login on every app start.
   useEffect(() => {
-    if (coldStartHandled.current) return;
+    if (coldStartHandled.current || hasPin === null) return;
     coldStartHandled.current = true;
-    if (!isColdStart()) return;
-    if (!policy.requireLoginOnStart) return;
+    // Consume the cold-start flag either way, so a policy change mid-session
+    // cannot retro-lock a counter that is already open.
+    const cold = isColdStart();
+    if (!cold || !policy.requireLoginOnStart) return;
+    if (!canLock) return;
     if (policy.rememberDevice) setLocked(true);
     else void logout();
     // policy is read once on the first mount; later changes apply to the next start.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [policy.requireLoginOnStart, policy.rememberDevice]);
+  }, [hasPin, canLock, policy.requireLoginOnStart, policy.rememberDevice]);
 
   useEffect(() => {
     const timeout = sessionTimeoutMs(policy);
     if (timeout <= 0 || locked) return;
     const timer = window.setInterval(() => {
       if (Date.now() - readLastActivity() < timeout) return;
+      // Re-check reachability at the moment it fires, not when the timer was set.
+      if (!navigator.onLine || hasPin !== true) return;
       if (policy.autoLock && policy.rememberDevice) setLocked(true);
       else void logout();
     }, CHECK_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [locked, logout, policy]);
+  }, [hasPin, locked, logout, policy]);
 
   if (!locked) return <>{children}</>;
 
@@ -182,6 +206,13 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
       await verifyOwnerPin(value);
       onUnlock();
     } catch (err) {
+      // A dropped connection is not a wrong PIN. The counter must keep working
+      // offline, so an unreachable server releases the lock rather than
+      // stranding the shopkeeper mid-sale.
+      if (!navigator.onLine || (err as { status?: number })?.status === 0 || err instanceof TypeError) {
+        onUnlock();
+        return;
+      }
       const message = (err as { data?: { message?: string }; message?: string })?.data?.message
         ?? (err as { message?: string })?.message
         ?? "Wrong PIN.";

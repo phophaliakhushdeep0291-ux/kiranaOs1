@@ -117,7 +117,26 @@ export async function createReportExportJob(shopId, userId, reportType, params =
 
 export async function createAndEnqueueReportExportJob(shopId, userId, reportType, params = {}) {
   if (!isQueueEnabled()) {
-    throw appError("Report export queue is disabled", 503, "JOB_QUEUE_DISABLED");
+    // Single-node fallback. Redis is an optional dependency, but an owner
+    // pressing "export" should never get a 503 because of a deployment choice.
+    // The job row, status polling and download route are identical either way;
+    // only the runner differs, so the client contract does not change.
+    const job = await createReportExportJob(shopId, userId, reportType, params);
+    await createAuditLog({
+      shopId,
+      userId,
+      action: "REPORT_EXPORT_JOB_CREATED",
+      entityType: "ReportExportJob",
+      entityId: job.id,
+      metadata: { reportType: job.reportType, params: job.params, queued: false, runner: "inline" },
+    });
+    // Run after the response so a large export does not hold the request open.
+    setImmediate(() => {
+      processReportExportJob(job.id).catch(async (error) => {
+        await markReportExportFailed(job.id, error?.message || "Inline export failed").catch(() => {});
+      });
+    });
+    return { ...job, queued: false, runner: "inline" };
   }
   const job = await createReportExportJob(shopId, userId, reportType, params);
   const queueResult = await addJob(QUEUE_NAMES.exportsQueue, JOB_NAMES.GENERATE_REPORT_EXPORT, {
@@ -325,8 +344,10 @@ async function buildReportCsv(shopId, reportType, params) {
       return rowsToCsv(data.rows ?? []);
     }
     case "stock_csv": {
-      const rows = await exportStockLedgerData(shopId, params);
-      return rowsToCsv(rows);
+      // The async job is the unbounded path by design: it streams to storage,
+      // not into a phone, so it asks for the full range explicitly.
+      const stock = await exportStockLedgerData(shopId, { ...params, limit: Number.MAX_SAFE_INTEGER });
+      return rowsToCsv(stock.rows ?? []);
     }
     case "udhar_csv": {
       const rows = await exportUdharData(shopId);
