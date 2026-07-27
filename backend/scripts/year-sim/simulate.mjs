@@ -80,6 +80,7 @@ const skipped = BACKDATE_MODELS.filter((model) => !MODELS_WITH_CREATED_AT.has(mo
  * a full table scan of Bill/StockLedger/AuditLog on every one of 365 days.
  */
 async function indexCreatedAt() {
+  await setBusyTimeout(dbRef);
   log(`Back-dating ${backdateModels.length} models${skipped.length ? ` (no createdAt column: ${skipped.join(", ")})` : ""}`);
   for (const model of backdateModels) {
     const table = model[0].toUpperCase() + model.slice(1);
@@ -94,6 +95,18 @@ async function indexCreatedAt() {
  * retry once before giving up.
  */
 let dbRef = db;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * The API server writes to the same SQLite file — and its post-write assurance
+ * hooks keep writing after the response is sent — so a bulk UPDATE here races
+ * with it. Wait for the lock rather than failing the run.
+ */
+async function setBusyTimeout(client) {
+  // PRAGMA returns a row, so it has to go through queryRaw, not executeRaw.
+  await client.$queryRawUnsafe("PRAGMA busy_timeout = 30000");
+}
+
 async function backdate(mark, ts) {
   for (const model of backdateModels) {
     const table = model[0].toUpperCase() + model.slice(1);
@@ -105,10 +118,18 @@ async function backdate(mark, ts) {
         );
         break;
       } catch (err) {
-        if (attempt >= 1) throw err;
-        log(`  (engine fault on ${table}, reconnecting: ${String(err.message).split("\n")[0].slice(0, 70)})`);
+        const message = String(err.message ?? "");
+        const locked = message.includes("database is locked") || message.includes("SQLITE_BUSY");
+        if (attempt >= 6) throw err;
+        if (locked) {
+          await sleep(250 * (attempt + 1));
+          continue;
+        }
+        // A Rust panic poisons the client for good — rebuild it and retry once.
+        log(`  (engine fault on ${table}, reconnecting)`);
         try { await dbRef.$disconnect(); } catch { /* already dead */ }
         dbRef = new PrismaClient();
+        await setBusyTimeout(dbRef);
       }
     }
   }
