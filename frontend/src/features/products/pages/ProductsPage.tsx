@@ -253,6 +253,26 @@ export default function ProductsPage() {
     };
   }, [productRows]);
 
+  /**
+   * Filter by the categories this shop actually uses, not a fixed list. A shop
+   * whose catalogue is "staples", "oils", "masala" could not filter to any of
+   * them, while the stat card beside the filter counted them — so the control
+   * silently covered a fraction of the catalogue. Seed defaults stay for a shop
+   * with no products yet.
+   */
+  const categoryOptions = useMemo(() => {
+    const used = new Set<string>();
+    productRows
+      .filter((product) => !isDeletedProduct(product))
+      .forEach((product) => {
+        const value = (product.category ?? "").trim();
+        if (value) used.add(value);
+      });
+    const defaults = CATEGORIES.filter((item) => item !== "all");
+    return [...new Set([...used, ...(used.size === 0 ? defaults : [])])].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [productRows]);
+
   /* pagination */
   const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
   useEffect(() => { setPage(1); }, [debouncedSearch, category, statusFilter, stockFilter, typeFilter, rowsPerPage]);
@@ -383,13 +403,17 @@ export default function ProductsPage() {
           />
         </div>
         <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold lg:w-52" data-testid="select-category">
-            <SelectValue placeholder="All Categories" />
+          <SelectTrigger className="h-11 w-full rounded-[10px] border-[#e3eaf3] text-[13px] font-semibold capitalize lg:w-52" data-testid="select-category">
+            {/* Render the label ourselves so the trigger reads "Home Care" like the
+                option does, instead of echoing the raw stored value ("home-care"). */}
+            <SelectValue placeholder="All Categories">
+              {category === "all" ? "All Categories" : category.replace(/[_-]/g, " ")}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {CATEGORIES.filter((c) => c !== "all").map((item) => (
-              <SelectItem key={item} value={item} className="capitalize">{item.replace(/_/g, " ")}</SelectItem>
+            {categoryOptions.map((item) => (
+              <SelectItem key={item} value={item} className="capitalize">{item.replace(/[_-]/g, " ")}</SelectItem>
             ))}
           </SelectContent>
         </Select>
