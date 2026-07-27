@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, FileText, Loader2, MessageSquare, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ const RESOLUTIONS: { status: FindingStatus; label: string; hint: string }[] = [
 ];
 
 export default function FindingDetailPage() {
-  const { id = "" } = useParams();
+  const { id = "" } = useParams<{ id: string }>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -159,7 +159,7 @@ export default function FindingDetailPage() {
     <div className="space-y-4 p-4">
       <div className="flex items-center gap-2">
         <Button asChild variant="ghost" size="sm">
-          <Link to="/assurance/findings"><ArrowLeft className="mr-1 h-4 w-4" /> Findings</Link>
+          <Link href="/assurance/findings"><ArrowLeft className="mr-1 h-4 w-4" /> Findings</Link>
         </Button>
       </div>
 

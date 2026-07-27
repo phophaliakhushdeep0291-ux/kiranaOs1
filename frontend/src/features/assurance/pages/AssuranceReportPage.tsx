@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -161,7 +161,7 @@ export default function AssuranceReportPage() {
                 {report.openCriticalFindings.map((finding) => (
                   <li key={finding.findingId} className="flex flex-wrap items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
                     <div className="min-w-0">
-                      <Link to={`/assurance/findings/${finding.findingId}`} className="text-sm font-medium hover:underline">
+                      <Link href={`/assurance/findings/${finding.findingId}`} className="text-sm font-medium hover:underline">
                         {finding.title}
                       </Link>
                       <p className="font-mono text-[10px] text-muted-foreground">{finding.ruleCodes.join(", ")}</p>
