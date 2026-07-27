@@ -10,7 +10,7 @@ import { assertFailure, assertSuccess, createIntegrationContext, resetDatabase }
 import { createCustomer, createProduct, createStaff, createTenant, login, unique, uniqueMobile } from "./factories.js";
 import { moneyShadows } from "../../src/utils/money.js";
 import { ENTITY_TYPES, FINDING_STATUS } from "../../src/modules/assurance/assurance.constants.js";
-import { flushAuditQueue } from "../../src/modules/assurance/assurance.hooks.js";
+import { flushAuditQueue, setTransactionTriggeredEnabled } from "../../src/modules/assurance/assurance.hooks.js";
 
 const ctx = await createIntegrationContext();
 
@@ -495,6 +495,11 @@ function runSuite() {
 
   test("transaction-triggered evaluation runs after commit without blocking billing", async () => {
     await resetDatabase(ctx.db);
+    // Post-commit evaluation is off in the test environment by default so its
+    // background writes cannot contend with unrelated suites. This test is the
+    // one that means to exercise it, so it opts in and restores the default.
+    setTransactionTriggeredEnabled(true);
+    try {
     const { shop, ownerMobile, ownerPassword } = await createTenant(ctx.db);
     const token = (await login(ctx, ownerMobile, ownerPassword)).accessToken;
     const product = await createProduct(ctx.db, shop.id, { stockBaseQty: 50, defaultPricePerRateUnit: 20, costPerRateUnit: 10 });
@@ -533,6 +538,10 @@ function runSuite() {
     assert.equal(evaluation.riskScore, 0);
     const finding = await ctx.db.auditFinding.findFirst({ where: { shopId: shop.id, sourceEntityId: bill.id } });
     assert.equal(finding, null, "a healthy sale must not raise a finding");
+    } finally {
+      setTransactionTriggeredEnabled(null);
+      await flushAuditQueue();
+    }
   });
 
   // ── MVP ACCEPTANCE SCENARIO ─────────────────────────────────
