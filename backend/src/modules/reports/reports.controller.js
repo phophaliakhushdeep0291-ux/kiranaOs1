@@ -171,7 +171,7 @@ export async function exportBills(req, res, next) {
 export async function exportStock(req, res, next) {
   try {
     const data = await svc.exportStockLedgerData(req.shopId, scopedQuery(req));
-    await logDataExport(req, "stock", { rowCount: Array.isArray(data) ? data.length : 0 });
+    await logDataExport(req, "stock", { rowCount: data.count, truncated: data.truncated });
     res.json({ success: true, data });
   } catch (err) { next(err); }
 }
@@ -191,7 +191,10 @@ export async function createReportExportJob(req, res, next) {
       req.body.reportType,
       req.body.params ?? {}
     );
-    res.status(202).json({ success: true, data: { jobId: data.id, status: data.status, queued: true, queueJobId: data.queueJobId } });
+    // `queued` reports how the job is actually being run, not a constant: without
+    // Redis it runs inline on this node, and saying otherwise would mislead a
+    // client that is deciding whether to poll.
+    res.status(202).json({ success: true, data: { jobId: data.id, status: data.status, queued: data.queued !== false, runner: data.runner ?? "queue", queueJobId: data.queueJobId } });
   } catch (err) { next(err); }
 }
 
