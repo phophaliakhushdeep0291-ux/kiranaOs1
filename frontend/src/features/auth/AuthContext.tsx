@@ -9,6 +9,7 @@ import { collectDeviceHealth } from "@/lib/device-health/collectDeviceHealth";
 import { ensureCurrentDeviceRegistered, writeOfflineLicenseToken } from "@/features/devices/license";
 import { getOfflineScope } from "@/lib/offline/context";
 import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
+import { clearSessionLockState } from "@/features/settings/SessionLockGate";
 import { offlineDB } from "@/lib/offline/db";
 import { AuthContext } from "./auth-context";
 
@@ -256,6 +257,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // user so this user only ever sees their own shop's data (React Query keys aren't shop-scoped).
     clearInstantMemoryCache();
     queryClient.clear();
+    // A fresh sign-in is the strongest proof of presence there is — start the
+    // idle clock over so the counter isn't locked the moment it opens.
+    clearSessionLockState();
     setAccessToken(token);
     setUser(userData);
     setShop(shopData ?? null);
@@ -288,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAuthStorage();
     clearInstantMemoryCache(); // drop the prior shop's in-memory cache so the next user starts clean
     queryClient.clear(); // drop cached React Query data (keys aren't shop-scoped)
+    clearSessionLockState();
     setAccessToken(null);
     setUser(null);
     setShop(null);

@@ -7,6 +7,7 @@ import { PageLoading } from "@/components/shared/PageLoading";
 import { RouteTransition } from "@/components/shared/RouteTransition";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLandingRoute } from "@/features/settings/landing-page";
+import { SessionLockGate } from "@/features/settings/SessionLockGate";
 import { stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
 import { FeatureGate } from "@/features/subscription/components/FeatureGate";
 import type { FeatureName } from "@/features/subscription/plans";
@@ -67,6 +68,14 @@ const DevicesPage = lazy(() => import("@/features/devices/pages/DevicesPage"));
 const PlatformAdminPage = lazy(() => import("@/features/platform-admin/pages/PlatformAdminPage"));
 const StaffPage = lazy(() => import("@/features/staff/pages/StaffPage"));
 const AuditLogsPage = lazy(() => import("@/features/audit-logs/pages/AuditLogsPage"));
+const AssuranceDashboardPage = lazy(() => import("@/features/assurance/pages/AssuranceDashboardPage"));
+const AssuranceFindingsPage = lazy(() => import("@/features/assurance/pages/FindingsPage"));
+const AssuranceFindingDetailPage = lazy(() => import("@/features/assurance/pages/FindingDetailPage"));
+const AssuranceEvidencePage = lazy(() => import("@/features/assurance/pages/EvidenceRequestsPage"));
+const AssuranceRunsPage = lazy(() => import("@/features/assurance/pages/AuditRunsPage"));
+const AssuranceRulesPage = lazy(() => import("@/features/assurance/pages/AuditRulesPage"));
+const AssuranceReviewQueuePage = lazy(() => import("@/features/assurance/pages/ReviewQueuePage"));
+const AssuranceReportPage = lazy(() => import("@/features/assurance/pages/AssuranceReportPage"));
 const RecycleBinPage = lazy(() => import("@/features/recycle-bin/pages/RecycleBinPage"));
 const SmartToolsPage = lazy(() => import("@/features/innovation/pages/SmartToolsPage"));
 const RecoveryModePage = lazy(() => import("@/features/recovery/pages/RecoveryModePage"));
@@ -151,11 +160,13 @@ function ProtectedRoute({ component: Component, featureName }: { component: Comp
   }
 
   return (
-    <Layout>
-      <ErrorBoundary>
-        <LazyPage component={Component} featureName={featureName} />
-      </ErrorBoundary>
-    </Layout>
+    <SessionLockGate>
+      <Layout>
+        <ErrorBoundary>
+          <LazyPage component={Component} featureName={featureName} />
+        </ErrorBoundary>
+      </Layout>
+    </SessionLockGate>
   );
 }
 
@@ -357,6 +368,30 @@ export function AppRoutes() {
       </Route>
       <Route path="/audit-logs">
         <ProtectedRoute component={AuditLogsPage} featureName="audit_logs" />
+      </Route>
+      <Route path="/assurance/findings/:id">
+        <ProtectedRoute component={AssuranceFindingDetailPage} />
+      </Route>
+      <Route path="/assurance/findings">
+        <ProtectedRoute component={AssuranceFindingsPage} />
+      </Route>
+      <Route path="/assurance/evidence">
+        <ProtectedRoute component={AssuranceEvidencePage} />
+      </Route>
+      <Route path="/assurance/review-queue">
+        <ProtectedRoute component={AssuranceReviewQueuePage} />
+      </Route>
+      <Route path="/assurance/runs">
+        <ProtectedRoute component={AssuranceRunsPage} />
+      </Route>
+      <Route path="/assurance/rules">
+        <ProtectedRoute component={AssuranceRulesPage} />
+      </Route>
+      <Route path="/assurance/report">
+        <ProtectedRoute component={AssuranceReportPage} />
+      </Route>
+      <Route path="/assurance">
+        <ProtectedRoute component={AssuranceDashboardPage} />
       </Route>
       <Route path="/recycle-bin">
         <ProtectedRoute component={RecycleBinPage} />

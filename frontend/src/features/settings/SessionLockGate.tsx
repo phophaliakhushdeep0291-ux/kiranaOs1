@@ -1,0 +1,238 @@
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fingerprint, Lock, Loader2, LogOut, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useAuth } from "@/features/auth/useAuth";
+import { verifyOwnerPin } from "@/features/settings/api";
+import { isBiometricEnrolled, verifyBiometric } from "@/features/settings/biometric-unlock";
+import {
+  SECURITY_POLICY_CHANGED_EVENT,
+  getSecurityPolicySync,
+  loadSecurityPolicy,
+  sessionTimeoutMs,
+  type SecurityPolicy,
+} from "@/features/settings/security-policy";
+
+/**
+ * Makes Settings -> Security "Session & Login Security" real.
+ *
+ * - Session timeout + Auto-lock: after the configured idle window the counter is
+ *   covered by a PIN lock instead of staying open on a shared till. With
+ *   auto-lock off the same window signs the user out completely.
+ * - Require login on app start: a cold start (new browser session) locks first.
+ * - Remember this device: when off, an expired session signs out instead of
+ *   offering the quick PIN unlock, so full credentials are needed again.
+ *
+ * The idle stamp lives in localStorage so a refresh cannot be used to dodge the
+ * lock, and the PIN is checked by the server (POST /auth/pin/verify) — never
+ * against anything stored in the browser.
+ */
+
+const LAST_ACTIVITY_KEY = "kiranaos.security.lastActivity.v1";
+const SESSION_STARTED_KEY = "kiranaos.security.sessionStarted.v1";
+const ACTIVITY_EVENTS = ["pointerdown", "keydown", "wheel", "touchstart", "focus"] as const;
+
+/** Throttled so a busy counter isn't writing to storage on every keystroke. */
+const ACTIVITY_WRITE_INTERVAL_MS = 15_000;
+const CHECK_INTERVAL_MS = 10_000;
+
+function readLastActivity(): number {
+  try {
+    const raw = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+    return Number.isFinite(raw) && raw > 0 ? raw : Date.now();
+  } catch {
+    return Date.now();
+  }
+}
+
+function writeLastActivity(at: number) {
+  try {
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(at));
+  } catch {
+    /* storage unavailable — the in-memory stamp still guards this tab */
+  }
+}
+
+/** True the first time the gate mounts in a brand-new browser session. */
+function isColdStart(): boolean {
+  try {
+    if (sessionStorage.getItem(SESSION_STARTED_KEY)) return false;
+    sessionStorage.setItem(SESSION_STARTED_KEY, String(Date.now()));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearSessionLockState() {
+  try {
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
+    sessionStorage.removeItem(SESSION_STARTED_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
+
+export function SessionLockGate({ children }: { children: ReactNode }) {
+  const { logout, user } = useAuth();
+  const [policy, setPolicy] = useState<SecurityPolicy>(() => getSecurityPolicySync());
+  const [locked, setLocked] = useState(false);
+  const lastWriteRef = useRef(0);
+  const coldStartHandled = useRef(false);
+
+  useEffect(() => {
+    void loadSecurityPolicy().then(setPolicy);
+    const onChange = () => setPolicy(getSecurityPolicySync());
+    window.addEventListener(SECURITY_POLICY_CHANGED_EVENT, onChange);
+    return () => window.removeEventListener(SECURITY_POLICY_CHANGED_EVENT, onChange);
+  }, []);
+
+  const markActive = useCallback(() => {
+    const now = Date.now();
+    if (now - lastWriteRef.current < ACTIVITY_WRITE_INTERVAL_MS) return;
+    lastWriteRef.current = now;
+    writeLastActivity(now);
+  }, []);
+
+  // Always record activity, even while unlocked with no timeout configured, so
+  // turning the timeout on later starts from a real timestamp.
+  useEffect(() => {
+    if (locked) return;
+    writeLastActivity(Date.now());
+    lastWriteRef.current = Date.now();
+    for (const event of ACTIVITY_EVENTS) window.addEventListener(event, markActive, { passive: true });
+    return () => {
+      for (const event of ACTIVITY_EVENTS) window.removeEventListener(event, markActive);
+    };
+  }, [locked, markActive]);
+
+  // Cold start: lock (or sign out) before anything renders when the owner asked
+  // for a login on every app start.
+  useEffect(() => {
+    if (coldStartHandled.current) return;
+    coldStartHandled.current = true;
+    if (!isColdStart()) return;
+    if (!policy.requireLoginOnStart) return;
+    if (policy.rememberDevice) setLocked(true);
+    else void logout();
+    // policy is read once on the first mount; later changes apply to the next start.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [policy.requireLoginOnStart, policy.rememberDevice]);
+
+  useEffect(() => {
+    const timeout = sessionTimeoutMs(policy);
+    if (timeout <= 0 || locked) return;
+    const timer = window.setInterval(() => {
+      if (Date.now() - readLastActivity() < timeout) return;
+      if (policy.autoLock && policy.rememberDevice) setLocked(true);
+      else void logout();
+    }, CHECK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [locked, logout, policy]);
+
+  if (!locked) return <>{children}</>;
+
+  return (
+    <LockScreen
+      userName={user?.name ?? null}
+      biometric={policy.biometric && isBiometricEnrolled()}
+      onUnlock={() => {
+        writeLastActivity(Date.now());
+        setLocked(false);
+      }}
+      onSignOut={() => void logout()}
+    />
+  );
+}
+
+function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: string | null; biometric: boolean; onUnlock: () => void; onSignOut: () => void }) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  async function unlockWithBiometric() {
+    setChecking(true);
+    setError(null);
+    try {
+      await verifyBiometric();
+      onUnlock();
+    } catch (err) {
+      setError((err as { message?: string })?.message || "Fingerprint / face unlock did not complete.");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 60);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = pin.trim();
+    if (value.length < 4) {
+      setError("Enter your 4-digit owner PIN.");
+      return;
+    }
+    setChecking(true);
+    setError(null);
+    try {
+      await verifyOwnerPin(value);
+      onUnlock();
+    } catch (err) {
+      const message = (err as { data?: { message?: string }; message?: string })?.data?.message
+        ?? (err as { message?: string })?.message
+        ?? "Wrong PIN.";
+      setError(message);
+      setPin("");
+      inputRef.current?.focus();
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-[linear-gradient(135deg,#07152f_0%,#0e2c63_100%)] px-4">
+      <div className="w-full max-w-[380px] rounded-[18px] bg-white p-6 shadow-[0_24px_60px_rgba(4,15,40,0.45)]">
+        <span className="grid h-12 w-12 place-items-center rounded-[14px] bg-[#eef5ff] text-[#005dff]"><Lock size={22} /></span>
+        <h1 className="mt-4 font-display text-[20px] font-black tracking-tight text-[#0f1e3d]">Counter locked</h1>
+        <p className="mt-1 text-[12.5px] leading-5 text-[#64748b]">
+          {userName ? `${userName}, enter` : "Enter"} the owner PIN to get back to the counter. This lock follows your
+          Settings &rarr; Security session rules.
+        </p>
+        <form className="mt-5 space-y-3" onSubmit={(event) => void submit(event)}>
+          <Input
+            ref={inputRef}
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            className="h-11 text-center text-[18px] tracking-[0.4em]"
+            placeholder="••••"
+            value={pin}
+            disabled={checking}
+            onChange={(event) => { setPin(event.target.value); setError(null); }}
+          />
+          {error ? <p role="alert" className="text-[12px] font-semibold text-rose-600">{error}</p> : null}
+          <Button
+            type="submit"
+            disabled={checking}
+            style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }}
+            className="h-11 w-full gap-2 rounded-[10px] font-black text-white hover:opacity-95"
+          >
+            {checking ? <><Loader2 size={16} className="animate-spin" /> Checking…</> : <><ShieldCheck size={16} /> Unlock counter</>}
+          </Button>
+          {biometric ? (
+            <Button type="button" variant="outline" disabled={checking} className="h-11 w-full gap-2 rounded-[10px] font-bold" onClick={() => void unlockWithBiometric()}>
+              <Fingerprint size={16} /> Use fingerprint / face
+            </Button>
+          ) : null}
+          <Button type="button" variant="ghost" className="h-10 w-full gap-2 text-[12px] font-bold text-[#64748b]" onClick={onSignOut}>
+            <LogOut size={14} /> Sign out instead
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}

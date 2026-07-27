@@ -9,6 +9,13 @@
       "port": 5173
     },
     {
+      "name": "kirana-frontend-51977",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "autoPort": false,
+      "port": 51977
+    },
+    {
       "name": "kirana-backend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "backend", "run", "dev"],

@@ -26,6 +26,8 @@ import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, write
 import { shareBillOnWhatsapp, derivePaymentModeLabel, type BillShareInput } from "@/features/bills/share";
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
 import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config";
+import { isActionProtected, loadSecurityPolicy } from "@/features/settings/security-policy";
+import { defaultPaymentMode, keyboardShortcutsEnabled, playCounterBeep } from "@/features/settings/app-preferences";
 import { computeGstBreakdown } from "@/lib/gst";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
@@ -175,7 +177,9 @@ export default function Billing() {
   const [discount, setDiscount] = useState(() => readBillingDraft().discount ?? 0);
   const [discountReason, setDiscountReason] = useState(() => readBillingDraft().discountReason ?? "");
   const [appliedOffer, setAppliedOffer] = useState<AppliedOffer | null>(() => readBillingDraft().appliedOffer ?? null);
-  const [paymentMode, setPaymentMode] = useState<PaymentSelection>(() => readBillingDraft().paymentMode ?? BillPaymentMode.cash);
+  // A resumed draft wins; otherwise open on the shop's default payment mode
+  // (Settings → Advanced → Default payment).
+  const [paymentMode, setPaymentMode] = useState<PaymentSelection>(() => readBillingDraft().paymentMode ?? defaultPaymentMode());
   const [billType, setBillType] = useState<BillTypeSelection>(() => readBillingDraft().billType ?? BillInputBillType.normal_sale);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => readBillingDraft().selectedCustomerId ?? "walk_in");
   const [customerName, setCustomerName] = useState(() => readBillingDraft().customerName ?? "");
@@ -538,6 +542,7 @@ export default function Billing() {
   useEffect(() => {
     void loadPrinterConfig();
     void loadTaxConfig();
+    void loadSecurityPolicy(); // which counter actions still ask for the owner PIN
   }, []);
 
   useEffect(() => {
@@ -612,6 +617,7 @@ export default function Billing() {
         queryClient.invalidateQueries({ queryKey: ["udhar"] });
         queryClient.invalidateQueries({ queryKey: ["loyalty-account"] });
         queryClient.invalidateQueries({ queryKey: ["loyalty-accounts"] });
+        playCounterBeep("success"); // honours Settings → Advanced → Sound effects
         toast({ title: `Bill ${billNo} saved`, description: isOnline ? "Bill saved. Cloud backup will run automatically." : "Data safe locally. Cloud backup pending." });
       },
       onError: (err: unknown) => {
@@ -625,6 +631,7 @@ export default function Billing() {
             pendingAutoPrintRef.current = null;
           }
         }
+        playCounterBeep("error");
         toast({ title: "Billing error", description: msg, variant: "destructive" });
       },
     },
@@ -644,7 +651,7 @@ export default function Billing() {
     setCustomerMobile("");
     setSelectedCustomerId("walk_in");
     setBillType(requestedBillType ?? BillInputBillType.normal_sale);
-    setPaymentMode(BillPaymentMode.cash);
+    setPaymentMode(defaultPaymentMode()); // next bill starts on the shop's default too
     setAllowAdvancePayment(false);
     setDraftRestored(false);
   }
@@ -1126,11 +1133,13 @@ export default function Billing() {
 
   function requiredBillingSensitiveActions(): BillingSensitiveAction[] {
     const actions: BillingSensitiveAction[] = [];
+    // Both of these are decided here at the counter, so Settings -> Security
+    // "Sensitive Action Protection" is the only thing that turns them on or off.
     const isLargeDiscount = subtotal > 0 && safeDiscount >= Math.max(100, subtotal * 0.1);
-    if (isLargeDiscount) actions.push("large_discount");
+    if (isLargeDiscount && isActionProtected("largeDiscount")) actions.push("large_discount");
     const hasBelowMinimumRate = cart.some(lineNeedsOwnerApproval);
-    if (hasBelowMinimumRate) actions.push("selling_below_minimum_price");
-    if (effectiveLoyaltyPoints > 0) actions.push("loyalty_redemption");
+    if (hasBelowMinimumRate && isActionProtected("sellBelowMin")) actions.push("selling_below_minimum_price");
+    if (effectiveLoyaltyPoints > 0) actions.push("loyalty_redemption"); // server-enforced on redeem
     return actions;
   }
 
@@ -1448,6 +1457,9 @@ export default function Billing() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) return;
+      // Settings → Advanced → Keyboard shortcuts. Escape-to-clear stays on
+      // because it is a browser convention, not an app hotkey.
+      if (!keyboardShortcutsEnabled() && event.key !== "Escape") return;
       if (event.key === "Escape" && search) {
         event.preventDefault();
         setSearch("");
