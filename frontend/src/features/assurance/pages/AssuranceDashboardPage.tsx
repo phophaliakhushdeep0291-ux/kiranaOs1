@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, FileSearch, Loader2, Play, RefreshCw, ShieldCheck } from "lucide-react";
@@ -178,7 +178,7 @@ export default function AssuranceDashboardPage() {
           className="lg:col-span-2"
           actions={
             <Button asChild variant="outline" size="sm">
-              <Link to="/assurance/findings">View all</Link>
+              <Link href="/assurance/findings">View all</Link>
             </Button>
           }
         >
@@ -187,7 +187,7 @@ export default function AssuranceDashboardPage() {
               {data.topFindings.map((finding) => (
                 <li key={finding.findingId} className="flex flex-wrap items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
                   <div className="min-w-0">
-                    <Link to={`/assurance/findings/${finding.findingId}`} className="text-sm font-medium hover:underline">
+                    <Link href={`/assurance/findings/${finding.findingId}`} className="text-sm font-medium hover:underline">
                       {finding.title}
                     </Link>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -219,7 +219,7 @@ export default function AssuranceDashboardPage() {
               <Row label="Rule set" value={<span className="font-mono text-[11px]">{data.latestRun.rulesetVersion}</span>} />
               <div className="pt-2">
                 <Button asChild variant="outline" size="sm" className="w-full">
-                  <Link to="/assurance/runs">All runs</Link>
+                  <Link href="/assurance/runs">All runs</Link>
                 </Button>
               </div>
             </dl>
