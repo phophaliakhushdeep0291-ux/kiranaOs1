@@ -28,3 +28,5 @@ release-artifacts
 
 # Stray database / file backups (e.g. dev.db.before-*.bak from QA snapshots)
 *.bak
+
+/scripts/year-sim/runs/

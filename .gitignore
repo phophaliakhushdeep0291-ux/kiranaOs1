@@ -23,3 +23,6 @@ dev.db
 .vscode/
 .idea/
 .DS_Store
+
+# Generated UI verification screenshots (runtime assets live under frontend/public).
+/frontend/*.png
