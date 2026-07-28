@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -137,6 +138,57 @@ describe("diagnostics report real runtime facts", () => {
   it("derives the version from the injected build stamp", () => {
     expect(appVersion()).not.toBe("2.1.3");
     expect(appVersion().length).toBeGreaterThan(0);
+  });
+});
+
+describe("accent picker repaints the app", () => {
+  const css = readFileSync("src/index.css", "utf8");
+  const theme = readFileSync("src/features/settings/theme.tsx", "utf8");
+  const accents = [...theme.matchAll(/^ {2}(\w+): \{ label:/gm)].map((m) => m[1]);
+
+  it("finds every swatch the picker offers", () => {
+    expect(accents.length).toBeGreaterThanOrEqual(8);
+    expect(accents).toContain("emerald");
+  });
+
+  it("ships a CSS block for every swatch", () => {
+    // Emerald shipped without one, so the first swatch in the picker set
+    // data-accent="emerald" and nothing in the stylesheet matched it.
+    for (const accent of accents) {
+      expect(css, `missing [data-accent="${accent}"] block`).toContain(`[data-accent="${accent}"] {`);
+    }
+  });
+
+  it("redefines all five brand tokens on every accent", () => {
+    for (const accent of accents) {
+      const start = css.indexOf(`[data-accent="${accent}"] {`);
+      const block = css.slice(start, css.indexOf("}", start));
+      for (const token of ["--brand:", "--brand-strong:", "--brand-soft:", "--brand-softer:", "--brand-border:"]) {
+        expect(block, `${accent} is missing ${token}`).toContain(token);
+      }
+    }
+  });
+
+  it("never silently rewrites a saved accent to blue", () => {
+    expect(theme).not.toContain('saved === "emerald"');
+    expect(theme).toContain("isAccent(saved) ? saved : \"blue\"");
+  });
+
+  it("keeps the literal brand hexes out of the app so themes can take effect", () => {
+    // These were painted directly into ~550 class names, which is why switching
+    // accent used to change almost nothing the shopkeeper could see.
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) { if (entry.name !== "node_modules") walk(full); continue; }
+        if (!/\.tsx?$/.test(entry.name)) continue;
+        if (full.replaceAll("\\", "/").endsWith("features/settings/theme.tsx")) continue; // the swatches themselves
+        if (/#(075fff|005dff|2563eb|0047e8|0046d8)/i.test(readFileSync(full, "utf8"))) offenders.push(full);
+      }
+    };
+    walk("src");
+    expect(offenders, `hardcoded brand hex in:\n${offenders.join("\n")}`).toEqual([]);
   });
 });
 
