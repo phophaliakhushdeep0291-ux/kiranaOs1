@@ -47,6 +47,8 @@ export function ReportIssueButton() {
         setSubmitting(false);
         setResult(null);
         setError(null);
+        setAssistantAnswer(null);
+        setAsking(false);
       }, 200);
     }
   }
@@ -67,6 +69,21 @@ export function ReportIssueButton() {
       );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleAsk() {
+    const text = description.trim();
+    if (!text || asking) return;
+    setAsking(true);
+    setError(null);
+    setAssistantAnswer(null);
+    try {
+      setAssistantAnswer(await askAssistant(text));
+    } catch {
+      setError("Couldn't reach the assistant just now — you can still send a report below.");
+    } finally {
+      setAsking(false);
     }
   }
 
@@ -122,6 +139,27 @@ export function ReportIssueButton() {
                   maxLength={2000}
                   className="resize-none"
                 />
+
+                {assistantAnswer && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3 text-sm">
+                    <div className="mb-1 flex items-center gap-1.5 font-semibold text-primary">
+                      <Wand2 size={14} aria-hidden="true" /> {assistantAnswer.topic}
+                    </div>
+                    <p className="whitespace-pre-line text-foreground">{assistantAnswer.answer}</p>
+                    {assistantAnswer.steps.length > 0 && (
+                      <ul className="mt-2 list-disc space-y-1 pl-4 text-muted-foreground">
+                        {assistantAnswer.steps.map((step, index) => (
+                          <li key={index}>{step}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {assistantAnswer.resolved
+                        ? "If this didn't solve it, send it to support below."
+                        : "I've prepared a full diagnostic report — send it to support below."}
+                    </p>
+                  </div>
+                )}
 
                 <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
                   <div className="mb-1.5 flex items-center gap-1.5 font-semibold text-foreground">
