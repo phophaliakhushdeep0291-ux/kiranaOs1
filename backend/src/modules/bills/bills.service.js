@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
+import { billSellerIdentity, locationSellerIdentity } from "../../utils/gstIdentity.js";
 import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import { postBillCancelledLedger, postBillCreatedLedger, postBillRestoredLedger, postSaleReturnLedger } from "../finance/financial-ledger.service.js";
 import {
@@ -155,6 +156,12 @@ export async function confirmBill(shopId, body, actor = {}) {
     const existingBill = await findExistingBillByIdentity(tx, shopId, billIdentity);
     if (existingBill) return existingBill;
     const location = await resolveOperationalLocation(shopId, operationalLocation.id, tx);
+    const shop = await tx.shop.findUnique({ where: { id: shopId } });
+    if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+    const sellerIdentity = locationSellerIdentity(location, shop);
+    if (billType === "gst_invoice" && !sellerIdentity.registrationValid) {
+      throw new AppError("This location needs a valid GSTIN before issuing a GST invoice", 422, "SELLER_GSTIN_REQUIRED");
+    }
 
     const invoiceCustomer = customerId
       ? await tx.customer.findFirst({ where: { id: customerId, shopId, deletedAt: null } })
@@ -453,6 +460,12 @@ export async function confirmBill(shopId, body, actor = {}) {
         buyerGstin: invoiceCustomer?.gstNumber ?? null,
         buyerStateCode: invoiceCustomer?.stateCode ?? null,
         buyerAddress: invoiceCustomer?.address ?? null,
+        sellerGstin: sellerIdentity.sellerGstin,
+        sellerStateCode: sellerIdentity.sellerStateCode,
+        sellerLegalName: sellerIdentity.sellerLegalName,
+        sellerTradeName: sellerIdentity.sellerTradeName,
+        sellerAddress: sellerIdentity.sellerAddress,
+        sellerCity: sellerIdentity.sellerCity,
         subtotal,
         discount: billDiscount,
         discountReason: body.discountReason || null,
@@ -793,6 +806,9 @@ export async function createSaleReturn(shopId, body, actor = {}) {
         tx,
         { allowInactive: Boolean(original?.locationId) },
       );
+      const shop = await tx.shop.findUnique({ where: { id: shopId } });
+      if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
+      const sellerIdentity = original ? billSellerIdentity(original, shop) : locationSellerIdentity(location, shop);
 
       // A return against an estimate must not post GST: the original kacha bill never entered
       // the GST report, so its reversal can't either — otherwise the report would show negative
@@ -979,6 +995,12 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           buyerGstin: original?.buyerGstin ?? returnCustomer?.gstNumber ?? null,
           buyerStateCode: original?.buyerStateCode ?? returnCustomer?.stateCode ?? null,
           buyerAddress: original?.buyerAddress ?? returnCustomer?.address ?? null,
+          sellerGstin: sellerIdentity.sellerGstin,
+          sellerStateCode: sellerIdentity.sellerStateCode,
+          sellerLegalName: sellerIdentity.sellerLegalName,
+          sellerTradeName: sellerIdentity.sellerTradeName,
+          sellerAddress: sellerIdentity.sellerAddress,
+          sellerCity: sellerIdentity.sellerCity,
           gstMode: effectiveGstMode,
           ...negativeMoney,
           ...moneyShadows(negativeMoney),

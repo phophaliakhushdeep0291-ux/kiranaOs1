@@ -12,6 +12,7 @@ describe("cloud data bootstrap wiring", () => {
     const providers = read("src/app/providers.tsx");
     expect(providers).toContain("CloudDataBootstrap");
     expect(providers).toContain("RealtimeRefreshBridge");
+    expect(providers).toContain('networkMode: "always"');
 
     const authProviderIndex = providers.indexOf("<AuthProvider>");
     const realtimeIndex = providers.indexOf("<RealtimeRefreshBridge />");

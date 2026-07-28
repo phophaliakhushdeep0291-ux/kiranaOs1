@@ -79,6 +79,7 @@ model Shop {
   storeLocations              StoreLocation[]
   locationStocks              LocationStock[]
   stockTransfers              StockTransfer[]
+  transferDocumentCounters    TransferDocumentCounter[]
   loyaltyPrograms             LoyaltyProgram[]
   loyaltyAccounts             LoyaltyAccount[]
   loyaltyTransactions         LoyaltyTransaction[]
@@ -485,6 +486,12 @@ model Bill {
   buyerGstin            String?
   buyerStateCode        String?
   buyerAddress          String?
+  sellerGstin           String?
+  sellerStateCode       String?
+  sellerLegalName       String?
+  sellerTradeName       String?
+  sellerAddress         String?
+  sellerCity            String?
   subtotal              Float     @default(0)
   subtotalPaise         BigInt?
   discount              Float     @default(0)
@@ -669,10 +676,14 @@ model StoreLocation {
   shopId    String
   code      String
   name      String
-  address   String?
-  city      String?
-  gstNumber String?
-  phone     String?
+  address             String?
+  city                String?
+  gstNumber           String?
+  gstStateCode        String?
+  gstLegalName        String?
+  gstTradeName        String?
+  gstRegistrationType String?
+  phone               String?
   isPrimary Boolean  @default(false)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -816,17 +827,41 @@ model GiftCardTransaction {
 }
 
 model StockTransfer {
-  id              String    @id @default(cuid())
-  shopId          String
-  referenceNo     String
-  fromLocationId  String
-  toLocationId    String
-  status          String    @default("completed")
-  note            String?
-  createdByUserId String?
-  completedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  shopId                String
+  referenceNo           String
+  fromLocationId        String
+  toLocationId          String
+  status                String    @default("completed") // completed | cancelled
+  movementReason        String    @default("branch_transfer")
+  documentType          String?
+  documentNumber        String?
+  documentDate          DateTime?
+  gstTreatment          String    @default("unregistered_internal")
+  fromGstin             String?
+  fromStateCode         String?
+  toGstin               String?
+  toStateCode           String?
+  isInterstate          Boolean   @default(false)
+  complianceStatus      String    @default("not_applicable")
+  eWayReviewRequired    Boolean   @default(false)
+  taxableValue          Float     @default(0)
+  taxableValuePaise     BigInt?
+  cgst                  Float     @default(0)
+  cgstPaise             BigInt?
+  sgst                  Float     @default(0)
+  sgstPaise             BigInt?
+  igst                  Float     @default(0)
+  igstPaise             BigInt?
+  taxTotal              Float     @default(0)
+  taxTotalPaise         BigInt?
+  consignmentValue      Float     @default(0)
+  consignmentValuePaise BigInt?
+  note                  String?
+  createdByUserId       String?
+  completedAt           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   shop         Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
   fromLocation StoreLocation       @relation("TransferFrom", fields: [fromLocationId], references: [id])
@@ -834,23 +869,53 @@ model StockTransfer {
   items        StockTransferItem[]
 
   @@unique([shopId, referenceNo])
+  @@unique([shopId, documentType, documentNumber])
   @@index([shopId, createdAt])
   @@index([shopId, status, createdAt])
 }
 
 model StockTransferItem {
-  id              String @id @default(cuid())
-  transferId      String
-  productId       String
-  productName     String
-  quantityBaseQty Float
-  baseUnit        String
+  id                            String @id @default(cuid())
+  transferId                    String
+  productId                     String
+  productName                   String
+  quantityBaseQty               Float
+  baseUnit                      String
+  hsn                           String?
+  gstRate                       Float  @default(0)
+  taxableValue                  Float  @default(0)
+  taxableValuePaise             BigInt?
+  cgst                          Float  @default(0)
+  cgstPaise                     BigInt?
+  sgst                          Float  @default(0)
+  sgstPaise                     BigInt?
+  igst                          Float  @default(0)
+  igstPaise                     BigInt?
+  taxTotal                      Float  @default(0)
+  taxTotalPaise                 BigInt?
+  totalValue                    Float  @default(0)
+  totalValuePaise               BigInt?
 
   transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   product  Product       @relation(fields: [productId], references: [id])
 
   @@unique([transferId, productId])
   @@index([productId])
+}
+
+model TransferDocumentCounter {
+  id           String   @id @default(cuid())
+  shopId       String
+  fiscalYear   String
+  documentType String
+  lastNumber   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, fiscalYear, documentType])
+  @@index([shopId, updatedAt])
 }
 
 model LoyaltyProgram {

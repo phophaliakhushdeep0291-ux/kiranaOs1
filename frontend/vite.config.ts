@@ -55,12 +55,15 @@ export default defineConfig({
     // hard-crash (SyntaxError -> white screen) on iOS 14-16.3 WebKit.
     target: ["es2020", "safari14"],
     // Release builds favor smaller payloads over the default minifier's speed.
-    // Two compression passes keep the full POS feature set inside the enforced
+    // Multiple compression passes keep the full POS feature set inside the enforced
     // raw and gzip budgets without changing runtime behavior.
     minify: "terser",
     manifest: true,
     terserOptions: {
-      compress: { passes: 2 },
+      ecma: 2020,
+      module: true,
+      compress: { passes: 4, toplevel: true },
+      mangle: { toplevel: true },
       format: { comments: false },
     },
     outDir: path.resolve(projectRoot, "dist/public"),
@@ -72,7 +75,6 @@ export default defineConfig({
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],
           "vendor-ui": ["lucide-react"],
-          "vendor-charts": ["recharts"],
           "vendor-validation": ["zod"],
           "vendor-date": ["date-fns"],
         },

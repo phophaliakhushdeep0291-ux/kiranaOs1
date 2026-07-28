@@ -17,7 +17,7 @@ describe("login first-attempt reliability", () => {
     expect(source).toContain("function PublicRoute");
     // Authenticated users are redirected away from /login to their configured landing page
     // (getLandingRoute() defaults to /dashboard).
-    expect(source).toContain("if (isAuthenticated) return <Redirect to={getLandingRoute()} />");
+    expect(source).toContain("if (isAuthenticated) return <Redirect to={peekPostLoginRedirect() ?? getLandingRoute()} />");
   });
 
   it("keeps the auth provider separate from the useAuth hook for stable dev refresh", () => {

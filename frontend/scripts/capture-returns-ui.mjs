@@ -56,7 +56,8 @@ async function waitForPage(client, expression, timeout = 25_000) {
     if (await client.evaluate(expression)) return;
     await sleep(150);
   }
-  throw new Error(`Timed out waiting for: ${expression}`);
+  const diagnostic = await client.evaluate("({ url: location.href, text: document.body?.innerText?.slice(0, 1600), articles: document.querySelectorAll('article').length, errors: window.__kiranaQaErrors || [] })").catch(() => null);
+  throw new Error(`Timed out waiting for: ${expression}; page=${JSON.stringify(diagnostic)}`);
 }
 
 async function navigate(client, url) {
@@ -124,17 +125,20 @@ async function main() {
     await client.evaluate(`(async () => {
       const apiUrl = ${JSON.stringify(API_URL)};
       const runId = ${JSON.stringify(runId)};
+      const deviceId = localStorage.getItem('kiranaos_device_id') || localStorage.getItem('kirana-os:device-id:v1') || ('returns_ui_' + runId);
       const response = await fetch(apiUrl + '/auth/register', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-device-id': 'returns_ui_' + runId },
+        headers: { 'content-type': 'application/json', 'x-device-id': deviceId },
         body: JSON.stringify({ shopName: 'Returns UI QA', ownerName: 'KiranaOS QA', city: 'Jodhpur', address: 'Visual QA', mobile: ${JSON.stringify(mobile)}, password: 'Test@12345', ownerPin: '2468' }),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(JSON.stringify(json));
       const auth = json.data ?? json;
       localStorage.setItem('kiranaApiBaseUrl', apiUrl);
-      localStorage.setItem('kirana-os:device-id:v1', 'returns_ui_' + runId);
+      localStorage.setItem('kiranaos_device_id', deviceId);
+      localStorage.setItem('kirana-os:device-id:v1', deviceId);
       localStorage.setItem('kiranaos.auth.session.v1', JSON.stringify({ accessToken: auth.accessToken ?? auth.token, refreshToken: auth.refreshToken, user: auth.user, shop: auth.shop }));
+      sessionStorage.setItem('kiranaos.security.sessionStarted.v1', String(Date.now()));
       const { offlineDB } = await import('/src/lib/offline/db.ts');
       const now = new Date();
       const iso = (daysAgo, hour) => { const value = new Date(now); value.setDate(value.getDate() - daysAgo); value.setHours(hour, 15, 0, 0); return value.toISOString(); };
@@ -168,7 +172,7 @@ async function main() {
         areaFills: [...document.querySelectorAll('.recharts-area-area')].filter((path) => !['none', 'transparent', null].includes(path.getAttribute('fill'))).length,
       };
     })()`);
-    assert(/300/.test(audit.total), `Total returns mismatch: ${audit.total}`);
+    assert(/300/.test(audit.total), `Total returns mismatch: ${JSON.stringify(audit)}`);
     assert(/3/.test(audit.orders), `Return order count mismatch: ${audit.orders}`);
     assert(/4/.test(audit.items), `Returned item count mismatch: ${audit.items}`);
     assert(/180/.test(audit.refund), `Refund amount mismatch: ${audit.refund}`);

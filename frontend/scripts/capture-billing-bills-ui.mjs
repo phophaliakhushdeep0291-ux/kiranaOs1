@@ -213,6 +213,8 @@ async function main() {
       return true;
     })()`);
 
+    await client.evaluate("sessionStorage.setItem('kiranaos.security.sessionStarted.v1', String(Date.now()))");
+
     console.log("visual-qa: auditing billing and bills");
     await client.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await navigate(client, `${FRONTEND_URL}/billing?billType=normal_sale`);

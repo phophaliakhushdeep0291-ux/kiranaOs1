@@ -8,7 +8,7 @@ import { RouteTransition } from "@/components/shared/RouteTransition";
 import { useAuth } from "@/features/auth/useAuth";
 import { getLandingRoute } from "@/features/settings/landing-page";
 import { SessionLockGate } from "@/features/settings/SessionLockGate";
-import { stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
+import { peekPostLoginRedirect, stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
 import { FeatureGate } from "@/features/subscription/components/FeatureGate";
 import type { FeatureName } from "@/features/subscription/plans";
 
@@ -174,7 +174,7 @@ function ProtectedRoute({ component: Component, featureName }: { component: Comp
 function PublicRoute({ component: Component }: { component: ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <LoadingScreen />;
-  if (isAuthenticated) return <Redirect to={getLandingRoute()} />;
+  if (isAuthenticated) return <Redirect to={peekPostLoginRedirect() ?? getLandingRoute()} />;
 
   return (
     <ErrorBoundary>

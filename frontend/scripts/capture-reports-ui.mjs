@@ -56,7 +56,8 @@ async function waitForPage(client, expression, timeout = 25_000) {
     if (await client.evaluate(expression)) return;
     await sleep(150);
   }
-  throw new Error(`Timed out waiting for page condition: ${expression}`);
+  const diagnostic = await client.evaluate("({ url: location.href, text: document.body?.innerText?.slice(0, 1600), articles: document.querySelectorAll('article').length, errors: window.__kiranaQaErrors || [] })").catch(() => null);
+  throw new Error(`Timed out waiting for page condition: ${expression}; page=${JSON.stringify(diagnostic)}`);
 }
 
 async function navigate(client, url) {
@@ -129,17 +130,20 @@ async function main() {
     const setup = await client.evaluate(`(async () => {
       const apiUrl = ${JSON.stringify(API_URL)};
       const runId = ${JSON.stringify(runId)};
+      const deviceId = localStorage.getItem('kiranaos_device_id') || localStorage.getItem('kirana-os:device-id:v1') || ('reports_ui_' + runId);
       const response = await fetch(apiUrl + '/auth/register', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-device-id': 'reports_ui_' + runId },
+        headers: { 'content-type': 'application/json', 'x-device-id': deviceId },
         body: JSON.stringify({ shopName: 'Reports UI QA', ownerName: 'KiranaOS QA', city: 'Jodhpur', address: 'Visual QA', mobile: ${JSON.stringify(mobile)}, password: 'Test@12345', ownerPin: '2468' }),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(JSON.stringify(json));
       const auth = json.data ?? json;
       localStorage.setItem('kiranaApiBaseUrl', apiUrl);
-      localStorage.setItem('kirana-os:device-id:v1', 'reports_ui_' + runId);
+      localStorage.setItem('kiranaos_device_id', deviceId);
+      localStorage.setItem('kirana-os:device-id:v1', deviceId);
       localStorage.setItem('kiranaos.auth.session.v1', JSON.stringify({ accessToken: auth.accessToken ?? auth.token, refreshToken: auth.refreshToken, user: auth.user, shop: auth.shop }));
+      sessionStorage.setItem('kiranaos.security.sessionStarted.v1', String(Date.now()));
       await import('/src/features/demo/demo-shop-data.ts').then((module) => module.seedDemoShopData());
       return { shopId: auth.shop?.id };
     })()`);

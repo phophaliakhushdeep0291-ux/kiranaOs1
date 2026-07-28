@@ -34,6 +34,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: shouldRetryQuery,
+      // Run local IndexedDB fallbacks even when the browser is offline.
+      networkMode: "always",
       staleTime: 1000 * 30,
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,

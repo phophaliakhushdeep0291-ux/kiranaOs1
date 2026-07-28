@@ -55,8 +55,9 @@ export function CloudDataBootstrap() {
             detail: { type: "sync", action: "cloud-bootstrap", result: detail },
           }));
           await queryClient.invalidateQueries({ refetchType: "none" });
-          // We intentionally avoid queryClient.refetchQueries() here because two open POS windows
-          // can otherwise create a request storm. Active pages refresh from local IndexedDB events.
+          // Hydration changed the local snapshot underneath the visible screen. Refresh only
+          // mounted queries so the user sees it immediately without reloading the browser.
+          await queryClient.refetchQueries({ type: "active" });
         } catch {
           // Reset so the next navigation or remount can retry. Without this, a failed
           // first-run (e.g. backend unreachable on fresh device) would permanently skip

@@ -55,6 +55,7 @@ async function main() {
       const response=await fetch(apiUrl+'/auth/register',{method:'POST',headers:{'content-type':'application/json','x-device-id':deviceId},body:JSON.stringify({shopName:'Customers UI QA',ownerName:'KiranaOS QA',city:'Jodhpur',address:'Visual QA',mobile:${JSON.stringify(mobile)},password:'Test@12345',ownerPin:'2468'})});
       const json=await response.json(); if(!response.ok) throw new Error(JSON.stringify(json)); const auth=json.data??json;
       localStorage.setItem('kiranaApiBaseUrl',apiUrl);localStorage.setItem('kiranaos_device_id',deviceId);localStorage.setItem('kirana-os:device-id:v1',deviceId);localStorage.setItem('kiranaos.auth.session.v1',JSON.stringify({accessToken:auth.accessToken??auth.token,refreshToken:auth.refreshToken,user:auth.user,shop:auth.shop}));
+      sessionStorage.setItem('kiranaos.security.sessionStarted.v1', String(Date.now()));
       for (const customer of [
         {name:'Ramesh Sharma',mobile:'9988776655',address:'MG Road, Jaipur',type:'udhar',udharAmount:30000},
         {name:'Suresh Kumar',mobile:'9876543210',address:'Vaishali Nagar, Jaipur',type:'udhar',udharAmount:22800},

@@ -30,7 +30,7 @@ if (ctx.skip) {
       const transfer = assertSuccess(await ctx.post("/api/stores/transfers", {
         fromLocationId: locations.locations[0].id,
         toLocationId: branch.id,
-        items: [{ productId: product.id, quantityBaseQty: 7 }],
+        items: [{ productId: product.id, quantityBaseQty: 7, declaredTaxableValue: 350 }],
         note: "Opening stock",
         ownerPin: tenant.ownerPin,
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
@@ -50,7 +50,7 @@ if (ctx.skip) {
       const overdraw = assertFailure(await ctx.post("/api/stores/transfers", {
         fromLocationId: branch.id,
         toLocationId: locations.locations[0].id,
-        items: [{ productId: product.id, quantityBaseQty: 8 }], ownerPin: tenant.ownerPin,
+        items: [{ productId: product.id, quantityBaseQty: 8, declaredTaxableValue: 200 }], ownerPin: tenant.ownerPin,
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
       assert.equal(overdraw.code, "INSUFFICIENT_LOCATION_STOCK");
     });
@@ -78,7 +78,7 @@ if (ctx.skip) {
       assertSuccess(await ctx.post("/api/stores/transfers", {
         fromLocationId: primary.id,
         toLocationId: branch.id,
-        items: [{ productId: product.id, quantityBaseQty: 4 }],
+        items: [{ productId: product.id, quantityBaseQty: 4, declaredTaxableValue: 200 }],
         ownerPin: tenant.ownerPin,
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       await ctx.db.pricingRule.create({ data: {
@@ -128,7 +128,7 @@ if (ctx.skip) {
       await ctx.post("/api/stores/transfers", {
         fromLocationId: primary.id,
         toLocationId: branch.id,
-        items: [{ productId: product.id, quantityBaseQty: 8 }],
+        items: [{ productId: product.id, quantityBaseQty: 8, declaredTaxableValue: 200 }],
         ownerPin: tenant.ownerPin,
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
 

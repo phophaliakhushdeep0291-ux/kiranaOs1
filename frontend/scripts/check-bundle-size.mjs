@@ -12,10 +12,13 @@ const MAX_JS_CHUNK_BYTES = 900 * 1024;
 // ceiling plus a separate bounded full-application ceiling. This avoids making
 // a legitimate lazy feature fail the startup budget while still detecting
 // dependency duplication and unlimited aggregate growth.
-const MAX_INITIAL_JS_BYTES = 1.30 * 1024 * 1024;
-const MAX_INITIAL_GZIP_BYTES = 400 * 1024;
-const MAX_TOTAL_JS_BYTES = 2.90 * 1024 * 1024;
-const MAX_TOTAL_GZIP_BYTES = 875 * 1024;
+const MAX_INITIAL_JS_BYTES = 950 * 1024;
+const MAX_INITIAL_GZIP_BYTES = 300 * 1024;
+// The assurance control plane adds independently lazy audit, findings, evidence,
+// case, run, and review surfaces. Keep startup/per-chunk ceilings fixed, while
+// ratcheting aggregate capacity only for those opt-in route chunks.
+const MAX_TOTAL_JS_BYTES = 3.00 * 1024 * 1024;
+const MAX_TOTAL_GZIP_BYTES = 902 * 1024;
 
 
 async function collectFiles(dir) {

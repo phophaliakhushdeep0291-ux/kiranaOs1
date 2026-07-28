@@ -101,6 +101,7 @@ async function main() {
       const auth=await request('/auth/register',{method:'POST',headers:{'content-type':'application/json','x-device-id':deviceId},body:JSON.stringify({shopName:'Purchase Receive QA',ownerName:'Artha QA',city:'Pune',address:'Focused live QA',mobile:'9${runId.slice(-9)}',password:'Test@12345',ownerPin:'2468'})});
       const headers={'content-type':'application/json',authorization:'Bearer '+(auth.accessToken??auth.token),'x-device-id':deviceId,'x-owner-pin':'2468'};
       localStorage.setItem('kiranaApiBaseUrl',api);localStorage.setItem('kiranaos_device_id',deviceId);localStorage.setItem('kirana-os:device-id:v1',deviceId);localStorage.setItem('kiranaos.auth.session.v1',JSON.stringify({accessToken:auth.accessToken??auth.token,refreshToken:auth.refreshToken,user:auth.user,shop:auth.shop}));
+      sessionStorage.setItem('kiranaos.security.sessionStarted.v1', String(Date.now()));
       const product=await request('/products',{method:'POST',headers,body:JSON.stringify({name:'QA Receiving Oil',category:'Grocery',displayUnit:'piece',baseUnit:'piece',rateUnit:'piece',stockBaseQty:24,costPerRateUnit:232,minPricePerRateUnit:250,defaultPricePerRateUnit:265,mrp:280,gstRate:5,lowStockThreshold:8})});
       const supplier=await request('/suppliers',{method:'POST',headers,body:JSON.stringify({name:'QA Reliable Wholesale',mobile:'9876543210'})});
       const order=await request('/purchase-orders',{method:'POST',headers,body:JSON.stringify({supplierId:supplier.id,supplierName:supplier.name,paymentTerms:'Net 7 days',items:[{productId:product.id,orderedBaseQty:4,expectedRate:230}]})});
@@ -117,7 +118,7 @@ async function main() {
       const dialog=document.querySelector('[data-mobile-task-dialog="true"]');
       const set=(node,value)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));node.dispatchEvent(new Event('change',{bubbles:true}))};
       const inputs=[...dialog.querySelectorAll('input')],numbers=inputs.filter(node=>node.type==='number'),invoice=inputs.find(node=>node.type==='text');
-      if(!invoice||numbers.length<3)throw new Error('Receive fields missing');set(invoice,'QA-SUP-1001');set(numbers[0],'100');
+      if(!invoice||numbers.length<3)throw new Error('Receive fields missing');set(invoice,'QA-SUP-1001');set(numbers[1],'100');
       const rect=dialog.getBoundingClientRect(),controls=[...dialog.querySelectorAll('input,textarea,button,[role="combobox"]')].filter(node=>getComputedStyle(node).display!=='none');
       return {rect:[Math.round(rect.left),Math.round(rect.top),Math.round(rect.width),Math.round(rect.height)],minControlHeight:Math.min(...controls.map(node=>node.getBoundingClientRect().height)),overflowX:dialog.scrollWidth-dialog.clientWidth,totalVisible:dialog.textContent.includes('₹920')};
     })()`);

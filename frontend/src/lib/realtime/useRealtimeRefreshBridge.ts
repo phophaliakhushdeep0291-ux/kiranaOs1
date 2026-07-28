@@ -19,6 +19,7 @@ export function useRealtimeRefreshBridge() {
   const queryClient = useQueryClient();
   const fastTimerRef = useRef<number | null>(null);
   const fullTimerRef = useRef<number | null>(null);
+  const pendingRefetchTypeRef = useRef<"none" | "active">("none");
 
   useEffect(() => {
     const clearTimer = (timer: number | null) => {
@@ -30,15 +31,20 @@ export function useRealtimeRefreshBridge() {
       refetchType: "none" | "active" = "none",
     ) => {
       if (!isVisible()) return;
+      // Never let a later low-priority sync-status event downgrade an already
+      // scheduled active refresh from a local write.
+      if (refetchType === "active") pendingRefetchTypeRef.current = "active";
       clearTimer(fastTimerRef.current);
       fastTimerRef.current = window.setTimeout(() => {
         fastTimerRef.current = null;
+        const pendingRefetchType = pendingRefetchTypeRef.current;
+        pendingRefetchTypeRef.current = "none";
         // A local-first WRITE refetches the queries actually on screen so every page
         // reflects an add/edit without a manual reload — not only the few pages that
         // wired their own listener. Other triggers (sync-queue churn, backend status)
         // pass refetchType "none" to just mark queries stale and avoid hammering the
         // backend. The debounce coalesces bursts and this is visibility-gated.
-        void queryClient.invalidateQueries({ refetchType });
+        void queryClient.invalidateQueries({ refetchType: pendingRefetchType });
       }, delayMs);
     };
 
@@ -57,7 +63,10 @@ export function useRealtimeRefreshBridge() {
     const onLocalDataChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ source?: string }>).detail;
       if (detail?.source === "broadcast") {
-        scheduleRefresh(FAST_REFRESH_DELAY_MS, "none");
+        const refetchType = shouldPassSharedThrottle("kirana.broadcastActiveQueryRefresh.lastRun", 1_200)
+          ? "active"
+          : "none";
+        scheduleRefresh(FAST_REFRESH_DELAY_MS, refetchType);
         return;
       }
       if (!shouldPassSharedThrottle("kirana.localActiveQueryRefresh.lastRun", 1_200)) {

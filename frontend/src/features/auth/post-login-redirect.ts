@@ -18,6 +18,19 @@ export function stashPostLoginRedirect(target: string): void {
   }
 }
 
+export function peekPostLoginRedirect(): string | null {
+  try {
+    const raw = sessionStorage.getItem(KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { target?: unknown; ts?: unknown };
+    const target = typeof parsed?.target === "string" ? parsed.target : null;
+    const ts = typeof parsed?.ts === "number" ? parsed.ts : 0;
+    if (!target || Date.now() - ts > TTL_MS) return null;
+    return target;
+  } catch {
+    return null;
+  }
+}
 export function consumePostLoginRedirect(): string | null {
   try {
     const raw = sessionStorage.getItem(KEY);

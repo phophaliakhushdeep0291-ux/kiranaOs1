@@ -6,6 +6,7 @@ import { getDateRange } from "../../utils/dates.js";
 import { gspHttpReadiness, submitEInvoiceToGsp, submitEWayBillToGsp } from "./gsp-http.provider.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { validateGstin, validateHsn } from "../../utils/gst.js";
+import { billSellerIdentity } from "../../utils/gstIdentity.js";
 
 export { validateGstin, validateHsn } from "../../utils/gst.js";
 
@@ -58,14 +59,33 @@ export async function assignHsnToCategory(shopId, input, actor = {}, req = null)
 }
 
 export async function getReadiness(shopId) {
-  const [shop, taxableProducts, gstInvoiceCount, documentCount] = await Promise.all([
+  const [shop, locations, taxableProducts, gstInvoiceCount, documentCount, transferReviewCount] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { id: true, name: true, gstNumber: true, city: true, address: true } }),
+    db.storeLocation.findMany({ where: { shopId, active: true }, select: { id: true, code: true, name: true, gstNumber: true, gstStateCode: true } }),
     db.product.findMany({ where: { shopId, deletedAt: null, gstRate: { gt: 0 } }, select: { id: true, name: true, hsn: true, gstRate: true } }),
     db.bill.count({ where: { shopId, billType: "gst_invoice", status: "active" } }),
     db.complianceDocument.count({ where: { shopId } }),
+    db.stockTransfer.count({ where: { shopId, OR: [{ complianceStatus: "legacy_review_required" }, { eWayReviewRequired: true }] } }),
   ]);
   if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
-  const gstin = validateGstin(shop.gstNumber);
+  const registrationRows = locations.length > 0
+    ? locations
+    : [{ id: shop.id, code: "SHOP", name: shop.name, gstNumber: shop.gstNumber, gstStateCode: null }];
+  const registrations = registrationRows.map((location) => {
+    const result = validateGstin(location.gstNumber);
+    return {
+      locationId: location.id,
+      code: location.code,
+      name: location.name,
+      gstin: result.valid ? result.normalized : location.gstNumber || null,
+      stateCode: result.valid ? result.stateCode : location.gstStateCode || null,
+      formatValid: result.valid,
+      reason: result.valid ? null : result.reason,
+      portalVerified: false,
+    };
+  });
+  const invalidRegistrations = registrations.filter((row) => !row.formatValid);
+  const uniqueGstins = [...new Set(registrations.filter((row) => row.formatValid).map((row) => row.gstin))];
   const missingHsn = taxableProducts.filter((row) => !row.hsn);
   const invalidHsn = taxableProducts.filter((row) => row.hsn && !validateHsn(row.hsn).valid);
   const liveProvider = env.GST_PROVIDER === "gsp_http" ? gspHttpReadiness() : {
@@ -76,19 +96,22 @@ export async function getReadiness(shopId) {
     legalSubmission: false,
   };
   const checks = [
-    { key: "gstin", label: "Valid shop GSTIN", ready: gstin.valid, detail: gstin.valid ? `State code ${gstin.stateCode}` : gstin.reason },
+    { key: "gstin", label: "Valid GSTIN on every active location", ready: invalidRegistrations.length === 0, detail: `${registrations.length - invalidRegistrations.length}/${registrations.length} locations have locally valid format and checksum` },
+    { key: "multi_gstin", label: "Registration-scoped GST exports", ready: true, detail: `${uniqueGstins.length} seller registration${uniqueGstins.length === 1 ? "" : "s"}; GSTR working papers are blocked unless exactly one GSTIN is selected` },
     { key: "hsn", label: "HSN coverage on taxable products", ready: missingHsn.length === 0 && invalidHsn.length === 0, detail: `${taxableProducts.length - missingHsn.length - invalidHsn.length}/${taxableProducts.length} taxable products valid` },
-    { key: "invoice_register", label: "Auditable GST invoice register", ready: true, detail: `${gstInvoiceCount} GST invoices available for export` },
+    { key: "invoice_register", label: "Auditable GST invoice register", ready: true, detail: `${gstInvoiceCount} GST invoices available with immutable seller snapshots` },
+    { key: "transfer_documents", label: "Registered stock-transfer documents", ready: transferReviewCount === 0, detail: transferReviewCount === 0 ? "No legacy or e-way review flags are open" : `${transferReviewCount} transfer record(s) need review` },
     { key: "provider", label: "Certified GSTN/GSP submission", ready: liveProvider.legalSubmission, detail: liveProvider.legalSubmission ? `${liveProvider.providerName} is configured for legal IRN submission` : liveProvider.configured ? "A non-legal sandbox is enabled, or provider certification is not attested" : "No certified GSP is connected; filing remains blocked by design" },
-    { key: "eway", label: "E-way bill transport data", ready: true, detail: "Transporter, vehicle, document, distance and delivery fields are captured with audited draft and GSP submission paths" },
+    { key: "eway", label: "E-way bill transport data", ready: true, detail: "Transport fields and review flags are captured; legal submission remains provider-dependent" },
   ];
   return {
     score: Math.round((checks.filter((row) => row.ready).length / checks.length) * 100),
     legallyReady: checks.every((row) => row.ready),
     provider: liveProvider,
     checks,
-    gaps: { missingHsn: missingHsn.slice(0, 25), invalidHsn: invalidHsn.slice(0, 25) },
-    stats: { taxableProducts: taxableProducts.length, gstInvoices: gstInvoiceCount, complianceDocuments: documentCount },
+    registrations,
+    gaps: { invalidRegistrations: invalidRegistrations.slice(0, 25), missingHsn: missingHsn.slice(0, 25), invalidHsn: invalidHsn.slice(0, 25), transferReviewCount },
+    stats: { taxableProducts: taxableProducts.length, gstInvoices: gstInvoiceCount, complianceDocuments: documentCount, activeLocations: registrations.length, sellerRegistrations: uniqueGstins.length },
   };
 }
 
@@ -161,15 +184,19 @@ export function buildInvoiceTaxSnapshot(bill, sellerStateCode = "") {
 
 export async function getGstInvoiceRegister(shopId, query = {}) {
   const { start, end } = getDateRange(query.range === "custom" ? null : query.range, query.from, query.to, env.DAILY_CLOSING_TIMEZONE);
-  const [shop, bills] = await Promise.all([db.shop.findUnique({ where: { id: shopId }, select: { gstNumber: true } }), db.bill.findMany({
-    where: { shopId, ...(query.locationId && { locationId: query.locationId }), status: "active", billType: { not: "estimate" }, businessDate: { gte: start, lte: end } },
-    orderBy: { businessDate: "asc" },
-    include: { items: { include: { product: { select: { hsn: true } } } }, payments: true },
-  })]);
-  const sellerStateCode = validateGstin(shop?.gstNumber).stateCode || "";
+  const sellerFilter = query.sellerGstin ? { sellerGstin: query.sellerGstin } : {};
+  const [shop, bills] = await Promise.all([
+    db.shop.findUnique({ where: { id: shopId }, select: { name: true, gstNumber: true, address: true, city: true } }),
+    db.bill.findMany({
+      where: { shopId, ...sellerFilter, ...(query.locationId && { locationId: query.locationId }), status: "active", billType: { not: "estimate" }, businessDate: { gte: start, lte: end } },
+      orderBy: { businessDate: "asc" },
+      include: { items: { include: { product: { select: { hsn: true } } } }, payments: true },
+    }),
+  ]);
+  if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
   const originalIds = [...new Set(bills.map((bill) => bill.returnOfBillId).filter(Boolean))];
   const originalBills = originalIds.length > 0
-    ? await db.bill.findMany({ where: { shopId, id: { in: originalIds } }, select: { id: true, billNo: true, businessDate: true, buyerGstin: true, buyerStateCode: true, buyerAddress: true, customerName: true, grandTotal: true } })
+    ? await db.bill.findMany({ where: { shopId, id: { in: originalIds } }, select: { id: true, billNo: true, businessDate: true, buyerGstin: true, buyerStateCode: true, buyerAddress: true, customerName: true, grandTotal: true, sellerGstin: true, sellerStateCode: true, sellerLegalName: true, sellerTradeName: true, sellerAddress: true, sellerCity: true } })
     : [];
   const originalById = new Map(originalBills.map((bill) => [bill.id, bill]));
   const rows = [];
@@ -181,8 +208,15 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
       buyerStateCode: bill.buyerStateCode || original.buyerStateCode,
       buyerAddress: bill.buyerAddress || original.buyerAddress,
       customerName: bill.customerName || original.customerName,
+      sellerGstin: bill.sellerGstin ?? original.sellerGstin,
+      sellerStateCode: bill.sellerStateCode ?? original.sellerStateCode,
+      sellerLegalName: bill.sellerLegalName ?? original.sellerLegalName,
+      sellerTradeName: bill.sellerTradeName ?? original.sellerTradeName,
+      sellerAddress: bill.sellerAddress ?? original.sellerAddress,
+      sellerCity: bill.sellerCity ?? original.sellerCity,
     } : bill;
-    const snapshot = buildInvoiceTaxSnapshot(effectiveBill, sellerStateCode);
+    const seller = billSellerIdentity(effectiveBill, shop);
+    const snapshot = buildInvoiceTaxSnapshot(effectiveBill, seller.sellerStateCode || "");
     for (const { item, tax, discount, grossLineTotal, netLineTotal } of snapshot.lines) {
       rows.push({
         invoiceNumber: bill.billNo,
@@ -192,10 +226,14 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
         originalInvoiceNumber: original?.billNo || "",
         originalInvoiceDate: original?.businessDate?.toISOString().slice(0, 10) || "",
         originalInvoiceValue: Number(original?.grandTotal ?? 0),
+        locationId: bill.locationId || null,
+        sellerGstin: seller.sellerGstin || "",
+        sellerStateCode: seller.sellerStateCode || "",
+        sellerLegalName: seller.sellerLegalName || "",
+        sellerTradeName: seller.sellerTradeName || "",
         customerName: effectiveBill.customerName,
         buyerGstin: effectiveBill.buyerGstin || "",
         buyerStateCode: effectiveBill.buyerStateCode || "",
-        sellerStateCode,
         placeOfSupply: tax.placeOfSupply,
         supplyType: tax.supplyType,
         hsn: item.hsn || item.product?.hsn || "",
@@ -214,16 +252,38 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
       });
     }
   }
-  // Table 13 needs every document number the shop issued in the period,
-  // including the cancelled ones that never reach the rows above.
+  // Table 13 needs every document number issued in the selected registration scope,
+  // including cancelled documents that never reach the active rows above.
   const issued = await db.bill.findMany({
-    where: { shopId, ...(query.locationId && { locationId: query.locationId }), billType: { not: "estimate" }, businessDate: { gte: start, lte: end } },
-    select: { billNo: true, status: true },
+    where: { shopId, ...sellerFilter, ...(query.locationId && { locationId: query.locationId }), billType: { not: "estimate" }, businessDate: { gte: start, lte: end } },
+    select: { billNo: true, status: true, sellerGstin: true },
     orderBy: { billNo: "asc" },
   });
-  const documents = issued.map((bill) => ({ invoiceNumber: bill.billNo, cancelled: bill.status === "cancelled" }));
+  const documents = issued.map((bill) => ({ invoiceNumber: bill.billNo, sellerGstin: bill.sellerGstin || "", cancelled: bill.status === "cancelled" }));
+  const registrationMap = new Map();
+  for (const row of rows) {
+    const entry = registrationMap.get(row.sellerGstin) ?? { sellerGstin: row.sellerGstin, sellerLegalName: row.sellerLegalName, invoiceNumbers: new Set(), rowCount: 0 };
+    entry.invoiceNumbers.add(row.invoiceNumber);
+    entry.rowCount += 1;
+    registrationMap.set(row.sellerGstin, entry);
+  }
+  const registrations = [...registrationMap.values()].map(({ invoiceNumbers, ...entry }) => ({ ...entry, invoiceCount: invoiceNumbers.size }));
+  const filingScopeRequired = !query.sellerGstin && registrations.filter((row) => row.sellerGstin).length > 1;
 
-  return { from: start.toISOString(), to: end.toISOString(), invoiceCount: bills.length, rowCount: rows.length, rows, documents };
+  return {
+    from: start.toISOString(),
+    to: end.toISOString(),
+    invoiceCount: bills.length,
+    rowCount: rows.length,
+    rows,
+    documents,
+    registrationScope: {
+      selectedGstin: query.sellerGstin || null,
+      registrations,
+      filingScopeRequired,
+      warning: filingScopeRequired ? "Select one seller GSTIN before generating GSTR working papers; GST returns are registration-specific." : null,
+    },
+  };
 }
 
 function csvCell(value) {
@@ -232,8 +292,8 @@ function csvCell(value) {
 }
 
 export function registerToCsv(register) {
-  const keys = ["invoiceNumber", "invoiceDate", "invoiceType", "documentType", "originalInvoiceNumber", "originalInvoiceDate", "customerName", "buyerGstin", "sellerStateCode", "placeOfSupply", "supplyType", "hsn", "description", "quantity", "unit", "gstRate", "taxableValue", "cgst", "sgst", "igst", "grossLineTotal", "discount", "lineTotal", "paymentModes"];
-  const labels = ["Document Number", "Document Date", "Bill Type", "Document Type", "Original Invoice Number", "Original Invoice Date", "Customer", "Buyer GSTIN", "Seller State", "Place of Supply", "Supply Type", "HSN", "Description", "Quantity", "Unit", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Gross Line Total", "Post-tax Discount", "Net Line Total", "Payment Modes"];
+  const keys = ["invoiceNumber", "invoiceDate", "invoiceType", "documentType", "originalInvoiceNumber", "originalInvoiceDate", "sellerGstin", "sellerLegalName", "sellerTradeName", "customerName", "buyerGstin", "sellerStateCode", "placeOfSupply", "supplyType", "hsn", "description", "quantity", "unit", "gstRate", "taxableValue", "cgst", "sgst", "igst", "grossLineTotal", "discount", "lineTotal", "paymentModes"];
+  const labels = ["Document Number", "Document Date", "Bill Type", "Document Type", "Original Invoice Number", "Original Invoice Date", "Seller GSTIN", "Seller Legal Name", "Seller Trade Name", "Customer", "Buyer GSTIN", "Seller State", "Place of Supply", "Supply Type", "HSN", "Description", "Quantity", "Unit", "GST Rate", "Taxable Value", "CGST", "SGST", "IGST", "Gross Line Total", "Post-tax Discount", "Net Line Total", "Payment Modes"];
   return [labels.join(","), ...register.rows.map((row) => keys.map((key) => csvCell(row[key])).join(","))].join("\r\n");
 }
 
@@ -486,12 +546,23 @@ export function buildGstr3bFromRegister(register) {
   };
 }
 
+function assertSingleRegistrationScope(register) {
+  if (!register.registrationScope?.filingScopeRequired) return;
+  const error = new AppError("Select one seller GSTIN before generating GST return working papers", 422, "SELLER_GSTIN_SCOPE_REQUIRED");
+  error.publicData = { registrations: register.registrationScope.registrations };
+  throw error;
+}
+
 export async function getGstr1WorkingPapers(shopId, query = {}) {
-  return buildGstr1WorkingFromRegister(await getGstInvoiceRegister(shopId, query));
+  const register = await getGstInvoiceRegister(shopId, query);
+  assertSingleRegistrationScope(register);
+  return { ...buildGstr1WorkingFromRegister(register), registrationScope: register.registrationScope };
 }
 
 export async function getGstr3bWorkingPapers(shopId, query = {}) {
-  return buildGstr3bFromRegister(await getGstInvoiceRegister(shopId, query));
+  const register = await getGstInvoiceRegister(shopId, query);
+  assertSingleRegistrationScope(register);
+  return { ...buildGstr3bFromRegister(register), registrationScope: register.registrationScope };
 }
 
 export function gstr1WorkingToCsv(working) {
@@ -510,11 +581,11 @@ export function gstr1WorkingToCsv(working) {
 }
 
 function canonicalPayload(bill, shop) {
-  const sellerStateCode = validateGstin(shop.gstNumber).stateCode || "";
-  const snapshot = buildInvoiceTaxSnapshot(bill, sellerStateCode);
+  const seller = billSellerIdentity(bill, shop);
+  const snapshot = buildInvoiceTaxSnapshot(bill, seller.sellerStateCode || "");
   return {
     schemaVersion: "kiranaos-gst-sandbox-v1",
-    seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
+    seller: { legalName: seller.sellerLegalName, tradeName: seller.sellerTradeName, gstin: seller.sellerGstin, stateCode: seller.sellerStateCode, address: seller.sellerAddress, city: seller.sellerCity },
     invoice: { number: bill.billNo, date: bill.businessDate.toISOString(), type: bill.billType, documentType: bill.billType === "sales_return" ? "credit_note" : "invoice", documentTypeCode: bill.billType === "sales_return" ? "CRN" : "INV", originalInvoiceId: bill.returnOfBillId ?? null, customerName: bill.customerName, buyerGstin: bill.buyerGstin, buyerStateCode: bill.buyerStateCode, buyerAddress: bill.buyerAddress, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
     items: snapshot.lines.map(({ item, tax, discount, grossLineTotal, netLineTotal }) => ({ name: item.name, hsn: item.hsn || item.product?.hsn || null, quantity: item.quantity, unit: item.enteredUnit, gstRate: item.gstRate, taxableValue: tax.taxableValue, cgst: tax.cgst, sgst: tax.sgst, igst: tax.igst, grossValue: grossLineTotal, postTaxDiscount: discount, total: netLineTotal })),
   };
@@ -528,8 +599,8 @@ export async function createSandboxEInvoice(shopId, billId) {
   ]);
   if (!bill) throw new AppError("Bill not found", 404, "BILL_NOT_FOUND");
   if (bill.billType !== "gst_invoice") throw new AppError("Only GST invoices can be prepared for e-invoice submission", 409, "GST_INVOICE_REQUIRED");
-  const gstin = validateGstin(shop?.gstNumber);
-  if (!gstin.valid) throw new AppError(gstin.reason, 422, "INVALID_SHOP_GSTIN");
+  const seller = billSellerIdentity(bill, shop);
+  if (!seller.registrationValid) throw new AppError("The invoice seller snapshot does not contain a valid GSTIN", 422, "INVALID_SELLER_GSTIN");
   const missing = bill.items.filter((item) => Number(item.gstRate) > 0 && !validateHsn(item.hsn || item.product?.hsn).valid);
   if (missing.length) throw new AppError("Every taxable invoice item needs a valid 4, 6 or 8 digit HSN", 422, "INVOICE_HSN_INCOMPLETE");
   const payload = canonicalPayload(bill, shop);
@@ -550,11 +621,11 @@ async function loadValidatedInvoice(shopId, billId) {
   ]);
   if (!bill) throw new AppError("Bill not found", 404, "BILL_NOT_FOUND");
   if (bill.billType !== "gst_invoice") throw new AppError("Only GST invoices can be submitted", 409, "GST_INVOICE_REQUIRED");
-  const gstin = validateGstin(shop?.gstNumber);
-  if (!gstin.valid) throw new AppError(gstin.reason, 422, "INVALID_SHOP_GSTIN");
+  const seller = billSellerIdentity(bill, shop);
+  if (!seller.registrationValid) throw new AppError("The invoice seller snapshot does not contain a valid GSTIN", 422, "INVALID_SELLER_GSTIN");
   const missing = bill.items.filter((item) => Number(item.gstRate) > 0 && !validateHsn(item.hsn || item.product?.hsn).valid);
   if (missing.length) throw new AppError("Every taxable invoice item needs a valid 4, 6 or 8 digit HSN", 422, "INVOICE_HSN_INCOMPLETE");
-  return { shop, bill };
+  return { shop, bill, seller };
 }
 
 export async function submitEInvoice(shopId, billId) {
@@ -603,12 +674,12 @@ export async function submitEInvoice(shopId, billId) {
 }
 
 function canonicalEWayPayload(bill, shop, transport) {
-  const sellerStateCode = validateGstin(shop.gstNumber).stateCode || "";
-  const snapshot = buildInvoiceTaxSnapshot(bill, sellerStateCode);
+  const seller = billSellerIdentity(bill, shop);
+  const snapshot = buildInvoiceTaxSnapshot(bill, seller.sellerStateCode || "");
   return {
     schemaVersion: "kiranaos-eway-provider-v1",
     supplyType: "outward",
-    seller: { legalName: shop.name, gstin: shop.gstNumber, address: shop.address, city: shop.city },
+    seller: { legalName: seller.sellerLegalName, tradeName: seller.sellerTradeName, gstin: seller.sellerGstin, stateCode: seller.sellerStateCode, address: seller.sellerAddress, city: seller.sellerCity },
     buyer: { name: bill.customerName, gstin: bill.buyerGstin, stateCode: bill.buyerStateCode, address: bill.buyerAddress },
     invoice: { number: bill.billNo, date: bill.businessDate.toISOString(), type: bill.billType, taxableValue: snapshot.taxableValue, tax: snapshot.tax, postTaxDiscount: snapshot.discount, grossValue: snapshot.grossInvoiceValue, total: snapshot.netInvoiceValue },
     transport: {

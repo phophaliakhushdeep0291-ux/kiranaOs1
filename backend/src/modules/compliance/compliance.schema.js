@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { validateGstin } from "../../utils/gst.js";
 
 export const complianceExportQuery = z.object({
   range: z.enum(["daily", "weekly", "monthly", "yearly", "custom"]).optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   format: z.enum(["json", "csv"]).default("json"),
+  sellerGstin: z.string().trim().toUpperCase().refine((value) => validateGstin(value).valid, "A valid seller GSTIN is required").optional(),
 });
 
 export const hsnCategoryAssignmentSchema = z.object({

@@ -30,7 +30,9 @@ describe("multi-session request isolation", () => {
     expect(realtimeBridge).toContain("detail?.source === \"broadcast\"");
     expect(realtimeBridge).toContain("kirana.localActiveQueryRefresh.lastRun");
     expect(realtimeBridge).toContain("const onSyncQueueUpdated = () => scheduleRefresh()");
-    expect(realtimeBridge).toContain("void queryClient.invalidateQueries({ refetchType })");
+    expect(realtimeBridge).toContain("pendingRefetchTypeRef");
+    expect(realtimeBridge).toContain("refetchType: pendingRefetchType");
+    expect(realtimeBridge).toContain("kirana.broadcastActiveQueryRefresh.lastRun");
   });
 
   it("lets the visible tab with local backup items recover its own queue", () => {

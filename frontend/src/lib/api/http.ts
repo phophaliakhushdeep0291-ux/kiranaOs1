@@ -38,6 +38,8 @@ export interface ApiRequestOptions extends RequestInit {
    * request does not block a cashier creating a bill in another tab/device.
    */
   background?: boolean;
+  /** Overrides the bounded request timeout. */
+  timeoutMs?: number;
 }
 
 let authTokenGetter: (() => string | null) | null = null;
@@ -176,6 +178,32 @@ function getMethod(options: RequestInit) {
   return String(options.method || "GET").toUpperCase();
 }
 
+function requestTimeoutMs(method: string, background: boolean | undefined, override?: number) {
+  if (override !== undefined) return Math.max(1_000, override);
+  if (background) return 8_000;
+  return isReadMethod(method) ? 15_000 : 30_000;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  if (typeof AbortController === "undefined") return fetch(url, init);
+  const controller = new AbortController();
+  const upstreamSignal = init.signal;
+  const relayAbort = () => controller.abort();
+  if (upstreamSignal?.aborted) controller.abort();
+  else upstreamSignal?.addEventListener("abort", relayAbort, { once: true });
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted && !upstreamSignal?.aborted) {
+      throw new ApiClientError("Request timed out. Check your connection and try again.", 408, { code: "REQUEST_TIMEOUT" });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    upstreamSignal?.removeEventListener("abort", relayAbort);
+  }
+}
 function rateLimitBucket(path: string) {
   const clean = path.split("?")[0] || path;
   const parts = clean.split("/").filter(Boolean);
@@ -287,7 +315,7 @@ export function refreshStoredAuthSession(refreshToken = getStoredRefreshToken())
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { ownerPin, responseType = "json", skipAuth, skipRefresh, skipDevice, background, ...fetchOptions } = options;
+  const { ownerPin, responseType = "json", skipAuth, skipRefresh, skipDevice, background, timeoutMs, ...fetchOptions } = options;
   if (!skipDevice) await hydrateDeviceIdentity();
   let token = getStoredAccessToken();
 
@@ -344,7 +372,8 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   const url = `${getApiBaseUrl()}${path}`;
   const startedAt = Date.now();
-  let response = await fetch(url, { ...fetchOptions, headers });
+  const boundedTimeoutMs = requestTimeoutMs(method, background, timeoutMs);
+  let response = await fetchWithTimeout(url, { ...fetchOptions, headers }, boundedTimeoutMs);
   updateRateLimitCooldown(path, response);
 
   if (response.status === 401 && !skipRefresh && !skipAuth) {
@@ -356,7 +385,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
         const retryHeaders = new Headers(headers);
         retryHeaders.set("Authorization", `Bearer ${refreshedToken}`);
-        response = await fetch(url, { ...fetchOptions, headers: retryHeaders });
+        response = await fetchWithTimeout(url, { ...fetchOptions, headers: retryHeaders }, boundedTimeoutMs);
         updateRateLimitCooldown(path, response);
       } catch {
         // Fall through to the original 401 response.
