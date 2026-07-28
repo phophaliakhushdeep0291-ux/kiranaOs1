@@ -244,7 +244,10 @@ export async function updateProduct(shopId, id, data) {
   // P0-3. Bulk edit legitimately sets stock here, so the field is honoured — it is
   // just no longer applied blindly.
   const { aliases, sellingUnits, baseUpdatedAt, stockBaseQty: requestedStockBaseQty, ...rawRest } = data;
-  const normalizedUnits = sellingUnits === undefined ? undefined : normalizeSellingUnits({ ...existing, ...rawRest }, sellingUnits);
+  const reconciledUnits = sellingUnits === undefined
+    ? undefined
+    : carryPriceEditIntoUntouchedDefaultUnit(sellingUnits, rawRest, existing);
+  const normalizedUnits = reconciledUnits === undefined ? undefined : normalizeSellingUnits({ ...existing, ...rawRest }, reconciledUnits);
   const rest = normalizedUnits ? applyDefaultSellingUnitToProduct(rawRest, normalizedUnits) : rawRest;
 
   // Optimistic concurrency: reject if the server moved past the version this edit
@@ -538,6 +541,54 @@ function applyDefaultSellingUnitToProduct(product, units) {
     defaultPricePerRateUnit: unit.defaultPrice,
     mrp: unit.maximumPrice ?? product.mrp ?? 0,
   };
+}
+
+const UNIT_PRICE_FIELDS = ["defaultPrice", "minimumPrice", "maximumPrice", "costPrice"];
+const PRODUCT_TO_UNIT_PRICE = {
+  defaultPricePerRateUnit: "defaultPrice",
+  minPricePerRateUnit: "minimumPrice",
+  mrp: "maximumPrice",
+  costPerRateUnit: "costPrice",
+};
+
+const samePrice = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.005;
+
+/**
+ * A client that edits the price on the product form but re-sends the product's
+ * existing sellingUnits unchanged (the shape the offline product editor builds)
+ * would otherwise have its edit silently reverted: applyDefaultSellingUnitToProduct
+ * copies the stale unit back over the product and the request still returns 200.
+ *
+ * If the incoming default unit's pricing is untouched relative to what is stored,
+ * an explicit product-level price change is the real intent — carry it into the
+ * unit. A unit the client actually edited still wins, so direct unit pricing
+ * (pack/dozen/bag rates) keeps working.
+ */
+function carryPriceEditIntoUntouchedDefaultUnit(units, incomingProduct, existing) {
+  if (!Array.isArray(units) || !units.length) return units;
+  const storedDefault = (existing?.sellingUnits ?? []).find((unit) => unit.isDefault);
+  if (!storedDefault) return units;
+
+  const incomingDefaultIndex = units.findIndex((unit) => unit.isDefault === true);
+  const index = incomingDefaultIndex === -1 ? 0 : incomingDefaultIndex;
+  const incomingDefault = units[index];
+  if (!incomingDefault) return units;
+
+  const unitUntouched = UNIT_PRICE_FIELDS.every((field) => samePrice(incomingDefault[field], storedDefault[field]));
+  if (!unitUntouched) return units;
+
+  const overrides = {};
+  for (const [productField, unitField] of Object.entries(PRODUCT_TO_UNIT_PRICE)) {
+    const value = incomingProduct[productField];
+    if (value === undefined) continue;
+    if (samePrice(value, storedDefault[unitField])) continue;
+    overrides[unitField] = Number(value);
+  }
+  if (!Object.keys(overrides).length) return units;
+
+  const next = [...units];
+  next[index] = { ...incomingDefault, ...overrides };
+  return next;
 }
 
 /**
