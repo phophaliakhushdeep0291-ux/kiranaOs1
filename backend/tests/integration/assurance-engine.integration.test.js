@@ -1069,6 +1069,74 @@ function runSuite() {
     assert.ok(!ruleCodes(disabled).includes("BILL_MARKED_PAID_WITHOUT_PAYMENTS"));
   });
 
+  test("sales returns are not mis-flagged, and amounts are never negative", async () => {
+    await resetDatabase(ctx.db);
+    const { shop, owner } = await createTenant(ctx.db);
+    const product = await createProduct(ctx.db, shop.id);
+
+    // A sales return is the mirror image of a sale: KiranaOS stores negative
+    // quantities AND a negative total. Both are correct, and neither is an
+    // "impossible quantity" — this used to flag every return in the shop.
+    const returnBill = await makeBill(ctx.db, shop.id, {
+      billType: "sales_return", grandTotal: -118, paidAmount: -118, createdByUserId: owner.id,
+      items: [billItem(product, { quantity: -1, ratePerRateUnit: 118, lineTotal: -118, quantityInBaseUnit: -1 })],
+      payments: [{ shopId: shop.id, mode: "cash", amount: -118, ...moneyShadows({ amount: -118 }) }],
+    });
+    await ctx.db.stockLedger.create({
+      data: {
+        shopId: shop.id, productId: product.id, productName: product.name, billId: returnBill.id,
+        action: "sales_return", changeBaseQty: 1, oldStockBaseQty: 20, newStockBaseQty: 21,
+      },
+    });
+
+    const result = await evaluate(shop.id, ENTITY_TYPES.BILL, returnBill.id);
+    assert.ok(!ruleCodes(result).includes("BILL_INVALID_QUANTITY"),
+      `a return's negative quantities are correct, got ${ruleCodes(result).join(",")}`);
+
+    // A forward sale with a negative quantity IS still wrong.
+    const badSale = await makeBill(ctx.db, shop.id, {
+      grandTotal: 100, paidAmount: 100, createdByUserId: owner.id,
+      items: [billItem(product, { quantity: -2, ratePerRateUnit: 50, lineTotal: 100, quantityInBaseUnit: -2 })],
+      payments: [{ shopId: shop.id, mode: "cash", amount: 100, ...moneyShadows({ amount: 100 }) }],
+    });
+    assert.ok(ruleCodes(await evaluate(shop.id, ENTITY_TYPES.BILL, badSale.id)).includes("BILL_INVALID_QUANTITY"));
+
+    // Whatever is flagged, the amount shown to a shopkeeper is never negative:
+    // signed amounts made dashboard totals arithmetically wrong.
+    const negativeAmounts = await ctx.db.auditFinding.count({ where: { shopId: shop.id, amountPaise: { lt: 0 } } });
+    assert.equal(negativeAmounts, 0, "findings must never carry a negative amount");
+  });
+
+  test("findings quantify the gap, and totals never exceed reality", async () => {
+    await resetDatabase(ctx.db);
+    const { shop, owner } = await createTenant(ctx.db);
+    const product = await createProduct(ctx.db, shop.id, { costPerRateUnit: 60, stockBaseQty: 100 });
+
+    // ₹1,000 bill that only collected ₹250 — the gap is ₹750, not ₹1,000.
+    const bill = await makeBill(ctx.db, shop.id, {
+      grandTotal: 1000, paidAmount: 1000, createdByUserId: owner.id,
+      items: [billItem(product, { quantity: 10, ratePerRateUnit: 100, lineTotal: 1000 })],
+      payments: [{ shopId: shop.id, mode: "cash", amount: 250, ...moneyShadows({ amount: 250 }) }],
+    });
+    const billFinding = await findingFor(shop.id, ENTITY_TYPES.BILL, bill.id) ?? (await evaluate(shop.id, ENTITY_TYPES.BILL, bill.id), await findingFor(shop.id, ENTITY_TYPES.BILL, bill.id));
+    assert.equal(Number(billFinding.discrepancyPaise), 75000, "gap is the ₹750 shortfall");
+    assert.equal(Number(billFinding.amountPaise), 100000, "record size stays the ₹1,000 bill");
+
+    // 20 phantom units of a ₹60-cost product = a ₹1,200 gap, not the whole
+    // stock valuation (which used to make the headline exceed lifetime sales).
+    await ctx.db.stockLedger.create({
+      data: {
+        shopId: shop.id, productId: product.id, productName: product.name, action: "purchase",
+        changeBaseQty: 80, oldStockBaseQty: 0, newStockBaseQty: 80, supplierName: "S", invoiceNumber: "I-1",
+      },
+    });
+    await evaluate(shop.id, ENTITY_TYPES.PRODUCT, product.id);
+    const stockFinding = await findingFor(shop.id, ENTITY_TYPES.PRODUCT, product.id);
+    assert.equal(Number(stockFinding.discrepancyPaise), 120000, "20 units × ₹60 cost");
+    assert.ok(Number(stockFinding.amountPaise) > Number(stockFinding.discrepancyPaise),
+      "stock valuation is larger than the gap, and must not be what gets totalled");
+  });
+
   test("baselines are computed from the shop's own history and gate outlier rules", async () => {
     await resetDatabase(ctx.db);
     const { shop } = await createTenant(ctx.db);

@@ -77,9 +77,9 @@ export default function AssuranceReportPage() {
               tone={report.findings.openCritical > 0 ? "text-[#ef4444]" : undefined}
             />
             <StatCard
-              label="Amount under review"
+              label="Value of gaps found"
               value={inr(report.exposure.highRiskAmountRupees)}
-              hint="Recorded value of high/critical findings"
+              hint={`${report.exposure.quantifiedFindings} measured${report.exposure.unquantifiedFindings > 0 ? ` · ${report.exposure.unquantifiedFindings} not quantified` : ""}`}
             />
           </div>
 

@@ -2346,7 +2346,13 @@ model AuditFinding {
   riskScore          Int       @default(0)
   riskLevel          String    @default("LOW") // LOW | MEDIUM | HIGH | CRITICAL
   confidence         Float     @default(1)
+  // amountPaise = size of the record involved (drives materiality banding).
+  // discrepancyPaise = the money actually in question (the shortfall, drift or
+  // difference a rule measured). Dashboards and reports must total the second:
+  // summing record sizes across entity types double-counts the same rupee and
+  // mixes inventory valuation with cash. Null = no rule quantified a gap.
   amountPaise        BigInt?
+  discrepancyPaise   BigInt?
   scoreBreakdownJson String    @default("{}")
   aiExplanation      String?
   aiExplanationLang  String?

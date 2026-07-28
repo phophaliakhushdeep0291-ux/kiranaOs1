@@ -303,6 +303,11 @@ async function stockMovementLocalFirst(data: StockMovementInput, movementType: S
       previousStock,
       nextStock,
       ...data,
+      // The server's stock schemas take idempotencyKey from the PAYLOAD, not the outbox
+      // envelope. Send it explicitly so a replayed movement is recognised and never
+      // doubles stock, cost, or a supplier due.
+      idempotencyKey: `stock-${movementType}:${productId}:${movementId}`,
+      clientMovementId: movementId,
       quantity: Math.abs(validated.quantityDelta),
       quantityDelta: validated.quantityDelta,
       enteredUnit: syncEnteredUnit,

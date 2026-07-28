@@ -501,15 +501,22 @@ export const billingRules = [
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE, EVIDENCE_TYPES.STAFF_EXPLANATION],
     remediation: "Verify what was actually sold and re-bill correctly. Impossible quantities usually indicate a client bug or a manual override.",
     evaluate(ctx) {
+      // A sales return is stored as a mirror image of the sale: negative
+      // quantities AND a negative total. Those negatives are correct by design,
+      // so the sign test only applies to forward sales. For a return, "invalid"
+      // means the quantity points the wrong way (positive) or is zero.
+      const isReturn = ctx.bill.billType === "sales_return";
       const offenders = (ctx.bill.items ?? [])
         .filter((item) => {
           const qty = Number(item.quantity);
           const baseQty = Number(item.quantityInBaseUnit);
-          return !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(baseQty) || baseQty <= 0;
+          if (!Number.isFinite(qty) || !Number.isFinite(baseQty)) return true;
+          if (qty === 0 || baseQty === 0) return true;
+          return isReturn ? qty > 0 || baseQty > 0 : qty < 0 || baseQty < 0;
         })
         .map((item) => ({ billItemId: item.id, name: item.name, quantity: item.quantity, quantityInBaseUnit: item.quantityInBaseUnit }));
       if (!offenders.length) return passed;
-      return triggered({ invalidLines: offenders });
+      return triggered({ billType: ctx.bill.billType, expectedSign: isReturn ? "negative" : "positive", invalidLines: offenders });
     },
   }),
 

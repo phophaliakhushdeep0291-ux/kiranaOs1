@@ -1872,12 +1872,16 @@ async function applyRestoreCustomer(shopId, event, context) {
 
 async function applyStockPurchase(shopId, event, context) {
   const rawPayload = normalizeStockPurchaseSyncPayload(getEventPayload(event));
-  const payload = stockPurchasePayloadSchema.parse(rawPayload);
-  payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
-  if (!payload.productId) throw new AppError("productId required for STOCK_PURCHASE sync event", 400);
   // Derive identity from the raw payload (purchaseSchema may strip unknown keys) so a replayed
   // purchase is recognised and never doubles stock, cost, or the supplier due.
+  // This MUST run before the parse: purchaseSchema is the REST contract and mandates an explicit
+  // idempotencyKey, but a synced purchase identifies itself by movementId/event id instead. Parsing
+  // first rejected every offline purchase with a permanent CONFLICT — local stock rose while the
+  // server never moved, and the supplier's due went unrecorded.
   const identity = getPurchaseIdentity(event, rawPayload);
+  const payload = stockPurchasePayloadSchema.parse({ ...rawPayload, idempotencyKey: identity.idempotencyKey ?? rawPayload.idempotencyKey });
+  payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
+  if (!payload.productId) throw new AppError("productId required for STOCK_PURCHASE sync event", 400);
   const data = await recordPurchase(shopId, payload, identity);
   return {
     type: event.type,

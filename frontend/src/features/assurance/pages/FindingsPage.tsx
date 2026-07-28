@@ -149,7 +149,11 @@ export default function FindingsPage({
                 <div className="w-40 shrink-0 space-y-1 text-right">
                   <RiskChip level={finding.riskLevel} score={finding.riskScore} />
                   <ScoreBar score={finding.riskScore} />
-                  <p className="text-xs text-muted-foreground">{inrFromPaise(finding.amountPaise)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {finding.discrepancyPaise !== null
+                      ? `Gap ${inrFromPaise(finding.discrepancyPaise)}`
+                      : inrFromPaise(finding.amountPaise)}
+                  </p>
                   <p className="text-[11px] text-muted-foreground">{fmtDateTime(finding.createdAt)}</p>
                 </div>
               </div>
