@@ -17,6 +17,13 @@ export async function gstRegister(req, res, next) {
   } catch (error) { return next(error); }
 }
 
+export async function gstr3bWorking(req, res, next) {
+  try {
+    const data = await service.getGstr3bWorkingPapers(req.shopId, { ...req.query, locationId: requestLocationId(req) });
+    return res.json({ success: true, data });
+  } catch (error) { return next(error); }
+}
+
 export async function gstr1Working(req, res, next) {
   try {
     const data = await service.getGstr1WorkingPapers(req.shopId, { ...req.query, locationId: requestLocationId(req) });

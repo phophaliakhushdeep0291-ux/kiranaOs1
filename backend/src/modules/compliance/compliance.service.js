@@ -214,7 +214,16 @@ export async function getGstInvoiceRegister(shopId, query = {}) {
       });
     }
   }
-  return { from: start.toISOString(), to: end.toISOString(), invoiceCount: bills.length, rowCount: rows.length, rows };
+  // Table 13 needs every document number the shop issued in the period,
+  // including the cancelled ones that never reach the rows above.
+  const issued = await db.bill.findMany({
+    where: { shopId, ...(query.locationId && { locationId: query.locationId }), billType: { not: "estimate" }, businessDate: { gte: start, lte: end } },
+    select: { billNo: true, status: true },
+    orderBy: { billNo: "asc" },
+  });
+  const documents = issued.map((bill) => ({ invoiceNumber: bill.billNo, cancelled: bill.status === "cancelled" }));
+
+  return { from: start.toISOString(), to: end.toISOString(), invoiceCount: bills.length, rowCount: rows.length, rows, documents };
 }
 
 function csvCell(value) {
@@ -228,14 +237,121 @@ export function registerToCsv(register) {
   return [labels.join(","), ...register.rows.map((row) => keys.map((key) => csvCell(row[key])).join(","))].join("\r\n");
 }
 
+/**
+ * GSTR-1 Table 12 reports quantities in GSTN's Unit Quantity Codes, not in the
+ * free text a counter types. Anything unmapped falls back to OTH ("others"),
+ * which the portal accepts, rather than failing the export.
+ */
+const UQC_BY_UNIT = {
+  kg: "KGS", kgs: "KGS", kilogram: "KGS", kilograms: "KGS",
+  g: "GMS", gm: "GMS", gms: "GMS", gram: "GMS", grams: "GMS",
+  l: "LTR", ltr: "LTR", litre: "LTR", liter: "LTR", litres: "LTR",
+  ml: "MLT", mls: "MLT",
+  piece: "NOS", pieces: "NOS", pc: "NOS", pcs: "NOS", nos: "NOS", no: "NOS", unit: "NOS", units: "NOS",
+  packet: "PAC", packets: "PAC", pack: "PAC", pkt: "PAC", pouch: "PAC",
+  box: "BOX", boxes: "BOX", carton: "BOX",
+  bag: "BAG", bags: "BAG", sack: "BAG",
+  bottle: "BTL", bottles: "BTL", btl: "BTL",
+  tin: "TIN", can: "CAN", jar: "JAR", tube: "TUB",
+  dozen: "DOZ", doz: "DOZ",
+  pair: "PRS", pairs: "PRS",
+  bundle: "BDL", roll: "ROL", set: "SET", sheet: "SHT", square_feet: "SQF", metre: "MTR", meter: "MTR",
+  quintal: "QTL", tonne: "TON", ton: "TON",
+};
+
+export function toUqc(unit) {
+  const key = String(unit ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+  return UQC_BY_UNIT[key] ?? "OTH";
+}
+
+/** Inter-state B2C invoices above this value are reported invoice-wise (B2CL), not summarised. */
+const B2CL_INVOICE_VALUE_THRESHOLD = 250000;
+
+const money = (value) => Number((Number(value) || 0).toFixed(2));
+
+function groupRegisterByDocument(register) {
+  const documents = new Map();
+  for (const row of register.rows) {
+    const existing = documents.get(row.invoiceNumber);
+    if (existing) {
+      existing.rows.push(row);
+      existing.invoiceValue = money(existing.invoiceValue + Number(row.lineTotal));
+      continue;
+    }
+    documents.set(row.invoiceNumber, {
+      invoiceNumber: row.invoiceNumber,
+      invoiceDate: row.invoiceDate,
+      documentType: row.documentType,
+      buyerGstin: row.buyerGstin,
+      customerName: row.customerName,
+      placeOfSupply: row.placeOfSupply,
+      supplyType: row.supplyType,
+      originalInvoiceNumber: row.originalInvoiceNumber,
+      originalInvoiceDate: row.originalInvoiceDate,
+      originalInvoiceValue: row.originalInvoiceValue,
+      invoiceValue: money(row.lineTotal),
+      rows: [row],
+    });
+  }
+  return [...documents.values()];
+}
+
+/**
+ * Table 8 — nil rated, exempted and non-GST outward supplies, split the four
+ * ways the return asks for. A kirana sells a large share of 0% goods (atta,
+ * milk, salt, fresh produce), so leaving these inside B2CS overstates taxable
+ * turnover. Distinguishing "nil rated" from "exempt" from "non-GST" needs a
+ * per-item legal classification the catalogue does not carry, so they are
+ * reported together and the filing warning says so.
+ */
+function nilRatedBucketKey(row) {
+  const interstate = row.supplyType === "interstate";
+  const registered = Boolean(row.buyerGstin);
+  if (interstate && registered) return "interstate_registered";
+  if (!interstate && registered) return "intrastate_registered";
+  if (interstate) return "interstate_unregistered";
+  return "intrastate_unregistered";
+}
+
+const NIL_BUCKET_LABELS = {
+  interstate_registered: "Inter-State supplies to registered persons",
+  intrastate_registered: "Intra-State supplies to registered persons",
+  interstate_unregistered: "Inter-State supplies to unregistered persons",
+  intrastate_unregistered: "Intra-State supplies to unregistered persons",
+};
+
 export function buildGstr1WorkingFromRegister(register) {
   const invoiceMap = new Map();
+  const b2clMap = new Map();
   const b2csMap = new Map();
   const cdnrMap = new Map();
   const cdnurMap = new Map();
   const hsnMap = new Map();
+  const nilMap = new Map();
+
+  const documents = groupRegisterByDocument(register);
+  const b2clInvoiceNumbers = new Set(
+    documents
+      .filter((doc) => doc.documentType !== "credit_note"
+        && !doc.buyerGstin
+        && doc.supplyType === "interstate"
+        && Math.abs(doc.invoiceValue) > B2CL_INVOICE_VALUE_THRESHOLD)
+      .map((doc) => doc.invoiceNumber)
+  );
+
   for (const row of register.rows) {
     const isCreditNote = row.documentType === "credit_note";
+    const isNilRated = Number(row.gstRate) === 0;
+
+    // Nil rated / exempt supplies are a separate disclosure (Table 8) and must
+    // not inflate the taxable B2CS summary.
+    if (isNilRated && !isCreditNote) {
+      const key = nilRatedBucketKey(row);
+      const bucket = nilMap.get(key) ?? { key, label: NIL_BUCKET_LABELS[key], nilRatedOrExempt: 0, nonGst: 0 };
+      bucket.nilRatedOrExempt = money(bucket.nilRatedOrExempt + Number(row.lineTotal));
+      nilMap.set(key, bucket);
+    }
+
     const cdnurEligible = isCreditNote && !row.buyerGstin && row.supplyType === "interstate" && Math.abs(Number(row.originalInvoiceValue ?? 0)) > 100000;
     if (isCreditNote && (row.buyerGstin || cdnurEligible)) {
       const targetMap = row.buyerGstin ? cdnrMap : cdnurMap;
@@ -263,28 +379,110 @@ export function buildGstr1WorkingFromRegister(register) {
       const invoice = invoiceMap.get(row.invoiceNumber) ?? { invoiceNumber: row.invoiceNumber, invoiceDate: row.invoiceDate, buyerGstin: row.buyerGstin, customerName: row.customerName, placeOfSupply: row.placeOfSupply, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, invoiceValue: 0 };
       for (const key of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "invoiceValue"]) invoice[key] = Number((invoice[key] + Number(key === "invoiceValue" ? row.lineTotal : key === "postTaxDiscount" ? row.discount : row[key])).toFixed(2));
       invoiceMap.set(row.invoiceNumber, invoice);
-    } else if (!row.buyerGstin) {
+    } else if (!row.buyerGstin && b2clInvoiceNumbers.has(row.invoiceNumber)) {
+      // Table 5 — inter-State supplies to unregistered persons above the
+      // threshold are reported invoice-wise, not netted into B2CS.
+      const invoice = b2clMap.get(row.invoiceNumber) ?? { invoiceNumber: row.invoiceNumber, invoiceDate: row.invoiceDate, customerName: row.customerName, placeOfSupply: row.placeOfSupply, gstRate: row.gstRate, taxableValue: 0, igst: 0, postTaxDiscount: 0, invoiceValue: 0 };
+      for (const field of ["taxableValue", "igst", "postTaxDiscount", "invoiceValue"]) invoice[field] = Number((invoice[field] + Number(field === "invoiceValue" ? row.lineTotal : field === "postTaxDiscount" ? row.discount : row[field])).toFixed(2));
+      b2clMap.set(row.invoiceNumber, invoice);
+    } else if (!row.buyerGstin && !isNilRated) {
       const key = `${row.placeOfSupply}:${row.gstRate}`;
       const summary = b2csMap.get(key) ?? { placeOfSupply: row.placeOfSupply, gstRate: row.gstRate, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, invoiceValue: 0 };
       for (const field of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "invoiceValue"]) summary[field] = Number((summary[field] + Number(field === "invoiceValue" ? row.lineTotal : field === "postTaxDiscount" ? row.discount : row[field])).toFixed(2));
       b2csMap.set(key, summary);
     }
     const hsnKey = `${row.hsn}:${row.unit}:${row.gstRate}`;
-    const hsn = hsnMap.get(hsnKey) ?? { hsn: row.hsn, description: row.description, unit: row.unit, gstRate: row.gstRate, quantity: 0, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, totalValue: 0 };
+    const hsn = hsnMap.get(hsnKey) ?? { hsn: row.hsn, description: row.description, unit: row.unit, uqc: toUqc(row.unit), gstRate: row.gstRate, quantity: 0, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, totalValue: 0 };
     hsn.quantity = Number((hsn.quantity + Number(row.quantity)).toFixed(3));
     for (const field of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "totalValue"]) hsn[field] = Number((hsn[field] + Number(field === "totalValue" ? row.lineTotal : field === "postTaxDiscount" ? row.discount : row[field])).toFixed(2));
     hsnMap.set(hsnKey, hsn);
   }
   return {
-    schemaVersion: "artha-gstr1-working-v2",
-    filingWarning: "Accountant working papers only; review GSTN classification before filing. Registered credit notes are separated as CDNR; eligible large interstate unregistered notes as CDNUR; smaller B2C returns are netted into B2CS.",
+    schemaVersion: "artha-gstr1-working-v3",
+    filingWarning: "Accountant working papers only; review GSTN classification before filing. Registered credit notes are separated as CDNR; eligible large interstate unregistered notes as CDNUR; smaller B2C returns are netted into B2CS. Table 8 groups nil-rated and exempt supplies together — splitting nil / exempt / non-GST needs a per-item legal classification the catalogue does not carry.",
     from: register.from,
     to: register.to,
     b2b: [...invoiceMap.values()],
+    b2cl: [...b2clMap.values()],
     b2cs: [...b2csMap.values()],
     cdnr: [...cdnrMap.values()],
     cdnur: [...cdnurMap.values()],
+    nilRated: [...nilMap.values()],
     hsn: [...hsnMap.values()],
+    documentSeries: buildDocumentSeries(register),
+  };
+}
+
+/**
+ * Table 13 — the series of documents issued in the period. Cancelled bills keep
+ * their number, so the range has to be built from every document the shop
+ * issued, not just the ones that survived.
+ */
+export function buildDocumentSeries(register) {
+  const series = new Map();
+  for (const document of [...(register.documents ?? []), ...groupRegisterByDocument(register)]) {
+    const prefix = String(document.invoiceNumber ?? "").replace(/\d+$/, "");
+    const entry = series.get(prefix) ?? { prefix, from: null, to: null, totalIssued: 0, cancelled: 0, seen: new Set() };
+    if (entry.seen.has(document.invoiceNumber)) continue;
+    entry.seen.add(document.invoiceNumber);
+    entry.totalIssued += 1;
+    if (document.cancelled) entry.cancelled += 1;
+    if (!entry.from || document.invoiceNumber < entry.from) entry.from = document.invoiceNumber;
+    if (!entry.to || document.invoiceNumber > entry.to) entry.to = document.invoiceNumber;
+    series.set(prefix, entry);
+  }
+  return [...series.values()].map(({ seen, ...entry }) => ({ ...entry, net: entry.totalIssued - entry.cancelled }));
+}
+
+/**
+ * GSTR-3B working summary. Only the outward-supply side is derivable from POS
+ * data: input tax credit (Table 4) comes from purchase invoices the shop's
+ * accountant reconciles against GSTR-2B, so it is deliberately not guessed here.
+ */
+export function buildGstr3bFromRegister(register) {
+  const outward = { taxableValue: 0, igst: 0, cgst: 0, sgst: 0 };
+  const nilRatedExempt = { value: 0 };
+  const nonGst = { value: 0 };
+  const interStateUnregistered = new Map();
+
+  for (const row of register.rows) {
+    const isNilRated = Number(row.gstRate) === 0;
+    if (isNilRated) {
+      nilRatedExempt.value = money(nilRatedExempt.value + Number(row.lineTotal));
+      continue;
+    }
+    // Credit notes carry negative values, so returns reduce the liability here.
+    outward.taxableValue = money(outward.taxableValue + Number(row.taxableValue));
+    outward.igst = money(outward.igst + Number(row.igst));
+    outward.cgst = money(outward.cgst + Number(row.cgst));
+    outward.sgst = money(outward.sgst + Number(row.sgst));
+
+    if (row.supplyType === "interstate" && !row.buyerGstin) {
+      const entry = interStateUnregistered.get(row.placeOfSupply) ?? { placeOfSupply: row.placeOfSupply, taxableValue: 0, igst: 0 };
+      entry.taxableValue = money(entry.taxableValue + Number(row.taxableValue));
+      entry.igst = money(entry.igst + Number(row.igst));
+      interStateUnregistered.set(row.placeOfSupply, entry);
+    }
+  }
+
+  return {
+    schemaVersion: "artha-gstr3b-working-v1",
+    filingWarning: "Outward supplies only. Input tax credit (Table 4) must be reconciled against GSTR-2B from purchase invoices and is intentionally not derived from POS data.",
+    from: register.from,
+    to: register.to,
+    outwardSupplies: {
+      "3.1(a)": { label: "Outward taxable supplies (other than zero rated, nil rated and exempted)", ...outward },
+      "3.1(b)": { label: "Outward taxable supplies (zero rated)", taxableValue: 0, igst: 0, cgst: 0, sgst: 0 },
+      "3.1(c)": { label: "Other outward supplies (nil rated, exempted)", taxableValue: nilRatedExempt.value, igst: 0, cgst: 0, sgst: 0 },
+      "3.1(e)": { label: "Non-GST outward supplies", taxableValue: nonGst.value, igst: 0, cgst: 0, sgst: 0 },
+    },
+    interStateSuppliesToUnregistered: [...interStateUnregistered.values()],
+    taxPayable: {
+      igst: outward.igst,
+      cgst: outward.cgst,
+      sgst: outward.sgst,
+      total: money(outward.igst + outward.cgst + outward.sgst),
+    },
   };
 }
 
@@ -292,14 +490,21 @@ export async function getGstr1WorkingPapers(shopId, query = {}) {
   return buildGstr1WorkingFromRegister(await getGstInvoiceRegister(shopId, query));
 }
 
+export async function getGstr3bWorkingPapers(shopId, query = {}) {
+  return buildGstr3bFromRegister(await getGstInvoiceRegister(shopId, query));
+}
+
 export function gstr1WorkingToCsv(working) {
-  const header = ["Section", "Document Number", "Document Date", "Buyer GSTIN", "Place of Supply", "Original Invoice Number", "Original Invoice Date", "HSN", "Description", "Unit", "GST Rate", "Quantity", "Taxable Value", "CGST", "SGST", "IGST", "Post-tax Discount", "Invoice/Note Value"];
+  const header = ["Section", "Document Number", "Document Date", "Buyer GSTIN", "Place of Supply", "Original Invoice Number", "Original Invoice Date", "HSN", "Description", "Unit", "UQC", "GST Rate", "Quantity", "Taxable Value", "CGST", "SGST", "IGST", "Post-tax Discount", "Invoice/Note Value"];
   const rows = [
-    ...working.b2b.map((row) => ["B2B", row.invoiceNumber, row.invoiceDate, row.buyerGstin, row.placeOfSupply, "", "", "", row.customerName, "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
-    ...working.b2cs.map((row) => ["B2CS", "", "", "", row.placeOfSupply, "", "", "", "", "", row.gstRate, "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
-    ...(working.cdnr ?? []).map((row) => ["CDNR", row.noteNumber, row.noteDate, row.buyerGstin, row.placeOfSupply, row.originalInvoiceNumber, row.originalInvoiceDate, "", row.customerName, "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, "", row.noteValue]),
-    ...(working.cdnur ?? []).map((row) => ["CDNUR", row.noteNumber, row.noteDate, "", row.placeOfSupply, row.originalInvoiceNumber, row.originalInvoiceDate, "", row.customerName, "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, "", row.noteValue]),
-    ...working.hsn.map((row) => ["HSN", "", "", "", "", "", "", row.hsn, row.description, row.unit, row.gstRate, row.quantity, row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.totalValue]),
+    ...working.b2b.map((row) => ["B2B", row.invoiceNumber, row.invoiceDate, row.buyerGstin, row.placeOfSupply, "", "", "", row.customerName, "", "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
+    ...(working.b2cl ?? []).map((row) => ["B2CL", row.invoiceNumber, row.invoiceDate, "", row.placeOfSupply, "", "", "", row.customerName, "", "", row.gstRate, "", row.taxableValue, "", "", row.igst, row.postTaxDiscount, row.invoiceValue]),
+    ...working.b2cs.map((row) => ["B2CS", "", "", "", row.placeOfSupply, "", "", "", "", "", "", row.gstRate, "", row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.invoiceValue]),
+    ...(working.cdnr ?? []).map((row) => ["CDNR", row.noteNumber, row.noteDate, row.buyerGstin, row.placeOfSupply, row.originalInvoiceNumber, row.originalInvoiceDate, "", row.customerName, "", "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, "", row.noteValue]),
+    ...(working.cdnur ?? []).map((row) => ["CDNUR", row.noteNumber, row.noteDate, "", row.placeOfSupply, row.originalInvoiceNumber, row.originalInvoiceDate, "", row.customerName, "", "", "", "", row.taxableValue, row.cgst, row.sgst, row.igst, "", row.noteValue]),
+    ...(working.nilRated ?? []).map((row) => ["NIL/EXEMPT", "", "", "", "", "", "", "", row.label, "", "", "", "", row.nilRatedOrExempt, "", "", "", "", row.nilRatedOrExempt]),
+    ...working.hsn.map((row) => ["HSN", "", "", "", "", "", "", row.hsn, row.description, row.unit, row.uqc, row.gstRate, row.quantity, row.taxableValue, row.cgst, row.sgst, row.igst, row.postTaxDiscount, row.totalValue]),
+    ...(working.documentSeries ?? []).map((row) => ["DOC-SERIES", `${row.from} - ${row.to}`, "", "", "", "", "", "", `${row.totalIssued} issued, ${row.cancelled} cancelled`, "", "", "", row.net, "", "", "", "", "", ""]),
   ];
   return [header.join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\r\n");
 }
