@@ -235,11 +235,11 @@ export default function Login() {
   return (
     <div className="app-shell flex min-h-screen items-center justify-center bg-[#f4f7fc] px-4 py-8">
       <div className="grid w-full max-w-5xl overflow-hidden rounded-[26px] border border-[#dce5f2] bg-card shadow-[0_28px_80px_rgba(16,35,71,0.16)] lg:grid-cols-[minmax(0,1fr)_420px]">
-        <section className="relative hidden overflow-hidden bg-[linear-gradient(145deg,#031126_0%,#06275f_58%,#075fff_135%)] p-10 text-white lg:flex lg:flex-col lg:justify-between">
+        <section className="relative hidden overflow-hidden bg-[linear-gradient(145deg,#031126_0%,#06275f_58%,var(--brand)_135%)] p-10 text-white lg:flex lg:flex-col lg:justify-between">
           <div className="pointer-events-none absolute -right-28 -top-28 h-80 w-80 rounded-full border border-white/10 bg-white/5" />
-          <div className="pointer-events-none absolute -bottom-36 -left-28 h-96 w-96 rounded-full border border-white/10 bg-[#075fff]/25" />
+          <div className="pointer-events-none absolute -bottom-36 -left-28 h-96 w-96 rounded-full border border-white/10 bg-[var(--brand)]/25" />
           <div>
-            <div className="relative inline-flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#075fff] text-white shadow-[0_14px_30px_rgba(0,74,255,0.35)] ring-1 ring-white/20">
+            <div className="relative inline-flex h-12 w-12 items-center justify-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_14px_30px_rgba(0,74,255,0.35)] ring-1 ring-white/20">
               <Store size={24} aria-hidden="true" />
             </div>
             <p className="relative mt-8 text-[11px] font-black uppercase tracking-[0.2em] text-[#78a8ff]">Retail operating system</p>

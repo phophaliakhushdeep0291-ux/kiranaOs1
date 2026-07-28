@@ -11,7 +11,7 @@ export type Tone = "blue" | "green" | "amber" | "red" | "gray" | "violet";
 
 // Vivid mid-tone text on a soft tint — matches the reference chips (see lib/chip-tones).
 const BADGE_TONES: Record<Tone, string> = {
-  blue: "bg-[#e8f0fe] text-[#2563eb]",
+  blue: "bg-[#e8f0fe] text-[var(--brand)]",
   green: "bg-[#e6f7ee] text-[#16a34a]",
   amber: "bg-[#fdf3e1] text-[#d97706]",
   red: "bg-[#fdebeb] text-[#ef4444]",
@@ -20,7 +20,7 @@ const BADGE_TONES: Record<Tone, string> = {
 };
 
 const KPI_TONES: Record<Tone, { ring: string; value: string }> = {
-  blue: { ring: "bg-[#eef5ff] text-[#005dff]", value: "text-[#102347]" },
+  blue: { ring: "bg-[var(--brand-soft)] text-[var(--brand)]", value: "text-[#102347]" },
   green: { ring: "bg-emerald-50 text-emerald-600", value: "text-[#102347]" },
   amber: { ring: "bg-amber-50 text-amber-600", value: "text-[#102347]" },
   red: { ring: "bg-rose-50 text-rose-600", value: "text-[#102347]" },
@@ -49,7 +49,7 @@ export function CardHead({ icon, title, sub, action }: { icon?: ReactNode; title
   return (
     <div className="flex min-w-0 flex-col gap-3 px-5 pb-3 pt-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 items-center gap-2.5">
-        {icon && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-[#eef5ff] text-[#005dff]">{icon}</span>}
+        {icon && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand)]">{icon}</span>}
         <div className="min-w-0">
           <h3 className="truncate font-display text-[14px] font-black tracking-tight text-[#102347]">{title}</h3>
           {sub && <p className="line-clamp-2 text-[11px] text-[#64748b]">{sub}</p>}

@@ -217,7 +217,7 @@ export default function PrinterSettingsPage() {
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
                 <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={testPrint}><Printer size={14} /> Test Print</Button>
-                <Button className="h-9 gap-1.5 rounded-[9px] text-[12px] font-black text-white" style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} onClick={() => void setAsDefault()}><CheckCircle2 size={14} /> Set Default</Button>
+                <Button className="h-9 gap-1.5 rounded-[9px] text-[12px] font-black text-white" style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} onClick={() => void setAsDefault()}><CheckCircle2 size={14} /> Set Default</Button>
               </div>
               {scanResult ? <div className="rounded-[10px] border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-semibold text-blue-800">{scanResult}</div> : null}
             </div>
@@ -241,7 +241,7 @@ export default function PrinterSettingsPage() {
 
         {/* Bill template preview */}
         <Card className="flex flex-col">
-          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="text-[12px] font-bold text-[#005dff] hover:underline">Test print</button>} />
+          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Test print</button>} />
           <div className="flex-1 px-5 pb-5">
             <div className="app-table-scroll overflow-auto rounded-[12px] border border-[#e3e9f3] bg-[#eef1f6]">
               <iframe title="Receipt preview" srcDoc={previewHtml} className="h-[560px] w-full border-0" />
@@ -273,7 +273,7 @@ export default function PrinterSettingsPage() {
 
         {/* Printer queue / test */}
         <Card>
-          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: "Queue cleared" }); }} className="text-[12px] font-bold text-[#005dff] hover:underline">Clear queue</button>} />
+          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: "Queue cleared" }); }} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Clear queue</button>} />
           <div className="px-5 pb-4">
             {jobs.length === 0 ? (
               <div className="rounded-[12px] border border-dashed border-[#dbe4f0] p-6 text-center text-[12px] font-semibold text-[#64748b]">
@@ -302,7 +302,7 @@ export default function PrinterSettingsPage() {
         <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-5">
           {hardwareCapabilities.map((capability) => {
             const Icon = capability.icon;
-            return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[#075fff] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : "Unavailable"}</Badge></div><p className="mt-3 text-[12px] font-black text-[#102347]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;
+            return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[var(--brand)] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : "Unavailable"}</Badge></div><p className="mt-3 text-[12px] font-black text-[#102347]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;
           })}
         </div>
       </Card>

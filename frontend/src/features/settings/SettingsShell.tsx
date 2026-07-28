@@ -51,11 +51,11 @@ export function SettingsShell({ children, className }: { children: ReactNode; cl
                   onClick={() => navigate(m.href)}
                   className={cn(
                     "flex w-full items-center gap-2.5 rounded-[8px] px-3 py-2 text-left text-[13px] font-semibold transition-colors",
-                    isActive ? "bg-[#eef5ff] text-[#005dff]" : "text-[#344668] hover:bg-[#eef2f8]",
+                    isActive ? "bg-[var(--brand-soft)] text-[var(--brand)]" : "text-[#344668] hover:bg-[#eef2f8]",
                   )}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <m.icon size={16} className={isActive ? "text-[#005dff]" : "text-[#536583]"} />
+                  <m.icon size={16} className={isActive ? "text-[var(--brand)]" : "text-[#536583]"} />
                   <span className="flex-1 truncate">{m.label}</span>
                   {isActive && <ChevronRight size={14} className="text-[#9aa6bb]" />}
                 </button>

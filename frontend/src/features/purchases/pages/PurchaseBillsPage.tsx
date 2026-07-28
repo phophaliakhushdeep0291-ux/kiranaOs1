@@ -540,19 +540,19 @@ export default function PurchaseBillsPage() {
       <div className="space-y-4">
         {/* KPI row — label left, icon top-right per reference */}
         <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
-          <Kpi label="Total Purchase Value" value={fmt(totals.amount)} icon={<ShoppingBag size={16} />} iconBg="bg-[#e8f0fe] text-[#2563eb]"
+          <Kpi label="Total Purchase Value" value={fmt(totals.amount)} icon={<ShoppingBag size={16} />} iconBg="bg-[#e8f0fe] text-[var(--brand)]"
             delta={monthStats.totalDelta} deltaSuffix="vs last month" fallbackSub={`${rows.length} purchase bills`} loading={loading} />
           <Kpi label="Unpaid Purchase Dues" value={fmt(totals.due)} icon={<AlertTriangle size={16} />} iconBg="bg-[#fdebeb] text-[#ef4444]"
             sub={totals.due > 0 ? `${rows.filter((r) => r.due > 0).length} bills pending` : "All bills settled"} subTone={totals.due > 0 ? "bad" : "good"} loading={loading} />
-          <Kpi label="Today's Purchases" value={fmt(monthStats.todayAmount)} icon={<CalendarDays size={16} />} iconBg="bg-[#e8f0fe] text-[#2563eb]"
+          <Kpi label="Today's Purchases" value={fmt(monthStats.todayAmount)} icon={<CalendarDays size={16} />} iconBg="bg-[#e8f0fe] text-[var(--brand)]"
             sub={`${monthStats.todayCount} bill${monthStats.todayCount === 1 ? "" : "s"} today`} subTone="muted" loading={loading} />
-          <Kpi label="Stock Added (This Month)" value={fmt(monthStats.thisMonth)} icon={<Box size={16} />} iconBg="bg-[#e8f0fe] text-[#2563eb]"
+          <Kpi label="Stock Added (This Month)" value={fmt(monthStats.thisMonth)} icon={<Box size={16} />} iconBg="bg-[#e8f0fe] text-[var(--brand)]"
             delta={monthStats.totalDelta} deltaSuffix="vs last month" fallbackSub="first month of data" loading={loading} />
         </div>
 
         {/* Insight strip — one card, four cells */}
         <div className="grid grid-cols-2 divide-y divide-[#eef2f8] rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)] xl:grid-cols-4 xl:divide-y-0 xl:divide-x">
-          <Insight icon={<Crown size={15} />} iconBg="bg-[#e8f0fe] text-[#2563eb]" label="Top Supplier"
+          <Insight icon={<Crown size={15} />} iconBg="bg-[#e8f0fe] text-[var(--brand)]" label="Top Supplier"
             value={topSuppliers[0]?.name ?? "—"} sub={topSuppliers[0] ? `${fmt(topSuppliers[0].amount)} (${topSuppliers[0].share}%)` : "No purchases yet"} />
           <Insight icon={<Package size={15} />} iconBg="bg-[#fdf3e1] text-[#d97706]" label="Most Purchased Item"
             value={mostPurchased?.name ?? "—"} sub={mostPurchased ? `${mostPurchased.qty.toLocaleString("en-IN")} units` : "No item data yet"} />
@@ -575,7 +575,7 @@ export default function PurchaseBillsPage() {
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
                 <Input className="h-9 pl-8 text-[12.5px]" placeholder="Search by bill no., supplier or product…" value={search} onChange={(event) => setSearch(event.target.value)} />
               </div>
-              <Button variant="outline" className={cn("h-9 gap-1.5 rounded-[9px] text-[12px] font-bold", showFilters && "border-[#2563eb] text-[#2563eb]")} onClick={() => setShowFilters((s) => !s)}>
+              <Button variant="outline" className={cn("h-9 gap-1.5 rounded-[9px] text-[12px] font-bold", showFilters && "border-[var(--brand)] text-[var(--brand)]")} onClick={() => setShowFilters((s) => !s)}>
                 <Filter size={13} /> Filters
               </Button>
               <DropdownMenu>
@@ -585,16 +585,16 @@ export default function PurchaseBillsPage() {
                 <DropdownMenuContent align="end" className="w-44">
                   {([["items", "Items"], ["paid", "Paid Amount"], ["mode", "Payment Mode"]] as const).map(([key, label]) => (
                     <DropdownMenuItem key={key} onClick={(event) => { event.preventDefault(); setCols((c) => ({ ...c, [key]: !c[key] })); }}>
-                      <span className="mr-2 grid h-4 w-4 place-items-center rounded border border-[#cbd5e1]">{cols[key] && <Check size={11} className="text-[#2563eb]" />}</span>
+                      <span className="mr-2 grid h-4 w-4 place-items-center rounded border border-[#cbd5e1]">{cols[key] && <Check size={11} className="text-[var(--brand)]" />}</span>
                       {label}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={exportCsv} disabled={filtered.length === 0} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
+              <Button onClick={exportCsv} disabled={filtered.length === 0} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
                 <Upload size={13} className="rotate-180" /> Export
               </Button>
-              <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
+              <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
                 <Plus size={14} /> Add Purchase
               </Button>
             </div>
@@ -620,14 +620,14 @@ export default function PurchaseBillsPage() {
                   <SelectItem value="credit">Credit</SelectItem>
                 </SelectContent>
               </Select>
-              <button onClick={() => { setStatusFilter("all"); setModeFilter("all"); }} className="text-[12px] font-bold text-[#2563eb] hover:underline">Reset</button>
+              <button onClick={() => { setStatusFilter("all"); setModeFilter("all"); }} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Reset</button>
             </div>
           )}
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#64748b]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-[#eef5ff] text-[#0057ff]"><Truck size={22} /></span>
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#0057ff]"><Truck size={22} /></span>
               <p className="text-[13px] font-bold text-[#102347]">No purchase bills yet</p>
               <p className="text-[12px] text-[#64748b]">Click "Add Purchase" to record your first supplier bill.</p>
             </div>
@@ -769,12 +769,12 @@ export default function PurchaseBillsPage() {
             <div className="px-5 py-2">
               {topSuppliers.length === 0 ? <EmptyHint text="No purchases in this period." /> : topSuppliers.map((s, i) => (
                 <div key={s.name} className={cn("flex items-center gap-3 py-2.5", i < topSuppliers.length - 1 && "border-b border-[#eef2f8]")}>
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[#eef5ff] text-[11px] font-black text-[#0057ff]">{i + 1}</span>
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-[11px] font-black text-[#0057ff]">{i + 1}</span>
                   <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-[#102347]">{s.name}</p>
                   <span className="shrink-0 text-[11.5px] font-bold text-[#344668]">{fmt(s.amount)} <span className="text-[10px] font-semibold text-[#94a3b8]">({s.share}%)</span></span>
                 </div>
               ))}
-              <Link href="/suppliers" className="block py-2.5 text-[12px] font-bold text-[#2563eb] hover:underline">View all suppliers</Link>
+              <Link href="/suppliers" className="block py-2.5 text-[12px] font-bold text-[var(--brand)] hover:underline">View all suppliers</Link>
             </div>
           </div>
 
@@ -782,7 +782,7 @@ export default function PurchaseBillsPage() {
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3">
               <h3 className="font-display text-[13.5px] font-black tracking-tight text-[#102347]">Recent Purchase Activity</h3>
-              <a href="#purchase-table" className="text-[11.5px] font-bold text-[#2563eb] hover:underline">View all</a>
+              <a href="#purchase-table" className="text-[11.5px] font-bold text-[var(--brand)] hover:underline">View all</a>
             </div>
             <div className="px-5 py-2">
               {recentRows.length === 0 ? <EmptyHint text="No purchases recorded yet." /> : recentRows.map((row, i) => (
@@ -801,7 +801,7 @@ export default function PurchaseBillsPage() {
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3">
               <h3 className="font-display text-[13.5px] font-black tracking-tight text-[#102347]">Purchase Due Alerts</h3>
-              <button onClick={() => { setShowFilters(true); setStatusFilter("due"); }} className="text-[11.5px] font-bold text-[#2563eb] hover:underline">View all</button>
+              <button onClick={() => { setShowFilters(true); setStatusFilter("due"); }} className="text-[11.5px] font-bold text-[var(--brand)] hover:underline">View all</button>
             </div>
             <div className="px-5 py-2">
               {dueAlerts.length === 0 ? <EmptyHint text="No supplier dues — all settled. 🎉" /> : (
@@ -1206,7 +1206,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
             </div>
           ))}
           <div className="flex min-w-[420px] items-center justify-between pt-1">
-            <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])} className="flex items-center gap-1 text-[12px] font-bold text-[#2563eb] hover:underline"><Plus size={13} /> Add Product</button>
+            <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])} className="flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Plus size={13} /> Add Product</button>
             <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[11.5px] font-bold" onClick={() => toast({ title: "Barcode scanning coming soon", description: "Use the product dropdown for now." })}><Barcode size={13} /> Scan Barcode</Button>
           </div>
 
@@ -1222,9 +1222,9 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
         {/* Bill upload */}
         <section className="space-y-2">
           <h3 className="text-[13px] font-black text-[#13274d]">Bill Upload</h3>
-          <label className="flex cursor-pointer flex-col items-center gap-1 rounded-[10px] border border-dashed border-[#c9d6ea] px-4 py-4 text-center hover:border-[#2563eb]">
-            <Upload size={16} className="text-[#2563eb]" />
-            <span className="text-[12px] font-bold text-[#2563eb]">Upload Bill / Invoice</span>
+          <label className="flex cursor-pointer flex-col items-center gap-1 rounded-[10px] border border-dashed border-[#c9d6ea] px-4 py-4 text-center hover:border-[var(--brand)]">
+            <Upload size={16} className="text-[var(--brand)]" />
+            <span className="text-[12px] font-bold text-[var(--brand)]">Upload Bill / Invoice</span>
             <span className="text-[10.5px] text-[#94a3b8]">PNG, JPG or PDF up to 5MB · stored after cloud storage lands</span>
             <input type="file" accept=".png,.jpg,.jpeg,.pdf" className="hidden" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")} />
           </label>
@@ -1245,7 +1245,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
             maxLength={250}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Enter any notes about this purchase…"
-            className="h-20 w-full resize-none rounded-[10px] border border-[#e2e8f0] px-3 py-2 text-[12.5px] text-[#102347] outline-none placeholder:text-[#9aa6bb] focus:border-[#2563eb]"
+            className="h-20 w-full resize-none rounded-[10px] border border-[#e2e8f0] px-3 py-2 text-[12.5px] text-[#102347] outline-none placeholder:text-[#9aa6bb] focus:border-[var(--brand)]"
           />
           <p className="text-right text-[10px] text-[#94a3b8]">{notes.length}/250</p>
         </section>
@@ -1254,7 +1254,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
       <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
         <div className="grid grid-cols-2 gap-2.5">
           <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
-          <Button type="button" onClick={() => void save()} disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+          <Button type="button" onClick={() => void save()} disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
             {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><ClipboardList size={15} /> Save Purchase</>}
           </Button>
         </div>

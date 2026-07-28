@@ -100,7 +100,7 @@ function MobileActionTileInner({ icon, label, helper, className, ...props }: Omi
       className={cn("mobile-action-surface p-3.5 text-center transition-transform duration-150", className)}
       {...props}
     >
-      <div className="mx-auto grid h-11 w-11 place-items-center rounded-[15px] bg-[#edf4ff] text-[#075fff] shadow-[0_8px_18px_rgba(7,95,255,0.08)]">{icon}</div>
+      <div className="mx-auto grid h-11 w-11 place-items-center rounded-[15px] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]">{icon}</div>
       <div className="mt-2 text-[13px] font-black leading-tight text-[#07133f]">{label}</div>
       {helper ? <div className="mt-1 text-[11px] font-medium leading-snug text-[#64708b]">{helper}</div> : null}
     </div>

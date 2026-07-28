@@ -701,10 +701,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
       {isDesktopViewport && <div className="w-full min-w-0 space-y-4 overflow-x-hidden bg-white p-4 font-sans sm:p-5 lg:p-5 2xl:p-6">
 
       {!dashboard.hasBusinessData && (
-        <section className="overflow-hidden rounded-[18px] border border-[#cfe0ff] bg-[linear-gradient(135deg,#f3f7ff_0%,#ffffff_62%)] p-5 shadow-[0_14px_36px_rgba(7,95,255,0.08)]">
+        <section className="overflow-hidden rounded-[18px] border border-[var(--brand-border)] bg-[linear-gradient(135deg,#f3f7ff_0%,#ffffff_62%)] p-5 shadow-[0_14px_36px_rgba(7,95,255,0.08)]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="max-w-xl">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#075fff]">Quick start</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--brand)]">Quick start</p>
               <h2 className="mt-1 font-display text-[22px] font-black text-[#071333]">Open your counter in three simple steps</h2>
               <p className="mt-1 text-[13px] font-medium text-[#52627e]">Set up one product, complete a test bill, and check your receipt before serving customers.</p>
             </div>
@@ -725,8 +725,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
           delta={salesDelta}
           deltaLabel="vs yesterday"
           icon={<ShoppingCart size={18} />}
-          iconBg="border border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.22)]"
-          color="#075fff"
+          iconBg="border border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.22)]"
+          color="var(--brand)"
           spark={mobileSparkline(yesterdaySales, dashboard.revenue)}
           loading={isLoading}
           onClick={() => openDrilldown("revenue")}
@@ -762,8 +762,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
             delta={bankDelta}
             deltaLabel="vs yesterday"
             icon={<Landmark size={18} />}
-            iconBg="border border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.20)]"
-            color="#075fff"
+            iconBg="border border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.20)]"
+            color="var(--brand)"
             spark={mobileSparkline(dashboard.previousBankCollected, dashboard.bankCollected)}
             loading={isLoading}
           />
@@ -832,7 +832,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
                 )}
               </div>
             </div>
-            <Link href="/reports" className="rounded-[9px] border border-[#bfd3ff] bg-[#eef5ff] px-4 py-2 text-[12px] font-black text-[#0057ff] shadow-[0_6px_14px_rgba(0,87,255,0.06)] transition-colors hover:bg-[#e2edff]">
+            <Link href="/reports" className="rounded-[9px] border border-[#bfd3ff] bg-[var(--brand-soft)] px-4 py-2 text-[12px] font-black text-[#0057ff] shadow-[0_6px_14px_rgba(0,87,255,0.06)] transition-colors hover:bg-[#e2edff]">
               View Report
             </Link>
           </div>
@@ -841,12 +841,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
               <AreaChart data={salesChartData} margin={{ top: 12, right: 10, left: -8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="salesOverviewFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#075fff" stopOpacity={0.30} />
+                    <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.30} />
                     <stop offset="46%" stopColor="#2f7dff" stopOpacity={0.14} />
-                    <stop offset="100%" stopColor="#075fff" stopOpacity={0.02} />
+                    <stop offset="100%" stopColor="var(--brand)" stopOpacity={0.02} />
                   </linearGradient>
                   <filter id="salesOverviewGlow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#075fff" floodOpacity="0.18" />
+                    <feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="var(--brand)" floodOpacity="0.18" />
                   </filter>
                 </defs>
                 <CartesianGrid vertical={false} strokeDasharray="2 4" stroke="#dbe5f1" />
@@ -869,12 +869,12 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
                 <Area
                   type="monotone"
                   dataKey="sales"
-                  stroke="#075fff"
+                  stroke="var(--brand)"
                   strokeWidth={3}
                   fill="url(#salesOverviewFill)"
                   filter="url(#salesOverviewGlow)"
-                  dot={{ r: 3.5, fill: "#ffffff", stroke: "#075fff", strokeWidth: 2.25 }}
-                  activeDot={{ r: 5, fill: "#ffffff", stroke: "#075fff", strokeWidth: 2.5 }}
+                  dot={{ r: 3.5, fill: "#ffffff", stroke: "var(--brand)", strokeWidth: 2.25 }}
+                  activeDot={{ r: 5, fill: "#ffffff", stroke: "var(--brand)", strokeWidth: 2.5 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -893,7 +893,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
         <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden lg:col-span-2 2xl:col-span-1 2xl:min-h-0")}>
           <div className="flex min-h-[46px] items-center justify-between gap-3 border-b border-[#e8edf4] px-4 py-3">
             <p className={DASH_TITLE}>Recent Bills</p>
-            <Link href="/bills" className="text-[11px] font-bold text-[#075fff] hover:underline">View all</Link>
+            <Link href="/bills" className="text-[11px] font-bold text-[var(--brand)] hover:underline">View all</Link>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             <table className="h-full w-full text-xs">
@@ -949,7 +949,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
           </div>
           <div className="grid min-h-[50px] border-t border-[#e8edf4] bg-[#fbfcfe] text-sm sm:grid-cols-2">
             <div className="flex items-center gap-2.5 px-4 py-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-[#eef4ff] text-[#075fff]">
+              <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-[#eef4ff] text-[var(--brand)]">
                 <ReceiptText size={14} />
               </span>
               <div>
@@ -999,7 +999,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
               <HealthRow icon={<MonitorSmartphone size={13} />} label="Device Status" status="ok" value="Active" />
             </div>
             <Link href="/sync-status">
-              <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-[9px] bg-[#075fff] py-2.5 text-[12px] font-bold text-white shadow-[0_8px_18px_rgba(7,95,255,0.18)] transition-colors duration-200 hover:bg-[#0054e8]">
+              <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-[9px] bg-[var(--brand)] py-2.5 text-[12px] font-bold text-white shadow-[0_8px_18px_rgba(7,95,255,0.18)] transition-colors duration-200 hover:bg-[#0054e8]">
                 <RefreshCw size={13} aria-hidden="true" /> Sync Now
               </button>
             </Link>
@@ -1091,14 +1091,14 @@ function MobileGeneralDashboard({
             <p className="text-[13px] font-medium text-[#33456b]">{isOnline ? "Just now" : "Offline safe"}</p>
           </div>
         </div>
-        <Link href="/sync-status" className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-[#d9e3f2] bg-white px-4 text-[15px] font-black text-[#075fff]">
+        <Link href="/sync-status" className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-[#d9e3f2] bg-white px-4 text-[15px] font-black text-[var(--brand)]">
           <RefreshCw size={18} /> Sync Now
         </Link>
       </section>
 
       {!dashboard.hasBusinessData && (
-        <section className="rounded-[18px] border border-[#cfe0ff] bg-[linear-gradient(145deg,#f1f6ff,#ffffff)] p-4 shadow-[0_12px_30px_rgba(7,95,255,0.08)]">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#075fff]">Quick start</p>
+        <section className="rounded-[18px] border border-[var(--brand-border)] bg-[linear-gradient(145deg,#f1f6ff,#ffffff)] p-4 shadow-[0_12px_30px_rgba(7,95,255,0.08)]">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--brand)]">Quick start</p>
           <h2 className="mt-1 font-display text-[19px] font-black text-[#071333]">Get ready for your first customer</h2>
           <p className="mt-1 text-[12px] font-medium leading-5 text-[#52627e]">Complete these once, then billing stays fast every day.</p>
           <div className="mt-3 grid gap-2">
@@ -1117,10 +1117,10 @@ function MobileGeneralDashboard({
           </span>
         </div>
         <div className="grid auto-rows-fr grid-cols-2 gap-3 min-[460px]:grid-cols-3">
-          <MobileMetricCard label="Total Sales" value={dashboard.revenue} previous={dashboard.previousRevenue} delta={salesDelta} color="#075fff" icon={<ShoppingCart size={13} />} iconClass="border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]" />
+          <MobileMetricCard label="Total Sales" value={dashboard.revenue} previous={dashboard.previousRevenue} delta={salesDelta} color="var(--brand)" icon={<ShoppingCart size={13} />} iconClass="border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)]" />
           <MobileMetricCard label="Cash Collection" value={dashboard.cashCollected} previous={dashboard.previousCashCollected} delta={cashDelta} color="#18ad50" icon={<Wallet size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
           <MobileMetricCard label="UPI Collection" value={dashboard.upiCollected} previous={dashboard.previousUpiCollected} delta={upiDelta} color="#7447eb" icon={<Smartphone size={13} />} iconClass="border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]" />
-          <MobileMetricCard label="Bank Collection" value={dashboard.bankCollected} previous={dashboard.previousBankCollected} delta={bankDelta} color="#075fff" icon={<Landmark size={13} />} iconClass="border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]" />
+          <MobileMetricCard label="Bank Collection" value={dashboard.bankCollected} previous={dashboard.previousBankCollected} delta={bankDelta} color="var(--brand)" icon={<Landmark size={13} />} iconClass="border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)]" />
           <MobileMetricCard label="Profit (Est.)" value={dashboard.grossProfit} previous={dashboard.previousGrossProfit} delta={profitDelta} color="#18ad50" icon={<TrendingUp size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
           <MobileMetricCard label="Outstanding Udhar" value={dashboard.totalOutstanding} previous={dashboard.previousOutstanding} delta={outstandingDelta} color="#ff304f" icon={<AlertTriangle size={13} />} iconClass="border-[#ffcfd7] bg-[#ffecef] text-[#ff304f]" positiveIsBad />
           <MobileMetricCard label="Expense Total" value={dashboard.expensesToday} previous={dashboard.previousExpenses} delta={expenseDelta} color="#f39a0b" icon={<Wallet size={13} />} iconClass="border-[#ffdca8] bg-[#fff2df] text-[#f39a0b]" positiveIsBad />
@@ -1144,15 +1144,15 @@ function MobileGeneralDashboard({
             <AreaChart data={salesChartData} margin={{ top: 10, right: 8, left: -15, bottom: 0 }}>
               <defs>
                 <linearGradient id="mobileSalesFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#075fff" stopOpacity={0.24} />
-                  <stop offset="100%" stopColor="#075fff" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="var(--brand)" stopOpacity={0.24} />
+                  <stop offset="100%" stopColor="var(--brand)" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} strokeDasharray="4 6" stroke="#dbe6f4" />
               <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} tickMargin={8} />
               <YAxis tick={{ fontSize: 8, fill: "#64748b", fontWeight: 600 }} tickLine={false} axisLine={false} width={38} tickFormatter={(value) => value >= 1000 ? `₹${Math.round(value / 1000)}K` : `₹${value}`} />
               <Tooltip formatter={(value: number) => [fmtCompactRs(value), "Sales"]} />
-              <Area type="monotone" dataKey="sales" stroke="#075fff" strokeWidth={2.5} fill="url(#mobileSalesFill)" dot={{ r: 3, fill: "white", stroke: "#075fff", strokeWidth: 2 }} />
+              <Area type="monotone" dataKey="sales" stroke="var(--brand)" strokeWidth={2.5} fill="url(#mobileSalesFill)" dot={{ r: 3, fill: "white", stroke: "var(--brand)", strokeWidth: 2 }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -1164,7 +1164,7 @@ function MobileGeneralDashboard({
           <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? "No sales yesterday to compare against yet." : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
           <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? "Your top product"} is leading sales.`} subtitle="Keep the best sellers available in stock." />
           <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle="Follow up to improve cash flow." />
-          <Link href="/reports" className="flex items-center justify-center gap-2 border-t border-[#e7edf5] py-2.5 text-[11px] font-black text-[#075fff]">View Detailed Insights <ArrowUpRight size={12} /></Link>
+          <Link href="/reports" className="flex items-center justify-center gap-2 border-t border-[#e7edf5] py-2.5 text-[11px] font-black text-[var(--brand)]">View Detailed Insights <ArrowUpRight size={12} /></Link>
         </div>
       </section>
 
@@ -1172,7 +1172,7 @@ function MobileGeneralDashboard({
         <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white">
           <div className="flex items-center justify-between border-b border-[#edf2f8] px-2.5 py-2.5">
             <h2 className="text-[11px] font-black text-[#102347]">Top Products</h2>
-            <Link href="/products" className="text-[9px] font-black text-[#075fff]">View all</Link>
+            <Link href="/products" className="text-[9px] font-black text-[var(--brand)]">View all</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-2">
             {(topRows.length > 0 ? topRows : recentProducts.slice(0, 5).map((product) => ({ productId: product.id, name: product.name, quantitySold: Number(product.stockQuantity ?? 0), revenue: productPrice(product), profitEstimate: 0 }))).map((row) => (
@@ -1191,7 +1191,7 @@ function MobileGeneralDashboard({
         <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white">
           <div className="flex items-center justify-between border-b border-[#edf2f8] px-2.5 py-2.5">
             <h2 className="text-[11px] font-black text-[#102347]">Recent Bills</h2>
-            <Link href="/bills" className="text-[9px] font-black text-[#075fff]">View all</Link>
+            <Link href="/bills" className="text-[9px] font-black text-[var(--brand)]">View all</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-2">
             {recentBills.slice(0, 5).map((bill) => (
@@ -1207,7 +1207,7 @@ function MobileGeneralDashboard({
               </Link>
             ))}
           </div>
-          <Link href="/bills" className="flex items-center justify-center gap-1 border-t border-[#edf2f8] py-2.5 text-[9px] font-black text-[#075fff]">View All Bills <ArrowUpRight size={10} /></Link>
+          <Link href="/bills" className="flex items-center justify-center gap-1 border-t border-[#edf2f8] py-2.5 text-[9px] font-black text-[var(--brand)]">View All Bills <ArrowUpRight size={10} /></Link>
         </div>
       </section>
 
@@ -1311,7 +1311,7 @@ function DashboardPeriodSelect({ value, onChange, compact = false }: { value: Da
             key={period}
             type="button"
             onClick={() => onChange(period)}
-            className={cn("w-full rounded-[6px] px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[#edf4ff] text-[#075fff]")}
+            className={cn("w-full rounded-[6px] px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[var(--brand-soft)] text-[var(--brand)]")}
           >
             {DASHBOARD_PERIOD_LABELS[period]}
           </button>
@@ -1388,15 +1388,15 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
 function QuickStartLink({ href, step, icon, title, detail }: { href: string; step: string; icon: ReactNode; title: string; detail: string }) {
   return (
     <Link href={href} className="group flex min-h-[64px] items-center gap-3 rounded-[14px] border border-[#dbe6f5] bg-white p-3 text-left shadow-[0_8px_20px_rgba(15,35,80,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#9fc0ff] hover:shadow-[0_12px_28px_rgba(7,95,255,0.10)]">
-      <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-[#edf4ff] text-[#075fff]">
+      <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-[11px] bg-[var(--brand-soft)] text-[var(--brand)]">
         {icon}
-        <span className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-[#075fff] text-[9px] font-black text-white ring-2 ring-white">{step}</span>
+        <span className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-[var(--brand)] text-[9px] font-black text-white ring-2 ring-white">{step}</span>
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[12px] font-black text-[#102347] group-hover:text-[#075fff]">{title}</span>
+        <span className="block text-[12px] font-black text-[#102347] group-hover:text-[var(--brand)]">{title}</span>
         <span className="mt-0.5 block text-[10px] font-semibold text-[#718096]">{detail}</span>
       </span>
-      <ChevronRight size={15} className="shrink-0 text-[#9aa8bc] group-hover:text-[#075fff]" />
+      <ChevronRight size={15} className="shrink-0 text-[#9aa8bc] group-hover:text-[var(--brand)]" />
     </Link>
   );
 }
@@ -1509,7 +1509,7 @@ function InsightRow({ icon, label, value, href, tone }: {
 }) {
   const toneClass = {
     emerald: "border-[#c8f1d5] bg-[#e7faee] text-[#11a84b] shadow-[0_6px_16px_rgba(17,168,75,0.14)]",
-    blue: "border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_6px_16px_rgba(7,95,255,0.14)]",
+    blue: "border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)] shadow-[0_6px_16px_rgba(7,95,255,0.14)]",
     violet: "border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb] shadow-[0_6px_16px_rgba(112,71,235,0.14)]",
     orange: "border-[#ffdca8] bg-[#fff2df] text-[#ff8500] shadow-[0_6px_16px_rgba(255,133,0,0.14)]",
   }[tone];
@@ -1554,7 +1554,7 @@ function RecentProductsRail({ products }: { products: Product[] }) {
     <section className={cn(DASH_CARD, "overflow-hidden")}>
       <div className="flex items-center justify-between gap-3 border-b border-[#edf2f8] px-5 py-3">
         <p className={DASH_TITLE}>Recently Added Products</p>
-        <Link href="/products" className="text-[12px] font-black text-[#075fff] hover:underline">View all</Link>
+        <Link href="/products" className="text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
       </div>
       {products.length === 0 ? (
         <div className={cn("m-4 rounded-[10px] border border-dashed border-[#dce7f5] px-4 py-7 text-center text-sm font-semibold", DASH_MUTED)}>
@@ -1575,7 +1575,7 @@ function RecentProductsRail({ products }: { products: Product[] }) {
             </Link>
           ))}
           <Link href="/products" className="grid min-w-[72px] place-items-center px-3">
-            <div className="grid h-10 w-10 place-items-center rounded-full border border-[#cfdaea] bg-white text-[#5f6f88] shadow-[0_7px_18px_rgba(26,57,112,0.10)] transition-all hover:border-[#075fff]/40 hover:text-[#075fff] hover:shadow-[0_9px_22px_rgba(7,95,255,0.16)]">
+            <div className="grid h-10 w-10 place-items-center rounded-full border border-[#cfdaea] bg-white text-[#5f6f88] shadow-[0_7px_18px_rgba(26,57,112,0.10)] transition-all hover:border-[var(--brand)]/40 hover:text-[var(--brand)] hover:shadow-[0_9px_22px_rgba(7,95,255,0.16)]">
               <ChevronRight size={18} />
             </div>
           </Link>
@@ -1596,7 +1596,7 @@ function ProductAvatar({ product, compact = false }: { product: Product; compact
     );
   }
   return (
-    <div className={cn(size, radius, "grid shrink-0 place-items-center bg-[#eef5ff] text-sm font-black text-[#0057ff] shadow-[0_6px_14px_rgba(0,87,255,0.08)]")}>
+    <div className={cn(size, radius, "grid shrink-0 place-items-center bg-[var(--brand-soft)] text-sm font-black text-[#0057ff] shadow-[0_6px_14px_rgba(0,87,255,0.08)]")}>
       {product.name.slice(0, 2).toUpperCase()}
     </div>
   );

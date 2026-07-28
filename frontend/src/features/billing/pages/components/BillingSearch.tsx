@@ -329,7 +329,7 @@ export function BillingSearch({
                   title="Voice billing"
                   aria-label="Open voice billing"
                   onClick={onToggleVoice}
-                  className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] sm:h-9 sm:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[#eef5ff] text-[#0057ff]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
+                  className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] sm:h-9 sm:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[#0057ff]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
                 >
                   <Mic size={16} aria-hidden="true" />
                 </button>
@@ -350,7 +350,7 @@ export function BillingSearch({
                       <button
                         key={p.id}
                         onClick={() => onAddProduct(p)}
-                        className="flex min-w-[104px] items-center gap-2 rounded-lg border border-transparent bg-white px-2 py-1.5 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition-all hover:border-[#cfe0ff]"
+                        className="flex min-w-[104px] items-center gap-2 rounded-lg border border-transparent bg-white px-2 py-1.5 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition-all hover:border-[var(--brand-border)]"
                       >
                         <span className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[7px] text-lg ${color}`}>
                           {p.imageUrl ? <img src={p.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(p.name, p.category)}
@@ -605,7 +605,7 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
           <span className="absolute bottom-1 right-1 rounded bg-amber-500 px-1 py-0.5 text-[9px] font-bold text-white">Low</span>
         ) : null}
         {sellingUnits.length > 1 ? (
-          <span className="absolute left-1.5 top-1.5 rounded-md border border-[#cfe0ff] bg-white/95 px-1.5 py-0.5 text-[8.5px] font-black text-[#075fff] shadow-sm">
+          <span className="absolute left-1.5 top-1.5 rounded-md border border-[var(--brand-border)] bg-white/95 px-1.5 py-0.5 text-[8.5px] font-black text-[var(--brand)] shadow-sm">
             {sellingUnits.length} pack sizes
           </span>
         ) : null}
@@ -670,7 +670,7 @@ function RecentBillsPanel() {
   }
 
   function badgeClass(label: string): string {
-    if (label === "UPI") return "bg-[#eef4ff] text-[#2563eb]";
+    if (label === "UPI") return "bg-[#eef4ff] text-[var(--brand)]";
     if (label === "Udhar") return "bg-amber-50 text-amber-700";
     if (label === "Bank") return "bg-blue-50 text-blue-700";
     if (label === "Card") return "bg-[#f3e8ff] text-[#7c3aed]";
@@ -757,7 +757,7 @@ function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChoos
     },
     {
       iconEl: <PauseCircle size={15} />,
-      iconBg: "bg-[#eef4ff] text-[#2563eb]",
+      iconBg: "bg-[#eef4ff] text-[var(--brand)]",
       title: "Hold Current Bill",
       description: "Save and resume later",
       hint: "F9",
@@ -816,7 +816,7 @@ function BillingTipsPanel() {
             <span className="h-[13px] w-[13px] shrink-0 text-[#16a34a]">✓</span>
             <span>
               {tip.action}{" "}
-              <span className="inline-flex h-5 min-w-[26px] items-center justify-center rounded-[5px] bg-[#edf4ff] px-1.5 text-[10px] font-black text-[#0057ff]">
+              <span className="inline-flex h-5 min-w-[26px] items-center justify-center rounded-[5px] bg-[var(--brand-soft)] px-1.5 text-[10px] font-black text-[#0057ff]">
                 {tip.key}
               </span>{" "}
               {tip.detail}

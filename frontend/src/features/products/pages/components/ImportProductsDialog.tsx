@@ -254,7 +254,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
           </div>
 
           <label className="flex min-h-16 cursor-pointer items-center gap-3 rounded-[8px] border border-dashed border-[#b9c8dd] bg-white p-4 text-sm transition-colors hover:border-[#0866ff] hover:bg-[#f6f9ff]">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] bg-[#eef5ff] text-[#0866ff]">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[#0866ff]">
               <Upload size={19} />
             </span>
             <span className="min-w-0 flex-1">
@@ -272,7 +272,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
                   <h3 className="text-[13px] font-black text-[#17223b]">Column mapping</h3>
                   <p className="text-[11px] text-[#71809a]">Detected {SOURCE_LABELS[result.source]}. Confirm the financial and packet fields.</p>
                 </div>
-                <span className="rounded-full bg-[#eef5ff] px-2.5 py-1 text-[10px] font-bold text-[#075bd8]">{result.rows.length} data rows</span>
+                <span className="rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-[10px] font-bold text-[#075bd8]">{result.rows.length} data rows</span>
               </div>
               {renderMappingFields(PRIORITY_MAPPING_FIELDS)}
               <details className="rounded-[7px] border border-[#e3e9f2] bg-[#fbfcfe] px-3 py-2">

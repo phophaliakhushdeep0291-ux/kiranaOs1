@@ -82,7 +82,7 @@ function openCheckout(checkout: RetailCheckout) {
       order_id: checkout.orderId,
       handler: (response) => { completed = true; resolve(response); },
       modal: { ondismiss: () => { if (!completed) reject(new Error("Payment checkout was cancelled.")); } },
-      theme: { color: "#075fff" },
+      theme: { color: "var(--brand)" },
       // This bill tender is UPI. Hiding the provider defaults prevents a card or
       // wallet transaction from being posted to the UPI ledger.
       config: {

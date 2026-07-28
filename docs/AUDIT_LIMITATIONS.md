@@ -80,7 +80,7 @@ growth/frequency. Below that they are skipped and report
 `INSUFFICIENT_DATA` — the engine never guesses on thin history. A new shop gets
 arithmetic and control checks immediately, but outlier detection only after it has
 traded for a while. Baselines are recomputed on demand
-(`POST /api/audit/baselines/recompute`); they are not yet on a schedule.
+(`POST /api/audit/baselines/recompute`) and, when the worker is running, daily.
 
 ## 8. Multi-location stock is only partly reconcilable
 
@@ -141,9 +141,13 @@ expense staff-permission checks (E5), counted-cash variance and repeated shortag
 
 ## 15. Operational limitations of this phase
 
-- **Scheduled runs are not yet wired to a scheduler.** The `SCHEDULED` run type,
-  the API and the idempotency all exist; nothing calls them on a timer yet. Runs
-  today are transaction-triggered or manual.
+- **Scheduled runs require the jobs infrastructure.** They are registered on the
+  shared BullMQ scheduler (`AUDIT_SCHEDULED_RUNS_ENABLED`, default on, every 24 h
+  with a 26 h overlapping window), so they only actually run when
+  `QUEUES_ENABLED=true`, Redis is reachable and a worker process is running.
+  Without a worker, runs are transaction-triggered or manual only. The sweep
+  covers shops with activity in the window rather than every shop that ever
+  existed, and caps at 200 shops per tick.
 - **Transaction-triggered evaluation uses an in-process queue.** It is bounded
   (500 items) and sheds load rather than growing; anything dropped is picked up by
   the next manual/scheduled run over that period, because evaluation is
@@ -156,8 +160,11 @@ expense staff-permission checks (E5), counted-cash variance and repeated shortag
   tables, but this has not been measured under real production load.
 - **Period runs are capped** at 2,000 entities per type; the truncation is recorded
   in the run summary rather than hidden.
-- **No `AuditCase` grouping UI yet.** The tables exist; investigation-case grouping
-  and its AI summary are not surfaced in this phase.
+- **Investigation cases group deterministically, and only over open findings.**
+  Grouping is by shared customer, supplier, staff member, locked day or repeated
+  rule, over at most 500 open findings. It does not reason about causation, and a
+  finding can appear in several proposed groups. Closing a case never closes its
+  findings.
 - **Evidence file upload is reference-first.** Binary storage works when object
   storage is configured; the primary path in this phase is references and text.
 

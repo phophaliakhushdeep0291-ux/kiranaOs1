@@ -174,7 +174,7 @@ function CartRow({
             {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{unit.name} · Rs {Number(unit.defaultPrice).toLocaleString("en-IN")}</option>)}
           </select>
         ) : item.sellingUnit ? (
-          <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[#f7faff] px-1.5 py-1 text-[10px] font-bold text-[#31527e]">
+          <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[var(--brand-softer)] px-1.5 py-1 text-[10px] font-bold text-[#31527e]">
             Pack: {item.sellingUnit.name}
           </p>
         ) : null}

@@ -474,7 +474,7 @@ export default function ProductsPage() {
                     <p className="truncate text-[14px] font-black text-[#102347]">{product.name}</p>
                     <p className="mt-0.5 truncate text-[11px] font-semibold capitalize text-[#64748b]">{product.category || "General"} · {unit}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="text-[15px] font-black text-[#075fff]">{rs(price)}</span>
+                      <span className="text-[15px] font-black text-[var(--brand)]">{rs(price)}</span>
                       {outOfStock ? <StatusPill tone="rose">Out of stock</StatusPill> : low ? <StatusPill tone="amber">Low stock</StatusPill> : <StatusPill tone="emerald">{stock} available</StatusPill>}
                     </div>
                   </div>

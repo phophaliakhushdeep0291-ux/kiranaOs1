@@ -141,7 +141,7 @@ export default function AssuranceDashboardPage() {
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(value: string) => value.slice(5)} />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="total" name="All" stroke="#2563eb" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="total" name="All" stroke="var(--brand)" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="critical" name="Critical" stroke="#ef4444" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="high" name="High" stroke="#d97706" strokeWidth={2} dot={false} />
                 </LineChart>
@@ -161,7 +161,7 @@ export default function AssuranceDashboardPage() {
                   <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                   <YAxis type="category" dataKey="category" tick={{ fontSize: 11 }} width={120} />
                   <Tooltip />
-                  <Bar dataKey="count" name="Findings" fill="#2563eb" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count" name="Findings" fill="var(--brand)" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

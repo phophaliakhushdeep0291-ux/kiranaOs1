@@ -207,7 +207,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   <span
                     className={cn(
                       "grid h-8 w-8 shrink-0 place-items-center rounded-[8px]",
-                      item.kind === "product" ? "bg-[#eef6ff] text-[#005dff]" : item.kind === "customer" ? "bg-[#ecfdf5] text-[#059669]" : "bg-[#fef3c7] text-[#b45309]",
+                      item.kind === "product" ? "bg-[#eef6ff] text-[var(--brand)]" : item.kind === "customer" ? "bg-[#ecfdf5] text-[#059669]" : "bg-[#fef3c7] text-[#b45309]",
                     )}
                   >
                     <Icon size={15} aria-hidden="true" />

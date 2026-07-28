@@ -201,7 +201,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
             type="button"
             onClick={submit}
             disabled={pending}
-            style={{ background: mode === "in" ? "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" : "linear-gradient(180deg,#f43f5e 0%,#e11d48 100%)" }}
+            style={{ background: mode === "in" ? "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" : "linear-gradient(180deg,#f43f5e 0%,#e11d48 100%)" }}
             className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95"
           >
             {pending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : mode === "in" ? "Add Stock" : "Remove Stock"}

@@ -101,6 +101,17 @@
   --primary: 221 83% 53%;
   --primary-foreground: 0 0% 100%;
 
+  /* Brand accent — the colour the app is actually painted with.
+     Pages reference these as var(--brand*) instead of a literal hex so the
+     accent picker in Settings → Advanced repaints the whole UI, not just the
+     handful of components wired to --primary. Each [data-accent] block below
+     re-declares the same five tokens on one hue. */
+  --brand: hsl(217 100% 51%);
+  --brand-strong: hsl(220 100% 45%);
+  --brand-soft: hsl(217 100% 96%);
+  --brand-softer: hsl(217 100% 98%);
+  --brand-border: hsl(217 100% 90%);
+
   --secondary: 215 45% 96%;
   --secondary-foreground: 222 47% 11%;
 
@@ -887,8 +898,44 @@
    attribute is present. Dark variants use (0,2,0) to beat both.
 ──────────────────────────────────────────────────────────────────────────── */
 
+/* Emerald (H 152) — this block was missing entirely, so the first swatch in
+   the picker set data-accent="emerald" and nothing matched it. */
+[data-accent="emerald"] {
+  --brand: hsl(152 76% 36%);
+  --brand-strong: hsl(152 76% 28%);
+  --brand-soft: hsl(152 96% 95%);
+  --brand-softer: hsl(152 96% 97%);
+  --brand-border: hsl(152 96% 85%);
+  --primary: 152 76% 36%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 152 76% 36%;
+  --sidebar: 152 50% 10%;
+  --sidebar-border: 152 52% 8%;
+  --sidebar-primary: 152 76% 36%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 152 38% 19%;
+  --sidebar-accent-foreground: 0 0% 97%;
+  --sidebar-ring: 152 76% 40%;
+}
+[data-accent="emerald"].dark {
+  --brand: hsl(152 70% 45%);
+  --brand-strong: hsl(152 70% 37%);
+  --primary: 152 70% 45%;
+  --ring: 152 70% 45%;
+  --sidebar: 152 60% 8%;
+  --sidebar-border: 152 50% 6%;
+  --sidebar-primary: 152 70% 45%;
+  --sidebar-accent: 152 38% 16%;
+  --sidebar-ring: 152 70% 45%;
+}
+
 /* Teal (H 174) */
 [data-accent="teal"] {
+  --brand: hsl(174 70% 47%);
+  --brand-strong: hsl(174 70% 39%);
+  --brand-soft: hsl(174 90% 96%);
+  --brand-softer: hsl(174 90% 98%);
+  --brand-border: hsl(174 90% 88%);
   --primary: 174 62% 37%;
   --primary-foreground: 0 0% 100%;
   --ring: 174 62% 37%;
@@ -912,6 +959,11 @@
 
 /* Blue (H 217) */
 [data-accent="blue"] {
+  --brand: hsl(217 100% 47%);
+  --brand-strong: hsl(217 100% 39%);
+  --brand-soft: hsl(217 100% 96%);
+  --brand-softer: hsl(217 100% 98%);
+  --brand-border: hsl(217 100% 88%);
   --primary: 217 91% 50%;
   --primary-foreground: 0 0% 100%;
   --ring: 217 91% 50%;
@@ -935,6 +987,11 @@
 
 /* Violet (H 263) */
 [data-accent="violet"] {
+  --brand: hsl(263 70% 47%);
+  --brand-strong: hsl(263 70% 39%);
+  --brand-soft: hsl(263 90% 96%);
+  --brand-softer: hsl(263 90% 98%);
+  --brand-border: hsl(263 90% 88%);
   --primary: 263 70% 55%;
   --primary-foreground: 0 0% 100%;
   --ring: 263 70% 55%;
@@ -958,6 +1015,11 @@
 
 /* Rose (H 346) */
 [data-accent="rose"] {
+  --brand: hsl(346 77% 47%);
+  --brand-strong: hsl(346 77% 39%);
+  --brand-soft: hsl(346 97% 96%);
+  --brand-softer: hsl(346 97% 98%);
+  --brand-border: hsl(346 97% 88%);
   --primary: 346 77% 50%;
   --primary-foreground: 0 0% 100%;
   --ring: 346 77% 50%;
@@ -981,6 +1043,11 @@
 
 /* Amber (H 38) — uses dark foreground on primary because amber is light */
 [data-accent="amber"] {
+  --brand: hsl(38 92% 47%);
+  --brand-strong: hsl(38 92% 39%);
+  --brand-soft: hsl(38 100% 96%);
+  --brand-softer: hsl(38 100% 98%);
+  --brand-border: hsl(38 100% 88%);
   --primary: 38 92% 45%;
   --primary-foreground: 30 70% 10%;
   --ring: 38 92% 45%;
@@ -1005,6 +1072,11 @@
 
 /* Orange (H 25) */
 [data-accent="orange"] {
+  --brand: hsl(25 90% 47%);
+  --brand-strong: hsl(25 90% 39%);
+  --brand-soft: hsl(25 100% 96%);
+  --brand-softer: hsl(25 100% 98%);
+  --brand-border: hsl(25 100% 88%);
   --primary: 25 90% 50%;
   --primary-foreground: 0 0% 100%;
   --ring: 25 90% 50%;
@@ -1028,6 +1100,11 @@
 
 /* Slate (H 215) */
 [data-accent="slate"] {
+  --brand: hsl(215 40% 47%);
+  --brand-strong: hsl(215 40% 39%);
+  --brand-soft: hsl(215 60% 96%);
+  --brand-softer: hsl(215 60% 98%);
+  --brand-border: hsl(215 60% 88%);
   --primary: 215 40% 40%;
   --primary-foreground: 0 0% 100%;
   --ring: 215 40% 40%;

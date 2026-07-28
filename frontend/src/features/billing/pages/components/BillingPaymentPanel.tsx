@@ -129,15 +129,15 @@ export function BillingPaymentPanel({
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eaf3ff] text-[#0b63f6]"><Landmark size={17} /></span>}
             label="Bank"
             selected={paymentMode === BillPaymentMode.bank}
-            activeClass="border-[#cfe0ff] bg-[#f3f7ff] text-[#0b63f6]"
+            activeClass="border-[var(--brand-border)] bg-[#f3f7ff] text-[#0b63f6]"
             onClick={() => setPaymentMode(BillPaymentMode.bank)}
           />
           <PayModeBtn
             testId={`button-payment-${SPLIT_PAYMENT}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eef4ff] text-[#2563eb]"><ArrowLeftRight size={17} /></span>}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eef4ff] text-[var(--brand)]"><ArrowLeftRight size={17} /></span>}
             label="Split"
             selected={paymentMode === SPLIT_PAYMENT}
-            activeClass="border-[#cfe0ff] bg-[#f4f8ff] text-[#2563eb]"
+            activeClass="border-[var(--brand-border)] bg-[#f4f8ff] text-[var(--brand)]"
             onClick={() => setPaymentMode(SPLIT_PAYMENT)}
           />
           <PayModeBtn
@@ -179,13 +179,13 @@ export function BillingPaymentPanel({
             <p className={`flex items-center gap-1.5 text-xs font-black ${retailPaymentVerified ? "text-emerald-800" : "text-slate-800"}`}><ShieldCheck size={15} />{retailPaymentVerified ? "Payment verified by provider" : retailPaymentConfigured ? "Provider verification available" : "Operator-confirmed UPI"}</p>
             <p className="mt-0.5 text-[11px] text-slate-600">{retailPaymentVerified ? "This confirmation can be consumed by this bill only once." : retailPaymentRequired ? "Verification is required before this bill can be saved." : retailPaymentConfigured ? "Optional, but recommended for payment assurance." : "Check the merchant app before finalising; no provider is connected."}</p>
           </div>
-          {retailPaymentConfigured && !retailPaymentVerified ? <button type="button" onClick={onVerifyRetailPayment} disabled={retailPaymentLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0753df] disabled:opacity-60">{retailPaymentLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}Verify</button> : null}
+          {retailPaymentConfigured && !retailPaymentVerified ? <button type="button" onClick={onVerifyRetailPayment} disabled={retailPaymentLoading} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#0753df] disabled:opacity-60">{retailPaymentLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}Verify</button> : null}
         </div>
       ) : null}
 
       {/* Amount received (cash/UPI mode) */}
       {showPaymentMode && paymentMode !== SPLIT_PAYMENT && paymentMode !== BillPaymentMode.credit && paymentMode !== BillPaymentMode.gift_card && !(showReceivedAmount || typeof paidAmount === "number" || allowAdvancePayment) ? (
-        <button type="button" onClick={() => setShowReceivedAmount(true)} className="w-full rounded-[8px] border border-dashed border-[#d7e2f1] py-2 text-[11px] font-semibold text-[#536383] transition-colors hover:border-[#b9cdf6] hover:bg-[#f8fbff] hover:text-[#075fff]">
+        <button type="button" onClick={() => setShowReceivedAmount(true)} className="w-full rounded-[8px] border border-dashed border-[#d7e2f1] py-2 text-[11px] font-semibold text-[#536383] transition-colors hover:border-[#b9cdf6] hover:bg-[#f8fbff] hover:text-[var(--brand)]">
           Enter partial or advance payment
         </button>
       ) : null}

@@ -112,7 +112,7 @@ export default function OffersPage() {
           <div className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3.5">
               <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">All Offers & Campaigns</h3>
-              <Button onClick={openCreate} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
+              <Button onClick={openCreate} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
                 <Plus size={15} /> New Offer
               </Button>
             </div>
@@ -122,7 +122,7 @@ export default function OffersPage() {
               <div className="py-12 text-center text-[13px] text-rose-600">Couldn't load offers. Check your connection.</div>
             ) : rows.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-12 text-center">
-                <span className="grid h-12 w-12 place-items-center rounded-full bg-[#eef5ff] text-[#0057ff]"><Ticket size={22} /></span>
+                <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#0057ff]"><Ticket size={22} /></span>
                 <p className="text-[13px] font-bold text-[#102347]">No offers yet</p>
                 <p className="text-[12px] text-[#64748b]">Create a coupon or auto-discount to boost sales.</p>
               </div>
@@ -232,7 +232,7 @@ function CouponTester() {
   });
   return (
     <div className="h-fit rounded-[14px] border border-[#e6ecf4] bg-white p-5 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
-      <div className="mb-3 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-[8px] bg-[#eef5ff] text-[#0057ff]"><Ticket size={15} /></span><h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Coupon tester</h3></div>
+      <div className="mb-3 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[#0057ff]"><Ticket size={15} /></span><h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Coupon tester</h3></div>
       <p className="mb-3 text-[11px] text-[#64748b]">Check what discount applies for a bill — exactly what billing will compute.</p>
       <div className="space-y-2.5">
         <div><Label className="mb-1 block text-[11px] font-semibold text-[#45577a]">Bill subtotal (₹)</Label><Input className="h-9" type="number" value={subtotal} onChange={(e) => setSubtotal(e.target.value)} /></div>
@@ -252,7 +252,7 @@ function CouponTester() {
 }
 
 function Kpi({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "blue" | "violet" | "green" }) {
-  const ring = tone === "blue" ? "bg-[#eef5ff] text-[#0057ff]" : tone === "violet" ? "bg-violet-50 text-violet-600" : "bg-emerald-50 text-emerald-600";
+  const ring = tone === "blue" ? "bg-[var(--brand-soft)] text-[#0057ff]" : tone === "violet" ? "bg-violet-50 text-violet-600" : "bg-emerald-50 text-emerald-600";
   return (
     <div className="rounded-[14px] border border-[#e6ecf4] bg-white px-5 py-4 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
       <div className="flex items-center justify-between">
@@ -330,7 +330,7 @@ function OfferPanel({ open, editing, saving, width, onResizeStart, onClose, onSu
                     onClick={() => form.setValue("type", t.key)}
                     className={cn(
                       "flex flex-col items-center gap-1.5 rounded-[10px] border px-2 py-3 transition-colors",
-                      selected ? "border-[#0057ff] bg-[#eef5ff]" : "border-[#e7edf7] bg-white hover:border-[#cfe0ff]",
+                      selected ? "border-[#0057ff] bg-[var(--brand-soft)]" : "border-[#e7edf7] bg-white hover:border-[var(--brand-border)]",
                     )}
                   >
                     <t.icon size={17} className={selected ? "text-[#0057ff]" : "text-[#536583]"} />
@@ -371,7 +371,7 @@ function OfferPanel({ open, editing, saving, width, onResizeStart, onClose, onSu
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           <div className="grid grid-cols-2 gap-2.5">
             <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+            <Button type="submit" disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><Ticket size={15} /> {editing ? "Save Changes" : "Create Offer"}</>}
             </Button>
           </div>

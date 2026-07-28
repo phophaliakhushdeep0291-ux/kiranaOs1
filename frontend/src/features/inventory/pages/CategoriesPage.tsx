@@ -311,7 +311,7 @@ function CategoryDialog({
           <Button
             type="button"
             onClick={() => onSave({ name, parentId: parentId === "none" ? null : parentId, status })}
-            style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }}
+            style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
             className="h-11 min-w-0 rounded-[10px] font-black text-white hover:opacity-95"
           >
             {editing ? "Update Category" : "Add Category"}

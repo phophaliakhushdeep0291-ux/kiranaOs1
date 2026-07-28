@@ -107,19 +107,19 @@ export default function ProductPricingPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-5">
-      <button onClick={() => navigate("/products")} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[#075fff]"><ArrowLeft size={14} /> Products</button>
+      <button onClick={() => navigate("/products")} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[var(--brand)]"><ArrowLeft size={14} /> Products</button>
       <h1 className="font-display text-xl font-black text-[#0f1e3d]">{product.name} — Pricing</h1>
       <p className="mt-0.5 text-[12px] text-[#6d7c98]">Set quantity slabs, group prices, and customer exceptions. The billing engine uses these automatically.</p>
 
       <div className="mt-4 rounded-2xl border border-[#dce7f7] bg-[#f8fbff] p-3">
         <p className="text-[10.5px] font-black uppercase tracking-wide text-[#6d7c98]">Price rule scope</p>
         <div className="mt-2 grid grid-cols-2 gap-2">
-          <button type="button" disabled={!activeLocationId} onClick={() => setPricingScope("store")} className={`rounded-xl border p-3 text-left transition ${pricingScope === "store" ? "border-[#075fff] bg-white shadow-sm" : "border-transparent bg-transparent"} disabled:opacity-50`}>
-            <span className="flex items-center gap-2 text-[12px] font-black text-[#13254a]"><MapPin size={14} className="text-[#075fff]" />Current store</span>
+          <button type="button" disabled={!activeLocationId} onClick={() => setPricingScope("store")} className={`rounded-xl border p-3 text-left transition ${pricingScope === "store" ? "border-[var(--brand)] bg-white shadow-sm" : "border-transparent bg-transparent"} disabled:opacity-50`}>
+            <span className="flex items-center gap-2 text-[12px] font-black text-[#13254a]"><MapPin size={14} className="text-[var(--brand)]" />Current store</span>
             <span className="mt-1 block text-[10.5px] text-[#6d7c98]">Overrides company prices only at this location.</span>
           </button>
-          <button type="button" onClick={() => setPricingScope("all")} className={`rounded-xl border p-3 text-left transition ${pricingScope === "all" ? "border-[#075fff] bg-white shadow-sm" : "border-transparent bg-transparent"}`}>
-            <span className="flex items-center gap-2 text-[12px] font-black text-[#13254a]"><Building2 size={14} className="text-[#075fff]" />All stores</span>
+          <button type="button" onClick={() => setPricingScope("all")} className={`rounded-xl border p-3 text-left transition ${pricingScope === "all" ? "border-[var(--brand)] bg-white shadow-sm" : "border-transparent bg-transparent"}`}>
+            <span className="flex items-center gap-2 text-[12px] font-black text-[#13254a]"><Building2 size={14} className="text-[var(--brand)]" />All stores</span>
             <span className="mt-1 block text-[10.5px] text-[#6d7c98]">A company-wide default inherited by every location.</span>
           </button>
         </div>
@@ -143,7 +143,7 @@ export default function ProductPricingPage() {
                 key={row.id ?? row.unitCode}
                 type="button"
                 onClick={() => setSelectedUnitKey(row.id ?? row.unitCode)}
-                className={`relative rounded-xl border p-3 text-left transition-colors ${active ? "border-[#075fff] bg-[#eef4ff]" : "border-[#e6ecf4] bg-white hover:border-[#b9cef7]"}`}
+                className={`relative rounded-xl border p-3 text-left transition-colors ${active ? "border-[var(--brand)] bg-[#eef4ff]" : "border-[#e6ecf4] bg-white hover:border-[#b9cef7]"}`}
               >
                 <span className="flex items-start justify-between gap-2">
                   <span>
@@ -232,7 +232,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function Section({ icon, title, hint, children }: { icon: React.ReactNode; title: string; hint: string; children: React.ReactNode }) {
   return (
     <div className="mt-4 rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-      <p className="inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><span className="text-[#075fff]">{icon}</span>{title}</p>
+      <p className="inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><span className="text-[var(--brand)]">{icon}</span>{title}</p>
       <p className="mt-0.5 text-[11.5px] text-[#8290a8]">{hint}</p>
       <div className="mt-3 space-y-2">{children}</div>
     </div>
@@ -251,8 +251,8 @@ function Row({ main, price, onDelete, busy }: { main: string; price: string; onD
   );
 }
 
-const inputCls = "h-9 rounded-lg border border-[#dce5f1] bg-white px-2 text-[13px] outline-none focus:border-[#075fff]";
-const addBtn = "inline-flex h-9 items-center gap-1 rounded-lg bg-[#075fff] px-3 text-[12px] font-bold text-white disabled:opacity-50";
+const inputCls = "h-9 rounded-lg border border-[#dce5f1] bg-white px-2 text-[13px] outline-none focus:border-[var(--brand)]";
+const addBtn = "inline-flex h-9 items-center gap-1 rounded-lg bg-[var(--brand)] px-3 text-[12px] font-bold text-white disabled:opacity-50";
 
 function SlabAdd({ unit, onAdd, disabled }: { unit: string; onAdd: (min: number, max: number | null, price: number) => void; disabled: boolean }) {
   const [min, setMin] = useState(""); const [max, setMax] = useState(""); const [price, setPrice] = useState("");
@@ -301,7 +301,7 @@ function SellingUnitAdd({ product, onAdd, disabled }: { product: Product; onAdd:
 
   if (!open) {
     return (
-      <button type="button" disabled={disabled} onClick={() => setOpen(true)} className="mt-1 inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-[#9dbcf4] px-3 text-[12px] font-black text-[#075fff] hover:bg-[#f5f8ff] disabled:opacity-50">
+      <button type="button" disabled={disabled} onClick={() => setOpen(true)} className="mt-1 inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed border-[#9dbcf4] px-3 text-[12px] font-black text-[var(--brand)] hover:bg-[#f5f8ff] disabled:opacity-50">
         <Plus size={14} /> Add another pack / unit
       </button>
     );
@@ -309,7 +309,7 @@ function SellingUnitAdd({ product, onAdd, disabled }: { product: Product; onAdd:
 
   return (
     <div className="rounded-xl border border-[#dce7f7] bg-[#f9fbff] p-3">
-      <p className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-black text-[#13254a]"><Box size={14} className="text-[#075fff]" />New selling unit</p>
+      <p className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-black text-[#13254a]"><Box size={14} className="text-[var(--brand)]" />New selling unit</p>
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Sell as
           <select className={`${inputCls} mt-1 w-full normal-case`} value={unitType} onChange={(event) => setUnitType(event.target.value)}>

@@ -131,6 +131,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/assurance/findings": "Assurance Findings",
   "/assurance/evidence": "Evidence Requests",
   "/assurance/review-queue": "Review Queue",
+  "/assurance/cases": "Investigation Cases",
   "/assurance/runs": "Audit Runs",
   "/assurance/rules": "Rules & Thresholds",
   "/assurance/report": "Financial Assurance Report",
@@ -238,6 +239,7 @@ const NAV: NavItem[] = [
       { href: "/assurance/findings", label: "Findings" },
       { href: "/assurance/review-queue", label: "Review Queue" },
       { href: "/assurance/evidence", label: "Evidence Requests" },
+      { href: "/assurance/cases", label: "Investigation Cases" },
       { href: "/assurance/runs", label: "Audit Runs" },
       { href: "/assurance/rules", label: "Rules & Thresholds" },
       { href: "/assurance/report", label: "Assurance Report" },
@@ -294,6 +296,7 @@ const MOBILE_MENU: MobileMenuItem[] = [
       { href: "/assurance/findings", label: "Findings" },
       { href: "/assurance/review-queue", label: "Review Queue" },
       { href: "/assurance/evidence", label: "Evidence Requests" },
+      { href: "/assurance/cases", label: "Investigation Cases" },
       { href: "/assurance/runs", label: "Audit Runs" },
       { href: "/assurance/rules", label: "Rules & Thresholds" },
       { href: "/assurance/report", label: "Assurance Report" },
@@ -738,7 +741,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <div className="flex min-w-0 items-center gap-4">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Open navigation" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-[#075fff] transition-colors active:bg-[#eef4ff] hover:bg-[#eef4ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#075fff]/30">
+                  <button type="button" aria-label="Open navigation" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-[var(--brand)] transition-colors active:bg-[#eef4ff] hover:bg-[#eef4ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/30">
                     <Menu size={29} strokeWidth={2} aria-hidden="true" />
                   </button>
                 </DropdownMenuTrigger>
@@ -747,7 +750,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
               <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Ar<span className="text-[#075fff]">tha</span></span>
+                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Ar<span className="text-[var(--brand)]">tha</span></span>
                 <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">{btDef.navConfig.tagline}</span>
               </Link>
             </div>
@@ -758,7 +761,7 @@ export function Layout({ children }: { children: ReactNode }) {
               </Link>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Open profile menu" className="grid h-11 w-11 place-items-center rounded-full bg-[#075fff] text-[12px] font-black text-white shadow-[0_10px_22px_rgba(7,95,255,0.18)] ring-4 ring-[#eef4ff]">
+                  <button type="button" aria-label="Open profile menu" className="grid h-11 w-11 place-items-center rounded-full bg-[var(--brand)] text-[12px] font-black text-white shadow-[0_10px_22px_rgba(7,95,255,0.18)] ring-4 ring-[#eef4ff]">
                     {initials(storeName)}
                   </button>
                 </DropdownMenuTrigger>
@@ -807,12 +810,12 @@ export function Layout({ children }: { children: ReactNode }) {
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200",
-                      active ? "text-[#075fff]" : "text-[#64748b] active:text-[#102347]",
+                      active ? "text-[var(--brand)]" : "text-[#64748b] active:text-[#102347]",
                     )}
                   >
                     <div className={cn(
                       "flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200",
-                      active ? "bg-[#edf4ff] text-[#075fff] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent",
+                      active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent",
                     )}>
                       <Icon size={20} aria-hidden="true" />
                     </div>
@@ -829,10 +832,10 @@ export function Layout({ children }: { children: ReactNode }) {
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200",
-                      active ? "text-[#075fff]" : "text-[#64748b] active:text-[#102347]",
+                      active ? "text-[var(--brand)]" : "text-[#64748b] active:text-[#102347]",
                     )}
                   >
-                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[#edf4ff] text-[#075fff] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
+                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
                       <Icon size={20} aria-hidden="true" />
                     </div>
                     <span className="leading-none">{label}</span>
@@ -879,7 +882,7 @@ function MobileMenuList({ loc }: { loc: string }) {
                 href={href}
                 className={cn(
                   "flex cursor-pointer items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-black text-[#102347]",
-                  active && "bg-[#eef4ff] text-[#075fff]",
+                  active && "bg-[#eef4ff] text-[var(--brand)]",
                 )}
               >
                 <Icon size={16} aria-hidden="true" />
@@ -896,7 +899,7 @@ function MobileMenuList({ loc }: { loc: string }) {
                         href={child.href}
                         className={cn(
                           "flex cursor-pointer items-center rounded-[7px] px-2.5 py-2 text-[12px] font-bold text-[#53627d]",
-                          subActive && "bg-[#f5f8ff] text-[#075fff]",
+                          subActive && "bg-[#f5f8ff] text-[var(--brand)]",
                         )}
                       >
                         {child.label}

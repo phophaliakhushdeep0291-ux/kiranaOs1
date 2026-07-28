@@ -171,7 +171,7 @@ export default function SyncSettingsPage() {
 
         {/* Pending Sync Queue */}
         <Card>
-          <CardHead icon={<Upload size={15} />} title="Pending Sync Queue" sub="Changes waiting to reach the cloud" action={(pendingCount + failedCount) > 0 ? <button onClick={handleSync} className="text-[12px] font-bold text-[#005dff] hover:underline">Retry all</button> : undefined} />
+          <CardHead icon={<Upload size={15} />} title="Pending Sync Queue" sub="Changes waiting to reach the cloud" action={(pendingCount + failedCount) > 0 ? <button onClick={handleSync} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Retry all</button> : undefined} />
           <div className="px-5 pb-5">
             {(pendingCount + failedCount + conflictCount) === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
@@ -220,7 +220,7 @@ export default function SyncSettingsPage() {
                 <RowToggle label="Integrity" desc="Verified before recovery" pill={<Badge tone="blue">SHA-256</Badge>} />
                 <RowToggle label="Retention" desc="Expired objects are deleted; audit metadata remains" pill={<Badge>{backupRetentionDays} days</Badge>} />
                 <RowToggle label="Sensitive credentials" desc="Passwords, PINs, sessions, API keys and webhook secrets" pill={<Badge tone="green">Excluded</Badge>} last />
-                <div className="mt-3 flex items-start gap-2 rounded-[10px] bg-[#eef5ff] px-3 py-2 text-[11px] font-medium leading-relaxed text-[#34507f]">
+                <div className="mt-3 flex items-start gap-2 rounded-[10px] bg-[var(--brand-soft)] px-3 py-2 text-[11px] font-medium leading-relaxed text-[#34507f]">
                   <ShieldCheck size={14} className="mt-0.5 shrink-0" />
                   Continuous device sync and portable snapshots are separate protections. A snapshot is created only after owner-PIN approval.
                 </div>
@@ -231,7 +231,7 @@ export default function SyncSettingsPage() {
 
         {/* Backup History */}
         <Card>
-          <CardHead icon={<Cloud size={15} />} title="Backup history" sub="Server-confirmed encrypted artifacts" action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="text-[12px] font-bold text-[#005dff] hover:underline">Refresh</button> : undefined} />
+          <CardHead icon={<Cloud size={15} />} title="Backup history" sub="Server-confirmed encrypted artifacts" action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Refresh</button> : undefined} />
           <div className="space-y-2 px-5 pb-4">
             {backupHistoryLoading ? (
               <div className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={15} className="animate-spin" /> Loading backup history</div>
@@ -239,13 +239,13 @@ export default function SyncSettingsPage() {
               <div className="py-8 text-center text-[12px] text-[#64748b]">Backup history is hidden for cashier accounts.</div>
             ) : backups.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-7 text-center">
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-[#eef5ff] text-[#005dff]"><Archive size={20} /></span>
+                <span className="grid h-11 w-11 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Archive size={20} /></span>
                 <p className="text-[13px] font-bold text-[#102347]">No portable snapshot yet</p>
                 <p className="max-w-sm text-[11px] text-[#64748b]">Create one before a major import, migration, device replacement, or support recovery.</p>
               </div>
             ) : backups.slice(0, 8).map((artifact) => (
               <div key={artifact.id} className="flex flex-col gap-3 rounded-[11px] border border-[#e7edf7] px-3.5 py-3 sm:flex-row sm:items-center">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[#eef5ff] text-[#005dff]"><Archive size={16} /></span>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><Archive size={16} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-[12px] font-bold text-[#102347]">{backupTime(artifact.completed_at ?? artifact.created_at)}</p>
@@ -295,7 +295,7 @@ function QueueRow({ label, tone, status, onRetry }: { label: string; tone: "ambe
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone === "red" ? "bg-rose-500" : "bg-amber-500"}`} />
       <p className="flex-1 text-[12px] font-semibold text-[#344668]">{label}</p>
       <Badge tone={tone}>{status}</Badge>
-      {onRetry && <button onClick={onRetry} className="text-[12px] font-bold text-[#005dff] hover:underline">Retry</button>}
+      {onRetry && <button onClick={onRetry} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Retry</button>}
     </div>
   );
 }

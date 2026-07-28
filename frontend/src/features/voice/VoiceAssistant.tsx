@@ -401,7 +401,7 @@ export function VoiceAssistant() {
           data-voice-mic="true"
           size="icon"
           variant="ghost"
-          className={`touch-none rounded-full border backdrop-blur-md transition-all duration-200 ${dragging ? "cursor-grabbing" : "cursor-grab"} ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-11 w-11 border-[#cfe0ff] bg-white text-[#075fff] shadow-[0_12px_28px_rgba(7,95,255,0.2)] hover:-translate-y-0.5 hover:bg-[#075fff] hover:text-white hover:shadow-2xl"}`}
+          className={`touch-none rounded-full border backdrop-blur-md transition-all duration-200 ${dragging ? "cursor-grabbing" : "cursor-grab"} ${open ? "h-10 w-10 bg-primary text-primary-foreground shadow-xl hover:bg-primary/90 hover:text-primary-foreground" : "h-11 w-11 border-[var(--brand-border)] bg-white text-[var(--brand)] shadow-[0_12px_28px_rgba(7,95,255,0.2)] hover:-translate-y-0.5 hover:bg-[var(--brand)] hover:text-white hover:shadow-2xl"}`}
           onPointerDown={handleMovePointerDown}
           onClick={() => {
             if (suppressMicClickRef.current) {

@@ -393,3 +393,94 @@ export function getAssuranceReport(params: { from: string; to: string }) {
 export function recomputeBaselines() {
   return apiRequest<{ baselineCount: number }>("/audit/baselines/recompute", { method: "POST" });
 }
+
+// ── investigation cases ───────────────────────────────────────
+
+export type CaseStatus = "OPEN" | "UNDER_REVIEW" | "CLOSED";
+
+export type CaseSummaryRow = {
+  caseId: string;
+  title: string;
+  summary: string | null;
+  status: CaseStatus;
+  riskLevel: RiskLevel;
+  findingCount: number;
+  totalAmountPaise: number | null;
+  totalAmountRupees: number | null;
+  createdByUserId: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CaseDetail = CaseSummaryRow & {
+  findings: Array<{
+    findingId: string;
+    title: string;
+    status: FindingStatus;
+    riskLevel: RiskLevel;
+    riskScore: number;
+    sourceEntityType: EntityType;
+    sourceEntityId: string;
+    amountPaise: number | null;
+    ruleCodes: string[];
+    createdAt: string;
+  }>;
+};
+
+export type CaseProposal = {
+  key: string;
+  strategy: "CUSTOMER" | "SUPPLIER" | "STAFF" | "LOCKED_DAY" | "RULE_PATTERN";
+  label: string;
+  findingCount: number;
+  riskLevel: RiskLevel;
+  maxRiskScore: number;
+  totalAmountPaise: number;
+  totalAmountRupees: number;
+  findingIds: string[];
+  ruleCodes: string[];
+};
+
+export function listCaseProposals(params?: { minimumFindings?: number }) {
+  return apiRequest<{ groups: CaseProposal[]; findingsConsidered: number }>(`/audit/cases/proposals${qs(params)}`);
+}
+
+export function listCases(params?: { page?: number; limit?: number; status?: CaseStatus }) {
+  return apiRequest<{ cases: CaseSummaryRow[]; pagination: Pagination }>(`/audit/cases${qs(params)}`);
+}
+
+export function getCase(caseId: string) {
+  return apiRequest<CaseDetail>(`/audit/cases/${caseId}`);
+}
+
+export function createCase(body: { title: string; summary?: string; findingIds: string[] }) {
+  return apiRequest<CaseSummaryRow>("/audit/cases", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function summarizeCase(caseId: string) {
+  return apiRequest<{
+    caseId: string;
+    summary: string;
+    financialImpact: string;
+    recommendedNextStep: string;
+    source: "ai_provider" | "deterministic_fallback";
+    provider: string;
+    degraded: boolean;
+    disclaimer: string;
+  }>(`/audit/cases/${caseId}/summary`, { method: "POST", body: JSON.stringify({}) });
+}
+
+export function updateCaseStatus(caseId: string, body: { status: CaseStatus }) {
+  return apiRequest<CaseSummaryRow>(`/audit/cases/${caseId}/status`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export function classifyEvidenceDescription(body: { description: string }) {
+  return apiRequest<{
+    evidenceType: string | null;
+    confidence: number;
+    reasoning: string;
+    source: "ai_provider" | "deterministic_fallback";
+    advisory: true;
+    note: string;
+  }>("/audit/evidence/classify", { method: "POST", body: JSON.stringify(body) });
+}

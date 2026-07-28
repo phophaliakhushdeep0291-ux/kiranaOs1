@@ -269,7 +269,7 @@ export default function CustomerOrderPage() {
   if (state.kind === "loading") {
     return (
       <CenterScreen>
-        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#dbe6f5] border-t-[#075fff]" />
+        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#dbe6f5] border-t-[var(--brand)]" />
         <p className="mt-4 text-sm font-medium text-[#5b6b85]">Loading shop...</p>
       </CenterScreen>
     );
@@ -469,12 +469,12 @@ function StorefrontHeader({
   return (
     <header className="sticky top-0 z-30 border-b border-[#e4ecf7] bg-white/95 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-2 pt-3 sm:px-6 lg:hidden">
-        <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#075fff] shadow-[0_8px_24px_rgba(20,40,90,0.06)]">
+        <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[var(--brand)] shadow-[0_8px_24px_rgba(20,40,90,0.06)]">
           <Menu size={21} />
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[#075fff] text-white shadow-[0_12px_30px_rgba(7,95,255,0.26)]">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_12px_30px_rgba(7,95,255,0.26)]">
               <ShoppingCart size={21} />
             </div>
             <div className="min-w-0">
@@ -543,25 +543,25 @@ function StorefrontHeader({
           </div>
         </div>
 
-        <div className="hidden rounded-2xl border border-[#dfe8f5] bg-[#f7faff] p-1 md:flex">
+        <div className="hidden rounded-2xl border border-[#dfe8f5] bg-[var(--brand-softer)] p-1 md:flex">
           <button
             type="button"
             onClick={() => onFulfillment("delivery")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black ${fulfillment === "delivery" ? "bg-[#eaf2ff] text-[#075fff] shadow-sm" : "text-[#52617a]"}`}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black ${fulfillment === "delivery" ? "bg-[#eaf2ff] text-[var(--brand)] shadow-sm" : "text-[#52617a]"}`}
           >
             <Truck size={16} /> Delivery
           </button>
           <button
             type="button"
             onClick={() => onFulfillment("pickup")}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black ${fulfillment === "pickup" ? "bg-white text-[#075fff] shadow-sm" : "text-[#52617a]"}`}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black ${fulfillment === "pickup" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#52617a]"}`}
           >
             <ShoppingBag size={16} /> Self Pickup
           </button>
         </div>
 
         <div className="hidden items-center gap-2 rounded-2xl border border-[#dfe8f5] bg-white px-3 py-2 shadow-[0_8px_24px_rgba(20,40,90,0.04)] md:flex">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eaf2ff] text-sm font-black text-[#075fff]">RS</span>
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eaf2ff] text-sm font-black text-[var(--brand)]">RS</span>
           <div>
             <p className="text-xs font-black text-[#14213d]">Customer</p>
             <p className="text-[11px] font-semibold text-[#7d8ba4]">Guest order</p>
@@ -608,12 +608,12 @@ function ShopProductsSection({
               Popularity <ChevronDown size={14} />
             </button>
           </div>
-          <div className="flex rounded-xl border border-[#dfe8f5] bg-[#f7faff] p-1">
+          <div className="flex rounded-xl border border-[#dfe8f5] bg-[var(--brand-softer)] p-1">
             <button
               type="button"
               aria-label="Grid view"
               onClick={() => setViewMode("grid")}
-              className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "grid" ? "bg-white text-[#075fff] shadow-sm" : "text-[#70809c]"}`}
+              className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "grid" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#70809c]"}`}
             >
               <LayoutGrid size={16} />
             </button>
@@ -621,7 +621,7 @@ function ShopProductsSection({
               type="button"
               aria-label="List view"
               onClick={() => setViewMode("list")}
-              className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "list" ? "bg-white text-[#075fff] shadow-sm" : "text-[#70809c]"}`}
+              className={`grid h-8 w-8 place-items-center rounded-lg ${viewMode === "list" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#70809c]"}`}
             >
               <List size={16} />
             </button>
@@ -668,7 +668,7 @@ function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefr
               type="button"
               key={item.view}
               onClick={() => onView(item.view)}
-              className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-black shadow-[0_8px_20px_rgba(20,40,90,0.04)] ${active ? "border-[#075fff] bg-[#075fff] text-white" : "border-[#dfe8f5] bg-white text-[#243653]"}`}
+              className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-black shadow-[0_8px_20px_rgba(20,40,90,0.04)] ${active ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe8f5] bg-white text-[#243653]"}`}
             >
               <Icon size={15} />
               {item.label.replace(" & Credits", "")}
@@ -696,7 +696,7 @@ function CustomerSidebar({
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] flex-col overflow-y-auto bg-[#061a39] px-4 py-6 text-white lg:flex xl:w-[280px]">
       <div className="flex items-center gap-3">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#075fff] text-white shadow-[0_16px_36px_rgba(7,95,255,0.35)]">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_16px_36px_rgba(7,95,255,0.35)]">
           <ShoppingCart size={25} />
         </div>
         <div>
@@ -714,11 +714,11 @@ function CustomerSidebar({
               type="button"
               key={item.view}
               onClick={() => onView(item.view)}
-              className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${active ? "bg-[#075fff] text-white shadow-[0_12px_30px_rgba(7,95,255,0.32)]" : "text-[#dbe7fb] hover:bg-white/8"}`}
+              className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${active ? "bg-[var(--brand)] text-white shadow-[0_12px_30px_rgba(7,95,255,0.32)]" : "text-[#dbe7fb] hover:bg-white/8"}`}
             >
               <Icon size={19} />
               <span className="min-w-0 flex-1">{item.label}</span>
-              {item.view === "orders" && trackedOrderId ? <span className="rounded-lg bg-[#075fff] px-2 py-0.5 text-xs">1</span> : item.badge ? <span className="rounded-lg bg-[#075fff] px-2 py-0.5 text-xs">{item.badge}</span> : null}
+              {item.view === "orders" && trackedOrderId ? <span className="rounded-lg bg-[var(--brand)] px-2 py-0.5 text-xs">1</span> : item.badge ? <span className="rounded-lg bg-[var(--brand)] px-2 py-0.5 text-xs">{item.badge}</span> : null}
               {item.sub ? <span className="text-[11px] text-[#2be07e]">{item.sub}</span> : null}
             </button>
           );
@@ -765,7 +765,7 @@ function CategoryRail({
               onClick={() => onSelect(cat.key)}
               className={`flex h-[72px] w-[74px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border bg-white text-center text-[10px] font-black transition sm:h-[82px] sm:w-[92px] sm:gap-2 sm:text-[11px] ${
                 selected
-                  ? "border-[#075fff] text-[#075fff] shadow-[0_14px_34px_rgba(7,95,255,0.16)]"
+                  ? "border-[var(--brand)] text-[var(--brand)] shadow-[0_14px_34px_rgba(7,95,255,0.16)]"
                   : "border-[#dfe8f5] text-[#172544] hover:border-[#bcd0f4]"
               }`}
             >
@@ -790,7 +790,7 @@ function CategoryRail({
 function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; title: string; body: string }) {
   const styles = {
     green: "border-[#d8f5e2] bg-[#f1fbf5] text-[#0f9f4a]",
-    blue: "border-[#dce8ff] bg-[#f4f8ff] text-[#075fff]",
+    blue: "border-[#dce8ff] bg-[#f4f8ff] text-[var(--brand)]",
     orange: "border-[#ffe4be] bg-[#fff8ed] text-[#f97316]",
   }[tone];
   const Icon = tone === "green" ? PackageCheck : tone === "blue" ? Clock : Store;
@@ -810,12 +810,12 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
 function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
   return (
     <article className="group rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_12px_35px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
-      <div className="relative grid aspect-[1.08/1] place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[#eef5ff] sm:aspect-square">
+      <div className="relative grid aspect-[1.08/1] place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[var(--brand-soft)] sm:aspect-square">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-[76%] w-[76%] object-contain transition duration-300 group-hover:scale-105" />
         ) : (
           <div className="grid place-items-center gap-1 text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-[#075fff] shadow-[0_12px_30px_rgba(7,95,255,0.12)]">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-[var(--brand)] shadow-[0_12px_30px_rgba(7,95,255,0.12)]">
               <PackageCheck size={24} />
             </span>
             <span className="font-display text-lg font-black text-[#b9c6dc]">{product.name.charAt(0).toUpperCase()}</span>
@@ -839,7 +839,7 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
         <button
           type="button"
           onClick={() => onChange(1)}
-          className="mt-2 flex h-9 w-full items-center justify-center rounded-xl border border-[#cfe0ff] bg-[#f8fbff] text-sm font-black text-[#075fff] transition hover:bg-[#eaf2ff] sm:mt-3 sm:h-10"
+          className="mt-2 flex h-9 w-full items-center justify-center rounded-xl border border-[var(--brand-border)] bg-[#f8fbff] text-sm font-black text-[var(--brand)] transition hover:bg-[#eaf2ff] sm:mt-3 sm:h-10"
         >
           Add
         </button>
@@ -851,11 +851,11 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
 function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-[#e3ebf7] bg-white p-3">
-      <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#f8fbff] to-[#eef5ff]">
+      <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#f8fbff] to-[var(--brand-soft)]">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-14 w-14 object-contain" />
         ) : (
-          <PackageCheck size={24} className="text-[#075fff]" />
+          <PackageCheck size={24} className="text-[var(--brand)]" />
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -868,7 +868,7 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
           <QuantityStepper qty={qty} onChange={onChange} compact />
         </div>
       ) : (
-        <button type="button" onClick={() => onChange(1)} className="rounded-xl border border-[#cfe0ff] px-4 py-2 text-sm font-black text-[#075fff]">
+        <button type="button" onClick={() => onChange(1)} className="rounded-xl border border-[var(--brand-border)] px-4 py-2 text-sm font-black text-[var(--brand)]">
           Add
         </button>
       )}
@@ -879,11 +879,11 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
 function QuantityStepper({ qty, onChange, compact = false }: { qty: number; onChange: (next: number) => void; compact?: boolean }) {
   return (
     <div className={`mt-2 flex items-center overflow-hidden rounded-xl border border-[#d9e4f2] bg-[#f8fbff] sm:mt-3 ${compact ? "mt-0 sm:mt-0" : ""}`}>
-      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-9 flex-1 place-items-center text-[#075fff] sm:h-10">
+      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-9 flex-1 place-items-center text-[var(--brand)] sm:h-10">
         <Minus size={16} />
       </button>
       <span className="grid h-9 min-w-9 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums sm:h-10 sm:min-w-10">{qty}</span>
-      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-9 flex-1 place-items-center text-[#075fff] sm:h-10">
+      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-9 flex-1 place-items-center text-[var(--brand)] sm:h-10">
         <Plus size={16} />
       </button>
     </div>
@@ -956,14 +956,14 @@ function OrderSummaryPanel({
           <button
             type="button"
             onClick={() => setFulfillment("delivery")}
-            className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "delivery" ? "bg-[#eaf2ff] text-[#075fff]" : "text-[#52617a]"}`}
+            className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "delivery" ? "bg-[#eaf2ff] text-[var(--brand)]" : "text-[#52617a]"}`}
           >
             Delivery
           </button>
           <button
             type="button"
             onClick={() => setFulfillment("pickup")}
-            className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "pickup" ? "bg-[#eaf2ff] text-[#075fff]" : "text-[#52617a]"}`}
+            className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "pickup" ? "bg-[#eaf2ff] text-[var(--brand)]" : "text-[#52617a]"}`}
           >
             Self Pickup
           </button>
@@ -982,7 +982,7 @@ function OrderSummaryPanel({
         type="button"
         disabled={!canPlace || placing}
         onClick={onPlace}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#075fff] py-4 text-sm font-black text-white shadow-[0_18px_38px_rgba(7,95,255,0.24)] disabled:cursor-not-allowed disabled:bg-[#b8c6dc] disabled:shadow-none"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand)] py-4 text-sm font-black text-white shadow-[0_18px_38px_rgba(7,95,255,0.24)] disabled:cursor-not-allowed disabled:bg-[#b8c6dc] disabled:shadow-none"
       >
         {placing ? <><Loader2 size={17} className="animate-spin" /> Placing order...</> : <>Place Order <ChevronRight size={17} /></>}
       </button>
@@ -1001,16 +1001,16 @@ function useOrderTotalsShape() {
 function CartLine({ item, onQtyChange }: { item: CartItem; onQtyChange: (id: string, next: number) => void }) {
   return (
     <div className="grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-[#edf2f8] bg-white p-2">
-      <div className="grid h-12 w-12 place-items-center rounded-xl bg-[#f7faff]">
+      <div className="grid h-12 w-12 place-items-center rounded-xl bg-[var(--brand-softer)]">
         {item.product.imageUrl ? <img src={item.product.imageUrl} alt="" className="h-11 w-11 object-contain" /> : <ShoppingBag size={18} className="text-[#9ca9bd]" />}
       </div>
       <div className="min-w-0">
         <p className="truncate text-sm font-black text-[#102347]">{item.product.name}</p>
         <p className="text-xs font-bold text-[#61718c]">{formatRs(item.product.price)}</p>
         <div className="mt-1 flex w-24 items-center overflow-hidden rounded-lg border border-[#d9e4f2]">
-          <button type="button" onClick={() => onQtyChange(item.product.id, item.qty - 1)} className="grid h-7 flex-1 place-items-center text-[#075fff]"><Minus size={13} /></button>
+          <button type="button" onClick={() => onQtyChange(item.product.id, item.qty - 1)} className="grid h-7 flex-1 place-items-center text-[var(--brand)]"><Minus size={13} /></button>
           <span className="grid h-7 w-8 place-items-center border-x border-[#d9e4f2] text-xs font-black">{item.qty}</span>
-          <button type="button" onClick={() => onQtyChange(item.product.id, item.qty + 1)} className="grid h-7 flex-1 place-items-center text-[#075fff]"><Plus size={13} /></button>
+          <button type="button" onClick={() => onQtyChange(item.product.id, item.qty + 1)} className="grid h-7 flex-1 place-items-center text-[var(--brand)]"><Plus size={13} /></button>
         </div>
       </div>
       <div className="text-right">
@@ -1027,7 +1027,7 @@ function PriceBreakdown({ totals }: { totals: ReturnType<typeof useOrderTotalsSh
       <Row label="Subtotal" value={formatRs(totals.subtotal)} />
       <div className="mt-3 flex items-center justify-between border-t border-[#edf2f8] pt-3">
         <span className="text-base font-black">Estimated item total</span>
-        <span className="font-display text-2xl font-black text-[#075fff]">{formatRs(totals.grandTotal)}</span>
+        <span className="font-display text-2xl font-black text-[var(--brand)]">{formatRs(totals.grandTotal)}</span>
       </div>
       <p className="text-[11px] font-semibold leading-4 text-[#71809a]">The store confirms taxes, delivery charges, discounts, and the final payable amount before billing.</p>
     </div>
@@ -1054,7 +1054,7 @@ function CustomerDetailsFields({
   mobileOk: boolean;
   compact?: boolean;
 }) {
-  const input = "w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-[#075fff]";
+  const input = "w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-[var(--brand)]";
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
       <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Customer name" className={input} />
@@ -1072,7 +1072,7 @@ function MobileCartBar({ count, amount, disabled, onOpen }: { count: number; amo
   if (disabled) return null;
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#e4ecf7] bg-white/95 p-3 backdrop-blur lg:hidden">
-      <button type="button" onClick={onOpen} className="mx-auto flex w-full max-w-xl items-center gap-3 rounded-2xl bg-[#075fff] px-4 py-3 text-white shadow-[0_18px_42px_rgba(7,95,255,0.28)]">
+      <button type="button" onClick={onOpen} className="mx-auto flex w-full max-w-xl items-center gap-3 rounded-2xl bg-[var(--brand)] px-4 py-3 text-white shadow-[0_18px_42px_rgba(7,95,255,0.28)]">
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/15">
           <ShoppingCart size={20} />
         </span>
@@ -1135,9 +1135,9 @@ function CheckoutSheet({
           <PriceBreakdown totals={totals} />
         </div>
 
-        <div className="mt-4 flex rounded-xl border border-[#dfe8f5] bg-[#f7faff] p-1">
-          <button type="button" onClick={() => setFulfillment("delivery")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "delivery" ? "bg-white text-[#075fff] shadow-sm" : "text-[#52617a]"}`}>Delivery</button>
-          <button type="button" onClick={() => setFulfillment("pickup")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "pickup" ? "bg-white text-[#075fff] shadow-sm" : "text-[#52617a]"}`}>Self Pickup</button>
+        <div className="mt-4 flex rounded-xl border border-[#dfe8f5] bg-[var(--brand-softer)] p-1">
+          <button type="button" onClick={() => setFulfillment("delivery")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "delivery" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#52617a]"}`}>Delivery</button>
+          <button type="button" onClick={() => setFulfillment("pickup")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "pickup" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#52617a]"}`}>Self Pickup</button>
         </div>
 
         <div className="mt-4">
@@ -1154,7 +1154,7 @@ function CheckoutSheet({
           </div>
         )}
 
-        <button type="button" disabled={!canPlace || placing} onClick={onPlace} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#075fff] py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-[#b8c6dc]">
+        <button type="button" disabled={!canPlace || placing} onClick={onPlace} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand)] py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-[#b8c6dc]">
           {placing ? <><Loader2 size={17} className="animate-spin" /> Sending...</> : <><Send size={17} /> Place order</>}
         </button>
         <button type="button" onClick={onQr} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#dce5f1] py-2.5 text-[12px] font-bold text-[#5b6b85]">
@@ -1179,7 +1179,7 @@ function HowOrderingWorks() {
       <div className="mt-4 grid grid-cols-5 gap-3">
         {steps.map(([num, title, body], idx) => (
           <div key={num} className="flex items-center gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#eaf2ff] text-sm font-black text-[#075fff]">{num}</span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#eaf2ff] text-sm font-black text-[var(--brand)]">{num}</span>
             <div className="min-w-0">
               <p className="text-xs font-black text-[#102347]">{title}</p>
               <p className="text-[11px] font-semibold text-[#70809a]">{body}</p>
@@ -1230,7 +1230,7 @@ function PortalCard({ children, className = "" }: { children: ReactNode; classNa
 
 function IconBubble({ icon: Icon, tone = "blue" }: { icon: typeof Home; tone?: "blue" | "green" | "orange" | "red" | "purple" | "slate" }) {
   const styles = {
-    blue: "bg-[#eaf2ff] text-[#075fff]",
+    blue: "bg-[#eaf2ff] text-[var(--brand)]",
     green: "bg-[#e9fbf0] text-[#0f9f4a]",
     orange: "bg-[#fff4e5] text-[#f97316]",
     red: "bg-[#fff1f2] text-[#ef4444]",
@@ -1246,11 +1246,11 @@ function IconBubble({ icon: Icon, tone = "blue" }: { icon: typeof Home; tone?: "
 
 function ProductThumb({ product, size = "h-12 w-12" }: { product?: CustomerCatalogProduct; size?: string }) {
   return (
-    <div className={`grid ${size} shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#f8fbff] to-[#eef5ff]`}>
+    <div className={`grid ${size} shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#f8fbff] to-[var(--brand-soft)]`}>
       {product?.imageUrl ? (
         <img src={product.imageUrl} alt="" className="h-[82%] w-[82%] object-contain" />
       ) : (
-        <PackageCheck size={20} className="text-[#075fff]" />
+        <PackageCheck size={20} className="text-[var(--brand)]" />
       )}
     </div>
   );
@@ -1259,10 +1259,10 @@ function ProductThumb({ product, size = "h-12 w-12" }: { product?: CustomerCatal
 function OrdersPortalPage({ onView }: { products: CustomerCatalogProduct[]; onView: (view: CustomerStorefrontView) => void }) {
   return (
     <div className="mx-auto max-w-xl py-16 text-center">
-      <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#eaf2ff] text-[#075fff]"><ShoppingBag size={28} /></span>
+      <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#eaf2ff] text-[var(--brand)]"><ShoppingBag size={28} /></span>
       <h1 className="mt-5 font-display text-2xl font-black text-[#071432]">No order to track yet</h1>
       <p className="mt-2 text-sm font-semibold text-[#66758f]">Your latest order will appear here after you place it. Tracking is stored only on this device for privacy.</p>
-      <button type="button" onClick={() => onView("shop")} className="mt-6 rounded-xl bg-[#075fff] px-6 py-3 text-sm font-black text-white">Start an order</button>
+      <button type="button" onClick={() => onView("shop")} className="mt-6 rounded-xl bg-[var(--brand)] px-6 py-3 text-sm font-black text-white">Start an order</button>
     </div>
   );
 }
@@ -1283,29 +1283,29 @@ function LegacyOrdersPortalPage({ products, onView }: { products: CustomerCatalo
           <SearchBox placeholder="Search by order ID or item..." />
           <div className="flex gap-2 overflow-x-auto">
             {["All", "Processing", "Packed", "Out for Delivery", "Delivered", "Cancelled"].map((tab, index) => (
-              <button key={tab} type="button" className={`shrink-0 rounded-xl border px-4 py-2 text-xs font-black ${index === 0 ? "border-[#075fff] bg-[#eaf2ff] text-[#075fff]" : "border-[#dfe8f5] bg-white text-[#52617a]"}`}>{tab}</button>
+              <button key={tab} type="button" className={`shrink-0 rounded-xl border px-4 py-2 text-xs font-black ${index === 0 ? "border-[var(--brand)] bg-[#eaf2ff] text-[var(--brand)]" : "border-[#dfe8f5] bg-white text-[#52617a]"}`}>{tab}</button>
             ))}
           </div>
         </div>
         <PortalCard className="mb-5 border-[#89b5ff] bg-[#f8fbff]">
           <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_120px] lg:items-center">
             <div>
-              <span className="rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-black text-[#075fff]">Active Order</span>
+              <span className="rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-black text-[var(--brand)]">Active Order</span>
               <h2 className="mt-4 text-lg font-black">Order #KOS12345678</h2>
               <p className="text-sm font-semibold text-[#66758f]">8 items - {formatRs(847.3)}</p>
-              <p className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#eaf2ff] px-3 py-2 text-xs font-black text-[#075fff]"><Truck size={15} /> Out for Delivery</p>
+              <p className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#eaf2ff] px-3 py-2 text-xs font-black text-[var(--brand)]"><Truck size={15} /> Out for Delivery</p>
             </div>
             <div className="grid grid-cols-5 gap-2">
               {["Placed", "Confirmed", "Packed", "Out", "Delivered"].map((step, index) => (
                 <div key={step} className="text-center">
-                  <span className={`mx-auto grid h-11 w-11 place-items-center rounded-full ${index < 4 ? "bg-[#075fff] text-white" : "bg-white text-[#8aa0bd]"}`}>
+                  <span className={`mx-auto grid h-11 w-11 place-items-center rounded-full ${index < 4 ? "bg-[var(--brand)] text-white" : "bg-white text-[#8aa0bd]"}`}>
                     {index < 4 ? <CheckCircle2 size={18} /> : <PackageCheck size={18} />}
                   </span>
                   <p className="mt-2 text-[11px] font-black text-[#172544]">{step}</p>
                 </div>
               ))}
             </div>
-            <button type="button" className="rounded-xl bg-[#075fff] px-4 py-3 text-sm font-black text-white">Track Order</button>
+            <button type="button" className="rounded-xl bg-[var(--brand)] px-4 py-3 text-sm font-black text-white">Track Order</button>
           </div>
         </PortalCard>
         <PortalCard className="overflow-hidden p-0">
@@ -1323,7 +1323,7 @@ function LegacyOrdersPortalPage({ products, onView }: { products: CustomerCatalo
                     <td className="font-black">{formatRs(order.total)}</td>
                     <td><StatusPill status={order.status} /></td>
                     <td className="font-semibold text-[#52617a]">{order.method}</td>
-                    <td><button type="button" className="rounded-xl border border-[#dfe8f5] px-3 py-2 text-xs font-black text-[#075fff]">View Details</button></td>
+                    <td><button type="button" className="rounded-xl border border-[#dfe8f5] px-3 py-2 text-xs font-black text-[var(--brand)]">View Details</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -1337,7 +1337,7 @@ function LegacyOrdersPortalPage({ products, onView }: { products: CustomerCatalo
             <h2 className="font-display text-lg font-black">Order #KOS12345678</h2>
             <button type="button" className="text-[#71809a]"><X size={18} /></button>
           </div>
-          <p className="mt-2 rounded-xl bg-[#eaf2ff] px-3 py-2 text-sm font-black text-[#075fff]">Out for Delivery - Today, 12:15 PM</p>
+          <p className="mt-2 rounded-xl bg-[#eaf2ff] px-3 py-2 text-sm font-black text-[var(--brand)]">Out for Delivery - Today, 12:15 PM</p>
           <h3 className="mt-5 text-sm font-black">Items ({orderItems.length || 1})</h3>
           <div className="mt-3 space-y-3">
             {(orderItems.length ? orderItems : [undefined]).map((product, index) => (
@@ -1352,12 +1352,12 @@ function LegacyOrdersPortalPage({ products, onView }: { products: CustomerCatalo
             ))}
           </div>
           <PriceSummaryLine label="Grand Total" value={formatRs(847.3)} strong />
-          <button type="button" onClick={() => onView("shop")} className="mt-4 w-full rounded-xl border border-[#cfe0ff] py-3 text-sm font-black text-[#075fff]">Reorder</button>
+          <button type="button" onClick={() => onView("shop")} className="mt-4 w-full rounded-xl border border-[var(--brand-border)] py-3 text-sm font-black text-[var(--brand)]">Reorder</button>
         </PortalCard>
         <PortalCard className="bg-[#f1fbf5]">
           <p className="font-black text-[#0f9f4a]">Need help?</p>
           <p className="mt-1 text-sm font-semibold text-[#52617a]">Contact the store for order help.</p>
-          <button type="button" onClick={() => onView("support")} className="mt-4 w-full rounded-xl bg-white py-3 text-sm font-black text-[#075fff]">Chat with Support</button>
+          <button type="button" onClick={() => onView("support")} className="mt-4 w-full rounded-xl bg-white py-3 text-sm font-black text-[var(--brand)]">Chat with Support</button>
         </PortalCard>
       </aside>
     </div>
@@ -1373,14 +1373,14 @@ function ListsPortalPage({ products, onView, onAddProduct }: { products: Custome
         <PortalHeader
           title="My Lists"
           subtitle="Save time by creating and managing your shopping lists."
-          action={<button type="button" className="rounded-xl bg-[#075fff] px-5 py-3 text-sm font-black text-white"><Plus size={16} className="inline" /> Create New List</button>}
+          action={<button type="button" className="rounded-xl bg-[var(--brand)] px-5 py-3 text-sm font-black text-white"><Plus size={16} className="inline" /> Create New List</button>}
         />
         <div className="mb-5 grid gap-3 md:grid-cols-4">
           {["Monthly Grocery", "Breakfast Items", "Cleaning Supplies", "Festival Shopping"].map((list, index) => (
-            <PortalCard key={list} className={index === 0 ? "border-[#075fff] bg-[#f8fbff]" : ""}>
+            <PortalCard key={list} className={index === 0 ? "border-[var(--brand)] bg-[#f8fbff]" : ""}>
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="font-black text-[#075fff]">{list}</p>
+                  <p className="font-black text-[var(--brand)]">{list}</p>
                   <p className="mt-2 text-xs font-semibold text-[#66758f]">{24 - index * 4} items</p>
                   <p className="mt-3 text-sm font-black">Est. {formatRs(1847 - index * 320)}</p>
                 </div>
@@ -1397,7 +1397,7 @@ function ListsPortalPage({ products, onView, onAddProduct }: { products: Custome
             </div>
             <div className="flex gap-2">
               <button type="button" className="rounded-xl border border-[#dfe8f5] px-4 py-2 text-xs font-black text-[#405173]"><Edit3 size={14} className="inline" /> Rename</button>
-              <button type="button" className="rounded-xl bg-[#075fff] px-4 py-2 text-xs font-black text-white" onClick={() => products.forEach((p) => selected.has(p.id) && onAddProduct(p.id))}>Move to Cart</button>
+              <button type="button" className="rounded-xl bg-[var(--brand)] px-4 py-2 text-xs font-black text-white" onClick={() => products.forEach((p) => selected.has(p.id) && onAddProduct(p.id))}>Move to Cart</button>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -1433,7 +1433,7 @@ function ListsPortalPage({ products, onView, onAddProduct }: { products: Custome
               <div key={p.id} className="flex items-center gap-3">
                 <ProductThumb product={p} />
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{p.name}</p><p className="text-xs text-[#66758f]">Frequently bought</p></div>
-                <button type="button" onClick={() => onAddProduct(p.id)} className="grid h-8 w-8 place-items-center rounded-lg border border-[#cfe0ff] text-[#075fff]"><Plus size={15} /></button>
+                <button type="button" onClick={() => onAddProduct(p.id)} className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--brand-border)] text-[var(--brand)]"><Plus size={15} /></button>
               </div>
             ))}
           </div>
@@ -1443,7 +1443,7 @@ function ListsPortalPage({ products, onView, onAddProduct }: { products: Custome
           <PriceSummaryLine label="Items in list" value={`${products.length}`} />
           <PriceSummaryLine label="Items selected" value={`${selected.size}`} />
           <PriceSummaryLine label="Estimated total" value={formatRs(total)} strong />
-          <button type="button" onClick={() => onView("shop")} className="mt-4 w-full rounded-xl bg-[#075fff] py-3 text-sm font-black text-white">Continue Shopping</button>
+          <button type="button" onClick={() => onView("shop")} className="mt-4 w-full rounded-xl bg-[var(--brand)] py-3 text-sm font-black text-white">Continue Shopping</button>
         </PortalCard>
       </aside>
     </div>
@@ -1458,26 +1458,26 @@ function OffersPortalPage({ products, onView, onAddProduct }: { products: Custom
         <section className="overflow-hidden rounded-[24px] bg-[#061a5f] p-6 text-white shadow-[0_24px_70px_rgba(7,95,255,0.22)]">
           <h2 className="font-display text-3xl font-black">Weekend Super Saver!</h2>
           <p className="mt-2 text-xl font-black text-[#ffc247]">Up to 50% OFF <span className="text-white">on daily essentials</span></p>
-          <button type="button" onClick={() => onView("shop")} className="mt-5 rounded-xl bg-white px-5 py-3 text-sm font-black text-[#075fff]">Shop Now</button>
+          <button type="button" onClick={() => onView("shop")} className="mt-5 rounded-xl bg-white px-5 py-3 text-sm font-black text-[var(--brand)]">Shop Now</button>
         </section>
         <div className="grid gap-3 md:grid-cols-4">
           {["FLAT Rs 50 OFF", "10% OFF", "FAST PICKUP", "Rs 75 CASHBACK"].map((offer, index) => (
-            <PortalCard key={offer} className={["border-dashed border-[#82e6b0] bg-[#f5fff8]", "border-dashed border-[#bcd0ff] bg-[#f7faff]", "border-dashed border-[#ffd08a] bg-[#fff8ed]", "border-dashed border-[#ddb7ff] bg-[#fbf6ff]"][index]}>
+            <PortalCard key={offer} className={["border-dashed border-[#82e6b0] bg-[#f5fff8]", "border-dashed border-[#bcd0ff] bg-[var(--brand-softer)]", "border-dashed border-[#ffd08a] bg-[#fff8ed]", "border-dashed border-[#ddb7ff] bg-[#fbf6ff]"][index]}>
               <IconBubble icon={index === 2 ? Store : index === 3 ? WalletCards : Gift} tone={index === 2 ? "orange" : index === 3 ? "purple" : "green"} />
               <p className="mt-3 font-black">{offer}</p>
               <p className="mt-1 text-xs font-semibold text-[#66758f]">Valid on selected orders</p>
-              <button type="button" className="mt-4 w-full rounded-xl bg-[#075fff] py-2 text-xs font-black text-white">Claim Offer</button>
+              <button type="button" className="mt-4 w-full rounded-xl bg-[var(--brand)] py-2 text-xs font-black text-white">Claim Offer</button>
             </PortalCard>
           ))}
         </div>
         <PortalCard>
-          <div className="flex items-center justify-between"><h2 className="font-display text-lg font-black">Limited Time Deals</h2><button className="text-sm font-black text-[#075fff]" type="button">View All</button></div>
+          <div className="flex items-center justify-between"><h2 className="font-display text-lg font-black">Limited Time Deals</h2><button className="text-sm font-black text-[var(--brand)]" type="button">View All</button></div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {products.map((product, index) => (
               <div key={product.id} className="flex items-center gap-3 rounded-2xl border border-[#edf2f8] p-3">
                 <ProductThumb product={product} />
                 <div className="min-w-0 flex-1"><p className="truncate text-sm font-black">{product.name}</p><p className="text-xs text-[#ef4444]">{20 + index * 2}% OFF</p><p className="font-black">{formatRs(product.price * 0.9)}</p></div>
-                <button type="button" onClick={() => onAddProduct(product.id)} className="rounded-lg border border-[#cfe0ff] px-3 py-2 text-xs font-black text-[#075fff]">Add</button>
+                <button type="button" onClick={() => onAddProduct(product.id)} className="rounded-lg border border-[var(--brand-border)] px-3 py-2 text-xs font-black text-[var(--brand)]">Add</button>
               </div>
             ))}
           </div>
@@ -1485,7 +1485,7 @@ function OffersPortalPage({ products, onView, onAddProduct }: { products: Custom
       </div>
       <aside className="space-y-4">
         <PortalCard><h2 className="font-display text-lg font-black">Your Savings Summary</h2><PriceSummaryLine label="Coupons Available" value="7" /><PriceSummaryLine label="Wallet Cashback" value="Rs 350.00" /><PriceSummaryLine label="Total Savings" value="Rs 326.00" strong /></PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Applied Promotions</h2><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">GROCERY10 - saved Rs 82.50</p><p className="mt-2 rounded-xl bg-[#f7faff] p-3 text-sm font-black text-[#075fff]">PICKUP20 - priority pickup</p></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Applied Promotions</h2><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">GROCERY10 - saved Rs 82.50</p><p className="mt-2 rounded-xl bg-[var(--brand-softer)] p-3 text-sm font-black text-[var(--brand)]">PICKUP20 - priority pickup</p></PortalCard>
       </aside>
     </div>
   );
@@ -1503,7 +1503,7 @@ function WalletPortalPage({ onView }: { onView: (view: CustomerStorefrontView) =
       <div className="space-y-5">
         <PortalHeader title="Wallet & Credits" subtitle="Manage your balance, credits and transactions" action={<span className="inline-flex items-center gap-2 text-sm font-black text-[#0f9f4a]"><ShieldCheck size={18} /> 100% Secure Payments</span>} />
         <div className="grid gap-4 md:grid-cols-4">
-          <PortalCard className="bg-[#075fff] text-white md:col-span-2"><p className="text-sm font-bold opacity-90">Main Wallet Balance</p><p className="mt-5 font-display text-4xl font-black">Rs 250.00</p><button type="button" className="mt-5 w-full rounded-xl bg-white py-3 text-sm font-black text-[#075fff]"><Plus size={15} className="inline" /> Add Money</button></PortalCard>
+          <PortalCard className="bg-[var(--brand)] text-white md:col-span-2"><p className="text-sm font-bold opacity-90">Main Wallet Balance</p><p className="mt-5 font-display text-4xl font-black">Rs 250.00</p><button type="button" className="mt-5 w-full rounded-xl bg-white py-3 text-sm font-black text-[var(--brand)]"><Plus size={15} className="inline" /> Add Money</button></PortalCard>
           <PortalCard className="bg-[#f1fbf5]"><p className="font-black text-[#0f9f4a]">Store Credit</p><p className="mt-8 font-display text-2xl font-black">Rs 120.00</p><p className="text-xs text-[#66758f]">Available to use</p></PortalCard>
           <PortalCard className="bg-[#fff8ed]"><p className="font-black text-[#f97316]">Cashback Earned</p><p className="mt-8 font-display text-2xl font-black">Rs 85.00</p><p className="text-xs text-[#66758f]">Earned from offers</p></PortalCard>
         </div>
@@ -1513,7 +1513,7 @@ function WalletPortalPage({ onView }: { onView: (view: CustomerStorefrontView) =
           ))}
         </div>
         <PortalCard className="overflow-hidden p-0">
-          <div className="flex items-center justify-between p-4"><h2 className="font-display text-lg font-black">Recent Wallet Transactions</h2><button type="button" className="text-sm font-black text-[#075fff]">View All Transactions</button></div>
+          <div className="flex items-center justify-between p-4"><h2 className="font-display text-lg font-black">Recent Wallet Transactions</h2><button type="button" className="text-sm font-black text-[var(--brand)]">View All Transactions</button></div>
           <div className="divide-y divide-[#edf2f8]">
             {rows.map(([date, ref, type, amount, status]) => <TransactionRow key={ref} left={date} title={ref} sub={type} amount={amount} status={status} />)}
           </div>
@@ -1537,8 +1537,8 @@ function AddressesPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (v
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div>
-        <PortalHeader title="Addresses" subtitle="Manage your delivery and pickup addresses" action={<button type="button" className="rounded-xl bg-[#075fff] px-5 py-3 text-sm font-black text-white"><Plus size={15} className="inline" /> Add New Address</button>} />
-        <div className="mb-5 flex gap-2 overflow-x-auto">{["All Addresses (3)", "Delivery Addresses (3)", "Pickup Addresses (0)"].map((tab, index) => <button key={tab} className={`shrink-0 rounded-xl px-4 py-2 text-sm font-black ${index === 0 ? "bg-[#eaf2ff] text-[#075fff]" : "text-[#52617a]"}`} type="button">{tab}</button>)}</div>
+        <PortalHeader title="Addresses" subtitle="Manage your delivery and pickup addresses" action={<button type="button" className="rounded-xl bg-[var(--brand)] px-5 py-3 text-sm font-black text-white"><Plus size={15} className="inline" /> Add New Address</button>} />
+        <div className="mb-5 flex gap-2 overflow-x-auto">{["All Addresses (3)", "Delivery Addresses (3)", "Pickup Addresses (0)"].map((tab, index) => <button key={tab} className={`shrink-0 rounded-xl px-4 py-2 text-sm font-black ${index === 0 ? "bg-[#eaf2ff] text-[var(--brand)]" : "text-[#52617a]"}`} type="button">{tab}</button>)}</div>
         <div className="space-y-4">
           {addresses.map((address) => (
             <PortalCard key={address.label}>
@@ -1549,7 +1549,7 @@ function AddressesPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (v
                   <p className="mt-2 text-sm font-semibold text-[#283957]">{address.detail}</p>
                   <p className="mt-2 text-sm text-[#66758f]">{address.phone}</p>
                   <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <button type="button" className="rounded-xl border border-[#dfe8f5] py-2 text-sm font-black text-[#075fff]"><Edit3 size={14} className="inline" /> Edit</button>
+                    <button type="button" className="rounded-xl border border-[#dfe8f5] py-2 text-sm font-black text-[var(--brand)]"><Edit3 size={14} className="inline" /> Edit</button>
                     <button type="button" onClick={() => setAddresses((rows) => rows.filter((row) => row.label !== address.label))} className="rounded-xl border border-[#ffd6d6] py-2 text-sm font-black text-[#ef4444]"><Trash2 size={14} className="inline" /> Delete</button>
                     <button type="button" onClick={() => setAddresses((rows) => rows.map((row) => ({ ...row, default: row.label === address.label })))} className="rounded-xl border border-[#dfe8f5] py-2 text-sm font-black text-[#405173]"><Star size={14} className="inline" /> Set as Default</button>
                   </div>
@@ -1560,7 +1560,7 @@ function AddressesPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (v
         </div>
       </div>
       <aside className="space-y-4">
-        <PortalCard><h2 className="font-display text-lg font-black">Serviceability Check</h2><div className="mt-4 grid h-56 place-items-center rounded-2xl bg-[#eef5ff] text-[#075fff]"><MapPin size={46} /></div><p className="mt-3 text-sm font-black text-[#0f9f4a]">We deliver to this location</p></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Serviceability Check</h2><div className="mt-4 grid h-56 place-items-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand)]"><MapPin size={46} /></div><p className="mt-3 text-sm font-black text-[#0f9f4a]">We deliver to this location</p></PortalCard>
         <PortalCard><h2 className="font-display text-lg font-black">Pickup from Store</h2><p className="mt-3 font-black">{catalog.shop.name}</p><p className="text-sm text-[#66758f]">{catalog.shop.city || "Local store"}</p><p className="mt-4 rounded-xl bg-[#f1fbf5] p-3 text-sm font-black text-[#0f9f4a]">Pickup in 20 mins</p></PortalCard>
       </aside>
     </div>
@@ -1572,11 +1572,11 @@ function PaymentsPortalPage({ onView }: { onView: (view: CustomerStorefrontView)
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-5">
-        <PortalHeader title="Payments" subtitle="Manage your payment methods, preferences and transaction history" action={<button type="button" className="rounded-xl border border-[#cfe0ff] px-4 py-2 text-sm font-black text-[#075fff]"><Plus size={15} className="inline" /> Add Payment Method</button>} />
+        <PortalHeader title="Payments" subtitle="Manage your payment methods, preferences and transaction history" action={<button type="button" className="rounded-xl border border-[var(--brand-border)] px-4 py-2 text-sm font-black text-[var(--brand)]"><Plus size={15} className="inline" /> Add Payment Method</button>} />
         <PortalCard>
           <h2 className="font-display text-lg font-black">Saved Payment Methods</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {methods.map((method, index) => <div key={method} className={`rounded-2xl border p-4 ${index === 0 ? "border-[#075fff] bg-[#f8fbff]" : "border-[#e3ebf7]"}`}><div className="flex justify-between"><IconBubble icon={index < 3 ? CreditCard : index === 3 ? Store : WalletCards} tone={index === 0 ? "green" : "blue"} /><MoreVertical size={18} /></div><p className="mt-5 font-black">{method}</p><button className="mt-4 rounded-lg bg-[#eaf2ff] px-3 py-1.5 text-xs font-black text-[#075fff]" type="button">{index === 0 ? "Default" : "Set as Default"}</button></div>)}
+            {methods.map((method, index) => <div key={method} className={`rounded-2xl border p-4 ${index === 0 ? "border-[var(--brand)] bg-[#f8fbff]" : "border-[#e3ebf7]"}`}><div className="flex justify-between"><IconBubble icon={index < 3 ? CreditCard : index === 3 ? Store : WalletCards} tone={index === 0 ? "green" : "blue"} /><MoreVertical size={18} /></div><p className="mt-5 font-black">{method}</p><button className="mt-4 rounded-lg bg-[#eaf2ff] px-3 py-1.5 text-xs font-black text-[var(--brand)]" type="button">{index === 0 ? "Default" : "Set as Default"}</button></div>)}
           </div>
         </PortalCard>
         <PortalCard className="overflow-hidden p-0">
@@ -1586,7 +1586,7 @@ function PaymentsPortalPage({ onView }: { onView: (view: CustomerStorefrontView)
       </div>
       <aside className="space-y-4">
         <PortalCard><IconBubble icon={ShieldCheck} /><h2 className="mt-3 font-display text-lg font-black">Payment Security</h2>{["PCI DSS compliant", "Bank-level encryption", "Secure UPI & card processing", "Your data is never stored"].map((text) => <InfoLine key={text} text={text} />)}</PortalCard>
-        <PortalCard><IconBubble icon={RefreshCw} /><h2 className="mt-3 font-display text-lg font-black">Refunds & Returns</h2><p className="mt-2 text-sm text-[#66758f]">Refunds are initiated to your original payment method within 3-5 business days.</p><button type="button" onClick={() => onView("support")} className="mt-4 text-sm font-black text-[#075fff]">View Refund Policy <ChevronRight size={15} className="inline" /></button></PortalCard>
+        <PortalCard><IconBubble icon={RefreshCw} /><h2 className="mt-3 font-display text-lg font-black">Refunds & Returns</h2><p className="mt-2 text-sm text-[#66758f]">Refunds are initiated to your original payment method within 3-5 business days.</p><button type="button" onClick={() => onView("support")} className="mt-4 text-sm font-black text-[var(--brand)]">View Refund Policy <ChevronRight size={15} className="inline" /></button></PortalCard>
       </aside>
     </div>
   );
@@ -1600,19 +1600,19 @@ function CustomerSettingsPortalPage({ catalog, onView }: { catalog: CustomerCata
       <div>
         <PortalHeader title="Settings" subtitle="Manage your account, preferences and privacy settings" />
         <div className="mb-5 flex max-w-xl rounded-2xl border border-[#dfe8f5] bg-white p-1">
-          {["Account", "Preferences", "Notifications", "Privacy & Security"].map((tab, index) => <button key={tab} className={`flex-1 rounded-xl px-3 py-2 text-xs font-black ${index === 0 ? "bg-[#eaf2ff] text-[#075fff]" : "text-[#52617a]"}`} type="button">{tab}</button>)}
+          {["Account", "Preferences", "Notifications", "Privacy & Security"].map((tab, index) => <button key={tab} className={`flex-1 rounded-xl px-3 py-2 text-xs font-black ${index === 0 ? "bg-[#eaf2ff] text-[var(--brand)]" : "text-[#52617a]"}`} type="button">{tab}</button>)}
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          <PortalCard><SectionTitle icon={User} title="Profile Information" sub="Update your personal details and profile information." /><SettingsInput label="Full Name" value="Ramesh Sharma" /><SettingsInput label="Email Address" value="ramesh.sharma91@gmail.com" verified /><SettingsInput label="Date of Birth" value="12 March 1991" /><button type="button" className="mt-4 rounded-xl border border-[#cfe0ff] px-4 py-2 text-sm font-black text-[#075fff]">Edit Profile</button></PortalCard>
+          <PortalCard><SectionTitle icon={User} title="Profile Information" sub="Update your personal details and profile information." /><SettingsInput label="Full Name" value="Ramesh Sharma" /><SettingsInput label="Email Address" value="ramesh.sharma91@gmail.com" verified /><SettingsInput label="Date of Birth" value="12 March 1991" /><button type="button" className="mt-4 rounded-xl border border-[var(--brand-border)] px-4 py-2 text-sm font-black text-[var(--brand)]">Edit Profile</button></PortalCard>
           <PortalCard><SectionTitle icon={Phone} title="Mobile Number" sub="Used for order updates and notifications." /><SettingsInput label="Mobile Number" value="+91 98920 12345" verified /><div className="mt-4 rounded-2xl bg-[#f1fbf5] p-4 text-sm font-black text-[#0f9f4a]">Your account is secure</div></PortalCard>
           <PortalCard><SectionTitle icon={Bell} title="Notification Preferences" sub="Choose how you want to receive updates." />{[["Promotions & Offers", "offers"], ["New Arrivals & Updates", "arrivals"], ["Exclusive Discounts", "discounts"]].map(([label, key]) => <ToggleRow key={key} label={label} checked={toggles[key as keyof typeof toggles]} onClick={() => toggle(key as keyof typeof toggles)} />)}</PortalCard>
           <PortalCard><SectionTitle icon={Truck} title="Order Updates" sub="Get real-time updates for your orders." />{[["Order Delivered", "delivered"], ["WhatsApp Notifications", "whatsapp"], ["SMS Notifications", "sms"]].map(([label, key]) => <ToggleRow key={key} label={label} checked={toggles[key as keyof typeof toggles]} onClick={() => toggle(key as keyof typeof toggles)} />)}</PortalCard>
-          <PortalCard><SectionTitle icon={Settings} title="Theme Appearance" sub="Choose your preferred theme." /><div className="grid grid-cols-2 gap-3"><button type="button" className="rounded-xl border border-[#075fff] bg-[#f8fbff] py-3 font-black text-[#075fff]">Light</button><button type="button" className="rounded-xl border border-[#dfe8f5] py-3 font-black text-[#405173]">Dark</button></div></PortalCard>
+          <PortalCard><SectionTitle icon={Settings} title="Theme Appearance" sub="Choose your preferred theme." /><div className="grid grid-cols-2 gap-3"><button type="button" className="rounded-xl border border-[var(--brand)] bg-[#f8fbff] py-3 font-black text-[var(--brand)]">Light</button><button type="button" className="rounded-xl border border-[#dfe8f5] py-3 font-black text-[#405173]">Dark</button></div></PortalCard>
           <PortalCard><SectionTitle icon={ShieldCheck} title="Privacy Controls" sub="Manage your data and privacy preferences." /><ToggleRow label="Share data for recommendations" checked={toggles.analytics} onClick={() => toggle("analytics")} /><button type="button" className="mt-4 text-sm font-black text-[#ef4444]">Logout from All Devices</button></PortalCard>
         </div>
       </div>
       <aside className="space-y-4">
-        <PortalCard><h2 className="font-display text-lg font-black">Account Summary</h2><div className="mt-4 flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-full bg-[#eaf2ff] font-black text-[#075fff]">RS</span><div><p className="font-black">Ramesh Sharma</p><p className="text-xs text-[#66758f]">Customer</p></div></div><PriceSummaryLine label="Wallet Balance" value="Rs 250.00" /><PriceSummaryLine label="Preferred Store" value={catalog.shop.name} /></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Account Summary</h2><div className="mt-4 flex items-center gap-3"><span className="grid h-14 w-14 place-items-center rounded-full bg-[#eaf2ff] font-black text-[var(--brand)]">RS</span><div><p className="font-black">Ramesh Sharma</p><p className="text-xs text-[#66758f]">Customer</p></div></div><PriceSummaryLine label="Wallet Balance" value="Rs 250.00" /><PriceSummaryLine label="Preferred Store" value={catalog.shop.name} /></PortalCard>
         <PortalCard className="bg-[#061a39] text-white"><h2 className="font-display text-lg font-black">Artha Plus</h2><p className="mt-3 text-sm text-[#b5c4df]">You are Rs 56 away from Gold membership</p><div className="mt-4 h-2 rounded-full bg-white/15"><div className="h-full w-2/3 rounded-full bg-[#ffc247]" /></div></PortalCard>
         <PortalCard><h2 className="font-display text-lg font-black">Quick Actions</h2>{[["Manage Addresses", "addresses"], ["Payment Methods", "payments"], ["My Lists", "lists"], ["Help & Support", "support"]].map(([label, target]) => <button key={label} type="button" onClick={() => onView(target as CustomerStorefrontView)} className="flex w-full items-center justify-between border-b border-[#edf2f8] py-3 text-sm font-black"><span>{label}</span><ChevronRight size={15} /></button>)}</PortalCard>
       </aside>
@@ -1627,15 +1627,15 @@ function SupportPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (vie
         <PortalHeader title="Help & Support" subtitle="We're here to help! Find answers or connect with support." />
         <PortalCard>
           <h2 className="font-display text-lg font-black">How can we help you today?</h2>
-          <div className="mt-4 flex gap-3"><SearchBox placeholder="Search help articles, FAQs or issues..." /><button type="button" className="rounded-xl bg-[#075fff] px-6 text-sm font-black text-white">Search</button></div>
+          <div className="mt-4 flex gap-3"><SearchBox placeholder="Search help articles, FAQs or issues..." /><button type="button" className="rounded-xl bg-[var(--brand)] px-6 text-sm font-black text-white">Search</button></div>
           <div className="mt-3 flex flex-wrap gap-2">{["Track Order", "Refund Status", "Cancel Order", "Payment Issues", "Wrong Item"].map((tag) => <button key={tag} type="button" className="rounded-full border border-[#dfe8f5] px-3 py-1.5 text-xs font-black text-[#52617a]">{tag}</button>)}</div>
         </PortalCard>
         <PortalCard><h2 className="font-display text-lg font-black">Browse Help Topics</h2><div className="mt-4 grid gap-3 md:grid-cols-5">{[["Late Delivery", Clock, "Track delivery issues"], ["Wrong Item", PackageCheck, "Received wrong item"], ["Refund & Returns", RefreshCw, "Refund status"], ["Payment Issue", CreditCard, "Failed payments"], ["App & Technical", Settings, "Technical glitches"]].map(([title, Icon, sub], index) => <div key={String(title)} className="rounded-2xl border border-[#e3ebf7] p-4 text-center"><IconBubble icon={Icon as typeof Home} tone={["blue", "green", "purple", "orange", "red"][index] as "blue"} /><p className="mt-3 font-black">{String(title)}</p><p className="mt-1 text-xs text-[#66758f]">{String(sub)}</p></div>)}</div></PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black">Contact Support</h2><div className="mt-4 grid gap-3 md:grid-cols-4">{[["Live Chat", MessageCircle, "Start Chat"], ["WhatsApp Help", MessageCircle, "Chat on WhatsApp"], ["Raise a Ticket", Mail, "Raise Ticket"], ["Call Support", Phone, "+91 98920 12345"]].map(([title, Icon, action]) => <div key={String(title)} className="rounded-2xl border border-[#e3ebf7] p-4"><IconBubble icon={Icon as typeof Home} /><p className="mt-3 font-black">{String(title)}</p><button type="button" className="mt-4 w-full rounded-xl border border-[#cfe0ff] py-2 text-xs font-black text-[#075fff]">{String(action)}</button></div>)}</div></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Contact Support</h2><div className="mt-4 grid gap-3 md:grid-cols-4">{[["Live Chat", MessageCircle, "Start Chat"], ["WhatsApp Help", MessageCircle, "Chat on WhatsApp"], ["Raise a Ticket", Mail, "Raise Ticket"], ["Call Support", Phone, "+91 98920 12345"]].map(([title, Icon, action]) => <div key={String(title)} className="rounded-2xl border border-[#e3ebf7] p-4"><IconBubble icon={Icon as typeof Home} /><p className="mt-3 font-black">{String(title)}</p><button type="button" className="mt-4 w-full rounded-xl border border-[var(--brand-border)] py-2 text-xs font-black text-[var(--brand)]">{String(action)}</button></div>)}</div></PortalCard>
         <PortalCard className="overflow-hidden p-0"><div className="p-4"><h2 className="font-display text-lg font-black">Your Support Tickets</h2></div>{["Late delivery", "Wrong item received", "Refund not received", "Payment failed but amount debited"].map((issue, index) => <TransactionRow key={issue} left={`#TK-${12458 - index}`} title={issue} sub={`Order #ORD-${89231 - index}`} amount={index === 0 ? "Today" : "Resolved"} status={index === 0 ? "In Progress" : "Resolved"} />)}</PortalCard>
       </div>
       <aside className="space-y-4">
-        <PortalCard><h2 className="font-display text-lg font-black">Store Contact</h2><div className="mt-4 flex gap-3"><IconBubble icon={Store} tone="orange" /><div><p className="font-black">{catalog.shop.name}</p><p className="text-sm text-[#66758f]">{catalog.shop.city || "Local store"}</p><p className="text-xs font-black text-[#0f9f4a]">Open</p></div></div><button type="button" className="mt-4 w-full rounded-xl border border-[#cfe0ff] py-3 text-sm font-black text-[#075fff]"><Phone size={15} className="inline" /> Call Store</button><button type="button" className="mt-2 w-full rounded-xl border border-[#cdebd8] bg-[#f1fbf5] py-3 text-sm font-black text-[#0f9f4a]"><MessageCircle size={15} className="inline" /> WhatsApp Store</button></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black">Store Contact</h2><div className="mt-4 flex gap-3"><IconBubble icon={Store} tone="orange" /><div><p className="font-black">{catalog.shop.name}</p><p className="text-sm text-[#66758f]">{catalog.shop.city || "Local store"}</p><p className="text-xs font-black text-[#0f9f4a]">Open</p></div></div><button type="button" className="mt-4 w-full rounded-xl border border-[var(--brand-border)] py-3 text-sm font-black text-[var(--brand)]"><Phone size={15} className="inline" /> Call Store</button><button type="button" className="mt-2 w-full rounded-xl border border-[#cdebd8] bg-[#f1fbf5] py-3 text-sm font-black text-[#0f9f4a]"><MessageCircle size={15} className="inline" /> WhatsApp Store</button></PortalCard>
         <PortalCard><h2 className="font-display text-lg font-black">Store Operating Hours</h2>{["Mon - Fri 7:00 AM - 10:00 PM", "Saturday 7:00 AM - 10:00 PM", "Sunday 7:00 AM - 10:00 PM"].map((row) => <p key={row} className="border-b border-[#edf2f8] py-3 text-sm font-semibold text-[#52617a]">{row}</p>)}</PortalCard>
         <PortalCard><h2 className="font-display text-lg font-black text-[#ef4444]">Emergency Support</h2><InfoLine text="Customer Support (24x7): +91 98920 12345" /><InfoLine text="Email: support@kiranaos.in" /></PortalCard>
       </aside>
@@ -1665,7 +1665,7 @@ function PriceSummaryLine({ label, value, strong = false }: { label: string; val
   return (
     <div className="mt-3 flex items-center justify-between border-t border-[#edf2f8] pt-3 text-sm">
       <span className="font-semibold text-[#66758f]">{label}</span>
-      <span className={strong ? "font-display text-lg font-black text-[#075fff]" : "font-black text-[#071432]"}>{value}</span>
+      <span className={strong ? "font-display text-lg font-black text-[var(--brand)]" : "font-black text-[#071432]"}>{value}</span>
     </div>
   );
 }
@@ -1673,7 +1673,7 @@ function PriceSummaryLine({ label, value, strong = false }: { label: string; val
 function TransactionRow({ left, title, sub, amount, status }: { left: string; title: string; sub: string; amount: string; status: string }) {
   return (
     <div className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[120px_minmax(0,1fr)_110px_110px] sm:items-center sm:gap-3">
-      <p className="font-black text-[#075fff]">{left}</p>
+      <p className="font-black text-[var(--brand)]">{left}</p>
       <div className="min-w-0"><p className="truncate font-black">{title}</p><p className="truncate text-xs text-[#66758f]">{sub}</p></div>
       <p className="font-black">{amount}</p>
       <div className="sm:text-right"><StatusPill status={status} /></div>
@@ -1715,7 +1715,7 @@ function ToggleRow({ label, checked, onClick }: { label: string; checked: boolea
   return (
     <button type="button" onClick={onClick} className="flex w-full items-center justify-between border-t border-[#edf2f8] py-3 text-sm font-black">
       <span>{label}</span>
-      <span className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[#075fff]" : "bg-[#cbd5e1]"}`}>
+      <span className={`relative h-6 w-11 rounded-full transition ${checked ? "bg-[var(--brand)]" : "bg-[#cbd5e1]"}`}>
         <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${checked ? "left-6" : "left-1"}`} />
       </span>
     </button>
@@ -1741,7 +1741,7 @@ function OrderQrOverlay({ urls, count, amount, onClose }: { urls: string[]; coun
         <ArrowLeft size={16} /> Back
       </button>
       <div className="m-auto w-[min(92vw,380px)] rounded-3xl bg-white p-6 text-center shadow-2xl">
-        <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-bold text-[#075fff]">
+        <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-bold text-[var(--brand)]">
           <ShoppingBag size={14} /> {count} item{count === 1 ? "" : "s"} - {formatRs(amount)}
         </div>
         <div className="mx-auto grid place-items-center rounded-2xl border border-[#eef2f8] p-3">
@@ -1750,11 +1750,11 @@ function OrderQrOverlay({ urls, count, amount, onClose }: { urls: string[]; coun
         {multi ? (
           <>
             <div className="mt-3 flex items-center justify-center gap-2">
-              <button type="button" disabled={safePart === 0} onClick={() => setPart((p) => Math.max(0, p - 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[#075fff] disabled:opacity-40" aria-label="Previous QR">
+              <button type="button" disabled={safePart === 0} onClick={() => setPart((p) => Math.max(0, p - 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[var(--brand)] disabled:opacity-40" aria-label="Previous QR">
                 <ChevronLeft size={18} />
               </button>
               <span className="min-w-[92px] text-[13px] font-black text-[#102347]">Part {safePart + 1} of {total}</span>
-              <button type="button" disabled={safePart === total - 1} onClick={() => setPart((p) => Math.min(total - 1, p + 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[#075fff] disabled:opacity-40" aria-label="Next QR">
+              <button type="button" disabled={safePart === total - 1} onClick={() => setPart((p) => Math.min(total - 1, p + 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[var(--brand)] disabled:opacity-40" aria-label="Next QR">
                 <ChevronRight size={18} />
               </button>
             </div>
@@ -1842,7 +1842,7 @@ function OrderTracker({
   if (loading && !status && !gone) {
     return (
       <CenterScreen>
-        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#dbe6f5] border-t-[#075fff]" />
+        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#dbe6f5] border-t-[var(--brand)]" />
         <p className="mt-4 text-sm font-medium text-[#5b6b85]">Loading your order...</p>
       </CenterScreen>
     );
@@ -1856,7 +1856,7 @@ function OrderTracker({
         </div>
         <h1 className="mt-4 font-display text-lg font-black text-[#102347]">Order not found</h1>
         <p className="mt-1 max-w-xs text-center text-sm text-[#5b6b85]">This order is no longer available. You can place a new one.</p>
-        <button type="button" onClick={onOrderAgain} className="mt-6 rounded-xl bg-[#075fff] px-5 py-3 text-sm font-bold text-white">Back to menu</button>
+        <button type="button" onClick={onOrderAgain} className="mt-6 rounded-xl bg-[var(--brand)] px-5 py-3 text-sm font-bold text-white">Back to menu</button>
       </CenterScreen>
     );
   }
@@ -1875,7 +1875,7 @@ function OrderTracker({
             <h1 className="truncate font-display text-base font-black leading-tight">{status?.shopName ?? "Your order"}</h1>
             <p className="truncate text-[11px] font-semibold text-[#6b7a93]">Order tracking</p>
           </div>
-          <button type="button" onClick={() => void load(true)} aria-label="Refresh" className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] text-[#405273] hover:bg-[#f7faff]">
+          <button type="button" onClick={() => void load(true)} aria-label="Refresh" className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] text-[#405273] hover:bg-[var(--brand-softer)]">
             <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
           </button>
         </div>
@@ -1904,7 +1904,7 @@ function OrderTracker({
               return (
                 <li key={step.key} className="flex gap-3">
                   <div className="flex flex-col items-center">
-                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors ${done ? "bg-[#16a34a] text-white" : active ? "bg-[#075fff] text-white" : "bg-[#eef2f8] text-[#9aa7bd]"}`}>
+                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition-colors ${done ? "bg-[#16a34a] text-white" : active ? "bg-[var(--brand)] text-white" : "bg-[#eef2f8] text-[#9aa7bd]"}`}>
                       {done ? <CheckCircle2 size={18} /> : <StepIcon size={17} />}
                     </span>
                     {i < STAGE_STEPS.length - 1 && <span className={`my-1 w-0.5 flex-1 ${i < currentIndex ? "bg-[#16a34a]" : "bg-[#e6ecf4]"}`} />}
@@ -1913,8 +1913,8 @@ function OrderTracker({
                     <p className={`text-[14px] font-black ${active || done ? "text-[#102347]" : "text-[#9aa7bd]"}`}>{step.label}</p>
                     <p className="mt-0.5 text-[12px] font-medium text-[#6b7a93]">{step.key === "ready" && status?.fulfillmentType === "delivery" ? "Your order is ready for delivery handover" : step.sub}</p>
                     {active && (
-                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#eaf2ff] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[#075fff]">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#075fff]" /> Now
+                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#eaf2ff] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--brand)]">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--brand)]" /> Now
                       </span>
                     )}
                   </div>
@@ -1938,7 +1938,7 @@ function OrderTracker({
                 </div>
               ))}
             </div>
-            <div className="mt-3 grid gap-2 rounded-xl bg-[#f7faff] p-3 text-[12px] text-[#52617a] sm:grid-cols-2">
+            <div className="mt-3 grid gap-2 rounded-xl bg-[var(--brand-softer)] p-3 text-[12px] text-[#52617a] sm:grid-cols-2">
               <p><span className="font-black text-[#102347]">Method:</span> {status.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"}</p>
               {status.promisedSlot ? <p><span className="font-black text-[#102347]">Preferred:</span> {status.promisedSlot}</p> : null}
               {status.location ? <p className="sm:col-span-2"><span className="font-black text-[#102347]">Store:</span> {status.location.name}{status.location.city ? ` · ${status.location.city}` : ""}</p> : null}
@@ -1952,7 +1952,7 @@ function OrderTracker({
 
         <div className="mt-5 flex gap-2">
           <button type="button" onClick={onBackToMenu} className="flex-1 rounded-xl border border-[#dce5f1] py-3 text-sm font-bold text-[#405273]">Back to menu</button>
-          <button type="button" onClick={onOrderAgain} className="flex-1 rounded-xl bg-[#075fff] py-3 text-sm font-bold text-white">Order again</button>
+          <button type="button" onClick={onOrderAgain} className="flex-1 rounded-xl bg-[var(--brand)] py-3 text-sm font-bold text-white">Order again</button>
         </div>
       </main>
     </div>

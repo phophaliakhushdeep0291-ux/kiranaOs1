@@ -76,6 +76,7 @@ const AssuranceRunsPage = lazy(() => import("@/features/assurance/pages/AuditRun
 const AssuranceRulesPage = lazy(() => import("@/features/assurance/pages/AuditRulesPage"));
 const AssuranceReviewQueuePage = lazy(() => import("@/features/assurance/pages/ReviewQueuePage"));
 const AssuranceReportPage = lazy(() => import("@/features/assurance/pages/AssuranceReportPage"));
+const AssuranceCasesPage = lazy(() => import("@/features/assurance/pages/CasesPage"));
 const RecycleBinPage = lazy(() => import("@/features/recycle-bin/pages/RecycleBinPage"));
 const SmartToolsPage = lazy(() => import("@/features/innovation/pages/SmartToolsPage"));
 const RecoveryModePage = lazy(() => import("@/features/recovery/pages/RecoveryModePage"));
@@ -389,6 +390,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/assurance/report">
         <ProtectedRoute component={AssuranceReportPage} />
+      </Route>
+      <Route path="/assurance/cases">
+        <ProtectedRoute component={AssuranceCasesPage} />
       </Route>
       <Route path="/assurance">
         <ProtectedRoute component={AssuranceDashboardPage} />

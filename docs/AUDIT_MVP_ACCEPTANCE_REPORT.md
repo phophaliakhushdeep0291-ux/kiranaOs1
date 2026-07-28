@@ -17,8 +17,10 @@ Date: 2026-07-26
 | 5 — Review & resolution | `AuditFindingStatusHistory` + lifecycle guard | Done — append-only, no deletes |
 | Baselines | `assurance/baseline.service.js` | Done — robust statistics, minimum samples |
 | AI abstraction | `assurance/ai/` (providers, redaction, orchestration) | Done — disabled by default |
-| APIs | `/api/audit/*` (19 endpoints) | Done — auth, isolation, roles, validation, limits, logging |
-| Frontend | `frontend/src/features/assurance/` (8 pages) | Done — new "Financial Assurance" nav section |
+| APIs | `/api/audit/*` (26 endpoints) | Done — auth, isolation, roles, validation, limits, logging |
+| Frontend | `frontend/src/features/assurance/` (9 pages) | Done — new "Financial Assurance" nav section |
+| Investigation cases | `assurance/case.service.js` + Cases page | Done — deterministic grouping, AI narrates only |
+| Scheduled runs | `workers/assurance.worker.js` + BullMQ scheduler | Done — daily sweep + daily baseline refresh |
 | Reporting | `assurance/report.service.js` | Done — "Financial Assurance Report", never "statutory" |
 | Docs | `docs/AI_AUDIT_ARCHITECTURE.md` + 5 more | Done |
 
@@ -125,12 +127,12 @@ HIGH 67; an over-collected khata HIGH 67.
 ## 4. Test results
 
 ```
-npm run test:integration   →  206 tests, 205 pass, 0 fail, 1 skipped (pre-existing)
+npm run test:integration   →  212 tests, 211 pass, 0 fail, 1 skipped (pre-existing)
 ```
 
-The suite grew from 169 to 206 tests; the 37 new tests are the two assurance
+The suite grew from 169 to 212 tests; the 43 new tests are the three assurance
 files. All 169 pre-existing tests still pass. Frontend: `tsc --noEmit` clean,
-`npm run build` succeeds (27.6 s).
+`npm run build` succeeds, all 9 assurance page chunks emit.
 
 Coverage against the 25 required test areas:
 
@@ -339,6 +341,42 @@ product can claim today:
    `QUEUES_ENABLED`.
 5. Build the `AuditCase` grouping UI and its AI summary (tables already exist).
 6. Add a supplier ledger for true supplier-statement reconciliation.
+
+---
+
+## 12a. Follow-on surfaces completed after the first pass
+
+Three things had models or provider methods but no caller. All three are now
+wired, tested and documented.
+
+**Scheduled runs** (`workers/assurance.worker.js`). Registered on the existing
+BullMQ scheduler alongside the backup cleanup job: a sweep every 24 h over a 26 h
+overlapping window (so a late offline sync is never skipped between ticks), plus a
+daily baseline refresh. The sweep only visits shops with activity in the window,
+caps at 200 shops per tick, and one shop's failure never stops the rest. Because
+evaluation is idempotent, a repeated tick creates nothing — asserted by test
+(`findingsCreated === 0` on the second sweep). Requires `QUEUES_ENABLED`, Redis
+and a running worker; without those, runs remain transaction-triggered or manual.
+
+**Investigation cases** (`assurance/case.service.js` + Cases page). Grouping is
+deterministic: findings are proposed as a group because they share a customer,
+supplier, staff member, locked business day, or a repeating rule (a rule firing
+across unrelated records is usually a systemic control gap, not isolated
+mistakes). Proposals are read-only — nothing is persisted until a reviewer opens a
+case. The AI layer only narrates a case that already exists, falling back to
+deterministic text when disabled. Closing a case does **not** close its findings;
+each keeps its own lifecycle and history, asserted by test.
+
+**Evidence classification** (`POST /api/audit/evidence/classify`). Advisory only:
+it suggests an evidence type from a free-text description, is restricted to the
+types the engine actually recognises, and returns `advisory: true` plus a note
+that the submitted type and its verification remain human decisions. With the
+provider disabled it declines rather than guessing (`evidenceType: null`).
+
+Six new tests cover these (case grouping by shared entity, case create /
+summarize / close without touching findings, case shop isolation including
+rejection of a foreign finding id, scheduled sweep idempotency, baseline refresh,
+and the advisory classifier).
 
 ---
 

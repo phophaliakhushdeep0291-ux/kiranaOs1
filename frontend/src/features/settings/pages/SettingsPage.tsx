@@ -93,7 +93,7 @@ export default function SettingsPage() {
   return (
     <SettingsShell>
       <section className="space-y-4 lg:hidden" aria-label="Settings shortcuts">
-        <div className="rounded-[20px] bg-[linear-gradient(135deg,#075fff_0%,#0046d8_100%)] p-5 text-white shadow-[0_18px_40px_rgba(7,95,255,0.24)]">
+        <div className="rounded-[20px] bg-[linear-gradient(135deg,var(--brand)_0%,var(--brand-strong)_100%)] p-5 text-white shadow-[0_18px_40px_rgba(7,95,255,0.24)]">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-100">Store control centre</p>
@@ -131,7 +131,7 @@ export default function SettingsPage() {
         </div>
 
         <Link href="/settings/advanced" className="flex min-h-14 items-center gap-3 rounded-[16px] border border-[#e2eaf6] bg-white px-4 shadow-[0_8px_22px_rgba(15,35,80,0.045)]">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#eef5ff] text-[#075fff]"><Sliders size={18} /></span>
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]"><Sliders size={18} /></span>
           <span className="flex-1 text-[13px] font-black text-[#102347]">Advanced tools & data</span>
           <ChevronRight size={17} className="text-[#9aa8bd]" />
         </Link>
@@ -143,7 +143,7 @@ export default function SettingsPage() {
         <Card>
           <CardHead icon={<Store size={15} />} title="Store Profile" action={<Manage href="/settings/store-profile" />} />
           <div className="flex items-center gap-3.5 border-b border-[#eef2f8] px-5 pb-4">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[12px] bg-[#eef5ff] text-2xl">🏪</span>
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-2xl">🏪</span>
             <div className="min-w-0">
               <p className="truncate font-display text-[16px] font-black text-[#102347]">{shopName}</p>
               <p className="truncate text-[12px] text-[#52627e]">{shopAddress}</p>
@@ -176,7 +176,7 @@ export default function SettingsPage() {
                 <p className="text-[11px] text-[#64748b]">Usage this month</p>
                 <p className="font-display text-[18px] font-black text-[#102347]">{snapshot?.status === "active" ? "Active" : "—"}</p>
                 <p className="mt-1 text-[11px] text-[#64748b]">Manage billing & invoices in your plan.</p>
-                <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline">View plan <ChevronRight size={13} /></Link>
+                <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">View plan <ChevronRight size={13} /></Link>
               </div>
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function SettingsPage() {
                 </div>
               );
             })}
-            <Link href="/settings/devices" className="mt-1 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[#005dff] hover:underline">+ Manage Devices</Link>
+            <Link href="/settings/devices" className="mt-1 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">+ Manage Devices</Link>
           </div>
         </Card>
       </div>
@@ -310,8 +310,8 @@ export default function SettingsPage() {
             { href: "/recycle-bin", label: "Recycle Bin", desc: "Restore deleted records", icon: Recycle },
             { href: "/plans", label: "Plans", desc: "Compare & upgrade", icon: CreditCard },
           ].map((l) => (
-            <Link key={l.href} href={l.href} className="flex items-center gap-3 rounded-[10px] border border-[#e7edf7] bg-white px-3 py-2.5 transition-colors hover:border-[#cfe0ff] hover:bg-[#f7faff]">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[#eef5ff] text-[#005dff]"><l.icon size={16} /></span>
+            <Link key={l.href} href={l.href} className="flex items-center gap-3 rounded-[10px] border border-[#e7edf7] bg-white px-3 py-2.5 transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-softer)]">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><l.icon size={16} /></span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-bold text-[#102347]">{l.label}</span>
                 <span className="block truncate text-[11px] text-[#64748b]">{l.desc}</span>
@@ -325,13 +325,13 @@ export default function SettingsPage() {
       {/* Footer */}
       <div className="flex flex-col items-stretch justify-between gap-3 rounded-[12px] border border-[#e7edf7] bg-white px-5 py-3.5 sm:flex-row sm:items-center">
         <div className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[#eef5ff] text-[#005dff]"><Settings2 size={16} /></span>
+          <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[var(--brand-soft)] text-[var(--brand)]"><Settings2 size={16} /></span>
           <div>
             <p className="text-[13px] font-extrabold text-[#102347]">About Artha</p>
             <p className="text-[11px] text-[#64748b]">Version {appVersion()} · build {buildId()}</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] font-bold text-[#005dff]">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] font-bold text-[var(--brand)]">
           <Link href="/settings/advanced" className="hover:underline">Diagnostics</Link>
           <Link href="/settings/setup" className="hover:underline">Setup checklist</Link>
           <a href="mailto:support@kiranaos.app?subject=Artha%20support" className="hover:underline">Contact Support</a>
@@ -343,7 +343,7 @@ export default function SettingsPage() {
 }
 
 function Manage({ href, label = "Manage" }: { href: string; label?: string }) {
-  return <Link href={href} className="flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline">{label} <ChevronRight size={13} /></Link>;
+  return <Link href={href} className="flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">{label} <ChevronRight size={13} /></Link>;
 }
 
 function OverviewStat({ label, value, sub }: { label: string; value: string; sub: string }) {

@@ -325,11 +325,11 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
             return (
               <article key={device.id || id} className="grid gap-4 p-4 transition-colors hover:bg-[#fbfcfe] xl:grid-cols-[minmax(220px,1.3fr)_minmax(170px,1fr)_minmax(160px,1fr)_auto] xl:items-center">
                 <div className="flex min-w-0 gap-3">
-                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[#edf4ff] text-[#075fff]"><DeviceIcon device={device} /></div>
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]"><DeviceIcon device={device} /></div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="truncate font-black text-[#102347]">{deviceNameOf(device)}</h3>
-                      {current ? <Badge className="bg-[#075fff] text-white">This device</Badge> : null}
+                      {current ? <Badge className="bg-[var(--brand)] text-white">This device</Badge> : null}
                       <Badge variant="outline" className={statusStyle(status)}>{status.replace(/_/g, " ")}</Badge>
                     </div>
                     <p className="mt-1 truncate text-xs text-[#60708e]">{[device.browser, device.operatingSystem].filter(Boolean).join(" on ") || device.platform || "Web installation"}</p>

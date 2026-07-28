@@ -213,7 +213,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
 
         <Button
           onClick={() => openMove(mode)}
-          style={{ background: mode === "in" ? "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" : "linear-gradient(180deg,#f43f5e 0%,#e11d48 100%)" }}
+          style={{ background: mode === "in" ? "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" : "linear-gradient(180deg,#f43f5e 0%,#e11d48 100%)" }}
           className="h-11 shrink-0 gap-1.5 rounded-[10px] px-5 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] hover:opacity-95"
         >
           <Plus size={16} /> {mode === "in" ? "New Stock In" : "New Stock Out"}

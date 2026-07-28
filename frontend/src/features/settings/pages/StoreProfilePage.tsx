@@ -281,7 +281,7 @@ export default function StoreProfilePage() {
       <Card>
           <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-4">
-            <span className="grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-[16px] bg-[#eef5ff] text-4xl">
+            <span className="grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-[16px] bg-[var(--brand-soft)] text-4xl">
               {sp.logoDataUrl ? <img src={String(sp.logoDataUrl)} alt="Store logo" className="h-full w-full object-cover" /> : "🏪"}
             </span>
             <div className="min-w-0">
@@ -300,7 +300,7 @@ export default function StoreProfilePage() {
           <div className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2">
             <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => uploadLogo(e.target.files?.[0])} />
             <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={() => logoInputRef.current?.click()}><Upload size={15} /> Upload Logo</Button>
-            <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-10 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+            <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-10 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {updateShop.isPending ? <Loader2 size={15} className="animate-spin" /> : <Store size={15} />} Save Profile
             </Button>
           </div>
@@ -330,7 +330,7 @@ export default function StoreProfilePage() {
 
         {/* Address & Location */}
         <Card>
-          <CardHead icon={<MapPin size={15} />} title="Address & Location" sub="Shop address & delivery area" action={<button onClick={openInMaps} className="text-[12px] font-bold text-[#005dff] hover:underline">Open in Maps</button>} />
+          <CardHead icon={<MapPin size={15} />} title="Address & Location" sub="Shop address & delivery area" action={<button onClick={openInMaps} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Open in Maps</button>} />
           <div className="space-y-3 px-5 pb-5">
             <Fld label="Shop Address"><Input className="h-10" value={addr.address} onChange={(e) => setAddr({ ...addr, address: e.target.value })} /></Fld>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -339,8 +339,8 @@ export default function StoreProfilePage() {
               <Fld label="Pincode"><Input className="h-10" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} /></Fld>
               <Fld label="Country"><Input className="h-10" value={addr.country} onChange={(e) => setAddr({ ...addr, country: e.target.value })} /></Fld>
             </div>
-            <div className="flex flex-col gap-3 rounded-[10px] border border-[#dbe6f7] bg-[#f3f8ff] px-3 py-3 sm:flex-row sm:items-center">
-              <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[#005dff] shadow-sm"><MapPin size={16} /></span>
+            <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--brand-border)] bg-[#f3f8ff] px-3 py-3 sm:flex-row sm:items-center">
+              <span className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--brand)] shadow-sm"><MapPin size={16} /></span>
               <p className="min-w-0 flex-1 text-[11px] font-medium text-[#34507f]">{sp.geo ? `Pinned at ${sp.geo}` : "Pin your exact shop location for delivery & maps."}</p>
               <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px] font-bold" onClick={useCurrentLocation}><Navigation size={13} /> Use current</Button>
             </div>
@@ -459,7 +459,7 @@ export default function StoreProfilePage() {
       />
 
       <div className="flex justify-end pb-2">
-        <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-11 gap-2 rounded-[10px] px-6 font-black text-white hover:opacity-95">
+        <Button onClick={requestSaveStoreDetails} disabled={updateShop.isPending} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 gap-2 rounded-[10px] px-6 font-black text-white hover:opacity-95">
           {updateShop.isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><CheckCircle2 size={16} /> Save All Changes</>}
         </Button>
       </div>
