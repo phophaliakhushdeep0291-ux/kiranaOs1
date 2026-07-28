@@ -74,10 +74,6 @@ const MODELS_WITH_CREATED_AT = new Set(
 );
 const backdateModels = BACKDATE_MODELS.filter((model) => MODELS_WITH_CREATED_AT.has(model));
 const skipped = BACKDATE_MODELS.filter((model) => !MODELS_WITH_CREATED_AT.has(model));
-// These append-only records now carry a separate economic timestamp used by
-// reports and compliance exports. Keep it aligned with the simulated day;
-// backdating createdAt alone would make a one-year run look empty to reports.
-const BUSINESS_DATE_MODELS = new Set(["bill", "udharLedger", "financialLedger"]);
 
 /**
  * The day-by-day back-dating pass scans on createdAt. Without an index that is
@@ -116,13 +112,6 @@ async function backdate(mark, ts) {
     const table = model[0].toUpperCase() + model.slice(1);
     for (let attempt = 0; ; attempt += 1) {
       try {
-        if (BUSINESS_DATE_MODELS.has(model)) {
-          await dbRef.$executeRawUnsafe(
-            `UPDATE "${table}" SET "createdAt" = ?, "businessDate" = ? WHERE "createdAt" >= ?`,
-            ts, ts, mark,
-          );
-          break;
-        }
         await dbRef.$executeRawUnsafe(
           `UPDATE "${table}" SET "createdAt" = ? WHERE "createdAt" >= ?`,
           ts, mark,
@@ -1001,11 +990,7 @@ async function runDay(date, dayIndex) {
   for (const bill of bills) {
     const hour = billTimes[index] ?? intBetween(rng, 9, 20);
     index += 1;
-    const billTime = atTime(date, hour, intBetween(rng, 0, 59));
-    await db.bill.update({
-      where: { id: bill.id },
-      data: { createdAt: billTime, businessDate: billTime },
-    });
+    await db.bill.update({ where: { id: bill.id }, data: { createdAt: atTime(date, hour, intBetween(rng, 0, 59)) } });
   }
 }
 

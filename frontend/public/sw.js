@@ -38,26 +38,10 @@ async function deleteOldShellCaches() {
   return oldKeys.length;
 }
 
-async function refreshOpenClientsAfterUpgrade() {
-  const windowClients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  await Promise.all(
-    windowClients.map((client) => {
-      const url = new URL(client.url);
-      if (url.origin !== self.location.origin || typeof client.navigate !== "function") return undefined;
-      return client.navigate(client.url).catch(() => undefined);
-    })
-  );
-}
-
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    deleteOldShellCaches()
-      .then((deletedCacheCount) => self.clients.claim().then(() => deletedCacheCount))
-      .then((deletedCacheCount) => {
-        if (deletedCacheCount > 0) return refreshOpenClientsAfterUpgrade();
-        return undefined;
-      })
-  );
+  // A new worker activates only after the cashier accepts the update (or every
+  // old tab closes). Never navigate/reload an open till from the worker itself.
+  event.waitUntil(deleteOldShellCaches().then(() => self.clients.claim()));
 });
 
 self.addEventListener("message", (event) => {

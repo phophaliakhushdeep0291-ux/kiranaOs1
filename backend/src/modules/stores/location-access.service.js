@@ -46,6 +46,18 @@ export function requireLocationAccess(capability = "view") {
   return async function locationAccessMiddleware(req, _res, next) {
     try {
       const requestedLocationId = requestLocationId(req);
+      const requestedSellerGstin = typeof req.query?.sellerGstin === "string" ? req.query.sellerGstin.trim().toUpperCase() : null;
+      if (req.method === "GET" && capability === "view" && requestedSellerGstin) {
+        const registrationLocations = await db.storeLocation.findMany({ where: { shopId: req.shopId, active: true, gstNumber: requestedSellerGstin }, select: { id: true } });
+        if (registrationLocations.length === 0) throw denied(`gstin:${requestedSellerGstin}`, capability);
+        for (const location of registrationLocations) {
+          await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId: location.id, capability });
+        }
+        req.locationScopeAll = true;
+        req.operationalLocation = null;
+        req.sellerRegistrationScope = requestedSellerGstin;
+        return next();
+      }
       if (req.method === "GET" && capability === "view" && requestedLocationId?.toLowerCase() === "all") {
         if (req.user?.role !== "owner") throw denied("all", capability);
         req.locationScopeAll = true;

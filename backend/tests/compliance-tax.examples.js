@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { buildGstr1WorkingFromRegister, buildInvoiceTaxSnapshot, calculateLineTaxBreakdown, validateGstin, validateHsn } from "../src/modules/compliance/compliance.service.js";
 import { createCustomerSchema, updateCustomerSchema } from "../src/modules/customers/customers.schema.js";
+import { createLocationSchema, createTransferSchema, updateLocationSchema } from "../src/modules/stores/stores.schema.js";
+import { billSellerIdentity, locationSellerIdentity } from "../src/utils/gstIdentity.js";
 
 const intrastateInclusive = calculateLineTaxBreakdown({ lineTotal: 118, gstRate: 18 }, "inclusive", "27", "27");
 assert.equal(intrastateInclusive.taxableValue, 100);
@@ -50,6 +52,31 @@ assert.equal(b2bCustomer.gstNumber, "27AAPFU0939F1ZV");
 assert.equal(createCustomerSchema.safeParse({ name: "Bad checksum", gstNumber: "27AAPFU0939F1ZA" }).success, false);
 assert.equal(createCustomerSchema.safeParse({ name: "Wrong state", gstNumber: "27AAPFU0939F1ZV", stateCode: "29" }).success, false);
 assert.equal(updateCustomerSchema.parse({ gstNumber: "29AAPFU0939F1ZR" }).stateCode, "29");
+const registeredLocation = createLocationSchema.parse({
+  name: "Karnataka Branch",
+  code: "kar01",
+  gstNumber: "29aapfu0939f1zr",
+  gstLegalName: "Karnataka Branch Private Limited",
+});
+assert.equal(registeredLocation.code, "KAR01");
+assert.equal(registeredLocation.gstNumber, "29AAPFU0939F1ZR");
+assert.equal(registeredLocation.gstStateCode, "29");
+assert.equal(createLocationSchema.safeParse({ name: "Bad GST", code: "BAD01", gstNumber: "29AAPFU0939F1ZA" }).success, false);
+assert.deepEqual(updateLocationSchema.parse({ gstNumber: null }), { gstNumber: null, gstStateCode: null });
+assert.equal(createTransferSchema.safeParse({ fromLocationId: "a", toLocationId: "b", documentNumber: "12345678901234567", items: [{ productId: "p", quantityBaseQty: 1 }] }).success, false);
+assert.equal(createTransferSchema.safeParse({ fromLocationId: "a", toLocationId: "b", documentDate: "2026-02-31", items: [{ productId: "p", quantityBaseQty: 1 }] }).success, false);
+assert.equal(createTransferSchema.parse({ fromLocationId: "a", toLocationId: "b", items: [{ productId: "p", quantityBaseQty: 1, declaredTaxableValue: 100 }] }).movementReason, "branch_transfer");
+
+const shopIdentity = { name: "Main Legal Name", gstNumber: "27AAPFU0939F1ZV", address: "Main Road", city: "Pune" };
+const explicitUnregistered = locationSellerIdentity({ name: "Unregistered Branch", gstNumber: null, address: "Branch Road" }, shopIdentity);
+assert.equal(explicitUnregistered.sellerGstin, null, "an explicit unregistered branch must never silently inherit the shop GSTIN");
+assert.equal(explicitUnregistered.registrationValid, false);
+const billSnapshot = billSellerIdentity({ sellerGstin: "29AAPFU0939F1ZR", sellerLegalName: "Historical Legal Name", sellerAddress: "Old address" }, shopIdentity);
+assert.equal(billSnapshot.sellerGstin, "29AAPFU0939F1ZR");
+assert.equal(billSnapshot.sellerStateCode, "29");
+assert.equal(billSnapshot.sellerLegalName, "Historical Legal Name");
+const unregisteredBillSnapshot = billSellerIdentity({ sellerGstin: null, sellerLegalName: "Unregistered Seller" }, shopIdentity);
+assert.equal(unregisteredBillSnapshot.sellerGstin, null, "a null seller snapshot must not be replaced with the mutable shop GSTIN");
 
 const register = {
   from: "2026-07-01T00:00:00.000Z",
@@ -84,5 +111,21 @@ assert.match(postgresSchema, /model BillItem \{[\s\S]*?\bhsn\s+String\?/);
 assert.match(billService, /hsn: product\?\.hsn \?\? item\.hsn \?\? null/);
 assert.equal(fs.existsSync(new URL("../prisma/migrations/20260718070000_bill_item_hsn_snapshot/migration.sql", import.meta.url)), true);
 assert.equal(fs.existsSync(new URL("../prisma-postgres/migrations/000062_bill_item_hsn_snapshot/migration.sql", import.meta.url)), true);
+for (const schema of [prismaSchema, postgresSchema]) {
+  assert.match(schema, /model Bill \{[\s\S]*?sellerGstin\s+String\?/);
+  assert.match(schema, /model StoreLocation \{[\s\S]*?gstStateCode\s+String\?/);
+  assert.match(schema, /model StockTransfer \{[\s\S]*?gstTreatment\s+String/);
+  assert.match(schema, /model TransferDocumentCounter \{/);
+  assert.match(schema, /@@unique\(\[shopId, documentType, documentNumber\]\)/);
+}
+const storeService = fs.readFileSync(new URL("../src/modules/stores/stores.service.js", import.meta.url), "utf8");
+const complianceService = fs.readFileSync(new URL("../src/modules/compliance/compliance.service.js", import.meta.url), "utf8");
+assert.match(storeService, /distinct_registration_supply/);
+assert.match(storeService, /TRANSFER_TAX_INVOICE_REQUIRED/);
+assert.match(storeService, /legalSubmissionStatus: "not_submitted"/);
+assert.match(complianceService, /SELLER_GSTIN_SCOPE_REQUIRED/);
+assert.match(complianceService, /billSellerIdentity/);
+assert.equal(fs.existsSync(new URL("../prisma/migrations/20260728180000_location_tax_registration_snapshots/migration.sql", import.meta.url)), true);
+assert.equal(fs.existsSync(new URL("../prisma-postgres/migrations/000071_location_tax_registration_snapshots/migration.sql", import.meta.url)), true);
 
 console.log("Compliance tax and HSN examples passed");

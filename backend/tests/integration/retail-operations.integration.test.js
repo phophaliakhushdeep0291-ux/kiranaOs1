@@ -55,6 +55,146 @@ if (ctx.skip) {
       assert.equal(overdraw.code, "INSUFFICIENT_LOCATION_STOCK");
     });
 
+    test("validates location GSTINs, documents distinct-registration transfers, and preserves bill seller snapshots", async () => {
+      const { tenant, auth } = await ownerContext();
+      const product = await createProduct(ctx.db, tenant.shop.id, {
+        name: "Registered Transfer Goods",
+        stockBaseQty: 10,
+        defaultPricePerRateUnit: 118,
+        gstRate: 18,
+        hsn: "1905",
+      });
+      const primary = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken })).locations[0];
+      assert.equal(primary.gstNumber, "27AAPFU0939F1ZV");
+      assert.equal(primary.gstStateCode, "27");
+      assert.equal(primary.taxRegistration.formatValid, true);
+      assert.equal(primary.taxRegistration.notice.includes("not verified"), true);
+
+      const invalidLocation = assertFailure(await ctx.post("/api/stores", {
+        name: "Invalid Registration Branch",
+        code: "BADGST",
+        gstNumber: "29AAPFU0939F1ZA",
+      }, { token: auth.accessToken }), 400);
+      assert.equal(invalidLocation.code, "VALIDATION_FAILED");
+      assert.match(invalidLocation.details.gstNumber.join(" "), /checksum/i);
+
+      const branch = assertSuccess(await ctx.post("/api/stores", {
+        name: "Karnataka Registered Branch",
+        code: "KAR01",
+        city: "Bengaluru",
+        address: "12 Market Road",
+        gstNumber: "29AAPFU0939F1ZR",
+        gstLegalName: "Karnataka Branch Private Limited",
+        gstTradeName: "KiranaOS Karnataka",
+        gstRegistrationType: "regular",
+      }, { token: auth.accessToken }), 201);
+      assert.equal(branch.gstStateCode, "29");
+      assert.equal(branch.taxRegistration.formatValid, true);
+      assert.equal(branch.taxRegistration.status, "format_valid");
+
+      const missingValue = assertFailure(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        items: [{ productId: product.id, quantityBaseQty: 2 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 422);
+      assert.equal(missingValue.code, "TRANSFER_VALUE_REQUIRED");
+
+      const missingInvoice = assertFailure(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        items: [{ productId: product.id, quantityBaseQty: 2, declaredTaxableValue: 200 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 422);
+      assert.equal(missingInvoice.code, "TRANSFER_TAX_INVOICE_REQUIRED");
+
+      const transfer = assertSuccess(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        movementReason: "branch_transfer",
+        documentType: "tax_invoice",
+        documentNumber: "INV/26-27/001",
+        documentDate: "2026-07-28",
+        items: [{ productId: product.id, quantityBaseQty: 2, declaredTaxableValue: 200 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(transfer.gstTreatment, "distinct_registration_supply");
+      assert.equal(transfer.isInterstate, true);
+      assert.equal(transfer.fromGstin, "27AAPFU0939F1ZV");
+      assert.equal(transfer.toGstin, "29AAPFU0939F1ZR");
+      assert.equal(transfer.taxableValue, 200);
+      assert.equal(transfer.igst, 36);
+      assert.equal(transfer.cgst, 0);
+      assert.equal(transfer.sgst, 0);
+      assert.equal(transfer.taxTotal, 36);
+      assert.equal(transfer.consignmentValue, 236);
+      assert.equal(transfer.legalSubmissionStatus, "not_submitted");
+      assert.match(transfer.complianceNotice, /not verified/i);
+
+      const duplicateDocument = assertFailure(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        documentType: "tax_invoice",
+        documentNumber: "INV/26-27/001",
+        documentDate: "2026-07-28",
+        items: [{ productId: product.id, quantityBaseQty: 1, declaredTaxableValue: 100 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(duplicateDocument.code, "TRANSFER_DOCUMENT_DUPLICATE");
+      const branchInventoryAfterDuplicate = assertSuccess(await ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }));
+      assert.equal(branchInventoryAfterDuplicate.products.find((row) => row.id === product.id).stockBaseQty, 2, "a duplicate document must roll back stock movement");
+
+      const firstBill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        billType: "gst_invoice",
+        quantity: 1,
+        ratePerRateUnit: 118,
+        gstRate: 18,
+        hsn: "1905",
+      }), { token: auth.accessToken, headers: { "x-location-id": branch.id } }), 201);
+      assert.equal(firstBill.sellerGstin, "29AAPFU0939F1ZR");
+      assert.equal(firstBill.sellerStateCode, "29");
+      assert.equal(firstBill.sellerLegalName, "Karnataka Branch Private Limited");
+      assert.equal(firstBill.sellerTradeName, "KiranaOS Karnataka");
+
+      const movedRegistration = assertSuccess(await ctx.request("PATCH", `/api/stores/${branch.id}`, {
+        token: auth.accessToken,
+        body: {
+          gstNumber: "07AAPFU0939F1ZX",
+          gstLegalName: "Delhi Branch Private Limited",
+          gstTradeName: "KiranaOS Delhi",
+          city: "New Delhi",
+        },
+      }));
+      assert.equal(movedRegistration.gstStateCode, "07");
+      const storedFirstBill = await ctx.db.bill.findUnique({ where: { id: firstBill.id } });
+      assert.equal(storedFirstBill.sellerGstin, "29AAPFU0939F1ZR", "location edits must not rewrite historical seller identity");
+      assert.equal(storedFirstBill.sellerLegalName, "Karnataka Branch Private Limited");
+
+      const secondBill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        billType: "gst_invoice",
+        quantity: 1,
+        ratePerRateUnit: 118,
+        gstRate: 18,
+        hsn: "1905",
+      }), { token: auth.accessToken, headers: { "x-location-id": branch.id } }), 201);
+      assert.equal(secondBill.sellerGstin, "07AAPFU0939F1ZX");
+      assert.equal(secondBill.sellerStateCode, "07");
+
+      const register = assertSuccess(await ctx.get("/api/compliance/gst-register?range=yearly&format=json&locationId=all", { token: auth.accessToken }));
+      assert.equal(register.registrationScope.filingScopeRequired, true);
+      assert.deepEqual(new Set(register.rows.map((row) => row.sellerGstin)), new Set(["29AAPFU0939F1ZR", "07AAPFU0939F1ZX"]));
+      const unsafeWorking = assertFailure(await ctx.get("/api/compliance/gstr1-working?range=yearly&format=json&locationId=all", { token: auth.accessToken }), 422);
+      assert.equal(unsafeWorking.code, "SELLER_GSTIN_SCOPE_REQUIRED");
+      const scopedWorking = assertSuccess(await ctx.get("/api/compliance/gstr1-working?range=yearly&format=json&sellerGstin=29AAPFU0939F1ZR", { token: auth.accessToken }));
+      assert.equal(scopedWorking.registrationScope.selectedGstin, "29AAPFU0939F1ZR");
+      assert.equal(scopedWorking.registrationScope.filingScopeRequired, false);
+      assert.equal(scopedWorking.documentSeries.length, 1);
+
+      const audits = await ctx.db.auditLog.findMany({ where: { shopId: tenant.shop.id, entityId: { in: [branch.id, transfer.id] } } });
+      assert.equal(audits.some((row) => row.action === "STORE_LOCATION_CREATED"), true);
+      assert.equal(audits.some((row) => row.action === "STORE_LOCATION_UPDATED"), true);
+      assert.equal(audits.some((row) => row.action === "STOCK_TRANSFER_COMPLETED"), true);
+    });
     test("enforces the subscribed store limit", async () => {
       const { tenant, auth } = await ownerContext();
       const current = assertSuccess(await ctx.get("/api/stores", { token: auth.accessToken }));
