@@ -14,7 +14,7 @@ import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
 import { createAuditLog } from "../audit/audit.service.js";
 
 const BACKUP_FORMAT = "kiranaos_aes256gcm_gzip_v1";
-const BACKUP_SCHEMA_VERSION = "2026-07-26";
+const BACKUP_SCHEMA_VERSION = "2026-07-28";
 const BACKUP_HEADER = Buffer.from("KOSB1", "ascii");
 const MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
 
@@ -110,6 +110,7 @@ async function buildShopSnapshot(shopId, client = db) {
     locationStocks,
     stockCountSessions,
     stockTransfers,
+    transferDocumentCounters,
     giftCards,
     giftCardTransactions,
     loyaltyPrograms,
@@ -152,6 +153,7 @@ async function buildShopSnapshot(shopId, client = db) {
     client.locationStock.findMany({ where: { shopId } }),
     client.stockCountSession.findMany({ where: { shopId }, include: { lines: true } }),
     client.stockTransfer.findMany({ where: { shopId }, include: { items: true } }),
+    client.transferDocumentCounter.findMany({ where: { shopId } }),
     client.giftCard.findMany({ where: { shopId } }),
     client.giftCardTransaction.findMany({ where: { shopId } }),
     client.loyaltyProgram.findMany({ where: { shopId } }),
@@ -194,6 +196,7 @@ async function buildShopSnapshot(shopId, client = db) {
     locationStocks,
     stockCountSessions,
     stockTransfers,
+    transferDocumentCounters,
     giftCards,
     giftCardTransactions,
     loyaltyPrograms,

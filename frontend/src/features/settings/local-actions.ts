@@ -1,6 +1,6 @@
 import { offlineDB } from "@/lib/offline/db";
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
-import { enqueueOutboxOperation } from "@/features/sync/outbox";
+import { buildOutboxOperation } from "@/features/sync/outbox";
 import { parseOrThrow } from "@/lib/offline/actions/utils";
 import type { Shop } from "@/types/api";
 
@@ -24,12 +24,15 @@ export async function updateSettingsLocalFirst(data: Partial<Shop> & { ownerPin?
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
-  await offlineDB.setSetting(SHOP_CACHE_KEY, shop);
-  await enqueueOutboxOperation({
+  const outbox = buildOutboxOperation({
     entity_type: "settings",
     entity_id: shop.id,
     operation_type: "UPDATE_SETTINGS",
     payload: { shop, ownerPin: data.ownerPin },
+  });
+  await offlineDB.transaction(["settings", "sync_outbox"], async (tx) => {
+    await tx.setSetting(SHOP_CACHE_KEY, shop);
+    await tx.enqueueOutboxOperation(outbox);
   });
   return shop;
 }

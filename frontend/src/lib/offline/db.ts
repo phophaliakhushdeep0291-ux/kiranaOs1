@@ -430,6 +430,8 @@ function isOutboxPendingOrRetryable(event: PendingSyncEvent): boolean {
   );
 }
 
+export const MAX_AUTOMATIC_RETRY_ATTEMPTS = 12;
+
 function isOutboxPendingNow(
   event: PendingSyncEvent,
   now = Date.now(),
@@ -440,6 +442,7 @@ function isOutboxPendingNow(
     event.status === "FAILED" || event.sync_status === "failed";
   if (isPending) return true;
   if (!isRetryableFailed) return false;
+  if ((event.retry_count ?? event.attempts ?? 0) >= MAX_AUTOMATIC_RETRY_ATTEMPTS) return false;
   if (!event.next_retry_at) return true;
   const retryAt = new Date(event.next_retry_at).getTime();
   return !Number.isFinite(retryAt) || retryAt <= now;

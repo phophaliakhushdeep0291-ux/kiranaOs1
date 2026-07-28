@@ -10,6 +10,7 @@ const syncApi = readFileSync("src/features/sync/api.ts", "utf8");
 const syncEngine = readFileSync("src/features/sync/sync-engine.ts", "utf8");
 const syncPull = readFileSync("src/features/sync/sync-pull.ts", "utf8");
 const authContext = readFileSync("src/features/auth/AuthContext.tsx", "utf8");
+const offlineDb = readFileSync("src/lib/offline/db.ts", "utf8");
 
 describe("multi-session request isolation", () => {
   it("allows visible tabs/devices to make interactive requests independently", () => {
@@ -35,6 +36,11 @@ describe("multi-session request isolation", () => {
     expect(realtimeBridge).toContain("kirana.broadcastActiveQueryRefresh.lastRun");
   });
 
+  it("bounds automatic retry loops while preserving manual retry", () => {
+    expect(offlineDb).toContain("MAX_AUTOMATIC_RETRY_ATTEMPTS = 12");
+    expect(offlineDb).toContain("retry_count ?? event.attempts ?? 0");
+    expect(offlineDb).toContain(">= MAX_AUTOMATIC_RETRY_ATTEMPTS");
+  });
   it("lets the visible tab with local backup items recover its own queue", () => {
     expect(offlineStatus).toContain("LOCAL_QUEUE_RECOVERY_THROTTLE_KEY");
     expect(offlineStatus).toContain("counts.totalBlocking === 0");

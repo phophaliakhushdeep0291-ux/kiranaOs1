@@ -845,6 +845,12 @@ model StockTransfer {
   isInterstate          Boolean   @default(false)
   complianceStatus      String    @default("not_applicable")
   eWayReviewRequired    Boolean   @default(false)
+  eWayReviewStatus      String    @default("not_required") // not_required | pending | external_reference_recorded | not_required_after_review
+  eWayBillNumber        String?
+  eWayBillDate          DateTime?
+  eWayReviewReason      String?
+  eWayReviewedAt        DateTime?
+  eWayReviewedByUserId  String?
   taxableValue          Float     @default(0)
   taxableValuePaise     BigInt?
   cgst                  Float     @default(0)
@@ -870,8 +876,10 @@ model StockTransfer {
 
   @@unique([shopId, referenceNo])
   @@unique([shopId, documentType, documentNumber])
+  @@unique([shopId, eWayBillNumber])
   @@index([shopId, createdAt])
   @@index([shopId, status, createdAt])
+  @@index([shopId, eWayReviewStatus, createdAt])
 }
 
 model StockTransferItem {
