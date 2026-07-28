@@ -21,10 +21,11 @@ export interface OfflineReadinessSnapshot {
 async function readStorageHealth() {
   const manager = typeof navigator !== "undefined" ? navigator.storage : undefined;
   const persistentStorageSupported = Boolean(manager?.persisted && manager?.persist);
-  const [estimate, persisted] = await Promise.all([
+  const [rawEstimate, persisted] = await Promise.all([
     manager?.estimate?.().catch(() => ({})) ?? Promise.resolve({}),
     manager?.persisted?.().catch(() => false) ?? Promise.resolve(false),
   ]);
+  const estimate = rawEstimate as StorageEstimate;
   const usage = typeof estimate.usage === "number" ? estimate.usage : null;
   const quota = typeof estimate.quota === "number" ? estimate.quota : null;
   return {

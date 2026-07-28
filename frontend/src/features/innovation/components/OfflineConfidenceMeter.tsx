@@ -21,6 +21,10 @@ function formatGrace(value: string | null) {
   return time > Date.now() ? `${formatDistanceToNow(new Date(time))} left` : "Grace expired";
 }
 
+function formatStorage(snapshot: OfflineConfidenceSnapshot | null) {
+  if (!snapshot || snapshot.storageUsageRatio === null) return "Storage estimate unavailable";
+  return `${Math.round(snapshot.storageUsageRatio * 100)}% used`;
+}
 export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean }) {
   const [snapshot, setSnapshot] = useState<OfflineConfidenceSnapshot | null>(null);
 
@@ -37,6 +41,7 @@ export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean 
 
   const dbHealthy = snapshot?.dbHealthy ?? true;
   const hasWarning = Boolean(snapshot?.warning);
+  const offlineReady = snapshot?.readinessState === "ready";
 
   return (
     <Card className={hasWarning ? "border-amber-300 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/50"}>
@@ -46,7 +51,7 @@ export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean 
             {dbHealthy ? <ShieldCheck className="h-5 w-5 text-emerald-600" /> : <AlertTriangle className="h-5 w-5 text-destructive" />}
             Offline confidence meter
           </CardTitle>
-          <Badge variant={dbHealthy ? "secondary" : "destructive"}>{dbHealthy ? "Data safe locally" : "Check recovery"}</Badge>
+          <Badge variant={offlineReady ? "secondary" : dbHealthy ? "outline" : "destructive"}>{offlineReady ? "Ready for offline billing" : dbHealthy ? "Offline setup needed" : "Check recovery"}</Badge>
         </div>
       </CardHeader>
       <CardContent className={compact ? "p-4 pt-0" : "space-y-4"}>
@@ -68,6 +73,14 @@ export function OfflineConfidenceMeter({ compact = false }: { compact?: boolean 
           <div className="rounded-xl border bg-background p-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground"><Database className="h-3.5 w-3.5" /> Offline grace</div>
             <div className="mt-1 text-sm font-semibold">{formatGrace(snapshot?.offlineGraceUntil ?? null)}</div>
+          </div>          <div className="rounded-xl border bg-background p-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground"><Database className="h-3.5 w-3.5" /> App restart</div>
+            <div className="mt-1 text-sm font-semibold">{snapshot?.appShellCached ? "Cached for offline" : "Cache not verified"}</div>
+          </div>
+          <div className="rounded-xl border bg-background p-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" /> Device storage</div>
+            <div className="mt-1 text-sm font-semibold">{snapshot?.persistentStorageGranted ? "Protected" : "May be cleaned"}</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">{formatStorage(snapshot)}</div>
           </div>
         </div>
         {!compact && (

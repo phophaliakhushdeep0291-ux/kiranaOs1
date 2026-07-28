@@ -30,7 +30,23 @@ function stampServiceWorkerBuild() {
       const swPath = path.resolve(projectRoot, "dist/public/sw.js");
       if (!fs.existsSync(swPath)) return;
       const source = fs.readFileSync(swPath, "utf8");
-      fs.writeFileSync(swPath, source.replaceAll("__KIRANA_BUILD_ID__", buildId));
+      const publicRoot = path.resolve(projectRoot, "dist/public");
+      const assetsRoot = path.join(publicRoot, "assets");
+      const collectAssets = (dir: string): string[] => fs.existsSync(dir)
+        ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+            const absolute = path.join(dir, entry.name);
+            if (entry.isDirectory()) return collectAssets(absolute);
+            if (!/\.(?:js|css)$/.test(entry.name)) return [];
+            return [`/${path.relative(publicRoot, absolute).replaceAll("\\", "/")}`];
+          })
+        : [];
+      const coreAssets = collectAssets(assetsRoot).sort();
+      fs.writeFileSync(
+        swPath,
+        source
+          .replaceAll("__KIRANA_BUILD_ID__", buildId)
+          .replace("__KIRANA_CORE_ASSETS__", JSON.stringify(coreAssets)),
+      );
     },
   };
 }

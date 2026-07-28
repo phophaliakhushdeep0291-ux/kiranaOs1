@@ -61,7 +61,8 @@ interface ComplianceReadiness {
   legallyReady: boolean;
   provider: { mode: string; providerName?: string | null; configured: boolean; certified?: boolean; legalSubmission: boolean };
   checks: Array<{ key: string; label: string; ready: boolean; detail: string }>;
-  gaps: { missingHsn: Array<{ id: string; name: string }>; invalidHsn: Array<{ id: string; name: string }> };
+  registrations: Array<{ locationId: string; code: string; name: string; gstin: string | null; stateCode: string | null; formatValid: boolean; reason: string | null; portalVerified: false }>;
+  gaps: { invalidRegistrations?: Array<{ locationId: string; name: string; reason: string | null }>; missingHsn: Array<{ id: string; name: string }>; invalidHsn: Array<{ id: string; name: string }>; transferReviewCount?: number };
 }
 interface EWayDraft {
   billId: string;
@@ -115,6 +116,7 @@ export default function TaxesSettingsPage() {
   const [hsnPinOpen, setHsnPinOpen] = useState(false);
   const [pendingHsn, setPendingHsn] = useState<{ row: HsnRow; hsn: string; gstRate: number } | null>(null);
   const [savingHsn, setSavingHsn] = useState(false);
+  const [selectedSellerGstin, setSelectedSellerGstin] = useState("");
   const hsnInputRef = useRef<HTMLInputElement>(null);
   const rateInputRef = useRef<HTMLInputElement>(null);
   const seeded = useRef(false);
@@ -148,6 +150,19 @@ export default function TaxesSettingsPage() {
     consistent: row.consistent,
   }));
   const eligibleBills = (recentBillsQ.data?.bills ?? []).filter((bill) => bill.billType === "gst_invoice");
+  const validRegistrations = (readinessQ.data?.registrations ?? []).filter((registration) => registration.formatValid && registration.gstin);
+  const uniqueRegistrations = [...new Map(validRegistrations.map((registration) => [registration.gstin as string, registration])).values()];
+
+  useEffect(() => {
+    if (uniqueRegistrations.length === 1 && !selectedSellerGstin) setSelectedSellerGstin(uniqueRegistrations[0].gstin || "");
+    if (selectedSellerGstin && !uniqueRegistrations.some((registration) => registration.gstin === selectedSellerGstin)) setSelectedSellerGstin("");
+  }, [selectedSellerGstin, uniqueRegistrations]);
+
+  const requireSellerRegistration = () => {
+    if (selectedSellerGstin) return selectedSellerGstin;
+    toast({ title: "Choose a seller GSTIN", description: "GST returns and working papers are registration-specific. Select one active registration first.", variant: "destructive" });
+    return null;
+  };
 
   const requestEwayApproval = () => {
     if (!ewayDraft.billId || !ewayDraft.distanceKm || !ewayDraft.deliveryAddress.trim() || (!ewayDraft.transporterId.trim() && !ewayDraft.transporterName.trim()) || (ewayDraft.transportMode === "road" && !ewayDraft.vehicleNumber.trim())) {
@@ -222,19 +237,23 @@ export default function TaxesSettingsPage() {
     }
   }
   async function exportGstReport() {
+    const sellerGstin = requireSellerRegistration();
+    if (!sellerGstin) return;
     try {
-      const csv = await apiRequest<string>("/compliance/gst-register?range=monthly&format=csv");
-      downloadText(`artha-gst-invoice-register-${new Date().toISOString().slice(0, 10)}.csv`, csv);
-      toast({ title: "GST invoice register downloaded", description: "Line-level HSN and tax values are ready for accountant review." });
+      const csv = await apiRequest<string>(`/compliance/gst-register?range=monthly&format=csv&sellerGstin=${encodeURIComponent(sellerGstin)}`);
+      downloadText(`artha-gst-register-${sellerGstin}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      toast({ title: "GST invoice register downloaded", description: `${sellerGstin} only · seller snapshots, HSN, and tax values are ready for accountant review.` });
     } catch (error) {
       toast({ title: "Export unavailable", description: error instanceof Error ? error.message : "Could not export the GST register.", variant: "destructive" });
     }
   }
   async function exportGstr1Working() {
+    const sellerGstin = requireSellerRegistration();
+    if (!sellerGstin) return;
     try {
-      const csv = await apiRequest<string>("/compliance/gstr1-working?range=monthly&format=csv");
-      downloadText(`artha-gstr1-working-${new Date().toISOString().slice(0, 10)}.csv`, csv);
-      toast({ title: "GSTR-1 working papers downloaded", description: "B2B, B2CS, CDNR, CDNUR and HSN sections include place-of-supply treatment and return netting. Review with your accountant before filing." });
+      const csv = await apiRequest<string>(`/compliance/gstr1-working?range=monthly&format=csv&sellerGstin=${encodeURIComponent(sellerGstin)}`);
+      downloadText(`artha-gstr1-working-${sellerGstin}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      toast({ title: "GSTR-1 working papers downloaded", description: `${sellerGstin} only · review B2B, B2CS, credit-note, HSN, and place-of-supply treatment with your accountant before filing.` });
     } catch (error) {
       toast({ title: "Export unavailable", description: error instanceof Error ? error.message : "Could not export GSTR-1 working papers.", variant: "destructive" });
     }
@@ -355,6 +374,17 @@ export default function TaxesSettingsPage() {
               </div>
             </div>
           ) : <>
+            <div className="px-5 pb-4">
+              <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                <Label htmlFor="gst-registration-scope" className="text-xs font-black text-[#17345f]">Seller registration for export</Label>
+                <Select value={selectedSellerGstin} onValueChange={setSelectedSellerGstin}>
+                  <SelectTrigger id="gst-registration-scope" className="mt-2 h-10 bg-white"><SelectValue placeholder="Choose one seller GSTIN" /></SelectTrigger>
+                  <SelectContent>{uniqueRegistrations.map((registration) => <SelectItem key={registration.gstin} value={registration.gstin || ""}>{registration.gstin} · {registration.name} · State {registration.stateCode}</SelectItem>)}</SelectContent>
+                </Select>
+                <p className="mt-2 text-[11px] leading-4 text-[#64748b]">Registers and GSTR working papers use immutable bill seller snapshots across every branch assigned to this GSTIN. Format/checksum is validated locally; portal status is not verified.</p>
+                {!readinessQ.isLoading && uniqueRegistrations.length === 0 && <p className="mt-2 text-[11px] font-bold text-rose-700">No active location has a valid seller GSTIN. Correct the location registration before exporting.</p>}
+              </div>
+            </div>
             <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-2">
               <Kpi label="GST Collected" value={gstQ.isLoading ? "…" : inr(gstQ.data?.gstCollected)} tone="green" />
               <Kpi label="Taxable Sales" value={gstQ.isLoading ? "…" : inr(gstQ.data?.taxableSales)} tone="blue" />

@@ -140,7 +140,10 @@ export async function recoverFromStaleDeploy(): Promise<void> {
 export function activateWaitingServiceWorker(): void {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
   void navigator.serviceWorker.getRegistration().then((registration) => {
-    registration?.waiting?.postMessage({ type: "SKIP_WAITING" });
-    window.location.reload();
+    if (registration?.waiting) {
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      return;
+    }
+    void registration?.update();
   });
 }

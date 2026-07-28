@@ -20,6 +20,7 @@ import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 import { autoCleanupEnabled, getAppPreferences } from "@/features/settings/app-preferences";
 import { loadSecurityPolicy } from "@/features/settings/security-policy";
 import { offlineDB } from "@/lib/offline/db";
+import { requestPersistentOfflineStorage } from "@/features/sync/offline-readiness";
 
 function shouldRetryQuery(failureCount: number, error: unknown) {
   if (error instanceof ApiClientError) {
@@ -57,6 +58,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
     // first paint of any page, not only after Settings has been opened.
     getAppPreferences();
     void loadSecurityPolicy();
+    void requestPersistentOfflineStorage().then((granted) => {
+      window.dispatchEvent(new CustomEvent("kirana:offline-storage-persistence", { detail: { granted } }));
+    });
     void initializeOfflineStorage()
       .then(() => hardenLocalFinancialData())
       .catch(() => {

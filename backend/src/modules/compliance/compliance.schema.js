@@ -7,6 +7,7 @@ export const complianceExportQuery = z.object({
   to: z.string().optional(),
   format: z.enum(["json", "csv"]).default("json"),
   sellerGstin: z.string().trim().toUpperCase().refine((value) => validateGstin(value).valid, "A valid seller GSTIN is required").optional(),
+  locationId: z.string().trim().min(1).optional(),
 });
 
 export const hsnCategoryAssignmentSchema = z.object({

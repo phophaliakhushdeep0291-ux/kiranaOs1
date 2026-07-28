@@ -134,8 +134,11 @@ describe("frontend security hardening", () => {
     expect(source).toContain("async function networkFirstStatic");
     expect(source).toContain('["style", "script", "worker"].includes(request.destination)');
     expect(source).toContain('["font", "image"].includes(request.destination)');
-    expect(source).toContain("refreshOpenClientsAfterUpgrade");
-    expect(source).toContain("client.navigate(client.url)");
+    expect(source).toContain("CORE_ASSETS");
+    expect(source).toContain("cache.addAll([...APP_SHELL, ...CORE_ASSETS])");
+    expect(source).not.toContain("refreshOpenClientsAfterUpgrade");
+    expect(source).not.toContain("client.navigate(client.url)");
+    expect(source).not.toContain(".then(() => self.skipWaiting())");
   });
 
   it("permission denied UI is accessible and explicit", () => {

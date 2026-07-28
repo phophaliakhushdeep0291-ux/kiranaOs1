@@ -1,6 +1,7 @@
 /* Artha service worker: app-shell only. Business data stays in IndexedDB, not Cache Storage. */
 const BUILD_ID = "__KIRANA_BUILD_ID__";
-const CACHE_VERSION = `kiranaos-shell-v6-${BUILD_ID}`;
+const CACHE_VERSION = `kiranaos-shell-v7-${BUILD_ID}`;
+const CORE_ASSETS = __KIRANA_CORE_ASSETS__;
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -26,8 +27,7 @@ const NEVER_CACHE_PATTERNS = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
-      .then((cache) => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
+      .then((cache) => cache.addAll([...APP_SHELL, ...CORE_ASSETS]))
   );
 });
 

@@ -48,10 +48,14 @@ export function requireLocationAccess(capability = "view") {
       const requestedLocationId = requestLocationId(req);
       const requestedSellerGstin = typeof req.query?.sellerGstin === "string" ? req.query.sellerGstin.trim().toUpperCase() : null;
       if (req.method === "GET" && capability === "view" && requestedSellerGstin) {
-        const registrationLocations = await db.storeLocation.findMany({ where: { shopId: req.shopId, active: true, gstNumber: requestedSellerGstin }, select: { id: true } });
-        if (registrationLocations.length === 0) throw denied(`gstin:${requestedSellerGstin}`, capability);
-        for (const location of registrationLocations) {
-          await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId: location.id, capability });
+        const [currentLocations, historicalBills] = await Promise.all([
+          db.storeLocation.findMany({ where: { shopId: req.shopId, active: true, gstNumber: requestedSellerGstin }, select: { id: true } }),
+          db.bill.findMany({ where: { shopId: req.shopId, sellerGstin: requestedSellerGstin, locationId: { not: null } }, distinct: ["locationId"], select: { locationId: true } }),
+        ]);
+        const registrationLocationIds = [...new Set([...currentLocations.map((row) => row.id), ...historicalBills.map((row) => row.locationId).filter(Boolean)])];
+        if (registrationLocationIds.length === 0) throw denied(`gstin:${requestedSellerGstin}`, capability);
+        for (const locationId of registrationLocationIds) {
+          await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId, capability });
         }
         req.locationScopeAll = true;
         req.operationalLocation = null;
