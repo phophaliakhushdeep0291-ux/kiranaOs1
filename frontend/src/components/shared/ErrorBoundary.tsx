@@ -125,7 +125,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         return (
           <div className="app-page-shell flex min-h-[70vh] items-center justify-center p-4">
             <div className="flex flex-col items-center gap-3 text-center">
-              <RefreshCcw size={22} className="animate-spin text-[#075fff]" aria-hidden="true" />
+              <RefreshCcw size={22} className="animate-spin text-[var(--brand)]" aria-hidden="true" />
               <p className="text-sm font-semibold text-muted-foreground">Updating to the latest version...</p>
               <Button variant="outline" size="sm" className="mt-1" onClick={this.retryChunkRecovery}>
                 Taking too long? Reload now

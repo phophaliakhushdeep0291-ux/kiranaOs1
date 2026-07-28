@@ -131,7 +131,7 @@ export default function ImportOrderPage() {
             <span
               key={n}
               className={`grid h-7 w-7 place-items-center rounded-full text-[11px] font-black ${
-                n <= have ? "bg-[#075fff] text-white" : "border border-[#d6e0ee] text-[#94a3b8]"
+                n <= have ? "bg-[var(--brand)] text-white" : "border border-[#d6e0ee] text-[#94a3b8]"
               }`}
             >
               {n}
@@ -159,7 +159,7 @@ export default function ImportOrderPage() {
   if (productsQuery.isLoading) {
     return (
       <Centered>
-        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#dbe6f5] border-t-[#075fff]" />
+        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#dbe6f5] border-t-[var(--brand)]" />
         <p className="mt-4 text-sm font-medium text-[#5b6b85]">Reading the order…</p>
       </Centered>
     );
@@ -222,7 +222,7 @@ export default function ImportOrderPage() {
             type="button"
             onClick={addToBilling}
             disabled={adding}
-            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#075fff] px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-[#075fff]/25 disabled:opacity-60"
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand)] px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-[var(--brand)]/25 disabled:opacity-60"
           >
             Add to Open Bills <ArrowRight size={18} />
           </button>
@@ -242,7 +242,7 @@ function Centered({ children }: { children: React.ReactNode }) {
 }
 
 function Icon({ tone, children }: { tone: "blue" | "rose"; children: React.ReactNode }) {
-  const cls = tone === "blue" ? "bg-[#eaf2ff] text-[#075fff]" : "bg-[#fff1f2] text-[#e11d48]";
+  const cls = tone === "blue" ? "bg-[#eaf2ff] text-[var(--brand)]" : "bg-[#fff1f2] text-[#e11d48]";
   return <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${cls}`}>{children}</div>;
 }
 
@@ -251,7 +251,7 @@ function BackToBilling({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="mt-5 rounded-xl border border-[#d6e0ee] bg-white px-4 py-2.5 text-sm font-bold text-[#075fff]"
+      className="mt-5 rounded-xl border border-[#d6e0ee] bg-white px-4 py-2.5 text-sm font-bold text-[var(--brand)]"
     >
       Go to Billing
     </button>

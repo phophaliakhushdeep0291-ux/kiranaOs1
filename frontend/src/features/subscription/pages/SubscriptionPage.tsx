@@ -67,11 +67,11 @@ export default function SubscriptionPage() {
       />
 
       <Card className={`overflow-hidden rounded-[18px] shadow-[0_16px_42px_rgba(16,35,71,0.08)] ${snapshot.localOnlyAfterExpiry ? "border-amber-300" : "border-[#d7e3f3]"}`}>
-        <CardHeader className="border-b border-[#dbe7f7] bg-[linear-gradient(135deg,#f7faff_0%,#edf4ff_100%)] p-5 sm:p-6">
-          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#075fff]">Current plan</p>
+        <CardHeader className="border-b border-[#dbe7f7] bg-[linear-gradient(135deg,var(--brand-softer)_0%,var(--brand-soft)_100%)] p-5 sm:p-6">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--brand)]">Current plan</p>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <CardTitle className="flex items-center gap-2.5 font-display text-2xl font-black tracking-tight text-[#102347]">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-[#075fff] shadow-sm ring-1 ring-[#d8e5fa]"><StateIcon className="h-5 w-5" /></span>
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-[var(--brand)] shadow-sm ring-1 ring-[#d8e5fa]"><StateIcon className="h-5 w-5" /></span>
               {snapshot.plan.name}
             </CardTitle>
             <p className="font-display text-2xl font-black tracking-tight text-[#102347]">₹{snapshot.plan.price}<span className="text-sm font-semibold text-[#66758d]">/month</span></p>

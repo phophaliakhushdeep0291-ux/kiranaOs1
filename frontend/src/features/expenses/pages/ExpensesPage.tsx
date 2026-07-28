@@ -154,7 +154,7 @@ export default function ExpensesPage() {
       <div className="space-y-4">
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
-          <Kpi icon={<Wallet size={16} />} iconBg="bg-[#eef5ff] text-[#0057ff]" label="Today's Expenses" value={inr(ov?.today)}
+          <Kpi icon={<Wallet size={16} />} iconBg="bg-[var(--brand-soft)] text-[#0057ff]" label="Today's Expenses" value={inr(ov?.today)}
             sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
           <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="This Month's Expenses" value={inr(ov?.month)}
             sub={monthDelta == null ? "vs last month" : `${Math.abs(monthDelta)}% vs last month`} subTone={monthDelta == null ? "muted" : monthDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
@@ -187,7 +187,7 @@ export default function ExpensesPage() {
             </SelectContent>
           </Select>
           <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={exportCsv} disabled={rows.length === 0}><Download size={15} /> Export</Button>
-          <Button onClick={openAdd} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-10 gap-2 rounded-[10px] font-bold text-white hover:opacity-95">
+          <Button onClick={openAdd} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-10 gap-2 rounded-[10px] font-bold text-white hover:opacity-95">
             <Plus size={16} /> Add Expense
           </Button>
         </div>
@@ -273,7 +273,7 @@ export default function ExpensesPage() {
             <div className="py-12 text-center text-[13px] text-rose-600">Couldn't load expenses. Check your connection and retry.</div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-[#eef5ff] text-[#0057ff]"><Receipt size={22} /></span>
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#0057ff]"><Receipt size={22} /></span>
               <p className="text-[13px] font-bold text-[#102347]">No expenses found</p>
               <p className="text-[12px] text-[#64748b]">Add rent, salary, utilities and other costs to track your profit.</p>
             </div>
@@ -545,7 +545,7 @@ function ExpensePanel({ open, editing, saving, width, onResizeStart, onClose, on
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           <div className="grid grid-cols-2 gap-2.5">
             <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,#0047e8 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+            <Button type="submit" disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><Receipt size={15} /> Save Expense</>}
             </Button>
           </div>

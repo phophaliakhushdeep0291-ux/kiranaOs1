@@ -367,7 +367,7 @@ export default function ReportsPage() {
       previous: previous?.sales ?? 0,
       icon: <ShoppingBag size={16} />,
       color: "#1264f6",
-      iconClass: "bg-[#edf4ff] text-[#1264f6]",
+      iconClass: "bg-[var(--brand-soft)] text-[#1264f6]",
       spark: trend.map((point) => point.sales),
     },
     {
@@ -432,7 +432,7 @@ export default function ReportsPage() {
       previous: previousNetProfit,
       icon: <BarChart3 size={16} />,
       color: "#1264f6",
-      iconClass: "bg-[#edf4ff] text-[#1264f6]",
+      iconClass: "bg-[var(--brand-soft)] text-[#1264f6]",
       spark: trend.map((point) => point.profit - (expenseByDay.get(point.date) ?? 0)),
     },
   ];
@@ -466,12 +466,12 @@ export default function ReportsPage() {
             <PopoverTrigger asChild><Button variant="outline" className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-semibold"><Filter size={14} className="mr-2" />Filters</Button></PopoverTrigger>
             <PopoverContent align="end" className="w-48 rounded-[8px] p-2">
               {(["today", "week", "month"] as const).map((item) => (
-                <button key={item} className={cn("w-full rounded-[6px] px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc]", period === item && "bg-[#edf4ff] text-[#075fff]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
+                <button key={item} className={cn("w-full rounded-[6px] px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc]", period === item && "bg-[var(--brand-soft)] text-[var(--brand)]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
               ))}
               <Link href="/daily-closing" className="mt-1 block border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[#1264f6]">Open daily closing</Link>
             </PopoverContent>
           </Popover>
-          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-9 rounded-[7px] bg-[#075fff] px-4 text-[12px] font-bold shadow-[0_7px_16px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Download size={14} className="mr-2" />Export</Button>
+          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-9 rounded-[7px] bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_7px_16px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Download size={14} className="mr-2" />Export</Button>
           <Button variant="ghost" size="icon" title="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-9 w-9 rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
         </div>
       </section>
@@ -501,7 +501,7 @@ export default function ReportsPage() {
                 <XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} />
                 <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
                 <Tooltip content={<MoneyTooltip />} />
-                <Area type="monotone" dataKey="sales" name="Sales" stroke="#075fff" strokeWidth={2.2} fill="url(#salesArea)" dot={{ r: 2.7, fill: "white", stroke: "#075fff", strokeWidth: 1.7 }} activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="sales" name="Sales" stroke="var(--brand)" strokeWidth={2.2} fill="url(#salesArea)" dot={{ r: 2.7, fill: "white", stroke: "var(--brand)", strokeWidth: 1.7 }} activeDot={{ r: 4 }} />
               </AreaChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -511,7 +511,7 @@ export default function ReportsPage() {
           <ChartFrame loading={loading} empty={!snapshot?.categoryPerformance.length}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={snapshot?.categoryPerformance ?? []} margin={{ top: 20, right: 8, left: -10, bottom: 2 }} barCategoryGap="28%">
-                <defs><linearGradient id="categoryBars" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#075fff" /><stop offset="100%" stopColor="#8bb5ff" /></linearGradient></defs>
+                <defs><linearGradient id="categoryBars" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--brand)" /><stop offset="100%" stopColor="#8bb5ff" /></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
                 <XAxis dataKey="name" tickFormatter={(value) => shortText(String(value), 10)} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} interval={0} />
                 <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
@@ -635,7 +635,7 @@ export default function ReportsPage() {
                   <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
                   <Tooltip content={<MoneyTooltip />} />
                   <Bar dataKey="sales" name="Sales" radius={[3, 3, 0, 0]}>
-                    {hourlyChart.map((row) => <Cell key={row.label} fill={peakHour && row.hour === peakHour.hour ? "#075fff" : "#b9d1fb"} />)}
+                    {hourlyChart.map((row) => <Cell key={row.label} fill={peakHour && row.hour === peakHour.hour ? "var(--brand)" : "#b9d1fb"} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -679,7 +679,7 @@ export default function ReportsPage() {
           <div className="divide-y divide-[#e8edf5] px-3">
             {loading ? <Skeleton className="my-3 h-28" /> : insights.map((insight) => <InsightRow key={insight.title} {...insight} />)}
           </div>
-          <Link href="/daily-closing" className="mx-3 mb-3 flex h-8 items-center justify-center rounded-[6px] border border-[#dfe7f2] text-[11px] font-bold text-[#075fff] hover:bg-[#f6f9ff]">View Detailed Insights <span className="ml-2">→</span></Link>
+          <Link href="/daily-closing" className="mx-3 mb-3 flex h-8 items-center justify-center rounded-[6px] border border-[#dfe7f2] text-[11px] font-bold text-[var(--brand)] hover:bg-[#f6f9ff]">View Detailed Insights <span className="ml-2">→</span></Link>
         </Panel>
       </section>
 
@@ -693,7 +693,7 @@ function MobileReportList({ title, actionHref, children }: { title: string; acti
     <article className="rounded-[18px] border border-[#e4ebf4] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
       <header className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
         <h2 className="text-[16px] font-extrabold text-[#07133f]">{title}</h2>
-        <Link href={actionHref} className="text-xs font-extrabold text-[#075fff]">View all</Link>
+        <Link href={actionHref} className="text-xs font-extrabold text-[var(--brand)]">View all</Link>
       </header>
       <div className="divide-y divide-[#edf2f8] px-3">
         {children ? children : <div className="py-8 text-center text-xs font-semibold text-[#8290a8]">No records in this period</div>}
@@ -749,7 +749,7 @@ function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (perio
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={5} className="w-36 rounded-[7px] border-[#dfe7f2] p-1.5">
         {(["today", "week", "month"] as const).map((period) => (
-          <button key={period} type="button" onClick={() => onChange(period)} className={cn("w-full rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[#edf4ff] text-[#075fff]")}>
+          <button key={period} type="button" onClick={() => onChange(period)} className={cn("w-full rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[var(--brand-soft)] text-[var(--brand)]")}>
             {REPORT_PERIOD_LABELS[period]}
           </button>
         ))}
@@ -777,7 +777,7 @@ function TrendLabel({ current, previous }: { current: number; previous: number }
 }
 
 function DenseTable({ title, action, actionHref, headers, loading, empty, children }: { title: string; action: string; actionHref: string; headers: string[]; loading: boolean; empty: boolean; children: ReactNode }) {
-  return <article className={cn(PANEL, "h-full")}><header className="flex h-9 min-w-0 items-center justify-between gap-2 px-3.5"><h2 className="truncate text-[12px] font-extrabold text-[#13254a]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[#075fff] hover:underline">{action}</Link></header>{loading ? <Skeleton className="m-3 h-32" /> : empty ? <div className="grid h-32 place-items-center text-[11px] text-[#8290a8]">No records in this period</div> : <div className="overflow-x-auto px-2 pb-1.5"><table className="w-full min-w-[430px] border-collapse text-[9px]"><thead><tr className="bg-[#f5f7fb]">{headers.map((header, index) => <th key={header} className={cn("border-y border-[#e5ebf3] px-2 py-1 font-bold text-[#52617c]", index ? "text-right" : "text-left")}>{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{children}</tbody></table></div>}</article>;
+  return <article className={cn(PANEL, "h-full")}><header className="flex h-9 min-w-0 items-center justify-between gap-2 px-3.5"><h2 className="truncate text-[12px] font-extrabold text-[#13254a]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[var(--brand)] hover:underline">{action}</Link></header>{loading ? <Skeleton className="m-3 h-32" /> : empty ? <div className="grid h-32 place-items-center text-[11px] text-[#8290a8]">No records in this period</div> : <div className="overflow-x-auto px-2 pb-1.5"><table className="w-full min-w-[430px] border-collapse text-[9px]"><thead><tr className="bg-[#f5f7fb]">{headers.map((header, index) => <th key={header} className={cn("border-y border-[#e5ebf3] px-2 py-1 font-bold text-[#52617c]", index ? "text-right" : "text-left")}>{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{children}</tbody></table></div>}</article>;
 }
 
 function Td({ children, right, strong }: { children?: ReactNode; right?: boolean; strong?: boolean }) {
@@ -790,7 +790,7 @@ function RiskChip({ balance }: { balance: number }) {
 }
 
 function StockStat({ icon, label, value, deltaValue, tone }: { icon: ReactNode; label: string; value: string; deltaValue: string; tone: "blue" | "red" | "green" | "amber" }) {
-  const colors = { blue: "bg-[#edf4ff] text-[#1264f6]", red: "bg-[#ffedef] text-[#ff334d]", green: "bg-[#eaf9ef] text-[#16ad52]", amber: "bg-[#fff3e8] text-[#ff8a00]" }[tone];
+  const colors = { blue: "bg-[var(--brand-soft)] text-[#1264f6]", red: "bg-[#ffedef] text-[#ff334d]", green: "bg-[#eaf9ef] text-[#16ad52]", amber: "bg-[#fff3e8] text-[#ff8a00]" }[tone];
   return <div className="flex min-h-[68px] gap-2.5 p-3"><span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[7px]", colors)}>{icon}</span><div className="min-w-0"><p className="text-[9px] font-semibold text-[#64738e]">{label}</p><p className="mt-0.5 text-[14px] font-black text-[#15264b]">{value}</p><p className="mt-0.5 text-[8.5px] text-[#7b89a0]">{deltaValue}</p></div></div>;
 }
 

@@ -28,18 +28,29 @@ interface ThemeContextValue {
 
 const ThemeContext = createContext<ThemeContextValue>({ accent: "blue", setAccent: () => {} });
 
+function isAccent(value: unknown): value is AccentColor {
+  return typeof value === "string" && value in ACCENT_COLORS;
+}
+
+/**
+ * Always stamp the attribute, including for blue. Removing it used to leave the
+ * :root defaults in charge, which meant the `[data-accent="blue"]` block could
+ * never win and switching back to blue relied on the two staying in sync.
+ */
 export function applyAccent(accent: AccentColor) {
-  if (accent === "blue") {
-    document.documentElement.removeAttribute("data-accent");
-  } else {
-    document.documentElement.setAttribute("data-accent", accent);
-  }
+  document.documentElement.setAttribute("data-accent", accent);
 }
 
 export function AppThemeProvider({ children }: { children: ReactNode }) {
   const [accent, setAccentState] = useState<AccentColor>(() => {
-    const saved = localStorage.getItem(THEME_KEY);
-    return saved === "emerald" || !saved ? "blue" : (saved as AccentColor);
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      // "emerald" used to be coerced to blue here because it had no CSS block;
+      // it has one now, so every swatch in the picker round-trips.
+      return isAccent(saved) ? saved : "blue";
+    } catch {
+      return "blue";
+    }
   });
 
   useEffect(() => {
@@ -48,7 +59,11 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
 
   const setAccent = (c: AccentColor) => {
     setAccentState(c);
-    localStorage.setItem(THEME_KEY, c);
+    try {
+      localStorage.setItem(THEME_KEY, c);
+    } catch {
+      /* the accent still applies for this session */
+    }
     applyAccent(c);
   };
 

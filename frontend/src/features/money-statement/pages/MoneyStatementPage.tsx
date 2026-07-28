@@ -153,8 +153,8 @@ export default function MoneyStatementPage() {
       value: summaryTotals.bankNet,
       icon: <Landmark size={18} />,
       href: "/money-statement?mode=bank",
-      color: "#075fff",
-      bg: "border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.20)]",
+      color: "var(--brand)",
+      bg: "border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)] shadow-[0_0_0_4px_rgba(7,95,255,0.035),0_10px_26px_rgba(7,95,255,0.20)]",
     },
     {
       label: "Total Net",
@@ -217,7 +217,7 @@ export default function MoneyStatementPage() {
 
         <section className={cn(CARD, "p-3 sm:p-4")}>
           <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto]">
-            <label className="flex min-h-11 items-center gap-2 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[#62708a] focus-within:border-[#075fff] focus-within:ring-4 focus-within:ring-[#075fff]/10">
+            <label className="flex min-h-11 items-center gap-2 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[#62708a] focus-within:border-[var(--brand)] focus-within:ring-4 focus-within:ring-[var(--brand)]/10">
               <Search size={17} />
               <input
                 value={search}
@@ -232,7 +232,7 @@ export default function MoneyStatementPage() {
                   key={item}
                   type="button"
                   onClick={() => setPresetRange(item)}
-                  className={cn("h-11 rounded-[12px] border px-4 text-[12px] font-black capitalize transition", preset === item ? "border-[#075fff] bg-[#075fff] text-white shadow-[0_10px_22px_rgba(7,95,255,0.20)]" : "border-[#dbe4f0] bg-white text-[#102347] hover:border-[#b9c8dd]")}
+                  className={cn("h-11 rounded-[12px] border px-4 text-[12px] font-black capitalize transition", preset === item ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(7,95,255,0.20)]" : "border-[#dbe4f0] bg-white text-[#102347] hover:border-[#b9c8dd]")}
                 >
                   {item}
                 </button>
@@ -254,13 +254,13 @@ export default function MoneyStatementPage() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex flex-wrap gap-2">
                 {(["all", "cash", "upi", "bank"] as Array<MoneyStatementMode | "all">).map((item) => (
-                  <button key={item} type="button" onClick={() => setMode(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", mode === item ? "border-[#075fff] bg-[#edf4ff] text-[#075fff]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item}</button>
+                  <button key={item} type="button" onClick={() => setMode(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", mode === item ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item}</button>
                 ))}
               </div>
               <span className="mx-1 hidden h-8 w-px rounded-full bg-[#d6e0ee] sm:block" aria-hidden="true" />
               <div className="flex flex-wrap gap-2 border-l border-[#d6e0ee] pl-3 sm:border-l-0 sm:pl-0">
                 {(["all", "in", "out"] as Array<MoneyStatementDirection | "all">).map((item) => (
-                  <button key={item} type="button" onClick={() => setDirection(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", direction === item ? "border-[#075fff] bg-[#edf4ff] text-[#075fff]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item === "in" ? "Received" : item === "out" ? "Paid" : "All flow"}</button>
+                  <button key={item} type="button" onClick={() => setDirection(item)} className={cn("rounded-[10px] border px-3 py-2 text-[11px] font-black uppercase", direction === item ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dbe4f0] bg-white text-[#405273]")}>{item === "in" ? "Received" : item === "out" ? "Paid" : "All flow"}</button>
                 ))}
               </div>
             </div>
@@ -268,7 +268,7 @@ export default function MoneyStatementPage() {
               type="button"
               onClick={() => downloadCsv(statement.rows)}
               disabled={statement.rows.length === 0}
-              className="inline-flex h-10 items-center gap-2 rounded-[11px] bg-[#075fff] px-4 text-[12px] font-black text-white shadow-[0_12px_24px_rgba(7,95,255,0.22)] disabled:opacity-50"
+              className="inline-flex h-10 items-center gap-2 rounded-[11px] bg-[var(--brand)] px-4 text-[12px] font-black text-white shadow-[0_12px_24px_rgba(7,95,255,0.22)] disabled:opacity-50"
             >
               <Download size={15} /> Export
             </button>
@@ -312,7 +312,7 @@ export default function MoneyStatementPage() {
                         setSelectedRowId(row.id);
                       }
                     }}
-                    className="cursor-pointer text-[12px] font-semibold text-[#253854] outline-none transition-colors hover:bg-[#fbfdff] focus-visible:bg-[#edf4ff]"
+                    className="cursor-pointer text-[12px] font-semibold text-[#253854] outline-none transition-colors hover:bg-[#fbfdff] focus-visible:bg-[var(--brand-soft)]"
                   >
                     <td className="px-4 py-3">
                       <p className="font-black text-[#102347]">{row.dateLabel}</p>
@@ -360,7 +360,7 @@ export default function MoneyStatementPage() {
           {statement.rows.length === 0 && (
             <div className="grid min-h-[260px] place-items-center px-4 py-10 text-center">
               <div>
-                <div className="mx-auto grid h-14 w-14 place-items-center rounded-[16px] bg-[#edf4ff] text-[#075fff]"><Landmark size={24} /></div>
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-[16px] bg-[var(--brand-soft)] text-[var(--brand)]"><Landmark size={24} /></div>
                 <p className="mt-4 text-[17px] font-black text-[#102347]">No money movement found</p>
                 <p className="mt-1 text-[12px] font-semibold text-[#718096]">Try a different date, mode, or search term.</p>
               </div>
@@ -377,7 +377,7 @@ function ModeBadge({ mode }: { mode: MoneyStatementMode }) {
   const styles = {
     cash: "border-[#c8f1d5] bg-[#e7faee] text-[#159447]",
     upi: "border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]",
-    bank: "border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]",
+    bank: "border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)]",
   }[mode];
   return <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase", styles)}>{mode}</span>;
 }
@@ -409,7 +409,7 @@ function MoneyStatementDetailPanel({ row, onClose }: { row: MoneyStatementRow; o
         <div className="flex items-start justify-between gap-3 border-b border-[#e7edf5] px-5 py-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="grid h-10 w-10 place-items-center rounded-[12px] border border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]">
+              <span className="grid h-10 w-10 place-items-center rounded-[12px] border border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)]">
                 <ReceiptText size={18} />
               </span>
               <div>

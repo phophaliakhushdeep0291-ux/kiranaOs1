@@ -230,7 +230,7 @@ export default function SecuritySettingsPage() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => setPwOpen(true)} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-10 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95"><KeyRound size={15} /> Change PIN</Button>
+              <Button onClick={() => setPwOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-10 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95"><KeyRound size={15} /> Change PIN</Button>
             </div>
             <p className="text-[11px] text-[#9aa6bb]">Forgot your PIN? Recover it from your registered owner email/phone on the login screen.</p>
           </div>
@@ -327,7 +327,7 @@ export default function SecuritySettingsPage() {
             icon={<MonitorSmartphone size={15} />}
             title="Signed-in Devices"
             sub="Live from your device licence list"
-            action={<button type="button" onClick={() => void devicesQ.refetch()} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><RefreshCcw size={12} className={devicesQ.isFetching ? "animate-spin" : ""} /> Refresh</button>}
+            action={<button type="button" onClick={() => void devicesQ.refetch()} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><RefreshCcw size={12} className={devicesQ.isFetching ? "animate-spin" : ""} /> Refresh</button>}
           />
           <div className="px-5 pb-4">
             {devicesQ.isLoading ? (
@@ -354,7 +354,7 @@ export default function SecuritySettingsPage() {
                 </div>
               );
             })}
-            <Link href="/settings/devices" className="mt-2 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[#005dff] hover:underline">Manage devices <ChevronRight size={13} /></Link>
+            <Link href="/settings/devices" className="mt-2 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">Manage devices <ChevronRight size={13} /></Link>
           </div>
         </Card>
 
@@ -364,7 +364,7 @@ export default function SecuritySettingsPage() {
             icon={<AlertTriangle size={15} />}
             title="Security Logs"
             sub="Real approvals and sensitive actions on this device"
-            action={<button type="button" onClick={() => void eventsQ.refetch()} className="text-[12px] font-bold text-[#005dff] hover:underline">Refresh</button>}
+            action={<button type="button" onClick={() => void eventsQ.refetch()} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Refresh</button>}
           />
           <div className="px-5 pb-4">
             {eventsQ.isLoading ? (
@@ -385,7 +385,7 @@ export default function SecuritySettingsPage() {
                 </div>
               );
             })}
-            <Link href="/audit-logs" className="mt-2 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[#005dff] hover:underline">Open full audit log <ChevronRight size={13} /></Link>
+            <Link href="/audit-logs" className="mt-2 flex items-center justify-center gap-1 py-2 text-[12px] font-bold text-[var(--brand)] hover:underline">Open full audit log <ChevronRight size={13} /></Link>
           </div>
         </Card>
       </div>
@@ -441,7 +441,7 @@ function ChangePinDialog({ open, onOpenChange, onChanged }: { open: boolean; onO
           <Fld label="Confirm new PIN" err={form.formState.errors.confirmPassword?.message}><Input className="h-10" type="password" {...form.register("confirmPassword")} /></Fld>
           <div className="flex gap-2.5 pt-1">
             <Button type="button" variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={changePassword.isPending} style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+            <Button type="submit" disabled={changePassword.isPending} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 flex-1 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {changePassword.isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : "Update"}
             </Button>
           </div>

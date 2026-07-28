@@ -312,8 +312,8 @@ export default function NotificationsSettingsPage() {
                     />
                   </div>
                   <div className="mt-2 flex gap-3">
-                    <button type="button" className="text-[11px] font-black text-[#005dff] hover:underline" onClick={() => { setEditing(template); setDraft(template.templateText); }}>Edit server template</button>
-                    <button type="button" className="inline-flex items-center gap-1 text-[11px] font-black text-[#005dff] hover:underline" onClick={() => void copySample(template)}><Copy size={11} /> Copy rendered sample</button>
+                    <button type="button" className="text-[11px] font-black text-[var(--brand)] hover:underline" onClick={() => { setEditing(template); setDraft(template.templateText); }}>Edit server template</button>
+                    <button type="button" className="inline-flex items-center gap-1 text-[11px] font-black text-[var(--brand)] hover:underline" onClick={() => void copySample(template)}><Copy size={11} /> Copy rendered sample</button>
                   </div>
                 </div>
               ))
@@ -372,7 +372,7 @@ export default function NotificationsSettingsPage() {
           </DialogHeader>
           <div className="space-y-3">
             <textarea
-              className="min-h-[150px] w-full resize-y rounded-[10px] border border-[#dbe6f7] bg-white px-3 py-2 text-[13px] outline-none focus:border-[#005dff]"
+              className="min-h-[150px] w-full resize-y rounded-[10px] border border-[var(--brand-border)] bg-white px-3 py-2 text-[13px] outline-none focus:border-[var(--brand)]"
               value={draft}
               maxLength={1000}
               onChange={(event) => setDraft(event.target.value)}

@@ -39,7 +39,7 @@ const STATUS_TABS: Array<{ value: string; label: string }> = [
 ];
 
 const STATUS_STYLE: Record<CustomerOrder["status"], string> = {
-  new: "bg-[#eaf2ff] text-[#075fff]",
+  new: "bg-[#eaf2ff] text-[var(--brand)]",
   accepted: "bg-[#fff7ed] text-[#c2410c]",
   ready: "bg-[#f3efff] text-[#7c3aed]",
   fulfilled: "bg-[#e9fbf0] text-[#16a34a]",
@@ -347,7 +347,7 @@ export default function OrdersReceivedPage() {
             void ordersQuery.refetch();
             void allOrdersQuery.refetch();
           }}
-          className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] bg-white text-[#405273] hover:bg-[#f7faff]"
+          className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] bg-white text-[#405273] hover:bg-[var(--brand-softer)]"
           aria-label="Refresh orders"
         >
           <RefreshCw size={16} className={ordersQuery.isFetching || allOrdersQuery.isFetching ? "animate-spin" : ""} />
@@ -358,7 +358,7 @@ export default function OrdersReceivedPage() {
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           icon={<CalendarDays size={18} />}
-          tint="bg-[#eaf2ff] text-[#075fff]"
+          tint="bg-[#eaf2ff] text-[var(--brand)]"
           label="Orders Today"
           value={stats.ordersToday}
           sub={todayDelta == null ? "first orders today" : `${todayDelta >= 0 ? "↑" : "↓"} ${Math.abs(todayDelta)}% vs yesterday`}
@@ -410,7 +410,7 @@ export default function OrdersReceivedPage() {
                 type="button"
                 onClick={() => setStatus(tab.value)}
                 className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${
-                  status === tab.value ? "bg-[#075fff] text-white" : "border border-[#dfe7f2] bg-white text-[#536383] hover:bg-[#f7faff]"
+                  status === tab.value ? "bg-[var(--brand)] text-white" : "border border-[#dfe7f2] bg-white text-[#536383] hover:bg-[var(--brand-softer)]"
                 }`}
               >
                 {tab.label}
@@ -441,7 +441,7 @@ export default function OrdersReceivedPage() {
                       <a
                         href={`tel:${order.customerMobile}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[#075fff]"
+                        className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--brand)]"
                       >
                         <Phone size={12} /> {order.customerMobile}
                       </a>
@@ -472,7 +472,7 @@ export default function OrdersReceivedPage() {
                         type="button"
                         disabled={openingOrderId != null}
                         onClick={(e: MouseEvent) => { e.stopPropagation(); acceptAndBill(order); }}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#075fff] px-3 py-2 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-2 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
                       >
                         <ShoppingCart size={14} /> {openingOrderId === order.id ? "Opening..." : "Open in Billing"}
                       </button>
@@ -512,7 +512,7 @@ export default function OrdersReceivedPage() {
                 type="button"
                 disabled={ordersQuery.isFetchingNextPage}
                 onClick={() => void ordersQuery.fetchNextPage()}
-                className="rounded-xl border border-[#dfe7f2] bg-white px-5 py-2.5 text-[12.5px] font-bold text-[#405273] hover:bg-[#f7faff] disabled:cursor-wait disabled:opacity-60"
+                className="rounded-xl border border-[#dfe7f2] bg-white px-5 py-2.5 text-[12.5px] font-bold text-[#405273] hover:bg-[var(--brand-softer)] disabled:cursor-wait disabled:opacity-60"
               >
                 {ordersQuery.isFetchingNextPage ? "Loading..." : "Load older orders"}
               </button>
@@ -566,7 +566,7 @@ const BANNER: Record<CustomerOrder["status"], { title: string; desc: string; ico
     title: "Order Confirmed — Preparing",
     desc: "Open it in Billing to adjust items and rates, then save the final bill.",
     icon: <ChefHat size={30} />,
-    tint: "bg-[#eaf2ff] text-[#075fff]",
+    tint: "bg-[#eaf2ff] text-[var(--brand)]",
   },
   ready: {
     title: "Order Ready for Handover",
@@ -631,7 +631,7 @@ function OrderDetail({
 
   return (
     <div>
-      <button type="button" onClick={onBack} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[#075fff]">
+      <button type="button" onClick={onBack} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[var(--brand)]">
         <ArrowLeft size={14} /> All orders
       </button>
 
@@ -652,7 +652,7 @@ function OrderDetail({
               <BannerField label="Date & Time" value={fullDateTime(order.createdAt)} />
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Order Source</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[#13254a]"><QrCode size={13} className="text-[#075fff]" /> QR Order</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[#13254a]"><QrCode size={13} className="text-[var(--brand)]" /> QR Order</p>
               </div>
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Status</p>
@@ -665,7 +665,7 @@ function OrderDetail({
 
           {/* Items table */}
           <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-            <p className="mb-3 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><ShoppingCart size={15} className="text-[#075fff]" /> Order Items</p>
+            <p className="mb-3 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><ShoppingCart size={15} className="text-[var(--brand)]" /> Order Items</p>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[430px] text-[12.5px]">
                 <thead>
@@ -713,7 +713,7 @@ function OrderDetail({
           {/* Fulfillment progress */}
           {order.status !== "rejected" && order.status !== "cancelled" && (
             <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-              <p className="mb-4 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><PackageCheck size={15} className="text-[#075fff]" /> Fulfillment Progress</p>
+              <p className="mb-4 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><PackageCheck size={15} className="text-[var(--brand)]" /> Fulfillment Progress</p>
               <FulfillmentStepper order={order} />
             </div>
           )}
@@ -725,7 +725,7 @@ function OrderDetail({
                 type="button"
                 disabled={opening}
                 onClick={onAcceptBill}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#075fff] px-4 py-2.5 text-[12.5px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--brand)] px-4 py-2.5 text-[12.5px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
               >
                 <CheckCircle2 size={15} /> {opening ? "Opening..." : order.status === "new" ? "Confirm & Open in Billing" : "Open in Billing"}
               </button>
@@ -760,13 +760,13 @@ function OrderDetail({
           {/* Customer details */}
           <SideCard title="Customer Details">
             <div className="flex items-center gap-3">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eaf2ff] font-display text-[14px] font-black text-[#075fff]">{initials}</span>
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eaf2ff] font-display text-[14px] font-black text-[var(--brand)]">{initials}</span>
               <div className="min-w-0">
                 <p className="flex items-center gap-2 font-bold text-[#13254a]">
                   <span className="truncate">{order.customerName}</span>
                   {order.status === "new" && <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[9.5px] font-black uppercase text-[#16a34a]">New</span>}
                 </p>
-                <a href={`tel:${order.customerMobile}`} className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[#075fff]">
+                <a href={`tel:${order.customerMobile}`} className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--brand)]">
                   <Phone size={12} /> +91 {order.customerMobile}
                 </a>
               </div>
@@ -782,8 +782,8 @@ function OrderDetail({
 
           {/* Payment & fulfillment */}
           <SideCard title="Payment & Fulfillment">
-            <InfoRow label="Payment" chip="At billing" chipClass="bg-[#eaf2ff] text-[#075fff]" />
-            <InfoRow label="Order Source" chip="QR Order" chipClass="bg-[#eaf2ff] text-[#075fff]" />
+            <InfoRow label="Payment" chip="At billing" chipClass="bg-[#eaf2ff] text-[var(--brand)]" />
+            <InfoRow label="Order Source" chip="QR Order" chipClass="bg-[#eaf2ff] text-[var(--brand)]" />
             <InfoRow label="Fulfillment" value={order.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"} />
             {order.promisedSlot ? <InfoRow label="Preferred Slot" value={order.promisedSlot} /> : null}
             <InfoRow label="Placed On" value={fullDateTime(order.createdAt)} />
@@ -797,7 +797,7 @@ function OrderDetail({
             <InfoRow label="Estimated Amount" value={fmtRs(order.estimatedTotal)} />
             <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2.5">
               <span className="text-[13px] font-black text-[#0f1e3d]">Grand Total</span>
-              <span className="font-display text-[16px] font-black text-[#075fff]">{fmtRs(order.estimatedTotal)}</span>
+              <span className="font-display text-[16px] font-black text-[var(--brand)]">{fmtRs(order.estimatedTotal)}</span>
             </div>
             <p className="mt-1 text-[10.5px] text-[#8290a8]">Estimated — final price is set when you bill it.</p>
           </SideCard>
@@ -862,7 +862,7 @@ function FulfillmentStepper({ order }: { order: CustomerOrder }) {
               {i < STEPS.length - 1 && <span className={`absolute left-1/2 right-0 top-1/2 h-0.5 -translate-y-1/2 ${i < currentIndex - 1 ? "bg-[#16a34a]" : "bg-[#e6ecf4]"}`} />}
               <span
                 className={`relative z-10 grid h-9 w-9 place-items-center rounded-full text-[12px] font-black ${
-                  done ? "bg-[#16a34a] text-white" : activeStep ? "bg-[#075fff] text-white" : "border-2 border-[#e6ecf4] bg-white text-[#9aa7bd]"
+                  done ? "bg-[#16a34a] text-white" : activeStep ? "bg-[var(--brand)] text-white" : "border-2 border-[#e6ecf4] bg-white text-[#9aa7bd]"
                 }`}
               >
                 {done ? <CheckCircle2 size={17} /> : i + 1}

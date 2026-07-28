@@ -580,7 +580,7 @@ export function BillingSummary({
             <div className="rounded-[9px] border border-[#dbe8ff] bg-[#f8fbff] p-2.5">
               <div className="flex items-center gap-2">
                 <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder="Enter coupon code" className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]" />
-                <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-[#075fff] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
+                <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-[var(--brand)] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
               </div>
               {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
             </div>
@@ -668,7 +668,7 @@ export function BillingSummary({
         {/* Save Bill button — 54px blue gradient */}
         <Button
           data-testid="button-confirm-bill"
-          style={{ background: "linear-gradient(180deg, #005dff 0%, #0047e8 100%)" }}
+          style={{ background: "linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%)" }}
           className="relative h-[54px] w-full rounded-[10px] text-[16px] font-black text-white shadow-[0_12px_24px_rgba(0,77,255,0.28)] hover:opacity-95"
           onClick={onConfirmBill}
           disabled={confirmBillPending || cart.length === 0 || !newBillingAllowed || !createBillAllowed}
@@ -717,7 +717,7 @@ export function BillingSummary({
             { key: "Ctrl+S", label: "Save" },
           ].map(({ key, label }) => (
             <div key={key} className="flex flex-col items-center justify-center gap-1.5">
-              <kbd className="inline-flex h-[22px] min-w-[28px] items-center justify-center rounded-[6px] bg-[#edf4ff] px-1.5 font-mono text-[10px] font-black text-[#0057ff]">
+              <kbd className="inline-flex h-[22px] min-w-[28px] items-center justify-center rounded-[6px] bg-[var(--brand-soft)] px-1.5 font-mono text-[10px] font-black text-[#0057ff]">
                 {key}
               </kbd>
               <span className="text-[10px] font-bold text-[#5d6f8d]">{label}</span>

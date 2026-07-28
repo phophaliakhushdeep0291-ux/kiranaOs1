@@ -227,7 +227,7 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[linear-gradient(135deg,#07152f_0%,#0e2c63_100%)] px-4">
       <div className="w-full max-w-[380px] rounded-[18px] bg-white p-6 shadow-[0_24px_60px_rgba(4,15,40,0.45)]">
-        <span className="grid h-12 w-12 place-items-center rounded-[14px] bg-[#eef5ff] text-[#005dff]"><Lock size={22} /></span>
+        <span className="grid h-12 w-12 place-items-center rounded-[14px] bg-[var(--brand-soft)] text-[var(--brand)]"><Lock size={22} /></span>
         <h1 className="mt-4 font-display text-[20px] font-black tracking-tight text-[#0f1e3d]">Counter locked</h1>
         <p className="mt-1 text-[12.5px] leading-5 text-[#64748b]">
           {userName ? `${userName}, enter` : "Enter"} the owner PIN to get back to the counter. This lock follows your
@@ -249,7 +249,7 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
           <Button
             type="submit"
             disabled={checking}
-            style={{ background: "linear-gradient(180deg,#005dff 0%,#0047e8 100%)" }}
+            style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
             className="h-11 w-full gap-2 rounded-[10px] font-black text-white hover:opacity-95"
           >
             {checking ? <><Loader2 size={16} className="animate-spin" /> Checking…</> : <><ShieldCheck size={16} /> Unlock counter</>}

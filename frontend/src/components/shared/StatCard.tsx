@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils";
 export type StatCardTone = "default" | "green" | "blue" | "amber" | "violet" | "red";
 
 const toneIconClasses: Record<StatCardTone, string> = {
-  default: "bg-[#edf4ff] text-[#075fff] ring-[#cfe0ff]",
+  default: "bg-[var(--brand-soft)] text-[var(--brand)] ring-[var(--brand-border)]",
   green: "bg-[#e8f9ee] text-[#159447] ring-[#c8f1d5] dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900",
-  blue: "bg-[#edf4ff] text-[#075fff] ring-[#cfe0ff] dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900",
+  blue: "bg-[var(--brand-soft)] text-[var(--brand)] ring-[var(--brand-border)] dark:bg-sky-950/40 dark:text-sky-300 dark:ring-sky-900",
   amber: "bg-[#fff3e1] text-[#e98400] ring-[#ffdca8] dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900",
   violet: "bg-[#f0ebff] text-[#7047eb] ring-[#ddd3ff] dark:bg-violet-950/40 dark:text-violet-300 dark:ring-violet-900",
   red: "bg-[#ffecef] text-[#ef3340] ring-[#ffcfd7] dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900",

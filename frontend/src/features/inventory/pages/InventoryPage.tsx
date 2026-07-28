@@ -655,7 +655,7 @@ export default function InventoryPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="group flex min-h-[66px] w-full items-center gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)]">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#eef4ff] text-[#075fff]"><Ellipsis size={20} /></span>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#eef4ff] text-[var(--brand)]"><Ellipsis size={20} /></span>
               <span><span className="block text-[13px] font-semibold text-[#13223f]">More Actions</span><span className="mt-0.5 block text-[11px] text-[#6d7c98]">History, bills and insights</span></span>
             </button>
           </DropdownMenuTrigger>
@@ -690,7 +690,7 @@ export default function InventoryPage() {
                       <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, SKU, barcode..." className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
                     <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />Filters</Button>
-                    <Button className="h-10 rounded-[8px] bg-[#075fff] px-4 text-[12px] shadow-[0_7px_16px_rgba(7,95,255,0.18)] hover:bg-[#0054e8]" onClick={exportInventory}><Download size={14} className="mr-1.5" />Export</Button>
+                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_rgba(7,95,255,0.18)] hover:bg-[#0054e8]" onClick={exportInventory}><Download size={14} className="mr-1.5" />Export</Button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -770,14 +770,14 @@ export default function InventoryPage() {
               <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
                 <h2 className="text-[14px] font-semibold text-[#13223f]">Stock Overview by Location</h2><p className="mt-0.5 text-[11px] text-[#718096]">Current stock distribution</p>
                 <div className="mt-2 grid grid-cols-[132px_1fr] items-center gap-3">
-                  <div className="h-[128px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ name: "Main Store", value: Math.max(stockStats.stockValue, 1) }]} dataKey="value" innerRadius={36} outerRadius={56} strokeWidth={0}><Cell fill="#075fff" /></Pie></PieChart></ResponsiveContainer></div>
-                  <div><div className="flex items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full bg-[#075fff]" /><span className="font-semibold text-[#243653]">Main Store</span></div><p className="ml-4 mt-1 text-[11px] text-[#718096]">100% of tracked stock</p></div>
+                  <div className="h-[128px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={[{ name: "Main Store", value: Math.max(stockStats.stockValue, 1) }]} dataKey="value" innerRadius={36} outerRadius={56} strokeWidth={0}><Cell fill="var(--brand)" /></Pie></PieChart></ResponsiveContainer></div>
+                  <div><div className="flex items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full bg-[var(--brand)]" /><span className="font-semibold text-[#243653]">Main Store</span></div><p className="ml-4 mt-1 text-[11px] text-[#718096]">100% of tracked stock</p></div>
                 </div>
                 <div className="flex items-center justify-between border-t border-[#edf1f6] pt-3 text-[11px]"><span className="text-[#718096]">Total Value</span><span className="font-bold text-[#13223f]">{fmtMoney(stockStats.stockValue)}</span></div>
               </section>
 
               <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)]">
-                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Low Stock Alerts</h2><p className="mt-0.5 text-[11px] text-[#718096]">Items needing immediate attention</p></div><button type="button" onClick={() => setStockFilter("low")} className="text-[11px] font-semibold text-[#075fff]">View all</button></div>
+                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Low Stock Alerts</h2><p className="mt-0.5 text-[11px] text-[#718096]">Items needing immediate attention</p></div><button type="button" onClick={() => setStockFilter("low")} className="text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
                 <div className="mt-2 divide-y divide-[#edf1f6]">
                   {lowStockRows.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">All tracked products have healthy stock.</p> : lowStockRows.slice(0, 3).map((item) => {
                     const unit = inventoryUnitLabel(item);
@@ -787,7 +787,7 @@ export default function InventoryPage() {
               </section>
 
               <section className="rounded-[12px] border border-[#e2e8f1] bg-white p-4 shadow-[0_5px_18px_rgba(30,55,90,0.045)] md:col-span-2 xl:col-span-1">
-                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Recent Stock Updates</h2><p className="mt-0.5 text-[11px] text-[#718096]">Latest inventory movements</p></div><button type="button" onClick={() => setActiveTab("movements")} className="text-[11px] font-semibold text-[#075fff]">View all</button></div>
+                <div className="flex items-start justify-between"><div><h2 className="text-[14px] font-semibold text-[#13223f]">Recent Stock Updates</h2><p className="mt-0.5 text-[11px] text-[#718096]">Latest inventory movements</p></div><button type="button" onClick={() => setActiveTab("movements")} className="text-[11px] font-semibold text-[var(--brand)]">View all</button></div>
                 <div className="mt-2 divide-y divide-[#edf1f6]">{recentMovements.length === 0 ? <p className="py-7 text-center text-xs text-[#718096]">No stock updates recorded yet.</p> : recentMovements.map((entry) => <RecentMovementRow key={entry.id} entry={entry} />)}</div>
               </section>
             </aside>
@@ -967,7 +967,7 @@ export default function InventoryPage() {
 type InventoryTone = "blue" | "violet" | "amber" | "rose" | "green" | "orange";
 
 const INVENTORY_TONES: Record<InventoryTone, string> = {
-  blue: "border-[#cfe0ff] bg-[#eaf2ff] text-[#075fff]",
+  blue: "border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)]",
   violet: "border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]",
   amber: "border-[#ffdca8] bg-[#fff2df] text-[#f08a00]",
   rose: "border-[#ffcfd7] bg-[#ffecef] text-[#ff304f]",
@@ -1005,7 +1005,7 @@ function InventoryFilterSelect({ value, onChange, placeholder, options }: { valu
 function InventoryProductAvatar({ item, compact = false }: { item: InventoryItem; compact?: boolean }) {
   const size = compact ? "h-8 w-8 rounded-[7px]" : "h-9 w-9 rounded-[8px]";
   return (
-    <span className={`grid shrink-0 place-items-center overflow-hidden border border-[#e4eaf2] bg-[#f7f9fc] text-xs font-bold text-[#075fff] ${size}`}>
+    <span className={`grid shrink-0 place-items-center overflow-hidden border border-[#e4eaf2] bg-[#f7f9fc] text-xs font-bold text-[var(--brand)] ${size}`}>
       {item.imageUrl ? <img src={item.imageUrl} alt="" className="h-full w-full object-contain" /> : item.name.slice(0, 2).toUpperCase()}
     </span>
   );
@@ -1023,7 +1023,7 @@ function InventoryPagination({ page, pages, total, onChange }: { page: number; p
   return (
     <div className="flex flex-col items-center justify-between gap-3 border-t border-[#e8edf4] px-4 py-3 sm:flex-row">
       <p className="text-[10px] text-[#718096]">Showing {first} to {last} of {total.toLocaleString("en-IN")} products</p>
-      <div className="flex items-center gap-1"><button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} onClick={() => onChange(number)} className={`grid h-8 min-w-8 place-items-center rounded-[7px] px-2 text-[11px] font-semibold ${number === page ? "bg-[#075fff] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label="Next page" disabled={page === pages} onClick={() => onChange(page + 1)} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35"><ChevronRight size={14} /></button></div>
+      <div className="flex items-center gap-1"><button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35"><ChevronLeft size={14} /></button>{visible.map((number) => <button type="button" key={number} onClick={() => onChange(number)} className={`grid h-8 min-w-8 place-items-center rounded-[7px] px-2 text-[11px] font-semibold ${number === page ? "bg-[var(--brand)] text-white" : "border border-[#dfe6ef] text-[#52627d]"}`}>{number}</button>)}<button type="button" aria-label="Next page" disabled={page === pages} onClick={() => onChange(page + 1)} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe6ef] text-[#52627d] disabled:opacity-35"><ChevronRight size={14} /></button></div>
       <p className="text-[10px] text-[#718096]">{STOCK_ROWS_PER_PAGE} rows per page</p>
     </div>
   );

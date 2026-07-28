@@ -278,7 +278,7 @@ export default function TaxesSettingsPage() {
           <div className="px-5 pb-4">
             {Object.keys(DEFAULT_TAX.rates).map((r, i, arr) => (
               <div key={r} className={`flex items-center gap-3 py-2.5 ${i < arr.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
-                <span className="grid h-8 w-12 shrink-0 place-items-center rounded-[8px] bg-[#eef5ff] text-[13px] font-black text-[#005dff]">{r}%</span>
+                <span className="grid h-8 w-12 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[13px] font-black text-[var(--brand)]">{r}%</span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-bold text-[#102347]">{RATE_INFO[r]}</p>
                   <p className="text-[11px] text-[#64748b]">{tax.defaultRate === r ? "Default rate" : "Tap to use on products"}</p>
@@ -298,7 +298,7 @@ export default function TaxesSettingsPage() {
           title="HSN / Product Mapping"
           sub="Live classifications from the product catalogue"
           action={gstReportsFeature.allowed
-            ? <button type="button" onClick={() => void hsnSummaryQ.refetch()} className="text-[12px] font-bold text-[#005dff] hover:underline">Refresh</button>
+            ? <button type="button" onClick={() => void hsnSummaryQ.refetch()} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Refresh</button>
             : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">Upgrade to Business</Link></Button>}
         />
         <div className="px-5 pb-5">
@@ -327,7 +327,7 @@ export default function TaxesSettingsPage() {
                     <td className="px-3 py-2.5"><Badge tone={row.rate === "Mixed" ? "amber" : "gray"}>{row.rate}</Badge></td>
                     <td className="px-3 py-2.5 font-mono text-[#344668]"><span className="inline-flex items-center gap-2">{row.hsn}{!row.consistent ? <Badge tone="amber">Review</Badge> : <Badge tone="green">Valid</Badge>}</span></td>
                     <td className="px-3 py-2.5 text-[#64748b]">{row.count} products</td>
-                    <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => editHsn(row)} aria-label={`Edit GST mapping for ${row.cat}`} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-bold text-[#005dff] hover:bg-[#eef4ff]"><Pencil size={12} aria-hidden="true" /> Edit</button></td>
+                    <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => editHsn(row)} aria-label={`Edit GST mapping for ${row.cat}`} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-bold text-[var(--brand)] hover:bg-[#eef4ff]"><Pencil size={12} aria-hidden="true" /> Edit</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -344,7 +344,7 @@ export default function TaxesSettingsPage() {
             title="GST Reports"
             sub="This month"
             action={gstReportsFeature.allowed
-              ? <span className="flex items-center gap-3"><button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> Register</button><button onClick={exportGstr1Working} className="inline-flex items-center gap-1 text-[12px] font-bold text-[#005dff] hover:underline"><Download size={12} /> GSTR-1 working</button></span>
+              ? <span className="flex items-center gap-3"><button onClick={exportGstReport} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> Register</button><button onClick={exportGstr1Working} className="inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Download size={12} /> GSTR-1 working</button></span>
               : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">Upgrade to Business</Link></Button>}
           />
           {!gstReportsFeature.loading && !gstReportsFeature.allowed ? (

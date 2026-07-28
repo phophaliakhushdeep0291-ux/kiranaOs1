@@ -74,7 +74,7 @@ type PinActionState =
 
 const CARD = "rounded-[12px] border border-[#e2e9f3] bg-white shadow-[0_5px_18px_rgba(31,60,110,0.045)]";
 const TABLE_HEAD = "border-y border-[#e6ecf4] bg-[#f7f9fc] text-[#52617c]";
-const BLUE = "#075fff";
+const BLUE = "var(--brand)";
 const GREEN = "#19b85a";
 const PURPLE = "#7c3ff2";
 const ORANGE = "#ff9f0a";
@@ -548,7 +548,7 @@ export default function BillsPage() {
   const backupStatus = isOnline
     ? { icon: Wifi, label: isSyncing ? "Syncing" : "Synced", sub: isSyncing ? "Backing up now" : "Just now", cls: "border-[#c9efd5] bg-[#eaf9ef] text-[#119447]" }
     : isBrowserOnline
-      ? { icon: CloudOff, label: backendStatus.checkedAt ? "Cloud paused" : "Checking backup", sub: "Local data safe", cls: "border-[#dbe9ff] bg-[#eef5ff] text-[#075fff]" }
+      ? { icon: CloudOff, label: backendStatus.checkedAt ? "Cloud paused" : "Checking backup", sub: "Local data safe", cls: "border-[#dbe9ff] bg-[var(--brand-soft)] text-[var(--brand)]" }
       : { icon: WifiOff, label: "Offline ready", sub: "Saved locally", cls: "border-[#dfe6f0] bg-[#f7f9fc] text-[#64748b]" };
   const BackupStatusIcon = backupStatus.icon;
 
@@ -684,40 +684,40 @@ export default function BillsPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-10 min-w-[218px] justify-between rounded-[8px] border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f]">
-                <span className="inline-flex items-center gap-2"><CalendarDays size={15} className="text-[#075fff]" />{formatRange(fromDate, toDate)}</span>
+                <span className="inline-flex items-center gap-2"><CalendarDays size={15} className="text-[var(--brand)]" />{formatRange(fromDate, toDate)}</span>
                 <ChevronDown size={13} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               {(Object.keys(PERIOD_LABELS) as BillPeriod[]).map((key) => (
-                <DropdownMenuItem key={key} onClick={() => applyPeriod(key)} className={cn("text-[12px] font-semibold", period === key && "text-[#075fff]")}>{PERIOD_LABELS[key]}</DropdownMenuItem>
+                <DropdownMenuItem key={key} onClick={() => applyPeriod(key)} className={cn("text-[12px] font-semibold", period === key && "text-[var(--brand)]")}>{PERIOD_LABELS[key]}</DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#24385f]" onClick={() => document.getElementById("billing-history-table")?.scrollIntoView({ block: "start", behavior: "smooth" })}>
             <Filter size={15} /> Filters
           </Button>
-          <Button onClick={exportCsv} disabled={filtered.length === 0} variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#075fff]">
+          <Button onClick={exportCsv} disabled={filtered.length === 0} variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[var(--brand)]">
             <Download size={15} /> Export
           </Button>
           <Button onClick={requestEstimateCleanup} disabled={counts.estimates === 0 || isSaving} variant="outline" className="h-10 rounded-[8px] border-rose-100 bg-white px-4 text-[12px] font-bold text-rose-600 hover:border-rose-200 hover:bg-rose-50">
             <Trash2 size={15} /> Clear Estimates
           </Button>
-          <Button asChild variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#075fff]">
+          <Button asChild variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[var(--brand)]">
             <Link href="/billing?billType=estimate"><FileText size={15} />Estimate Bill</Link>
           </Button>
-          <Button asChild className="h-10 rounded-[8px] bg-[#075fff] px-5 text-[12px] font-bold text-white shadow-[0_9px_20px_rgba(7,95,255,0.22)] hover:bg-[#0054e8]">
+          <Button asChild className="h-10 rounded-[8px] bg-[var(--brand)] px-5 text-[12px] font-bold text-white shadow-[0_9px_20px_rgba(7,95,255,0.22)] hover:bg-[#0054e8]">
             <Link href="/billing?billType=normal_sale"><Plus size={15} />Pakka Bill</Link>
           </Button>
         </div>
       </div>
 
       <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <BillKpiCard label="Total Bills" value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[#edf4ff] text-[#075fff] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label="Total Bills" value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Total Sales" value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Paid Bills" value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Udhar Bills" value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
-        <BillKpiCard label="Average Bill Value" value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[#edf4ff] text-[#075fff] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard label="Average Bill Value" value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Cancelled Bills" value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
       </div>
 
@@ -733,8 +733,8 @@ export default function BillsPage() {
                   className={cn(
                     "h-9 whitespace-nowrap rounded-[7px] border px-4 text-[12px] font-bold transition-colors",
                     filter === tab.value
-                      ? "border-[#d8e6ff] bg-[#edf4ff] text-[#075fff] shadow-[0_5px_12px_rgba(7,95,255,0.08)]"
-                      : "border-transparent bg-white text-[#24385f] hover:bg-[#f7faff]",
+                      ? "border-[#d8e6ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_5px_12px_rgba(7,95,255,0.08)]"
+                      : "border-transparent bg-white text-[#24385f] hover:bg-[var(--brand-softer)]",
                   )}
                 >
                   {tab.label}
@@ -765,7 +765,7 @@ export default function BillsPage() {
                   {staffOptions.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" className="h-10 w-10 rounded-[8px] border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => { setSearch(""); setModeFilter("all"); setStaffFilter("all"); setFilter("all"); applyPeriod("all"); void refetch(); }} aria-label="Clear filters">
+              <Button variant="outline" size="icon" className="h-10 w-10 rounded-[8px] border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => { setSearch(""); setModeFilter("all"); setStaffFilter("all"); setFilter("all"); applyPeriod("all"); void refetch(); }} aria-label="Clear filters">
                 <SlidersHorizontal size={15} />
               </Button>
             </div>
@@ -803,7 +803,7 @@ export default function BillsPage() {
                   <article key={bill.id} className={cn("rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]", deleted && "opacity-70")}>
                     <div className="flex items-start justify-between gap-3">
                       <Link href={`/bills/${bill.id}`} className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-extrabold text-[#075fff]">Bill #{compactBillNo(billNo(bill))}</p>
+                        <p className="truncate text-[14px] font-extrabold text-[var(--brand)]">Bill #{compactBillNo(billNo(bill))}</p>
                         <p className="mt-1 truncate text-xs font-bold text-[#102347]">{bill.customerName || "Walk-in Customer"}</p>
                         <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{date.date} {date.time ? `• ${date.time}` : ""} • {itemsCount(bill) || 0} items</p>
                       </Link>
@@ -814,13 +814,13 @@ export default function BillsPage() {
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <ModeBadge mode={mode} />
-                      <span className="rounded-[6px] bg-[#edf4ff] px-2 py-1 text-[10px] font-black text-[#075fff]">{billTypeOf(bill)}</span>
+                      <span className="rounded-[6px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill)}</span>
                       <SyncBadgeMini sync={sync} />
                     </div>
                     <div className="mt-3 grid grid-cols-4 gap-2">
-                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => navigate(`/bills/${bill.id}`)} aria-label="View bill"><Eye size={15} className="mx-auto" /></button>
-                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => printBill(bill)} aria-label="Print bill"><Printer size={15} className="mx-auto" /></button>
-                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#075fff]" onClick={() => void shareOnWhatsapp(bill)} aria-label="Share bill"><Share2 size={15} className="mx-auto" /></button>
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => navigate(`/bills/${bill.id}`)} aria-label="View bill"><Eye size={15} className="mx-auto" /></button>
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => printBill(bill)} aria-label="Print bill"><Printer size={15} className="mx-auto" /></button>
+                      <button type="button" className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[var(--brand)]" onClick={() => void shareOnWhatsapp(bill)} aria-label="Share bill"><Share2 size={15} className="mx-auto" /></button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button className="h-9 rounded-[10px] border border-[#dfe7f2] bg-white text-[#405273]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={15} className="mx-auto" /></button>
@@ -849,7 +849,7 @@ export default function BillsPage() {
                 <thead>
                   <tr className={TABLE_HEAD}>
                     <th className="w-9 px-4 py-2.5 text-left">
-                      <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[#075fff]" aria-label="Select all bills on page" checked={pageRows.length > 0 && pageRows.every((bill) => checked.has(bill.id))} onChange={toggleAllOnPage} />
+                      <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[var(--brand)]" aria-label="Select all bills on page" checked={pageRows.length > 0 && pageRows.every((bill) => checked.has(bill.id))} onChange={toggleAllOnPage} />
                     </th>
                     {["Bill No", "Customer", "Date & Time", "Items", "Payment Mode", "Bill Type", "Amount", "Status", "Staff", "Sync", "Action"].map((header) => (
                       <th key={header} className={cn("px-4 py-2.5 font-bold", ["Items", "Amount"].includes(header) ? "text-right" : "text-left")}>{header}</th>
@@ -867,9 +867,9 @@ export default function BillsPage() {
                     return (
                       <tr key={bill.id} className={cn("text-[#24385f] transition-colors hover:bg-[#fbfcfe]", deleted && "bg-[#f8fafc] opacity-70")}>
                         <td className="px-4 py-2.5">
-                          <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[#075fff]" aria-label={`Select bill ${billNo(bill)}`} checked={checked.has(bill.id)} onChange={() => toggleOne(bill.id)} />
+                          <input type="checkbox" className="h-3.5 w-3.5 rounded border-[#cbd5e1] accent-[var(--brand)]" aria-label={`Select bill ${billNo(bill)}`} checked={checked.has(bill.id)} onChange={() => toggleOne(bill.id)} />
                         </td>
-                        <td className="whitespace-nowrap px-4 py-2.5 font-black text-[#075fff]">{compactBillNo(billNo(bill))}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 font-black text-[var(--brand)]">{compactBillNo(billNo(bill))}</td>
                         <td className="min-w-[145px] px-4 py-2.5">
                           <p className="font-bold text-[#13254a]">{bill.customerName || "Walk-in Customer"}</p>
                           <p className="mt-0.5 text-[#6f7f9b]">{bill.customerMobile || "-"}</p>
@@ -880,7 +880,7 @@ export default function BillsPage() {
                         </td>
                         <td className="px-4 py-2.5 text-right font-bold">{itemsCount(bill) || "-"}</td>
                         <td className="px-4 py-2.5"><ModeBadge mode={mode} /></td>
-                        <td className="px-4 py-2.5"><span className="rounded-[5px] bg-[#edf4ff] px-2 py-1 text-[10px] font-black text-[#075fff]">{billTypeOf(bill)}</span></td>
+                        <td className="px-4 py-2.5"><span className="rounded-[5px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill)}</span></td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-right font-black text-[#102347]">{money(billTotal(bill))}</td>
                         <td className="px-4 py-2.5"><StatusBadge status={status} /></td>
                         <td className="px-4 py-2.5 font-semibold">{staffNameOf(bill, staffFallback)}</td>
@@ -902,7 +902,7 @@ export default function BillsPage() {
                             )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[#405273] transition-colors hover:border-[#c7d8ef] hover:bg-[#f7faff]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={14} /></button>
+                                <button className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[#405273] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-softer)]" aria-label={`More actions for ${billNo(bill)}`}><MoreVertical size={14} /></button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuItem asChild><Link href={`/bills/${bill.id}`}><span className="flex items-center"><FileText size={14} className="mr-2" /> Open bill page</span></Link></DropdownMenuItem>
@@ -1041,7 +1041,7 @@ function SyncBadgeMini({ sync }: { sync: string }) {
 
 function ActionIcon({ title, children, onClick }: { title: string; children: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" title={title} aria-label={title} onClick={onClick} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[#075fff] transition-colors hover:border-[#c7d8ef] hover:bg-[#edf4ff]">
+    <button type="button" title={title} aria-label={title} onClick={onClick} className="grid h-8 w-8 place-items-center rounded-[7px] border border-[#dfe7f2] bg-white text-[var(--brand)] transition-colors hover:border-[#c7d8ef] hover:bg-[var(--brand-soft)]">
       {children}
     </button>
   );
@@ -1057,7 +1057,7 @@ function PageBtn({ children, active, disabled, ariaLabel, onClick }: { children:
       disabled={disabled}
       className={cn(
         "grid h-8 min-w-8 place-items-center rounded-[7px] border px-2 text-[12px] font-black transition-colors",
-        active ? "border-[#075fff] bg-[#075fff] text-white" : "border-[#dfe7f2] bg-white text-[#405273] hover:bg-[#f7faff] disabled:opacity-40",
+        active ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe7f2] bg-white text-[#405273] hover:bg-[var(--brand-softer)] disabled:opacity-40",
       )}
     >
       {children}
@@ -1071,7 +1071,7 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
         <h2 className="text-[14px] font-extrabold text-[#13254a]">Recent Billing Activity</h2>
-        <Link href="/bills" className="text-[11px] font-bold text-[#075fff]">View all</Link>
+        <Link href="/bills" className="text-[11px] font-bold text-[var(--brand)]">View all</Link>
       </header>
       <div className="divide-y divide-[#edf2f8]">
         {rows.length === 0 ? (
@@ -1137,7 +1137,7 @@ function TopCustomersCard({ rows }: { rows: Array<{ name: string; bills: number;
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
         <h2 className="text-[14px] font-extrabold text-[#13254a]">Top Customers</h2>
-        <Link href="/customers" className="text-[11px] font-bold text-[#075fff]">View all</Link>
+        <Link href="/customers" className="text-[11px] font-bold text-[var(--brand)]">View all</Link>
       </header>
       {rows.length === 0 ? (
         <div className="grid h-44 place-items-center text-[12px] font-semibold text-[#8290a8]">No customer sales in this period</div>
@@ -1156,7 +1156,7 @@ function TopCustomersCard({ rows }: { rows: Array<{ name: string; bills: number;
               {rows.map((row) => (
                 <tr key={row.name} className="text-[#24385f]">
                   <td className="px-2 py-2">
-                    <span className="inline-flex items-center gap-2 font-black"><span className="grid h-6 w-6 place-items-center rounded-full bg-[#edf4ff] text-[#075fff]"><User size={12} /></span>{row.name}</span>
+                    <span className="inline-flex items-center gap-2 font-black"><span className="grid h-6 w-6 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><User size={12} /></span>{row.name}</span>
                   </td>
                   <td className="px-2 py-2 text-right font-bold">{row.bills}</td>
                   <td className="px-2 py-2 text-right font-black">{money(row.total)}</td>

@@ -334,7 +334,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Data Management */}
         <Card>
-          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button onClick={() => void optimizeDatabase()} className="text-[12px] font-bold text-[#005dff] hover:underline">Optimize</button>} />
+          <CardHead icon={<Database size={15} />} title="Data Management" sub="Retention & storage" action={<button onClick={() => void optimizeDatabase()} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Optimize</button>} />
           <div className="px-5 pb-5">
             <RowToggle
               label="Auto cleanup temp files"
@@ -349,7 +349,7 @@ export default function AdvancedSettingsPage() {
               </div>
               {storage?.measured && storage.quotaBytes ? (
                 <div className="h-2.5 overflow-hidden rounded-full bg-[#eef2f8]">
-                  <div className="h-full rounded-full bg-[#005dff]" style={{ width: `${Math.min(100, Math.max(1, ((storage.usageBytes ?? 0) / storage.quotaBytes) * 100))}%` }} />
+                  <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${Math.min(100, Math.max(1, ((storage.usageBytes ?? 0) / storage.quotaBytes) * 100))}%` }} />
                 </div>
               ) : null}
               <p className="text-[11px] font-semibold text-[#64748b]">{storage ? `${storage.totalRows.toLocaleString("en-IN")} local records` : "Measuring…"}</p>
@@ -454,7 +454,7 @@ export default function AdvancedSettingsPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Diagnostics */}
         <Card>
-          <CardHead icon={<FlaskConical size={15} />} title="Developer / Diagnostics" sub="For support" action={<button onClick={copyDiagnostics} className="text-[12px] font-bold text-[#005dff] hover:underline">Copy</button>} />
+          <CardHead icon={<FlaskConical size={15} />} title="Developer / Diagnostics" sub="For support" action={<button onClick={copyDiagnostics} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Copy</button>} />
           <div className="grid grid-cols-1 gap-y-3 px-5 pb-5 sm:grid-cols-2">
             {[
               ["App version", appVersion()],

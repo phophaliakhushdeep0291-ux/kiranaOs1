@@ -152,7 +152,7 @@ export default function MerchantSetupPage() {
 
   return (
     <SettingsShell>
-      <Card className="border-[#cfe0ff] bg-white">
+      <Card className="border-[var(--brand-border)] bg-white">
         <div className="grid gap-4 px-5 py-5 lg:grid-cols-[1fr_260px]">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -170,7 +170,7 @@ export default function MerchantSetupPage() {
             </p>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#eef2f8]">
               <div
-                className="h-full rounded-full bg-[#005dff] transition-all duration-300"
+                className="h-full rounded-full bg-[var(--brand)] transition-all duration-300"
                 style={{ width: `${progress.percent}%` }}
               />
             </div>
@@ -182,7 +182,7 @@ export default function MerchantSetupPage() {
               <p className="mt-1 text-[12px] text-[#64748b]">{continueStep?.detail ?? "Your setup checks are complete."}</p>
             </div>
             <Button
-              className="mt-4 w-full rounded-[9px] bg-[#005dff] text-white hover:bg-[#004bd1]"
+              className="mt-4 w-full rounded-[9px] bg-[var(--brand)] text-white hover:bg-[#004bd1]"
               onClick={() => continueStep ? void openStep(continueStep) : navigate("/billing")}
             >
               Continue setup <ChevronRight size={16} />
@@ -203,7 +203,7 @@ export default function MerchantSetupPage() {
                     <span
                       className={cn(
                         "grid h-10 w-10 shrink-0 place-items-center rounded-[10px]",
-                        step.complete ? "bg-[#e6f7ee] text-[#16a34a]" : step.required ? "bg-[#fff7e8] text-[#d97706]" : "bg-[#eef5ff] text-[#005dff]",
+                        step.complete ? "bg-[#e6f7ee] text-[#16a34a]" : step.required ? "bg-[#fff7e8] text-[#d97706]" : "bg-[var(--brand-soft)] text-[var(--brand)]",
                       )}
                     >
                       {step.complete ? <BadgeCheck size={18} /> : <Icon size={18} />}
@@ -228,7 +228,7 @@ export default function MerchantSetupPage() {
                         Not needed
                       </Button>
                     )}
-                    <Button className="rounded-[8px] bg-[#005dff] text-white hover:bg-[#004bd1]" onClick={() => void openStep(step)}>
+                    <Button className="rounded-[8px] bg-[var(--brand)] text-white hover:bg-[#004bd1]" onClick={() => void openStep(step)}>
                       {step.actionLabel}
                     </Button>
                   </div>
@@ -266,7 +266,7 @@ export default function MerchantSetupPage() {
                 "Udhar or purchase workflows used before owner review.",
               ].map((item) => (
                 <div key={item} className="flex gap-2 rounded-[10px] bg-[#f8fbff] px-3 py-2">
-                  <Circle size={8} className="mt-1.5 shrink-0 fill-[#005dff] text-[#005dff]" />
+                  <Circle size={8} className="mt-1.5 shrink-0 fill-[var(--brand)] text-[var(--brand)]" />
                   <p className="text-[12px] leading-5 text-[#52627e]">{item}</p>
                 </div>
               ))}

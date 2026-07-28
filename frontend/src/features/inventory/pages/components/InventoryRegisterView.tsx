@@ -170,7 +170,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
           <div className="py-14 text-center text-[13px] text-[#64748b]">Loading movement history...</div>
         ) : scopedRows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-full bg-[#eef5ff] text-[#075cf7]">{icon}</span>
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#075cf7]">{icon}</span>
             <p className="text-[13px] font-black text-[#102347]">{emptyTitle}</p>
             <p className="max-w-sm text-[12px] leading-5 text-[#64748b]">{emptyText}</p>
           </div>
@@ -216,7 +216,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
 
 function Kpi({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "blue" | "green" | "violet" | "amber" }) {
   const toneClass = {
-    blue: "bg-[#eef5ff] text-[#075cf7]",
+    blue: "bg-[var(--brand-soft)] text-[#075cf7]",
     green: "bg-emerald-50 text-emerald-600",
     violet: "bg-violet-50 text-violet-600",
     amber: "bg-amber-50 text-amber-600",

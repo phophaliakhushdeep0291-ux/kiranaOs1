@@ -62,7 +62,7 @@ export function BillingOrderQrButton() {
           type="button"
           data-testid="button-order-qr"
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#cfe0ff] bg-[#eaf2ff] px-2.5 py-1.5 text-[12px] font-bold text-[#075fff]"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--brand-border)] bg-[#eaf2ff] px-2.5 py-1.5 text-[12px] font-bold text-[var(--brand)]"
         >
           <QrCode size={14} /> Order QR
         </button>
@@ -94,7 +94,7 @@ export function BillingOrderQrButton() {
               </>
             ) : (
               <>
-                <div className="mx-auto mt-4 grid h-16 w-16 place-items-center rounded-2xl bg-[#eaf2ff] text-[#075fff]">
+                <div className="mx-auto mt-4 grid h-16 w-16 place-items-center rounded-2xl bg-[#eaf2ff] text-[var(--brand)]">
                   <QrCode size={30} />
                 </div>
                 <p className="mt-3 text-[13px] font-bold text-[#102347]">Customer QR ordering is off</p>

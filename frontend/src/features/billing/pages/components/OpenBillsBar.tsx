@@ -51,7 +51,7 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
         type="button"
         onClick={onNew}
         title="Start a new bill"
-        className="ml-auto flex shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[#0057ff] px-2.5 py-1 text-[12px] font-bold text-[#0057ff] hover:bg-[#eef5ff]"
+        className="ml-auto flex shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[#0057ff] px-2.5 py-1 text-[12px] font-bold text-[#0057ff] hover:bg-[var(--brand-soft)]"
       >
         <Plus size={14} /> New bill
       </button>

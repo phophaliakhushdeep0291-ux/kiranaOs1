@@ -53,7 +53,7 @@ export interface StorageReport {
 }
 
 const STORAGE_GROUPS: { label: string; tables: string[]; tone: string }[] = [
-  { label: "Catalogue", tables: ["products", "suppliers"], tone: "bg-[#005dff]" },
+  { label: "Catalogue", tables: ["products", "suppliers"], tone: "bg-[var(--brand)]" },
   { label: "Sales", tables: ["bills", "bill_items", "payments"], tone: "bg-violet-500" },
   { label: "Customers", tables: ["customers", "customer_ledger"], tone: "bg-emerald-500" },
   { label: "Stock", tables: ["inventory_movements"], tone: "bg-amber-500" },

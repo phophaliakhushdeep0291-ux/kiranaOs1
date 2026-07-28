@@ -311,9 +311,9 @@ export function ProductFormPanel({
             )}
 
             {showPackContent ? (
-              <div className="rounded-[12px] border border-[#cfe0ff] bg-[#f7faff] p-3.5" data-testid="packed-unit-setup">
+              <div className="rounded-[12px] border border-[var(--brand-border)] bg-[var(--brand-softer)] p-3.5" data-testid="packed-unit-setup">
                 <div className="mb-3 flex items-start gap-2.5">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e7f0ff] text-[#075fff]"><Package size={16} /></span>
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e7f0ff] text-[var(--brand)]"><Package size={16} /></span>
                   <div>
                     <p className="text-[12px] font-black text-[#13274d]">Pack size used for billing and stock</p>
                     <p className="mt-0.5 text-[10.5px] font-semibold leading-relaxed text-[#6d7c98]">Example: a salt packet sold for Rs 28 contains 1 kg. Billing counts packets; inventory counts grams.</p>
@@ -327,7 +327,7 @@ export function ProductFormPanel({
                       key={unit}
                       type="button"
                       onClick={() => form.setValue("unit", unit, { shouldDirty: true, shouldValidate: true })}
-                      className={`h-8 shrink-0 rounded-lg border px-2.5 text-[10.5px] font-extrabold capitalize transition-colors ${selectedUnit === unit ? "border-[#075fff] bg-[#075fff] text-white" : "border-[#dfe8f5] bg-white text-[#45577a] hover:border-[#a9c5ff]"}`}
+                      className={`h-8 shrink-0 rounded-lg border px-2.5 text-[10.5px] font-extrabold capitalize transition-colors ${selectedUnit === unit ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe8f5] bg-white text-[#45577a] hover:border-[#a9c5ff]"}`}
                     >
                       {unit}
                     </button>
@@ -447,7 +447,7 @@ export function ProductFormPanel({
                   <button
                     type="button"
                     onClick={() => setExtraPackOpen((value) => !value)}
-                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#bcd0ff] bg-white px-2.5 text-[10.5px] font-black text-[#075fff] hover:bg-[#f2f7ff]"
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#bcd0ff] bg-white px-2.5 text-[10.5px] font-black text-[var(--brand)] hover:bg-[#f2f7ff]"
                   >
                     {extraPackOpen ? <X size={12} /> : <Plus size={12} />}
                     {extraPackOpen ? "Close" : "Add size"}
@@ -469,7 +469,7 @@ export function ProductFormPanel({
                 ) : null}
 
                 {extraPackOpen ? (
-                  <div className="mt-3 space-y-2.5 rounded-[10px] border border-[#cfe0ff] bg-white p-3">
+                  <div className="mt-3 space-y-2.5 rounded-[10px] border border-[var(--brand-border)] bg-white p-3">
                     <div className="grid grid-cols-2 gap-2">
                       <Field label="Sold as" required>
                         <Select value={extraPack.unitType} onValueChange={(value) => setExtraPack((current) => ({ ...current, unitType: value }))}>
@@ -495,7 +495,7 @@ export function ProductFormPanel({
                     <Field label="Pack barcode (Optional)">
                       <Input className="h-9" value={extraPack.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder="Barcode for this size" />
                     </Field>
-                    <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[#075fff] text-[11.5px] font-black text-white hover:bg-[#0052e8]">Add pack to product</button>
+                    <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[var(--brand)] text-[11.5px] font-black text-white hover:bg-[#0052e8]">Add pack to product</button>
                   </div>
                 ) : null}
               </div>
@@ -565,7 +565,7 @@ export function ProductFormPanel({
             <Button
               type="submit"
               disabled={isPending}
-              style={{ background: "linear-gradient(180deg, #005dff 0%, #0047e8 100%)" }}
+              style={{ background: "linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%)" }}
               className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white shadow-[0_10px_22px_rgba(0,77,255,0.28)] hover:opacity-95"
             >
               {isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : editing ? "Update Product" : "Save Product"}

@@ -297,7 +297,7 @@ export function BankReconciliationPanel({ from, to }: { from: string; to: string
       <header className="border-b border-[#e7edf5] bg-[linear-gradient(135deg,#f7fbff_0%,#ffffff_52%,#f3fff9_100%)] p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-[#eaf2ff] text-[#075fff]"><Landmark size={19} /></span>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-[#eaf2ff] text-[var(--brand)]"><Landmark size={19} /></span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-black text-[#10224a]">Bank & UPI reconciliation</h2><span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-extrabold text-emerald-800">Owner-confirmed only</span></div>
               <p className="mt-1 text-[11px] leading-5 text-[#66758f]">Import statement evidence, inspect deterministic candidates, and explicitly link recorded ledger impacts. Suggestions never post a match.</p>
@@ -333,7 +333,7 @@ export function BankReconciliationPanel({ from, to }: { from: string; to: string
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px]">
             <p className={fileError ? "font-semibold text-red-700" : "text-[#6c7a92]"}>{fileError ?? (csvFile ? `${csvFile.name} · ${(csvFile.size / 1024).toFixed(1)} KB ready for strict validation` : "Accepted dates: YYYY-MM-DD or DD/MM/YYYY · exact two-decimal money · maximum 5,000 rows")}</p>
-            <a className="font-bold text-[#075fff] hover:underline" download="kiranaos-bank-statement-template.csv" href={"data:text/csv;charset=utf-8," + encodeURIComponent("Date,Description,Reference,Debit,Credit,Balance\n2026-07-01,Customer settlement,UTR123,,1000.00,1000.00")}>Download template</a>
+            <a className="font-bold text-[var(--brand)] hover:underline" download="kiranaos-bank-statement-template.csv" href={"data:text/csv;charset=utf-8," + encodeURIComponent("Date,Description,Reference,Debit,Credit,Balance\n2026-07-01,Customer settlement,UTR123,,1000.00,1000.00")}>Download template</a>
           </div>
           {lastImport ? <div className="mt-3 flex items-start gap-2 rounded-[8px] border border-emerald-200 bg-emerald-50 p-3 text-[11px] text-emerald-900"><FileCheck2 size={15} className="mt-0.5 shrink-0" /><p><strong>{lastImport.idempotentReplay ? "Exact replay detected." : `${lastImport.importedCount} rows imported.`}</strong> {lastImport.duplicateCount} duplicate row{lastImport.duplicateCount === 1 ? "" : "s"} skipped from {lastImport.fileName}. No partial row import was accepted.</p></div> : null}
         </section>
@@ -358,7 +358,7 @@ export function BankReconciliationPanel({ from, to }: { from: string; to: string
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 gap-1 overflow-x-auto pb-1">
                 {(["all", "unmatched", "partial", "matched", "ignored"] as const).map((value) => (
-                  <button key={value} type="button" onClick={() => { setStatus(value); setOffset(0); }} className={cn("shrink-0 rounded-[6px] px-3 py-1.5 text-[10px] font-extrabold capitalize transition-colors", status === value ? "bg-[#075fff] text-white" : "bg-[#f1f4f9] text-[#52617c] hover:bg-[#e7edf7]")}>{value}</button>
+                  <button key={value} type="button" onClick={() => { setStatus(value); setOffset(0); }} className={cn("shrink-0 rounded-[6px] px-3 py-1.5 text-[10px] font-extrabold capitalize transition-colors", status === value ? "bg-[var(--brand)] text-white" : "bg-[#f1f4f9] text-[#52617c] hover:bg-[#e7edf7]")}>{value}</button>
                 ))}
               </div>
               <select value={accountFilter} onChange={(event) => { setAccountFilter(event.target.value as AccountFilter); setOffset(0); }} className="h-8 rounded-[6px] border border-[#dbe3ee] bg-white px-2 text-[10px] font-bold text-[#425472]">

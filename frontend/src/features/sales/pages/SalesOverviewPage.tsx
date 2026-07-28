@@ -49,7 +49,7 @@ type LocalBill = Bill & Record<string, unknown>;
 const PANEL = "min-w-0 overflow-hidden rounded-[9px] border border-[#e1e8f3] bg-white shadow-[0_5px_20px_rgba(31,60,110,0.045)]";
 const GRID_STROKE = "#e7edf5";
 const AXIS_COLOR = "#6f7f9b";
-const BLUE = "#075fff";
+const BLUE = "var(--brand)";
 const GREEN = "#18b85a";
 const ORANGE = "#ff9d0a";
 const PURPLE = "#7c3ff2";
@@ -213,7 +213,7 @@ function modeMeta(mode: string) {
   if (mode === "upi") return { label: "UPI", color: PURPLE, chip: "border-[#ddd3ff] bg-[#f4efff] text-[#7146eb]" };
   if (mode === "card") return { label: "Card", color: ORANGE, chip: "border-[#ffdda8] bg-[#fff2df] text-[#db7f00]" };
   if (mode === "udhar") return { label: "Udhar", color: ORANGE, chip: "border-[#ffdda8] bg-[#fff2df] text-[#db7f00]" };
-  if (mode === "split") return { label: "Split", color: BLUE, chip: "border-[#c9dcff] bg-[#eef4ff] text-[#075fff]" };
+  if (mode === "split") return { label: "Split", color: BLUE, chip: "border-[#c9dcff] bg-[#eef4ff] text-[var(--brand)]" };
   return { label: "Cash", color: GREEN, chip: "border-[#c9efd5] bg-[#eaf9ef] text-[#13964a]" };
 }
 
@@ -391,7 +391,7 @@ export default function SalesOverviewPage() {
   ];
 
   const kpis = [
-    { label: "Total Sales", value: money(selected?.sales), current: selected?.sales ?? 0, previous: previous?.sales ?? 0, icon: <IndianRupee size={16} />, iconClass: "bg-[#edf4ff] text-[#075fff]", color: BLUE, spark: snapshot?.dailyTrend.map((point) => point.sales) ?? [] },
+    { label: "Total Sales", value: money(selected?.sales), current: selected?.sales ?? 0, previous: previous?.sales ?? 0, icon: <IndianRupee size={16} />, iconClass: "bg-[var(--brand-soft)] text-[var(--brand)]", color: BLUE, spark: snapshot?.dailyTrend.map((point) => point.sales) ?? [] },
     { label: "Total Orders", value: String(selected?.bills ?? 0), current: selected?.bills ?? 0, previous: previous?.bills ?? 0, icon: <ShoppingCart size={16} />, iconClass: "bg-[#eaf9ef] text-[#16ad52]", color: GREEN, spark: snapshot?.dailyTrend.map((point) => point.collection) ?? [] },
     { label: "Average Order Value", value: money(avgOrderValue), current: avgOrderValue, previous: previousAvgOrderValue, icon: <Tag size={16} />, iconClass: "bg-[#fff3e8] text-[#ff8a00]", color: ORANGE, spark: snapshot?.dailyTrend.map((point) => {
       const bills = dailyOrderCounts.get(point.date) ?? 0;
@@ -399,7 +399,7 @@ export default function SalesOverviewPage() {
     }) ?? [] },
     { label: "Gross Profit", value: money(selected?.profitEstimate), current: selected?.profitEstimate ?? 0, previous: previous?.profitEstimate ?? 0, icon: <CircleDollarSign size={16} />, iconClass: "bg-[#f3edff] text-[#7c3df0]", color: PURPLE, spark: snapshot?.dailyTrend.map((point) => point.profit) ?? [] },
     { label: "Profit Margin", value: `${profitMargin.toFixed(2)}%`, current: profitMargin, previous: previousProfitMargin, icon: <Percent size={16} />, iconClass: "bg-[#ffedf5] text-[#ff3b8d]", color: PINK, spark: snapshot?.dailyTrend.map((point) => point.sales ? (point.profit / point.sales) * 100 : 0) ?? [] },
-    { label: "Refunds", value: money(refundTotal), current: refundTotal, previous: previousRefundTotal, icon: <RefreshCw size={16} />, iconClass: "bg-[#edf4ff] text-[#075fff]", color: BLUE, spark: snapshot?.dailyTrend.map((point) => returnsByDate.get(point.date) ?? 0) ?? [], positiveIsBad: true },
+    { label: "Refunds", value: money(refundTotal), current: refundTotal, previous: previousRefundTotal, icon: <RefreshCw size={16} />, iconClass: "bg-[var(--brand-soft)] text-[var(--brand)]", color: BLUE, spark: snapshot?.dailyTrend.map((point) => returnsByDate.get(point.date) ?? 0) ?? [], positiveIsBad: true },
   ];
 
   const exportSales = () => {
@@ -426,7 +426,7 @@ export default function SalesOverviewPage() {
           <Popover open={dateOpen} onOpenChange={setDateOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="h-9 min-w-[230px] justify-between rounded-[7px] border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f]">
-                <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[#075fff]" />{rangeLabel(range)}</span>
+                <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[var(--brand)]" />{rangeLabel(range)}</span>
                 <ChevronDown size={13} className="text-[#7e8ba3]" />
               </Button>
             </PopoverTrigger>
@@ -443,12 +443,12 @@ export default function SalesOverviewPage() {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-44 rounded-[8px] border-[#dfe7f2] p-2">
               {(["today", "week", "month"] as const).map((item) => (
-                <button key={item} type="button" onClick={() => applyPeriod(item)} className={cn("w-full rounded-[6px] px-3 py-2 text-left text-xs font-bold hover:bg-[#f2f6fc]", period === item && "bg-[#edf4ff] text-[#075fff]")}>{PERIOD_LABELS[item]}</button>
+                <button key={item} type="button" onClick={() => applyPeriod(item)} className={cn("w-full rounded-[6px] px-3 py-2 text-left text-xs font-bold hover:bg-[#f2f6fc]", period === item && "bg-[var(--brand-soft)] text-[var(--brand)]")}>{PERIOD_LABELS[item]}</button>
               ))}
             </PopoverContent>
           </Popover>
           <Button variant="outline" onClick={exportSales} disabled={!snapshot || loading} className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-bold"><Download size={14} className="mr-2" />Export</Button>
-          <Button asChild className="h-9 rounded-[7px] bg-[#075fff] px-5 text-[12px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.22)] hover:bg-[#0052e0]"><Link href="/billing"><Plus size={14} className="mr-2" />New Sale</Link></Button>
+          <Button asChild className="h-9 rounded-[7px] bg-[var(--brand)] px-5 text-[12px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.22)] hover:bg-[#0052e0]"><Link href="/billing"><Plus size={14} className="mr-2" />New Sale</Link></Button>
         </div>
       </section>
 
@@ -480,7 +480,7 @@ export default function SalesOverviewPage() {
         <SmallTable title="Top Selling Products" actionHref="/products" action="View all" headers={["Product", "Category", "Qty Sold", "Sales (\u20b9)"]} loading={loading} empty={!snapshot?.topProducts.length}>
           {snapshot?.topProducts.slice(0, 5).map((row, index) => (
             <tr key={row.productId} className="text-[#24385f]">
-              <td className="px-3 py-2 font-bold"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded bg-[#f5f7fb] text-[10px] text-[#075fff]">{index + 1}</span>{row.name}</td>
+              <td className="px-3 py-2 font-bold"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded bg-[#f5f7fb] text-[10px] text-[var(--brand)]">{index + 1}</span>{row.name}</td>
               <td className="px-3 py-2">{row.category}</td>
               <td className="px-3 py-2 text-right font-semibold">{row.quantitySold}</td>
               <td className="px-3 py-2 text-right font-black">{money(row.revenue)}</td>
@@ -488,13 +488,13 @@ export default function SalesOverviewPage() {
           ))}
         </SmallTable>
 
-        <Panel title="Sales by Store" action={<Link href="/settings/store-profile" className="text-[10px] font-bold text-[#075fff]">View all</Link>}>
+        <Panel title="Sales by Store" action={<Link href="/settings/store-profile" className="text-[10px] font-bold text-[var(--brand)]">View all</Link>}>
           <div className="space-y-3 px-4 pb-4 pt-1">
             {loading ? <Skeleton className="h-36" /> : storeRows.length === 0 ? <EmptyState label="No store sales in this period" /> : storeRows.map((row) => {
               const max = Math.max(...storeRows.map((item) => item.sales), 1);
               return <div key={row.name} className="grid grid-cols-[1fr_86px_44px] items-center gap-3 text-[10px]">
                 <span className="truncate font-semibold text-[#34486e]">{row.name}</span>
-                <div><p className="mb-1 text-right font-black text-[#14264c]">{money(row.sales)}</p><div className="h-1.5 rounded-full bg-[#edf2f8]"><div className="h-full rounded-full bg-[#075fff]" style={{ width: `${Math.max(7, (row.sales / max) * 100)}%` }} /></div></div>
+                <div><p className="mb-1 text-right font-black text-[#14264c]">{money(row.sales)}</p><div className="h-1.5 rounded-full bg-[#edf2f8]"><div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${Math.max(7, (row.sales / max) * 100)}%` }} /></div></div>
                 <span className="text-right font-semibold text-[#52617c]">{row.orders}</span>
               </div>;
             })}
@@ -506,7 +506,7 @@ export default function SalesOverviewPage() {
             const mode = modeMeta(paymentMode(bill));
             const date = new Date(billDate(bill));
             return <tr key={bill.id} className="text-[#24385f]">
-              <td className="px-3 py-2 font-bold text-[#075fff]">{billNo(bill)}</td>
+              <td className="px-3 py-2 font-bold text-[var(--brand)]">{billNo(bill)}</td>
               <td className="px-3 py-2">{customerName(bill)}</td>
               <td className="px-3 py-2 text-right font-black">{money(billTotal(bill))}</td>
               <td className="px-3 py-2 text-right"><span className={cn("rounded-[5px] border px-2 py-0.5 text-[9px] font-bold", mode.chip)}>{mode.label}</span></td>
@@ -537,7 +537,7 @@ export default function SalesOverviewPage() {
           <div className="divide-y divide-[#e8edf4] px-4 pb-3">
             {loading ? <Skeleton className="my-3 h-44" /> : summaryRows.map((row) => (
               <div key={row.label} className="grid grid-cols-[26px_1fr_auto] items-center gap-2 py-2.5 text-[11px]">
-                <span className="grid h-6 w-6 place-items-center rounded-[6px] bg-[#edf4ff]" style={{ color: row.color }}><CalendarDays size={13} /></span>
+                <span className="grid h-6 w-6 place-items-center rounded-[6px] bg-[var(--brand-soft)]" style={{ color: row.color }}><CalendarDays size={13} /></span>
                 <span className="font-semibold text-[#34486e]">{row.label}</span>
                 <span className="font-black text-[#14264c]">{money(row.value)}</span>
               </div>
@@ -611,7 +611,7 @@ function PeriodPill({ value, onChange }: { value: SalesPeriod; onChange: (period
       </PopoverTrigger>
       <PopoverContent align="end" className="w-36 rounded-[7px] border-[#dfe7f2] p-1.5">
         {(["today", "week", "month"] as const).map((period) => (
-          <button key={period} type="button" onClick={() => onChange(period)} className={cn("w-full rounded-[5px] px-2.5 py-2 text-left text-[11px] font-bold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[#edf4ff] text-[#075fff]")}>{PERIOD_LABELS[period]}</button>
+          <button key={period} type="button" onClick={() => onChange(period)} className={cn("w-full rounded-[5px] px-2.5 py-2 text-left text-[11px] font-bold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[var(--brand-soft)] text-[var(--brand)]")}>{PERIOD_LABELS[period]}</button>
         ))}
       </PopoverContent>
     </Popover>
@@ -650,7 +650,7 @@ function DonutPanel({ title, total, rows, centerLabel }: { title: string; total:
 function SmallTable({ title, action, actionHref, headers, loading, empty, children }: { title: string; action: string; actionHref: string; headers: string[]; loading: boolean; empty: boolean; children: ReactNode }) {
   return (
     <article className={cn(PANEL, "h-full")}>
-      <header className="flex h-11 items-center justify-between gap-3 px-4"><h2 className="truncate text-[13px] font-black text-[#13254a]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[#075fff]">{action}</Link></header>
+      <header className="flex h-11 items-center justify-between gap-3 px-4"><h2 className="truncate text-[13px] font-black text-[#13254a]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[var(--brand)]">{action}</Link></header>
       {loading ? <Skeleton className="m-3 h-36" /> : empty ? <EmptyState label="No records in this period" /> : (
         <div className="overflow-x-auto px-2 pb-3">
           <table className="w-full min-w-[520px] border-collapse text-[10px]">
