@@ -266,13 +266,16 @@ export default function ReportsPage() {
   const netProfit = expenseTotal == null ? undefined : (selected?.profitEstimate ?? 0) - expenseTotal;
   const previousNetProfit = (previous?.profitEstimate ?? 0) - previousExpenseTotal;
 
+  // Tender split of the period's SALES, so the slices reconcile to Total Sales.
+  // Deliberately not cashIn/upiIn/bankIn: those add recovery of *older* udhar, which
+  // double-counts against the udhar slice and made this donut exceed total sales.
   const paymentModes = useMemo(() => {
     const payment = snapshot?.paymentBreakdown;
     if (!payment) return [];
     return [
-      { name: "Cash", value: payment.cashIn, color: "#20b75a" },
-      { name: "UPI", value: payment.upiIn, color: "#1264f6" },
-      { name: "Bank", value: payment.bankIn, color: "#0ea5e9" },
+      { name: "Cash", value: payment.cash, color: "#20b75a" },
+      { name: "UPI", value: payment.upi, color: "#1264f6" },
+      { name: "Bank", value: payment.bank, color: "#0ea5e9" },
       { name: "Udhar", value: payment.udhar, color: "#f5a30a" },
     ].filter((item) => item.value > 0);
   }, [snapshot]);
@@ -301,7 +304,7 @@ export default function ReportsPage() {
       {
         tone: "green" as const,
         title: `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared to the previous period.`,
-        detail: `${paymentModes[0]?.name ?? "Cash"} currently leads collected payments.`,
+        detail: `${paymentModes[0]?.name ?? "Cash"} currently leads the payment mode mix.`,
       },
       topCategory ? {
         tone: "amber" as const,
@@ -527,7 +530,7 @@ export default function ReportsPage() {
             <div className="grid min-h-[218px] items-center gap-3 px-3 pb-2 sm:grid-cols-[minmax(170px,0.9fr)_minmax(0,1.1fr)]">
               <div className="relative mx-auto h-[176px] w-[176px]">
                 <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={paymentModes} dataKey="value" nameKey="name" innerRadius={56} outerRadius={84} paddingAngle={1} stroke="#fff" strokeWidth={2}>{paymentModes.map((mode) => <Cell key={mode.name} fill={mode.color} />)}</Pie><Tooltip content={<MoneyTooltip />} /></PieChart></ResponsiveContainer>
-                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center"><div><strong className="block text-[15px] text-[#13244a]">{fmt(paymentTotal)}</strong><span className="text-[10px] text-[#7886a0]">Total Collection</span></div></div>
+                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center"><div><strong className="block text-[15px] text-[#13244a]">{fmt(paymentTotal)}</strong><span className="text-[10px] text-[#7886a0]">Total Sales</span></div></div>
               </div>
               <div className="space-y-3 pr-2">
                 {paymentModes.map((mode) => <div key={mode.name} className="grid grid-cols-[10px_1fr_auto] items-center gap-2 text-[11px]"><span className="h-2 w-2 rounded-full" style={{ background: mode.color }} /><span className="font-semibold text-[#2c3f64]">{mode.name}</span><span className="font-bold text-[#15264b]">{fmt(mode.value)} <em className="font-normal not-italic text-[#75839d]">({paymentTotal ? ((mode.value / paymentTotal) * 100).toFixed(1) : 0}%)</em></span></div>)}

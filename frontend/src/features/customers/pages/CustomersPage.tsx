@@ -265,6 +265,29 @@ function paymentDate(row: Record<string, unknown>): string {
   return getDate(row, ["paidAt", "paid_at", "createdAt", "created_at"]);
 }
 
+const LEDGER_DATE_KEYS = ["businessDate", "business_date", "entry_at", "createdAt", "created_at"];
+
+function ledgerEntryDate(row: Record<string, unknown>): string {
+  return getDate(row, LEDGER_DATE_KEYS);
+}
+
+// After sync the table holds BOTH the local optimistic row and the server echo,
+// with the local twin tombstoned. Counting raw rows doubles every figure.
+function isLiveLedgerRow(row: Record<string, unknown>): boolean {
+  return !(row.deleted_at ?? row.deletedAt ?? row.merged_into_id ?? row.mergedIntoId);
+}
+
+// "Received" on this page means udhar RECOVERED, so it must come from the customer
+// ledger, not the `payments` table — that table also holds bill tender for ordinary
+// cash/UPI sales, and summing it reports shop revenue as khata collections.
+function udharCollectionAmount(row: Record<string, unknown>): number {
+  const type = String(row.type ?? row.source_type ?? "").toUpperCase();
+  if (!type.includes("PAYMENT")) return 0;
+  if (row.reversedAt ?? row.reversed_at) return 0;
+  const amount = Number(row.amount ?? 0);
+  return Number.isFinite(amount) ? Math.abs(amount) : 0;
+}
+
 function ledgerSignedAmount(row: Record<string, unknown>): number {
   const amount = Number(row.amount ?? 0);
   if (!Number.isFinite(amount)) return 0;
@@ -298,7 +321,7 @@ export default function CustomersPage() {
   const [editing, setEditing] = useState<CustomerWithLedger | null>(null);
   const [customerForm, setCustomerForm] = useState<CustomerFormState>(blankCustomerForm());
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentForm, setPaymentForm] = useState<PaymentFormState>({ customerId: "", amount: "", mode: "split", cashAmount: "", upiAmount: "", note: "" });
+  const [paymentForm, setPaymentForm] = useState<PaymentFormState>({ customerId: "", amount: "", mode: "cash", cashAmount: "", upiAmount: "", note: "" });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CustomerWithLedger | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -381,10 +404,10 @@ export default function CustomersPage() {
   const creditLimit = money(selectedCustomer?.udharLimit);
   const availableCredit = Math.max(0, creditLimit - Math.max(0, money(selectedCustomer?.ledgerBalance)));
   const trustScore = selectedCustomer?.ledgerMetrics.trustScore ?? 0;
-  const allPayments = overviewQuery.data?.payments ?? [];
-  const allLedger = overviewQuery.data?.ledger ?? [];
-  const rangePayments = allPayments.filter((payment) => inDateRange(paymentDate(payment), rangeFrom, rangeTo));
-  const receivedInRange = rangePayments.reduce((sum, payment) => sum + paymentAmount(payment), 0);
+  const allLedger = (overviewQuery.data?.ledger ?? []).filter(isLiveLedgerRow);
+  const receivedInRange = allLedger
+    .filter((row) => inDateRange(ledgerEntryDate(row), rangeFrom, rangeTo))
+    .reduce((sum, row) => sum + udharCollectionAmount(row), 0);
   const selectedReceivedInRange = paymentRows
     .filter((payment) => inDateRange(paymentDate(payment), rangeFrom, rangeTo))
     .reduce((sum, payment) => sum + paymentAmount(payment), 0);
@@ -412,12 +435,9 @@ export default function CustomersPage() {
     const paymentsByDay = new Map(days.map((day) => [day, 0]));
     const customersByDay = new Map(days.map((day) => [day, 0]));
     for (const row of allLedger) {
-      const date = getDate(row, ["businessDate", "business_date", "entry_at", "createdAt", "created_at"]).slice(0, 10);
+      const date = ledgerEntryDate(row).slice(0, 10);
       if (ledgerByDay.has(date)) ledgerByDay.set(date, (ledgerByDay.get(date) ?? 0) + ledgerSignedAmount(row));
-    }
-    for (const row of allPayments) {
-      const date = paymentDate(row).slice(0, 10);
-      if (paymentsByDay.has(date)) paymentsByDay.set(date, (paymentsByDay.get(date) ?? 0) + paymentAmount(row));
+      if (paymentsByDay.has(date)) paymentsByDay.set(date, (paymentsByDay.get(date) ?? 0) + udharCollectionAmount(row));
     }
     for (const customer of dedupedCustomers) {
       const date = String(customer.createdAt ?? customer.created_at ?? "").slice(0, 10);
@@ -433,7 +453,7 @@ export default function CustomersPage() {
       active: days.map(() => totals.active),
       collection: days.map(() => averageCollectionDays),
     };
-  }, [allLedger, allPayments, averageCollectionDays, dedupedCustomers, overdueAmount, totals.active, totals.customers, totals.totalUdhar]);
+  }, [allLedger, averageCollectionDays, dedupedCustomers, overdueAmount, totals.active, totals.customers, totals.totalUdhar]);
   const metricChanges = useMemo(() => {
     const from = new Date(`${rangeFrom}T00:00:00`);
     const to = new Date(`${rangeTo}T23:59:59.999`);
@@ -442,8 +462,8 @@ export default function CustomersPage() {
     const previousFrom = new Date(previousTo.getTime() - duration + 1);
     const previousFromKey = inputDate(previousFrom);
     const previousToKey = inputDate(previousTo);
-    const previousPayments = allPayments.filter((payment) => inDateRange(paymentDate(payment), previousFromKey, previousToKey)).reduce((sum, payment) => sum + paymentAmount(payment), 0);
-    const currentLedgerMovement = allLedger.filter((row) => inDateRange(getDate(row, ["businessDate", "business_date", "entry_at", "createdAt", "created_at"]), rangeFrom, rangeTo)).reduce((sum, row) => sum + ledgerSignedAmount(row), 0);
+    const previousPayments = allLedger.filter((row) => inDateRange(ledgerEntryDate(row), previousFromKey, previousToKey)).reduce((sum, row) => sum + udharCollectionAmount(row), 0);
+    const currentLedgerMovement = allLedger.filter((row) => inDateRange(ledgerEntryDate(row), rangeFrom, rangeTo)).reduce((sum, row) => sum + ledgerSignedAmount(row), 0);
     const priorOutstanding = Math.max(0, totals.totalUdhar - currentLedgerMovement);
     const customersAtPreviousEnd = dedupedCustomers.filter((customer) => {
       const created = new Date(String(customer.createdAt ?? customer.created_at ?? 0)).getTime();
@@ -457,7 +477,7 @@ export default function CustomersPage() {
       active: 0,
       collection: 0,
     };
-  }, [allLedger, allPayments, dedupedCustomers, rangeFrom, rangeTo, receivedInRange, totals.customers, totals.totalUdhar]);
+  }, [allLedger, dedupedCustomers, rangeFrom, rangeTo, receivedInRange, totals.customers, totals.totalUdhar]);
 
   useEffect(() => {
     if (!selectedCustomer) return;
@@ -782,7 +802,7 @@ export default function CustomersPage() {
         <CustomerMetricCard label="Total Customers" value={String(totals.customers)} change={metricChanges.customers} color="#1768f5" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[#1768f5]" spark={metricSparks.customers} />
         <CustomerMetricCard label="Total Outstanding" value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
         <CustomerMetricCard label="Overdue Amount" value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
-        <CustomerMetricCard label="Received This Week" value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
+        <CustomerMetricCard label="Udhar Collected" value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
         <CustomerMetricCard label="Customers with Balance" value={String(totals.active)} change={metricChanges.active} color="#1768f5" icon={<UserCheck size={18} />} iconClass="bg-[var(--brand-soft)] text-[#1768f5]" spark={metricSparks.active} />
         <CustomerMetricCard label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
       </section>
@@ -1347,17 +1367,18 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
   const paid = paymentRows.reduce((sum, row) => sum + paymentAmount(row), 0);
   const paymentTotal = paymentForm.mode === "split" ? addMoney(paymentForm.cashAmount, paymentForm.upiAmount) : money(paymentForm.amount);
   const overdueDays = customerOverdueDays(customer);
+  // Split seeding puts the whole amount in cash and leaves UPI at zero. Never
+  // guess a cash/UPI ratio: the tender split decides the cash drawer and the
+  // UPI report, so an invented ratio silently falsifies both.
   const chooseAmount = (requested: number) => onPaymentChange((form) => {
     const value = Math.min(requested, outstanding);
     if (form.mode !== "split") return { ...form, amount: String(value) };
-    const cash = Math.round(value * 0.4);
-    return { ...form, amount: String(value), cashAmount: String(cash), upiAmount: String(subtractMoney(value, cash)) };
+    return { ...form, amount: String(value), cashAmount: String(value), upiAmount: "0" };
   });
   const setTotal = (raw: string) => onPaymentChange((form) => {
     if (form.mode !== "split") return { ...form, amount: raw };
     const total = money(raw);
-    const cash = Math.round(total * 0.4);
-    return { ...form, amount: raw, cashAmount: total > 0 ? String(cash) : "", upiAmount: total > 0 ? String(subtractMoney(total, cash)) : "" };
+    return { ...form, amount: raw, cashAmount: total > 0 ? String(total) : "", upiAmount: total > 0 ? "0" : "" };
   });
   const invalidAmount = paymentTotal <= 0 || moneyExceeds(paymentTotal, outstanding);
   return (
@@ -1378,7 +1399,7 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
         <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]"><div><p className="text-[10px] font-bold uppercase text-[#75839d]">Amount Due</p><p className="mt-1.5 text-[19px] font-black text-rose-600">{fmtMoney(outstanding)}</p></div><div><Label className="text-[10px] font-bold text-[#52627e]">Payment Amount <span className="text-rose-500">*</span></Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#52627e]">₹</span><Input id="customer-payment-amount" type="number" inputMode="decimal" min="0" step="0.01" max={outstanding} value={paymentForm.amount} onChange={(event) => setTotal(event.target.value)} className="h-10 rounded-[10px] border-[#dfe7f2] pl-8 text-[13px] font-bold" placeholder="0.00" /></div></div></div>
         <div className="mt-3 grid grid-cols-[1.45fr_repeat(4,1fr)] gap-2"><button onClick={() => chooseAmount(outstanding)} className="min-h-9 rounded-[8px] border border-[#0b63f6] bg-[var(--brand-soft)] px-1 text-[9px] font-bold text-[#0b63f6]">Full Due ({fmtMoney(outstanding)})</button>{[500,1000,2000].map((amount) => <button key={amount} onClick={() => chooseAmount(amount)} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{fmtMoney(amount)}</button>)}<button onClick={() => document.getElementById("customer-payment-amount")?.focus()} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">Custom</button></div>
         <p className="mt-4 text-[10px] font-bold text-[#52627e]">Payment Mode</p>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['cash','Cash',<Banknote key="cash" size={15} />],['upi','UPI',<CreditCard key="upi" size={15} />],['bank','Bank',<Landmark key="bank" size={15} />],['split','Split',<ArrowLeftRight key="split" size={15} />]] as const).map(([mode,label,icon]) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); const cash = Math.round(total * 0.4); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(cash), upiAmount: String(subtractMoney(total, cash)) } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[#0b63f6] bg-[var(--brand-soft)] text-[#0b63f6]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['cash','Cash',<Banknote key="cash" size={15} />],['upi','UPI',<CreditCard key="upi" size={15} />],['bank','Bank',<Landmark key="bank" size={15} />],['split','Split',<ArrowLeftRight key="split" size={15} />]] as const).map(([mode,label,icon]) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(total), upiAmount: "0" } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[#0b63f6] bg-[var(--brand-soft)] text-[#0b63f6]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
         {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[#071b3a]">{fmtMoney(paymentTotal)}</span></p></div>}
         {moneyExceeds(paymentTotal, outstanding) && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
         <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">Payment Note <span className="font-medium text-[#94a3b8]">(Optional)</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder="Payment note / reference" /></div>
