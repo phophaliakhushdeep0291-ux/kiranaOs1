@@ -97,12 +97,14 @@ export async function getPublicOrderStatus(shopId, orderId) {
   }
   const order = await db.customerOrder.findFirst({
     where: { id: String(orderId ?? ""), shopId },
-    select: { id: true, status: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
+    select: { id: true, status: true, paymentStatus: true, fulfillmentStatus: true, fulfillmentType: true, promisedSlot: true, itemCount: true, estimatedTotal: true, itemsJson: true, createdAt: true, updatedAt: true, location: { select: { id: true, name: true, address: true, city: true, phone: true } } },
   });
   if (!order) throw new AppError("We couldn't find that order.", 404);
   return {
     orderId: order.id,
     status: order.status,
+    paymentStatus: order.paymentStatus,
+    fulfillmentStatus: order.fulfillmentStatus,
     stage: ORDER_STAGE[order.status] ?? order.status,
     fulfillmentType: order.fulfillmentType,
     promisedSlot: order.promisedSlot,
@@ -212,6 +214,9 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
         note: note ? note.slice(0, 400) : null,
         fulfillmentType,
         promisedSlot,
+        sourceChannel: "customer_portal",
+        paymentStatus: "unpaid",
+        fulfillmentStatus: "unfulfilled",
         itemsJson: JSON.stringify(lines),
         itemCount,
         estimatedTotal,

@@ -568,9 +568,6 @@ model Bill {
   @@unique([shopId, sourceDeviceId, clientBillId])
   @@index([shopId, createdByUserId, createdAt])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, locationId, status, createdAt])
   @@index([shopId, businessDate])
   @@index([shopId, status, businessDate])
@@ -824,9 +821,6 @@ model GiftCard {
 
   @@unique([shopId, codeHash])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, customerId, createdAt])
 }
 
@@ -906,9 +900,6 @@ model StockTransfer {
   @@unique([shopId, eWayBillNumber])
   @@index([shopId, createdAt])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, eWayReviewStatus, createdAt])
 }
 
@@ -1440,9 +1431,6 @@ model PurchaseReturn {
   @@index([shopId, supplierId, createdAt])
   @@index([shopId, purchaseReceiptId, createdAt])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
 }
 
 model PurchaseReturnItem {
@@ -1639,9 +1627,6 @@ model ReportExportJob {
   requestedBy User @relation(fields: [requestedByUserId], references: [id])
 
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, reportType, createdAt])
   @@index([requestedByUserId, createdAt])
   @@index([expiresAt])
@@ -1723,9 +1708,6 @@ model ReminderLog {
   @@unique([provider, providerMessageId])
   @@index([shopId, customerId, createdAt])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, channel, createdAt])
 }
 
@@ -1768,9 +1750,6 @@ model OfflineSyncEvent {
 
   @@unique([shopId, eventId])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
 }
 
 model SyncConflict {
@@ -1806,9 +1785,6 @@ model SyncConflict {
   @@unique([shopId, sourceEventId])
   @@unique([shopId, clientConflictId])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, entityType, entityId])
   @@index([shopId, deviceId, createdAt])
   @@index([expiresAt])
@@ -1837,9 +1813,6 @@ model SyncCommand {
   @@unique([shopId, idempotencyKey])
   @@unique([shopId, deviceId, clientCommandId])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
 }
 
 model ChangeLog {
@@ -2084,9 +2057,6 @@ model SupportRequest {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, createdAt])
 }
 
@@ -2411,9 +2381,6 @@ model AuditRun {
 
   @@index([shopId, createdAt])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, runType, createdAt])
 }
 
@@ -2489,9 +2456,6 @@ model AuditFinding {
 
   @@unique([shopId, dedupeKey])
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([shopId, riskLevel, status])
   @@index([shopId, sourceEntityType, sourceEntityId])
   @@index([shopId, assignedReviewerId, status])
@@ -2536,9 +2500,6 @@ model AuditEvidenceRequirement {
   evidence AuditEvidence[]
 
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
   @@index([findingId])
 }
 
@@ -2628,9 +2589,6 @@ model AuditCase {
   findings AuditCaseFinding[]
 
   @@index([shopId, status, createdAt])
-  @@index([shopId, sourceChannel, createdAt])
-  @@index([shopId, fulfillmentStatus, createdAt])
-  @@index([shopId, paymentStatus, createdAt])
 }
 
 model AuditCaseFinding {

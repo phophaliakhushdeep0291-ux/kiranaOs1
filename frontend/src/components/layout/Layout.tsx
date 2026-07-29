@@ -803,21 +803,12 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Mobile bottom nav */}
         <nav data-app-mobile-bottom-nav="true" aria-label="Mobile navigation" className="shrink-0 border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-5 items-end px-2.5 py-1.5">
-            {MOBILE_NAV.slice(0, 2).map(({ href, label, Icon }) => {
+            {MOBILE_NAV.filter((item) => item.href === "/dashboard" || item.href === "/inventory").map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);
               return (
                 <Link key={href} href={href}>
-                  <div
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200",
-                      active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]",
-                    )}
-                  >
-                    <div className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200",
-                      active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent",
-                    )}>
+                  <div aria-current={active ? "page" : undefined} className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200", active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]")}>
+                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
                       <Icon size={21} strokeWidth={2.1} aria-hidden="true" />
                     </div>
                     <span className="leading-none">{label}</span>
@@ -827,25 +818,19 @@ export function Layout({ children }: { children: ReactNode }) {
             })}
 
             <Link href="/billing">
-              <div aria-label="Create bill" className="relative flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-end gap-1 rounded-2xl text-[11px] font-bold text-[var(--brand)]">
-                <div className="absolute -top-5 grid h-[64px] w-[64px] place-items-center rounded-full bg-[var(--brand)] text-white shadow-[0_16px_34px_rgba(7,92,255,0.34)] ring-[7px] ring-white">
+              <div aria-label="Create bill" aria-current={isMobileNavActive(loc, "/billing") ? "page" : undefined} className="relative flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-end gap-1 rounded-2xl text-[11px] font-bold text-[var(--brand)]">
+                <div className={cn("absolute -top-5 grid h-[64px] w-[64px] place-items-center rounded-full bg-[var(--brand)] text-white shadow-[0_16px_34px_rgba(7,92,255,0.34)] ring-[7px] ring-white transition-transform active:scale-95", isMobileNavActive(loc, "/billing") && "outline outline-2 outline-offset-2 outline-blue-200")}>
                   <Plus size={31} strokeWidth={2.2} aria-hidden="true" />
                 </div>
                 <span className="sr-only">Create bill</span>
               </div>
             </Link>
 
-            {MOBILE_NAV.slice(2).map(({ href, label, Icon }) => {
+            {MOBILE_NAV.filter((item) => item.href === "/customers").map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);
               return (
                 <Link key={href} href={href}>
-                  <div
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200",
-                      active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]",
-                    )}
-                  >
+                  <div aria-current={active ? "page" : undefined} className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200", active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]")}>
                     <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
                       <Icon size={21} strokeWidth={2.1} aria-hidden="true" />
                     </div>
@@ -854,6 +839,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button type="button" aria-label="Open more navigation" className="flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold text-[#4d5d7a] transition-all duration-200 active:text-[#102347]">
@@ -870,7 +856,6 @@ export function Layout({ children }: { children: ReactNode }) {
           </div>
         </nav>
       </div>
-
       {cleanPath(loc) !== "/billing" && <VoiceAssistant />}
       <ReportIssueButton />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
@@ -1067,3 +1052,4 @@ function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
     </div>
   );
 }
+

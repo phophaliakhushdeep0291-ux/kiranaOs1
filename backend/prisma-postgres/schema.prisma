@@ -255,9 +255,13 @@ model CustomerOrder {
   itemCount       Int       @default(0)
   estimatedTotal  Float     @default(0)
   note            String?
-  fulfillmentType String    @default("delivery") // delivery | pickup
-  promisedSlot    String?
-  status          String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
+  fulfillmentType  String    @default("delivery") // delivery | pickup
+  promisedSlot     String?
+  sourceChannel    String    @default("customer_portal") // pos | customer_portal | api | marketplace
+  externalOrderId  String?
+  paymentStatus    String    @default("unpaid") // unpaid | partially_paid | paid | refunded
+  fulfillmentStatus String   @default("unfulfilled") // unfulfilled | preparing | ready | fulfilled | cancelled
+  status           String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
   billId          String?
   idempotencyKey  String?
   acceptedAt      DateTime?
@@ -274,6 +278,9 @@ model CustomerOrder {
   @@unique([shopId, idempotencyKey])
   @@index([shopId, locationId, status, createdAt])
   @@index([shopId, status, createdAt])
+  @@index([shopId, sourceChannel, createdAt])
+  @@index([shopId, fulfillmentStatus, createdAt])
+  @@index([shopId, paymentStatus, createdAt])
 }
 
 // ─────────────────────────────────────────────

@@ -21,6 +21,10 @@ export interface CustomerOrder {
   estimatedTotal: number;
   fulfillmentType: "delivery" | "pickup";
   promisedSlot: string | null;
+  sourceChannel: "pos" | "customer_portal" | "api" | "marketplace";
+  externalOrderId: string | null;
+  paymentStatus: "unpaid" | "partially_paid" | "paid" | "refunded";
+  fulfillmentStatus: "unfulfilled" | "preparing" | "ready" | "fulfilled" | "cancelled";
   status: "new" | "accepted" | "ready" | "fulfilled" | "rejected" | "cancelled";
   billId: string | null;
   acceptedAt: string | null;
@@ -47,7 +51,7 @@ export function listCustomerOrders(status?: string, cursor?: string | null) {
   return apiRequest<CustomerOrdersResponse>(`/orders${query ? `?${query}` : ""}`);
 }
 
-export function updateCustomerOrder(id: string, data: { status?: CustomerOrder["status"]; billId?: string | null }) {
+export function updateCustomerOrder(id: string, data: { status?: CustomerOrder["status"]; paymentStatus?: CustomerOrder["paymentStatus"]; billId?: string | null }) {
   return apiRequest<CustomerOrder>(`/orders/${id}`, {
     method: "PATCH",
     body: JSON.stringify(data),
