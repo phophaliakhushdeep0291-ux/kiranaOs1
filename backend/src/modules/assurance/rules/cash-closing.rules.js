@@ -17,13 +17,9 @@ import {
   RULE_CATEGORIES,
   SEVERITY,
 } from "../assurance.constants.js";
-import { defineRule, money, passed, sum, triggered } from "../rule.interface.js";
+import { defineRule, money, moneyDiffers, passed, sum, toPaiseInt, triggered } from "../rule.interface.js";
 
 const CLOSING = [ENTITY_TYPES.DAILY_CLOSING];
-
-function toPaise(rupees) {
-  return Math.round(money(rupees) * 100);
-}
 
 function activeSaleBills(ctx) {
   return (ctx.bills ?? []).filter((bill) => bill.status === "active");
@@ -31,7 +27,7 @@ function activeSaleBills(ctx) {
 
 function paymentsForActiveBills(ctx) {
   const activeIds = new Set(activeSaleBills(ctx).map((bill) => bill.id));
-  return (ctx.payments ?? []).filter((payment) => activeIds.has(payment.billId) && payment.status !== "failed");
+  return (ctx.payments ?? []).filter((payment) => activeIds.has(payment.billId) && payment.status === "confirmed");
 }
 
 function paymentSumByMode(payments, mode) {
@@ -60,10 +56,10 @@ export const cashClosingRules = [
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.OWNER_APPROVAL],
     remediation: "Refresh the day's closing snapshot. If it is locked, re-open, refresh and re-lock it.",
     evaluate(ctx) {
-      const recomputedPaise = toPaise(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
+      const recomputedPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
       const snapshotPaise = Number(ctx.snapshot.cashReceivedPaise ?? 0);
       const differencePaise = snapshotPaise - recomputedPaise;
-      if (Math.abs(differencePaise) <= 1) return passed;
+      if (differencePaise === 0) return passed;
       return triggered({
         snapshotCashPaise: snapshotPaise,
         recomputedCashPaise: recomputedPaise,
@@ -89,10 +85,10 @@ export const cashClosingRules = [
     evidenceTypes: [EVIDENCE_TYPES.UPI_REFERENCE, EVIDENCE_TYPES.BANK_TRANSACTION],
     remediation: "Refresh the closing snapshot and reconcile UPI collections against the payment app statement.",
     evaluate(ctx) {
-      const recomputedPaise = toPaise(paymentSumByMode(paymentsForActiveBills(ctx), "upi") + udharRecoveryByMode(ctx, "upi"));
+      const recomputedPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "upi") + udharRecoveryByMode(ctx, "upi"));
       const snapshotPaise = Number(ctx.snapshot.upiReceivedPaise ?? 0);
       const differencePaise = snapshotPaise - recomputedPaise;
-      if (Math.abs(differencePaise) <= 1) return passed;
+      if (differencePaise === 0) return passed;
       return triggered({
         snapshotUpiPaise: snapshotPaise,
         recomputedUpiPaise: recomputedPaise,
@@ -115,10 +111,10 @@ export const cashClosingRules = [
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE, EVIDENCE_TYPES.OWNER_APPROVAL],
     remediation: "Refresh the closing snapshot. A stale sales figure usually means bills arrived after the snapshot was generated.",
     evaluate(ctx) {
-      const recomputedPaise = toPaise(sum(activeSaleBills(ctx).map((bill) => bill.grandTotal)));
+      const recomputedPaise = toPaiseInt(sum(activeSaleBills(ctx).map((bill) => bill.grandTotal)));
       const snapshotPaise = Number(ctx.snapshot.totalSalesPaise ?? 0);
       const differencePaise = snapshotPaise - recomputedPaise;
-      if (Math.abs(differencePaise) <= 1) return passed;
+      if (differencePaise === 0) return passed;
       return triggered({
         snapshotSalesPaise: snapshotPaise,
         recomputedSalesPaise: recomputedPaise,
@@ -143,7 +139,7 @@ export const cashClosingRules = [
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
     remediation: "Refresh the closing snapshot so khata collections are counted in the day's cash position.",
     evaluate(ctx) {
-      const recomputedPaise = toPaise(
+      const recomputedPaise = toPaiseInt(
         sum(
           (ctx.udharPayments ?? [])
             .filter((row) => !row.reversedAt && ["cash", "upi", "bank"].includes(String(row.mode).toLowerCase()))
@@ -152,7 +148,7 @@ export const cashClosingRules = [
       );
       const snapshotPaise = Number(ctx.snapshot.oldUdharRecoveredPaise ?? 0);
       const differencePaise = snapshotPaise - recomputedPaise;
-      if (Math.abs(differencePaise) <= 1) return passed;
+      if (differencePaise === 0) return passed;
       return triggered({
         snapshotUdharRecoveredPaise: snapshotPaise,
         recomputedUdharRecoveredPaise: recomputedPaise,
@@ -176,7 +172,7 @@ export const cashClosingRules = [
     evidenceTypes: [EVIDENCE_TYPES.EXPENSE_RECEIPT, EVIDENCE_TYPES.OWNER_APPROVAL],
     remediation: "When counting the drawer, subtract cash expenses manually. This is a known reporting gap, not necessarily an error in the data.",
     evaluate(ctx) {
-      const cashExpensePaise = toPaise(
+      const cashExpensePaise = toPaiseInt(
         sum((ctx.expenses ?? []).filter((expense) => String(expense.paymentMode).toLowerCase() === "cash").map((expense) => expense.amount))
       );
       if (cashExpensePaise <= 0) return passed;
@@ -185,7 +181,7 @@ export const cashClosingRules = [
       const expectedCashPaise = Number(ctx.snapshot.expectedCashPaise ?? 0);
       const cashReceivedPaise = Number(ctx.snapshot.cashReceivedPaise ?? 0);
       // Only report when expectedCash was NOT reduced by the expenses.
-      if (Math.abs(expectedCashPaise - cashReceivedPaise) > 1) return passed;
+      if (expectedCashPaise !== cashReceivedPaise) return passed;
       return triggered({
         expectedCashPaise,
         cashReceivedPaise,
@@ -214,7 +210,7 @@ export const cashClosingRules = [
       const returns = activeSaleBills(ctx).filter((bill) => bill.billType === "sales_return");
       if (!returns.length) return passed;
       const paymentsByBill = new Map();
-      for (const payment of ctx.payments ?? []) {
+      for (const payment of paymentsForActiveBills(ctx)) {
         const list = paymentsByBill.get(payment.billId) ?? [];
         list.push(payment);
         paymentsByBill.set(payment.billId, list);
@@ -302,8 +298,8 @@ export const cashClosingRules = [
     remediation: "Investigate the day end-to-end before locking. Large gaps are where cash leakage hides.",
     evaluate(ctx) {
       const threshold = ctx.settings.closingDifferenceAlertPaise;
-      const recomputedSalesPaise = toPaise(sum(activeSaleBills(ctx).map((bill) => bill.grandTotal)));
-      const recomputedCashPaise = toPaise(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
+      const recomputedSalesPaise = toPaiseInt(sum(activeSaleBills(ctx).map((bill) => bill.grandTotal)));
+      const recomputedCashPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
       const salesDelta = Number(ctx.snapshot.totalSalesPaise ?? 0) - recomputedSalesPaise;
       const cashDelta = Number(ctx.snapshot.cashReceivedPaise ?? 0) - recomputedCashPaise;
       const worst = Math.max(Math.abs(salesDelta), Math.abs(cashDelta));
@@ -331,7 +327,7 @@ export const cashClosingRules = [
     remediation: "Match each reference against the payment app statement. Only one bill may claim a given transfer.",
     evaluate(ctx) {
       const byReference = new Map();
-      for (const payment of ctx.payments ?? []) {
+      for (const payment of paymentsForActiveBills(ctx)) {
         const reference = typeof payment.providerReference === "string" ? payment.providerReference.trim() : "";
         if (reference.length < 6) continue;
         const list = byReference.get(reference) ?? [];
@@ -365,15 +361,14 @@ export const cashClosingRules = [
     remediation: "Reconcile each flagged bill's tender split. Do not edit the bill; record a corrective entry.",
     evaluate(ctx) {
       const paymentsByBill = new Map();
-      for (const payment of ctx.payments ?? []) {
-        if (payment.status === "failed") continue;
+      for (const payment of paymentsForActiveBills(ctx)) {
         paymentsByBill.set(payment.billId, (paymentsByBill.get(payment.billId) ?? 0) + money(payment.amount));
       }
       const offenders = [];
       for (const bill of activeSaleBills(ctx)) {
         const declared = money(bill.paidAmount);
         const actual = paymentsByBill.get(bill.id) ?? 0;
-        if (Math.abs(declared - actual) <= 0.011) continue;
+        if (!moneyDiffers(declared, actual)) continue;
         offenders.push({
           billId: bill.id,
           billNo: bill.billNo,

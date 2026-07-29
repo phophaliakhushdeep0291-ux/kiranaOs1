@@ -9,11 +9,13 @@ import {
 } from "../assurance.constants.js";
 import {
   defineRule,
+  fromPaiseInt,
   money,
   moneyDiffers,
   passed,
   percentOf,
   sum,
+  toPaiseInt,
   triggered,
 } from "../rule.interface.js";
 
@@ -31,7 +33,7 @@ function isLegacyQuoteEstimate(bill) {
 }
 
 function confirmedPaymentTotal(bill) {
-  return sum((bill.payments ?? []).filter((p) => p.status !== "failed" && p.status !== "refunded").map((p) => p.amount));
+  return sum((bill.payments ?? []).filter((p) => p.status === "confirmed").map((p) => p.amount));
 }
 
 export const billingRules = [
@@ -145,24 +147,27 @@ export const billingRules = [
   defineRule({
     ruleCode: "BILL_PAID_EXCEEDS_TOTAL",
     name: "Paid amount exceeds bill total",
-    description: "The recorded paid amount is larger than the bill's grand total.",
+    description: "The settled tender magnitude is larger than the bill total. Sales returns use negative amounts and are compared by magnitude.",
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.PAYMENT_RECEIVED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
     remediation: "Confirm the tender collected. If the customer overpaid, record a refund or credit rather than editing the bill.",
     evaluate(ctx) {
       const { bill } = ctx;
-      const paid = money(bill.paidAmount);
-      const total = money(bill.grandTotal);
-      if (paid <= total + 0.011) return passed;
+      const paidPaise = toPaiseInt(bill.paidAmount);
+      const totalPaise = toPaiseInt(bill.grandTotal);
+      const excessPaise = bill.billType === "sales_return"
+        ? Math.max(0, Math.abs(paidPaise) - Math.abs(totalPaise))
+        : Math.max(0, paidPaise - totalPaise);
+      if (excessPaise === 0) return passed;
       return triggered({
-        paidAmount: paid,
-        grandTotal: total,
-        excessRupees: Number((paid - total).toFixed(2)),
+        paidAmount: fromPaiseInt(paidPaise),
+        grandTotal: fromPaiseInt(totalPaise),
+        excessRupees: fromPaiseInt(excessPaise),
       });
     },
   }),
@@ -196,26 +201,26 @@ export const billingRules = [
 
   defineRule({
     ruleCode: "BILL_MARKED_PAID_WITHOUT_PAYMENTS",
-    name: "Bill marked paid without sufficient payment rows",
-    description: "The bill records a paid amount that its confirmed payment rows do not add up to.",
+    name: "Bill paid amount does not match settled payment rows",
+    description: "The bill's paid amount does not exactly equal its confirmed payment rows, including negative refund rows on sales returns.",
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.CRITICAL,
     defaultWeight: 38,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.PAYMENT_RECEIVED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.UPI_REFERENCE, EVIDENCE_TYPES.STAFF_EXPLANATION],
-    remediation: "Establish whether the money was actually received. Record the missing payment through the billing flow, or cancel and re-bill.",
+    remediation: "Establish whether the money was actually received or refunded. Record the missing payment through the normal flow; never edit the bill total.",
     evaluate(ctx) {
       const { bill } = ctx;
       if (isLegacyQuoteEstimate(bill)) return passed;
       const paymentSum = confirmedPaymentTotal(bill);
       const declaredPaid = money(bill.paidAmount);
-      if (declaredPaid <= paymentSum + 0.011) return passed;
+      if (!moneyDiffers(declaredPaid, paymentSum)) return passed;
       return triggered({
         declaredPaidAmount: declaredPaid,
-        confirmedPaymentSum: Number(paymentSum.toFixed(2)),
-        shortfallRupees: Number((declaredPaid - paymentSum).toFixed(2)),
+        confirmedPaymentSum: paymentSum,
+        shortfallRupees: fromPaiseInt(Math.abs(toPaiseInt(declaredPaid) - toPaiseInt(paymentSum))),
         paymentRowCount: bill.payments?.length ?? 0,
       });
     },
@@ -250,6 +255,34 @@ export const billingRules = [
     },
   }),
 
+  defineRule({
+    ruleCode: "UDHAR_RETURN_MISSING_LEDGER_CREDIT",
+    name: "Udhar refund missing from the customer ledger",
+    description: "A sales return was refunded to udhar but the matching customer-ledger payment is missing or has the wrong amount.",
+    category: RULE_CATEGORIES.CUSTOMER_CREDIT,
+    severity: SEVERITY.CRITICAL,
+    defaultWeight: 36,
+    version: 1,
+    applicableEntityTypes: BILL,
+    applicableEventTypes: [EVENT_TYPES.SALE_RETURNED, EVENT_TYPES.CUSTOMER_CREDIT_ADJUSTED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],
+    evidenceTypes: [EVIDENCE_TYPES.CUSTOMER_CONFIRMATION, EVIDENCE_TYPES.SALES_INVOICE],
+    remediation: "Post the missing return credit through the customer's khata so the return reduces outstanding exactly once.",
+    evaluate(ctx) {
+      const { bill } = ctx;
+      if (bill.status === "cancelled" || bill.billType !== "sales_return" || bill.refundMode !== "udhar") return passed;
+      const expectedPaise = Math.abs(toPaiseInt(bill.creditAmount || bill.grandTotal));
+      const creditedPaise = (ctx.udharRows ?? [])
+        .filter((row) => row.type === "payment" && row.mode === "return" && !row.reversedAt)
+        .reduce((total, row) => total + Math.abs(toPaiseInt(row.amount)), 0);
+      if (creditedPaise === expectedPaise) return passed;
+      return triggered({
+        expectedReturnCreditRupees: fromPaiseInt(expectedPaise),
+        ledgerReturnCreditRupees: fromPaiseInt(creditedPaise),
+        differenceRupees: fromPaiseInt(creditedPaise - expectedPaise),
+        customerId: bill.customerId,
+      });
+    },
+  }),
   defineRule({
     ruleCode: "CANCELLED_BILL_STILL_IN_LEDGER",
     name: "Cancelled bill still contributes to financial reports",

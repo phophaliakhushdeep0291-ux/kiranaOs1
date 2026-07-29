@@ -1,7 +1,154 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { Link } from "wouter";
-import { ChevronRight } from "lucide-react";
+import { CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+export interface MobilePageProps extends HTMLAttributes<HTMLDivElement> {
+  title?: ReactNode;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}
+
+export function MobilePage({ title, subtitle, actions, children, className, ...props }: MobilePageProps) {
+  return (
+    <div className={cn("kirana-mobile-page md:hidden", className)} {...props}>
+      {(title || subtitle || actions) ? (
+        <div className="kirana-mobile-page-heading">
+          <div className="min-w-0">
+            {title ? <h1 className="kirana-mobile-title">{title}</h1> : null}
+            {subtitle ? <p className="kirana-mobile-subtitle">{subtitle}</p> : null}
+          </div>
+          {actions ? <div className="kirana-mobile-heading-actions">{actions}</div> : null}
+        </div>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+export interface MobileSyncStripProps extends HTMLAttributes<HTMLElement> {
+  status?: "synced" | "syncing" | "offline" | "attention";
+  label?: ReactNode;
+  detail?: ReactNode;
+  actionLabel?: ReactNode;
+  href?: string;
+  onAction?: () => void;
+}
+
+export function MobileSyncStrip({
+  status = "synced",
+  label,
+  detail,
+  actionLabel = "Sync Now",
+  href = "/sync-status",
+  onAction,
+  className,
+  ...props
+}: MobileSyncStripProps) {
+  const isGood = status === "synced";
+  const isBusy = status === "syncing";
+  const tone = isGood ? "good" : status === "offline" ? "offline" : "attention";
+  const icon = isBusy ? <RefreshCw className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />;
+  const content = (
+    <button type="button" onClick={onAction} className="kirana-mobile-sync-action">
+      <RefreshCw className="h-4 w-4" />
+      {actionLabel}
+    </button>
+  );
+
+  return (
+    <section className={cn("kirana-mobile-sync-strip", `kirana-mobile-sync-${tone}`, className)} {...props}>
+      <div className="kirana-mobile-sync-icon">{icon}</div>
+      <div className="min-w-0 flex-1">
+        <p className="kirana-mobile-sync-label">{label ?? (isBusy ? "Syncing" : isGood ? "Synced" : status === "offline" ? "Offline safe" : "Review sync")}</p>
+        <p className="kirana-mobile-sync-detail">{detail ?? (isGood ? "Just now" : status === "offline" ? "Saved on this device" : "Some changes need retry")}</p>
+      </div>
+      {onAction ? content : <Link href={href}>{content}</Link>}
+    </section>
+  );
+}
+
+export interface MobileKpiGridProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
+}
+
+export function MobileKpiGrid({ children, className, ...props }: MobileKpiGridProps) {
+  return (
+    <div className={cn("kirana-mobile-kpi-grid", className)} {...props}>
+      {children}
+    </div>
+  );
+}
+
+export interface MobileKpiCardProps extends HTMLAttributes<HTMLDivElement> {
+  icon?: ReactNode;
+  label: ReactNode;
+  value: ReactNode;
+  trend?: ReactNode;
+  trendTone?: "up" | "down" | "neutral";
+  sparkline?: number[];
+  tone?: "blue" | "green" | "violet" | "orange" | "red";
+}
+
+const mobileKpiToneClass: Record<NonNullable<MobileKpiCardProps["tone"]>, string> = {
+  blue: "kirana-mobile-kpi-blue",
+  green: "kirana-mobile-kpi-green",
+  violet: "kirana-mobile-kpi-violet",
+  orange: "kirana-mobile-kpi-orange",
+  red: "kirana-mobile-kpi-red",
+};
+
+function sparklinePoints(values: number[]): string {
+  if (values.length === 0) return "";
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  return values.map((value, index) => {
+    const x = values.length === 1 ? 100 : (index / (values.length - 1)) * 100;
+    const y = 28 - ((value - min) / range) * 22;
+    return `${x},${y}`;
+  }).join(" ");
+}
+
+export function MobileKpiCard({ icon, label, value, trend, trendTone = "neutral", sparkline, tone = "blue", className, ...props }: MobileKpiCardProps) {
+  const points = sparklinePoints(sparkline ?? []);
+  return (
+    <div className={cn("kirana-mobile-kpi-card", mobileKpiToneClass[tone], className)} {...props}>
+      <div className="flex min-w-0 items-center gap-2">
+        {icon ? <span className="kirana-mobile-kpi-icon">{icon}</span> : null}
+        <span className="kirana-mobile-kpi-label">{label}</span>
+      </div>
+      <div className="kirana-mobile-kpi-value">{value}</div>
+      {trend ? <div className={cn("kirana-mobile-kpi-trend", `kirana-mobile-trend-${trendTone}`)}>{trend}</div> : null}
+      {points ? (
+        <svg className="kirana-mobile-kpi-spark" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+          <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ) : null}
+    </div>
+  );
+}
+
+export interface MobileToolbarProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
+}
+
+export function MobileToolbar({ children, className, ...props }: MobileToolbarProps) {
+  return (
+    <div className={cn("kirana-mobile-toolbar", className)} {...props}>
+      {children}
+    </div>
+  );
+}
+
+export interface MobilePillButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  active?: boolean;
+}
+
+export function MobilePillButton({ active, className, ...props }: MobilePillButtonProps) {
+  return <button type="button" className={cn("kirana-mobile-pill", active && "kirana-mobile-pill-active", className)} {...props} />;
+}
 
 // Omit the native string `title` attribute so these cards can take rich ReactNode titles.
 export interface MobileSectionProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
@@ -16,7 +163,7 @@ export function MobileSection({ title, subtitle, action, children, className, ..
     <section className={cn("mobile-card-premium md:hidden overflow-hidden rounded-[20px]", className)} {...props}>
       <div className="flex min-h-[58px] items-start justify-between gap-3 border-b border-[#edf2f8] px-4 py-3.5">
         <div className="min-w-0">
-          <h2 className="truncate font-display text-[18px] font-black leading-tight tracking-normal text-[#07133f]">{title}</h2>
+          <h2 className="truncate font-display text-[18px] font-extrabold leading-tight tracking-normal text-[#07133f]">{title}</h2>
           {subtitle ? <p className="mt-1 line-clamp-2 text-[12px] font-medium leading-snug text-[#64708b]">{subtitle}</p> : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}

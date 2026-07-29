@@ -22,6 +22,7 @@ import {
   percentOf,
   quantityDiffers,
   sum,
+  toPaiseInt,
   triggered,
 } from "../rule.interface.js";
 
@@ -109,7 +110,7 @@ export const purchaseRules = [
         ? sum(ctx.receipt.items.map((item) => item.lineAmount))
         : money(ctx.history?.totalCost);
       const lineCount = ctx.receipt ? ctx.receipt.items.length : 1;
-      if (goodsValue > 0.011 && lineCount > 0) return passed;
+      if (toPaiseInt(goodsValue) > 0 && lineCount > 0) return passed;
       return triggered({ paidAmountRupees: paid, goodsValueRupees: Number(goodsValue.toFixed(2)), lineCount });
     },
   }),
@@ -307,7 +308,7 @@ export const purchaseRules = [
       const total = money(ctx.history.billAmount);
       const paid = money(ctx.history.purchasePaidAmount);
       if (total <= 0) return passed;
-      if (paid + 0.011 >= total) return passed;
+      if (toPaiseInt(paid) >= toPaiseInt(total)) return passed;
       return triggered({
         paymentStatus: status,
         totalRupees: total,
@@ -332,7 +333,7 @@ export const purchaseRules = [
     evaluate(ctx) {
       const total = ctx.receipt ? money(ctx.receipt.totalAmount) : money(ctx.history?.billAmount);
       const paid = ctx.receipt ? money(ctx.receipt.paidAmount) : money(ctx.history?.purchasePaidAmount);
-      if (total <= 0 || paid <= total + 0.011) return passed;
+      if (toPaiseInt(total) <= 0 || toPaiseInt(paid) <= toPaiseInt(total)) return passed;
       return triggered({ totalRupees: total, paidRupees: paid, excessRupees: Number((paid - total).toFixed(2)) });
     },
   }),
@@ -378,7 +379,7 @@ export const purchaseRules = [
     remediation: "Collect and record the supplier invoice number. Purchases without invoices cannot be verified or claimed.",
     evaluate(ctx) {
       const threshold = ctx.settings.purchaseInvoiceRequiredAbovePaise;
-      const amountPaise = Math.round(purchaseAmount(ctx) * 100);
+      const amountPaise = toPaiseInt(purchaseAmount(ctx));
       if (amountPaise <= threshold) return passed;
       if (invoiceNumber(ctx)) return passed;
       return triggered({
@@ -404,7 +405,7 @@ export const purchaseRules = [
     remediation: "Complete the supplier's contact details so purchases are traceable to a real party.",
     evaluate(ctx) {
       const supplier = ctx.supplier ?? null;
-      const amountPaise = Math.round(purchaseAmount(ctx) * 100);
+      const amountPaise = toPaiseInt(purchaseAmount(ctx));
       if (amountPaise <= ctx.settings.purchaseInvoiceRequiredAbovePaise) return passed;
       if (!supplier) {
         return triggered({
@@ -443,7 +444,7 @@ export const purchaseRules = [
       const NEW_SUPPLIER_DAYS = 30;
       const ageDays = (purchaseCreatedAt(ctx).getTime() - new Date(supplier.createdAt).getTime()) / (24 * 60 * 60 * 1000);
       if (ageDays > NEW_SUPPLIER_DAYS || ageDays < 0) return passed;
-      const amountPaise = Math.round(purchaseAmount(ctx) * 100);
+      const amountPaise = toPaiseInt(purchaseAmount(ctx));
       if (amountPaise <= ctx.settings.largeAdjustmentPaise) return passed;
       return triggered({
         supplierId: supplier.id,

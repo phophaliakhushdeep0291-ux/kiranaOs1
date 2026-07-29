@@ -125,7 +125,7 @@ function riskLevelForBucket(bucket) {
 }
 
 function sumPaymentsByMode(payments, mode) {
-  return sumMoney(payments.filter((p) => p.mode === mode).map((p) => p.amount));
+  return sumMoney(payments.filter((payment) => payment.mode === mode && payment.status === "confirmed").map((payment) => payment.amount));
 }
 
 function paymentModesForBill(bill) {
