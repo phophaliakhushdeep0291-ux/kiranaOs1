@@ -31,6 +31,18 @@ describe("multi-GSTIN transfer and reporting UI", () => {
     expect(transfers).toContain("does not create or submit a legal e-way bill");
   });
 
+  it("resolves threshold-triggered reviews without claiming portal submission", () => {
+    for (const contract of [
+      "/compliance-review",
+      'value="external_reference_recorded"',
+      'value="not_required_after_review"',
+      "12-digit e-way bill number",
+      "reviewOwnerPin",
+      "STOCK_TRANSFER_COMPLIANCE_REVIEWED",
+      "not portal-verified",
+    ]) expect(transfers).toContain(contract);
+    expect(transfers).toContain("does not verify the e-way bill portal");
+  });
   it("keeps GST working papers scoped to one explicit seller registration", () => {
     expect(taxes).toContain("selectedSellerGstin");
     expect(taxes).toContain("requireSellerRegistration");

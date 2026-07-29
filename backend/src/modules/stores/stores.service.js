@@ -5,6 +5,7 @@ import { addMoney, moneyShadows, multiplyMoney, round2, sumMoney } from "../../u
 import { validateGstin, validateHsn } from "../../utils/gst.js";
 import { getPlanLimits } from "../feature-gates/featureGate.service.js";
 import { accessibleLocationIds, assertLocationCapability } from "./location-access.service.js";
+import { createAuditLog } from "../audit/audit.service.js";
 
 function transferRef() {
   const day = new Date().toISOString().slice(0, 10).replaceAll("-", "");
@@ -253,13 +254,22 @@ function transferComplianceNotice(transfer) {
   if (transfer.gstTreatment === "unregistered_internal") {
     return "Internal stock record; no GST registration was assigned to either location.";
   }
-  return transfer.eWayReviewRequired
+  if (transfer.eWayReviewStatus === "external_reference_recorded") {
+    return "An external 12-digit e-way bill reference was recorded. KiranaOS has not verified it against the e-way bill portal and did not submit it.";
+  }
+  if (transfer.eWayReviewStatus === "not_required_after_review") {
+    return "E-way applicability was reviewed and marked not required with retained reason evidence; KiranaOS does not make the legal determination.";
+  }
+  return transfer.eWayReviewRequired || transfer.eWayReviewStatus === "pending"
     ? "Documented locally. Review e-way bill applicability and submit through a certified GST provider when legally required."
     : "GSTIN format and document fields were validated locally; GSTN status and legal submission are not verified.";
 }
 
 function decorateTransfer(transfer) {
-  return { ...transfer, legalSubmissionStatus: "not_submitted", complianceNotice: transferComplianceNotice(transfer) };
+  const legalSubmissionStatus = transfer.eWayReviewStatus === "external_reference_recorded"
+    ? "external_reference_recorded_not_verified"
+    : "not_submitted";
+  return { ...transfer, legalSubmissionStatus, complianceNotice: transferComplianceNotice(transfer) };
 }
 
 export async function createTransfer(shopId, data, userId, userRole = "staff") {
@@ -394,6 +404,7 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
           isInterstate: classification.interstate,
           complianceStatus: classification.registered ? "documented" : "not_applicable",
           eWayReviewRequired,
+          eWayReviewStatus: eWayReviewRequired ? "pending" : "not_required",
           taxableValue,
           cgst,
           sgst,
@@ -416,6 +427,67 @@ export async function createTransfer(shopId, data, userId, userRole = "staff") {
   }
 }
 
+export async function reviewTransferCompliance(shopId, transferId, data, userId, userRole = "staff", req = null) {
+  try {
+    return await db.$transaction(async (tx) => {
+      const current = await tx.stockTransfer.findFirst({
+        where: { id: transferId, shopId },
+        include: { fromLocation: true, toLocation: true, items: true },
+      });
+      if (!current) throw new AppError("Stock transfer not found", 404, "STOCK_TRANSFER_NOT_FOUND");
+      await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.fromLocationId, capability: "transfer", client: tx });
+      await assertLocationCapability({ shopId, userId, role: userRole, locationId: current.toLocationId, capability: "transfer", client: tx });
+      if (current.status !== "completed") throw new AppError("Only completed transfers can be reviewed", 409, "TRANSFER_NOT_REVIEWABLE");
+      if (!current.eWayReviewRequired || current.eWayReviewStatus !== "pending") {
+        throw new AppError("This e-way applicability review is already resolved or was never required", 409, "TRANSFER_EWAY_REVIEW_NOT_PENDING");
+      }
+
+      const recordsExternalReference = data.decision === "external_reference_recorded";
+      const reviewedAt = new Date();
+      const updated = await tx.stockTransfer.updateMany({
+        where: { id: current.id, shopId, eWayReviewRequired: true, eWayReviewStatus: "pending" },
+        data: {
+          eWayReviewRequired: false,
+          eWayReviewStatus: data.decision,
+          eWayBillNumber: recordsExternalReference ? data.eWayBillNumber : null,
+          eWayBillDate: recordsExternalReference ? parseDocumentDate(data.eWayBillDate) : null,
+          eWayReviewReason: data.reason,
+          eWayReviewedAt: reviewedAt,
+          eWayReviewedByUserId: userId || null,
+        },
+      });
+      if (updated.count !== 1) throw new AppError("The transfer review changed; refresh and retry", 409, "CONCURRENT_TRANSFER_REVIEW");
+      const reviewed = await tx.stockTransfer.findUnique({
+        where: { id: current.id },
+        include: { fromLocation: true, toLocation: true, items: true },
+      });
+      await createAuditLog({
+        shopId,
+        userId,
+        action: "STOCK_TRANSFER_COMPLIANCE_REVIEWED",
+        entityType: "StockTransfer",
+        entityId: current.id,
+        before: { eWayReviewRequired: true, eWayReviewStatus: current.eWayReviewStatus },
+        after: {
+          eWayReviewRequired: false,
+          eWayReviewStatus: reviewed.eWayReviewStatus,
+          eWayBillNumber: reviewed.eWayBillNumber,
+          eWayBillDate: reviewed.eWayBillDate,
+          eWayReviewReason: reviewed.eWayReviewReason,
+          eWayReviewedAt: reviewed.eWayReviewedAt,
+          eWayReviewedByUserId: reviewed.eWayReviewedByUserId,
+        },
+        metadata: { portalVerified: false, submittedByKiranaOS: false },
+        req,
+        client: tx,
+      });
+      return decorateTransfer(reviewed);
+    });
+  } catch (error) {
+    if (error?.code === "P2002") throw new AppError("That e-way bill number is already recorded on another transfer", 409, "EWAY_BILL_ALREADY_RECORDED");
+    throw error;
+  }
+}
 export async function listTransfers(shopId, { limit = 50 } = {}, user = null) {
   const accessibleIds = user ? await accessibleLocationIds(shopId, user.userId, user.role) : null;
   const transfers = await db.stockTransfer.findMany({

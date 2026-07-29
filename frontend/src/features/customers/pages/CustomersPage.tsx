@@ -56,6 +56,7 @@ import {
   applyAuthoritativeUdharSummary,
   loadCustomerDetail,
   loadCustomersWithLedger,
+  readCachedCustomersWithLedger,
   formatShortDate,
   toLedgerDriftCandidates,
   type CustomerWithLedger,
@@ -119,6 +120,7 @@ function useCustomersLedgerList() {
   }, [queryClient]);
   return useQuery({
     queryKey: ["customers-ledger-list"],
+    initialData: readCachedCustomersWithLedger(),
     queryFn: async () => {
       const localCustomers = await loadCustomersWithLedger();
       // The server's ledger summary is authoritative. Offline we reuse the last

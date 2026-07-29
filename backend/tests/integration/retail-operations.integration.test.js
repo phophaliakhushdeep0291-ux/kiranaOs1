@@ -143,6 +143,73 @@ if (ctx.skip) {
       assert.equal(duplicateDocument.code, "TRANSFER_DOCUMENT_DUPLICATE");
       const branchInventoryAfterDuplicate = assertSuccess(await ctx.get(`/api/stores/${branch.id}/inventory`, { token: auth.accessToken }));
       assert.equal(branchInventoryAfterDuplicate.products.find((row) => row.id === product.id).stockBaseQty, 2, "a duplicate document must roll back stock movement");
+      const externalReviewTransfer = assertSuccess(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        documentType: "tax_invoice",
+        documentNumber: "INV/26-27/002",
+        documentDate: "2026-07-28",
+        items: [{ productId: product.id, quantityBaseQty: 1, declaredTaxableValue: 60000 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      const notRequiredTransfer = assertSuccess(await ctx.post("/api/stores/transfers", {
+        fromLocationId: primary.id,
+        toLocationId: branch.id,
+        documentType: "tax_invoice",
+        documentNumber: "INV/26-27/003",
+        documentDate: "2026-07-28",
+        items: [{ productId: product.id, quantityBaseQty: 1, declaredTaxableValue: 60000 }],
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(externalReviewTransfer.eWayReviewRequired, true);
+      assert.equal(externalReviewTransfer.eWayReviewStatus, "pending");
+      assert.equal(notRequiredTransfer.eWayReviewStatus, "pending");
+
+      const pendingReadiness = assertSuccess(await ctx.get("/api/compliance/readiness", { token: auth.accessToken }));
+      assert.equal(pendingReadiness.gaps.pendingEWayReviewCount, 2);
+      assert.equal(pendingReadiness.checks.find((row) => row.key === "eway").ready, false);
+
+      const invalidExternalEvidence = assertFailure(await ctx.post(`/api/stores/transfers/${externalReviewTransfer.id}/compliance-review`, {
+        decision: "external_reference_recorded",
+        reason: "Generated externally by the authorised operator",
+        eWayBillNumber: "1234",
+        eWayBillDate: "2026-07-28",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 400);
+      assert.equal(invalidExternalEvidence.code, "VALIDATION_FAILED");
+
+      const externalEvidence = assertSuccess(await ctx.post(`/api/stores/transfers/${externalReviewTransfer.id}/compliance-review`, {
+        decision: "external_reference_recorded",
+        reason: "Generated externally by the authorised operator",
+        eWayBillNumber: "181000609270",
+        eWayBillDate: "2026-07-28",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(externalEvidence.eWayReviewRequired, false);
+      assert.equal(externalEvidence.eWayReviewStatus, "external_reference_recorded");
+      assert.equal(externalEvidence.eWayBillNumber, "181000609270");
+      assert.equal(externalEvidence.legalSubmissionStatus, "external_reference_recorded_not_verified");
+      assert.match(externalEvidence.complianceNotice, /not verified/i);
+
+      const reasonedDecision = assertSuccess(await ctx.post(`/api/stores/transfers/${notRequiredTransfer.id}/compliance-review`, {
+        decision: "not_required_after_review",
+        reason: "Movement was reviewed against the applicable exemption evidence",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }));
+      assert.equal(reasonedDecision.eWayReviewRequired, false);
+      assert.equal(reasonedDecision.eWayReviewStatus, "not_required_after_review");
+      assert.equal(reasonedDecision.eWayBillNumber, null);
+      assert.match(reasonedDecision.complianceNotice, /does not make the legal determination/i);
+
+      const duplicateReview = assertFailure(await ctx.post(`/api/stores/transfers/${externalReviewTransfer.id}/compliance-review`, {
+        decision: "not_required_after_review",
+        reason: "Attempted duplicate review must not overwrite evidence",
+        ownerPin: tenant.ownerPin,
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 409);
+      assert.equal(duplicateReview.code, "TRANSFER_EWAY_REVIEW_NOT_PENDING");
+      const resolvedReadiness = assertSuccess(await ctx.get("/api/compliance/readiness", { token: auth.accessToken }));
+      assert.equal(resolvedReadiness.gaps.pendingEWayReviewCount, 0);
+      assert.equal(resolvedReadiness.checks.find((row) => row.key === "eway").ready, true);
 
       const firstBill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
         billType: "gst_invoice",
@@ -190,10 +257,11 @@ if (ctx.skip) {
       assert.equal(scopedWorking.registrationScope.filingScopeRequired, false);
       assert.equal(scopedWorking.documentSeries.length, 1);
 
-      const audits = await ctx.db.auditLog.findMany({ where: { shopId: tenant.shop.id, entityId: { in: [branch.id, transfer.id] } } });
+      const audits = await ctx.db.auditLog.findMany({ where: { shopId: tenant.shop.id, entityId: { in: [branch.id, transfer.id, externalReviewTransfer.id, notRequiredTransfer.id] } } });
       assert.equal(audits.some((row) => row.action === "STORE_LOCATION_CREATED"), true);
       assert.equal(audits.some((row) => row.action === "STORE_LOCATION_UPDATED"), true);
       assert.equal(audits.some((row) => row.action === "STOCK_TRANSFER_COMPLETED"), true);
+      assert.equal(audits.filter((row) => row.action === "STOCK_TRANSFER_COMPLIANCE_REVIEWED").length, 2);
     });
     test("enforces the subscribed store limit", async () => {
       const { tenant, auth } = await ownerContext();

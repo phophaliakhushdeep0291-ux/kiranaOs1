@@ -5,6 +5,7 @@ import { apiRequest } from "@/lib/api/http";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -53,10 +54,15 @@ interface Transfer {
   isInterstate: boolean;
   complianceStatus: string;
   eWayReviewRequired: boolean;
+  eWayReviewStatus: "not_required" | "pending" | "external_reference_recorded" | "not_required_after_review";
+  eWayBillNumber?: string | null;
+  eWayBillDate?: string | null;
+  eWayReviewReason?: string | null;
+  eWayReviewedAt?: string | null;
   taxableValue: number;
   taxTotal: number;
   consignmentValue: number;
-  legalSubmissionStatus: "not_submitted";
+  legalSubmissionStatus: "not_submitted" | "external_reference_recorded_not_verified";
   complianceNotice: string;
   completedAt?: string | null;
   createdAt: string;
@@ -66,6 +72,7 @@ interface Transfer {
 }
 
 type RegistrationMode = "inherit" | "distinct" | "unregistered";
+type EWayReviewDecision = "external_reference_recorded" | "not_required_after_review";
 type TransferTreatment = "pending" | "incomplete" | Transfer["gstTreatment"];
 
 const card = "rounded-2xl border border-slate-200/80 bg-white shadow-[0_10px_35px_rgba(15,23,42,0.05)]";
@@ -112,6 +119,12 @@ export default function StockTransfersPage() {
   const [locationGstin, setLocationGstin] = useState("");
   const [locationLegalName, setLocationLegalName] = useState("");
   const [locationTradeName, setLocationTradeName] = useState("");
+  const [reviewTransfer, setReviewTransfer] = useState<Transfer | null>(null);
+  const [reviewDecision, setReviewDecision] = useState<EWayReviewDecision>("external_reference_recorded");
+  const [reviewReason, setReviewReason] = useState("");
+  const [reviewEWayNumber, setReviewEWayNumber] = useState("");
+  const [reviewEWayDate, setReviewEWayDate] = useState(today());
+  const [reviewOwnerPin, setReviewOwnerPin] = useState("");
 
   const locationsQ = useQuery({ queryKey: ["store-locations"], queryFn: () => apiRequest<LocationsResponse>("/stores") });
   const transfersQ = useQuery({ queryKey: ["stock-transfers"], queryFn: () => apiRequest<Transfer[]>("/stores/transfers?limit=100") });
@@ -150,6 +163,43 @@ export default function StockTransfersPage() {
     onSuccess: (data) => { void queryClient.invalidateQueries({ queryKey: ["store-locations"] }); setLocationOpen(false); resetLocation(); toast({ title: "Store location created", description: data.taxRegistration?.formatValid ? `${data.name} uses ${data.taxRegistration.gstin}. Format validated locally.` : `${data.name} can now receive stock.` }); },
     onError: (error: Error) => toast({ title: "Location not created", description: error.message, variant: "destructive" }),
   });
+  const resetReview = () => {
+    setReviewTransfer(null);
+    setReviewDecision("external_reference_recorded");
+    setReviewReason("");
+    setReviewEWayNumber("");
+    setReviewEWayDate(today());
+    setReviewOwnerPin("");
+  };
+  const reviewMutation = useMutation({
+    mutationFn: () => apiRequest<Transfer>(`/stores/transfers/${reviewTransfer?.id}/compliance-review`, {
+      method: "POST",
+      ownerPin: reviewOwnerPin,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision: reviewDecision,
+        reason: reviewReason.trim(),
+        eWayBillNumber: reviewDecision === "external_reference_recorded" ? reviewEWayNumber : undefined,
+        eWayBillDate: reviewDecision === "external_reference_recorded" ? reviewEWayDate : undefined,
+        ownerPin: reviewOwnerPin,
+      }),
+    }),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ["stock-transfers"] });
+      void queryClient.invalidateQueries({ queryKey: ["gst-compliance-readiness"] });
+      resetReview();
+      toast({
+        title: "E-way review resolved",
+        description: data.eWayBillNumber
+          ? `${data.eWayBillNumber} retained as an external reference; portal status was not verified.`
+          : "The not-required decision and reason are retained in the transfer audit trail.",
+      });
+    },
+    onError: (error: Error) => toast({ title: "Review not saved", description: error.message, variant: "destructive" }),
+  });
+  const reviewReady = reviewReason.trim().length >= 8
+    && reviewOwnerPin.length === 4
+    && (reviewDecision === "not_required_after_review" || (/^\d{12}$/.test(reviewEWayNumber) && Boolean(reviewEWayDate)));
   const canTransfer = Boolean(fromId && toId && fromId !== toId && productId && Number(quantity) > 0 && ownerPin.length === 4 && transferReady && !transferMutation.isPending);
   const locationReady = locationName.trim().length >= 2 && locationCode.trim().length >= 2 && (registrationMode !== "distinct" || locationGstin.length === 15);
   const usage = locationsQ.data?.usage;
@@ -210,7 +260,25 @@ export default function StockTransfersPage() {
                 <div><div className="flex items-center gap-3 text-sm font-bold text-slate-800"><span className="truncate">{transfer.fromLocation.name}</span><ArrowRight className="shrink-0 text-blue-500" size={16} /><span className="truncate">{transfer.toLocation.name}</span></div><span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black ${treatmentTone(transfer.gstTreatment)}`}>{treatmentLabel(transfer.gstTreatment)}</span></div>
                 <div className="lg:text-right"><p className="text-sm font-black text-slate-900">{money.format(transfer.consignmentValue || 0)}</p><p className="truncate text-[11px] text-slate-500">{transfer.items.map((item) => `${item.productName} ${item.quantityBaseQty} ${item.baseUnit}`).join(", ")}</p></div>
               </div>
-              {(transfer.documentType || transfer.eWayReviewRequired) && <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600"><FileText size={13} className="text-slate-500" />{transfer.documentType && <span className="font-bold">{transfer.documentType.replaceAll("_", " ")}</span>}{transfer.documentDate && <span>· {new Date(transfer.documentDate).toLocaleDateString("en-IN")}</span>}{transfer.taxTotal > 0 && <span>· Tax {money.format(transfer.taxTotal)}</span>}{transfer.eWayReviewRequired && <span className="inline-flex items-center gap-1 font-bold text-amber-700"><TriangleAlert size={12} /> E-way applicability review</span>}</div>}
+              {(transfer.documentType || transfer.eWayReviewStatus !== "not_required") && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                  <FileText size={13} className="text-slate-500" />
+                  {transfer.documentType && <span className="font-bold">{transfer.documentType.replaceAll("_", " ")}</span>}
+                  {transfer.documentDate && <span>· {new Date(transfer.documentDate).toLocaleDateString("en-IN")}</span>}
+                  {transfer.taxTotal > 0 && <span>· Tax {money.format(transfer.taxTotal)}</span>}
+                  {transfer.eWayReviewRequired && <span className="inline-flex items-center gap-1 font-bold text-amber-700"><TriangleAlert size={12} /> E-way applicability review pending</span>}
+                  {transfer.eWayReviewStatus === "external_reference_recorded" && <span className="inline-flex items-center gap-1 font-bold text-emerald-700"><BadgeCheck size={12} /> External EWB {transfer.eWayBillNumber} · not portal-verified</span>}
+                  {transfer.eWayReviewStatus === "not_required_after_review" && <span className="inline-flex items-center gap-1 font-bold text-blue-700"><CheckCircle2 size={12} /> Reviewed: not required</span>}
+                  {transfer.eWayReviewReason && <span className="basis-full text-slate-500">Reason: {transfer.eWayReviewReason}</span>}
+                </div>
+              )}
+              {transfer.eWayReviewRequired && (
+                <div className="mt-3 flex justify-end">
+                  <Button size="sm" variant="outline" className="border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100" onClick={() => setReviewTransfer(transfer)}>
+                    <ShieldCheck size={14} /> Resolve review
+                  </Button>
+                </div>
+              )}
             </div>
           ))}
           {!transfersQ.isLoading && !(transfersQ.data?.length) && <div className="p-10 text-center"><ArrowRightLeft className="mx-auto text-slate-300" size={30} /><p className="mt-3 text-sm font-bold text-slate-700">No transfers yet</p><p className="mt-1 text-xs text-slate-500">Create the first movement after adding a second location.</p></div>}
@@ -250,6 +318,58 @@ export default function StockTransfersPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={Boolean(reviewTransfer)} onOpenChange={(open) => { if (!open && !reviewMutation.isPending) resetReview(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Resolve e-way applicability review</DialogTitle>
+            <DialogDescription>
+              {reviewTransfer ? `${reviewTransfer.documentNumber || reviewTransfer.referenceNo} · ${money.format(reviewTransfer.consignmentValue)}` : "Transfer review"}. Record external evidence or retain a reasoned not-required decision.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+              KiranaOS stores this review and audit evidence. It does not verify the e-way bill portal, decide legal applicability, or submit a legal document.
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="eway-review-decision">Review decision</Label>
+              <Select value={reviewDecision} onValueChange={(value) => setReviewDecision(value as EWayReviewDecision)}>
+                <SelectTrigger id="eway-review-decision"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="external_reference_recorded">External e-way bill recorded</SelectItem>
+                  <SelectItem value="not_required_after_review">Reviewed and not required</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {reviewDecision === "external_reference_recorded" && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="eway-review-number">12-digit e-way bill number</Label>
+                  <Input id="eway-review-number" inputMode="numeric" maxLength={12} value={reviewEWayNumber} onChange={(event) => setReviewEWayNumber(event.target.value.replace(/\D/g, "").slice(0, 12))} placeholder="181000609270" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="eway-review-date">E-way bill date</Label>
+                  <Input id="eway-review-date" type="date" value={reviewEWayDate} onChange={(event) => setReviewEWayDate(event.target.value)} />
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="eway-review-reason">Review reason</Label>
+              <Textarea id="eway-review-reason" rows={3} maxLength={500} value={reviewReason} onChange={(event) => setReviewReason(event.target.value)} placeholder={reviewDecision === "external_reference_recorded" ? "Reference generated externally by authorised operator/provider…" : "Reason applicability was reviewed as not required…"} />
+              <p className="text-right text-[11px] text-slate-500">{reviewReason.trim().length}/500 · minimum 8 characters</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="eway-review-pin">Owner PIN</Label>
+              <Input id="eway-review-pin" inputMode="numeric" type="password" maxLength={4} value={reviewOwnerPin} onChange={(event) => setReviewOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4 digits" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetReview} disabled={reviewMutation.isPending}>Cancel</Button>
+            <Button onClick={() => reviewMutation.mutate()} disabled={!reviewReady || reviewMutation.isPending}>
+              <ShieldCheck size={15} /> {reviewMutation.isPending ? "Saving review…" : "Save review evidence"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={locationOpen} onOpenChange={setLocationOpen}>
         <DialogContent className="max-h-[92vh] max-w-lg overflow-y-auto">
           <DialogHeader><DialogTitle>Add store location</DialogTitle><DialogDescription>Choose whether this branch uses the main registration, a distinct GSTIN, or no GST registration. GSTIN checks are local format/checksum validation—not GST portal verification.</DialogDescription></DialogHeader>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { apiRequest } from "@/lib/api/http";
@@ -150,8 +150,10 @@ export default function TaxesSettingsPage() {
     consistent: row.consistent,
   }));
   const eligibleBills = (recentBillsQ.data?.bills ?? []).filter((bill) => bill.billType === "gst_invoice");
-  const validRegistrations = (readinessQ.data?.registrations ?? []).filter((registration) => registration.formatValid && registration.gstin);
-  const uniqueRegistrations = [...new Map(validRegistrations.map((registration) => [registration.gstin as string, registration])).values()];
+  const uniqueRegistrations = useMemo(() => {
+    const valid = (readinessQ.data?.registrations ?? []).filter((registration) => registration.formatValid && registration.gstin);
+    return [...new Map(valid.map((registration) => [registration.gstin as string, registration])).values()];
+  }, [readinessQ.data?.registrations]);
 
   useEffect(() => {
     if (uniqueRegistrations.length === 1 && !selectedSellerGstin) setSelectedSellerGstin(uniqueRegistrations[0].gstin || "");

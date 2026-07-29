@@ -59,3 +59,21 @@ export const createTransferSchema = z.object({
     declaredTaxableValue: moneyAmount({ positive: true }).optional(),
   })).min(1).max(100),
 });
+export const transferComplianceReviewSchema = z.object({
+  decision: z.enum(["external_reference_recorded", "not_required_after_review"]),
+  reason: z.string().trim().min(8, "Enter a clear review reason").max(500),
+  eWayBillNumber: z.string().trim().regex(/^\d{12}$/, "E-way bill number must contain exactly 12 digits").optional().nullable(),
+  eWayBillDate: documentDate.optional().nullable(),
+  ownerPin: z.string().regex(/^\d{4}$/).optional(),
+}).superRefine((value, ctx) => {
+  const recordsExternalReference = value.decision === "external_reference_recorded";
+  if (recordsExternalReference && !value.eWayBillNumber) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["eWayBillNumber"], message: "Enter the 12-digit external e-way bill number" });
+  }
+  if (recordsExternalReference && !value.eWayBillDate) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["eWayBillDate"], message: "Enter the external e-way bill date" });
+  }
+  if (!recordsExternalReference && (value.eWayBillNumber || value.eWayBillDate)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["eWayBillNumber"], message: "Do not attach e-way bill evidence when the review decision is not required" });
+  }
+});

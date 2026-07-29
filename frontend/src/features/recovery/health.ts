@@ -72,6 +72,42 @@ export async function runLocalDbHealthCheck(): Promise<LocalDbHealthReport> {
     checks.push({ name: "Billing draft", status: "warning", message: "Could not inspect billing draft.", detail: error instanceof Error ? error.message : String(error) });
   }
 
+  try {
+    const [bills, billItems, payments, inventory] = await Promise.all([
+      offlineDB.getAll<Record<string, unknown>>("bills"),
+      offlineDB.getAll<Record<string, unknown>>("bill_items"),
+      offlineDB.getAll<Record<string, unknown>>("payments"),
+      offlineDB.getAll<Record<string, unknown>>("inventory"),
+    ]);
+    const billIds = new Set<string>();
+    const duplicateBillIds = new Set<string>();
+    for (const bill of bills) {
+      for (const value of [bill.id, bill.local_id, bill.server_id, bill.billNo, bill.billNumber]) {
+        if (typeof value !== "string" || !value) continue;
+        if (billIds.has(value)) duplicateBillIds.add(value);
+        billIds.add(value);
+      }
+    }
+    const referencesMissingBill = (row: Record<string, unknown>) => {
+      const id = row.billId ?? row.bill_id;
+      return typeof id === "string" && id.length > 0 && !billIds.has(id);
+    };
+    const orphanItems = billItems.filter(referencesMissingBill).length;
+    const orphanPayments = payments.filter(referencesMissingBill).length;
+    const negativeStock = inventory.filter((row) => {
+      const value = Number(row.quantity ?? row.currentStock ?? row.current_stock ?? 0);
+      return Number.isFinite(value) && value < 0;
+    }).length;
+    const issues = duplicateBillIds.size + orphanItems + orphanPayments + negativeStock;
+    checks.push({
+      name: "Financial data integrity",
+      status: issues > 0 ? "warning" : "healthy",
+      message: issues > 0 ? `${issues.toLocaleString("en-IN")} possible integrity issue${issues === 1 ? "" : "s"} found; review before clearing any data.` : "Bill identities, linked items, payments, and stock values passed consistency checks.",
+      detail: issues > 0 ? `Duplicate bill identities: ${duplicateBillIds.size}; orphan bill items: ${orphanItems}; orphan payments: ${orphanPayments}; negative stock rows: ${negativeStock}. This check is read-only.` : undefined,
+    });
+  } catch (error) {
+    checks.push({ name: "Financial data integrity", status: "problem", message: "Could not complete consistency checks.", detail: error instanceof Error ? error.message : String(error) });
+  }
   return {
     status: worstStatus(checks),
     checked_at: new Date().toISOString(),
