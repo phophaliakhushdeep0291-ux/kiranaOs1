@@ -130,7 +130,7 @@ async function buildBillContext(shopId, billId, client) {
     productIds.length
       ? client.product.findMany({
           where: { id: { in: productIds } },
-          select: { id: true, shopId: true, name: true, isLooseItem: true, baseUnit: true, deletedAt: true, costPerRateUnit: true },
+          select: { id: true, shopId: true, name: true, isLooseItem: true, baseUnit: true, rateUnit: true, deletedAt: true, costPerRateUnit: true },
         })
       : Promise.resolve([]),
     client.udharLedger.findMany({ where: { shopId, billId: bill.id } }),

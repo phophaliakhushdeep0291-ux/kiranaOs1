@@ -48,9 +48,15 @@ async function makeBill(db, shopId, overrides = {}) {
     creditAmount: overrides.creditAmount ?? 0,
   };
   const { items, payments, ...rest } = overrides;
+  // businessDate defaults to now() in the schema, so a bill built with a past
+  // createdAt would otherwise claim to belong to today — and every rule that
+  // looks up "that day's closing" would search the wrong day and stay silent.
+  // A real backdated sale carries both dates together.
+  const businessDate = overrides.businessDate ?? overrides.createdAt;
   return db.bill.create({
     data: {
       shopId,
+      ...(businessDate ? { businessDate } : {}),
       billNo: overrides.billNo ?? `KOS-T-${Date.now()}-${billSeq}`,
       billType: overrides.billType ?? "normal_sale",
       status: overrides.status ?? "active",
@@ -1135,6 +1141,52 @@ function runSuite() {
     assert.equal(Number(stockFinding.discrepancyPaise), 120000, "20 units × ₹60 cost");
     assert.ok(Number(stockFinding.amountPaise) > Number(stockFinding.discrepancyPaise),
       "stock valuation is larger than the gap, and must not be what gets totalled");
+  });
+
+  test("a critical finding always carries a figure, and stock gaps are valued at cost", async () => {
+    await resetDatabase(ctx.db);
+    const { shop, owner } = await createTenant(ctx.db);
+    const supplier = await ctx.db.supplier.create({ data: { shopId: shop.id, name: "Wholesale Co", mobile: "9800011122" } });
+    const product = await createProduct(ctx.db, shop.id, { costPerRateUnit: 40, stockBaseQty: 500 });
+
+    // ₹3,000 paid to a supplier, and not one gram of stock arrived. This is the
+    // shape that showed CRITICAL · 100 next to a ₹0 gap on the dashboard: the
+    // rule states its gap as `amountRupees`, which nothing was reading.
+    const ghost = await ctx.db.purchaseHistory.create({
+      data: {
+        shopId: shop.id, productId: product.id, supplierId: supplier.id, supplierName: supplier.name,
+        qtyBase: 3000, pricePerRateUnit: 100, totalCost: 3000, billAmount: 3000,
+        invoiceNumber: "SUP-GHOST-1", purchasePaymentStatus: "paid", purchasePaidAmount: 3000, purchaseDueAmount: 0,
+        ...moneyShadows({ pricePerRateUnit: 100, totalCost: 3000, billAmount: 3000, purchasePaidAmount: 3000, purchaseDueAmount: 0 }),
+      },
+    });
+    await evaluate(shop.id, ENTITY_TYPES.PURCHASE, ghost.id);
+    const purchaseFinding = await findingFor(shop.id, ENTITY_TYPES.PURCHASE, ghost.id);
+    assert.ok(purchaseFinding, "a purchase that never became stock must raise a finding");
+    assert.equal(Number(purchaseFinding.discrepancyPaise), 300000, "the whole ₹3,000 is at risk");
+
+    // Stock a cancellation should have put back and didn't: 25 units × ₹40 cost.
+    const cancelled = await makeBill(ctx.db, shop.id, {
+      grandTotal: 2500, paidAmount: 2500, createdByUserId: owner.id,
+      status: "cancelled", cancelledAt: new Date(), cancelledReason: "customer left",
+      items: [billItem(product, { quantity: 25, ratePerRateUnit: 100, lineTotal: 2500 })],
+      payments: [{ shopId: shop.id, mode: "cash", amount: 2500, ...moneyShadows({ amount: 2500 }) }],
+    });
+    await ctx.db.stockLedger.create({
+      data: {
+        shopId: shop.id, productId: product.id, productName: product.name, action: "sale",
+        changeBaseQty: -25, oldStockBaseQty: 500, newStockBaseQty: 475, billId: cancelled.id,
+      },
+    });
+    await evaluate(shop.id, ENTITY_TYPES.BILL, cancelled.id);
+    const cancelledFinding = await findingFor(shop.id, ENTITY_TYPES.BILL, cancelled.id);
+    assert.equal(Number(cancelledFinding.discrepancyPaise), 100000, "25 units × ₹40 cost, not the ₹2,500 sale price");
+
+    // The promise the dashboard makes: nothing serious is left without a number.
+    const critical = await ctx.db.auditFinding.findMany({ where: { shopId: shop.id, riskLevel: "CRITICAL" } });
+    for (const finding of critical) {
+      assert.ok(finding.discrepancyPaise !== null, `${finding.title} is CRITICAL but reports no figure`);
+    }
   });
 
   test("baselines are computed from the shop's own history and gate outlier rules", async () => {

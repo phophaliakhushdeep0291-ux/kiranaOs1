@@ -64,13 +64,16 @@ async function networkFirstNavigation(request) {
       cache.put("/index.html", response.clone()).catch(() => undefined);
     }
     return response;
-  } catch {
+  } catch (error) {
     // Offline: serve the cached SPA shell so any in-app route can boot, then fall back to offline.html.
-    return (
+    const shell =
       (await cache.match("/index.html")) ||
       (await cache.match("/")) ||
-      (await cache.match("/offline.html"))
-    );
+      (await cache.match("/offline.html"));
+    // Same rule as networkFirstStatic: a navigation that resolves undefined is a
+    // hard failure and shows a blank page instead of the browser's own error.
+    if (!shell) throw error;
+    return shell;
   }
 }
 
@@ -94,8 +97,15 @@ async function networkFirstStatic(request) {
     const response = await fetch(request);
     if (response && response.ok && response.type === "basic") cache.put(request, response.clone()).catch(() => undefined);
     return response;
-  } catch {
-    return cache.match(request);
+  } catch (error) {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    // Never resolve undefined. respondWith(undefined) is a hard failure, and for a
+    // module script that makes the dynamic import() reject — which React caches
+    // forever, so the route is dead until a full reload. Lazy route chunks are not
+    // precached, so a single dropped request used to be enough to brick the page.
+    // Re-throwing lets the browser treat it as an ordinary network error it can retry.
+    throw error;
   }
 }
 
