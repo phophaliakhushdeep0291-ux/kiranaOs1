@@ -82,8 +82,11 @@ export async function runLocalDbHealthCheck(): Promise<LocalDbHealthReport> {
     const billIds = new Set<string>();
     const duplicateBillIds = new Set<string>();
     for (const bill of bills) {
-      for (const value of [bill.id, bill.local_id, bill.server_id, bill.billNo, bill.billNumber]) {
-        if (typeof value !== "string" || !value) continue;
+      const identities = new Set(
+        [bill.id, bill.local_id, bill.server_id, bill.billNo, bill.billNumber]
+          .filter((value): value is string => typeof value === "string" && value.length > 0),
+      );
+      for (const value of identities) {
         if (billIds.has(value)) duplicateBillIds.add(value);
         billIds.add(value);
       }

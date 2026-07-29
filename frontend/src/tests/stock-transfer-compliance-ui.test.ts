@@ -38,7 +38,7 @@ describe("multi-GSTIN transfer and reporting UI", () => {
       'value="not_required_after_review"',
       "12-digit e-way bill number",
       "reviewOwnerPin",
-      "STOCK_TRANSFER_COMPLIANCE_REVIEWED",
+      'invalidateQueries({ queryKey: ["gst-compliance-readiness"] })',
       "not portal-verified",
     ]) expect(transfers).toContain(contract);
     expect(transfers).toContain("does not verify the e-way bill portal");

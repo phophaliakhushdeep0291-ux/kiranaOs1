@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { shouldPassSharedThrottle, shouldRunInteractiveNetworkWork } from "@/lib/browser/multiTabCoordinator";
 import { LOCAL_DATA_CHANGE_CHANNEL, type LocalDataChangeMessage } from "@/lib/offline/instant-cache";
 
-const FAST_REFRESH_DELAY_MS = 650;
+const FAST_REFRESH_DELAY_MS = 120;
 const FULL_REFRESH_DELAY_MS = 1_200;
 
 function isVisible() {

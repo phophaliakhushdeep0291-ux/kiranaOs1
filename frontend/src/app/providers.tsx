@@ -44,6 +44,19 @@ const queryClient = new QueryClient({
   },
 });
 
+function scheduleFinancialHardening(): () => void {
+  let cancelled = false;
+  const run = () => {
+    if (cancelled || document.visibilityState !== "visible") return;
+    void hardenLocalFinancialData().catch(() => undefined);
+  };
+  if ("requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(run, { timeout: 8_000 });
+    return () => { cancelled = true; window.cancelIdleCallback(id); };
+  }
+  const id = globalThis.setTimeout(run, 2_000);
+  return () => { cancelled = true; globalThis.clearTimeout(id); };
+}
 function RealtimeRefreshBridge() {
   useRealtimeRefreshBridge();
   useMultiDeviceSync();
@@ -61,15 +74,16 @@ export function AppProviders({ children }: { children: ReactNode }) {
     void requestPersistentOfflineStorage().then((granted) => {
       window.dispatchEvent(new CustomEvent("kirana:offline-storage-persistence", { detail: { granted } }));
     });
+    let cancelInitialHardening: () => void = () => undefined;
     void initializeOfflineStorage()
-      .then(() => hardenLocalFinancialData())
+      .then(() => { cancelInitialHardening = scheduleFinancialHardening(); })
       .catch(() => {
         // Offline storage is an enhancement; the UI should still render if the browser blocks IndexedDB.
       });
     const stopLeadership = startBackgroundLeadershipHeartbeat();
     const timer = window.setInterval(() => {
-      void hardenLocalFinancialData().catch(() => undefined);
-    }, 30_000);
+      scheduleFinancialHardening();
+    }, 5 * 60_000);
     // Settings → Advanced → "Auto cleanup temp files". Off means expired caches
     // and synced history are left alone until the owner runs it by hand.
     const cleanupTimer = window.setInterval(() => {
@@ -79,6 +93,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     }, 10 * 60_000);
     return () => {
       window.clearInterval(timer);
+      cancelInitialHardening();
       window.clearInterval(cleanupTimer);
       stopLeadership();
     };
