@@ -1,173 +1,234 @@
-# KiranaOS Mobile UX Architecture Report
+﻿# KiranaOS Mobile UX Architecture V2
 
-## Goal
+## Product Goal
 
-Make KiranaOS feel like a production mobile POS app, not a desktop dashboard squeezed onto a phone. The mobile experience should be fast, thumb-friendly, offline-first, and visually consistent across Dashboard, Billing, Bills History, Inventory, Customers/Udhar, Purchases, Returns, Expenses, Reports, Settings, and Sync.
+The mobile app must feel like a native, one-hand POS companion for a kirana owner. It must not reuse crowded desktop layouts. The rule is simple: desktop can be dense; mobile must be sequenced, thumb-friendly, offline-first, and financially clear.
 
-## Core Mobile Layout
+## Non-Negotiable Mobile Rules
 
-Every mobile page should use the same structure:
+1. No desktop tables on phones. Every table becomes a card list with the key decision fields first.
+2. No horizontal page scroll. If content does not fit, it stacks vertically.
+3. No hidden primary action. Add, save, pay, print, sync, and accept actions must be visible or in a clear bottom sheet.
+4. Every page gets the same mobile shell: header, optional sync strip, page controls, KPI cards, content cards, bottom nav.
+5. Every money view must show who, when, mode, reference, amount, and status.
+6. Every offline write must be visible immediately and sync without duplicate backend rows.
+7. Technical sync/conflict details stay out of normal owner flow. Normal users see retryable, plain-language states.
 
-1. Header
-   - Left: menu button.
-   - Center: page title or KiranaOS brand.
-   - Right: notification/profile.
-   - Keep height predictable and avoid wrapping.
+## Mobile App Shell
 
-2. Sync strip
-   - Show a compact green synced/offline-safe state.
-   - Primary action: Sync Now.
-   - Use plain language for failure states: "Backup did not finish. Try again."
-   - Keep technical conflict details behind an advanced/review screen.
+### Header
 
-3. Page controls
-   - Search, date range, filter, export, add actions should become large touch targets.
-   - On mobile, filters should open a bottom sheet instead of compressing dropdowns inline.
+- Height: stable, never wraps.
+- Left: menu button.
+- Center: KiranaOS brand on home-like pages, page title on detail pages.
+- Right: notification and store/profile button.
+- Store names must truncate before they collide with actions.
 
-4. KPI section
-   - Use a 2-column card grid on phones.
-   - Each card should have icon, label, value, trend percentage, and optional sparkline.
-   - Only the number and percent sign should use positive/negative color; comparison text stays neutral.
+### Sync Strip
 
-5. Main content
-   - Tables should become stacked list cards on mobile.
-   - Desktop tables can remain from `md` upward.
-   - Cards should show the decision-making data first: customer/supplier/product, amount, status, and next action.
+- Appears near the top on operational pages.
+- Good state: green icon, `Synced`, `Just now`, `Sync Now` button.
+- Offline state: `Offline safe`, `Saved on this device`.
+- Failure state: `Backup did not finish`, `Try again when internet/backend is working`.
 
-6. Bottom navigation
-   - Fixed bottom nav with Dashboard, Billing, Inventory, Customers, and More.
-   - Center floating `+` action goes to Billing because billing is the highest-frequency POS action.
-   - More opens all secondary modules: Bills History, Sales Overview, Purchases, Returns, Expenses, Reports, Offers, Settings, Sync.
+### Bottom Navigation
 
-## Data Fetching Architecture
+- Fixed bottom nav with Dashboard, Billing, Inventory, Customers, More.
+- Center floating plus goes to Billing.
+- More opens every secondary module: Bills History, Orders Received, Sales Overview, Purchases, Returns, Reports, Money Statement, Expenses, Offers, Settings, Sync.
+- Every page reserves bottom safe-area space so buttons are not covered.
 
-KiranaOS is local-first, so mobile pages should read in this order:
+## Shared Mobile Components
 
-1. IndexedDB instant cache for immediate paint.
-2. React Query active refetch for currently visible screens after local writes.
-3. Sync queue state for pending/failed backup status.
-4. Backend pull after successful sync or when app becomes online.
+Use these primitives for all mobile pages:
 
-Rules:
+- `MobilePage`: page wrapper with white background, safe spacing, and bottom-nav clearance.
+- `MobileSyncStrip`: consistent online/offline/sync status.
+- `MobileKpiGrid`: two-column phone KPI grid.
+- `MobileKpiCard`: icon, label, value, percent trend, sparkline.
+- `MobileToolbar`: search/filter/date/action grouping that wraps cleanly.
+- `MobilePillButton`: tab/filter chip with active state.
+- `MobileSection`: title, action, content card.
+- `MobileListCard`: table-row replacement.
+- `MobileActionGrid` and `MobileActionTile`: big touch actions.
 
-- Never block mobile UI waiting for the server if local data exists.
-- Never calculate financial totals from raw duplicated local/server echoes. Use deduped bills and canonical record ids.
-- Every write must have an idempotency key so retrying sync does not create duplicate backend rows.
-- Offline writes should update local UI immediately, then reconcile when online.
-- If sync fails, keep local data safe and retry without double-applying balances.
-
-## Page-Specific Mobile Placement
+## Page Architecture
 
 ### Dashboard
 
-- Sync strip.
-- Business Overview KPI cards in 2 columns.
-- Sales Trend chart full-width.
-- Quick Insights card.
-- Top Products and Recent Bills side-by-side only on wider phones/tablets; stacked on narrow phones.
+Order:
+1. Sync strip.
+2. Business Overview with six KPI cards: sales, cash, UPI, profit, outstanding udhar, expense/stock alert.
+3. Sales trend chart full-width.
+4. Quick Insights.
+5. Top Products and Recent Bills.
+6. Bottom nav.
+
+Rules:
+- KPI cards always show mini sparklines.
+- Only the percent value is colored; `vs yesterday/week` remains neutral.
+- Payment breakdown and chart sections must animate consistently.
 
 ### Billing
 
-- Customer selector.
-- Product search and barcode scan.
-- Recent products carousel.
-- Category chips.
-- Product cards.
-- Sticky mini cart bar.
-- Cart review and payment as step screens or bottom sheets.
-- Pakka bill and Estimate bill share the same billing quality, but use separate number series and separate history cleanup.
+Order:
+1. Customer selector.
+2. Product search and barcode scan.
+3. Recent products carousel.
+4. Category chips.
+5. Product cards.
+6. Sticky mini-cart.
+7. Cart review and payment in bottom sheets/step screens.
+
+Rules:
+- Pakka bill and Estimate bill use the same cart quality and print support.
+- Estimate bill has a separate number series and separate cleanup/history.
+- If stock is lower than sold quantity, allow negative stock but show a clear warning.
 
 ### Bills History
 
-- KPI cards.
-- Search and filters.
-- Bill list cards on mobile.
-- Bill detail/action bottom sheet with print, share, cancel, refund, mark paid/udhar.
+Order:
+1. KPI cards.
+2. Search/date/filter controls.
+3. Status chips.
+4. Bill cards.
+5. Bill detail bottom sheet with print, share, cancel, refund, mark paid/udhar.
+
+Rules:
+- All bills must be visible, including synced, pending, estimate, and finalized bills.
+- Bill numbers may be simplified visually, but full reference must be available in detail.
+
+### Orders Received
+
+Order:
+1. Pending/accepted/rejected KPI cards.
+2. Order cards with customer name, phone, address, amount, time.
+3. Accept & Bill loads the order into Billing, never WhatsApp.
+4. Already-loaded orders open the existing Billing draft instead of duplicating.
 
 ### Inventory
 
-- Stock KPI cards.
-- Action tiles: Add Stock, Stock Correction, Damage Entry, Supplier Purchase, More.
-- Product stock summary as mobile list cards.
-- Stock by location and recent updates below.
-- Product, Categories, Stock In, Stock Out, Adjustments, Transfers remain available from Inventory submenu.
+Order:
+1. Stock KPI cards.
+2. Action tiles: Add Stock, Correction, Damage, Supplier Purchase, More.
+3. Product stock list.
+4. Stock by location.
+5. Recent stock updates.
+
+Rules:
+- Inventory root must be a real overview page.
+- Stock In and Stock Out must only show relevant movement records, not every product as stock out.
+- Low/out-of-stock state is based on available quantity and threshold, not accidental movement rows.
 
 ### Customers / Udhar
 
-- Customer KPI cards.
-- Search, filter, sort, add customer.
-- Customer list cards with risk and outstanding amount.
-- Selected customer payment card.
-- Collection progress and recent payments.
-- Udhar ledger as cards on mobile and table on desktop.
+Order:
+1. Customer KPI cards.
+2. Search/filter/sort/add customer controls.
+3. Customer list; no customer selected by default.
+4. Selected customer detail card.
+5. Record payment card.
+6. Collection progress.
+7. Udhar ledger.
+
+Rules:
+- Payment cannot exceed outstanding balance.
+- Split payments must sum exactly to payment amount.
+- Customer list amount/tick/status must align in one stable row.
+- Every ledger row shows date, time, reference, debit, credit, mode, and running balance.
 
 ### Purchases
 
-- Purchase KPI cards.
-- Supplier insights strip.
-- Search/filter/columns/add purchase controls.
-- Purchase bill cards on mobile.
-- Activity and due alerts below.
+Order:
+1. Purchase KPI cards.
+2. Supplier insight strip.
+3. Search/filter/add purchase controls.
+4. Purchase bill cards.
+5. Recent activity and due alerts.
+
+Rules:
+- Purchase due date must be normalized before sync.
+- Partial payment cannot exceed bill amount.
+- Purchases must be idempotent during retry.
 
 ### Returns
 
-- Return KPI cards.
-- Sales Return / Purchase Return tabs.
-- Return order cards on mobile.
-- Top returned items and return summary below.
+Order:
+1. Return KPI cards.
+2. Sales/Purchase return tabs.
+3. Return order cards.
+4. Top returned items.
+5. Return summary.
 
-### Expenses
-
-- Expense KPI cards.
-- Category donut and monthly trend.
-- Search/filter/export/add expense controls.
-- Expense list cards on mobile.
+Rules:
+- Return stock impact must be explicit.
+- Refund/cash/bank/UPI movement must appear in Money Statement.
 
 ### Reports
 
-- KPI cards with sparklines.
-- Sales Trend, Category Performance, Payment Breakdown.
-- Tables become compact summary cards on mobile.
-- Filters open a bottom sheet.
+Order:
+1. KPI cards in mobile two-column grid; desktop 4 + 4 grid when requested.
+2. Sales trend.
+3. Category/payment charts.
+4. Top products/customers/closing summaries as cards.
+
+Rules:
+- White background.
+- No flicker while rendering; preserve previous data while refetching.
+- Charts keep stable dimensions.
+
+### Money Statement
+
+Order:
+1. Cash, UPI, Bank, Net KPI cards.
+2. Search/date/filter toolbar.
+3. Mode chips separated from flow chips.
+4. Statement cards/table with customer/supplier name, date, time, reference, mode, received, paid, status.
+5. Detail drawer showing bill/payment line items.
+
+Rules:
+- Filtering by mode must not zero unrelated summaries unless the selected filter explicitly scopes totals.
+- Udhar bank payments must appear as bank received.
+
+### Expenses
+
+Order:
+1. Expense KPI cards.
+2. Category breakdown and spending trend.
+3. Search/filter/export/add expense.
+4. Expense list cards.
 
 ### Settings
 
-- Use grouped cards with large rows.
-- Avoid dense desktop grids on phone.
-- Device, printer, billing, backup, and security settings should be reachable in one or two taps.
+Order:
+1. Grouped settings cards.
+2. Store Profile, Staff, Device, Printer/Billing, Taxes, Sync, Security, Notifications.
+3. Every visible action must either work or be clearly marked unavailable.
 
-## Visual System
+Rules:
+- Store profile save updates header and General settings card.
+- Device management is owner-friendly, not technical.
+- Printer page must support scan/connect/test print where browser/device capability allows.
 
-- Background: white on mobile.
-- Cards: 18px radius, light border, soft shadow.
-- Primary blue: vibrant POS blue.
-- Success green, warning orange, danger red, UPI violet.
-- Minimum touch target: 44px.
-- Page gutter: 16px.
-- Bottom safe area: always reserve room for fixed nav.
-- No horizontal page scrolling.
+## Responsive Breakpoints
 
-## Implementation Standard
+- 320-374px: single-column fallback for wide controls.
+- 375-430px: primary mobile target.
+- 431-767px: wider phone layout, still mobile shell.
+- 768-1023px: tablet can use 2-column sections but no desktop sidebar compression.
+- 1024px+: desktop layout.
 
-Shared primitives should be used before page-specific custom layout:
+## Verification Checklist
 
-- `StatsGrid`: 2-column mobile KPI grid.
-- `StatCard`: mobile-friendly card proportions and readable labels.
-- `MobileSection`: title/action/content block.
-- `MobileListCard`: table replacement for mobile.
-- `MobileActionGrid`: touch-first action tiles.
+For every page:
 
-## Production Test Checklist
-
-For every mobile page:
-
-- 375px, 390px, 430px, 768px, and desktop widths.
+- Open at 375, 390, 430, 768, 1024, 1440.
+- No text collision.
 - No horizontal scroll.
-- Bottom nav does not cover buttons.
-- Primary action is reachable by thumb.
-- Search/filter/add flows work.
-- Offline-first data appears immediately.
-- Sync retry does not duplicate data.
-- Totals match deduped backend/local calculations.
-- Empty states, loading states, and error states are user-safe.
-
+- Header actions do not overlap store name.
+- Fixed bottom nav does not cover submit buttons.
+- Local data renders before backend response.
+- Writes update instantly offline.
+- Sync retry does not duplicate bills/payments/ledger/purchase rows.
+- Money totals match canonical deduped records.
+- Build, typecheck, and targeted UI tests pass.

@@ -630,17 +630,18 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
 
   const dayStart = startOfDay(snapshot.date);
   const dayEnd = endOfDay(snapshot.date);
+  const locationScope = snapshot.storeId ? { locationId: snapshot.storeId } : {};
 
   // Use the same shop-timezone businessDate window as getDailyClosing. Offline
   // bills can arrive later, so createdAt would evaluate the wrong closing day.
   // Payments are loaded by those bill ids because tender belongs to the sale.
   const bills = await client.bill.findMany({
-    where: { shopId, businessDate: { gte: dayStart, lte: dayEnd } },
+    where: { shopId, ...locationScope, businessDate: { gte: dayStart, lte: dayEnd } },
     select: { id: true, billNo: true, billType: true, status: true, grandTotal: true, paidAmount: true, creditAmount: true, businessDate: true, createdAt: true, updatedAt: true },
   });
   const dayBillIds = bills.map((bill) => bill.id);
 
-  const [settings, baselines, payments, udharPayments, expenses, lateSyncEvents] = await Promise.all([
+  const [settings, baselines, payments, udharPayments, expenses, purchaseReceipts, quickPurchases, purchaseReturns, lateSyncEvents] = await Promise.all([
     loadShopSettings(shopId, client),
     getShopBaselines(shopId, { client }),
     dayBillIds.length
@@ -650,16 +651,28 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
         })
       : Promise.resolve([]),
     client.udharLedger.findMany({
-      where: { shopId, type: "payment", businessDate: { gte: dayStart, lte: dayEnd } },
+      where: { shopId, ...locationScope, type: "payment", businessDate: { gte: dayStart, lte: dayEnd } },
       select: { id: true, amount: true, mode: true, reversedAt: true, billId: true },
     }),
     client.expense.findMany({
-      where: { shopId, deletedAt: null, spentAt: { gte: dayStart, lte: dayEnd } },
-      select: { id: true, amount: true, paymentMode: true, spentAt: true, createdAt: true },
+      where: { shopId, ...locationScope, deletedAt: null, spentAt: { gte: dayStart, lte: dayEnd } },
+      select: { id: true, amount: true, paymentMode: true, status: true, spentAt: true, createdAt: true },
+    }),
+    client.purchaseReceipt.findMany({
+      where: { shopId, ...locationScope, createdAt: { gte: dayStart, lte: dayEnd } },
+      select: { id: true, paidAmount: true, paymentMode: true, createdAt: true },
+    }),
+    client.purchaseHistory.findMany({
+      where: { shopId, ...locationScope, purchaseReceiptId: null, createdAt: { gte: dayStart, lte: dayEnd } },
+      select: { id: true, purchasePaidAmount: true, purchasePaymentMode: true, createdAt: true },
+    }),
+    client.purchaseReturn.findMany({
+      where: { shopId, ...locationScope, status: "active", createdAt: { gte: dayStart, lte: dayEnd } },
+      select: { id: true, refundAmount: true, refundMode: true, createdAt: true },
     }),
     snapshot.lockedAt
       ? client.bill.findMany({
-          where: { shopId, businessDate: { gte: dayStart, lte: dayEnd }, updatedAt: { gt: snapshot.lockedAt } },
+          where: { shopId, ...locationScope, businessDate: { gte: dayStart, lte: dayEnd }, updatedAt: { gt: snapshot.lockedAt } },
           select: { id: true, billNo: true, updatedAt: true, status: true },
           take: 25,
         })
@@ -678,6 +691,9 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
     payments,
     udharPayments,
     expenses,
+    purchaseReceipts,
+    quickPurchases,
+    purchaseReturns,
     lateSyncEvents,
     inputHash: computeInputHash({
       settings,
@@ -687,6 +703,9 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
       payments,
       udharPayments,
       expenses,
+      purchaseReceipts,
+      quickPurchases,
+      purchaseReturns,
       lateSyncEvents,
     }),
   };

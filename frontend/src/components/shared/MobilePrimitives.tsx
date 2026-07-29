@@ -1,9 +1,9 @@
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+﻿import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { Link } from "wouter";
 import { CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export interface MobilePageProps extends HTMLAttributes<HTMLDivElement> {
+export interface MobilePageProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
@@ -265,3 +265,4 @@ export function MobileActionTile({ href, ...props }: MobileActionTileProps) {
 
   return <MobileActionTileInner {...props} />;
 }
+

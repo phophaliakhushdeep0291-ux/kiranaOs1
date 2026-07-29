@@ -16,6 +16,7 @@
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { collectAlterTableAddedColumns } from "../scripts/migration-column-parser.js";
 
 const sqliteSchema   = fs.readFileSync("prisma/schema.prisma", "utf8");
 const pgSchema       = fs.readFileSync("prisma-postgres/schema.prisma", "utf8");
@@ -129,6 +130,20 @@ assert.match(
   /extractMigrationTableColumns|CREATE TABLE/,
   "production-check.js must parse migration SQL for column drift checking"
 );
+const groupedAlterColumns = collectAlterTableAddedColumns(`
+ALTER TABLE "Bill"
+  ADD COLUMN "sellerGstin" TEXT,
+  ADD COLUMN "sellerStateCode" TEXT,
+  ADD COLUMN IF NOT EXISTS "sellerLegalName" TEXT;
+ALTER TABLE "Bill" ADD CONSTRAINT "ignored_constraint" CHECK (true);
+`, "Bill");
+assert.deepEqual([...groupedAlterColumns], ["sellerGstin", "sellerStateCode", "sellerLegalName"], "grouped PostgreSQL ADD COLUMN clauses must be detected without treating constraints as columns");
+
+const registrationMigration = fs.readFileSync("prisma-postgres/migrations/000071_location_tax_registration_snapshots/migration.sql", "utf8");
+const migratedBillColumns = collectAlterTableAddedColumns(registrationMigration, "Bill");
+for (const column of ["sellerGstin", "sellerStateCode", "sellerLegalName", "sellerTradeName", "sellerAddress", "sellerCity"]) {
+  assert.ok(migratedBillColumns.has(column), `production drift parser must detect grouped Bill.${column}`);
+}
 
 // Critical indexes
 assert.match(

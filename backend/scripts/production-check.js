@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { collectAlterTableAddedColumns } from "./migration-column-parser.js";
 
 const root = process.cwd();
 
@@ -16,6 +17,7 @@ const requiredFiles = [
   "docs/MONEY_MIGRATION.md",
   "docs/PAISE_SHADOW_COLUMNS.md",
   "scripts/production-check.js",
+  "scripts/migration-column-parser.js",
   "scripts/backup-postgres.sh",
   "prisma/schema.prisma",
   "prisma-postgres/schema.prisma",
@@ -629,9 +631,7 @@ function extractMigrationTableColumns(migrationText, tableName) {
   // Later migrations may safely add nullable columns to existing tables. Include
   // ALTER TABLE ... ADD COLUMN entries in drift detection so additive migrations
   // do not require duplicating CREATE TABLE blocks.
-  const alterRe = new RegExp(`ALTER TABLE "${tableName}" ADD COLUMN(?: IF NOT EXISTS)? "(\\w+)"`, "g");
-  let match;
-  while ((match = alterRe.exec(migrationText)) !== null) cols.add(match[1]);
+  for (const column of collectAlterTableAddedColumns(migrationText, tableName)) cols.add(column);
 
   return cols;
 }
