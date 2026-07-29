@@ -1879,6 +1879,7 @@ async function applyStockPurchase(shopId, event, context) {
   // first rejected every offline purchase with a permanent CONFLICT — local stock rose while the
   // server never moved, and the supplier's due went unrecorded.
   const identity = getPurchaseIdentity(event, rawPayload);
+  console.log("XX_PURCHASE_MARKER", JSON.stringify({ identityKey: identity?.idempotencyKey, rawMovementId: rawPayload?.movementId, rawKeys: Object.keys(rawPayload || {}).slice(0, 12) }));
   const payload = stockPurchasePayloadSchema.parse({ ...rawPayload, idempotencyKey: identity.idempotencyKey ?? rawPayload.idempotencyKey });
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_PURCHASE sync event", 400);

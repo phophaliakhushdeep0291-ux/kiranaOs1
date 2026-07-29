@@ -370,19 +370,27 @@ export const customerCreditRules = [
       if (!candidates.length) return passed;
       const selfName = normalizeName(ctx.customer.name);
       const selfMobile = normalizeMobile(ctx.customer.mobile);
+      // A shared name is NOT evidence of a duplicate: two customers called
+      // "Ramesh Kumar" with different phone numbers are two different people,
+      // and flagging them was pure noise on real shop data. A duplicate needs
+      // either the same mobile, or the same name where at least one record has
+      // no mobile at all — the case where one person really was entered twice.
       const matches = candidates
         .filter((candidate) => {
-          const sameName = selfName && normalizeName(candidate.name) === selfName;
-          const sameMobile = selfMobile && normalizeMobile(candidate.mobile) === selfMobile;
-          return sameName || sameMobile;
+          const candidateMobile = normalizeMobile(candidate.mobile);
+          if (selfMobile && candidateMobile) return selfMobile === candidateMobile;
+          return Boolean(selfName) && normalizeName(candidate.name) === selfName;
         })
-        .map((candidate) => ({
-          customerId: candidate.id,
-          name: candidate.name,
-          matchedOn: normalizeMobile(candidate.mobile) === selfMobile && selfMobile ? "mobile" : "name",
-          softDeleted: Boolean(candidate.deletedAt),
-          outstanding: money(candidate.udharAmount),
-        }));
+        .map((candidate) => {
+          const candidateMobile = normalizeMobile(candidate.mobile);
+          return {
+            customerId: candidate.id,
+            name: candidate.name,
+            matchedOn: selfMobile && candidateMobile === selfMobile ? "mobile" : "name_with_missing_mobile",
+            softDeleted: Boolean(candidate.deletedAt),
+            outstanding: money(candidate.udharAmount),
+          };
+        });
       if (!matches.length) return passed;
       return triggered({ duplicateCandidates: matches.slice(0, 10), candidateCount: matches.length });
     },

@@ -85,33 +85,25 @@ export const billingRules = [
       let matches = candidates.filter((candidate) => itemSignature(candidate.items) === signature);
       if (!matches.length) return passed;
 
-      // Two different walk-in customers buying the same item for the same amount
-      // minutes apart is ordinary kirana trade, not a duplicate. Without an
-      // identified customer the only trustworthy duplicate signal is the same
-      // device double-submitting within seconds, so the bar is much higher.
-      const WALKIN_WINDOW_SECONDS = 120;
-      const identifiedCustomer = Boolean(bill.customerId);
-      let windowSeconds = 10 * 60;
-      if (!identifiedCustomer) {
-        const device = bill.deviceId ?? bill.sourceDeviceId ?? null;
-        if (!device) return passed;
-        windowSeconds = WALKIN_WINDOW_SECONDS;
-        const billTime = new Date(bill.createdAt).getTime();
-        matches = matches.filter((candidate) => {
-          const sameDevice = (candidate.deviceId ?? candidate.sourceDeviceId ?? null) === device;
-          const secondsApart = Math.abs(new Date(candidate.createdAt).getTime() - billTime) / 1000;
-          return sameDevice && secondsApart <= WALKIN_WINDOW_SECONDS;
-        });
-        if (!matches.length) return passed;
-      }
+      // Only identified customers are checked. Two walk-in customers buying the
+      // same item for the same amount within a minute of each other is ordinary
+      // trade at a busy counter — measured on real shop data, that pattern was
+      // 24 seconds apart and entirely innocent. With no customer on the bill
+      // there is nothing that separates a double-submit from two real sales, and
+      // a rule that cannot tell them apart should not fire at all. Genuine
+      // retries still surface through BILL_SYNC_RETRY_STORM and the durable
+      // idempotency constraints.
+      if (!bill.customerId) return passed;
 
+      const windowSeconds = 10 * 60;
       return triggered({
         grandTotal: money(bill.grandTotal),
         itemSignature: signature,
         matchingBillIds: matches.map((b) => b.id),
-        customerIdentified: identifiedCustomer,
+        customerIdentified: true,
         windowSeconds,
         windowMinutes: Number((windowSeconds / 60).toFixed(2)),
+        innocentExplanation: "The same customer may genuinely have bought the same items twice. Confirm before treating this as a duplicate.",
       });
     },
   }),

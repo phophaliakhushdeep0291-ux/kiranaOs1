@@ -66,17 +66,35 @@ export async function updateProgram(shopId, data) {
   return shapeProgram(await db.loyaltyProgram.upsert({ where: { shopId }, create: { shopId, ...stored }, update: stored }));
 }
 
-export async function listAccounts(shopId, limit = 100) {
+/**
+ * Paginated. The old shape returned a bare array capped at 100 (200 max) with no
+ * way to reach the rest, so a shop with more loyalty members than the cap had
+ * accounts it simply could not see. Callers now get `total` and `hasMore` so the
+ * page can say what it is showing, and `offset` to walk the remainder.
+ */
+export async function listAccounts(shopId, { limit = 100, offset = 0 } = {}) {
   const program = await db.loyaltyProgram.findUnique({ where: { shopId } }) ?? DEFAULT_PROGRAM;
   await expireDormantAccounts(shopId, program);
   const tiers = tiersFrom(program.tierRulesJson);
-  const accounts = await db.loyaltyAccount.findMany({
-    where: { shopId },
-    orderBy: [{ pointsBalance: "desc" }, { updatedAt: "desc" }],
-    take: Math.min(Math.max(Number(limit) || 100, 1), 200),
-    include: { customer: { select: { id: true, name: true, mobile: true } } },
-  });
-  return accounts.map((account) => ({ ...account, ...tierFor(account, tiers), expiresAt: account.lastEarnedAt && program.pointsExpireDays > 0 ? new Date(account.lastEarnedAt.getTime() + program.pointsExpireDays * 86_400_000) : null }));
+  const take = Math.min(Math.max(Number(limit) || 100, 1), 200);
+  const skip = Math.max(Number(offset) || 0, 0);
+  const [total, accounts] = await Promise.all([
+    db.loyaltyAccount.count({ where: { shopId } }),
+    db.loyaltyAccount.findMany({
+      where: { shopId },
+      orderBy: [{ pointsBalance: "desc" }, { updatedAt: "desc" }, { id: "asc" }],
+      skip,
+      take,
+      include: { customer: { select: { id: true, name: true, mobile: true } } },
+    }),
+  ]);
+  return {
+    accounts: accounts.map((account) => ({ ...account, ...tierFor(account, tiers), expiresAt: account.lastEarnedAt && program.pointsExpireDays > 0 ? new Date(account.lastEarnedAt.getTime() + program.pointsExpireDays * 86_400_000) : null })),
+    total,
+    limit: take,
+    offset: skip,
+    hasMore: skip + accounts.length < total,
+  };
 }
 
 export async function getAccount(shopId, customerId) {

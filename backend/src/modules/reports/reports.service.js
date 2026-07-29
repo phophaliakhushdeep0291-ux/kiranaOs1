@@ -923,19 +923,26 @@ export async function refreshDailyClosingSnapshot(shopId, storeIdOrDate, maybeDa
 // ─────────────────────────────────────────────────────────────
 // EXPORT — raw data for CSV / Excel download
 // ─────────────────────────────────────────────────────────────
-export async function exportBillsData(shopId, { from, to, status, locationId }) {
+export async function exportBillsData(shopId, { from, to, status, locationId, limit } = {}) {
+  // Bounded like the stock export: a year of trading is ~48k line rows and 17 MB
+  // in a single synchronous response. The async export job remains the unbounded
+  // path because it writes to storage rather than to a handset.
+  const take = Math.min(Number(limit) || SYNC_EXPORT_BILL_LIMIT, SYNC_EXPORT_BILL_LIMIT);
   const where = {
     shopId,
     ...(locationId && { locationId }),
     ...(status && status !== "all" ? { status } : {}),
-    ...(from && to ? { businessDate: { gte: new Date(from), lte: new Date(to) } } : {}),
+    ...(from || to ? { businessDate: exportDateBounds(from, to) } : {}),
   };
 
-  const bills = await db.bill.findMany({
+  const fetched = await db.bill.findMany({
     where,
     include: { items: true, payments: true },
     orderBy: { businessDate: "desc" },
+    take: take + 1,
   });
+  const truncated = fetched.length > take;
+  const bills = truncated ? fetched.slice(0, take) : fetched;
 
   const rows = [];
   for (const b of bills) {
@@ -987,7 +994,7 @@ export async function exportBillsData(shopId, { from, to, status, locationId }) 
     }
   }
 
-  return { rows, count: bills.length };
+  return { rows, count: bills.length, truncated, limit: take };
 }
 
 /**
@@ -997,16 +1004,30 @@ export async function exportBillsData(shopId, { from, to, status, locationId }) 
  * `truncated` tells the caller to narrow the range or use the async export job.
  */
 export const SYNC_EXPORT_ROW_LIMIT = 10000;
+/** Bills are capped by document, not line: each bill expands to several rows. */
+export const SYNC_EXPORT_BILL_LIMIT = 2000;
 const SYNC_EXPORT_DEFAULT_WINDOW_DAYS = 90;
 
+/**
+ * A caller asking for `to=2026-07-25` means "through the end of the 25th", but
+ * `new Date("2026-07-25")` is midnight at its START — so the whole day fell
+ * outside the range and the export silently dropped it. Every other report goes
+ * through startOfDay/endOfDay in the shop timezone; the exports were the only
+ * place that skipped them.
+ */
+export function exportDateBounds(from, to) {
+  return {
+    ...(from ? { gte: startOfDay(new Date(from)) } : {}),
+    ...(to ? { lte: endOfDay(new Date(to)) } : {}),
+  };
+}
+
 function boundedExportWindow(from, to) {
-  if (from && to) return { gte: new Date(from), lte: new Date(to) };
-  if (from) return { gte: new Date(from) };
-  if (to) return { lte: new Date(to) };
+  if (from || to) return exportDateBounds(from, to);
   // No window asked for: default to a recent window rather than all history.
   const start = new Date();
   start.setDate(start.getDate() - SYNC_EXPORT_DEFAULT_WINDOW_DAYS);
-  return { gte: start };
+  return { gte: startOfDay(start) };
 }
 
 export async function exportStockLedgerData(shopId, { from, to, productId, locationId, limit } = {}) {

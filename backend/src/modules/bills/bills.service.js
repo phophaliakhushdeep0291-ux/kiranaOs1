@@ -1032,6 +1032,11 @@ export async function createSaleReturn(shopId, body, actor = {}) {
               oldStockBaseQty: await getLocationQuantity(tx, shopId, location, product),
               newStockBaseQty: await getLocationQuantity(tx, shopId, location, product),
               damageLossValue: lineCost,
+              // The paise shadow has to be written alongside the decimal, exactly
+              // as inventory.service.js does for a counter damage entry. Without it
+              // the row reads as zero loss to any paise-based reconciliation, so
+              // damage silently undercounts once those consumers become primary.
+              ...moneyShadows({ damageLossValue: lineCost }),
               billId: returnBill.id,
               clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `damage:${product.id}`),
               idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `damage:${product.id}`),

@@ -340,7 +340,8 @@ export async function processReportExportJob(exportJobId) {
 async function buildReportCsv(shopId, reportType, params) {
   switch (reportType) {
     case "bills_csv": {
-      const data = await exportBillsData(shopId, params);
+      // Unbounded on purpose: the job streams to storage, not to a handset.
+      const data = await exportBillsData(shopId, { ...params, limit: Number.MAX_SAFE_INTEGER });
       return rowsToCsv(data.rows ?? []);
     }
     case "stock_csv": {
