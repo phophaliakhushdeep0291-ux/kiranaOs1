@@ -301,10 +301,17 @@ function isCancelledBill(bill: RecordLike): boolean {
   return String(bill.status ?? "").toLowerCase().includes("cancel");
 }
 
+// A bill the SERVER permanently rejected must stop earning revenue locally. Only "conflict"
+// is excluded: pending/failed rows are still in flight and must keep counting, or offline-first
+// billing would under-report every sale until the network returns.
+function isRejectedBySync(bill: RecordLike): boolean {
+  return String(bill.sync_status ?? bill.syncStatus ?? "").toLowerCase() === "conflict";
+}
+
 function isSaleBill(bill: RecordLike): boolean {
   // Estimates (kacha bills) count as sales — they move stock, tender, and udhar just like a
   // pakka bill and only differ by their EST- number series.
-  return !isDeleted(bill) && !isCancelledBill(bill);
+  return !isDeleted(bill) && !isCancelledBill(bill) && !isRejectedBySync(bill);
 }
 
 function billTotal(bill: RecordLike): number {

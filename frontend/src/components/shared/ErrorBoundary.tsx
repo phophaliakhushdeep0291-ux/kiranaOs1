@@ -24,7 +24,14 @@ interface ErrorBoundaryState {
 // that fetches the new build; on a PWA that reload must bust the service-worker cache first.
 function isChunkLoadError(message?: string): boolean {
   if (!message) return false;
-  return /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|loading chunk [\w-]* failed|chunkloaderror|failed to load module script/i.test(message);
+  // The first group is Chromium/Firefox wording. WebKit says something different for
+  // the same failure — a rejected module fetch on iOS Safari surfaces as the bare
+  // "Load failed" TypeError, and an aborted one as "cancelled". Without those, an
+  // iPhone fell through to the generic crash card and never ran the silent reload
+  // recovery that Android got, so the page stayed dead on the error screen.
+  return /failed to fetch dynamically imported module|error loading dynamically imported module|importing a module script failed|loading chunk [\w-]* failed|chunkloaderror|failed to load module script|^load failed$|^cancelled$|unable to load script|module source is unavailable/i.test(
+    message.trim(),
+  );
 }
 
 // Recover at most once per window, so a chunk that genuinely 404s (or an offline shop) can never
