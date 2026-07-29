@@ -55,6 +55,13 @@ const requiredEndpoints = [
   "POST /api/customers/:id/udhar-payment",
   "POST /api/customers/:id/udhar-payment/:ledgerId/reverse",
   "POST /api/inventory/correction",
+  "GET /api/stores",
+  "POST /api/stores/transfers",
+  "POST /api/stores/transfers/:id/compliance-review",
+  "GET /api/compliance/readiness",
+  "GET /api/compliance/gst-register",
+  "GET /api/compliance/gstr1-working",
+  "GET /api/compliance/gstr3b-working",
   "POST /api/purchase-orders/:id/receipts/:receiptId/reconcile",
   "GET /api/accounting/control",
   "GET /api/accounting/bank-statements",
@@ -102,6 +109,8 @@ const deviceRequiredPrefixes = [
   "/api/reminders",
   "/api/purchase-orders",
   "/api/accounting",
+  "/api/stores",
+  "/api/compliance",
   "/api/ai"
 ];
 for (const prefix of deviceRequiredPrefixes) {
@@ -189,6 +198,29 @@ if (!downloadBackup?.ownerPinRequired || downloadBackup?.responseContentType !==
   fail("backup download must be owner-PIN protected encrypted binary");
 }
 
+const transferComplianceReview = contract.endpoints.find((endpoint) => endpoint.path === "/api/stores/transfers/:id/compliance-review");
+if (!transferComplianceReview?.ownerPinRequired || transferComplianceReview?.feature !== "multi_store") fail("transfer compliance review must require owner PIN and multi_store");
+if (!transferComplianceReview?.roles?.includes("owner") || !transferComplianceReview?.roles?.includes("admin")) fail("transfer compliance review must require owner/admin role");
+for (const field of ["data.eWayReviewRequired", "data.eWayReviewStatus", "data.eWayBillNumber", "data.eWayReviewReason", "data.eWayReviewedAt", "data.legalSubmissionStatus", "data.complianceNotice"]) {
+  if (!transferComplianceReview?.responseMustInclude?.includes(field)) fail(`transfer compliance review contract must require ${field}`);
+}
+for (const guarantee of ["location capabilities", "pending review", "12-digit", "reason, actor, timestamp", "not claimed"]) {
+  if (!transferComplianceReview?.transactionGuarantees?.some((item) => item.includes(guarantee))) fail(`transfer compliance review must guarantee ${guarantee}`);
+}
+const complianceReadiness = contract.endpoints.find((endpoint) => endpoint.path === "/api/compliance/readiness");
+for (const field of ["data.provider.legalSubmission", "data.registrations", "data.gaps.legacyTransferReviewCount", "data.gaps.pendingEWayReviewCount"]) {
+  if (!complianceReadiness?.responseMustInclude?.includes(field)) fail(`compliance readiness contract must require ${field}`);
+}
+const gstRegister = contract.endpoints.find((endpoint) => endpoint.path === "/api/compliance/gst-register");
+if (!gstRegister?.queryFields?.includes("sellerGstin") || !gstRegister?.integrityGuarantees?.some((item) => item.includes("immutable bill seller snapshots"))) {
+  fail("GST register must be seller-GSTIN scoped and use immutable seller snapshots");
+}
+for (const path of ["/api/compliance/gstr1-working", "/api/compliance/gstr3b-working"]) {
+  const endpoint = contract.endpoints.find((item) => item.path === path);
+  if (!endpoint?.queryFields?.includes("sellerGstin") || !endpoint?.integrityGuarantees?.some((item) => item.includes("mixed seller registrations fail closed"))) {
+    fail(`${path} must fail closed for mixed seller registrations`);
+  }
+}
 const transcribeAudio = contract.endpoints.find((endpoint) => endpoint.path === "/api/ai/transcribe");
 for (const field of ["data.transcript", "data.model", "data.provider"]) {
   if (!transcribeAudio?.responseMustInclude?.includes(field)) fail("audio transcription contract must require " + field);

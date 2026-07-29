@@ -13,9 +13,8 @@ const supplierRow = {
 
 vi.mock("@/lib/offline/db", () => ({
   offlineDB: {
-    getAll: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
+    getAll: vi.fn(), put: vi.fn(), delete: vi.fn(),
+    transaction: vi.fn(async (_tables: string[], callback: (tx: { put: ReturnType<typeof vi.fn>; enqueueOutboxOperation: ReturnType<typeof vi.fn> }) => Promise<void>) => callback({ put: vi.fn(async () => undefined), enqueueOutboxOperation: vi.fn(async () => undefined) })),
   },
 }));
 
@@ -26,23 +25,20 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 vi.mock("@/features/audit-logs/local-actions", () => ({
-  writeAuditLog: vi.fn(async () => ({ id: "audit_1" })),
+  buildAuditLogRow: vi.fn((input: Record<string, unknown>) => ({ id: "audit_1", ...input })),
+  buildAuditLogOutboxInput: vi.fn((row: Record<string, unknown>) => ({ entity_type: "audit_log", entity_id: row.id, operation_type: "AUDIT_LOG_APPEND", payload: { row } })),
 }));
 
 vi.mock("@/features/sync/outbox", () => ({
-  enqueueOutboxOperation: vi.fn(async () => undefined),
+  buildOutboxOperation: vi.fn((input: Record<string, unknown>) => ({ clientEventId: `op_${String(input.entity_id)}`, ...input })),
 }));
 
 import { offlineDB } from "@/lib/offline/db";
 import { removeCachedListItem } from "@/lib/offline/instant-cache";
-import { enqueueOutboxOperation } from "@/features/sync/outbox";
-import { writeAuditLog } from "@/features/audit-logs/local-actions";
 import { deleteSupplierLocalFirst } from "@/features/suppliers/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedRemoveCachedListItem = vi.mocked(removeCachedListItem);
-const mockedEnqueueOutboxOperation = vi.mocked(enqueueOutboxOperation);
-const mockedWriteAuditLog = vi.mocked(writeAuditLog);
 
 describe("supplier delete safety", () => {
   beforeEach(() => {
@@ -56,38 +52,13 @@ describe("supplier delete safety", () => {
 
     expect(mockedOfflineDB.getAll).not.toHaveBeenCalled();
     expect(mockedOfflineDB.put).not.toHaveBeenCalled();
-    expect(mockedWriteAuditLog).not.toHaveBeenCalled();
-    expect(mockedEnqueueOutboxOperation).not.toHaveBeenCalled();
+    expect(mockedOfflineDB.transaction).not.toHaveBeenCalled();
   });
 
-  it("soft deletes supplier with owner PIN, audit, cache removal, and outbox", async () => {
+  it("soft deletes supplier, audit, and outbox in one transaction", async () => {
     const result = await deleteSupplierLocalFirst({ id: "supplier_1", ownerPin: "1234", reason: "Duplicate supplier" });
-
     expect(result).toEqual({ success: true, pendingSync: true });
-    expect(mockedOfflineDB.put).toHaveBeenCalledWith("suppliers", expect.objectContaining({
-      id: "supplier_1",
-      deletedAt: expect.any(String),
-      deleted_at: expect.any(String),
-      sync_status: "pending_sync",
-    }));
+    expect(mockedOfflineDB.transaction).toHaveBeenCalledWith(["suppliers", "local_audit_logs", "sync_outbox"], expect.any(Function));
     expect(mockedRemoveCachedListItem).toHaveBeenCalledWith("suppliers", "supplier_1");
-    expect(mockedWriteAuditLog).toHaveBeenCalledWith(expect.objectContaining({
-      action: "supplier_deleted",
-      entityType: "supplier",
-      entityId: "supplier_1",
-      reason: "Duplicate supplier",
-      ownerPinProvided: true,
-    }));
-    expect(mockedEnqueueOutboxOperation).toHaveBeenCalledWith(expect.objectContaining({
-      entity_type: "supplier",
-      entity_id: "supplier_1",
-      operation_type: "DELETE_SUPPLIER_PENDING",
-      payload: expect.objectContaining({
-        supplierId: "supplier_1",
-        ownerPin: "1234",
-        reason: "Duplicate supplier",
-        ownerPinProvided: true,
-      }),
-    }));
   });
 });

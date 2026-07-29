@@ -24,6 +24,7 @@ import {
   Menu,
   Package,
   PercentSquare,
+  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -164,7 +165,7 @@ const PAGE_TITLES: Record<string, string> = {
 function getPageTitle(loc: string): string {
   if (PAGE_TITLES[loc]) return PAGE_TITLES[loc];
   const match = Object.keys(PAGE_TITLES).find(k => k !== "/dashboard" && loc.startsWith(k + "/"));
-  return match ? PAGE_TITLES[match] : "Artha";
+  return match ? PAGE_TITLES[match] : "KiranaOS";
 }
 
 function getPageSubtitle(loc: string): string | undefined {
@@ -539,7 +540,7 @@ export function Layout({ children }: { children: ReactNode }) {
             {!collapsed && (
               <div className="min-w-0">
                 <div className="font-display text-[28px] font-black leading-none tracking-tight text-white">
-                  Ar<span className="text-[#2b7cff]">tha</span>
+                  Kirana<span className="text-[#2b7cff]">OS</span>
                 </div>
                 <div className="mt-1 truncate text-[11px] font-medium leading-none text-white/68">{btDef.navConfig.tagline}</div>
               </div>
@@ -750,7 +751,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 </DropdownMenuContent>
               </DropdownMenu>
               <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Ar<span className="text-[var(--brand)]">tha</span></span>
+                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Kirana<span className="text-[var(--brand)]">OS</span></span>
                 <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">{btDef.navConfig.tagline}</span>
               </Link>
             </div>
@@ -800,8 +801,8 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
 
         {/* Mobile bottom nav */}
-        <nav data-app-mobile-bottom-nav="true" aria-label="Mobile navigation" className="mx-3 mb-3 mt-2 shrink-0 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_34px_rgba(15,35,80,0.14)] backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-5 items-center px-2.5">
+        <nav data-app-mobile-bottom-nav="true" aria-label="Mobile navigation" className="shrink-0 border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+          <div className="grid grid-cols-5 items-end px-2.5 py-1.5">
             {MOBILE_NAV.slice(0, 2).map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);
               return (
@@ -810,20 +811,30 @@ export function Layout({ children }: { children: ReactNode }) {
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200",
-                      active ? "text-[var(--brand)]" : "text-[#64748b] active:text-[#102347]",
+                      active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]",
                     )}
                   >
                     <div className={cn(
                       "flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200",
                       active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent",
                     )}>
-                      <Icon size={20} aria-hidden="true" />
+                      <Icon size={21} strokeWidth={2.1} aria-hidden="true" />
                     </div>
                     <span className="leading-none">{label}</span>
                   </div>
                 </Link>
               );
             })}
+
+            <Link href="/billing">
+              <div aria-label="Create bill" className="relative flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-end gap-1 rounded-2xl text-[11px] font-bold text-[var(--brand)]">
+                <div className="absolute -top-5 grid h-[64px] w-[64px] place-items-center rounded-full bg-[var(--brand)] text-white shadow-[0_16px_34px_rgba(7,92,255,0.34)] ring-[7px] ring-white">
+                  <Plus size={31} strokeWidth={2.2} aria-hidden="true" />
+                </div>
+                <span className="sr-only">Create bill</span>
+              </div>
+            </Link>
+
             {MOBILE_NAV.slice(2).map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);
               return (
@@ -832,11 +843,11 @@ export function Layout({ children }: { children: ReactNode }) {
                     aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200",
-                      active ? "text-[var(--brand)]" : "text-[#64748b] active:text-[#102347]",
+                      active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]",
                     )}
                   >
                     <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
-                      <Icon size={20} aria-hidden="true" />
+                      <Icon size={21} strokeWidth={2.1} aria-hidden="true" />
                     </div>
                     <span className="leading-none">{label}</span>
                   </div>
@@ -845,9 +856,9 @@ export function Layout({ children }: { children: ReactNode }) {
             })}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button type="button" aria-label="Open more navigation" className="flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold text-[#64748b] transition-all duration-200 active:text-[#102347]">
+                <button type="button" aria-label="Open more navigation" className="flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold text-[#4d5d7a] transition-all duration-200 active:text-[#102347]">
                   <div className="flex h-9 w-9 items-center justify-center rounded-2xl transition-colors">
-                    <Settings size={20} aria-hidden="true" />
+                    <Settings size={21} strokeWidth={2.1} aria-hidden="true" />
                   </div>
                   <span className="leading-none">More</span>
                 </button>

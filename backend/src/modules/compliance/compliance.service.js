@@ -59,13 +59,14 @@ export async function assignHsnToCategory(shopId, input, actor = {}, req = null)
 }
 
 export async function getReadiness(shopId) {
-  const [shop, locations, taxableProducts, gstInvoiceCount, documentCount, transferReviewCount] = await Promise.all([
+  const [shop, locations, taxableProducts, gstInvoiceCount, documentCount, legacyTransferReviewCount, pendingEWayReviewCount] = await Promise.all([
     db.shop.findUnique({ where: { id: shopId }, select: { id: true, name: true, gstNumber: true, city: true, address: true } }),
     db.storeLocation.findMany({ where: { shopId, active: true }, select: { id: true, code: true, name: true, gstNumber: true, gstStateCode: true } }),
     db.product.findMany({ where: { shopId, deletedAt: null, gstRate: { gt: 0 } }, select: { id: true, name: true, hsn: true, gstRate: true } }),
     db.bill.count({ where: { shopId, billType: "gst_invoice", status: "active" } }),
     db.complianceDocument.count({ where: { shopId } }),
-    db.stockTransfer.count({ where: { shopId, OR: [{ complianceStatus: "legacy_review_required" }, { eWayReviewRequired: true }] } }),
+    db.stockTransfer.count({ where: { shopId, complianceStatus: "legacy_review_required" } }),
+    db.stockTransfer.count({ where: { shopId, eWayReviewRequired: true, eWayReviewStatus: "pending" } }),
   ]);
   if (!shop) throw new AppError("Shop not found", 404, "SHOP_NOT_FOUND");
   const registrationRows = locations.length > 0
@@ -100,9 +101,9 @@ export async function getReadiness(shopId) {
     { key: "multi_gstin", label: "Registration-scoped GST exports", ready: true, detail: `${uniqueGstins.length} seller registration${uniqueGstins.length === 1 ? "" : "s"}; GSTR working papers are blocked unless exactly one GSTIN is selected` },
     { key: "hsn", label: "HSN coverage on taxable products", ready: missingHsn.length === 0 && invalidHsn.length === 0, detail: `${taxableProducts.length - missingHsn.length - invalidHsn.length}/${taxableProducts.length} taxable products valid` },
     { key: "invoice_register", label: "Auditable GST invoice register", ready: true, detail: `${gstInvoiceCount} GST invoices available with immutable seller snapshots` },
-    { key: "transfer_documents", label: "Registered stock-transfer documents", ready: transferReviewCount === 0, detail: transferReviewCount === 0 ? "No legacy or e-way review flags are open" : `${transferReviewCount} transfer record(s) need review` },
+    { key: "transfer_documents", label: "Registered stock-transfer documents", ready: legacyTransferReviewCount === 0, detail: legacyTransferReviewCount === 0 ? "No undocumented legacy transfer records are open" : `${legacyTransferReviewCount} legacy transfer record(s) need document review` },
     { key: "provider", label: "Certified GSTN/GSP submission", ready: liveProvider.legalSubmission, detail: liveProvider.legalSubmission ? `${liveProvider.providerName} is configured for legal IRN submission` : liveProvider.configured ? "A non-legal sandbox is enabled, or provider certification is not attested" : "No certified GSP is connected; filing remains blocked by design" },
-    { key: "eway", label: "E-way bill transport data", ready: true, detail: "Transport fields and review flags are captured; legal submission remains provider-dependent" },
+    { key: "eway", label: "E-way bill applicability reviews", ready: pendingEWayReviewCount === 0, detail: pendingEWayReviewCount === 0 ? "No threshold-triggered transfer reviews are pending" : `${pendingEWayReviewCount} transfer review(s) need external evidence or a retained not-required reason` },
   ];
   return {
     score: Math.round((checks.filter((row) => row.ready).length / checks.length) * 100),
@@ -110,8 +111,8 @@ export async function getReadiness(shopId) {
     provider: liveProvider,
     checks,
     registrations,
-    gaps: { invalidRegistrations: invalidRegistrations.slice(0, 25), missingHsn: missingHsn.slice(0, 25), invalidHsn: invalidHsn.slice(0, 25), transferReviewCount },
-    stats: { taxableProducts: taxableProducts.length, gstInvoices: gstInvoiceCount, complianceDocuments: documentCount, activeLocations: registrations.length, sellerRegistrations: uniqueGstins.length },
+    gaps: { invalidRegistrations: invalidRegistrations.slice(0, 25), missingHsn: missingHsn.slice(0, 25), invalidHsn: invalidHsn.slice(0, 25), transferReviewCount: legacyTransferReviewCount + pendingEWayReviewCount, legacyTransferReviewCount, pendingEWayReviewCount },
+    stats: { taxableProducts: taxableProducts.length, gstInvoices: gstInvoiceCount, complianceDocuments: documentCount, activeLocations: registrations.length, sellerRegistrations: uniqueGstins.length, pendingEWayReviews: pendingEWayReviewCount },
   };
 }
 

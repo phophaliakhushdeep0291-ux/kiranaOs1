@@ -61,6 +61,7 @@ import {
   resetLedgerDriftRepairThrottle,
 } from "@/features/ledger/ledger-drift-repair";
 import { getLocalUdharSummary } from "@/features/payments/local-actions";
+import { metricsWithCustomerBalanceFallback } from "@/features/customers/customer-ledger-data";
 
 const SERVER_SUMMARY = {
   totalOutstanding: 300,
@@ -137,6 +138,13 @@ describe("udhar offline/online parity", () => {
     );
   });
 
+  it("keeps the projected remainder after a partial payment when local history is incomplete", () => {
+    const metrics = metricsWithCustomerBalanceFallback(
+      { id: "customer_gops", name: "gops", udharAmount: 150, totalUdhar: 150, balance_derived_from_local_ledger: true },
+      [{ id: "ledger_partial_payment", customerId: "customer_gops", type: "PAYMENT", amount: 150, sync_status: "pending_sync", entry_at: "2026-07-25T18:00:00.000Z" }],
+    );
+    expect(metrics.balance).toBe(150);
+  });
   it("detects a synced customer whose local ledger contradicts the server", () => {
     const drifts = detectLedgerDrift(
       [

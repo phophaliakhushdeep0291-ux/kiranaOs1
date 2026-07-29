@@ -95,3 +95,9 @@ export async function createTransfer(req, res, next) {
     res.status(201).json({ success: true, data });
   } catch (error) { next(error); }
 }
+export async function reviewTransferCompliance(req, res, next) {
+  try {
+    const data = await service.reviewTransferCompliance(req.shopId, req.params.id, req.body, req.user?.userId, req.user?.role, req);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}

@@ -7,6 +7,8 @@
 // the sync-integrity rules, never silently followed.
 import crypto from "node:crypto";
 import db from "../../db.js";
+import { env } from "../../config/env.js";
+import { endOfZonedDay, startOfZonedDay } from "../../utils/dates.js";
 import { ENTITY_TYPES, EVENT_TYPES } from "./assurance.constants.js";
 import { getShopBaselines } from "./baseline.service.js";
 
@@ -103,8 +105,9 @@ async function buildBillContext(shopId, billId, client) {
   const createdAt = new Date(bill.createdAt);
   const windowStart = new Date(createdAt.getTime() - DUPLICATE_WINDOW_MS);
   const windowEnd = new Date(createdAt.getTime() + DUPLICATE_WINDOW_MS);
-  const dayStart = startOfDay(createdAt);
-  const dayEnd = endOfDay(createdAt);
+  const businessDate = new Date(bill.businessDate ?? bill.createdAt);
+  const dayStart = startOfDay(businessDate);
+  const dayEnd = endOfDay(businessDate);
 
   const [
     products,
@@ -625,18 +628,15 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
   const snapshot = await client.dailyClosingSnapshot.findFirst({ where: { id: snapshotId, shopId } });
   if (!snapshot) throw new AuditContextError("Daily closing snapshot not found in this shop", "ENTITY_NOT_FOUND");
 
-  const dayStart = startOfDay(new Date(snapshot.date));
-  const dayEnd = endOfDay(new Date(snapshot.date));
+  const dayStart = startOfDay(snapshot.date);
+  const dayEnd = endOfDay(snapshot.date);
 
-  // Payments are loaded by the day's BILL ids, not by the payment's own date.
-  // This matches how the product computes a day's cash
-  // (reports.service.js#getDailyClosing sums every payment attached to that
-  // day's active bills). Filtering by payment date instead would report a false
-  // mismatch whenever a bill from one day is paid on the next, and would make
-  // the split-payment check see only part of a bill's tender.
+  // Use the same shop-timezone businessDate window as getDailyClosing. Offline
+  // bills can arrive later, so createdAt would evaluate the wrong closing day.
+  // Payments are loaded by those bill ids because tender belongs to the sale.
   const bills = await client.bill.findMany({
-    where: { shopId, createdAt: { gte: dayStart, lte: dayEnd } },
-    select: { id: true, billNo: true, billType: true, status: true, grandTotal: true, paidAmount: true, creditAmount: true, createdAt: true, updatedAt: true },
+    where: { shopId, businessDate: { gte: dayStart, lte: dayEnd } },
+    select: { id: true, billNo: true, billType: true, status: true, grandTotal: true, paidAmount: true, creditAmount: true, businessDate: true, createdAt: true, updatedAt: true },
   });
   const dayBillIds = bills.map((bill) => bill.id);
 
@@ -650,7 +650,7 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
         })
       : Promise.resolve([]),
     client.udharLedger.findMany({
-      where: { shopId, type: "payment", createdAt: { gte: dayStart, lte: dayEnd } },
+      where: { shopId, type: "payment", businessDate: { gte: dayStart, lte: dayEnd } },
       select: { id: true, amount: true, mode: true, reversedAt: true, billId: true },
     }),
     client.expense.findMany({
@@ -659,7 +659,7 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
     }),
     snapshot.lockedAt
       ? client.bill.findMany({
-          where: { shopId, createdAt: { gte: dayStart, lte: dayEnd }, updatedAt: { gt: snapshot.lockedAt } },
+          where: { shopId, businessDate: { gte: dayStart, lte: dayEnd }, updatedAt: { gt: snapshot.lockedAt } },
           select: { id: true, billNo: true, updatedAt: true, status: true },
           take: 25,
         })
@@ -680,10 +680,14 @@ async function buildDailyClosingContext(shopId, snapshotId, client) {
     expenses,
     lateSyncEvents,
     inputHash: computeInputHash({
+      settings,
+      baselines,
       snapshot,
-      billIds: bills.map((b) => `${b.id}:${b.status}`),
-      paymentIds: payments.map((p) => p.id),
-      expenseIds: expenses.map((e) => e.id),
+      bills,
+      payments,
+      udharPayments,
+      expenses,
+      lateSyncEvents,
     }),
   };
 }
@@ -746,13 +750,9 @@ async function buildSyncEventContext(shopId, eventRowId, client) {
 }
 
 function startOfDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return startOfZonedDay(new Date(date), env.DAILY_CLOSING_TIMEZONE);
 }
 
 function endOfDay(date) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
+  return endOfZonedDay(new Date(date), env.DAILY_CLOSING_TIMEZONE);
 }

@@ -280,11 +280,18 @@ function isDeleted(row: RecordLike): boolean {
   return Boolean(row.deleted_at ?? row.deletedAt ?? row.merged_into_id ?? row.mergedIntoId);
 }
 
+// A bill the SERVER permanently rejected must not keep earning revenue in local reports.
+// Only "conflict" is excluded: pending/failed rows are still in flight and must keep counting,
+// otherwise offline-first billing would under-report until the network returns.
+function isRejectedBySync(row: RecordLike): boolean {
+  return String(row.sync_status ?? row.syncStatus ?? "").toLowerCase() === "conflict";
+}
+
 function isSaleBill(row: LocalBill): boolean {
   // Estimates (kacha bills) count as sales — same money and stock effects as a pakka bill,
   // only the EST- number series differs.
   const status = String(row.status ?? "").toLowerCase();
-  return !isDeleted(row) && !status.includes("cancel");
+  return !isDeleted(row) && !isRejectedBySync(row) && !status.includes("cancel");
 }
 
 function billTotal(row: LocalBill): number {

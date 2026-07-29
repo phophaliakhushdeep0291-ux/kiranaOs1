@@ -345,6 +345,60 @@ suggestion as confirmed, never infer missing historical ledger events, and never
 hide ambiguity, remaining amounts, candidate-scan truncation, or coverage
 limitations.
 
+## Multi-registration stores and transfer compliance
+
+```text
+GET   /api/stores
+POST  /api/stores                                      # owner/admin, multi_store
+PATCH /api/stores/:id                                  # owner/admin, multi_store
+GET   /api/stores/:id/inventory
+GET   /api/stores/transfers                            # multi_store
+POST  /api/stores/transfers                            # owner/admin + owner PIN
+POST  /api/stores/transfers/:id/compliance-review      # owner/admin + owner PIN
+```
+
+Each active location has an explicit tax-registration identity. Omitted GSTIN on
+creation may inherit the shop registration; explicit `null` means unregistered
+and must never silently inherit. GSTIN structure, state code, and checksum are
+validated locally. The API always says that GST portal status is not verified.
+Editing a location never rewrites immutable seller identity already frozen on a
+bill.
+
+Stock transfers are classified from the source and destination registration
+snapshots. Same-registration movement receives a transactional financial-year
+delivery-challan number. Movement between distinct registrations requires a tax
+invoice reference, declared taxable line values, and valid HSN evidence for
+taxable products. Stock and transfer evidence commit atomically; duplicate
+document numbers roll the entire movement back.
+
+A registered consignment over the configured threshold is created with
+`eWayReviewStatus=pending`. Review resolution is an optimistic conditional
+update and requires both location capabilities, owner/admin role, the
+`multi_store` feature, and owner PIN. It accepts exactly one of:
+
+- `external_reference_recorded`: a unique 12-digit external e-way bill number,
+  date, and reason; or
+- `not_required_after_review`: a retained reason without an e-way bill number.
+
+The transfer retains reviewer, timestamp, decision, reason, and any external
+reference, plus a central audit record. An external reference is reported as
+`external_reference_recorded_not_verified`: KiranaOS does not claim it verified
+the portal or performed legal submission.
+
+```text
+GET /api/compliance/readiness
+GET /api/compliance/gst-register?sellerGstin=<GSTIN>
+GET /api/compliance/gstr1-working?sellerGstin=<GSTIN>
+GET /api/compliance/gstr3b-working?sellerGstin=<GSTIN>
+```
+
+Readiness reports undocumented legacy transfers separately from pending e-way
+applicability reviews. GST invoice registers use immutable bill seller
+snapshots. GSTR working papers fail closed when the selected data contains more
+than one seller GSTIN; one explicit registration must be selected. These are
+accountant-review working papers, never a claim that a statutory return was
+filed. Legal submission remains unavailable unless a configured certified
+provider explicitly reports legal-submission readiness.
 ## Frontend release gate
 
 Before a frontend build is considered compatible with this backend, verify:

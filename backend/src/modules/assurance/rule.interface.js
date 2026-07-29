@@ -9,8 +9,6 @@
 // `evaluate` returns either a falsy value (not triggered) or
 // `{ triggered: true, details: { … } }` where details records the exact numbers
 // compared so the finding is explainable without re-running the rule.
-import { MONEY_EPSILON } from "./assurance.constants.js";
-
 export function defineRule(definition) {
   const required = ["ruleCode", "name", "description", "category", "severity", "defaultWeight", "version", "applicableEntityTypes", "evaluate"];
   for (const key of required) {
@@ -42,20 +40,33 @@ export const passed = null;
 
 // ── deterministic comparison helpers ─────────────────────────
 // Money lives as Float rupees plus BigInt paise shadows in KiranaOS. Rules
-// compare rupees with a one-paisa epsilon so Float representation noise never
-// produces a finding on its own.
+// normalize every value to integer paise before arithmetic or comparison. This
+// removes Float noise without hiding a real one-paisa discrepancy.
 
 export function money(value) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function moneyDiffers(left, right, epsilon = MONEY_EPSILON) {
-  return Math.abs(money(left) - money(right)) > epsilon;
-}
-
 export function toPaiseInt(value) {
   return Math.round(money(value) * 100);
+}
+
+export function fromPaiseInt(value) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed / 100 : 0;
+}
+
+export function moneyDiffers(left, right) {
+  return toPaiseInt(left) !== toPaiseInt(right);
+}
+
+export function moneyGreaterThan(left, right) {
+  return toPaiseInt(left) > toPaiseInt(right);
+}
+
+export function moneyLessThan(left, right) {
+  return toPaiseInt(left) < toPaiseInt(right);
 }
 
 export function quantityDiffers(left, right, epsilon = 0.0001) {
@@ -63,7 +74,7 @@ export function quantityDiffers(left, right, epsilon = 0.0001) {
 }
 
 export function sum(values) {
-  return values.reduce((total, value) => total + money(value), 0);
+  return fromPaiseInt(values.reduce((total, value) => total + toPaiseInt(value), 0));
 }
 
 export function percentOf(part, whole) {

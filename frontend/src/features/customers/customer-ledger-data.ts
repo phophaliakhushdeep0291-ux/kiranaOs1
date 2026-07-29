@@ -178,10 +178,26 @@ function readNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(num) ? num : fallback;
 }
 
-function metricsWithCustomerBalanceFallback(customer: Customer & Record<string, unknown>, entries: CustomerLedgerEntry[]): LedgerMetrics {
+export function metricsWithCustomerBalanceFallback(customer: Customer & Record<string, unknown>, entries: CustomerLedgerEntry[]): LedgerMetrics {
   const metrics = calculateTrustScore(customer, entries);
+  const projectedBalance = roundMoney(readNumber(customer.udharAmount ?? customer.totalUdhar, 0));
+  const hasPendingMovement = hasUnsyncedLedgerEntries(entries);
+  // A payment can be recorded before this device has downloaded the customer's
+  // complete historical ledger. The local rows may then contain only the new
+  // negative payment, whose raw sum falsely clamps the outstanding balance to
+  // zero. The payment transaction persists the correct projected remainder on
+  // the customer, so prefer it while that ledger movement is still pending.
+  if (customer.balance_derived_from_local_ledger === true && hasPendingMovement) {
+    const balance = Math.max(0, projectedBalance);
+    return {
+      ...metrics,
+      balance,
+      ageing: { ...metrics.ageing, total: balance, zeroToSeven: balance },
+      isBadCustomer: balance > readNumber(customer.udharLimit, Number.POSITIVE_INFINITY),
+    };
+  }
   if (entries.length > 0) return metrics;
-  const balance = roundMoney(readNumber(customer.udharAmount ?? customer.totalUdhar, 0));
+  const balance = projectedBalance;
   if (balance <= 0) return metrics;
   return {
     ...metrics,
@@ -351,8 +367,34 @@ function syntheticCustomerFromLedger(customerId: string, entries: CustomerLedger
   };
 }
 
+export function readCachedCustomersWithLedger(): CustomerWithLedger[] {
+  return readInstantCache<Customer[]>("customers", [])
+    .filter((customer) => !isDeleted(customer as unknown as Record<string, unknown>))
+    .map((customer) => {
+      const balance = roundMoney(Math.max(0, Number(customer.udharAmount ?? customer.totalUdhar ?? 0)));
+      const limit = Number(customer.udharLimit ?? Number.POSITIVE_INFINITY);
+      return {
+        ...customer,
+        ledgerBalance: balance,
+        rawLedgerBalance: balance,
+        totalUdhar: balance,
+        udharAmount: balance,
+        ledgerMetrics: {
+          balance,
+          ageing: { total: balance, zeroToSeven: balance, sevenToThirty: 0, thirtyPlus: 0 },
+          paymentCount: 0,
+          billCount: 0,
+          trustScore: Number((customer as unknown as Record<string, unknown>).trustScore ?? 75),
+          isBadCustomer: Number.isFinite(limit) && balance > limit,
+          warning: null,
+        },
+      } as CustomerWithLedger;
+    });
+}
 export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
-  await hardenLocalFinancialData().catch(() => undefined);
+  // Do not make first customer paint wait for a multi-table integrity scan.
+  // Repairs emit a data-change event and refresh this query when they complete.
+  void hardenLocalFinancialData().catch(() => undefined);
   const cached = readInstantCache<Customer[]>("customers", []);
   const dbCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
   const customers = uniqueById([...cached, ...dbCustomers].filter((customer) => !isDeleted(customer as unknown as Record<string, unknown>)) as Array<Customer & Record<string, unknown>>);

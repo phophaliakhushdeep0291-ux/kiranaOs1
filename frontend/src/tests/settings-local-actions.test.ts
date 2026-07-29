@@ -7,17 +7,35 @@ const state = vi.hoisted(() => ({
   idCounter: 0,
 }));
 
-vi.mock("@/lib/offline/db", () => ({
-  offlineDB: {
-    getSetting: vi.fn(async (key: string) => state.settings.get(key) ?? null),
-    setSetting: vi.fn(async (key: string, value: unknown) => {
-      state.settings.set(key, value);
-    }),
-    enqueueOutboxOperation: vi.fn(async (event: Record<string, unknown>) => {
-      state.outbox.push(event);
-    }),
-  },
-}));
+vi.mock("@/lib/offline/db", () => {
+  const setSetting = vi.fn(async (key: string, value: unknown) => {
+    state.settings.set(key, value);
+  });
+  const enqueueOutboxOperation = vi.fn(async (event: Record<string, unknown>) => {
+    state.outbox.push(event);
+  });
+  return {
+    offlineDB: {
+      getSetting: vi.fn(async (key: string) => state.settings.get(key) ?? null),
+      setSetting,
+      enqueueOutboxOperation,
+      // The settings save writes the shop cache and the outbox row in one
+      // atomic block (OfflineWriteTransaction), so the double-write cannot half
+      // land. The stub hands the callback the same writers the real tx exposes.
+      transaction: vi.fn(async (_stores: string[], callback: (tx: {
+        setSetting: typeof setSetting;
+        enqueueOutboxOperation: typeof enqueueOutboxOperation;
+        put: (storeName: string, value: unknown) => Promise<void>;
+        putMany: (storeName: string, values: unknown[]) => Promise<void>;
+      }) => Promise<unknown>) => callback({
+        setSetting,
+        enqueueOutboxOperation,
+        put: async () => {},
+        putMany: async () => {},
+      })),
+    },
+  };
+});
 
 vi.mock("@/lib/offline/context", () => ({
   getOfflineScope: () => ({

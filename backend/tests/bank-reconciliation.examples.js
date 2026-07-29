@@ -182,5 +182,8 @@ for (const model of [
   "bankReconciliationAllocation.findMany",
   "bankReconciliationEvent.findMany",
 ]) assert.ok(backupSource.includes(model), `encrypted tenant backup must include ${model}`);
-assert.ok(backupSource.includes('BACKUP_SCHEMA_VERSION = "2026-07-26"'));
+// Pinned on purpose: adding a model to the tenant backup must be a deliberate
+// act, so bumping BACKUP_SCHEMA_VERSION is expected to fail here until the new
+// shape has been reviewed. Last reviewed for the StockTransfer eWay fields.
+assert.ok(backupSource.includes('BACKUP_SCHEMA_VERSION = "2026-07-28"'));
 console.log("bank-reconciliation.examples.js OK");

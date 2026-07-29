@@ -668,12 +668,22 @@ function OperationList({
   );
 }
 
+type ConflictResolution = "use_local" | "use_server" | "resolved_by_owner" | "ignored_by_owner";
+
+function conflictFieldDiff(conflict: ConflictRow) {
+  const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
+  const cloud = isRecord(conflict.server_snapshot) ? conflict.server_snapshot : {};
+  return [...new Set([...Object.keys(local), ...Object.keys(cloud)])]
+    .filter((key) => compactJson(local[key]) !== compactJson(cloud[key]))
+    .slice(0, 20)
+    .map((key) => ({ key, local: local[key], cloud: cloud[key] }));
+}
 function ConflictList({
   conflicts,
   onMarkResolved,
 }: {
   conflicts: ConflictRow[];
-  onMarkResolved?: (conflictId: string, resolution: "resolved_by_owner" | "ignored_by_owner") => void;
+  onMarkResolved?: (conflictId: string, resolution: ConflictResolution) => void;
 }) {
   return (
     <Card>
@@ -719,11 +729,14 @@ function ConflictList({
                   </Button>
                   {onMarkResolved ? (
                     <>
-                      <Button size="sm" onClick={() => onMarkResolved(conflict.id, "resolved_by_owner")}>
-                        Mark resolved
+                      <Button size="sm" onClick={() => onMarkResolved(conflict.id, "use_local")}>
+                        Keep local
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => onMarkResolved(conflict.id, "use_server")}>
+                        Keep cloud
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => onMarkResolved(conflict.id, "ignored_by_owner")}>
-                        Ignore
+                        Decide later
                       </Button>
                     </>
                   ) : null}
@@ -732,7 +745,20 @@ function ConflictList({
               <p className="mt-3 text-sm text-muted-foreground">
                 {conflictSubject(conflict).reason} You can keep billing; local data has not been deleted.
               </p>
-              <details className="mt-3 rounded-md bg-background/70 p-3 text-xs">
+              {conflictFieldDiff(conflict).length > 0 && (
+                <div className="mt-3 overflow-x-auto rounded-md border bg-background text-xs">
+                  <div className="grid min-w-[560px] grid-cols-[140px_1fr_1fr] border-b bg-muted/50 font-semibold">
+                    <div className="p-2">Field</div><div className="border-l p-2">This device</div><div className="border-l p-2">Cloud</div>
+                  </div>
+                  {conflictFieldDiff(conflict).map((field) => (
+                    <div key={field.key} className="grid min-w-[560px] grid-cols-[140px_1fr_1fr] border-b last:border-b-0">
+                      <div className="break-words p-2 font-medium">{field.key}</div>
+                      <pre className="whitespace-pre-wrap break-words border-l p-2">{compactJson(field.local)}</pre>
+                      <pre className="whitespace-pre-wrap break-words border-l p-2">{compactJson(field.cloud)}</pre>
+                    </div>
+                  ))}
+                </div>
+              )}              <details className="mt-3 rounded-md bg-background/70 p-3 text-xs">
                 <summary className="cursor-pointer font-medium text-muted-foreground">
                   Show technical details
                 </summary>
@@ -981,7 +1007,7 @@ export default function SyncStatusPage() {
 
   const handleMarkConflictResolved = async (
     conflictId: string,
-    resolution: "resolved_by_owner" | "ignored_by_owner",
+    resolution: ConflictResolution,
   ) => {
     if (!snapshot.isBrowserOnline || !snapshot.isBackendReachable) {
       toast({
@@ -1030,8 +1056,8 @@ export default function SyncStatusPage() {
       }
       window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
       toast({
-        title: resolution === "resolved_by_owner" ? "Review marked resolved" : "Review item ignored",
-        description: "Sync Status will no longer block on this backup review item.",
+        title: resolution === "use_local" ? "Local version selected" : resolution === "use_server" ? "Cloud version selected" : resolution === "resolved_by_owner" ? "Review marked resolved" : "Decision postponed",
+        description: resolution === "ignored_by_owner" ? "The conflict remains available for later review." : "The owner decision was recorded for all devices.",
       });
     } catch {
       toast({
