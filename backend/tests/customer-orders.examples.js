@@ -20,6 +20,10 @@ for (const [name, schema] of [["sqlite", sqliteSchema], ["postgres", postgresSch
   assert.ok(schema.includes("locationId"), `${name} CustomerOrder routes work to a store location`);
   assert.ok(schema.includes("fulfillmentType"), `${name} CustomerOrder stores pickup or delivery as structured data`);
   assert.ok(schema.includes("readyAt"), `${name} CustomerOrder stores fulfillment timestamps`);
+  assert.ok(schema.includes("sourceChannel"), `${name} CustomerOrder stores unified commerce source channel`);
+  assert.ok(schema.includes("externalOrderId"), `${name} CustomerOrder stores external marketplace identity`);
+  assert.ok(schema.includes("paymentStatus"), `${name} CustomerOrder stores payment lifecycle independently`);
+  assert.ok(schema.includes("fulfillmentStatus"), `${name} CustomerOrder stores fulfillment lifecycle independently`);
   assert.ok(schema.includes("@@unique([shopId, idempotencyKey])"), `${name} CustomerOrder idempotency must be shop scoped`);
   assert.ok(schema.includes("customerOrders"), `${name} Shop relation must include customerOrders`);
 }
@@ -39,6 +43,27 @@ for (const [name, migration] of [["sqlite", sqliteIdempotencyMigration], ["postg
   assert.ok(migration.includes('"CustomerOrder_shopId_idempotencyKey_key"'), `${name} migration must enforce shop-scoped idempotency`);
 }
 
+const sqliteUnifiedCommerceMigration = read("../prisma/migrations/20260729113000_unified_commerce_order_lifecycle/migration.sql");
+const postgresUnifiedCommerceMigration = read("../prisma-postgres/migrations/000073_unified_commerce_order_lifecycle/migration.sql");
+for (const [name, migration] of [["sqlite", sqliteUnifiedCommerceMigration], ["postgres", postgresUnifiedCommerceMigration]]) {
+  for (const field of ["sourceChannel", "externalOrderId", "paymentStatus", "fulfillmentStatus"]) {
+    assert.ok(migration.includes(`ADD COLUMN "${field}"`), `${name} unified-commerce migration must persist ${field}`);
+  }
+  for (const index of ["sourceChannel", "fulfillmentStatus", "paymentStatus"]) {
+    assert.ok(migration.includes(`CustomerOrder_shopId_${index}_createdAt_idx`), `${name} unified-commerce migration must index ${index}`);
+  }
+}
+
+for (const [name, schema] of [["sqlite", sqliteSchema], ["postgres", postgresSchema]]) {
+  const modelBlocks = [...schema.matchAll(/model\s+(\w+)\s*\{([\s\S]*?)\n\}/g)];
+  for (const [, modelName, body] of modelBlocks) {
+    for (const field of ["sourceChannel", "fulfillmentStatus", "paymentStatus"]) {
+      if (body.includes(`@@index([shopId, ${field}, createdAt])`)) {
+        assert.match(body, new RegExp(`\\n\\s*${field}\\s+String\\b`), `${name} ${modelName} must never index missing ${field}`);
+      }
+    }
+  }
+}
 const publicRoutes = read("../src/modules/public/public.routes.js");
 assert.ok(
   publicRoutes.includes('router.post("/shops/:shopId/orders"'),

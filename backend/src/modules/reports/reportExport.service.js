@@ -31,6 +31,7 @@ const SAFE_PARAM_KEYS = new Set([
   "productId",
   "limit",
 ]);
+const ASYNC_EXPORT_PAGE_SIZE = 500;
 
 function appError(message, statusCode, code) {
   const err = new AppError(message, statusCode);
@@ -337,18 +338,37 @@ export async function processReportExportJob(exportJobId) {
   }
 }
 
+async function buildPagedReportCsv(loadPage) {
+  let cursor = null;
+  let headers = null;
+  const chunks = [];
+
+  while (true) {
+    const page = await loadPage(cursor);
+    const rows = page?.rows ?? [];
+    if (rows.length > 0) {
+      headers ??= [...new Set(rows.flatMap((row) => Object.keys(row)))];
+      chunks.push(rowsToCsv(rows, { headers, includeHeader: chunks.length === 0 }));
+    }
+    if (!page?.truncated) break;
+    if (!page.nextCursor || page.nextCursor === cursor) {
+      throw appError("Export pagination did not advance", 500, "REPORT_EXPORT_CURSOR_STALLED");
+    }
+    cursor = page.nextCursor;
+  }
+
+  return chunks.join("");
+}
+
 async function buildReportCsv(shopId, reportType, params) {
   switch (reportType) {
     case "bills_csv": {
-      // Unbounded on purpose: the job streams to storage, not to a handset.
-      const data = await exportBillsData(shopId, { ...params, limit: Number.MAX_SAFE_INTEGER });
-      return rowsToCsv(data.rows ?? []);
+      return buildPagedReportCsv((cursor) =>
+        exportBillsData(shopId, { ...params, limit: ASYNC_EXPORT_PAGE_SIZE, cursor }));
     }
     case "stock_csv": {
-      // The async job is the unbounded path by design: it streams to storage,
-      // not into a phone, so it asks for the full range explicitly.
-      const stock = await exportStockLedgerData(shopId, { ...params, limit: Number.MAX_SAFE_INTEGER });
-      return rowsToCsv(stock.rows ?? []);
+      return buildPagedReportCsv((cursor) =>
+        exportStockLedgerData(shopId, { ...params, limit: ASYNC_EXPORT_PAGE_SIZE, cursor, allHistory: true }));
     }
     case "udhar_csv": {
       const rows = await exportUdharData(shopId);
@@ -379,10 +399,10 @@ function flattenReportRow(row = {}) {
   return flat;
 }
 
-export function rowsToCsv(rows = []) {
+export function rowsToCsv(rows = [], { headers: providedHeaders, includeHeader = true } = {}) {
   if (!rows.length) return "";
-  const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
-  const lines = [headers.join(",")];
+  const headers = providedHeaders ?? [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const lines = includeHeader ? [headers.join(",")] : [];
   for (const row of rows) {
     lines.push(headers.map((header) => escapeCsv(row[header])).join(","));
   }
@@ -396,4 +416,4 @@ function escapeCsv(value) {
   return raw;
 }
 
-export const __reportExportInternals = { sanitizeExportParams, rowsToCsv, buildReportCsv, safeJob, cleanupExpiredReportExports };
+export const __reportExportInternals = { sanitizeExportParams, rowsToCsv, buildPagedReportCsv, buildReportCsv, safeJob, cleanupExpiredReportExports };

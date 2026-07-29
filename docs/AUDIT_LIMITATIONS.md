@@ -131,7 +131,7 @@ Not implemented because the data cannot support them honestly (details and
 reasoning in `AUDIT_RULE_CATALOG.md` §Deferred): duplicate idempotency key (A2),
 backdated ledger adjustment (B10), per-staff stock corrections (C6),
 supplier-level payable reconciliation (D8), changed supplier bank details (D14),
-expense staff-permission checks (E5), counted-cash variance and repeated shortages
+expense staff-permission checks (E5), server-side counted-cash variance and repeated shortages
 (F1/F10), record overwritten by an older version (G12).
 
 ## 15. Operational limitations of this phase

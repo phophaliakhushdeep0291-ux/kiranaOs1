@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Award, CheckCircle2, Gift, ShieldCheck, Sparkles, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { apiRequest } from "@/lib/api/http";
@@ -14,13 +14,26 @@ interface Account { id: string; pointsBalance: number; lifetimeEarned: number; l
 interface AccountsPage { accounts: Account[]; total: number; limit: number; offset: number; hasMore: boolean }
 
 const card = "rounded-2xl border border-slate-200/80 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.05)]";
+const ACCOUNT_PAGE_SIZE = 100;
 
 export default function LoyaltyPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const programQ = useQuery({ queryKey: ["loyalty-program"], queryFn: () => apiRequest<Program>("/loyalty/program") });
-  const accountsQ = useQuery({ queryKey: ["loyalty-accounts"], queryFn: () => apiRequest<AccountsPage>("/loyalty/accounts?limit=200") });
-  const accountRows = accountsQ.data?.accounts ?? [];
+  const accountsQ = useInfiniteQuery({
+    queryKey: ["loyalty-accounts"],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      apiRequest<AccountsPage>(`/loyalty/accounts?limit=${ACCOUNT_PAGE_SIZE}&offset=${pageParam}`),
+    getNextPageParam: (lastPage) => lastPage.hasMore
+      ? lastPage.offset + lastPage.accounts.length
+      : undefined,
+  });
+  const accountRows = useMemo(
+    () => accountsQ.data?.pages.flatMap((page) => page.accounts) ?? [],
+    [accountsQ.data],
+  );
+  const accountTotal = accountsQ.data?.pages[0]?.total ?? 0;
   const [active, setActive] = useState(false);
   const [earnRate, setEarnRate] = useState("1");
   const [pointValue, setPointValue] = useState("25");
