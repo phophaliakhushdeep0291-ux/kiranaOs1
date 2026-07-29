@@ -5,11 +5,11 @@
 // Known product semantics the rules encode (verified against
 // modules/reports/reports.service.js#getDailyClosing):
 //   * cashReceived  = bill cash payments + cash udhar recovery
-//   * expectedCash  = cashReceived (cash EXPENSES are not subtracted)
+//   * expectedCash  = cash received + supplier cash refunds - supplier cash paid - paid cash expenses
 //   * sales returns are stored as negative bills with negative payment rows,
 //     so refunds net out of the cash figure automatically
-// There is no recorded physical cash count anywhere in KiranaOS, so a true
-// "counted vs expected" variance cannot be computed yet (documented).
+// Physical drawer counts are currently device-local, so the server engine can
+// verify expected cash but cannot yet compare it with the shopkeeper's count.
 import {
   ENTITY_TYPES,
   EVENT_TYPES,
@@ -40,6 +40,33 @@ function udharRecoveryByMode(ctx, mode) {
       .filter((row) => !row.reversedAt && String(row.mode).toLowerCase() === mode)
       .map((row) => row.amount)
   );
+}
+
+function supplierCashPaidPaise(ctx) {
+  const receiptPaise = (ctx.purchaseReceipts ?? [])
+    .filter((row) => String(row.paymentMode).toLowerCase() === "cash")
+    .reduce((total, row) => total + toPaiseInt(row.paidAmount), 0);
+  const quickPurchasePaise = (ctx.quickPurchases ?? [])
+    .filter((row) => String(row.purchasePaymentMode).toLowerCase() === "cash")
+    .reduce((total, row) => total + toPaiseInt(row.purchasePaidAmount), 0);
+  return receiptPaise + quickPurchasePaise;
+}
+
+function paidCashExpensePaise(ctx) {
+  return (ctx.expenses ?? [])
+    .filter((row) => row.status === "paid" && String(row.paymentMode).toLowerCase() === "cash")
+    .reduce((total, row) => total + toPaiseInt(row.amount), 0);
+}
+
+function cashPurchaseRefundPaise(ctx) {
+  return (ctx.purchaseReturns ?? [])
+    .filter((row) => String(row.refundMode).toLowerCase() === "cash")
+    .reduce((total, row) => total + toPaiseInt(row.refundAmount), 0);
+}
+
+function recomputedExpectedCashPaise(ctx) {
+  const cashReceivedPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
+  return cashReceivedPaise + cashPurchaseRefundPaise(ctx) - supplierCashPaidPaise(ctx) - paidCashExpensePaise(ctx);
 }
 
 export const cashClosingRules = [
@@ -161,35 +188,29 @@ export const cashClosingRules = [
 
   defineRule({
     ruleCode: "CLOSING_CASH_EXPENSES_NOT_DEDUCTED",
-    name: "Expected cash does not account for cash expenses",
-    description: "Cash expenses were recorded for this day but the expected-cash figure equals cash received, so the cash the drawer should actually hold is overstated.",
+    name: "Expected drawer cash does not match recorded cash movements",
+    description: "Expected cash must equal confirmed cash collections plus supplier cash refunds minus supplier cash payments and paid cash expenses.",
     category: RULE_CATEGORIES.CASH_CLOSING,
-    severity: SEVERITY.MEDIUM,
-    defaultWeight: 20,
-    version: 1,
+    severity: SEVERITY.HIGH,
+    defaultWeight: 26,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
-    evidenceTypes: [EVIDENCE_TYPES.EXPENSE_RECEIPT, EVIDENCE_TYPES.OWNER_APPROVAL],
-    remediation: "When counting the drawer, subtract cash expenses manually. This is a known reporting gap, not necessarily an error in the data.",
+    evidenceTypes: [EVIDENCE_TYPES.EXPENSE_RECEIPT, EVIDENCE_TYPES.PURCHASE_INVOICE, EVIDENCE_TYPES.OWNER_APPROVAL],
+    remediation: "Refresh the closing snapshot and reconcile every recorded cash outflow or supplier refund before locking the day.",
     evaluate(ctx) {
-      const cashExpensePaise = toPaiseInt(
-        sum((ctx.expenses ?? []).filter((expense) => String(expense.paymentMode).toLowerCase() === "cash").map((expense) => expense.amount))
-      );
-      if (cashExpensePaise <= 0) return passed;
-      // Materiality gate: only report when the omission is worth a shopkeeper's attention.
-      if (cashExpensePaise < ctx.settings.closingDifferenceAlertPaise) return passed;
-      const expectedCashPaise = Number(ctx.snapshot.expectedCashPaise ?? 0);
-      const cashReceivedPaise = Number(ctx.snapshot.cashReceivedPaise ?? 0);
-      // Only report when expectedCash was NOT reduced by the expenses.
-      if (expectedCashPaise !== cashReceivedPaise) return passed;
+      const expectedCashPaise = recomputedExpectedCashPaise(ctx);
+      const snapshotExpectedCashPaise = Number(ctx.snapshot.expectedCashPaise ?? 0);
+      const differencePaise = snapshotExpectedCashPaise - expectedCashPaise;
+      if (differencePaise === 0) return passed;
       return triggered({
-        expectedCashPaise,
-        cashReceivedPaise,
-        cashExpensesPaise: cashExpensePaise,
-        cashExpensesRupees: Number((cashExpensePaise / 100).toFixed(2)),
-        drawerShouldHoldPaise: cashReceivedPaise - cashExpensePaise,
-        materialityThresholdRupees: ctx.settings.closingDifferenceAlertPaise / 100,
-        expenseCount: (ctx.expenses ?? []).filter((e) => String(e.paymentMode).toLowerCase() === "cash").length,
+        snapshotExpectedCashPaise,
+        recomputedExpectedCashPaise: expectedCashPaise,
+        differencePaise,
+        differenceRupees: Number((differencePaise / 100).toFixed(2)),
+        supplierCashPaidPaise: supplierCashPaidPaise(ctx),
+        cashExpensesPaise: paidCashExpensePaise(ctx),
+        supplierCashRefundsPaise: cashPurchaseRefundPaise(ctx),
       });
     },
   }),
@@ -302,12 +323,14 @@ export const cashClosingRules = [
       const recomputedCashPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
       const salesDelta = Number(ctx.snapshot.totalSalesPaise ?? 0) - recomputedSalesPaise;
       const cashDelta = Number(ctx.snapshot.cashReceivedPaise ?? 0) - recomputedCashPaise;
-      const worst = Math.max(Math.abs(salesDelta), Math.abs(cashDelta));
+      const expectedCashDelta = Number(ctx.snapshot.expectedCashPaise ?? 0) - recomputedExpectedCashPaise(ctx);
+      const worst = Math.max(Math.abs(salesDelta), Math.abs(cashDelta), Math.abs(expectedCashDelta));
       if (worst < threshold) return passed;
       return triggered({
         materialityThresholdPaise: threshold,
         salesDifferencePaise: salesDelta,
         cashDifferencePaise: cashDelta,
+        expectedCashDifferencePaise: expectedCashDelta,
         worstDifferenceRupees: Number((worst / 100).toFixed(2)),
       });
     },

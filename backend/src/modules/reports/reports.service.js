@@ -155,7 +155,7 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   const end = endOfDay(day);
   const dateKey = date ?? formatDateInTimeZone(start, env.DAILY_CLOSING_TIMEZONE);
 
-  const [activeBills, cancelledBills, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts] = await Promise.all([
+  const [activeBills, cancelledBills, roughBillsCount, oldUdharRecovered, pendingSyncCount, lowStockProducts, topProducts, purchaseReceipts, quickPurchases, cashExpenses, cashPurchaseReturns] = await Promise.all([
     db.bill.findMany({
       where: activeSalesWhere(shopId, start, end, locationId),
       include: { payments: true },
@@ -177,6 +177,22 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
       take: 20,
     }),
     getTopProducts(shopId, { from: dateKey, to: dateKey, limit: 5, includeProfit: false, locationId }),
+    db.purchaseReceipt.findMany({
+      where: { shopId, ...(locationId && { locationId }), createdAt: { gte: start, lte: end }, paidAmount: { gt: 0 }, paymentMode: "cash" },
+      select: { paidAmount: true },
+    }),
+    db.purchaseHistory.findMany({
+      where: { shopId, ...(locationId && { locationId }), purchaseReceiptId: null, createdAt: { gte: start, lte: end }, purchasePaidAmount: { gt: 0 }, purchasePaymentMode: "cash" },
+      select: { purchasePaidAmount: true },
+    }),
+    db.expense.findMany({
+      where: { shopId, ...(locationId && { locationId }), deletedAt: null, status: "paid", paymentMode: "cash", spentAt: { gte: start, lte: end } },
+      select: { amount: true },
+    }),
+    db.purchaseReturn.findMany({
+      where: { shopId, ...(locationId && { locationId }), status: "active", refundMode: "cash", createdAt: { gte: start, lte: end }, refundAmount: { gt: 0 } },
+      select: { refundAmount: true },
+    }),
   ]);
 
   const reportLocation = allLocations ? null : await resolveOperationalLocation(shopId, locationId);
@@ -197,6 +213,13 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
   const cashReceived = addMoney(billCash, oldUdharCash);
   const upiReceived = addMoney(billUpi, oldUdharUpi);
   const bankReceived = addMoney(billBank, oldUdharBank);
+  const supplierCashPaid = sumMoney([
+    ...purchaseReceipts.map((row) => row.paidAmount),
+    ...quickPurchases.map((row) => row.purchasePaidAmount),
+  ]);
+  const cashExpensesPaid = sumMoney(cashExpenses.map((row) => row.amount));
+  const cashPurchaseRefunds = sumMoney(cashPurchaseReturns.map((row) => row.refundAmount));
+  const expectedCash = subtractMoney(addMoney(cashReceived, cashPurchaseRefunds), supplierCashPaid, cashExpensesPaid);
 
   return {
     date: dateKey,
@@ -206,7 +229,10 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
     bankReceivedPaise: toPaise(bankReceived),
     udharGivenPaise: toPaise(sumMoney(activeBills.map((b) => b.creditAmount))),
     oldUdharRecoveredPaise: toPaise(sumMoney(oldUdharRecovered.map((u) => u.amount))),
-    expectedCashPaise: toPaise(cashReceived),
+    expectedCashPaise: toPaise(expectedCash),
+    supplierCashPaidPaise: toPaise(supplierCashPaid),
+    cashExpensesPaidPaise: toPaise(cashExpensesPaid),
+    cashPurchaseRefundsPaise: toPaise(cashPurchaseRefunds),
     totalBills: activeBills.length,
     cancelledBills: cancelledBills.length,
     roughBills: roughBillsCount,
