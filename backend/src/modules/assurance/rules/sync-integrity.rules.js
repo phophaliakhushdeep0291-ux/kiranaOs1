@@ -225,7 +225,7 @@ export const syncIntegrityRules = [
     category: RULE_CATEGORIES.SYNC_INTEGRITY,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE],

@@ -56,6 +56,12 @@ const STATUS_LABEL: Record<CustomerOrder["status"], string> = {
   cancelled: "Cancelled",
 };
 
+const CHANNEL_LABEL: Record<CustomerOrder["sourceChannel"], string> = { pos: "POS", customer_portal: "QR order", api: "API", marketplace: "Marketplace" };
+const PAYMENT_LABEL: Record<CustomerOrder["paymentStatus"], string> = { unpaid: "Unpaid", partially_paid: "Part paid", paid: "Paid", refunded: "Refunded" };
+const PAYMENT_STYLE: Record<CustomerOrder["paymentStatus"], string> = {
+  unpaid: "bg-amber-50 text-amber-700", partially_paid: "bg-orange-50 text-orange-700", paid: "bg-emerald-50 text-emerald-700", refunded: "bg-slate-100 text-slate-600",
+};
+
 const fmtRs = (n: number) => `Rs ${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const fmtMoney = (n: number) => Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -452,6 +458,10 @@ export default function OrdersReceivedPage() {
                     <div className="flex shrink-0 items-start gap-2 text-right">
                       <div>
                         <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase ${STATUS_STYLE[order.status]}`}>{STATUS_LABEL[order.status]}</span>
+                        <div className="mt-1 flex justify-end gap-1">
+                          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold text-slate-600">{CHANNEL_LABEL[order.sourceChannel]}</span>
+                          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${PAYMENT_STYLE[order.paymentStatus]}`}>{PAYMENT_LABEL[order.paymentStatus]}</span>
+                        </div>
                         <p className="mt-1 text-[10px] font-semibold text-[#8290a8]">{timeAgo(order.createdAt)}</p>
                       </div>
                       <ChevronRight size={16} className="mt-1 text-[#9aa7bd]" />
@@ -652,7 +662,7 @@ function OrderDetail({
               <BannerField label="Date & Time" value={fullDateTime(order.createdAt)} />
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Order Source</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[#13254a]"><QrCode size={13} className="text-[var(--brand)]" /> QR Order</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[#13254a]"><QrCode size={13} className="text-[var(--brand)]" /> {CHANNEL_LABEL[order.sourceChannel]}</p>
               </div>
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Status</p>

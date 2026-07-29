@@ -31,7 +31,7 @@ const RESOLVED_STATUSES = [
 export const REPORT_LIMITATIONS = Object.freeze([
   "This is a continuous financial-control report produced by deterministic rules over KiranaOS records. It is not a statutory audit, carries no audit opinion, and does not replace a Chartered Accountant.",
   "Conclusions are limited to data recorded in KiranaOS. Cash, goods or credit that was never entered into the system cannot be detected.",
-  "No physical cash count is stored anywhere in the product, so a true counted-versus-expected cash variance cannot be computed; cash rules compare the closing figure against its own inputs.",
+  "Physical drawer counts are stored only on the counter device and are not synced to the server, so server assurance cannot compute counted-versus-expected variance; cash rules verify expected cash against canonical server records.",
   "There is no bank or UPI provider feed. UPI references are operator-entered: reuse is detectable, authenticity is not.",
   "Expenses store a payee name and an author name rather than a user id, so expense attribution and staff-permission checks are advisory.",
   "Stock movements carry no actor column, so stock corrections cannot be attributed to an individual staff member.",

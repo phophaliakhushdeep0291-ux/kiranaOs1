@@ -6,6 +6,8 @@ export async function list(req, res, next) {
   try {
     const data = await svc.listCustomerOrders(req.shopId, {
       status: req.query.status,
+      sourceChannel: req.query.sourceChannel,
+      paymentStatus: req.query.paymentStatus,
       cursor: req.query.cursor,
       limit: req.query.limit,
       locationId: req.operationalLocation?.id,
@@ -20,6 +22,7 @@ export async function updateStatus(req, res, next) {
   try {
     const data = await svc.updateCustomerOrderStatus(req.shopId, req.params.id, {
       status: req.body?.status,
+      paymentStatus: req.body?.paymentStatus,
       billId: req.body?.billId,
       locationId: req.operationalLocation?.id,
     });
@@ -29,7 +32,7 @@ export async function updateStatus(req, res, next) {
       action: "CUSTOMER_ORDER_STATUS_UPDATED",
       entityType: "CustomerOrder",
       entityId: data.id,
-      metadata: { status: data.status, billId: data.billId, locationId: data.locationId },
+      metadata: { status: data.status, paymentStatus: data.paymentStatus, fulfillmentStatus: data.fulfillmentStatus, billId: data.billId, locationId: data.locationId },
       req,
     });
     await publishIntegrationEvent(req.shopId, "customer_order.updated", {
@@ -37,6 +40,9 @@ export async function updateStatus(req, res, next) {
       locationId: data.locationId,
       fulfillmentType: data.fulfillmentType,
       status: data.status,
+      sourceChannel: data.sourceChannel,
+      paymentStatus: data.paymentStatus,
+      fulfillmentStatus: data.fulfillmentStatus,
       billId: data.billId,
       updatedAt: data.updatedAt,
     });

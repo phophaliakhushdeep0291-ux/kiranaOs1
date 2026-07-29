@@ -2,6 +2,15 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 
 const ORDER_STATUSES = ["new", "accepted", "ready", "fulfilled", "rejected", "cancelled"];
+const PAYMENT_STATUSES = ["unpaid", "partially_paid", "paid", "refunded"];
+const FULFILLMENT_STATUS_BY_ORDER_STATUS = {
+  new: "unfulfilled",
+  accepted: "preparing",
+  ready: "ready",
+  fulfilled: "fulfilled",
+  rejected: "cancelled",
+  cancelled: "cancelled",
+};
 const ALLOWED_TRANSITIONS = {
   new: new Set(["accepted", "rejected", "cancelled"]),
   accepted: new Set(["ready", "fulfilled", "rejected", "cancelled"]),
@@ -30,9 +39,11 @@ function shapeOrder(order) {
  * Shop-scoped; newest first; cursor-paginated (the list used to silently truncate at 200).
  * Returns the count of still-new orders for the nav badge and a nextCursor when more exist.
  */
-export async function listCustomerOrders(shopId, { status, cursor, limit, locationId } = {}) {
+export async function listCustomerOrders(shopId, { status, sourceChannel, paymentStatus, cursor, limit, locationId } = {}) {
   const where = { shopId, ...(locationId ? { locationId } : {}) };
   if (status && status !== "all") where.status = status;
+  if (sourceChannel && sourceChannel !== "all") where.sourceChannel = sourceChannel;
+  if (paymentStatus && paymentStatus !== "all") where.paymentStatus = paymentStatus;
   const take = Math.min(Math.max(Number(limit) || 200, 1), 200);
 
   const [rows, newCount] = await Promise.all([
@@ -55,8 +66,9 @@ export async function listCustomerOrders(shopId, { status, cursor, limit, locati
   };
 }
 
-export async function updateCustomerOrderStatus(shopId, orderId, { status, billId, locationId } = {}) {
+export async function updateCustomerOrderStatus(shopId, orderId, { status, paymentStatus, billId, locationId } = {}) {
   if (status && !ORDER_STATUSES.includes(status)) throw new AppError("Invalid order status", 400);
+  if (paymentStatus && !PAYMENT_STATUSES.includes(paymentStatus)) throw new AppError("Invalid payment status", 400);
   const existing = await db.customerOrder.findFirst({ where: { id: orderId, shopId, ...(locationId ? { locationId } : {}) } });
   if (!existing) throw new AppError("Order not found", 404);
   if (status && status !== existing.status && !ALLOWED_TRANSITIONS[existing.status]?.has(status)) {
@@ -73,7 +85,8 @@ export async function updateCustomerOrderStatus(shopId, orderId, { status, billI
   const updated = await db.customerOrder.update({
     where: { id: orderId },
     data: {
-      ...(status ? { status } : {}),
+      ...(status ? { status, fulfillmentStatus: FULFILLMENT_STATUS_BY_ORDER_STATUS[status] } : {}),
+      ...(paymentStatus ? { paymentStatus } : {}),
       ...(billId !== undefined ? { billId: billId || null } : {}),
       ...(status === "accepted" && !existing.acceptedAt ? { acceptedAt: now } : {}),
       ...(status === "ready" && !existing.readyAt ? { readyAt: now } : {}),

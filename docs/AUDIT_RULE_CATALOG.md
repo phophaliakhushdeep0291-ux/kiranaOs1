@@ -1,6 +1,6 @@
 # Audit Rule Catalog
 
-Engine: `assurance-engine-1.0.0` · Rule set: `ruleset-bc237f642ac6` · **94 rules implemented**
+Engine: `assurance-engine-1.1.0` | Rule set: `ruleset-4c8a90da9c6e` | **95 rules implemented**
 
 Every rule is deterministic code in `backend/src/modules/assurance/rules/`. No LLM
 participates in deciding whether a rule triggers. Each rule declares its own
@@ -46,9 +46,9 @@ implies, the mapping says so.
 | 4 | Total ≠ items − discounts + tax | `BILL_TOTAL_MISMATCH` | Reproduces the total from line totals, discount, loyalty discount and GST mode. |
 | 5 | Paid amount exceeds total | `BILL_PAID_EXCEEDS_TOTAL` | |
 | 6 | Outstanding ≠ total − paid | `BILL_OUTSTANDING_MISMATCH` | Also subtracts `waivedAmount` (KiranaOS let-go handling). |
-| 7 | Marked paid without sufficient payments | `BILL_MARKED_PAID_WITHOUT_PAYMENTS` | Compares `paidAmount` to the sum of non-failed payment rows. |
+| 7 | Marked paid without sufficient payments | `BILL_MARKED_PAID_WITHOUT_PAYMENTS` | Requires `paidAmount` to exactly equal confirmed payment rows, including negative return tenders. |
 | 8 | Udhar bill marked paid after sync | `UDHAR_BILL_MISSING_LEDGER_DEBIT` | Implemented as the detectable form: a credit bill whose udhar debit never landed. |
-| 9 | Cancelled bill still in sales reports | `CANCELLED_BILL_STILL_IN_LEDGER` | Checks FinancialLedger rows net to zero per entryType. |
+| 8b | Udhar return missing from khata | `UDHAR_RETURN_MISSING_LEDGER_CREDIT` | Requires an exact customer-ledger return credit for every Udhar-refunded sales return. |`n| 9 | Cancelled bill still in sales reports | `CANCELLED_BILL_STILL_IN_LEDGER` | Checks FinancialLedger rows net to zero per entryType. |
 | 10 | Cancelled bill still reducing inventory | `CANCELLED_BILL_STOCK_NOT_RESTORED` | Plus `STOCK_CANCELLED_SALE_NOT_RESTORED` at product scope. |
 | 11 | Returned bill not reversing inventory | `RETURN_BILL_STOCK_NOT_REVERSED` | |
 | 12 | Suspiciously high manual discount | `BILL_EXCESSIVE_DISCOUNT` | Threshold `audit.maxDiscountPercent` (default 20%). |
@@ -146,16 +146,16 @@ where the legacy opening balance is itself a `legacy_opening_balance` debit row.
 
 | # | Requested | Implemented as |
 |---|---|---|
-| 1 | Expected cash ≠ closing cash | `CLOSING_CASH_FIGURE_STALE` (recomputes cash-in; **no physical count exists** — see §Deferred) |
+| 1 | Expected cash differs from closing cash | `CLOSING_CASH_FIGURE_STALE` verifies recorded cash-in; physical counts remain device-local and unavailable to server assurance. |
 | 2 | Cash sales ≠ bill payments | `CLOSING_CASH_FIGURE_STALE` |
 | 3 | UPI sales ≠ recorded UPI payments | `CLOSING_UPI_FIGURE_STALE` |
 | 4 | Customer payments excluded from cash | `CLOSING_UDHAR_RECOVERY_STALE` |
-| 5 | Expenses excluded from cash | `CLOSING_CASH_EXPENSES_NOT_DEDUCTED` — a **real product gap**: `expectedCashPaise` equals cash received and never subtracts cash expenses |
+| 5 | Expenses excluded from cash | `CLOSING_CASH_EXPENSES_NOT_DEDUCTED` now verifies expected cash as confirmed cash collections + supplier cash refunds - supplier cash paid - paid cash expenses. The rule code is retained for history compatibility. |
 | 6 | Refund excluded from cash | `CLOSING_REFUND_NOT_IN_CASH` |
 | 7 | Daily closing changed after completion | `CLOSING_CHANGED_AFTER_LOCK` |
 | 8 | Late offline transaction affects closed day | `CLOSING_LATE_TRANSACTION_AFTER_LOCK` |
 | 9 | Large closing difference | `CLOSING_LARGE_DIFFERENCE` (threshold `audit.closingDifferenceAlertPaise`, default ₹200) |
-| 10 | Repeated shortages by staff/device | **DEFERRED** — requires a counted-cash field that does not exist |
+| 10 | Repeated shortages by staff/device | **DEFERRED on the server** - counted cash exists only in device-local storage and is not synced. |
 | 11 | UPI reference reused | `CLOSING_UPI_REFERENCE_REUSED` (reference masked in the finding) |
 | 12 | Split payment ≠ total paid | `CLOSING_SPLIT_PAYMENT_MISMATCH` |
 | — | Sales total stale vs bills | `CLOSING_SALES_FIGURE_STALE` (added) |
@@ -207,9 +207,7 @@ exist yet. Each would produce guesses or false positives if forced.
 6. **E5 — expense outside staff permission.** `Expense.recordedBy` is free text,
    not a `userId`, so role checks are impossible. `EXPENSE_UNATTRIBUTED` reports
    missing attribution and marks `userIdAttributionAvailable: false`.
-7. **F1/F10 — counted vs expected cash, repeated shortages.** KiranaOS stores no
-   physical cash count anywhere. `expectedCashPaise` is a derived figure, so the
-   cash rules compare it against its own inputs, never against a count.
+7. **F1/F10 - counted vs expected cash, repeated shortages.** The Daily Closing UI records physical counts only in device-local storage. Because those counts are not synced to `DailyClosingSnapshot`, server assurance can verify expected cash but cannot compare it with the shopkeeper's count.
 8. **G12 — record overwritten by an older version.** Canonical financial tables
    carry no row version, only `updatedAt`.
 
@@ -241,9 +239,6 @@ for future noise.
 
 Remaining known noise sources, by design:
 
-- `CLOSING_CASH_EXPENSES_NOT_DEDUCTED` will fire on every day where cash expenses
-  exceed the materiality threshold, because the product genuinely does not
-  subtract them. It is gated on materiality and marked MEDIUM.
 - `EXPENSE_CATEGORY_INCONSISTENT` is keyword-based and LOW severity by design;
   a shop's own category naming always wins.
 - `UDHAR_AGEING_BEYOND_LIMIT` will fire for any shop that carries long-standing
