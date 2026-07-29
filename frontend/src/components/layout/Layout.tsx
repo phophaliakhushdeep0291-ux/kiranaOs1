@@ -801,7 +801,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </main>
 
         {/* Mobile bottom nav */}
-        <nav data-app-mobile-bottom-nav="true" aria-label="Mobile navigation" className="shrink-0 border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+        <nav data-app-mobile-bottom-nav="true" aria-label="Mobile navigation" className="mx-3 mb-3 mt-2 shrink-0 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_16px_40px_rgba(15,35,71,0.12)] backdrop-blur-xl lg:hidden">
           <div className="grid grid-cols-5 items-end px-2.5 py-1.5">
             {MOBILE_NAV.filter((item) => item.href === "/dashboard" || item.href === "/inventory").map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);

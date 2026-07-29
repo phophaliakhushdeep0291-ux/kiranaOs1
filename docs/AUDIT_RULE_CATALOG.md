@@ -48,7 +48,8 @@ implies, the mapping says so.
 | 6 | Outstanding ≠ total − paid | `BILL_OUTSTANDING_MISMATCH` | Also subtracts `waivedAmount` (KiranaOS let-go handling). |
 | 7 | Marked paid without sufficient payments | `BILL_MARKED_PAID_WITHOUT_PAYMENTS` | Requires `paidAmount` to exactly equal confirmed payment rows, including negative return tenders. |
 | 8 | Udhar bill marked paid after sync | `UDHAR_BILL_MISSING_LEDGER_DEBIT` | Implemented as the detectable form: a credit bill whose udhar debit never landed. |
-| 8b | Udhar return missing from khata | `UDHAR_RETURN_MISSING_LEDGER_CREDIT` | Requires an exact customer-ledger return credit for every Udhar-refunded sales return. |`n| 9 | Cancelled bill still in sales reports | `CANCELLED_BILL_STILL_IN_LEDGER` | Checks FinancialLedger rows net to zero per entryType. |
+| 8b | Udhar return missing from khata | `UDHAR_RETURN_MISSING_LEDGER_CREDIT` | Requires an exact customer-ledger return credit for every Udhar-refunded sales return. |
+| 9 | Cancelled bill still in sales reports | `CANCELLED_BILL_STILL_IN_LEDGER` | Checks FinancialLedger rows net to zero per entryType. |
 | 10 | Cancelled bill still reducing inventory | `CANCELLED_BILL_STOCK_NOT_RESTORED` | Plus `STOCK_CANCELLED_SALE_NOT_RESTORED` at product scope. |
 | 11 | Returned bill not reversing inventory | `RETURN_BILL_STOCK_NOT_REVERSED` | |
 | 12 | Suspiciously high manual discount | `BILL_EXCESSIVE_DISCOUNT` | Threshold `audit.maxDiscountPercent` (default 20%). |

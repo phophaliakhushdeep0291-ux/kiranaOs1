@@ -949,7 +949,7 @@ export async function refreshDailyClosingSnapshot(shopId, storeIdOrDate, maybeDa
 // ─────────────────────────────────────────────────────────────
 // EXPORT — raw data for CSV / Excel download
 // ─────────────────────────────────────────────────────────────
-export async function exportBillsData(shopId, { from, to, status, locationId, limit } = {}) {
+export async function exportBillsData(shopId, { from, to, status, locationId, limit, cursor } = {}) {
   // Bounded like the stock export: a year of trading is ~48k line rows and 17 MB
   // in a single synchronous response. The async export job remains the unbounded
   // path because it writes to storage rather than to a handset.
@@ -964,7 +964,8 @@ export async function exportBillsData(shopId, { from, to, status, locationId, li
   const fetched = await db.bill.findMany({
     where,
     include: { items: true, payments: true },
-    orderBy: { businessDate: "desc" },
+    orderBy: [{ businessDate: "desc" }, { id: "desc" }],
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     take: take + 1,
   });
   const truncated = fetched.length > take;
@@ -1020,7 +1021,7 @@ export async function exportBillsData(shopId, { from, to, status, locationId, li
     }
   }
 
-  return { rows, count: bills.length, truncated, limit: take };
+  return { rows, count: bills.length, truncated, limit: take, nextCursor: truncated ? bills.at(-1)?.id ?? null : null };
 }
 
 /**
@@ -1056,15 +1057,15 @@ function boundedExportWindow(from, to) {
   return { gte: startOfDay(start) };
 }
 
-export async function exportStockLedgerData(shopId, { from, to, productId, locationId, limit } = {}) {
+export async function exportStockLedgerData(shopId, { from, to, productId, locationId, limit, cursor, allHistory = false } = {}) {
   const take = Math.min(Number(limit) || SYNC_EXPORT_ROW_LIMIT, SYNC_EXPORT_ROW_LIMIT);
   const where = {
     shopId,
     ...(locationId && { locationId }),
     ...(productId ? { productId } : {}),
-    createdAt: boundedExportWindow(from, to),
+    ...(!allHistory || from || to ? { createdAt: boundedExportWindow(from, to) } : {}),
   };
-  const rows = await db.stockLedger.findMany({ where, orderBy: { createdAt: "desc" }, take: take + 1 });
+  const rows = await db.stockLedger.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}), take: take + 1 });
   const truncated = rows.length > take;
   return {
     rows: truncated ? rows.slice(0, take) : rows,
@@ -1072,6 +1073,7 @@ export async function exportStockLedgerData(shopId, { from, to, productId, locat
     truncated,
     limit: take,
     defaultWindowDays: from || to ? null : SYNC_EXPORT_DEFAULT_WINDOW_DAYS,
+    nextCursor: truncated ? rows[take - 1]?.id ?? null : null,
   };
 }
 

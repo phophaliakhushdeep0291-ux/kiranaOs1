@@ -12,7 +12,7 @@ import {
   SEVERITY,
 } from "../assurance.constants.js";
 import { BASELINE_METRICS } from "../baseline.service.js";
-import { defineRule, money, passed, percentOf, triggered } from "../rule.interface.js";
+import { defineRule, money, passed, percentOf, toPaiseInt, triggered } from "../rule.interface.js";
 
 const EXPENSE = [ENTITY_TYPES.EXPENSE];
 
