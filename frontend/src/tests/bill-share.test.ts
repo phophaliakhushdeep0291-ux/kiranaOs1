@@ -103,7 +103,43 @@ describe("billRecordToShareInput", () => {
     expect(input.billNo).toBe("KOS-1");
     expect(input.customerMobile).toBe("9123456780");
     expect(input.items).toHaveLength(1);
-    // money helper takes absolute value, so the return still reads cleanly
-    expect(buildBillReceiptText(input)).toContain("*Total: ₹50*");
+    // Regression: money() prints absolute values, so a refund used to render the same
+    // "*Total: ₹50*" as a sale — a customer could read the receipt as a charge.
+    const text = buildBillReceiptText(input);
+    expect(text).toContain("*Refund total: ₹50*");
+    expect(text).not.toContain("*Total: ₹50*");
+    expect(text).toContain("Refunded to you: ₹50");
+  });
+});
+
+describe("refund receipts state plainly that money went back", () => {
+  const saleBase = {
+    shopName: "My Kirana",
+    billNo: "KOS-9",
+    items: [{ name: "Rice", quantity: 1, rate: 50, lineTotal: 50 }],
+    total: 50,
+    paid: 50,
+    credit: 0,
+    paymentMode: "Cash",
+  };
+
+  it("leaves an ordinary sale wording untouched", () => {
+    const text = buildBillReceiptText(saleBase);
+    expect(text).toContain("*Total: ₹50*");
+    expect(text).toContain("Paid: ₹50 (Cash)");
+    expect(text).not.toContain("Refund");
+  });
+
+  it("labels a cash refund and names the tender", () => {
+    const text = buildBillReceiptText({ ...saleBase, billNo: "RET-1", isReturn: true, total: -50, paid: -50 });
+    expect(text).toContain("_Return / Refund_");
+    expect(text).toContain("*Refund total: ₹50*");
+    expect(text).toContain("Refunded to you: ₹50 (Cash)");
+  });
+
+  it("says the udhar was reduced when the refund went to khata", () => {
+    const text = buildBillReceiptText({ ...saleBase, billNo: "RET-2", isReturn: true, total: -50, paid: 0, credit: -50, paymentMode: "Udhar" });
+    expect(text).toContain("Udhar reduced by: ₹50");
+    expect(text).not.toContain("Udhar baki");
   });
 });

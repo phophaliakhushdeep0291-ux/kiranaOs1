@@ -124,6 +124,16 @@ function fmtRs(value: number) {
   return `₹${value.toLocaleString("en-IN")}`;
 }
 
+// CGST and SGST are each half the GST, but the two halves must still add back to the
+// exact tax charged. Naively printing gst/2 twice yields values like ₹1.335 — not a
+// real currency amount, and not something that can go on a GST return. Round one half
+// and derive the other, so the odd paisa lands on SGST and the pair always reconciles.
+// Same split as lib/gst.ts, which the printed tax invoice uses.
+function halveTax(gst: number): { cgst: number; sgst: number } {
+  const cgst = Math.round((gst / 2) * 100) / 100;
+  return { cgst, sgst: Math.round((gst - cgst) * 100) / 100 };
+}
+
 export function BillingSummary({
   summaryWidth,
   onStartSummaryResize,
@@ -506,7 +516,7 @@ export function BillingSummary({
             {gstAmount > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
                 <span className="font-semibold text-[#536383]">
-                  GST <span className="text-[10.5px] text-[#94a3b8]">(CGST {fmtRs(gstAmount / 2)} + SGST {fmtRs(gstAmount / 2)})</span>
+                  GST <span className="text-[10.5px] text-[#94a3b8]">(CGST {fmtRs(halveTax(gstAmount).cgst)} + SGST {fmtRs(halveTax(gstAmount).sgst)})</span>
                 </span>
                 <span data-testid="text-gst" className={gstMode === "exclusive" ? "font-black text-[#13274d]" : "font-bold text-[#64748b]"}>
                   {gstMode === "exclusive" ? `+${fmtRs(gstAmount)}` : `incl. ${fmtRs(gstAmount)}`}
