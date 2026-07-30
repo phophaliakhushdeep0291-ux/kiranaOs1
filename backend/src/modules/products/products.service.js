@@ -87,7 +87,24 @@ export async function getProduct(shopId, id, { locationId } = {}) {
   return scoped;
 }
 
+// Per-packaging stock is accepted by the schema (groundwork) but nothing consumes it:
+// `packagingMode` is never branched on, and no sale, purchase or return writes
+// ProductSellingUnit.onHandQty. Storing it would leave the counts frozen at whatever was
+// typed while real stock kept moving through the shared pool — two numbers for the same
+// goods, the authoritative-looking one permanently stale. Refuse it until the sale,
+// purchase and return paths actually maintain it.
+function assertPackagingModeIsSupported(data) {
+  if (data?.packagingMode && data.packagingMode !== "pooled") {
+    throw new AppError(
+      "Per-packaging stock is not available yet. Sell the same stock in different pack sizes using 'Other pack sizes', or create a separate product for a pack you need to count and reorder on its own.",
+      400,
+      "PACKAGING_MODE_NOT_SUPPORTED",
+    );
+  }
+}
+
 export async function createProduct(shopId, data, { identity = null } = {}) {
+  assertPackagingModeIsSupported(data);
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const productIdentity = normalizeProductIdentity(shopId, identity);
 
@@ -233,6 +250,7 @@ async function applyStockCorrectionInTransaction(tx, shopId, productId, newStock
 }
 
 export async function updateProduct(shopId, id, data) {
+  assertPackagingModeIsSupported(data);
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const existing = await getProduct(shopId, id); // ensures it exists and belongs to shop
   if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id);

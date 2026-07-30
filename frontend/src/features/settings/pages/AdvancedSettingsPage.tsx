@@ -228,7 +228,7 @@ export default function AdvancedSettingsPage() {
   async function exportFullBackup() {
     try {
       const entries = await Promise.all(EXPORT_TABLES.map(async (table) => [table, await offlineDB.getAll<Record<string, unknown>>(table)] as const));
-      downloadJson(`kiranaos-backup-${new Date().toISOString().slice(0, 10)}.json`, {
+      downloadJson(`artha-backup-${new Date().toISOString().slice(0, 10)}.json`, {
         app: "Artha",
         exportedAt: new Date().toISOString(),
         tables: Object.fromEntries(entries),
@@ -424,10 +424,10 @@ export default function AdvancedSettingsPage() {
           <div className="grid grid-cols-1 gap-2 px-5 pb-5 sm:grid-cols-2">
             {[
               { label: "Open product import", icon: Upload, run: () => { window.location.href = "/products?import=1"; } },
-              { label: "Customer CSV template", icon: Download, run: () => downloadCsvTemplate("kiranaos-customers-template.csv", ["name", "mobile", "address", "openingBalance"]) },
-              { label: "Export products", icon: Download, run: () => void exportTable("products", "kiranaos-products.json") },
-              { label: "Export customers", icon: Download, run: () => void exportTable("customers", "kiranaos-customers.json") },
-              { label: "Export bills", icon: Download, run: () => void exportTable("bills", "kiranaos-bills.json") },
+              { label: "Customer CSV template", icon: Download, run: () => downloadCsvTemplate("artha-customers-template.csv", ["name", "mobile", "address", "openingBalance"]) },
+              { label: "Export products", icon: Download, run: () => void exportTable("products", "artha-products.json") },
+              { label: "Export customers", icon: Download, run: () => void exportTable("customers", "artha-customers.json") },
+              { label: "Export bills", icon: Download, run: () => void exportTable("bills", "artha-bills.json") },
               { label: "Export full backup", icon: Download, run: () => void exportFullBackup() },
             ].map((b) => (
               <Button key={b.label} variant="outline" className="h-10 justify-start gap-2 rounded-[9px] text-[12px] font-bold" onClick={b.run}>

@@ -93,7 +93,7 @@ export default function IntegrationsSettingsPage() {
   });
   const tallyM = useMutation({
     mutationFn: () => apiRequest<string>(`/integrations/exports/tally?from=${from}&to=${to}`),
-    onSuccess: (xml) => { downloadText(`kiranaos-tally-${from}-${to}.xml`, xml, "application/xml;charset=utf-8"); toast({ title: "Tally export downloaded", description: "Import it from TallyPrime > Import Data > Vouchers." }); },
+    onSuccess: (xml) => { downloadText(`artha-tally-${from}-${to}.xml`, xml, "application/xml;charset=utf-8"); toast({ title: "Tally export downloaded", description: "Import it from TallyPrime > Import Data > Vouchers." }); },
     onError: (error) => toast({ title: "Export failed", description: errorMessage(error), variant: "destructive" }),
   });
 
