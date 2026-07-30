@@ -102,6 +102,46 @@ assert.equal(working.cdnur.length, 1);
 assert.equal(working.cdnur[0].noteValue, 118);
 assert.equal(working.b2cs[0].invoiceValue, 59, "small B2C returns must net against B2CS rather than becoming CDNUR");
 
+// Regression: a 0%-rated B2C return used to fall through every table — excluded from
+// Table 8 as a credit note, excluded from B2CS as nil-rated, and not CDNR/CDNUR because
+// the buyer is unregistered. Exempt turnover was overstated and Table 8 contradicted both
+// the HSN summary and GSTR-3B, which already netted returns.
+const nilRegister = {
+  from: "2026-07-01T00:00:00.000Z",
+  to: "2026-07-31T23:59:59.999Z",
+  rows: [
+    { invoiceNumber: "NIL-1", invoiceDate: "2026-07-01", documentType: "invoice", customerName: "Walk-in", buyerGstin: "", placeOfSupply: "27", supplyType: "intrastate", originalInvoiceValue: 0, hsn: "", description: "Maggi Noodles", quantity: 5, unit: "piece", gstRate: 0, taxableValue: 70, cgst: 0, sgst: 0, igst: 0, discount: 0, lineTotal: 70 },
+    { invoiceNumber: "NIL-RET-1", invoiceDate: "2026-07-02", documentType: "credit_note", originalInvoiceNumber: "NIL-1", originalInvoiceDate: "2026-07-01", originalInvoiceValue: 70, customerName: "Walk-in", buyerGstin: "", placeOfSupply: "27", supplyType: "intrastate", hsn: "", description: "Maggi Noodles", quantity: -2, unit: "piece", gstRate: 0, taxableValue: -28, cgst: 0, sgst: 0, igst: 0, discount: 0, lineTotal: -28 },
+  ],
+};
+const nilWorking = buildGstr1WorkingFromRegister(nilRegister);
+const nilBucketTotal = nilWorking.nilRated.reduce((sum, row) => sum + row.nilRatedOrExempt, 0);
+const nilHsnTotal = nilWorking.hsn.reduce((sum, row) => sum + row.totalValue, 0);
+assert.equal(nilBucketTotal, 42, "a nil-rated B2C return must net into Table 8 (70 - 28)");
+assert.equal(nilHsnTotal, 42, "the HSN summary must still net the same return");
+assert.equal(nilBucketTotal, nilHsnTotal, "Table 8 and the HSN summary must reconcile");
+assert.equal(nilWorking.b2cs.length, 0, "nil-rated supplies must never leak into the taxable B2CS summary");
+assert.equal(nilWorking.cdnr.length, 0, "an unregistered nil-rated return is not a CDNR note");
+assert.equal(nilWorking.cdnur.length, 0, "a small intrastate nil-rated return is not a CDNUR note");
+
+// A registered-buyer nil-rated return stays in CDNR and must NOT also reduce Table 8,
+// or the reduction would be counted twice.
+const nilRegisteredRegister = {
+  from: "2026-07-01T00:00:00.000Z",
+  to: "2026-07-31T23:59:59.999Z",
+  rows: [
+    { invoiceNumber: "NIL-2", invoiceDate: "2026-07-01", documentType: "invoice", customerName: "Registered", buyerGstin: "27AAPFU0939F1ZV", placeOfSupply: "27", supplyType: "intrastate", originalInvoiceValue: 0, hsn: "", description: "Maggi Noodles", quantity: 5, unit: "piece", gstRate: 0, taxableValue: 70, cgst: 0, sgst: 0, igst: 0, discount: 0, lineTotal: 70 },
+    { invoiceNumber: "NIL-RET-2", invoiceDate: "2026-07-02", documentType: "credit_note", originalInvoiceNumber: "NIL-2", originalInvoiceDate: "2026-07-01", originalInvoiceValue: 70, customerName: "Registered", buyerGstin: "27AAPFU0939F1ZV", placeOfSupply: "27", supplyType: "intrastate", hsn: "", description: "Maggi Noodles", quantity: -2, unit: "piece", gstRate: 0, taxableValue: -28, cgst: 0, sgst: 0, igst: 0, discount: 0, lineTotal: -28 },
+  ],
+};
+const nilRegisteredWorking = buildGstr1WorkingFromRegister(nilRegisteredRegister);
+assert.equal(nilRegisteredWorking.cdnr.length, 1, "a registered nil-rated return belongs in CDNR");
+assert.equal(
+  nilRegisteredWorking.nilRated.reduce((sum, row) => sum + row.nilRatedOrExempt, 0),
+  70,
+  "a return already disclosed in CDNR must not reduce Table 8 as well",
+);
+
 const routes = fs.readFileSync(new URL("../src/modules/compliance/compliance.routes.js", import.meta.url), "utf8");
 assert.match(routes, /gstr1-working/);
 assert.match(routes, /hsn-summary/);
