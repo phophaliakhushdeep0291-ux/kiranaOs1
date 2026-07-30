@@ -279,6 +279,29 @@ export async function recordPurchase(shopId, data, identity = {}) {
       },
     });
 
+    // The purchase row is written FIRST so the stock movement can point at it.
+    // sourceId must identify the SOURCE DOCUMENT (same convention as
+    // sourceType "purchase_receipt" -> receipt.id). It previously held the productId,
+    // which matched nothing: the assurance context looks for
+    // { sourceType: "purchase", sourceId: history.id }, and its fallback arm only
+    // accepts sourceId === null — so every purchase looked like it moved no stock and
+    // raised a false HIGH "Purchase did not increase stock" finding.
+    const purchaseHistory = await tx.purchaseHistory.create({
+      data: {
+        shopId, locationId: location.id, productId,
+        supplierId: supplierId ?? null,
+        supplierName,
+        qtyBase: qtyInBase,
+        pricePerRateUnit,
+        totalCost,
+        billAmount,
+        ...purchasePayment,
+        ...moneyShadows({ pricePerRateUnit, totalCost, billAmount }),
+        ...purchasePaymentShadows,
+        note: note ?? "",
+      },
+    });
+
     const stockLedger = await tx.stockLedger.create({
       data: {
         shopId, locationId: location.id, productId,
@@ -298,23 +321,7 @@ export async function recordPurchase(shopId, data, identity = {}) {
         clientMovementId,
         sourceDeviceId,
         sourceType: idempotencyKey ? "purchase" : null,
-        sourceId: idempotencyKey ? productId : null,
-      },
-    });
-
-    const purchaseHistory = await tx.purchaseHistory.create({
-      data: {
-        shopId, locationId: location.id, productId,
-        supplierId: supplierId ?? null,
-        supplierName,
-        qtyBase: qtyInBase,
-        pricePerRateUnit,
-        totalCost,
-        billAmount,
-        ...purchasePayment,
-        ...moneyShadows({ pricePerRateUnit, totalCost, billAmount }),
-        ...purchasePaymentShadows,
-        note: note ?? "",
+        sourceId: idempotencyKey ? purchaseHistory.id : null,
       },
     });
 
