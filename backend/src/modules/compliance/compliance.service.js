@@ -403,17 +403,25 @@ export function buildGstr1WorkingFromRegister(register) {
   for (const row of register.rows) {
     const isCreditNote = row.documentType === "credit_note";
     const isNilRated = Number(row.gstRate) === 0;
+    const cdnurEligible = isCreditNote && !row.buyerGstin && row.supplyType === "interstate" && Math.abs(Number(row.originalInvoiceValue ?? 0)) > 100000;
+    // A credit note reported invoice-wise in CDNR/CDNUR must NOT also reduce a
+    // summary table, or the reduction is counted twice.
+    const creditNoteReportedSeparately = isCreditNote && (row.buyerGstin || cdnurEligible);
 
     // Nil rated / exempt supplies are a separate disclosure (Table 8) and must
-    // not inflate the taxable B2CS summary.
-    if (isNilRated && !isCreditNote) {
+    // not inflate the taxable B2CS summary. Small B2C returns of nil-rated goods
+    // are netted here — the same policy B2CS uses for taxable returns. Credit-note
+    // rows carry a negative lineTotal, so adding it subtracts the return.
+    // Without this, a 0%-rated return fell through every table (not Table 8, not
+    // B2CS because it is nil-rated, not CDNR/CDNUR because the buyer is
+    // unregistered), overstating exempt turnover and contradicting the HSN table.
+    if (isNilRated && !creditNoteReportedSeparately) {
       const key = nilRatedBucketKey(row);
       const bucket = nilMap.get(key) ?? { key, label: NIL_BUCKET_LABELS[key], nilRatedOrExempt: 0, nonGst: 0 };
       bucket.nilRatedOrExempt = money(bucket.nilRatedOrExempt + Number(row.lineTotal));
       nilMap.set(key, bucket);
     }
 
-    const cdnurEligible = isCreditNote && !row.buyerGstin && row.supplyType === "interstate" && Math.abs(Number(row.originalInvoiceValue ?? 0)) > 100000;
     if (isCreditNote && (row.buyerGstin || cdnurEligible)) {
       const targetMap = row.buyerGstin ? cdnrMap : cdnurMap;
       const note = targetMap.get(row.invoiceNumber) ?? {
@@ -460,7 +468,7 @@ export function buildGstr1WorkingFromRegister(register) {
   }
   return {
     schemaVersion: "artha-gstr1-working-v3",
-    filingWarning: "Accountant working papers only; review GSTN classification before filing. Registered credit notes are separated as CDNR; eligible large interstate unregistered notes as CDNUR; smaller B2C returns are netted into B2CS. Table 8 groups nil-rated and exempt supplies together — splitting nil / exempt / non-GST needs a per-item legal classification the catalogue does not carry.",
+    filingWarning: "Accountant working papers only; review GSTN classification before filing. Registered credit notes are separated as CDNR; eligible large interstate unregistered notes as CDNUR; smaller B2C returns are netted into B2CS, and nil-rated B2C returns are netted into Table 8 so it reconciles with the HSN summary. Table 8 groups nil-rated and exempt supplies together — splitting nil / exempt / non-GST needs a per-item legal classification the catalogue does not carry. Heavy returns can net a bucket below zero; GSTN will not accept a negative disclosure, so review any negative figure before filing.",
     from: register.from,
     to: register.to,
     b2b: [...invoiceMap.values()],
