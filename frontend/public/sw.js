@@ -14,6 +14,11 @@ const APP_SHELL = [
   "/icons/maskable-512.png",
 ];
 const NEVER_CACHE_PATTERNS = [
+  // The customer QR self-order page belongs to a walk-in stranger, not to this
+  // install. Never intercept it: a worker that already exists on this device
+  // (the owner previewing on their own phone) must not serve a stale shell or a
+  // half-cached chunk to someone who is standing at the counter trying to order.
+  /^\/order(\/|$)/i,
   /\/api\//i,
   /\/sync\//i,
   /\/auth\//i,

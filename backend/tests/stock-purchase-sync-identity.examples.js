@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { purchaseSchema } from '../src/modules/inventory/inventory.schema.js';
 
-const SYNC_SERVICE = 'src/modules/sync/sync.service.js';
+// Resolved from this file, not the cwd, so the check works from any directory.
+const SYNC_SERVICE = fileURLToPath(new URL('../src/modules/sync/sync.service.js', import.meta.url));
 
 // Regression: STOCK_PURCHASE parsed the payload with purchaseSchema BEFORE deriving
 // identity. purchaseSchema is the REST contract and mandates an explicit idempotencyKey,
