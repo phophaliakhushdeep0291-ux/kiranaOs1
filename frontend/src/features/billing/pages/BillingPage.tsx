@@ -29,6 +29,7 @@ import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config"
 import { isActionProtected, loadSecurityPolicy } from "@/features/settings/security-policy";
 import { defaultPaymentMode, keyboardShortcutsEnabled, playCounterBeep } from "@/features/settings/app-preferences";
 import { computeGstBreakdown } from "@/lib/gst";
+import { gstStateCode } from "@/lib/gstin";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
 import { SPLIT_PAYMENT, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
@@ -286,9 +287,23 @@ export default function Billing() {
   // GST: one engine for UI, local record and server. Inclusive (kirana MRP
   // default) extracts tax from the entered prices without changing the payable;
   // exclusive adds it on top — and then the discount cap must include it.
+  // Seller/buyer state decides CGST+SGST vs IGST. Omitting the jurisdiction made the
+  // counter always show CGST+SGST, even when billing an out-of-state buyer — the printed
+  // tax invoice already resolved this correctly, so the two disagreed. The engine treats a
+  // missing code as intra-state, which is the right default for a walk-in sale.
+  const sellerStateCode = gstStateCode(shop?.gstNumber);
+  const buyerStateCode = (() => {
+    const record = resolvedCustomerRecord as { stateCode?: string | null; gstNumber?: string | null } | undefined;
+    const explicit = String(record?.stateCode ?? "").trim();
+    return explicit || gstStateCode(record?.gstNumber);
+  })();
   const gstBreakdown = useMemo(
-    () => computeGstBreakdown(cart.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })), getTaxConfigSync().mode),
-    [cart],
+    () => computeGstBreakdown(
+      cart.map((item) => ({ price: item.rate, quantity: item.quantity, gstRate: item.product.gstRate ?? 0, lineDiscount: cartItemLineDiscount(item) })),
+      getTaxConfigSync().mode,
+      { sellerStateCode, buyerStateCode },
+    ),
+    [cart, sellerStateCode, buyerStateCode],
   );
   const payableBase = roundMoney(subtotal + gstBreakdown.gstToAdd);
   const safeDiscount = Math.min(Math.max(Number(discount) || 0, 0), payableBase);
@@ -1615,6 +1630,10 @@ export default function Billing() {
         loyaltyDiscount={loyaltyDiscount}
         gstAmount={gstBreakdown.gst}
         gstMode={gstBreakdown.mode}
+        gstCgst={gstBreakdown.cgst}
+        gstSgst={gstBreakdown.sgst}
+        gstIgst={gstBreakdown.igst}
+        gstSupplyType={gstBreakdown.supplyType}
         grandTotal={grandTotal}
         paymentMode={paymentMode}
         setPaymentMode={setPaymentMode}

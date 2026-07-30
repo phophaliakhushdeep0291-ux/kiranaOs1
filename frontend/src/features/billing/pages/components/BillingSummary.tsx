@@ -61,6 +61,12 @@ interface BillingSummaryProps {
   loyaltyDiscount: number;
   gstAmount: number;
   gstMode: "inclusive" | "exclusive" | "none";
+  // Split resolved by the shared GST engine, which decides CGST+SGST vs IGST from the
+  // seller/buyer state codes. Optional so existing callers and tests keep working.
+  gstCgst?: number;
+  gstSgst?: number;
+  gstIgst?: number;
+  gstSupplyType?: "intrastate" | "interstate";
   grandTotal: number;
   paymentMode: PaymentSelection;
   setPaymentMode: Dispatch<SetStateAction<PaymentSelection>>;
@@ -124,14 +130,24 @@ function fmtRs(value: number) {
   return `₹${value.toLocaleString("en-IN")}`;
 }
 
-// CGST and SGST are each half the GST, but the two halves must still add back to the
-// exact tax charged. Naively printing gst/2 twice yields values like ₹1.335 — not a
-// real currency amount, and not something that can go on a GST return. Round one half
-// and derive the other, so the odd paisa lands on SGST and the pair always reconciles.
-// Same split as lib/gst.ts, which the printed tax invoice uses.
-function halveTax(gst: number): { cgst: number; sgst: number } {
-  const cgst = Math.round((gst / 2) * 100) / 100;
-  return { cgst, sgst: Math.round((gst - cgst) * 100) / 100 };
+// An out-of-state buyer is charged IGST, not CGST+SGST, so the counter has to say which.
+// The split comes from the shared GST engine (lib/gst.ts) — the same one the printed tax
+// invoice uses — so the screen and the invoice can never disagree.
+//
+// The fallback halves gstAmount only when the caller passes no split. It rounds one half
+// and derives the other: printing gst/2 twice produced values like ₹1.335, which is not a
+// real currency amount and cannot go on a GST return.
+export function describeTaxSplit(
+  gstAmount: number,
+  split: { cgst?: number; sgst?: number; igst?: number; supplyType?: "intrastate" | "interstate" } = {},
+): string {
+  const money = (value: number) => `₹${value.toLocaleString("en-IN")}`;
+  if (split.supplyType === "interstate") {
+    return `IGST ${money(split.igst ?? gstAmount)}`;
+  }
+  const cgst = split.cgst ?? Math.round((gstAmount / 2) * 100) / 100;
+  const sgst = split.sgst ?? Math.round((gstAmount - cgst) * 100) / 100;
+  return `CGST ${money(cgst)} + SGST ${money(sgst)}`;
 }
 
 export function BillingSummary({
@@ -172,6 +188,10 @@ export function BillingSummary({
   loyaltyDiscount,
   gstAmount,
   gstMode,
+  gstCgst,
+  gstSgst,
+  gstIgst,
+  gstSupplyType,
   grandTotal,
   paymentMode,
   setPaymentMode,
@@ -516,7 +536,7 @@ export function BillingSummary({
             {gstAmount > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
                 <span className="font-semibold text-[#536383]">
-                  GST <span className="text-[10.5px] text-[#94a3b8]">(CGST {fmtRs(halveTax(gstAmount).cgst)} + SGST {fmtRs(halveTax(gstAmount).sgst)})</span>
+                  GST <span className="text-[10.5px] text-[#94a3b8]">({describeTaxSplit(gstAmount, { cgst: gstCgst, sgst: gstSgst, igst: gstIgst, supplyType: gstSupplyType })})</span>
                 </span>
                 <span data-testid="text-gst" className={gstMode === "exclusive" ? "font-black text-[#13274d]" : "font-bold text-[#64748b]"}>
                   {gstMode === "exclusive" ? `+${fmtRs(gstAmount)}` : `incl. ${fmtRs(gstAmount)}`}
