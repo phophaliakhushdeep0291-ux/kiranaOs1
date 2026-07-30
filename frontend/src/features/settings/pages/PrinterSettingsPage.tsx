@@ -165,7 +165,7 @@ export default function PrinterSettingsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "kiranaos-sample-receipt.html";
+    link.download = "artha-sample-receipt.html";
     document.body.appendChild(link);
     link.click();
     link.remove();

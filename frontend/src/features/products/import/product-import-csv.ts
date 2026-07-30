@@ -564,11 +564,11 @@ function triggerCsvDownload(content: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function downloadProductTemplate(filename = "kiranaos-products-template.csv"): void {
+export function downloadProductTemplate(filename = "artha-products-template.csv"): void {
   triggerCsvDownload(buildProductTemplateCsv(), filename);
 }
 
-export function downloadProductImportErrors(plan: ProductImportPlan, filename = "kiranaos-product-import-errors.csv"): void {
+export function downloadProductImportErrors(plan: ProductImportPlan, filename = "artha-product-import-errors.csv"): void {
   triggerCsvDownload(buildProductImportErrorCsv(plan), filename);
 }
 

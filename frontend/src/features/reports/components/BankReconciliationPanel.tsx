@@ -333,7 +333,7 @@ export function BankReconciliationPanel({ from, to }: { from: string; to: string
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px]">
             <p className={fileError ? "font-semibold text-red-700" : "text-[#6c7a92]"}>{fileError ?? (csvFile ? `${csvFile.name} · ${(csvFile.size / 1024).toFixed(1)} KB ready for strict validation` : "Accepted dates: YYYY-MM-DD or DD/MM/YYYY · exact two-decimal money · maximum 5,000 rows")}</p>
-            <a className="font-bold text-[var(--brand)] hover:underline" download="kiranaos-bank-statement-template.csv" href={"data:text/csv;charset=utf-8," + encodeURIComponent("Date,Description,Reference,Debit,Credit,Balance\n2026-07-01,Customer settlement,UTR123,,1000.00,1000.00")}>Download template</a>
+            <a className="font-bold text-[var(--brand)] hover:underline" download="artha-bank-statement-template.csv" href={"data:text/csv;charset=utf-8," + encodeURIComponent("Date,Description,Reference,Debit,Credit,Balance\n2026-07-01,Customer settlement,UTR123,,1000.00,1000.00")}>Download template</a>
           </div>
           {lastImport ? <div className="mt-3 flex items-start gap-2 rounded-[8px] border border-emerald-200 bg-emerald-50 p-3 text-[11px] text-emerald-900"><FileCheck2 size={15} className="mt-0.5 shrink-0" /><p><strong>{lastImport.idempotentReplay ? "Exact replay detected." : `${lastImport.importedCount} rows imported.`}</strong> {lastImport.duplicateCount} duplicate row{lastImport.duplicateCount === 1 ? "" : "s"} skipped from {lastImport.fileName}. No partial row import was accepted.</p></div> : null}
         </section>

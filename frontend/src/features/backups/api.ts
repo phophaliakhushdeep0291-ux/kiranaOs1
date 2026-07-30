@@ -52,7 +52,7 @@ export function saveBackupBlob(blob: Blob, artifact: BackupArtifact) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `kiranaos-shop-${artifact.id}.kosb`;
+  anchor.download = `artha-shop-${artifact.id}.kosb`;
   anchor.rel = "noopener";
   document.body.appendChild(anchor);
   anchor.click();

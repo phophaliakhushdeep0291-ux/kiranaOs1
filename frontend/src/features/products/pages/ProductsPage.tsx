@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Layers,
   MoreVertical,
   Package,
@@ -346,6 +347,38 @@ export default function ProductsPage() {
     setOpen(true);
   };
 
+  // Standard retail practice: a pack you need to count and reorder on its own is a
+  // separate SKU, not a second stock bucket on one product. Retyping every field is what
+  // pushed people toward "Other pack sizes" expecting a quantity there, so this copies
+  // the catalogue details and clears only what must be unique to the new SKU.
+  const duplicateProduct = (product: Product) => {
+    if (!manageProducts.allowed) {
+      toast({ title: "Permission denied", description: manageProducts.reason, variant: "destructive" });
+      return;
+    }
+    const source = productToForm(product);
+    // editing = null so this saves as a NEW product rather than overwriting the source.
+    setEditing(null);
+    form.reset({
+      ...source,
+      // The server rejects a duplicate active name, so the copy must arrive distinct.
+      name: `${source.name} (copy)`,
+      // A barcode identifies one physical pack; sharing it would make scans ambiguous.
+      barcode: "",
+      // A new SKU starts empty — stock is counted in, never copied.
+      stockQuantity: 0,
+      // These carry the SOURCE product's selling-unit database ids. formToInput reuses
+      // previousDefault.id when the unitCode matches, which would attach another
+      // product's units to this one. The unit is rebuilt from unit/packSize below.
+      sellingUnits: [],
+    });
+    setOpen(true);
+    toast({
+      title: "Copy ready",
+      description: "Set the pack size, price and opening stock for the new size, then save.",
+    });
+  };
+
   const printLabel = (product: Product) => {
     if (!openLabelPrintWindow([product])) {
       toast({ title: "Pop-up blocked", description: "Allow pop-ups for this site to print price labels.", variant: "destructive" });
@@ -484,6 +517,7 @@ export default function ProductsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-44">
                       <DropdownMenuItem onClick={() => openEdit(product)}><Pencil size={14} className="mr-2" /> Edit product</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => duplicateProduct(product)}><Copy size={14} className="mr-2" /> Duplicate as new size</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setLocation(`/products/${product.id}/pricing`)}><Layers size={14} className="mr-2" /> Customer pricing</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => printLabel(product)}><Tag size={14} className="mr-2" /> Print label</DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(product)}><Trash2 size={14} className="mr-2" /> Recycle product</DropdownMenuItem>
@@ -605,6 +639,9 @@ export default function ProductsPage() {
                           <DropdownMenuContent align="end" className="w-40">
                             <DropdownMenuItem onClick={() => openEdit(product)}>
                               <Pencil size={14} className="mr-2" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => duplicateProduct(product)}>
+                              <Copy size={14} className="mr-2" /> Duplicate
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setLocation(`/products/${product.id}/pricing`)}>
                               <Layers size={14} className="mr-2" /> Pricing

@@ -28,7 +28,7 @@ export default function DeviceRemovedPage() {
       const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
       const link = document.createElement("a");
       link.href = url;
-      link.download = `kiranaos-unsynced-recovery-${new Date().toISOString().slice(0, 10)}.json`;
+      link.download = `artha-unsynced-recovery-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       URL.revokeObjectURL(url);
     } finally {
