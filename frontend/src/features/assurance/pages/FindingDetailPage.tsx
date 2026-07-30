@@ -296,7 +296,7 @@ export default function FindingDetailPage() {
           <SectionCard title="Source transaction" description="Read-only view of the record this finding is about">
             <DetailGrid details={sanitizeSource(finding.sourceTransaction)} />
             <p className="mt-2 text-[11px] text-muted-foreground">
-              The assurance module never edits this record. Corrections must be made through the normal KiranaOS screens so
+              The assurance module never edits this record. Corrections must be made through the normal Artha screens so
               they leave their own trail.
             </p>
           </SectionCard>
