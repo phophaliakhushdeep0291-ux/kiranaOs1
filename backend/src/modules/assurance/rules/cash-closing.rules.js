@@ -5,11 +5,11 @@
 // Known product semantics the rules encode (verified against
 // modules/reports/reports.service.js#getDailyClosing):
 //   * cashReceived  = bill cash payments + cash udhar recovery
-//   * expectedCash  = cashReceived (cash EXPENSES are not subtracted)
+//   * expectedCash  = cash received + supplier cash refunds - supplier cash paid - paid cash expenses
 //   * sales returns are stored as negative bills with negative payment rows,
 //     so refunds net out of the cash figure automatically
-// There is no recorded physical cash count anywhere in KiranaOS, so a true
-// "counted vs expected" variance cannot be computed yet (documented).
+// Physical drawer counts are currently device-local, so the server engine can
+// verify expected cash but cannot yet compare it with the shopkeeper's count.
 import {
   ENTITY_TYPES,
   EVENT_TYPES,
@@ -17,13 +17,9 @@ import {
   RULE_CATEGORIES,
   SEVERITY,
 } from "../assurance.constants.js";
-import { defineRule, money, passed, sum, triggered } from "../rule.interface.js";
+import { defineRule, money, moneyDiffers, passed, sum, toPaiseInt, triggered } from "../rule.interface.js";
 
 const CLOSING = [ENTITY_TYPES.DAILY_CLOSING];
-
-function toPaise(rupees) {
-  return Math.round(money(rupees) * 100);
-}
 
 function activeSaleBills(ctx) {
   return (ctx.bills ?? []).filter((bill) => bill.status === "active");
@@ -31,7 +27,7 @@ function activeSaleBills(ctx) {
 
 function paymentsForActiveBills(ctx) {
   const activeIds = new Set(activeSaleBills(ctx).map((bill) => bill.id));
-  return (ctx.payments ?? []).filter((payment) => activeIds.has(payment.billId) && payment.status !== "failed");
+  return (ctx.payments ?? []).filter((payment) => activeIds.has(payment.billId) && payment.status === "confirmed");
 }
 
 function paymentSumByMode(payments, mode) {
@@ -46,6 +42,33 @@ function udharRecoveryByMode(ctx, mode) {
   );
 }
 
+function supplierCashPaidPaise(ctx) {
+  const receiptPaise = (ctx.purchaseReceipts ?? [])
+    .filter((row) => String(row.paymentMode).toLowerCase() === "cash")
+    .reduce((total, row) => total + toPaiseInt(row.paidAmount), 0);
+  const quickPurchasePaise = (ctx.quickPurchases ?? [])
+    .filter((row) => String(row.purchasePaymentMode).toLowerCase() === "cash")
+    .reduce((total, row) => total + toPaiseInt(row.purchasePaidAmount), 0);
+  return receiptPaise + quickPurchasePaise;
+}
+
+function paidCashExpensePaise(ctx) {
+  return (ctx.expenses ?? [])
+    .filter((row) => row.status === "paid" && String(row.paymentMode).toLowerCase() === "cash")
+    .reduce((total, row) => total + toPaiseInt(row.amount), 0);
+}
+
+function cashPurchaseRefundPaise(ctx) {
+  return (ctx.purchaseReturns ?? [])
+    .filter((row) => String(row.refundMode).toLowerCase() === "cash")
+    .reduce((total, row) => total + toPaiseInt(row.refundAmount), 0);
+}
+
+function recomputedExpectedCashPaise(ctx) {
+  const cashReceivedPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
+  return cashReceivedPaise + cashPurchaseRefundPaise(ctx) - supplierCashPaidPaise(ctx) - paidCashExpensePaise(ctx);
+}
+
 export const cashClosingRules = [
   defineRule({
     ruleCode: "CLOSING_CASH_FIGURE_STALE",
@@ -54,16 +77,16 @@ export const cashClosingRules = [
     category: RULE_CATEGORIES.CASH_CLOSING,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.OWNER_APPROVAL],
     remediation: "Refresh the day's closing snapshot. If it is locked, re-open, refresh and re-lock it.",
     evaluate(ctx) {
-      const recomputedPaise = toPaise(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
+      const recomputedPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
       const snapshotPaise = Number(ctx.snapshot.cashReceivedPaise ?? 0);
       const differencePaise = snapshotPaise - recomputedPaise;
-      if (Math.abs(differencePaise) <= 1) return passed;
+      if (differencePaise === 0) return passed;
       return triggered({
         snapshotCashPaise: snapshotPaise,
         recomputedCashPaise: recomputedPaise,
@@ -83,16 +106,16 @@ export const cashClosingRules = [
     category: RULE_CATEGORIES.CASH_CLOSING,
     severity: SEVERITY.HIGH,
     defaultWeight: 28,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
     evidenceTypes: [EVIDENCE_TYPES.UPI_REFERENCE, EVIDENCE_TYPES.BANK_TRANSACTION],
     remediation: "Refresh the closing snapshot and reconcile UPI collections against the payment app statement.",
     evaluate(ctx) {
-      const recomputedPaise = toPaise(paymentSumByMode(paymentsForActiveBills(ctx), "upi") + udharRecoveryByMode(ctx, "upi"));
+      const recomputedPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "upi") + udharRecoveryByMode(ctx, "upi"));
       const snapshotPaise = Number(ctx.snapshot.upiReceivedPaise ?? 0);
       const differencePaise = snapshotPaise - recomputedPaise;
-      if (Math.abs(differencePaise) <= 1) return passed;
+      if (differencePaise === 0) return passed;
       return triggered({
         snapshotUpiPaise: snapshotPaise,
         recomputedUpiPaise: recomputedPaise,
@@ -109,16 +132,16 @@ export const cashClosingRules = [
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE, EVIDENCE_TYPES.OWNER_APPROVAL],
     remediation: "Refresh the closing snapshot. A stale sales figure usually means bills arrived after the snapshot was generated.",
     evaluate(ctx) {
-      const recomputedPaise = toPaise(sum(activeSaleBills(ctx).map((bill) => bill.grandTotal)));
+      const recomputedPaise = toPaiseInt(sum(activeSaleBills(ctx).map((bill) => bill.grandTotal)));
       const snapshotPaise = Number(ctx.snapshot.totalSalesPaise ?? 0);
       const differencePaise = snapshotPaise - recomputedPaise;
-      if (Math.abs(differencePaise) <= 1) return passed;
+      if (differencePaise === 0) return passed;
       return triggered({
         snapshotSalesPaise: snapshotPaise,
         recomputedSalesPaise: recomputedPaise,
@@ -137,13 +160,13 @@ export const cashClosingRules = [
     category: RULE_CATEGORIES.CASH_CLOSING,
     severity: SEVERITY.MEDIUM,
     defaultWeight: 22,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
     remediation: "Refresh the closing snapshot so khata collections are counted in the day's cash position.",
     evaluate(ctx) {
-      const recomputedPaise = toPaise(
+      const recomputedPaise = toPaiseInt(
         sum(
           (ctx.udharPayments ?? [])
             .filter((row) => !row.reversedAt && ["cash", "upi", "bank"].includes(String(row.mode).toLowerCase()))
@@ -152,7 +175,7 @@ export const cashClosingRules = [
       );
       const snapshotPaise = Number(ctx.snapshot.oldUdharRecoveredPaise ?? 0);
       const differencePaise = snapshotPaise - recomputedPaise;
-      if (Math.abs(differencePaise) <= 1) return passed;
+      if (differencePaise === 0) return passed;
       return triggered({
         snapshotUdharRecoveredPaise: snapshotPaise,
         recomputedUdharRecoveredPaise: recomputedPaise,
@@ -165,35 +188,29 @@ export const cashClosingRules = [
 
   defineRule({
     ruleCode: "CLOSING_CASH_EXPENSES_NOT_DEDUCTED",
-    name: "Expected cash does not account for cash expenses",
-    description: "Cash expenses were recorded for this day but the expected-cash figure equals cash received, so the cash the drawer should actually hold is overstated.",
+    name: "Expected drawer cash does not match recorded cash movements",
+    description: "Expected cash must equal confirmed cash collections plus supplier cash refunds minus supplier cash payments and paid cash expenses.",
     category: RULE_CATEGORIES.CASH_CLOSING,
-    severity: SEVERITY.MEDIUM,
-    defaultWeight: 20,
-    version: 1,
+    severity: SEVERITY.HIGH,
+    defaultWeight: 26,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
-    evidenceTypes: [EVIDENCE_TYPES.EXPENSE_RECEIPT, EVIDENCE_TYPES.OWNER_APPROVAL],
-    remediation: "When counting the drawer, subtract cash expenses manually. This is a known reporting gap, not necessarily an error in the data.",
+    evidenceTypes: [EVIDENCE_TYPES.EXPENSE_RECEIPT, EVIDENCE_TYPES.PURCHASE_INVOICE, EVIDENCE_TYPES.OWNER_APPROVAL],
+    remediation: "Refresh the closing snapshot and reconcile every recorded cash outflow or supplier refund before locking the day.",
     evaluate(ctx) {
-      const cashExpensePaise = toPaise(
-        sum((ctx.expenses ?? []).filter((expense) => String(expense.paymentMode).toLowerCase() === "cash").map((expense) => expense.amount))
-      );
-      if (cashExpensePaise <= 0) return passed;
-      // Materiality gate: only report when the omission is worth a shopkeeper's attention.
-      if (cashExpensePaise < ctx.settings.closingDifferenceAlertPaise) return passed;
-      const expectedCashPaise = Number(ctx.snapshot.expectedCashPaise ?? 0);
-      const cashReceivedPaise = Number(ctx.snapshot.cashReceivedPaise ?? 0);
-      // Only report when expectedCash was NOT reduced by the expenses.
-      if (Math.abs(expectedCashPaise - cashReceivedPaise) > 1) return passed;
+      const expectedCashPaise = recomputedExpectedCashPaise(ctx);
+      const snapshotExpectedCashPaise = Number(ctx.snapshot.expectedCashPaise ?? 0);
+      const differencePaise = snapshotExpectedCashPaise - expectedCashPaise;
+      if (differencePaise === 0) return passed;
       return triggered({
-        expectedCashPaise,
-        cashReceivedPaise,
-        cashExpensesPaise: cashExpensePaise,
-        cashExpensesRupees: Number((cashExpensePaise / 100).toFixed(2)),
-        drawerShouldHoldPaise: cashReceivedPaise - cashExpensePaise,
-        materialityThresholdRupees: ctx.settings.closingDifferenceAlertPaise / 100,
-        expenseCount: (ctx.expenses ?? []).filter((e) => String(e.paymentMode).toLowerCase() === "cash").length,
+        snapshotExpectedCashPaise,
+        recomputedExpectedCashPaise: expectedCashPaise,
+        differencePaise,
+        differenceRupees: Number((differencePaise / 100).toFixed(2)),
+        supplierCashPaidPaise: supplierCashPaidPaise(ctx),
+        cashExpensesPaise: paidCashExpensePaise(ctx),
+        supplierCashRefundsPaise: cashPurchaseRefundPaise(ctx),
       });
     },
   }),
@@ -205,7 +222,7 @@ export const cashClosingRules = [
     category: RULE_CATEGORIES.CASH_CLOSING,
     severity: SEVERITY.HIGH,
     defaultWeight: 26,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.SALE_RETURNED, EVENT_TYPES.DAILY_CLOSING_COMPLETED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
@@ -214,7 +231,7 @@ export const cashClosingRules = [
       const returns = activeSaleBills(ctx).filter((bill) => bill.billType === "sales_return");
       if (!returns.length) return passed;
       const paymentsByBill = new Map();
-      for (const payment of ctx.payments ?? []) {
+      for (const payment of paymentsForActiveBills(ctx)) {
         const list = paymentsByBill.get(payment.billId) ?? [];
         list.push(payment);
         paymentsByBill.set(payment.billId, list);
@@ -295,23 +312,25 @@ export const cashClosingRules = [
     category: RULE_CATEGORIES.CASH_CLOSING,
     severity: SEVERITY.CRITICAL,
     defaultWeight: 34,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.DAILY_CLOSING_COMPLETED],
     evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.STAFF_EXPLANATION],
     remediation: "Investigate the day end-to-end before locking. Large gaps are where cash leakage hides.",
     evaluate(ctx) {
       const threshold = ctx.settings.closingDifferenceAlertPaise;
-      const recomputedSalesPaise = toPaise(sum(activeSaleBills(ctx).map((bill) => bill.grandTotal)));
-      const recomputedCashPaise = toPaise(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
+      const recomputedSalesPaise = toPaiseInt(sum(activeSaleBills(ctx).map((bill) => bill.grandTotal)));
+      const recomputedCashPaise = toPaiseInt(paymentSumByMode(paymentsForActiveBills(ctx), "cash") + udharRecoveryByMode(ctx, "cash"));
       const salesDelta = Number(ctx.snapshot.totalSalesPaise ?? 0) - recomputedSalesPaise;
       const cashDelta = Number(ctx.snapshot.cashReceivedPaise ?? 0) - recomputedCashPaise;
-      const worst = Math.max(Math.abs(salesDelta), Math.abs(cashDelta));
+      const expectedCashDelta = Number(ctx.snapshot.expectedCashPaise ?? 0) - recomputedExpectedCashPaise(ctx);
+      const worst = Math.max(Math.abs(salesDelta), Math.abs(cashDelta), Math.abs(expectedCashDelta));
       if (worst < threshold) return passed;
       return triggered({
         materialityThresholdPaise: threshold,
         salesDifferencePaise: salesDelta,
         cashDifferencePaise: cashDelta,
+        expectedCashDifferencePaise: expectedCashDelta,
         worstDifferenceRupees: Number((worst / 100).toFixed(2)),
       });
     },
@@ -324,14 +343,14 @@ export const cashClosingRules = [
     category: RULE_CATEGORIES.CASH_CLOSING,
     severity: SEVERITY.HIGH,
     defaultWeight: 28,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.PAYMENT_RECEIVED, EVENT_TYPES.DAILY_CLOSING_COMPLETED],
     evidenceTypes: [EVIDENCE_TYPES.UPI_REFERENCE, EVIDENCE_TYPES.BANK_TRANSACTION],
     remediation: "Match each reference against the payment app statement. Only one bill may claim a given transfer.",
     evaluate(ctx) {
       const byReference = new Map();
-      for (const payment of ctx.payments ?? []) {
+      for (const payment of paymentsForActiveBills(ctx)) {
         const reference = typeof payment.providerReference === "string" ? payment.providerReference.trim() : "";
         if (reference.length < 6) continue;
         const list = byReference.get(reference) ?? [];
@@ -358,22 +377,21 @@ export const cashClosingRules = [
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CLOSING,
     applicableEventTypes: [EVENT_TYPES.PAYMENT_RECEIVED, EVENT_TYPES.DAILY_CLOSING_COMPLETED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.SALES_INVOICE],
     remediation: "Reconcile each flagged bill's tender split. Do not edit the bill; record a corrective entry.",
     evaluate(ctx) {
       const paymentsByBill = new Map();
-      for (const payment of ctx.payments ?? []) {
-        if (payment.status === "failed") continue;
+      for (const payment of paymentsForActiveBills(ctx)) {
         paymentsByBill.set(payment.billId, (paymentsByBill.get(payment.billId) ?? 0) + money(payment.amount));
       }
       const offenders = [];
       for (const bill of activeSaleBills(ctx)) {
         const declared = money(bill.paidAmount);
         const actual = paymentsByBill.get(bill.id) ?? 0;
-        if (Math.abs(declared - actual) <= 0.011) continue;
+        if (!moneyDiffers(declared, actual)) continue;
         offenders.push({
           billId: bill.id,
           billNo: bill.billNo,

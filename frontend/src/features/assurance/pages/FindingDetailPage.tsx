@@ -175,7 +175,11 @@ export default function FindingDetailPage() {
               {finding.reopenCount > 0 ? <Chip>Reopened ×{finding.reopenCount}</Chip> : null}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Raised {fmtDateTime(finding.createdAt)} · amount under review {inrFromPaise(finding.amountPaise)} · engine{" "}
+              Raised {fmtDateTime(finding.createdAt)} ·{" "}
+              {finding.discrepancyPaise !== null
+                ? `gap ${inrFromPaise(finding.discrepancyPaise)} on a ${inrFromPaise(finding.amountPaise)} record`
+                : `record value ${inrFromPaise(finding.amountPaise)}`}{" "}
+              · engine{" "}
               <span className="font-mono">{finding.engineVersion}</span> · rule set <span className="font-mono">{finding.rulesetVersion}</span>
             </p>
           </div>

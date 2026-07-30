@@ -43,6 +43,8 @@ export type Finding = {
   riskLevel: RiskLevel;
   confidence: number;
   amountPaise: number | null;
+  /** The money actually in question (shortfall/drift/difference), when a rule measured one. */
+  discrepancyPaise: number | null;
   assignedReviewerId: string | null;
   occurredAt: string | null;
   resolvedAt: string | null;
@@ -194,6 +196,7 @@ export type Dashboard = {
     highFindings: number;
     highRiskAmountPaise: number;
     highRiskAmountRupees: number;
+    unquantifiedHighRiskFindings: number;
     unresolvedEvidenceRequests: number;
   };
   byStatus: Record<string, number>;
@@ -252,7 +255,7 @@ export type AssuranceReport = {
     byCategory: Record<string, number>;
     topRules: Array<{ ruleCode: string; name: string; category: string | null; severity: RiskLevel | null; findingCount: number }>;
   };
-  exposure: { highRiskAmountPaise: number; highRiskAmountRupees: number; criticalFindingCount: number; highFindingCount: number; note: string };
+  exposure: { highRiskAmountPaise: number; highRiskAmountRupees: number; criticalFindingCount: number; highFindingCount: number; quantifiedFindings: number; unquantifiedFindings: number; note: string };
   byArea: Record<string, number>;
   evidence: { byStatus: Record<string, number>; outstandingRequests: number; note: string };
   managementResponses: {

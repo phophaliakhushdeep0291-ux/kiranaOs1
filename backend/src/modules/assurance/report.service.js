@@ -31,7 +31,7 @@ const RESOLVED_STATUSES = [
 export const REPORT_LIMITATIONS = Object.freeze([
   "This is a continuous financial-control report produced by deterministic rules over KiranaOS records. It is not a statutory audit, carries no audit opinion, and does not replace a Chartered Accountant.",
   "Conclusions are limited to data recorded in KiranaOS. Cash, goods or credit that was never entered into the system cannot be detected.",
-  "No physical cash count is stored anywhere in the product, so a true counted-versus-expected cash variance cannot be computed; cash rules compare the closing figure against its own inputs.",
+  "Physical drawer counts are stored only on the counter device and are not synced to the server, so server assurance cannot compute counted-versus-expected variance; cash rules verify expected cash against canonical server records.",
   "There is no bank or UPI provider feed. UPI references are operator-entered: reuse is detectable, authenticity is not.",
   "Expenses store a payee name and an author name rather than a user id, so expense attribution and staff-permission checks are advisory.",
   "Stock movements carry no actor column, so stock corrections cannot be attributed to an individual staff member.",
@@ -79,7 +79,7 @@ export async function buildAssuranceReport(shopId, { from, to }) {
     }),
     db.auditFinding.findMany({
       where: { shopId, status: { in: OPEN_STATUSES }, riskLevel: { in: [RISK_LEVELS.HIGH, RISK_LEVELS.CRITICAL] } },
-      select: { amountPaise: true, riskLevel: true },
+      select: { discrepancyPaise: true, riskLevel: true },
     }),
     db.auditEvidenceRequirement.groupBy({
       by: ["status"],
@@ -99,7 +99,9 @@ export async function buildAssuranceReport(shopId, { from, to }) {
     }),
   ]);
 
-  const highRiskExposurePaise = highRiskOpen.reduce((total, row) => total + Number(row.amountPaise ?? 0), 0);
+  // Sum of measured gaps, not of record sizes — see assurance.service.js.
+  const quantifiedExposure = highRiskOpen.filter((row) => row.discrepancyPaise !== null && row.discrepancyPaise !== undefined);
+  const highRiskExposurePaise = quantifiedExposure.reduce((total, row) => total + Number(row.discrepancyPaise), 0);
 
   const ruleCounts = new Map();
   for (const finding of findingsRaised) {
@@ -155,7 +157,9 @@ export async function buildAssuranceReport(shopId, { from, to }) {
       highRiskAmountRupees: Number((highRiskExposurePaise / 100).toFixed(2)),
       criticalFindingCount: highRiskOpen.filter((row) => row.riskLevel === RISK_LEVELS.CRITICAL).length,
       highFindingCount: highRiskOpen.filter((row) => row.riskLevel === RISK_LEVELS.HIGH).length,
-      note: "Exposure is the recorded value of the transactions under review, not a quantified loss.",
+      quantifiedFindings: quantifiedExposure.length,
+      unquantifiedFindings: highRiskOpen.length - quantifiedExposure.length,
+      note: "Total of the gaps the rules actually measured (shortfalls, drifts, differences) across open high and critical findings. Findings where no rule could quantify a gap are counted separately and contribute nothing to this figure. It is money to investigate, not a confirmed loss.",
     },
 
     byArea: {

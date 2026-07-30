@@ -124,9 +124,13 @@ export default function AssuranceDashboardPage() {
         />
         <StatCard label="High risk" value={data?.totals.highFindings ?? 0} hint="Serious but not critical" />
         <StatCard
-          label="Amount under review"
+          label="Value of gaps found"
           value={inr(data?.totals.highRiskAmountRupees ?? 0)}
-          hint="Recorded value of high/critical items — not a loss figure"
+          hint={
+            (data?.totals.unquantifiedHighRiskFindings ?? 0) > 0
+              ? `Measured shortfalls and drifts · ${data?.totals.unquantifiedHighRiskFindings} more not yet quantified`
+              : "Measured shortfalls and drifts — money to check, not a confirmed loss"
+          }
         />
         <StatCard label="Evidence pending" value={data?.totals.unresolvedEvidenceRequests ?? 0} hint="Documents still requested" />
       </div>

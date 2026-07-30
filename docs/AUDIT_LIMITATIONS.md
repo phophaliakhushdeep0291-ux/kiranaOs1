@@ -16,23 +16,20 @@ system cannot be detected. A sale made entirely off-book produces no finding —
 there is nothing inconsistent about a transaction that does not exist. This is the
 single most important limitation: **the module detects inconsistency, not absence.**
 
-## 2. No physical cash count exists anywhere in the product
+## 2. Physical cash counts are device-local
 
-`DailyClosingSnapshot` stores `expectedCashPaise`, which is derived (cash bill
-payments + cash udhar recovery). There is no field anywhere for the cash actually
-counted in the drawer. Consequences:
+The Daily Closing UI records counted cash and over/short history in local device
+storage. Those counts are not synced to `DailyClosingSnapshot`, so server assurance
+cannot compute a true counted-versus-expected variance. Consequences:
 
-- A true "counted vs expected" variance cannot be computed. The cash rules compare
-  the closing figure against its own inputs — they detect a *stale or wrong
-  figure*, not a shortage.
-- "Repeated shortages by the same staff/device" (requested rule F10) is deferred
-  entirely.
-- Separately, `expectedCashPaise` never subtracts cash expenses. That is a genuine
-  product gap, reported by `CLOSING_CASH_EXPENSES_NOT_DEDUCTED` rather than
-  silently corrected.
+- Server cash rules verify that expected cash exactly matches canonical confirmed
+  collections, supplier cash refunds, supplier cash payments, and paid cash expenses.
+- A shortage visible on one counter device is not yet available to the server rule
+  engine or another device.
+- "Repeated shortages by the same staff/device" (requested rule F10) remains
+  deferred until drawer counts are synced with shop, location, user, and device scope.
 
 ## 3. No bank or UPI feed
-
 There is no authorized bank/UPI provider integration. UPI references are
 operator-entered strings. The engine can detect the same reference claimed by two
 bills (`CLOSING_UPI_REFERENCE_REUSED`); it cannot verify that any reference
@@ -124,8 +121,6 @@ market).
 
 ## 13. Rules with known noise
 
-- `CLOSING_CASH_EXPENSES_NOT_DEDUCTED` fires on every day with material cash
-  expenses, because the product genuinely does not subtract them.
 - `EXPENSE_CATEGORY_INCONSISTENT` is keyword-based and LOW severity; a shop's own
   category naming always wins.
 - Any rule can be disabled or re-weighted per shop by the owner.
@@ -136,7 +131,7 @@ Not implemented because the data cannot support them honestly (details and
 reasoning in `AUDIT_RULE_CATALOG.md` §Deferred): duplicate idempotency key (A2),
 backdated ledger adjustment (B10), per-staff stock corrections (C6),
 supplier-level payable reconciliation (D8), changed supplier bank details (D14),
-expense staff-permission checks (E5), counted-cash variance and repeated shortages
+expense staff-permission checks (E5), server-side counted-cash variance and repeated shortages
 (F1/F10), record overwritten by an older version (G12).
 
 ## 15. Operational limitations of this phase

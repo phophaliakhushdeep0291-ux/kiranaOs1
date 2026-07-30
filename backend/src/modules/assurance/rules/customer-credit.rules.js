@@ -16,10 +16,12 @@ import {
 import {
   defineRule,
   daysBetween,
+  fromPaiseInt,
   money,
   moneyDiffers,
   passed,
   sum,
+  toPaiseInt,
   triggered,
 } from "../rule.interface.js";
 
@@ -30,18 +32,16 @@ function liveRows(ledger) {
   return (ledger ?? []).filter((row) => !row.reversedAt);
 }
 
-function signedAmount(row) {
-  return row.type === "payment" ? -money(row.amount) : money(row.amount);
-}
-
 export function computeOutstanding(ledger) {
   const rows = liveRows(ledger);
-  const raw = rows.reduce((total, row) => total + signedAmount(row), 0);
+  const rawPaise = rows.reduce((total, row) => total + (row.type === "payment" ? -toPaiseInt(row.amount) : toPaiseInt(row.amount)), 0);
+  const debitPaise = rows.filter((row) => row.type === "debit").reduce((total, row) => total + toPaiseInt(row.amount), 0);
+  const paymentPaise = rows.filter((row) => row.type === "payment").reduce((total, row) => total + toPaiseInt(row.amount), 0);
   return {
-    rawBalance: Number(raw.toFixed(2)),
-    balance: Number(Math.max(0, raw).toFixed(2)),
-    debitSum: Number(sum(rows.filter((r) => r.type === "debit").map((r) => r.amount)).toFixed(2)),
-    paymentSum: Number(sum(rows.filter((r) => r.type === "payment").map((r) => r.amount)).toFixed(2)),
+    rawBalance: fromPaiseInt(rawPaise),
+    balance: fromPaiseInt(Math.max(0, rawPaise)),
+    debitSum: fromPaiseInt(debitPaise),
+    paymentSum: fromPaiseInt(paymentPaise),
     rowCount: rows.length,
   };
 }
@@ -56,7 +56,7 @@ export const customerCreditRules = [
     category: RULE_CATEGORIES.CUSTOMER_CREDIT,
     severity: SEVERITY.CRITICAL,
     defaultWeight: 36,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CUSTOMER,
     applicableEventTypes: [EVENT_TYPES.CUSTOMER_CREDIT_CREATED, EVENT_TYPES.CUSTOMER_CREDIT_ADJUSTED],
     evidenceTypes: [EVIDENCE_TYPES.CUSTOMER_CONFIRMATION, EVIDENCE_TYPES.PAYMENT_RECEIPT],
@@ -150,14 +150,14 @@ export const customerCreditRules = [
     category: RULE_CATEGORIES.CUSTOMER_CREDIT,
     severity: SEVERITY.HIGH,
     defaultWeight: 28,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CUSTOMER,
     applicableEventTypes: [EVENT_TYPES.CUSTOMER_CREDIT_ADJUSTED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
     remediation: "Find the missing credit sale or the double-recorded payment. Refund or carry forward the advance explicitly.",
     evaluate(ctx) {
       const computed = computeOutstanding(ctx.ledger);
-      if (computed.rawBalance >= -0.011) return passed;
+      if (toPaiseInt(computed.rawBalance) >= 0) return passed;
       return triggered({
         rawLedgerBalance: computed.rawBalance,
         debitSum: computed.debitSum,
@@ -174,7 +174,7 @@ export const customerCreditRules = [
     category: RULE_CATEGORIES.CUSTOMER_CREDIT,
     severity: SEVERITY.HIGH,
     defaultWeight: 28,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CUSTOMER,
     applicableEventTypes: [EVENT_TYPES.CUSTOMER_CREDIT_ADJUSTED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.UPI_REFERENCE, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
@@ -182,23 +182,21 @@ export const customerCreditRules = [
     evaluate(ctx) {
       const rows = liveRows(ctx.ledger);
       if (!rows.length) return passed;
-      let running = 0;
+      let runningPaise = 0;
       const offenders = [];
       for (const row of rows) {
-        if (row.type === "payment") {
-          const amount = money(row.amount);
-          if (amount > running + 0.011) {
-            offenders.push({
-              ledgerId: row.id,
-              paymentAmount: amount,
-              outstandingBefore: Number(running.toFixed(2)),
-              excessRupees: Number((amount - running).toFixed(2)),
-              mode: row.mode,
-              createdAt: new Date(row.createdAt).toISOString(),
-            });
-          }
+        const amountPaise = toPaiseInt(row.amount);
+        if (row.type === "payment" && amountPaise > runningPaise) {
+          offenders.push({
+            ledgerId: row.id,
+            paymentAmount: fromPaiseInt(amountPaise),
+            outstandingBefore: fromPaiseInt(runningPaise),
+            excessRupees: fromPaiseInt(amountPaise - runningPaise),
+            mode: row.mode,
+            createdAt: new Date(row.createdAt).toISOString(),
+          });
         }
-        running += signedAmount(row);
+        runningPaise += row.type === "payment" ? -amountPaise : amountPaise;
       }
       if (!offenders.length) return passed;
       return triggered({ overPayments: offenders.slice(0, 10), offenderCount: offenders.length });
@@ -271,7 +269,7 @@ export const customerCreditRules = [
     category: RULE_CATEGORIES.CUSTOMER_CREDIT,
     severity: SEVERITY.MEDIUM,
     defaultWeight: 18,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CUSTOMER,
     applicableEventTypes: [EVENT_TYPES.CUSTOMER_CREDIT_CREATED],
     evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
@@ -280,7 +278,7 @@ export const customerCreditRules = [
       const limitPaise = ctx.settings.creditLimitPaise;
       if (!limitPaise || limitPaise <= 0) return passed; // no limit configured
       const computed = computeOutstanding(ctx.ledger);
-      const outstandingPaise = Math.round(computed.balance * 100);
+      const outstandingPaise = toPaiseInt(computed.balance);
       if (outstandingPaise <= limitPaise) return passed;
       return triggered({
         outstandingRupees: computed.balance,
@@ -297,7 +295,7 @@ export const customerCreditRules = [
     category: RULE_CATEGORIES.AUTHORIZATION,
     severity: SEVERITY.HIGH,
     defaultWeight: 26,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CUSTOMER,
     applicableEventTypes: [EVENT_TYPES.CUSTOMER_CREDIT_ADJUSTED],
     evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.STAFF_EXPLANATION, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
@@ -305,7 +303,7 @@ export const customerCreditRules = [
     evaluate(ctx) {
       const threshold = ctx.settings.largeAdjustmentPaise;
       const offenders = liveRows(ctx.ledger)
-        .filter((row) => !row.billId && Math.round(money(row.amount) * 100) > threshold)
+        .filter((row) => !row.billId && Math.abs(toPaiseInt(row.amount)) > threshold)
         .map((row) => ({
           ledgerId: row.id,
           type: row.type,
@@ -370,19 +368,27 @@ export const customerCreditRules = [
       if (!candidates.length) return passed;
       const selfName = normalizeName(ctx.customer.name);
       const selfMobile = normalizeMobile(ctx.customer.mobile);
+      // A shared name is NOT evidence of a duplicate: two customers called
+      // "Ramesh Kumar" with different phone numbers are two different people,
+      // and flagging them was pure noise on real shop data. A duplicate needs
+      // either the same mobile, or the same name where at least one record has
+      // no mobile at all — the case where one person really was entered twice.
       const matches = candidates
         .filter((candidate) => {
-          const sameName = selfName && normalizeName(candidate.name) === selfName;
-          const sameMobile = selfMobile && normalizeMobile(candidate.mobile) === selfMobile;
-          return sameName || sameMobile;
+          const candidateMobile = normalizeMobile(candidate.mobile);
+          if (selfMobile && candidateMobile) return selfMobile === candidateMobile;
+          return Boolean(selfName) && normalizeName(candidate.name) === selfName;
         })
-        .map((candidate) => ({
-          customerId: candidate.id,
-          name: candidate.name,
-          matchedOn: normalizeMobile(candidate.mobile) === selfMobile && selfMobile ? "mobile" : "name",
-          softDeleted: Boolean(candidate.deletedAt),
-          outstanding: money(candidate.udharAmount),
-        }));
+        .map((candidate) => {
+          const candidateMobile = normalizeMobile(candidate.mobile);
+          return {
+            customerId: candidate.id,
+            name: candidate.name,
+            matchedOn: selfMobile && candidateMobile === selfMobile ? "mobile" : "name_with_missing_mobile",
+            softDeleted: Boolean(candidate.deletedAt),
+            outstanding: money(candidate.udharAmount),
+          };
+        });
       if (!matches.length) return passed;
       return triggered({ duplicateCandidates: matches.slice(0, 10), candidateCount: matches.length });
     },
@@ -445,7 +451,7 @@ export const customerCreditRules = [
     category: RULE_CATEGORIES.CUSTOMER_CREDIT,
     severity: SEVERITY.MEDIUM,
     defaultWeight: 16,
-    version: 1,
+    version: 2,
     applicableEntityTypes: CUSTOMER,
     applicableEventTypes: [EVENT_TYPES.CUSTOMER_CREDIT_CREATED],
     evidenceTypes: [EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
@@ -458,19 +464,19 @@ export const customerCreditRules = [
       // Oldest-first allocation of payments against debits.
       const debits = rows
         .filter((row) => row.type === "debit")
-        .map((row) => ({ createdAt: row.createdAt, remaining: money(row.amount), ledgerId: row.id }))
+        .map((row) => ({ createdAt: row.createdAt, remainingPaise: toPaiseInt(row.amount), ledgerId: row.id }))
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-      let paymentPool = computed.paymentSum;
+      let paymentPoolPaise = toPaiseInt(computed.paymentSum);
       for (const debit of debits) {
-        if (paymentPool <= 0) break;
-        const applied = Math.min(paymentPool, debit.remaining);
-        debit.remaining = Number((debit.remaining - applied).toFixed(2));
-        paymentPool = Number((paymentPool - applied).toFixed(2));
+        if (paymentPoolPaise <= 0) break;
+        const appliedPaise = Math.min(paymentPoolPaise, debit.remainingPaise);
+        debit.remainingPaise -= appliedPaise;
+        paymentPoolPaise -= appliedPaise;
       }
       const latest = latestTimestamp(ctx.ledger);
       const aged = debits
-        .filter((debit) => debit.remaining > 0.011)
-        .map((debit) => ({ ...debit, ageDays: Math.round(daysBetween(latest, debit.createdAt) ?? 0) }))
+        .filter((debit) => debit.remainingPaise > 0)
+        .map((debit) => ({ ...debit, remaining: fromPaiseInt(debit.remainingPaise), ageDays: Math.round(daysBetween(latest, debit.createdAt) ?? 0) }))
         .filter((debit) => debit.ageDays > limitDays);
       if (!aged.length) return passed;
       return triggered({

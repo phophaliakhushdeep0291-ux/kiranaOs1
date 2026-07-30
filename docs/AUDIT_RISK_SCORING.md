@@ -150,3 +150,49 @@ final = 100 → CRITICAL
   behaviour means changing a weight or a rule, visibly and with a version bump.
 - It does not decide anything. A score never closes, hides or escalates a finding
   on its own; a human transition is always required.
+
+## Two different money figures, and why
+
+Every finding stores two amounts, and confusing them is what once made the
+dashboard nonsensical.
+
+- **`amountPaise` — the size of the record.** A bill's total, a purchase's
+  value, a product's stock valuation. This is the input to the *materiality*
+  band in the score above. It is deliberately never totalled: adding one bill's
+  total to a whole day's sales to a product's entire stock valuation counts the
+  same rupee several times, and in one real shop produced a headline larger than
+  its lifetime turnover.
+- **`discrepancyPaise` — the measured gap.** The shortfall, the drift, the
+  difference. This is what the "Value of gaps found" tile totals, and it is the
+  only figure that may be summed across findings.
+
+Both are stored as magnitudes. A sales return is recorded with a negative total
+by design, and a finding reading "₹-118" tells a shopkeeper nothing.
+
+### Which rules put a number on the gap
+
+A rule contributes to the total only when it can state the gap honestly. The
+mapping lives in `DISCREPANCY_BY_RULE` in `evaluation.service.js`, and the line
+it draws is between **money that went missing** and **paperwork that is
+missing**:
+
+| The rule found | Gap reported | Example |
+| --- | --- | --- |
+| Money that should be there and isn't | the shortfall | ₹300 bill collected ₹120 → ₹180 |
+| A khata that disagrees with its ledger | the drift | stored ₹777, ledger ₹100 → ₹677 |
+| Stock that moved with no reason, or never came back | quantity × **cost** | 30 units × ₹60 → ₹1,800 |
+| Money paid where no goods arrived | the purchase amount | ₹3,000 paid, zero stock → ₹3,000 |
+| Something charged or paid twice | the duplicate | second ₹100 expense → ₹100 |
+| Spend far above the category's normal range | only the excess | ₹25,000 against a ₹900 fence → ₹24,100 |
+
+Deliberately **not** quantified: missing invoices, missing payees, absent
+supplier details, cancellations without an audit-log entry. These are control
+weaknesses, not shortfalls. Folding their full value into the headline would
+tell a shopkeeper that ordinary, probably-fine undocumented spend had vanished.
+They are counted instead by the evidence queue, and the tile says how many
+findings carry no figure so the total never reads as "all of it".
+
+Stock gaps are valued at **cost**, never at selling price — the shop's loss on
+missing goods is what it paid for them. Where a purchase states its own per-unit
+cost, that line is used in preference to the product's running average, because
+it needs no unit conversion and is what the shop actually paid that day.

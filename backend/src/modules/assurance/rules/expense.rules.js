@@ -12,7 +12,7 @@ import {
   SEVERITY,
 } from "../assurance.constants.js";
 import { BASELINE_METRICS } from "../baseline.service.js";
-import { defineRule, money, passed, percentOf, triggered } from "../rule.interface.js";
+import { defineRule, money, passed, percentOf, toPaiseInt, triggered } from "../rule.interface.js";
 
 const EXPENSE = [ENTITY_TYPES.EXPENSE];
 
@@ -68,7 +68,7 @@ export const expenseRules = [
     remediation: "Attach the receipt to this finding. Expenses without receipts cannot be verified or claimed against tax.",
     evaluate(ctx) {
       const threshold = ctx.settings.expenseReceiptRequiredAbovePaise;
-      const amountPaise = Math.round(money(ctx.expense.amount) * 100);
+      const amountPaise = toPaiseInt(ctx.expense.amount);
       if (amountPaise <= threshold) return passed;
       const hasVendor = ctx.expense.vendor && String(ctx.expense.vendor).trim();
       const hasNotes = ctx.expense.notes && String(ctx.expense.notes).trim();
@@ -165,7 +165,7 @@ export const expenseRules = [
     evidenceTypes: [EVIDENCE_TYPES.STAFF_EXPLANATION, EVIDENCE_TYPES.OWNER_APPROVAL],
     remediation: "Record who entered each expense. Note that expenses store a name, not a user id, so attribution is advisory only.",
     evaluate(ctx) {
-      const amountPaise = Math.round(money(ctx.expense.amount) * 100);
+      const amountPaise = toPaiseInt(ctx.expense.amount);
       if (amountPaise <= ctx.settings.expenseReceiptRequiredAbovePaise) return passed;
       const recordedBy = ctx.expense.recordedBy && String(ctx.expense.recordedBy).trim();
       if (recordedBy) return passed;
@@ -353,7 +353,7 @@ export const expenseRules = [
     remediation: "Record who was paid. Payee-less spend above the threshold is the weakest link in expense control.",
     evaluate(ctx) {
       const threshold = ctx.settings.expenseReceiptRequiredAbovePaise;
-      const amountPaise = Math.round(money(ctx.expense.amount) * 100);
+      const amountPaise = toPaiseInt(ctx.expense.amount);
       if (amountPaise <= threshold) return passed;
       const vendor = ctx.expense.vendor && String(ctx.expense.vendor).trim();
       if (vendor) return passed;

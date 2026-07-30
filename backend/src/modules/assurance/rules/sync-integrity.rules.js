@@ -12,7 +12,7 @@ import {
   RULE_CATEGORIES,
   SEVERITY,
 } from "../assurance.constants.js";
-import { defineRule, money, passed, triggered } from "../rule.interface.js";
+import { defineRule, money, passed, toPaiseInt, triggered } from "../rule.interface.js";
 
 const SYNC_EVENT = [ENTITY_TYPES.SYNC_EVENT];
 const BILL = [ENTITY_TYPES.BILL];
@@ -225,7 +225,7 @@ export const syncIntegrityRules = [
     category: RULE_CATEGORIES.SYNC_INTEGRITY,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE],
@@ -233,7 +233,7 @@ export const syncIntegrityRules = [
     evaluate(ctx) {
       const itemCount = (ctx.bill.items ?? []).length;
       if (itemCount > 0) return passed;
-      if (Math.abs(money(ctx.bill.grandTotal)) <= 0.011) return passed;
+      if (toPaiseInt(ctx.bill.grandTotal) === 0) return passed;
       return triggered({
         itemCount: 0,
         grandTotalRupees: money(ctx.bill.grandTotal),

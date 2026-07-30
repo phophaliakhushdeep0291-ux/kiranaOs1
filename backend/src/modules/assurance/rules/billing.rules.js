@@ -9,11 +9,13 @@ import {
 } from "../assurance.constants.js";
 import {
   defineRule,
+  fromPaiseInt,
   money,
   moneyDiffers,
   passed,
   percentOf,
   sum,
+  toPaiseInt,
   triggered,
 } from "../rule.interface.js";
 
@@ -31,7 +33,7 @@ function isLegacyQuoteEstimate(bill) {
 }
 
 function confirmedPaymentTotal(bill) {
-  return sum((bill.payments ?? []).filter((p) => p.status !== "failed" && p.status !== "refunded").map((p) => p.amount));
+  return sum((bill.payments ?? []).filter((p) => p.status === "confirmed").map((p) => p.amount));
 }
 
 export const billingRules = [
@@ -85,33 +87,25 @@ export const billingRules = [
       let matches = candidates.filter((candidate) => itemSignature(candidate.items) === signature);
       if (!matches.length) return passed;
 
-      // Two different walk-in customers buying the same item for the same amount
-      // minutes apart is ordinary kirana trade, not a duplicate. Without an
-      // identified customer the only trustworthy duplicate signal is the same
-      // device double-submitting within seconds, so the bar is much higher.
-      const WALKIN_WINDOW_SECONDS = 120;
-      const identifiedCustomer = Boolean(bill.customerId);
-      let windowSeconds = 10 * 60;
-      if (!identifiedCustomer) {
-        const device = bill.deviceId ?? bill.sourceDeviceId ?? null;
-        if (!device) return passed;
-        windowSeconds = WALKIN_WINDOW_SECONDS;
-        const billTime = new Date(bill.createdAt).getTime();
-        matches = matches.filter((candidate) => {
-          const sameDevice = (candidate.deviceId ?? candidate.sourceDeviceId ?? null) === device;
-          const secondsApart = Math.abs(new Date(candidate.createdAt).getTime() - billTime) / 1000;
-          return sameDevice && secondsApart <= WALKIN_WINDOW_SECONDS;
-        });
-        if (!matches.length) return passed;
-      }
+      // Only identified customers are checked. Two walk-in customers buying the
+      // same item for the same amount within a minute of each other is ordinary
+      // trade at a busy counter — measured on real shop data, that pattern was
+      // 24 seconds apart and entirely innocent. With no customer on the bill
+      // there is nothing that separates a double-submit from two real sales, and
+      // a rule that cannot tell them apart should not fire at all. Genuine
+      // retries still surface through BILL_SYNC_RETRY_STORM and the durable
+      // idempotency constraints.
+      if (!bill.customerId) return passed;
 
+      const windowSeconds = 10 * 60;
       return triggered({
         grandTotal: money(bill.grandTotal),
         itemSignature: signature,
         matchingBillIds: matches.map((b) => b.id),
-        customerIdentified: identifiedCustomer,
+        customerIdentified: true,
         windowSeconds,
         windowMinutes: Number((windowSeconds / 60).toFixed(2)),
+        innocentExplanation: "The same customer may genuinely have bought the same items twice. Confirm before treating this as a duplicate.",
       });
     },
   }),
@@ -123,7 +117,7 @@ export const billingRules = [
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.CRITICAL,
     defaultWeight: 40,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED],
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE],
@@ -153,24 +147,27 @@ export const billingRules = [
   defineRule({
     ruleCode: "BILL_PAID_EXCEEDS_TOTAL",
     name: "Paid amount exceeds bill total",
-    description: "The recorded paid amount is larger than the bill's grand total.",
+    description: "The settled tender magnitude is larger than the bill total. Sales returns use negative amounts and are compared by magnitude.",
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.PAYMENT_RECEIVED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
     remediation: "Confirm the tender collected. If the customer overpaid, record a refund or credit rather than editing the bill.",
     evaluate(ctx) {
       const { bill } = ctx;
-      const paid = money(bill.paidAmount);
-      const total = money(bill.grandTotal);
-      if (paid <= total + 0.011) return passed;
+      const paidPaise = toPaiseInt(bill.paidAmount);
+      const totalPaise = toPaiseInt(bill.grandTotal);
+      const excessPaise = bill.billType === "sales_return"
+        ? Math.max(0, Math.abs(paidPaise) - Math.abs(totalPaise))
+        : Math.max(0, paidPaise - totalPaise);
+      if (excessPaise === 0) return passed;
       return triggered({
-        paidAmount: paid,
-        grandTotal: total,
-        excessRupees: Number((paid - total).toFixed(2)),
+        paidAmount: fromPaiseInt(paidPaise),
+        grandTotal: fromPaiseInt(totalPaise),
+        excessRupees: fromPaiseInt(excessPaise),
       });
     },
   }),
@@ -182,7 +179,7 @@ export const billingRules = [
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.HIGH,
     defaultWeight: 30,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.CUSTOMER_CREDIT_CREATED],
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE, EVIDENCE_TYPES.CUSTOMER_CONFIRMATION],
@@ -204,26 +201,26 @@ export const billingRules = [
 
   defineRule({
     ruleCode: "BILL_MARKED_PAID_WITHOUT_PAYMENTS",
-    name: "Bill marked paid without sufficient payment rows",
-    description: "The bill records a paid amount that its confirmed payment rows do not add up to.",
+    name: "Bill paid amount does not match settled payment rows",
+    description: "The bill's paid amount does not exactly equal its confirmed payment rows, including negative refund rows on sales returns.",
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.CRITICAL,
     defaultWeight: 38,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.PAYMENT_RECEIVED],
     evidenceTypes: [EVIDENCE_TYPES.PAYMENT_RECEIPT, EVIDENCE_TYPES.UPI_REFERENCE, EVIDENCE_TYPES.STAFF_EXPLANATION],
-    remediation: "Establish whether the money was actually received. Record the missing payment through the billing flow, or cancel and re-bill.",
+    remediation: "Establish whether the money was actually received or refunded. Record the missing payment through the normal flow; never edit the bill total.",
     evaluate(ctx) {
       const { bill } = ctx;
       if (isLegacyQuoteEstimate(bill)) return passed;
       const paymentSum = confirmedPaymentTotal(bill);
       const declaredPaid = money(bill.paidAmount);
-      if (declaredPaid <= paymentSum + 0.011) return passed;
+      if (!moneyDiffers(declaredPaid, paymentSum)) return passed;
       return triggered({
         declaredPaidAmount: declaredPaid,
-        confirmedPaymentSum: Number(paymentSum.toFixed(2)),
-        shortfallRupees: Number((declaredPaid - paymentSum).toFixed(2)),
+        confirmedPaymentSum: paymentSum,
+        shortfallRupees: fromPaiseInt(Math.abs(toPaiseInt(declaredPaid) - toPaiseInt(paymentSum))),
         paymentRowCount: bill.payments?.length ?? 0,
       });
     },
@@ -236,7 +233,7 @@ export const billingRules = [
     category: RULE_CATEGORIES.CUSTOMER_CREDIT,
     severity: SEVERITY.CRITICAL,
     defaultWeight: 36,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.CUSTOMER_CREDIT_CREATED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],
     evidenceTypes: [EVIDENCE_TYPES.CUSTOMER_CONFIRMATION, EVIDENCE_TYPES.SALES_INVOICE],
@@ -258,6 +255,34 @@ export const billingRules = [
     },
   }),
 
+  defineRule({
+    ruleCode: "UDHAR_RETURN_MISSING_LEDGER_CREDIT",
+    name: "Udhar refund missing from the customer ledger",
+    description: "A sales return was refunded to udhar but the matching customer-ledger payment is missing or has the wrong amount.",
+    category: RULE_CATEGORIES.CUSTOMER_CREDIT,
+    severity: SEVERITY.CRITICAL,
+    defaultWeight: 36,
+    version: 1,
+    applicableEntityTypes: BILL,
+    applicableEventTypes: [EVENT_TYPES.SALE_RETURNED, EVENT_TYPES.CUSTOMER_CREDIT_ADJUSTED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],
+    evidenceTypes: [EVIDENCE_TYPES.CUSTOMER_CONFIRMATION, EVIDENCE_TYPES.SALES_INVOICE],
+    remediation: "Post the missing return credit through the customer's khata so the return reduces outstanding exactly once.",
+    evaluate(ctx) {
+      const { bill } = ctx;
+      if (bill.status === "cancelled" || bill.billType !== "sales_return" || bill.refundMode !== "udhar") return passed;
+      const expectedPaise = Math.abs(toPaiseInt(bill.creditAmount || bill.grandTotal));
+      const creditedPaise = (ctx.udharRows ?? [])
+        .filter((row) => row.type === "payment" && row.mode === "return" && !row.reversedAt)
+        .reduce((total, row) => total + Math.abs(toPaiseInt(row.amount)), 0);
+      if (creditedPaise === expectedPaise) return passed;
+      return triggered({
+        expectedReturnCreditRupees: fromPaiseInt(expectedPaise),
+        ledgerReturnCreditRupees: fromPaiseInt(creditedPaise),
+        differenceRupees: fromPaiseInt(Math.abs(creditedPaise - expectedPaise)),
+        customerId: bill.customerId,
+      });
+    },
+  }),
   defineRule({
     ruleCode: "CANCELLED_BILL_STILL_IN_LEDGER",
     name: "Cancelled bill still contributes to financial reports",
@@ -501,15 +526,22 @@ export const billingRules = [
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE, EVIDENCE_TYPES.STAFF_EXPLANATION],
     remediation: "Verify what was actually sold and re-bill correctly. Impossible quantities usually indicate a client bug or a manual override.",
     evaluate(ctx) {
+      // A sales return is stored as a mirror image of the sale: negative
+      // quantities AND a negative total. Those negatives are correct by design,
+      // so the sign test only applies to forward sales. For a return, "invalid"
+      // means the quantity points the wrong way (positive) or is zero.
+      const isReturn = ctx.bill.billType === "sales_return";
       const offenders = (ctx.bill.items ?? [])
         .filter((item) => {
           const qty = Number(item.quantity);
           const baseQty = Number(item.quantityInBaseUnit);
-          return !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(baseQty) || baseQty <= 0;
+          if (!Number.isFinite(qty) || !Number.isFinite(baseQty)) return true;
+          if (qty === 0 || baseQty === 0) return true;
+          return isReturn ? qty > 0 || baseQty > 0 : qty < 0 || baseQty < 0;
         })
         .map((item) => ({ billItemId: item.id, name: item.name, quantity: item.quantity, quantityInBaseUnit: item.quantityInBaseUnit }));
       if (!offenders.length) return passed;
-      return triggered({ invalidLines: offenders });
+      return triggered({ billType: ctx.bill.billType, expectedSign: isReturn ? "negative" : "positive", invalidLines: offenders });
     },
   }),
 

@@ -50,6 +50,7 @@ function serializeFinding(finding, { includeBreakdown = false } = {}) {
     riskLevel: finding.riskLevel,
     confidence: finding.confidence,
     amountPaise: finding.amountPaise === null || finding.amountPaise === undefined ? null : Number(finding.amountPaise),
+    discrepancyPaise: finding.discrepancyPaise === null || finding.discrepancyPaise === undefined ? null : Number(finding.discrepancyPaise),
     assignedReviewerId: finding.assignedReviewerId,
     occurredAt: finding.occurredAt,
     resolvedAt: finding.resolvedAt,
@@ -799,7 +800,7 @@ export async function getDashboard(shopId, actor) {
     db.auditFinding.groupBy({ by: ["riskLevel"], where: { ...scope, status: { in: openStatuses } }, _count: { _all: true } }),
     db.auditFinding.findMany({
       where: { ...scope, status: { in: openStatuses }, riskLevel: { in: [RISK_LEVELS.HIGH, RISK_LEVELS.CRITICAL] } },
-      select: { amountPaise: true },
+      select: { discrepancyPaise: true },
     }),
     db.auditEvidenceRequirement.count({ where: { shopId, status: { in: [EVIDENCE_STATUS.REQUESTED, EVIDENCE_STATUS.INSUFFICIENT] } } }),
     db.auditRun.findFirst({ where: { shopId }, orderBy: { createdAt: "desc" } }),
@@ -822,7 +823,12 @@ export async function getDashboard(shopId, actor) {
     }),
   ]);
 
-  const highRiskAmountPaise = highRiskFindings.reduce((total, row) => total + Number(row.amountPaise ?? 0), 0);
+  // Total the measured GAPS, never the record sizes. Adding a bill's total to a
+  // whole day's sales to a product's stock valuation counts the same rupee
+  // repeatedly and once produced a figure larger than the shop's lifetime sales.
+  const quantified = highRiskFindings.filter((row) => row.discrepancyPaise !== null && row.discrepancyPaise !== undefined);
+  const highRiskAmountPaise = quantified.reduce((total, row) => total + Number(row.discrepancyPaise), 0);
+  const unquantifiedHighRisk = highRiskFindings.length - quantified.length;
 
   // Affected staff / customers / suppliers, derived from open findings' sources.
   const affected = await affectedParties(shopId, scope, openStatuses);
@@ -837,6 +843,9 @@ export async function getDashboard(shopId, actor) {
       highFindings: highCount,
       highRiskAmountPaise,
       highRiskAmountRupees: Number((highRiskAmountPaise / 100).toFixed(2)),
+      // Findings whose gap no rule could put a number on (a missing invoice, an
+      // unexplained movement). Shown so the total never reads as "all of it".
+      unquantifiedHighRiskFindings: unquantifiedHighRisk,
       unresolvedEvidenceRequests: openEvidenceRequests,
     },
     byStatus: Object.fromEntries(byStatus.map((row) => [row.status, row._count._all])),

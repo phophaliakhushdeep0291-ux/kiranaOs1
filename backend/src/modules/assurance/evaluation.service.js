@@ -7,6 +7,7 @@
 import crypto from "node:crypto";
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
+import { baseQtyToRateQty } from "../../utils/units.js";
 import {
   ACTIVE_FINDING_STATUSES,
   ENGINE_VERSION,
@@ -128,9 +129,200 @@ function entityMetadata(ctx) {
   }
 }
 
+// Magnitude, always. A sales return is stored with a negative total by design,
+// and a finding that reads "₹-118" is meaningless to a shopkeeper — worse,
+// summing signed amounts made dashboard totals arithmetically wrong.
 function toPaise(rupees) {
   const value = Number(rupees ?? 0);
-  return Number.isFinite(value) ? Math.round(value * 100) : 0;
+  return Number.isFinite(value) ? Math.abs(Math.round(value * 100)) : 0;
+}
+
+// ── how much money is actually in question ────────────────────
+//
+// `amountPaise` is the size of the record a finding is about, which is the
+// right input for materiality banding but the WRONG thing to total on a
+// dashboard: summing a bill total, a whole day's sales and a product's entire
+// stock valuation counts the same rupee several times and can exceed a shop's
+// lifetime turnover. Rules already measure the actual gap — the shortfall, the
+// drift, the difference — so this lifts that number out of their details.
+//
+// The maximum across triggered rules is used rather than the sum: several rules
+// often measure the same underlying gap from different angles, and adding them
+// would inflate it again.
+const DISCREPANCY_RUPEE_KEYS = [
+  "shortfallRupees",
+  "differenceRupees",
+  "excessRupees",
+  "overstatedRupees",
+  "overCollectedRupees",
+  "worstDifferenceRupees",
+  "agedOutstandingRupees",
+  "cashExpensesRupees",
+  "missingCreditTotal",
+  "manualDiscountRupees",
+  "discountRupees",
+];
+const DISCREPANCY_PAISE_KEYS = ["differencePaise", "cashDifferencePaise", "salesDifferencePaise"];
+
+// Rules whose gap is real but not expressible as a plain "differenceRupees".
+// Each entry says, explicitly, what money is in question — no generic guessing.
+//
+// The line drawn here is between money that went MISSING and paperwork that is
+// missing. A purchase that never became stock is a shortfall and belongs in the
+// total; a purchase whose invoice was not filed is a control weakness, and
+// folding its full value in would tell a shopkeeper that ordinary undocumented
+// spend had vanished. Those rules deliberately stay unquantified — the evidence
+// queue already counts them.
+const DISCREPANCY_BY_RULE = {
+  // Unexplained stock movement: the goods that moved without a reason, at cost.
+  STOCK_DECREASE_WITHOUT_SOURCE: (d) => ({ baseQty: d.totalUnexplainedBaseQty }),
+  STOCK_INCREASE_WITHOUT_SOURCE: (d) => ({ baseQty: sumBaseQty(d.unexplainedIncreases) }),
+  STOCK_NEGATIVE_BALANCE: (d) => ({ baseQty: d.shortfallBaseQty }),
+  STOCK_UNUSUAL_SHRINKAGE: (d) => ({ baseQty: d.shrinkageBaseQty }),
+  STOCK_SALE_EXCEEDED_AVAILABLE: (d) => ({ baseQty: sumBaseQty(d.oversoldMovements, "soldBaseQty") }),
+  STOCK_SOLD_WHILE_ARCHIVED: (d) => ({ baseQty: sumBaseQty(d.salesAfterArchive) }),
+  STOCK_DUPLICATE_MOVEMENT: (d) => ({ baseQty: sumBaseQty(d.duplicatePairs) }),
+  STOCK_LARGE_MANUAL_CORRECTION: (d) => ({ baseQty: sumBaseQty(d.corrections) }),
+  // Stock a cancellation should have put back and didn't, valued at cost.
+  STOCK_CANCELLED_SALE_NOT_RESTORED: (d) => ({ baseQty: sumBaseQty(d.unrestoredBills, "netBaseQty") }),
+  // Same gap seen from the bill side, where each line is a different product.
+  CANCELLED_BILL_STOCK_NOT_RESTORED: (d, ctx) => ({ paise: valueByProduct(d.unrestoredProducts, ctx, "netBaseQty") }),
+  // Credit that never reached the khata: the part that went missing.
+  UDHAR_BILL_MISSING_LEDGER_DEBIT: (d) => ({ rupees: Math.abs(Number(d.billCreditAmount ?? 0) - Number(d.ledgerDebitSum ?? 0)) }),
+  // A duplicate is money charged or paid twice — the duplicate itself is at risk.
+  EXPENSE_DUPLICATE: (d) => ({ rupees: d.amountRupees }),
+  BILL_NEAR_DUPLICATE: (d) => ({ rupees: d.grandTotal }),
+  PURCHASE_REPEATED_SAME_DAY_AMOUNT: (d) => ({ rupees: d.amountRupees }),
+  PURCHASE_DUPLICATE_INVOICE_NUMBER: (d) => ({ rupees: d.amountRupees }),
+  // Money left the shop but no goods arrived: the whole purchase is the gap.
+  PURCHASE_WITHOUT_STOCK_RECEIPT: (d) => ({ rupees: d.amountRupees }),
+  PURCHASE_PAYMENT_WITHOUT_GOODS: (d) => ({ rupees: Number(d.paidAmountRupees ?? 0) - Number(d.goodsValueRupees ?? 0) }),
+  // Goods returned to the supplier that were never credited back.
+  PURCHASE_RETURN_NOT_CREDITED: (d) => ({ rupees: sumRupees(d.uncreditedReturns, "totalAmountRupees") }),
+  // Purchased-vs-stocked quantity gap, valued at the purchase's own cost basis.
+  PURCHASE_STOCK_QUANTITY_MISMATCH: (d, ctx) =>
+    d.purchaseKind === "receipt"
+      ? { paise: valueAtPurchaseCost(d.mismatches, ctx) }
+      : { paise: valueAtPurchaseCost([{ differenceBaseQty: d.differenceBaseQty }], ctx) },
+  // Only the amount above the normal range is unusual — not the whole expense.
+  EXPENSE_UNUSUALLY_HIGH_FOR_CATEGORY: (d) => ({ rupees: Number(d.amountRupees ?? 0) - Number(d.upperFenceRupees ?? 0) }),
+};
+
+function sumBaseQty(rows, key = "changeBaseQty") {
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce((total, row) => total + Math.abs(Number(row?.[key]) || 0), 0);
+}
+
+function sumRupees(rows, key) {
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce((total, row) => total + Math.abs(Number(row?.[key]) || 0), 0);
+}
+
+function valueAtProductCost(baseQty, product) {
+  const qty = Math.abs(Number(baseQty) || 0);
+  const cost = Number(product?.costPerRateUnit ?? 0);
+  if (!qty || cost <= 0) return 0;
+  try {
+    const rateQty = baseQtyToRateQty(qty, product.rateUnit, product.baseUnit);
+    return Math.round(Math.abs(rateQty * cost) * 100);
+  } catch {
+    return 0; // unsupported unit pair: no figure beats a wrong figure
+  }
+}
+
+function valueStockAtCost(baseQty, ctx) {
+  return valueAtProductCost(baseQty, ctx.product);
+}
+
+/** Bill contexts carry a products map: value every line at its own product's cost. */
+function valueByProduct(rows, ctx, key) {
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce((paise, row) => paise + valueAtProductCost(row?.[key], ctx.products?.get(row?.productId)), 0);
+}
+
+/**
+ * A purchase states what it paid per unit, so its own lines are a better cost
+ * basis than the product's running average — and need no unit conversion.
+ */
+function purchaseCostPerBaseUnit(ctx) {
+  const totals = new Map();
+  for (const item of ctx.receipt?.items ?? []) {
+    const qty = Math.abs(Number(item.quantityBaseQty) || 0);
+    const amount = Math.abs(Number(item.lineAmount) || 0);
+    if (!qty || !amount) continue;
+    const prev = totals.get(item.productId) ?? { qty: 0, amount: 0 };
+    totals.set(item.productId, { qty: prev.qty + qty, amount: prev.amount + amount });
+  }
+  if (!totals.size && ctx.history) {
+    const qty = Math.abs(Number(ctx.history.qtyBase) || 0);
+    const amount = Math.abs(Number(ctx.history.totalCost) || 0);
+    if (qty && amount) totals.set(ctx.history.productId, { qty, amount });
+  }
+  const rates = new Map();
+  for (const [productId, { qty, amount }] of totals) rates.set(productId, amount / qty);
+  return rates;
+}
+
+function valueAtPurchaseCost(rows, ctx) {
+  if (!Array.isArray(rows) || !rows.length) return 0;
+  const rates = purchaseCostPerBaseUnit(ctx);
+  const fallback = rates.size === 1 ? [...rates.values()][0] : 0;
+  return rows.reduce((paise, row) => {
+    const qty = Math.abs(Number(row?.differenceBaseQty) || 0);
+    const rate = rates.get(row?.productId) ?? fallback;
+    return paise + (qty && rate > 0 ? Math.round(qty * rate * 100) : 0);
+  }, 0);
+}
+
+function ruleDiscrepancyPaise(rule, details, ctx) {
+  if (!details || typeof details !== "object") return 0;
+
+  const explicit = DISCREPANCY_BY_RULE[rule.ruleCode];
+  if (explicit) {
+    const { baseQty, rupees, paise } = explicit(details, ctx) ?? {};
+    if (paise !== undefined) return Math.abs(Math.round(Number(paise) || 0));
+    if (baseQty !== undefined) return valueStockAtCost(baseQty, ctx);
+    if (rupees !== undefined) return Math.abs(Math.round((Number(rupees) || 0) * 100));
+    return 0;
+  }
+
+  // Stock gaps are measured in base units; value them at the product's own cost.
+  if (details.differenceBaseQty !== undefined && ctx.product) {
+    return valueStockAtCost(details.differenceBaseQty, ctx);
+  }
+
+  for (const key of DISCREPANCY_PAISE_KEYS) {
+    if (details[key] !== undefined) return Math.abs(Math.round(Number(details[key]) || 0));
+  }
+  for (const key of DISCREPANCY_RUPEE_KEYS) {
+    if (details[key] !== undefined) return Math.abs(Math.round((Number(details[key]) || 0) * 100));
+  }
+
+  // Nested per-row gaps (over-payments, split-payment mismatches): total the rows.
+  for (const key of ["overPayments", "mismatchedBills", "cancelledDebits"]) {
+    if (Array.isArray(details[key])) {
+      const total = details[key].reduce((sum, row) => {
+        const value = row?.excessRupees ?? row?.differenceRupees ?? row?.amount ?? 0;
+        return sum + Math.abs(Number(value) || 0);
+      }, 0);
+      if (total > 0) return Math.round(total * 100);
+    }
+  }
+  return 0;
+}
+
+/** Largest quantified gap across the triggered rules, or null if none measured one. */
+export function extractDiscrepancyPaise(triggeredRules, ctx) {
+  let largest = 0;
+  let measured = false;
+  for (const { rule, details } of triggeredRules) {
+    const value = ruleDiscrepancyPaise(rule, details, ctx);
+    if (value > 0) {
+      measured = true;
+      largest = Math.max(largest, value);
+    }
+  }
+  return measured ? largest : null;
 }
 
 function findingTitle(ctx, triggeredRules) {
@@ -308,6 +500,7 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
   }
 
   const meta = entityMetadata(ctx);
+  const discrepancyPaise = extractDiscrepancyPaise(triggeredRules, ctx);
   const findingData = {
     sourceEntityType: result.sourceEntityType,
     sourceEntityId: result.sourceEntityId,
@@ -320,6 +513,7 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
     riskLevel: result.riskLevel,
     confidence: result.confidence,
     amountPaise: BigInt(meta.amountPaise ?? 0),
+    discrepancyPaise: discrepancyPaise === null ? null : BigInt(discrepancyPaise),
     scoreBreakdownJson: JSON.stringify({
       formula: result.formula,
       baseScore: result.baseScore,
@@ -338,6 +532,7 @@ async function persistEvaluation({ shopId, runId, ctx, result, triggeredRules, a
       riskLevel: result.riskLevel,
       confidence: result.confidence,
       confidenceReasons: result.confidenceReasons,
+      discrepancyPaise,
       triggeredRules: result.triggeredRules,
       inputHash: result.inputHash,
       engineVersion: result.engineVersion,
