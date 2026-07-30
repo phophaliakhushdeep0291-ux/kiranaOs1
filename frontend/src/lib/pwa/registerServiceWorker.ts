@@ -57,8 +57,64 @@ export async function unregisterStaleLocalServiceWorkers(): Promise<void> {
   }
 }
 
+/**
+ * The customer QR self-order page is opened by walk-in strangers, once, on a
+ * phone we will never see again. They gain nothing from the PWA — and they carry
+ * all of its risk: `clients.claim()` means a brand-new worker takes control
+ * during that very first visit and then has to serve the route's lazy chunks
+ * from a cache that is still empty. One dropped request on shop wifi and the
+ * import rejects, which React caches for good, leaving a stranger staring at a
+ * reload screen we cannot talk them through.
+ *
+ * So the public order route stays a plain web page: no worker, no interception,
+ * always straight from the network. The shopkeeper's till still gets the full
+ * offline PWA, because that is the surface that actually needs it.
+ */
+export function isPublicCustomerRoute(pathname: string): boolean {
+  return /^\/order(\/|$)/.test(pathname);
+}
+
+const PUBLIC_ROUTE_SW_RELEASE_KEY = "kirana:public-route-sw-released";
+
+/**
+ * Heal a phone that is already stuck.
+ *
+ * A customer who scanned before this fix shipped still has the old worker
+ * installed, and it will keep failing their order page forever — we cannot ask a
+ * stranger at the counter to clear their Safari data. So when the public route
+ * finds itself under a worker's control, it releases the worker, drops the shell
+ * caches and reloads once into a clean, plain page.
+ *
+ * Guarded by sessionStorage so it can never loop, and scoped to /order/ only —
+ * the till re-registers its worker the next time the owner opens the app.
+ */
+function releaseServiceWorkerForPublicRoute(): void {
+  if (!navigator.serviceWorker.controller) return;
+  try {
+    if (window.sessionStorage.getItem(PUBLIC_ROUTE_SW_RELEASE_KEY) === "1") return;
+    window.sessionStorage.setItem(PUBLIC_ROUTE_SW_RELEASE_KEY, "1");
+  } catch {
+    // Storage blocked (private mode): fall through, the reload below still runs once
+    // per page load and the unregister makes the next load clean regardless.
+  }
+  void (async () => {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+      await clearKiranaShellCaches();
+    } catch {
+      // Nothing recoverable here; the reload is still worth attempting.
+    }
+    window.location.reload();
+  })();
+}
+
 export function registerServiceWorker(): void {
   if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+  if (isPublicCustomerRoute(window.location.pathname)) {
+    releaseServiceWorkerForPublicRoute();
+    return;
+  }
   if (import.meta.env.DEV && isLocalAppHost()) {
     void unregisterStaleLocalServiceWorkers().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "Local service worker cleanup failed";
