@@ -522,6 +522,12 @@ function normalizeSellingUnits(product, units) {
       minimumPrice: unit.minimumPrice == null ? null : Number(unit.minimumPrice),
       maximumPrice: unit.maximumPrice == null ? null : Number(unit.maximumPrice),
       costPrice: unit.costPrice == null ? null : Number(unit.costPrice),
+      // Per-packaging stock. Carried through explicitly: anything this function
+      // does not name is dropped, so omitting these silently discarded the
+      // quantities the shopkeeper typed per pack.
+      onHandQty: unit.onHandQty == null ? null : Number(unit.onHandQty),
+      lowStockThreshold: unit.lowStockThreshold == null ? null : Number(unit.lowStockThreshold),
+      reorderLevel: unit.reorderLevel == null ? null : Number(unit.reorderLevel),
       isDefault,
       isActive: unit.isActive !== false,
     };
@@ -657,6 +663,9 @@ async function writeSellingUnits(tx, shopId, productId, units) {
       minimumPrice: unit.minimumPrice,
       maximumPrice: unit.maximumPrice,
       costPrice: unit.costPrice,
+      onHandQty: unit.onHandQty,
+      lowStockThreshold: unit.lowStockThreshold,
+      reorderLevel: unit.reorderLevel,
       isDefault: unit.isDefault,
       isActive: unit.isActive,
     };

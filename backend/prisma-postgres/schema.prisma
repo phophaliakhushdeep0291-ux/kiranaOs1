@@ -185,6 +185,12 @@ model ProductSellingUnit {
   maximumPricePaise BigInt?
   costPrice         Float?
   costPricePaise    BigInt?
+  // Per-packaging stock, used only when the parent product is "per_pack".
+  // Held in this unit's own counts (packets, boxes), NOT product base units.
+  // Pooled products leave these null and keep reading Product.stockBaseQty.
+  onHandQty         Float?
+  lowStockThreshold Float?
+  reorderLevel      Float?
   isDefault         Boolean  @default(false)
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
@@ -418,6 +424,13 @@ model Product {
   imageUrl                     String? // optional product image (data URL or hosted URL)
   isLooseItem                  Boolean   @default(false) // sold loose by weight (no fixed package)
   lowStockThreshold            Float     @default(0) // alert when stock <= this
+  // How the packagings of this product share stock.
+  //   "pooled"   — one base-unit pool behind every selling unit. Correct for loose
+  //                goods: 1 kg and a 5 kg bag both come out of the same sack.
+  //   "per_pack" — each selling unit holds its own count. Correct for distinct
+  //                pre-packed SKUs (70 g packet vs 8-pack), reordered separately.
+  // Defaults to "pooled" so existing products keep their current behaviour.
+  packagingMode                String    @default("pooled")
   batchTrackingEnabled         Boolean   @default(false)
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)
@@ -1022,6 +1035,10 @@ model StockLedger {
   locationId              String?
   productId               String
   productName             String
+  // Which packaging this movement belongs to, for "per_pack" products. Without it a
+  // per-pack balance cannot be audited or rebuilt from the ledger.
+  sellingUnitId           String?
+  sellingUnitQty          Float? // movement size in that unit's own counts
   action                  String // sale | purchase | damage | correction | cancel_reversal
   changeBaseQty           Float // positive = stock in, negative = stock out
   oldStockBaseQty         Float
@@ -1058,6 +1075,7 @@ model StockLedger {
 
   @@unique([shopId, idempotencyKey])
   @@index([shopId, createdAt])
+  @@index([shopId, sellingUnitId])
   @@index([shopId, locationId, createdAt])
   @@index([shopId, sourceType, sourceId])
   @@index([productId])

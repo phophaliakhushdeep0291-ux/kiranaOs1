@@ -381,6 +381,24 @@ const NIL_BUCKET_LABELS = {
   intrastate_unregistered: "Intra-State supplies to unregistered persons",
 };
 
+/**
+ * Turn the internal productNames set into a description an accountant can act on, and
+ * surface a missing HSN explicitly — GSTN will not accept a blank HSN, so the row has to
+ * announce that it needs a code rather than look like a normal line.
+ */
+function finaliseHsnRow(row) {
+  const names = [...(row.productNames ?? [])];
+  const { productNames, ...rest } = row;
+  const missingHsn = !String(row.hsn ?? "").trim();
+  const sample = `${names.slice(0, 3).join(", ")}${names.length > 3 ? ", …" : ""}`;
+  // Several products can share one legitimate HSN, so only the blank-code bucket is
+  // described as missing a code.
+  const description = names.length > 1
+    ? `${names.length} products${missingHsn ? " without HSN" : ""}: ${sample}`
+    : (names[0] ?? row.description ?? "");
+  return { ...rest, description, productCount: names.length, missingHsn };
+}
+
 export function buildGstr1WorkingFromRegister(register) {
   const invoiceMap = new Map();
   const b2clMap = new Map();
@@ -461,7 +479,12 @@ export function buildGstr1WorkingFromRegister(register) {
       b2csMap.set(key, summary);
     }
     const hsnKey = `${row.hsn}:${row.unit}:${row.gstRate}`;
-    const hsn = hsnMap.get(hsnKey) ?? { hsn: row.hsn, description: row.description, unit: row.unit, uqc: toUqc(row.unit), gstRate: row.gstRate, quantity: 0, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, totalValue: 0 };
+    const hsn = hsnMap.get(hsnKey) ?? { hsn: row.hsn, description: row.description, unit: row.unit, uqc: toUqc(row.unit), gstRate: row.gstRate, quantity: 0, taxableValue: 0, cgst: 0, sgst: 0, igst: 0, postTaxDiscount: 0, totalValue: 0, productNames: new Set() };
+    // Products with no HSN all collapse into one bucket keyed on an empty code. Keeping
+    // only the first product's name made the row read as if it were that single product
+    // (e.g. "Parle-G Biscuit, qty 8" when the 8 units spanned three products), so track
+    // every name and relabel the group below.
+    if (row.description) hsn.productNames.add(String(row.description));
     hsn.quantity = Number((hsn.quantity + Number(row.quantity)).toFixed(3));
     for (const field of ["taxableValue", "cgst", "sgst", "igst", "postTaxDiscount", "totalValue"]) hsn[field] = Number((hsn[field] + Number(field === "totalValue" ? row.lineTotal : field === "postTaxDiscount" ? row.discount : row[field])).toFixed(2));
     hsnMap.set(hsnKey, hsn);
@@ -477,7 +500,7 @@ export function buildGstr1WorkingFromRegister(register) {
     cdnr: [...cdnrMap.values()],
     cdnur: [...cdnurMap.values()],
     nilRated: [...nilMap.values()],
-    hsn: [...hsnMap.values()],
+    hsn: [...hsnMap.values()].map(finaliseHsnRow),
     documentSeries: buildDocumentSeries(register),
   };
 }

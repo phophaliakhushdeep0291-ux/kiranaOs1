@@ -124,6 +124,41 @@ assert.equal(nilWorking.b2cs.length, 0, "nil-rated supplies must never leak into
 assert.equal(nilWorking.cdnr.length, 0, "an unregistered nil-rated return is not a CDNR note");
 assert.equal(nilWorking.cdnur.length, 0, "a small intrastate nil-rated return is not a CDNUR note");
 
+// Regression: products with no HSN all collapse into one bucket keyed on a blank code.
+// The row kept only the FIRST product's name, so it read as that single product while the
+// quantity spanned several — and a blank HSN is not filable.
+const noHsnWorking = buildGstr1WorkingFromRegister({
+  from: "2026-07-01T00:00:00.000Z",
+  to: "2026-07-31T23:59:59.999Z",
+  rows: [
+    { invoiceNumber: "NH-1", invoiceDate: "2026-07-01", documentType: "invoice", customerName: "Walk-in", buyerGstin: "", placeOfSupply: "27", supplyType: "intrastate", originalInvoiceValue: 0, hsn: "", description: "Parle-G Biscuit", quantity: 2, unit: "piece", gstRate: 0, taxableValue: 20, cgst: 0, sgst: 0, igst: 0, discount: 0, lineTotal: 20 },
+    { invoiceNumber: "NH-1", invoiceDate: "2026-07-01", documentType: "invoice", customerName: "Walk-in", buyerGstin: "", placeOfSupply: "27", supplyType: "intrastate", originalInvoiceValue: 0, hsn: "", description: "Amul Milk 500ml", quantity: 1, unit: "piece", gstRate: 0, taxableValue: 33, cgst: 0, sgst: 0, igst: 0, discount: 0, lineTotal: 33 },
+    { invoiceNumber: "NH-1", invoiceDate: "2026-07-01", documentType: "invoice", customerName: "Walk-in", buyerGstin: "", placeOfSupply: "27", supplyType: "intrastate", originalInvoiceValue: 0, hsn: "", description: "Maggi Noodles", quantity: 5, unit: "piece", gstRate: 0, taxableValue: 70, cgst: 0, sgst: 0, igst: 0, discount: 0, lineTotal: 70 },
+  ],
+});
+const blankRow = noHsnWorking.hsn.find((r) => !String(r.hsn || "").trim());
+assert.ok(blankRow, "products without HSN must still be disclosed as a row");
+assert.equal(blankRow.missingHsn, true, "a blank-HSN row must announce that it needs a code");
+assert.equal(blankRow.productCount, 3);
+assert.equal(blankRow.quantity, 8, "the grouped quantity spans all three products");
+assert.match(blankRow.description, /3 products without HSN/, "the row must not masquerade as one product");
+assert.equal(blankRow.productNames, undefined, "the internal name set must not leak into the payload");
+
+// Several products can legitimately share one real HSN — that row must NOT be labelled
+// as missing a code.
+const sharedHsnWorking = buildGstr1WorkingFromRegister({
+  from: "2026-07-01T00:00:00.000Z",
+  to: "2026-07-31T23:59:59.999Z",
+  rows: [
+    { invoiceNumber: "SH-1", invoiceDate: "2026-07-01", documentType: "invoice", customerName: "Walk-in", buyerGstin: "", placeOfSupply: "27", supplyType: "intrastate", originalInvoiceValue: 0, hsn: "1905", description: "Parle-G Biscuit", quantity: 1, unit: "piece", gstRate: 18, taxableValue: 100, cgst: 9, sgst: 9, igst: 0, discount: 0, lineTotal: 118 },
+    { invoiceNumber: "SH-1", invoiceDate: "2026-07-01", documentType: "invoice", customerName: "Walk-in", buyerGstin: "", placeOfSupply: "27", supplyType: "intrastate", originalInvoiceValue: 0, hsn: "1905", description: "Britannia Marie", quantity: 1, unit: "piece", gstRate: 18, taxableValue: 100, cgst: 9, sgst: 9, igst: 0, discount: 0, lineTotal: 118 },
+  ],
+});
+const sharedRow = sharedHsnWorking.hsn.find((r) => r.hsn === "1905");
+assert.equal(sharedRow.missingHsn, false);
+assert.equal(sharedRow.productCount, 2);
+assert.doesNotMatch(sharedRow.description, /without HSN/, "a real shared HSN must not be reported as missing");
+
 // A registered-buyer nil-rated return stays in CDNR and must NOT also reduce Table 8,
 // or the reduction would be counted twice.
 const nilRegisteredRegister = {

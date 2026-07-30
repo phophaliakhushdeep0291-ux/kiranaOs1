@@ -50,6 +50,16 @@ function formatDate(iso?: string): string {
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
+/** Friendly label for a refund tender recorded on a sales-return bill. */
+function refundModeLabel(raw: unknown): string | undefined {
+  const mode = str(raw).toLowerCase();
+  if (!mode) return undefined;
+  if (mode === "upi") return "UPI";
+  if (mode === "udhar") return "Udhar";
+  if (mode === "gift_card") return "Store credit";
+  return mode.charAt(0).toUpperCase() + mode.slice(1);
+}
+
 /** Friendly payment-mode label from the payment rows + credit split. */
 export function derivePaymentModeLabel(payments: AnyRow[] | undefined, credit: number, total: number): string | undefined {
   const modes = new Set((payments ?? []).map((p) => str(p.mode).toLowerCase()).filter(Boolean));
@@ -76,10 +86,19 @@ export function buildBillReceiptText(input: BillShareInput): string {
     lines.push(`• ${it.name} — ${Math.abs(it.quantity)} × ${money(it.rate)} = ${money(it.lineTotal)}`);
   }
   if (input.items.length) lines.push("");
-  lines.push(`*Total: ${money(input.total)}*`);
   const modeLabel = input.paymentMode ? ` (${input.paymentMode})` : "";
-  if (input.paid > 0.005) lines.push(`Paid: ${money(input.paid)}${modeLabel}`);
-  if (input.credit > 0.005) lines.push(`Udhar baki: ${money(input.credit)}`);
+  if (input.isReturn) {
+    // money() prints absolute values, and a refund carries negative paid/total. Without
+    // explicit refund wording the customer reads "Total: ₹28" as a charge, and the Paid
+    // line vanishes entirely because -28 fails the > 0 guard below.
+    lines.push(`*Refund total: ${money(input.total)}*`);
+    if (Math.abs(input.paid) > 0.005) lines.push(`Refunded to you: ${money(input.paid)}${modeLabel}`);
+    if (input.credit < -0.005) lines.push(`Udhar reduced by: ${money(input.credit)}`);
+  } else {
+    lines.push(`*Total: ${money(input.total)}*`);
+    if (input.paid > 0.005) lines.push(`Paid: ${money(input.paid)}${modeLabel}`);
+    if (input.credit > 0.005) lines.push(`Udhar baki: ${money(input.credit)}`);
+  }
   lines.push("");
   lines.push("Thank you! 🙏");
   return lines.join("\n");
@@ -126,7 +145,12 @@ export function billRecordToShareInput(
     total,
     paid,
     credit,
-    paymentMode: opts.paymentMode ?? derivePaymentModeLabel(opts.payments, credit, total),
+    // A return usually has no payment rows to derive a tender from, but the bill records
+    // how the money went back. Without this the refund line reads "Refunded to you: ₹28"
+    // with no indication of whether that was cash, UPI, or a khata reduction.
+    paymentMode: opts.paymentMode
+      ?? derivePaymentModeLabel(opts.payments, credit, total)
+      ?? refundModeLabel(bill.refundMode ?? bill.refund_mode),
     customerName: str(bill.customerName ?? bill.customer_name) || undefined,
     customerMobile: opts.customerMobile || str(bill.customerMobile ?? bill.customer_mobile) || undefined,
     isReturn: billType === "sales_return",
