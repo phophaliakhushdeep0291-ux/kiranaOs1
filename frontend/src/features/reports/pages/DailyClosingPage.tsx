@@ -232,11 +232,13 @@ export default function DailyClosingPage() {
             </div>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/reports"><Button variant="outline" className="rounded-xl"><CalendarDays size={15} className="mr-1.5" />Reports</Button></Link>
-          <Button variant="outline" className="rounded-xl" onClick={() => report && printClosing(report)} disabled={!report}><Printer size={15} className="mr-1.5" />Print</Button>
-          <Button variant="outline" className="rounded-xl border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => report && shareDailyClosingOnWhatsapp({ report, shopName: shop?.name, include: summaryInclude })} disabled={!report}><MessageCircle size={15} className="mr-1.5" />Share</Button>
-          <Button onClick={() => void load({ showLoader: !reportRef.current })} disabled={loading && !report} className="rounded-xl"><RefreshCw size={15} className="mr-1.5" />Refresh</Button>
+        <div className="grid grid-cols-4 gap-2 lg:flex lg:flex-wrap">
+          <Button asChild variant="outline" className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm">
+            <Link href="/reports"><CalendarDays size={15} className="mr-1 sm:mr-1.5" />Reports</Link>
+          </Button>
+          <Button variant="outline" className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm" onClick={() => report && printClosing(report)} disabled={!report}><Printer size={15} className="mr-1 sm:mr-1.5" />Print</Button>
+          <Button variant="outline" className="h-11 min-w-0 rounded-xl border-emerald-200 px-1.5 text-xs text-emerald-700 hover:bg-emerald-50 sm:px-4 sm:text-sm" onClick={() => report && shareDailyClosingOnWhatsapp({ report, shopName: shop?.name, include: summaryInclude })} disabled={!report}><MessageCircle size={15} className="mr-1 sm:mr-1.5" />Share</Button>
+          <Button onClick={() => void load({ showLoader: !reportRef.current })} disabled={loading && !report} className="h-11 min-w-0 rounded-xl px-1.5 text-xs sm:px-4 sm:text-sm"><RefreshCw size={15} className="mr-1 sm:mr-1.5" />Refresh</Button>
         </div>
       </div>
 
@@ -244,43 +246,43 @@ export default function DailyClosingPage() {
       <div className="flex items-end gap-4">
         <div className="w-full max-w-xs space-y-1.5">
           <Label className="app-muted-label">Closing date</Label>
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 rounded-xl" />
+          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 rounded-xl" />
         </div>
       </div>
 
       {/* ── Hero: Expected Cash in Drawer ───────────────────────────────── */}
-      <div className="overflow-hidden rounded-2xl border-2 border-primary/25 bg-card shadow-md">
-        <div className="border-b border-primary/15 bg-primary/[0.04] px-5 py-3 sm:px-6">
+      <div data-testid="daily-closing-cash-hero" className="overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-lg shadow-primary/10">
+        <div className="border-b border-white/15 bg-gradient-to-r from-primary via-blue-600 to-indigo-700 px-5 py-3 text-white sm:px-6">
           <div className="flex items-center gap-2">
-            <Wallet size={16} className="text-primary" />
-            <p className="app-muted-label text-primary/80">Expected cash in drawer tonight</p>
+            <Wallet size={16} className="text-white/85" />
+            <p className="app-muted-label text-white/80">Expected cash in drawer tonight</p>
           </div>
         </div>
         <div className="grid gap-0 lg:grid-cols-[1fr_1px_0.9fr]">
-          <div className="p-5 sm:p-6">
+          <div className="bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-5 text-white sm:p-6">
             {loading ? (
               <Skeleton className="h-16 w-48" />
             ) : (
               <>
-                <p className="font-display text-5xl font-black tracking-tight text-foreground tabular-nums sm:text-6xl">
+                <p className="break-words font-display text-5xl font-black tracking-tight text-white tabular-nums sm:text-6xl">
                   {fmt(report?.expectedCashInDrawer)}
                 </p>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 text-sm leading-5 text-white/75">
                   Opening float + cash sales + old udhar cash recovery + cash in
                   &nbsp;-&nbsp; supplier cash paid - cash expenses - cash out
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                  <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white ring-1 ring-white/20 backdrop-blur-sm">
                     <ArrowUpRight size={13} />Cash in {fmt(report?.cashReceived)}
                   </span>
-                  <span className="flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-700 ring-1 ring-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300">
+                  <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white ring-1 ring-white/20 backdrop-blur-sm">
                     <CreditCard size={13} />UPI in {fmt(report?.upiReceived)}
                   </span>
-                  <span className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200/60 dark:bg-indigo-950/40 dark:text-indigo-300">
+                  <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white ring-1 ring-white/20 backdrop-blur-sm">
                     <CreditCard size={13} />Bank in {fmt(report?.bankReceived)}
                   </span>
                   {(report?.purchaseCashPaid ?? 0) > 0 && (
-                    <span className="flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-700 ring-1 ring-orange-200/60 dark:bg-orange-950/40 dark:text-orange-300">
+                    <span className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white ring-1 ring-white/20 backdrop-blur-sm">
                       <ArrowDownRight size={13} />Supplier cash -{fmt(report?.purchaseCashPaid)}
                     </span>
                   )}
@@ -377,7 +379,7 @@ export default function DailyClosingPage() {
 
           <div>
             <Label className="app-muted-label">Record cash in / out</Label>
-            <div className="mt-2 grid grid-cols-[0.8fr_1.2fr] gap-2">
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[0.8fr_1.2fr]">
               <Input
                 data-testid="input-cash-movement-amount"
                 type="number"
@@ -398,10 +400,10 @@ export default function DailyClosingPage() {
               />
             </div>
             <div className="mt-2 flex gap-2">
-              <Button variant="outline" className="h-10 flex-1" onClick={() => void addCashMovement("in")}>
+              <Button variant="outline" className="h-11 flex-1" onClick={() => void addCashMovement("in")}>
                 <ArrowDownRight size={15} className="mr-1.5" /> Cash in
               </Button>
-              <Button variant="outline" className="h-10 flex-1" onClick={() => void addCashMovement("out")}>
+              <Button variant="outline" className="h-11 flex-1" onClick={() => void addCashMovement("out")}>
                 <ArrowUpRight size={15} className="mr-1.5" /> Cash out
               </Button>
             </div>
@@ -426,7 +428,7 @@ export default function DailyClosingPage() {
                       <button
                         type="button"
                         onClick={() => void deleteCashMovement(row.id)}
-                        className="text-muted-foreground hover:text-destructive"
+                        className="grid h-11 w-11 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                         aria-label={`Remove ${row.kind === "in" ? "cash in" : "cash out"} of ${fmt(row.amount)}`}
                       >
                         <XCircle size={15} />
@@ -458,9 +460,9 @@ export default function DailyClosingPage() {
                 placeholder="What is physically in the drawer?"
                 value={countedDraft}
                 onChange={(event) => setCountedDraft(event.target.value)}
-                className="h-10 rounded-xl"
+                className="h-11 rounded-xl"
               />
-              <Button data-testid="button-save-drawer-count" onClick={() => void saveDrawerCountForDate()} disabled={savingCount || !report || countedDraft.trim() === ""} className="rounded-xl">
+              <Button data-testid="button-save-drawer-count" onClick={() => void saveDrawerCountForDate()} disabled={savingCount || !report || countedDraft.trim() === ""} className="h-11 rounded-xl">
                 {savingCount ? "Saving..." : savedCountForDate ? "Update" : "Save"}
               </Button>
             </div>
@@ -478,9 +480,9 @@ export default function DailyClosingPage() {
             ) : (
               <ul className="mt-2 divide-y" data-testid="drawer-count-history">
                 {drawerCounts.slice(0, 7).map((row) => (
-                  <li key={row.date} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <li key={row.date} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3 text-sm sm:flex-nowrap">
                     <span className="font-semibold">{new Date(`${row.date}T00:00:00`).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</span>
-                    <span className="text-xs text-muted-foreground">counted {fmt(row.countedCash)} / expected {fmt(row.expectedCash)}</span>
+                    <span className="order-3 w-full text-xs text-muted-foreground sm:order-none sm:w-auto">counted {fmt(row.countedCash)} / expected {fmt(row.expectedCash)}</span>
                     <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-black", row.variance === 0 ? "bg-emerald-50 text-emerald-700" : row.variance > 0 ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-600")}>
                       {row.variance === 0 ? "Exact" : row.variance > 0 ? `+${fmt(row.variance)}` : `−${fmt(Math.abs(row.variance))}`}
                     </span>

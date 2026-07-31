@@ -122,7 +122,10 @@ export default function ProductsPage() {
   const products = useListProducts({ limit: 1000 }, {
     query: { placeholderData: (previousData: Product[] | undefined) => previousData ?? [], staleTime: 2 * 60_000 },
   });
-  const productRows = (products.data?.length ?? 0) > 0 ? products.data ?? [] : localProductRows;
+  // `[]` is an authoritative, successfully loaded catalogue. Falling back to
+  // every IndexedDB row when the server returns an empty list resurrects stale
+  // products; use the direct DB paint only until the repository has resolved.
+  const productRows = products.data === undefined ? localProductRows : products.data;
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),

@@ -1,6 +1,6 @@
 import { offlineDB } from "@/lib/offline/db";
 import { ownerPinRequiredActionSchema, supplierCreationSchema } from "@/lib/validation";
-import { createLocalId, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
+import { createLocalId, emitLocalDataChanged, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation, type EnqueueOutboxOperationInput } from "@/features/sync/outbox";
 import { makeLocalEntity, parseOrThrow, touchLocalEntity } from "@/lib/offline/actions/utils";
 import type { Supplier } from "@/types/api";
@@ -41,6 +41,7 @@ export async function createSupplierLocalFirst(data: Partial<Supplier>): Promise
     { entity_type: "supplier", entity_id: supplier.id, operation_type: "CREATE_SUPPLIER", idempotency_key: `create-supplier:${supplier.id}`, payload: { localSupplierId: supplier.id, supplier: data } },
   );
   upsertCachedListItem<Supplier>(CACHE_KEY, supplier, 1000);
+  emitLocalDataChanged({ type: "supplier", id: supplier.id, action: "created" });
   return supplier;
 }
 
@@ -54,6 +55,7 @@ export async function updateSupplierLocalFirst(id: string, data: Partial<Supplie
     { entity_type: "supplier", entity_id: id, operation_type: "UPDATE_SUPPLIER", idempotency_key: `update-supplier:${id}:${String((supplier as Supplier & { updatedAt?: string }).updatedAt ?? "")}`, payload: { supplierId: id, supplier: data } },
   );
   upsertCachedListItem<Supplier>(CACHE_KEY, supplier, 1000);
+  emitLocalDataChanged({ type: "supplier", id: supplier.id, action: "updated" });
   return supplier;
 }
 
@@ -75,5 +77,6 @@ export async function deleteSupplierLocalFirst(input: DeleteSupplierLocalFirstIn
     { entity_type: "supplier", entity_id: id, operation_type: "DELETE_SUPPLIER_PENDING", idempotency_key: `delete-supplier:${id}`, payload: { supplierId: id, ownerPin: input.ownerPin, reason: input.reason?.trim(), ownerPinProvided: true } },
   );
   removeCachedListItem<Supplier>(CACHE_KEY, id);
+  emitLocalDataChanged({ type: "supplier", id, action: "deleted" });
   return { success: true, pendingSync: true };
 }

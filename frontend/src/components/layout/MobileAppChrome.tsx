@@ -26,7 +26,6 @@ import {
   Truck,
   Undo2,
   Users,
-  WalletCards,
   WifiOff,
   X,
   type LucideIcon,

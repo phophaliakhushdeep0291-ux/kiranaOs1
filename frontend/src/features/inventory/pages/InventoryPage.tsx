@@ -644,7 +644,7 @@ export default function InventoryPage() {
         <InventoryMetricCard label="Total SKUs" value={stockStats.products.toLocaleString("en-IN")} detail={`${stockStats.totalQuantity.toLocaleString("en-IN")} units tracked`} tone="violet" icon={<Tags size={19} />} />
         <InventoryMetricCard label="Low Stock Items" value={stockStats.lowStock.toLocaleString("en-IN")} detail="Require attention" tone="amber" icon={<AlertTriangle size={19} />} />
         <InventoryMetricCard label="Out of Stock Items" value={stockStats.outOfStock.toLocaleString("en-IN")} detail="Take immediate action" tone="rose" icon={<PackageX size={19} />} />
-        <InventoryMetricCard label="Stock Turnover (30D)" value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? "Based on sold quantity" : "No sales movement yet"} tone="green" icon={<TrendingUp size={19} />} />
+        <div className="col-span-2 xl:col-span-1"><InventoryMetricCard label="Stock Turnover (30D)" value={`${stockStats.turnover30}x`} detail={stockStats.turnover30 > 0 ? "Based on sold quantity" : "No sales movement yet"} tone="green" icon={<TrendingUp size={19} />} /></div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -654,9 +654,9 @@ export default function InventoryPage() {
         <InventoryActionCard label="Supplier Purchase" detail="Create purchase entry" tone="violet" icon={<CircleDollarSign size={20} />} onClick={() => openMovement("purchase")} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className="group flex min-h-[66px] w-full items-center gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)]">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#eef4ff] text-[var(--brand)]"><Ellipsis size={20} /></span>
-              <span><span className="block text-[13px] font-semibold text-[#13223f]">More Actions</span><span className="mt-0.5 block text-[11px] text-[#6d7c98]">History, bills and insights</span></span>
+            <button type="button" className="group col-span-2 flex min-h-[82px] w-full items-center gap-3 rounded-[16px] border border-[#e2e8f1] bg-white px-3.5 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)] lg:col-span-1">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#eef4ff] text-[var(--brand)]"><Ellipsis size={20} /></span>
+              <span className="min-w-0"><span className="block text-[13px] font-bold text-[#13223f]">More Actions</span><span className="mt-1 block text-[11px] leading-4 text-[#6d7c98]">History, bills and insights</span></span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
@@ -986,9 +986,9 @@ function InventoryMetricCard({ label, value, detail, tone, icon }: { label: stri
 
 function InventoryActionCard({ label, detail, tone, icon, onClick }: { label: string; detail: string; tone: InventoryTone; icon: ReactNode; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className="group flex min-h-[66px] w-full items-center gap-3 rounded-[10px] border border-[#e2e8f1] bg-white px-4 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)]">
-      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${INVENTORY_TONES[tone]}`}>{icon}</span>
-      <span><span className="block text-[13px] font-semibold text-[#13223f]">{label}</span><span className="mt-0.5 block text-[11px] text-[#6d7c98]">{detail}</span></span>
+    <button type="button" onClick={onClick} className="group flex min-h-[82px] w-full items-center gap-3 rounded-[16px] border border-[#e2e8f1] bg-white px-3.5 text-left shadow-[0_4px_14px_rgba(30,55,90,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_8px_20px_rgba(30,55,90,0.07)]">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] border ${INVENTORY_TONES[tone]}`}>{icon}</span>
+      <span className="min-w-0"><span className="block text-[13px] font-bold leading-4 text-[#13223f]">{label}</span><span className="mt-1 block text-[11px] leading-4 text-[#6d7c98]">{detail}</span></span>
     </button>
   );
 }

@@ -36,6 +36,34 @@ function readCachedSuppliers(): Supplier[] {
   return readInstantCache<Supplier[]>(SUPPLIERS_CACHE_KEY, []).filter((supplier) => (supplier as { deleted_at?: unknown }).deleted_at == null);
 }
 
+function isVisible(supplier: Supplier): boolean {
+  const row = supplier as Supplier & { deleted_at?: unknown; deletedAt?: unknown };
+  return row.deleted_at == null && row.deletedAt == null;
+}
+
+function isDeviceOwned(supplier: Supplier): boolean {
+  const row = supplier as Supplier & { demo_data?: unknown; sync_status?: unknown; server_id?: unknown; serverId?: unknown };
+  if (row.demo_data === true || supplier.id.startsWith("demo_") || supplier.id.startsWith("local_")) return true;
+  if (typeof row.server_id === "string" || typeof row.serverId === "string") return false;
+  return ["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(String(row.sync_status ?? "").toLowerCase());
+}
+
+export function mergeSuppliers(serverRows: Supplier[], localRows: Supplier[]): Supplier[] {
+  const rows = new Map(serverRows.filter(isVisible).map((supplier) => [supplier.id, supplier]));
+  for (const supplier of localRows) {
+    if (!isVisible(supplier)) {
+      rows.delete(supplier.id);
+      continue;
+    }
+    if (isDeviceOwned(supplier)) rows.set(supplier.id, { ...rows.get(supplier.id), ...supplier });
+  }
+  return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function readSuppliersFromIndexedDB(): Promise<Supplier[]> {
+  return offlineDB.getAll<Supplier>("suppliers").then((rows) => rows.filter(isVisible)).catch(() => []);
+}
+
 export function useListSuppliers(options?: QueryHookOptions<ListSuppliersResponse, ListSuppliersQueryKey>) {
   const extra = getQueryOptions<ListSuppliersResponse, ListSuppliersQueryKey>(options);
   const cached = readCachedSuppliers();
@@ -45,13 +73,17 @@ export function useListSuppliers(options?: QueryHookOptions<ListSuppliersRespons
     initialData: extra.initialData ?? cached,
     queryFn: async () => {
       const liveCached = readCachedSuppliers();
-      if (!isBrowserOnline()) return liveCached;
+      if (!isBrowserOnline()) return mergeSuppliers([], [...liveCached, ...await readSuppliersFromIndexedDB()]);
       try {
-        const fresh = await suppliersApi.listSuppliers();
-        void cacheSuppliers(fresh);
-        return fresh;
+        const [fresh, localRows] = await Promise.all([
+          suppliersApi.listSuppliers(),
+          readSuppliersFromIndexedDB(),
+        ]);
+        const merged = mergeSuppliers(fresh, [...liveCached, ...localRows]);
+        void cacheSuppliers(merged);
+        return merged;
       } catch (error) {
-        if (liveCached.length > 0 || isNetworkLikeError(error)) return liveCached;
+        if (isNetworkLikeError(error)) return mergeSuppliers([], [...liveCached, ...await readSuppliersFromIndexedDB()]);
         throw error;
       }
     },

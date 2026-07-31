@@ -177,6 +177,15 @@ export default function PurchaseBillsPage() {
         const next = await FinancialAggregationService.buildSnapshot().catch(() => null);
         if (!active) return;
 
+        // Paint the complete local snapshot before attempting cloud hydration.
+        // Previously the first visit kept the whole page behind a loader until
+        // the sync pull finished (or timed out), even though IndexedDB already
+        // contained everything needed to render purchases offline.
+        setSnapshot(next);
+        await reloadLocal();
+        if (!active) return;
+        if (showLoader) setLoading(false);
+
         if (
           !authLoading &&
           isAuthenticated &&
@@ -191,12 +200,8 @@ export default function PurchaseBillsPage() {
             if (!active) return;
             setSnapshot(afterImport);
             await reloadLocal();
-            return;
           }
         }
-
-        setSnapshot(next);
-        await reloadLocal();
       } finally {
         if (active && showLoader) setLoading(false);
       }

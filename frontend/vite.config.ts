@@ -87,6 +87,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
+        // Merge only very small compatible lazy chunks. This preserves route-level
+        // loading while avoiding dozens of sub-5 kB requests and repeated gzip
+        // framing/dictionaries across feature helper modules.
+        experimentalMinChunkSize: 5_000,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],

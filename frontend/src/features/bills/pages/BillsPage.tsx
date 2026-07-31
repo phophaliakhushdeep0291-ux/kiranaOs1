@@ -279,8 +279,9 @@ function dateMatches(bill: BillRecord, from: string, to: string) {
 
 function realSaleRows(rows: BillRecord[]) {
   // Estimates (kacha bills) count as sales — same money and stock effects as pakka bills,
-  // only the EST- number series differs — so the stat cards include them.
-  return rows.filter((bill) => bill.status !== "cancelled" && !isDeleted(bill));
+  // only the EST- number series differs. History deletion hides a row but must not
+  // rewrite financial summaries; cancellation is the action that removes a sale.
+  return rows.filter((bill) => bill.status !== "cancelled" && !isMergedTwin(bill));
 }
 
 function activeEstimateRows(rows: BillRecord[]) {
@@ -388,7 +389,7 @@ export default function BillsPage() {
   const staffFallback = shop?.name || "Mukesh Store";
 
   const periodBills = useMemo(
-    () => bills.filter((bill) => !isDeleted(bill) && dateMatches(bill, fromDate, toDate)),
+    () => bills.filter((bill) => !isMergedTwin(bill) && dateMatches(bill, fromDate, toDate)),
     [bills, fromDate, toDate],
   );
 
@@ -446,7 +447,7 @@ export default function BillsPage() {
 
   const analytics = useMemo(() => {
     const previous = previousRangeFor(fromDate, toDate);
-    const previousRows = bills.filter((bill) => !isDeleted(bill) && dateMatches(bill, previous.from, previous.to));
+    const previousRows = bills.filter((bill) => !isMergedTwin(bill) && dateMatches(bill, previous.from, previous.to));
     const currentReal = realSaleRows(periodBills);
     const previousReal = realSaleRows(previousRows);
     const sum = (rows: BillRecord[], getter: (bill: BillRecord) => number) => rows.reduce((total, bill) => total + getter(bill), 0);
@@ -500,7 +501,7 @@ export default function BillsPage() {
 
   const paymentBreakdown = useMemo(() => {
     const totals = new Map<string, number>();
-    for (const bill of realSaleRows(filtered)) {
+    for (const bill of realSaleRows(periodBills)) {
       const key = paymentModeOf(bill);
       totals.set(key, (totals.get(key) ?? 0) + billTotal(bill));
     }
@@ -508,7 +509,7 @@ export default function BillsPage() {
     return order
       .map((key) => ({ key, value: totals.get(key) ?? 0, ...MODE_META[key] }))
       .filter((row) => row.value > 0);
-  }, [filtered]);
+  }, [periodBills]);
 
   const recentActivities = useMemo(() => filtered.filter((bill) => !isDeleted(bill)).slice(0, 4).map((bill) => {
     const status = paymentStatusOf(bill);

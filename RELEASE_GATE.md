@@ -22,9 +22,9 @@ Run against a clean checkout with supported Node versions and frozen installs.
 
 | Gate | Command/evidence | Status |
 |---|---|---|
-| Frontend typecheck | `cd frontend && npm run typecheck` | Local baseline passed 2026-07-22 |
-| Frontend tests | `cd frontend && npm run test` | Local baseline passed 2026-07-22: 682 passed, 1 skipped |
-| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local baseline passed 2026-07-22: 2825.9 kB raw / 838.0 kB gzip; bundle budget and production-app check passed |
+| Frontend typecheck | `cd frontend && npm run typecheck` | Local candidate passed 2026-07-31 |
+| Frontend tests | `cd frontend && npm run test` | Local candidate passed 2026-07-31: 862 passed, 1 skipped |
+| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local candidate passed 2026-07-31: 3058.1 kB raw / 911.3 kB gzip; startup, aggregate bundle and production-app checks passed |
 | Backend tests | `cd backend && npm test` | Local baseline passed 2026-07-18, including AI hallucination, GST, loyalty and payment integrity suites |
 | Backend production check | `cd backend && npm run prod:check` | Local baseline passed after Railway packaging fix |
 | Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 153 passed, 1 PostgreSQL-only suite skipped; focused owner-RBAC expansion passed 13/13 |
@@ -44,7 +44,7 @@ Any failure is red. Skips require a written exception below; P0 financial, migra
 | Two-device duplicate/conflict proof | SYNC-002..003 | Not verified |
 | Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Verified. Backend proofs cover partial due, weighted cost, exact stock/lots, audit uniqueness and strict replay identity. Live 390px create/receive reconciled stock 24 -> 28 and ₹920 = ₹100 paid + ₹820 due. Live settlement/reversal proved ₹900 -> ₹700 -> ₹900, exact-event replay, 390x844 geometry, 44px controls and zero runtime/overflow errors. |
 | Daily closing and GST sample reconciliation | RPT-001..002 | Not verified |
-| 375/390/430/768 mobile matrix | QUAL-003 / all MQA flows | Overview routes for Billing, Products, Inventory, Purchases, Reports, Settings and Sync pass overflow/runtime smoke; Customers has separate multi-width evidence. Full transactional flows remain open. |
+| 375/390/430/768 mobile matrix | QUAL-003 / all MQA flows | Overview routes for Billing, Products, Inventory, Purchases, Reports, Settings and Sync pass overflow/runtime smoke; Customers has separate multi-width evidence. Premium Reports and Daily Closing layouts pass all four target widths with zero horizontal overflow; Daily Closing has no sub-44px controls in main content. Full transactional flows remain open. |
 | Backup restore proof and rollback rehearsal | SYNC-005 | Not verified |
 
 Supplier settlement/reversal addendum (2026-07-18): dedicated immutable payment and owner-gated reversal events pass focused frontend tests (8/8), backend sync integration (37/37), and live 390px settlement/reversal capture, including exact-event replay, due restoration and zero visual/runtime errors. MQA-PUR-01 is closed for this release scope.
@@ -53,7 +53,7 @@ Replenishment and return-ledger addendum (2026-07-18): deterministic 30-day net-
 
 Accounting-integrity addendum (2026-07-22): bill postings now balance cash, UPI, bank, receivables, gift-card redemption/return liability and explicit waiver expense legs; supplier payments and reversals are projected into fixed debit/credit accounts. The owner-only shop control returns integer-paise trial-balance evidence, balanced source groups, coverage, unmapped rows and visible exceptions without inventing balancing entries. Contract coverage is 140 endpoints. This is a ledger control, not statutory-complete accounting: inventory valuation/COGS, purchase principal/AP, operating expenses, GST input/output liability, bank-statement matching, TDS/TCS and statutory statements remain open.
 
-Reporting-authority addendum (2026-07-31): operational tables and locked daily-closing snapshots remain the customer-facing report authority. `FinancialLedger` is an append-only journal and future read-model candidate. The owner/admin reconciliation endpoint compares supported shop-wide current-state KPIs at exact paise precision and refuses cutover evidence on any variance; focused integration passes 11/11, including staff denial, deliberate one-paise drift and cancellation netting. Historical period restatement, location-scoped journal parity and premium 390px report-flow QA remain open.
+Reporting-authority addendum (2026-07-31): operational tables and locked daily-closing snapshots remain the customer-facing report authority. `FinancialLedger` is an append-only journal and future read-model candidate. The owner/admin reconciliation endpoint compares supported shop-wide current-state KPIs at exact paise precision and refuses cutover evidence on any variance; focused integration passes 11/11, including staff denial, deliberate one-paise drift and cancellation netting. Premium Reports and Daily Closing phone layouts pass live 375/390/430/768 geometry checks with zero overflow; focused frontend closing coverage passes 28/28 and typecheck passes. Historical period restatement, location-scoped journal parity, transactional closing reconciliation and GST sample proof remain open.
 
 ## Defect thresholds
 

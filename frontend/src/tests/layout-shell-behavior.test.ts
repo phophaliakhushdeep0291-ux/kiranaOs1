@@ -43,4 +43,17 @@ describe("desktop app shell behavior", () => {
     expect(styles).toContain("calc(8px + env(safe-area-inset-bottom))");
     expect(layout).toContain("overscroll-contain");
   });
+
+  it("uses one task-oriented mobile shell with stable top-level destinations", () => {
+    expect(layout).toContain("<MobileTopBar");
+    expect(layout).toContain("<MobileBottomNav");
+    expect(layout).not.toContain("Legacy mobile topbar");
+    expect(layout).not.toContain("Legacy mobile navigation");
+    for (const label of ["Home", "Sell", "Stock", "Customers"]) {
+      expect(mobileChrome).toContain(`label: "${label}"`);
+    }
+    expect(mobileChrome).toContain("Open all app areas");
+    expect(mobileChrome).toContain("Search products, bills, customers");
+    expect(mobileChrome).toContain("Backup & sync");
+  });
 });

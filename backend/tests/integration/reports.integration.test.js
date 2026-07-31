@@ -134,6 +134,141 @@ if (ctx.skip) {
       assert.equal(Array.isArray(data.lowStock), true);
     });
 
+    test("daily closing and GST report reconcile an exact mixed-tender sale, refund, udhar recovery, and cash expense", async () => {
+      const tenant = await createTenant(ctx.db, { gstNumber: "29AAPFU0939F1ZR" });
+      const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const customer = await createCustomer(ctx.db, tenant.shop.id, {
+        type: "udhar",
+        gstNumber: "29AAPFU0939F1ZR",
+        stateCode: "29",
+      });
+      const product = await createProduct(ctx.db, tenant.shop.id, {
+        name: "Closing GST Fixture",
+        stockBaseQty: 20,
+        defaultPricePerRateUnit: 118,
+        gstRate: 18,
+        hsn: "1905",
+      });
+
+      const sale = await createPaidBillViaApi(ctx, auth.accessToken, product, {
+        billType: "gst_invoice",
+        gstMode: "inclusive",
+        customerId: customer.id,
+        customerName: customer.name,
+        quantity: 2,
+        ratePerRateUnit: 118,
+        gstRate: 18,
+        hsn: "1905",
+        actualAmount: 236,
+        buyerPaidAmount: 200,
+        payments: [
+          { mode: "cash", amount: 80 },
+          { mode: "upi", amount: 80 },
+          { mode: "bank", amount: 40 },
+          { mode: "credit", amount: 36 },
+        ],
+      });
+      assert.equal(sale.grandTotal, 236);
+      assert.equal(sale.gst, 36);
+
+      await createPaidBillViaApi(ctx, auth.accessToken, product, {
+        billType: "estimate",
+        quantity: 1,
+        ratePerRateUnit: 50,
+        gstRate: 18,
+        payments: [{ mode: "cash", amount: 50 }],
+      });
+
+      const refund = assertSuccess(await ctx.post("/api/bills/returns", {
+        refundMode: "cash",
+        returnOfBillId: sale.id,
+        reason: "P0 closing and GST reconciliation fixture",
+        items: [{
+          originalBillItemId: sale.items[0].id,
+          productId: product.id,
+          name: product.name,
+          quantity: 1,
+          enteredUnit: "piece",
+          ratePerRateUnit: 118,
+          lineDiscount: 0,
+          gstRate: 18,
+          hsn: "1905",
+          damaged: false,
+        }],
+      }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
+      assert.equal(refund.grandTotal, -118);
+      assert.equal(refund.gst, -18);
+
+      assertSuccess(await ctx.post(`/api/customers/${customer.id}/udhar-payment`, {
+        amount: 20,
+        mode: "cash",
+        note: "P0 closing reconciliation fixture",
+        idempotencyKey: "reports-p0-udhar-recovery",
+      }, { token: auth.accessToken }));
+      assertSuccess(await ctx.post("/api/expenses", {
+        idempotencyKey: "reports-p0-cash-expense",
+        clientExpenseId: "reports-p0-cash-expense",
+        title: "Closing cash expense",
+        amount: 10,
+        category: "general",
+        paymentMode: "cash",
+        status: "paid",
+        spentAt: new Date().toISOString(),
+      }, { token: auth.accessToken }), 201);
+
+      const closing = assertSuccess(await ctx.get("/api/reports/daily-closing?source=live", { token: auth.accessToken }));
+      assert.deepEqual({
+        totalSalesPaise: closing.totalSalesPaise,
+        cashReceivedPaise: closing.cashReceivedPaise,
+        upiReceivedPaise: closing.upiReceivedPaise,
+        bankReceivedPaise: closing.bankReceivedPaise,
+        udharGivenPaise: closing.udharGivenPaise,
+        oldUdharRecoveredPaise: closing.oldUdharRecoveredPaise,
+        cashExpensesPaidPaise: closing.cashExpensesPaidPaise,
+        expectedCashPaise: closing.expectedCashPaise,
+        totalBills: closing.totalBills,
+        roughBills: closing.roughBills,
+      }, {
+        totalSalesPaise: 16800,
+        cashReceivedPaise: 3200,
+        upiReceivedPaise: 8000,
+        bankReceivedPaise: 4000,
+        udharGivenPaise: 3600,
+        oldUdharRecoveredPaise: 2000,
+        cashExpensesPaidPaise: 1000,
+        expectedCashPaise: 2200,
+        totalBills: 3,
+        roughBills: 1,
+      });
+
+      const snapshot = assertSuccess(await ctx.post("/api/reports/daily-closing/snapshot", {
+        date: closing.date,
+      }, { token: auth.accessToken }), 201);
+      assert.equal(snapshot.totalSalesPaise, closing.totalSalesPaise);
+      assert.equal(snapshot.expectedCashPaise, closing.expectedCashPaise);
+      assert.equal(snapshot.snapshot.persisted, true);
+
+      const gst = assertSuccess(await ctx.get("/api/reports/gst?range=monthly", { token: auth.accessToken }));
+      assert.deepEqual({
+        totalBills: gst.totalBills,
+        gstBills: gst.gstBills,
+        taxableSales: gst.taxableSales,
+        gstCollected: gst.gstCollected,
+        cgst: gst.cgst,
+        sgst: gst.sgst,
+        igst: gst.igst,
+      }, {
+        totalBills: 2,
+        gstBills: 2,
+        taxableSales: 100,
+        gstCollected: 18,
+        cgst: 9,
+        sgst: 9,
+        igst: 0,
+      });
+      assert.equal(gst.taxableSales + gst.gstCollected, sale.grandTotal + refund.grandTotal);
+    });
+
     test("sales summary hides gross profit from staff", async () => {
       const tenant = await createTenant(ctx.db);
       const staff = await createStaff(ctx.db, tenant.shop.id);

@@ -80,9 +80,9 @@ IDs are permanent. Split a requirement instead of reusing or renumbering an ID.
 
 | ID | Requirement | Acceptance evidence | Current repository evidence | Priority |
 |---|---|---|---|---|
-| RPT-001 | Daily closing reconciles cash, bank/UPI, udhar, refunds and expected drawer. | Timezone/money tests; closing QA. | Closing snapshots and cash split tests. | P0 |
+| RPT-001 | Daily closing reconciles cash, bank/UPI, udhar, refunds and expected drawer. | Timezone/money tests; closing QA. | Closing snapshots and cash split tests; premium closing layout passes 375/390/430/768 live geometry with zero overflow and 44px main-content controls. Transactional reconciliation remains required. | P0 |
 | RPT-002 | GST report and invoice totals agree exactly for the selected tax mode. | Compliance parity tests; sample return QA. | Compliance/GST tests. | P0 |
-| RPT-003 | Owner sees sales, P&L, top products, dues, staff sales and inventory health. | Aggregation/range tests; 390px report QA. | Operational tables + locked snapshots are the report authority. Owner/admin reconciliation gates any future FinancialLedger read cutover with exact-paise variance; focused backend integration passes 11/11. Premium 390px report-flow QA remains required. | P1 |
+| RPT-003 | Owner sees sales, P&L, top products, dues, staff sales and inventory health. | Aggregation/range tests; 390px report QA. | Operational tables + locked snapshots are the report authority. Owner/admin reconciliation gates any future FinancialLedger read cutover with exact-paise variance; focused backend integration passes 11/11. Premium report hierarchy passes 375/390/430/768 live geometry with zero overflow and focused frontend coverage. | P1 |
 | RPT-004 | Authorized exports produce CSV/PDF with shop/date context and no cross-tenant data. | Export and tenant isolation tests; file inspection QA. | Export workers/tests. | P1 |
 
 ### Hardware, online ordering and administration

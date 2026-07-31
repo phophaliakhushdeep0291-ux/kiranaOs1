@@ -68,36 +68,6 @@ function productStockUnit(product: Product) {
   return product.baseUnit ?? product.stockUnit ?? product.unit ?? product.displayUnit ?? "unit";
 }
 
-function productIdentityKeys(product: Product): string[] {
-  return [
-    product.id,
-    (product as Product & { productId?: string }).productId,
-    (product as Product & { local_id?: string }).local_id,
-    (product as Product & { server_id?: string }).server_id,
-  ].filter((value): value is string => typeof value === "string" && value.length > 0);
-}
-
-function mergeProductRows(queryRows: Product[], localRows: Product[]): Product[] {
-  const merged: Product[] = [];
-  const keyToIndex = new Map<string, number>();
-
-  const upsert = (product: Product) => {
-    const keys = productIdentityKeys(product);
-    const existingIndex = keys.map((key) => keyToIndex.get(key)).find((index): index is number => index !== undefined);
-    if (existingIndex === undefined) {
-      const index = merged.push(product) - 1;
-      keys.forEach((key) => keyToIndex.set(key, index));
-      return;
-    }
-    merged[existingIndex] = { ...merged[existingIndex], ...product };
-    productIdentityKeys(merged[existingIndex]).forEach((key) => keyToIndex.set(key, existingIndex));
-  };
-
-  localRows.forEach(upsert);
-  queryRows.forEach(upsert);
-  return merged;
-}
-
 function productBelongsToActiveLocation(product: Product) {
   const activeLocationId = getActiveLocationId();
   if (!activeLocationId) return true;
@@ -207,6 +177,12 @@ export default function Billing() {
   const [printConfirmOpen, setPrintConfirmOpen] = useState(false);
   const [pendingPrintBillType, setPendingPrintBillType] = useState<BillTypeSelection | null>(null);
   const [mobileCheckoutOpen, setMobileCheckoutOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileCheckoutOpen) return;
+    document.body.setAttribute("data-app-mobile-task-open", "true");
+    return () => document.body.removeAttribute("data-app-mobile-task-open");
+  }, [mobileCheckoutOpen]);
   const [sensitiveApproval, setSensitiveApproval] = useState<{ ownerPin: string; reason: string; actions: BillingSensitiveAction[] } | null>(null);
   const [pendingSensitiveBillType, setPendingSensitiveBillType] = useState<BillTypeSelection | null>(null);
   const [voiceCommand, setVoiceCommand] = useState("");
@@ -412,7 +388,13 @@ export default function Billing() {
     };
   }, []);
 
-  const productRows = useMemo(() => mergeProductRows(products.data ?? [], localProductRows), [products.data, localProductRows]);
+  // The products repository already reconciles server rows with pending local
+  // work. Direct IndexedDB rows are only an instant first-paint fallback; using
+  // them after an authoritative empty response resurrects removed products.
+  const productRows = useMemo(
+    () => products.data === undefined ? localProductRows : products.data,
+    [products.data, localProductRows],
+  );
 
   const allProducts = useMemo(() => productRows.filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null && !String(product.id ?? "").startsWith("demo_")), [productRows]);
 
