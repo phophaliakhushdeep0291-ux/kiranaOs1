@@ -99,7 +99,12 @@ export default defineConfig({
     terserOptions: {
       ecma: 2020,
       module: true,
-      compress: { passes: 4, toplevel: true },
+      compress: {
+        passes: 4,
+        toplevel: true,
+        keep_fargs: false,
+        unsafe_arrows: true,
+      },
       mangle: { toplevel: true },
       format: { comments: false },
     },
@@ -109,9 +114,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Merge only very small compatible lazy chunks. This preserves route-level
-        // loading while avoiding dozens of sub-5 kB requests and repeated gzip
+        // loading while avoiding dozens of sub-8 kB requests and repeated gzip
         // framing/dictionaries across feature helper modules.
-        experimentalMinChunkSize: 5_000,
+        experimentalMinChunkSize: 9_000,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],

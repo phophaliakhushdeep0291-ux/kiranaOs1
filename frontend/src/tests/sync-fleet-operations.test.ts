@@ -36,6 +36,6 @@ describe("sync fleet operations", () => {
     expect(page).toContain("allowsDirectConflictChoice(conflict.entity_type)");
     expect(page).toContain("Correction required");
     expect(page).toContain("Use reversal / correction workflow");
-    expect(page).toContain("Financial history is append-only");
+    expect(page).toContain("Financial and stock history is immutable");
   });
 });
