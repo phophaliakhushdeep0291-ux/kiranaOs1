@@ -124,14 +124,16 @@ export async function createExpense(shopId, data, identity = {}) {
   }
 }
 
-export async function updateExpense(shopId, id, data) {
+export async function updateExpense(shopId, id, data, identity = {}) {
   const payload = normalize(data);
   return db.$transaction(async (tx) => {
     const existing = await tx.expense.findFirst({ where: { id, shopId, deletedAt: null } });
     if (!existing) throw new AppError("Expense not found", 404);
     const operationAt = new Date();
-    const operationId = crypto.randomUUID();
+    const operationId = String(identity.idempotencyKey ?? crypto.randomUUID());
     const sourceId = `${existing.id}:${operationId}`;
+    const replay = await tx.financialLedger.findFirst({ where: { shopId, sourceType: "expense_update", sourceId } });
+    if (replay) return existing;
     await postExpenseEffectLedger(tx, {
       shopId,
       expense: existing,
@@ -157,18 +159,22 @@ export async function updateExpense(shopId, id, data) {
   });
 }
 
-export async function softDeleteExpense(shopId, id) {
+export async function softDeleteExpense(shopId, id, identity = {}) {
   return db.$transaction(async (tx) => {
-    const expense = await tx.expense.findFirst({ where: { id, shopId, deletedAt: null } });
+    const expense = await tx.expense.findFirst({ where: { id, shopId } });
     if (!expense) throw new AppError("Expense not found", 404);
     const operationAt = new Date();
-    const operationId = crypto.randomUUID();
+    const operationId = String(identity.idempotencyKey ?? crypto.randomUUID());
+    const sourceId = `${expense.id}:${operationId}`;
+    const replay = await tx.financialLedger.findFirst({ where: { shopId, sourceType: "expense_delete", sourceId } });
+    if (replay) return expense;
+    if (expense.deletedAt) throw new AppError("Expense is already deleted", 409, "EXPENSE_ALREADY_DELETED");
     await postExpenseEffectLedger(tx, {
       shopId,
       expense,
       sign: -1,
       sourceType: "expense_delete",
-      sourceId: `${expense.id}:${operationId}`,
+      sourceId,
       keyBase: `expense:${expense.id}:delete:${operationId}`,
       businessDate: operationAt,
     });

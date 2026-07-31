@@ -39,7 +39,9 @@ export type SyncOutboxOperationType =
   | "RESTORE_CUSTOMER_PENDING"
   | "RESTORE_PRODUCT_PENDING"
   | "RESTORE_SUPPLIER_PENDING"
-  | "CREATE_EXPENSE";
+  | "CREATE_EXPENSE"
+  | "UPDATE_EXPENSE"
+  | "DELETE_EXPENSE";
 
 export type SyncOutboxEntityType =
   | "customer"

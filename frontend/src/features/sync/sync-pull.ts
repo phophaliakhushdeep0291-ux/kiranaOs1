@@ -26,6 +26,7 @@ const ENTITY_CURSOR_KEYS = [
   "udharLedger",
   "suppliers",
   "purchaseHistory",
+  "expenses",
 ] as const;
 
 type EntityCursorKey = typeof ENTITY_CURSOR_KEYS[number];
@@ -154,6 +155,7 @@ export function normalizePullChanges(response: SyncPullResponse): SyncPullChange
     ["udharLedger", "udhar_ledger"],
     ["suppliers", "supplier"],
     ["purchaseHistory", "purchase_history"],
+    ["expenses", "expense"],
     ["settings", "settings"],
   ];
   return records.flatMap(([key, entityType]) => {

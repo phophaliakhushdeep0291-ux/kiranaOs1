@@ -6,14 +6,15 @@ import type { Expense, ExpenseInput } from "@/types/api";
 
 type LocalExpense = Expense & {
   local_id: string;
+  server_id?: string;
   tenant_id: string;
   store_id: string;
   device_id: string;
   created_at: string;
   updated_at: string;
-  deleted_at: null;
+  deleted_at: string | null;
   version: number;
-  sync_status: "pending_sync";
+  sync_status: "pending_sync" | "syncing" | "synced" | "failed" | "conflict" | "local_only";
 };
 
 export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expense> {
@@ -61,6 +62,81 @@ export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expen
   });
   emitLocalDataChanged({ type: "expense", id, action: "created" });
   return expense;
+}
+
+export async function updateExpenseLocalFirst(id: string, data: ExpenseInput): Promise<Expense> {
+  const existing = await offlineDB.getAll<LocalExpense>("expenses")
+    .then((rows) => rows.find((row) => row.id === id || row.server_id === id));
+  if (!existing) throw new Error("Expense is not cached on this device");
+  const now = nowIso();
+  const expense: LocalExpense = {
+    ...existing,
+    ...data,
+    id: existing.id,
+    local_id: existing.local_id || existing.id,
+    title: data.title.trim(),
+    amount: Number(data.amount),
+    vendor: data.vendor?.trim() || null,
+    notes: data.notes?.trim() || null,
+    updatedAt: now,
+    updated_at: now,
+    version: existing.version + 1,
+    sync_status: "pending_sync",
+  };
+  const opId = createLocalId("update-expense");
+  const outbox = buildOutboxOperation({
+    op_id: opId,
+    entity_type: "expense",
+    entity_id: existing.id,
+    operation_type: "UPDATE_EXPENSE",
+    idempotency_key: opId,
+    payload: {
+      expenseId: existing.server_id || existing.id,
+      localExpenseId: existing.local_id || existing.id,
+      changes: data,
+    },
+  });
+  await offlineDB.transaction(["expenses", "sync_outbox"], async (tx) => {
+    await tx.put("expenses", expense);
+    await tx.enqueueOutboxOperation(outbox);
+  });
+  emitLocalDataChanged({ type: "expense", id: existing.id, action: "updated" });
+  return expense;
+}
+
+export async function deleteExpenseLocalFirst(id: string, ownerPin: string): Promise<void> {
+  if (!/^\d{4}$/.test(ownerPin)) throw new Error("Enter the 4-digit owner PIN");
+  const existing = await offlineDB.getAll<LocalExpense>("expenses")
+    .then((rows) => rows.find((row) => row.id === id || row.server_id === id));
+  if (!existing) throw new Error("Expense is not cached on this device");
+  const now = nowIso();
+  const deleted: LocalExpense = {
+    ...existing,
+    deletedAt: now,
+    deleted_at: now,
+    updatedAt: now,
+    updated_at: now,
+    version: existing.version + 1,
+    sync_status: "pending_sync",
+  };
+  const opId = createLocalId("delete-expense");
+  const outbox = buildOutboxOperation({
+    op_id: opId,
+    entity_type: "expense",
+    entity_id: existing.id,
+    operation_type: "DELETE_EXPENSE",
+    idempotency_key: opId,
+    payload: {
+      expenseId: existing.server_id || existing.id,
+      localExpenseId: existing.local_id || existing.id,
+      ownerPin,
+    },
+  });
+  await offlineDB.transaction(["expenses", "sync_outbox"], async (tx) => {
+    await tx.put("expenses", deleted);
+    await tx.enqueueOutboxOperation(outbox);
+  });
+  emitLocalDataChanged({ type: "expense", id: existing.id, action: "deleted" });
 }
 
 export async function listLocalExpenses(): Promise<Expense[]> {

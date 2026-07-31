@@ -100,6 +100,7 @@ export async function readOfflineReadiness(): Promise<OfflineReadinessSnapshot> 
   const offlineLicenseState = license?.state ?? "missing";
   const billingAllowed = license?.billingAllowed ?? true;
   const currentDeviceStatus = currentDevice?.status ?? null;
+  const deviceTrusted = currentDeviceStatus === "active";
   const warnings: string[] = [];
   if (!databaseAvailable) warnings.push("Local database is unavailable; do not continue offline billing.");
   if (!appShellCached) warnings.push("The complete app shell has not been verified for an offline restart.");
@@ -108,9 +109,10 @@ export async function readOfflineReadiness(): Promise<OfflineReadinessSnapshot> 
   if (productCount === 0) warnings.push("No products are cached on this device yet.");
   if (offlineLicenseState === "missing") warnings.push("No signed offline licence is cached; refresh it while internet is available.");
   if (!billingAllowed) warnings.push("The cached offline licence does not currently allow new billing.");
-  if (currentDeviceStatus && !["active", "pending_activation"].includes(currentDeviceStatus)) warnings.push(`This device is ${currentDeviceStatus} and cannot be trusted for offline billing.`);
+  if (!currentDeviceStatus) warnings.push("This device has not been activated for offline billing.");
+  else if (!deviceTrusted) warnings.push(`This device is ${currentDeviceStatus} and cannot be trusted for offline billing.`);
 
-  const state: OfflineReadinessState = !databaseAvailable || !appShellCached || !billingAllowed || Boolean(currentDeviceStatus && !["active", "pending_activation"].includes(currentDeviceStatus))
+  const state: OfflineReadinessState = !databaseAvailable || !appShellCached || !billingAllowed || !deviceTrusted
     ? "not_ready"
     : warnings.length > 0
       ? "degraded"

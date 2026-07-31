@@ -13,8 +13,8 @@ import { createProductSchema, updateProductSchema } from "../products/products.s
 import { createProduct, restoreDeletedProduct, softDeleteProduct, updateProduct } from "../products/products.service.js";
 import { createSupplierSchema, updateSupplierSchema } from "../suppliers/suppliers.schema.js";
 import { createSupplier, restoreSupplier, softDeleteSupplier, updateSupplier } from "../suppliers/suppliers.service.js";
-import { createExpenseSchema } from "../expenses/expenses.schema.js";
-import { createExpense } from "../expenses/expenses.service.js";
+import { createExpenseSchema, updateExpenseSchema } from "../expenses/expenses.schema.js";
+import { createExpense, softDeleteExpense, updateExpense } from "../expenses/expenses.service.js";
 import { doesBodyTouchProtectedFields } from "../../utils/permissionRules.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
@@ -547,6 +547,7 @@ const SYNC_ENTITY_TYPES = Object.freeze({
   LEDGER_ENTRY: "ledger_entry",
   PURCHASE_HISTORY: "purchase_history",
   STOCK_LEDGER: "inventory_movement",
+  EXPENSE: "expense",
 });
 
 const SYNC_PROCESSING_STALE_MS = 2 * 60 * 1000;
@@ -653,7 +654,7 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
 
   const orderBy = [{ updatedAt: "asc" }, { id: "asc" }];
 
-  const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory] = await Promise.all([
+  const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory, expenses] = await Promise.all([
     db.product.findMany({
       where: buildWhere("products"),
       include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } },
@@ -666,10 +667,11 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
     db.udharLedger.findMany({ where: buildWhere("udharLedger"), orderBy, take: limit }),
     db.supplier.findMany({ where: buildWhere("suppliers"), orderBy, take: limit }),
     db.purchaseHistory.findMany({ where: buildWhere("purchaseHistory"), orderBy, take: limit }),
+    db.expense.findMany({ where: buildWhere("expenses"), orderBy, take: limit }),
   ]);
   const bills = await backfillLegacyBillIdentity(shopId, rawBills);
 
-  const entitySets = { products, customers, bills, stockLedger, udharLedger, suppliers, purchaseHistory };
+  const entitySets = { products, customers, bills, stockLedger, udharLedger, suppliers, purchaseHistory, expenses };
   const hasMoreByEntity = Object.fromEntries(
     Object.entries(entitySets).map(([entity, rows]) => [entity, rows.length === limit])
   );
@@ -704,6 +706,7 @@ export async function pullSince(shopId, since, { cursor, limit, cursors, role, a
     udharLedger,
     suppliers: privileged ? suppliers : [],
     purchaseHistory: privileged ? purchaseHistory : [],
+    expenses: privileged ? expenses : [],
     sync: {
       hasMore,
       hasMoreByEntity,
@@ -892,7 +895,7 @@ async function pullBySequence(shopId, afterSeq, { limit, role } = {}) {
   const rowsByIdentity = await loadSequenceEntities(shopId, page);
   const changes = [];
   for (const log of page) {
-    if (!privileged && (log.entityType === "supplier" || log.entityType === "purchase_history")) continue;
+    if (!privileged && (log.entityType === "supplier" || log.entityType === "purchase_history" || log.entityType === "expense")) continue;
     let entity = rowsByIdentity.get(`${log.entityType}:${log.entityId}`) ?? null;
     if (entity && !privileged && log.entityType === "product") entity = redactProductCostForCashier(entity);
     if (entity && !privileged && log.entityType === "bill") entity = redactBillProfitForCashier(entity);
@@ -928,7 +931,7 @@ async function pullBySequence(shopId, afterSeq, { limit, role } = {}) {
 
 async function loadSequenceEntities(shopId, logs) {
   const ids = (type) => [...new Set(logs.filter((log) => log.entityType === type && log.operation !== "delete").map((log) => log.entityId))];
-  const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory] = await Promise.all([
+  const [products, customers, rawBills, stockLedger, udharLedger, suppliers, purchaseHistory, expenses] = await Promise.all([
     db.product.findMany({ where: { shopId, id: { in: ids("product") } }, include: { sellingUnits: { orderBy: [{ isDefault: "desc" }, { name: "asc" }] } } }),
     db.customer.findMany({ where: { shopId, id: { in: ids("customer") } } }),
     db.bill.findMany({ where: { shopId, id: { in: ids("bill") } }, include: { items: true, payments: true } }),
@@ -936,10 +939,11 @@ async function loadSequenceEntities(shopId, logs) {
     db.udharLedger.findMany({ where: { shopId, id: { in: ids("udhar_ledger") } } }),
     db.supplier.findMany({ where: { shopId, id: { in: ids("supplier") } } }),
     db.purchaseHistory.findMany({ where: { shopId, id: { in: ids("purchase_history") } } }),
+    db.expense.findMany({ where: { shopId, id: { in: ids("expense") } } }),
   ]);
   const bills = await backfillLegacyBillIdentity(shopId, rawBills);
   const map = new Map();
-  for (const [type, rows] of Object.entries({ product: products, customer: customers, bill: bills, stock_ledger: stockLedger, udhar_ledger: udharLedger, supplier: suppliers, purchase_history: purchaseHistory })) {
+  for (const [type, rows] of Object.entries({ product: products, customer: customers, bill: bills, stock_ledger: stockLedger, udhar_ledger: udharLedger, supplier: suppliers, purchase_history: purchaseHistory, expense: expenses })) {
     for (const row of rows) map.set(`${type}:${row.id}`, row);
   }
   return map;
@@ -958,7 +962,7 @@ function redactBillProfitForCashier(bill) {
 }
 
 function buildEntityCursorMap({ legacyCursor = null, cursors = null } = {}) {
-  const entities = ["products", "customers", "bills", "stockLedger", "udharLedger", "suppliers", "purchaseHistory"];
+  const entities = ["products", "customers", "bills", "stockLedger", "udharLedger", "suppliers", "purchaseHistory", "expenses"];
   const map = Object.fromEntries(entities.map((entity) => [entity, legacyCursor || null]));
   if (!cursors) return map;
   const parsed = typeof cursors === "string" ? safeJsonParse(cursors) : cursors;
@@ -1234,6 +1238,11 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyRestoreSupplier(shopId, event, context);
     case SYNC_EVENT_TYPES.CREATE_EXPENSE:
       return applyCreateExpense(shopId, event, user, context);
+    case SYNC_EVENT_TYPES.UPDATE_EXPENSE:
+      return applyUpdateExpense(shopId, event, context);
+    case SYNC_EVENT_TYPES.DELETE_EXPENSE:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyDeleteExpense(shopId, event, context);
     default:
       throw new AppError(`Unsupported sync event type: ${event.type}`, 400);
   }
@@ -1452,8 +1461,35 @@ async function applyCreateExpense(shopId, event, user, context) {
     localExpenseId,
     idempotencyKey,
     idempotentReplay: expense.idempotentReplay === true,
-    expense,
+    expense: toSyncJsonSafe(expense),
   };
+}
+
+async function applyUpdateExpense(shopId, event, context) {
+  const payload = getEventPayload(event);
+  const expenseId = await resolveEntityReference(
+    shopId,
+    SYNC_ENTITY_TYPES.EXPENSE,
+    payload.serverExpenseId ?? payload.expenseId ?? payload.localExpenseId ?? payload.id,
+    context,
+  );
+  if (!expenseId) throw new AppError("expenseId required for UPDATE_EXPENSE sync event", 400);
+  const changes = updateExpenseSchema.parse(payload.changes ?? payload.expense ?? {});
+  const expense = await updateExpense(shopId, expenseId, changes, { idempotencyKey: event.eventId });
+  return { expenseId: expense.id, localExpenseId: payload.localExpenseId ?? null, expense: toSyncJsonSafe(expense) };
+}
+
+async function applyDeleteExpense(shopId, event, context) {
+  const payload = getEventPayload(event);
+  const expenseId = await resolveEntityReference(
+    shopId,
+    SYNC_ENTITY_TYPES.EXPENSE,
+    payload.serverExpenseId ?? payload.expenseId ?? payload.localExpenseId ?? payload.id,
+    context,
+  );
+  if (!expenseId) throw new AppError("expenseId required for DELETE_EXPENSE sync event", 400);
+  const expense = await softDeleteExpense(shopId, expenseId, { idempotencyKey: event.eventId });
+  return { expenseId: expense.id, localExpenseId: payload.localExpenseId ?? null, deletedAt: expense.deletedAt };
 }
 
 async function applyDeleteBill(shopId, event, context) {
@@ -2737,7 +2773,7 @@ function rememberMappingInContext(context, entityType, localId, serverId) {
 }
 
 function exportContextMappings(context) {
-  const grouped = { products: {}, customers: {}, bills: {}, suppliers: {}, ledgerEntries: {} };
+  const grouped = { products: {}, customers: {}, bills: {}, suppliers: {}, expenses: {}, ledgerEntries: {} };
   grouped.purchaseHistory = {};
   grouped.stockLedger = {};
   for (const mapping of context?.mappings?.values?.() ?? []) {
@@ -2749,6 +2785,8 @@ function exportContextMappings(context) {
           ? grouped.bills
           : mapping.entityType === SYNC_ENTITY_TYPES.SUPPLIER
             ? grouped.suppliers
+            : mapping.entityType === SYNC_ENTITY_TYPES.EXPENSE
+              ? grouped.expenses
             : mapping.entityType === SYNC_ENTITY_TYPES.LEDGER_ENTRY
               ? grouped.ledgerEntries
               : mapping.entityType === SYNC_ENTITY_TYPES.PURCHASE_HISTORY
@@ -2780,6 +2818,10 @@ async function rememberMappingsFromResult(shopId, event, result, context) {
   if (result?.supplierId) {
     const localSupplierId = result.localSupplierId ?? payload.localSupplierId ?? payload.supplier?.localId ?? payload.localId;
     if (localSupplierId) mappings.push({ entityType: SYNC_ENTITY_TYPES.SUPPLIER, localId: localSupplierId, serverId: result.supplierId });
+  }
+  if (result?.expenseId) {
+    const localExpenseId = result.localExpenseId ?? payload.localExpenseId ?? payload.expense?.clientExpenseId ?? payload.localId;
+    if (localExpenseId) mappings.push({ entityType: SYNC_ENTITY_TYPES.EXPENSE, localId: localExpenseId, serverId: result.expenseId });
   }
   if (result?.ledgerEntryId) {
     const payment = payload?.payment && typeof payload.payment === "object" && !Array.isArray(payload.payment)
@@ -2919,6 +2961,9 @@ async function entityExists(shopId, entityType, id) {
   }
   if (entityType === SYNC_ENTITY_TYPES.SUPPLIER) {
     return Boolean(await db.supplier.findFirst({ where: { shopId, id, deletedAt: null }, select: { id: true } }));
+  }
+  if (entityType === SYNC_ENTITY_TYPES.EXPENSE) {
+    return Boolean(await db.expense.findFirst({ where: { shopId, id, deletedAt: null }, select: { id: true } }));
   }
   if (entityType === SYNC_ENTITY_TYPES.LEDGER_ENTRY) {
     return Boolean(await db.udharLedger.findFirst({ where: { shopId, id }, select: { id: true } }));

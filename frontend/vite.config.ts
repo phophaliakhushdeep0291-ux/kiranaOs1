@@ -104,6 +104,7 @@ export default defineConfig({
         toplevel: true,
         keep_fargs: false,
         booleans_as_integers: true,
+        drop_console: true,
         unsafe_arrows: true,
       },
       mangle: { toplevel: true },
@@ -117,7 +118,7 @@ export default defineConfig({
         // Merge only very small compatible lazy chunks. This preserves route-level
         // loading while avoiding dozens of sub-6.6 kB requests and repeated gzip
         // framing/dictionaries across feature helper modules.
-        experimentalMinChunkSize: 6_550,
+        experimentalMinChunkSize: 6_600,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],
