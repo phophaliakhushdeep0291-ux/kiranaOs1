@@ -45,6 +45,15 @@ const CAUSE_BY_CODE = {
   DEVICE_NOT_FOUND: "this device is not registered",
   DEVICE_REQUIRED: "a registered device is required",
   SERVER_ERROR: "of a temporary server problem",
+  // 4xx business rules. These reached the owner as "a temporary server problem"
+  // until classifySyncError stopped treating every non-[400/404/409] status as a
+  // 5xx — each one names something only the owner can fix, so say what it is.
+  SUBSCRIPTION_REQUIRED: "this store's subscription is not active",
+  BUSINESS_RULE_FAILED: "it breaks a business rule",
+  SELLER_GSTIN_REQUIRED: "this location needs a GSTIN before it can issue a GST invoice",
+  OFFER_REFERENCE_REQUIRED: "the coupon discount is missing its offer reference",
+  OFFER_DISCOUNT_CHANGED: "the coupon value changed — reapply the coupon",
+  OFFER_DISCOUNT_MISMATCH: "the bill discount is lower than the validated coupon value",
 };
 
 // The stored OfflineSyncEvent.error is just a string (no statusCode), so we also

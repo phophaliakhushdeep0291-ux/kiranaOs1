@@ -183,7 +183,12 @@ export function isMergedBillTwin(bill: Record<string, unknown>): boolean {
   // A row can never be a twin of ITSELF. The surviving row can inherit this marker
   // from the tombstone it replaced (same id), and treating that as "merged away"
   // would hide a real bill from the list.
-  const self = [bill.id, bill.local_id, bill.server_id].filter((v) => typeof v === "string");
+  //
+  // Only the row's OWN keys count as "itself" — NOT server_id. A genuine tombstone is
+  // stamped with server_id AND merged_into_id both set to the surviving row's server id
+  // (see tombstoneMergedRow), so counting server_id here rejected every real twin and
+  // put a phantom "deleted" bill in the recycle bin for every synced bill.
+  const self = [bill.id, bill.local_id].filter((v) => typeof v === "string");
   return !self.includes(mergedInto);
 }
 

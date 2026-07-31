@@ -277,6 +277,7 @@ import { pushPendingOutboxOperations } from "@/features/sync/engine";
 import {
   dedupeBillsForDisplay,
   dedupePaymentsForDisplay,
+  isMergedBillTwin,
   reconcileSyncedBillFromPush,
 } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
@@ -935,9 +936,13 @@ describe("bill sync behavior", () => {
       sync_status: "synced",
     });
     // A GENUINE twin (tombstone pointing at a DIFFERENT row) must be left alone.
+    // It carries server_id === merged_into_id, exactly as reconcile stamps it — the
+    // shape that a self-check counting server_id wrongly scrubbed, which put a phantom
+    // "deleted" bill in the recycle bin for every bill that synced.
     dbState.putInto("bills", {
       id: "bill_local_twin",
       local_id: "bill_local_twin",
+      server_id: "server_bill_twin",
       billNo: "PENDING-TWIN",
       grandTotal: 200,
       deleted_at: "2026-06-07T09:00:00.000Z",
@@ -959,6 +964,78 @@ describe("bill sync behavior", () => {
     expect(scopedRows("bills")).toContainEqual(
       expect.objectContaining({ id: "bill_local_twin", merged_into_id: "server_bill_twin" }),
     );
+  });
+
+  it("restores merge-tombstone markers an earlier build scrubbed, without resurrecting real deletes", async () => {
+    // Regression: the self-merge repair used to count server_id as one of the row's own
+    // ids, so it cleared merged_into_id off every GENUINE tombstone. A tombstone without
+    // that marker is indistinguishable from a user-deleted bill, so each synced bill left
+    // a phantom in the recycle bin. Devices already carry the scrubbed rows — re-stamp them.
+    dbState.putInto("bills", {
+      id: "server_bill_survivor",
+      server_id: "server_bill_survivor",
+      billNo: "KOS-2026-000007",
+      grandTotal: 38,
+      status: "active",
+      deleted_at: null,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+    });
+    dbState.putInto("bills", {
+      id: "bill_local_scrubbed",
+      local_id: "bill_local_scrubbed",
+      server_id: "server_bill_survivor", // points at the row that replaced it
+      billNo: "PENDING-9A03C8",
+      grandTotal: 38,
+      deleted_at: "2026-07-31T12:26:18.329Z",
+      merged_into_id: null, // ← scrubbed by the old repair
+      mergedIntoId: null,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+    });
+    // A bill the user really deleted: keyed BY its server id. Must stay in the bin.
+    dbState.putInto("bills", {
+      id: "server_bill_user_deleted",
+      server_id: "server_bill_user_deleted",
+      billNo: "KOS-2026-000008",
+      grandTotal: 90,
+      deleted_at: "2026-07-31T12:40:00.000Z",
+      merged_into_id: null,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+    });
+    // Deleted before it ever synced — no server_id, so it is a real delete too.
+    dbState.putInto("bills", {
+      id: "bill_local_never_synced",
+      local_id: "bill_local_never_synced",
+      billNo: "PENDING-NEVER",
+      grandTotal: 12,
+      deleted_at: "2026-07-31T12:41:00.000Z",
+      merged_into_id: null,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "pending",
+    });
+
+    await hardenLocalFinancialData();
+
+    const rows = scopedRows("bills");
+    const byId = (id: string) => rows.find((row) => row.id === id);
+    // The scrubbed twin is re-marked, so the recycle bin drops it.
+    expect(byId("bill_local_scrubbed")).toEqual(
+      expect.objectContaining({ merged_into_id: "server_bill_survivor", mergedIntoId: "server_bill_survivor" }),
+    );
+    // Genuine deletes keep no marker and stay in the bin.
+    expect(byId("server_bill_user_deleted")?.merged_into_id ?? null).toBeNull();
+    expect(byId("bill_local_never_synced")?.merged_into_id ?? null).toBeNull();
+
+    const inRecycleBin = rows
+      .filter((row) => typeof row.deleted_at === "string" && !isMergedBillTwin(row as Record<string, unknown>))
+      .map((row) => row.id);
+    expect(inRecycleBin.sort()).toEqual(["bill_local_never_synced", "server_bill_user_deleted"]);
   });
 
   it("product created offline merges with its synced server echo instead of conflicting", async () => {

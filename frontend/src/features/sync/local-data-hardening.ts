@@ -349,12 +349,23 @@ async function repairSelfReferencingMergedRows(): Promise<number> {
     for (const row of rows) {
       const mergedInto = readStringFrom(row, ["merged_into_id", "mergedIntoId"]);
       if (!mergedInto) continue;
+      // Only the row's OWN keys count as "itself". server_id must NOT: a genuine
+      // tombstone carries server_id === merged_into_id by design (both are the
+      // surviving row's server id), so treating server_id as a self-reference
+      // scrubbed the marker off every real twin — and a twin without it is
+      // indistinguishable from a user-deleted bill, so each synced bill left a
+      // phantom entry in the recycle bin.
       const selfIds = [
         readStringFrom(row, ["id"]),
         readStringFrom(row, ["local_id"]),
-        readStringFrom(row, ["server_id"]),
       ].filter(Boolean);
-      if (!selfIds.includes(mergedInto)) continue; // genuine twin — leave it alone
+      const pointsAtSelf = selfIds.includes(mergedInto);
+      // An ACTIVE row must never carry the app-wide "this row is gone" marker; a
+      // genuine twin is always tombstoned. This still catches the original bug
+      // (a survivor that inherited the marker) even when it is keyed locally.
+      const activeInheritedMarker =
+        !isDeleted(row) && mergedInto === readStringFrom(row, ["server_id"]);
+      if (!pointsAtSelf && !activeInheritedMarker) continue; // genuine twin — leave it alone
 
       const rowId = readStringFrom(row, ["id"]);
       if (!rowId) continue;
@@ -362,6 +373,54 @@ async function repairSelfReferencingMergedRows(): Promise<number> {
         .catch(() => undefined);
       repaired += 1;
     }
+  }
+  return repaired;
+}
+
+/**
+ * Backfill: restore merged_into_id on merge tombstones an earlier build scrubbed.
+ *
+ * repairSelfReferencingMergedRows used to count server_id as one of the row's "own"
+ * ids. A genuine tombstone carries server_id === merged_into_id by design, so every
+ * one of them was wrongly cleared — leaving a deleted row with no twin marker, i.e.
+ * something the recycle bin cannot tell apart from a bill the user deleted. Devices
+ * that synced under that build still hold one phantom per bill, so re-stamp them.
+ *
+ * A row only qualifies when it is unambiguously a sync artifact: deleted, no marker,
+ * carrying a server_id that is NOT its own id (its id is still the local bill_… id),
+ * and the row it points at actually exists. A synced bill the user deleted is keyed
+ * BY its server id (id === server_id), and a never-synced local delete has no
+ * server_id at all — so neither can match.
+ */
+async function repairScrubbedMergeTombstones(): Promise<number> {
+  await dexieDB.open();
+  const rows = filterRowsForCurrentScope(
+    await dexieDB.bills.filter(rowMatchesCurrentScope).toArray().catch(() => []),
+  ) as MutableRow[];
+  const liveIds = new Set(
+    rows.filter((row) => !isDeleted(row)).map((row) => readStringFrom(row, ["id"])).filter(Boolean),
+  );
+
+  let repaired = 0;
+  for (const row of rows) {
+    if (!isDeleted(row)) continue;
+    if (readStringFrom(row, ["merged_into_id", "mergedIntoId"])) continue;
+    const rowId = readStringFrom(row, ["id"]);
+    const serverId = readStringFrom(row, ["server_id", "serverId"]);
+    if (!rowId || !serverId || serverId === rowId) continue;
+    if (!liveIds.has(serverId)) continue; // nothing survived it — treat as a real delete
+
+    await dexieDB.bills
+      .put({
+        ...row,
+        merged_into_id: serverId,
+        mergedIntoId: serverId,
+        updated_at: nowIso(),
+        updatedAt: nowIso(),
+        hardening_reason: "restored merge tombstone marker scrubbed by self-merge repair",
+      } as never)
+      .catch(() => undefined);
+    repaired += 1;
   }
   return repaired;
 }
@@ -761,7 +820,11 @@ export async function hardenLocalFinancialData(): Promise<LocalDataHardeningResu
     // Run FIRST: a row wrongly marked "merged into itself" is invisible to the
     // repairs below (and to every list/total), so un-hide it before they run.
     const selfMergesCleared = await repairSelfReferencingMergedRows().catch(() => 0);
-    const billsMerged = (await repairDuplicateBillEchoRows().catch(() => 0)) + selfMergesCleared;
+    // Then re-stamp the twins an earlier build of that same repair wrongly scrubbed,
+    // so their phantom entries drop out of the recycle bin.
+    const tombstonesRestored = await repairScrubbedMergeTombstones().catch(() => 0);
+    const billsMerged =
+      (await repairDuplicateBillEchoRows().catch(() => 0)) + selfMergesCleared + tombstonesRestored;
     const paymentsMerged = (await repairDuplicateFinancialEchoTable("payments").catch(() => 0)) +
       (await repairExactDuplicatePaymentRows().catch(() => 0));
     const ledgerMerged = (await repairMappedBillLedgerEchoRows().catch(() => 0)) +
