@@ -350,6 +350,64 @@ function retryableLedgerAdjustmentValidationConflict(event: PendingSyncEvent): b
   );
 }
 
+/**
+ * A bill cancelled/restored before it had ever reached the server carries
+ * `serverBillId: null`. The server's payload schema used `.optional()`, which
+ * tolerates a missing key but not an explicit null, so these were rejected with
+ * INVALID_EVENT and `retryable: false` — parking a real cancellation in the
+ * conflict queue forever, where no existing repair sweep could see it.
+ *
+ * The server now accepts a nullish id, so the event is valid as-is and only needs
+ * re-queueing. Re-pushing is safe: applying a cancellation twice is idempotent
+ * server-side (the status claim is conditional and the reversal is posted under a
+ * fixed idempotency key), so a duplicate push cannot double-reverse a bill.
+ *
+ * Deliberately narrow — it matches only the serverBillId/null validation failure,
+ * so a cancellation rejected for any other reason stays in the queue for review.
+ */
+export function retryableBillCancellationValidationConflict(event: PendingSyncEvent): boolean {
+  const kind = operationKind(event);
+  const originalKind = String(
+    (event as unknown as MutableRow).original_operation_type ?? "",
+  ).toUpperCase();
+  const isCancellation =
+    kind === "CANCEL_BILL" ||
+    kind === "RESTORE_BILL" ||
+    originalKind === "SOFT_DELETE_BILL_PENDING";
+  if (!isCancellation || (!isConflictOutbox(event) && !isFailedOutbox(event))) return false;
+
+  const message = eventErrorMessage(event);
+  const mentionsServerBillId = message.includes("serverbillid");
+  const mentionsNullType = message.includes("received") && message.includes("null");
+  return mentionsServerBillId || (mentionsNullType && message.includes("invalid_type"));
+}
+
+async function repairRetryableBillCancellationConflicts(): Promise<number> {
+  await dexieDB.open();
+  const rows = filterRowsForCurrentScope(
+    await offlineDB.getAll<PendingSyncEvent>("sync_outbox").catch(() => []),
+  ).filter(retryableBillCancellationValidationConflict);
+
+  if (rows.length === 0) return 0;
+  const now = nowIso();
+  let repaired = 0;
+  for (const event of rows) {
+    const normalizedPayload = buildBackendSyncOperation(event, payloadRecord(event))?.payload ?? event.payload;
+    await dexieDB.sync_outbox.put({
+      ...event,
+      payload: normalizedPayload,
+      status: "PENDING",
+      sync_status: "pending_sync",
+      error_message: null,
+      last_error: null,
+      next_retry_at: null,
+      last_attempt_at: now,
+    });
+    repaired += 1;
+  }
+  return repaired;
+}
+
 async function repairRetryablePurchaseAndLedgerValidationConflicts(): Promise<number> {
   await dexieDB.open();
   const rows = filterRowsForCurrentScope(
@@ -529,11 +587,12 @@ export async function repairResolvedSyncStatusNoise(): Promise<number> {
   const staleSyncingRepaired = await repairStaleSyncingOutboxEvents().catch(() => 0);
   const retryableValidationRepaired = await repairRetryableBillValidationConflicts().catch(() => 0);
   const retryablePurchaseAndLedgerRepaired = await repairRetryablePurchaseAndLedgerValidationConflicts().catch(() => 0);
+  const cancellationRepaired = await repairRetryableBillCancellationConflicts().catch(() => 0);
   const financialRepaired = await hardenLocalFinancialData().then((result) => result.total).catch(() => 0);
   const billRepaired = await repairStaleSyncedBillOutboxFailures().catch(() => 0);
   const duplicateKeyRepaired = await repairResolvedDuplicateKeyOutboxFailures().catch(() => 0);
   const conflictsRepaired = await repairResolvedStoredConflicts().catch(() => 0);
-  const repaired = staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + financialRepaired + billRepaired + duplicateKeyRepaired + conflictsRepaired;
+  const repaired = staleSyncingRepaired + retryableValidationRepaired + retryablePurchaseAndLedgerRepaired + cancellationRepaired + financialRepaired + billRepaired + duplicateKeyRepaired + conflictsRepaired;
   if (repaired > 0 && typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
   }
