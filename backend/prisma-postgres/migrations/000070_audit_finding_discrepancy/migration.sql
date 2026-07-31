@@ -1,4 +1,5 @@
 -- AlterTable
+-- @replay-safe: idempotent (see below), so the deploy script may auto-resolve+replay it on P3009.
 -- Idempotent on purpose. If this migration ever fails mid-transaction the
 -- deploy script resolves it as rolled-back and replays it, so it has to be safe
 -- against a database that already has the column. The plain ADD COLUMN form

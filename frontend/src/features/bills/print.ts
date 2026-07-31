@@ -29,6 +29,8 @@ export interface PrintableBillSnapshot {
   rows: PrintableBillRow[];
   subtotal: number;
   discount: number;
+  /** Signed nearest-rupee round-off derived from the stored totals; 0 when none. */
+  roundOff?: number;
   total: number;
   paid: number;
   credit: number;
