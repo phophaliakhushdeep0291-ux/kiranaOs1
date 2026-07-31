@@ -16,6 +16,7 @@ import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAlia
 import { fetchGroqAliasSuggestions } from "../product-aliases";
 import { baseUnitFor, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
 import type { ProductFormData } from "../product-form-state";
+import { generateInternalEan13 } from "@/lib/barcode/ean13";
 
 const GST_RATES = [0, 5, 12, 18, 28];
 const PACK_MEASURE_UNITS = ["piece", "tablet", "gram", "kg", "ml", "litre"];
@@ -336,9 +337,14 @@ export function ProductFormPanel({
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label={productEntry.identifierLabel} error={err.barcode?.message}>
-                  <div className="relative">
-                    <Input className="h-10 pr-9" placeholder={productEntry.identifierPlaceholder} {...form.register("barcode")} />
-                    <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
+                  <div className="flex gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <Input className="h-10 pr-9" placeholder={productEntry.identifierPlaceholder} {...form.register("barcode")} />
+                      <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
+                    </div>
+                    <Button type="button" variant="outline" className="h-10 shrink-0 px-3" onClick={() => form.setValue("barcode", generateInternalEan13(), { shouldDirty: true, shouldValidate: true })}>
+                      Generate
+                    </Button>
                   </div>
                 </Field>
                 {UnitField}

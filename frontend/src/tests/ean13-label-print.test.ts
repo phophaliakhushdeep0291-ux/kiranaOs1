@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ean13CheckDigit, ean13Modules, ean13Svg, normalizeEan13 } from "@/lib/barcode/ean13";
+import { ean13CheckDigit, ean13Modules, ean13Svg, generateInternalEan13, normalizeEan13 } from "@/lib/barcode/ean13";
 import { buildLabelSheetHtml } from "@/features/products/label-print";
 
 describe("ean13 encoder", () => {
@@ -17,6 +17,12 @@ describe("ean13 encoder", () => {
     expect(normalizeEan13("no-barcode")).toBeNull();
     expect(normalizeEan13("")).toBeNull();
     expect(normalizeEan13(null)).toBeNull();
+  });
+
+  it("generates valid restricted-circulation barcodes for in-store labels", () => {
+    const generated = generateInternalEan13();
+    expect(generated).toMatch(/^29\d{11}$/);
+    expect(normalizeEan13(generated)).toBe(generated);
   });
 
   it("emits exactly 95 modules with guards in place", () => {

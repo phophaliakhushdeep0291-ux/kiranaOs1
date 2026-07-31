@@ -5,6 +5,7 @@ import { createProduct, createStaff, createTenant, login } from "./factories.js"
 import { env } from "../../src/config/env.js";
 import {
   cleanupExpiredShopBackups,
+  openShopBackup,
   processShopBackupArtifact,
   verifyBackupArtifactForTest,
 } from "../../src/modules/backups/backup.service.js";
@@ -142,6 +143,28 @@ if (ctx.skip) {
       assert.equal(expired.status, "expired");
       assert.equal(expired.objectKey, null);
       assert.equal(expired.checksumSha256.length, 64, "checksum metadata survives object expiry");
+    });
+
+    test("refuses to download a backup whose stored envelope no longer matches its checksum", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      const artifact = await ctx.db.backupArtifact.create({
+        data: {
+          shopId: tenant.shop.id,
+          requestedByUserId: tenant.owner.id,
+          type: "shop_logical",
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+      await processShopBackupArtifact(artifact.id, tenant.shop.id);
+      await ctx.db.backupArtifact.update({
+        where: { id: artifact.id },
+        data: { checksumSha256: "0".repeat(64) },
+      });
+
+      await assert.rejects(
+        () => openShopBackup(tenant.shop.id, artifact.id),
+        (error) => error?.code === "BACKUP_CHECKSUM_MISMATCH" && error?.statusCode === 409,
+      );
     });
 
     test("owner backup routes enforce PIN, role, tenant scope, audit, and protected download", async () => {
