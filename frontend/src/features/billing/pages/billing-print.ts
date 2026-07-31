@@ -69,6 +69,7 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     })),
     subtotal: bill.subtotal,
     discount: printer.showDiscount ? bill.discount : 0,
+    roundOff: bill.roundOff ?? 0,
     total: bill.total,
     paid: bill.paid,
     credit: bill.credit,

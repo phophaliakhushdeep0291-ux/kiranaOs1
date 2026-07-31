@@ -86,6 +86,8 @@ export interface PrintableBill {
   items: CartItem[];
   subtotal: number;
   discount: number;
+  /** Signed nearest-rupee adjustment (payable − raw); 0 when round-off is off. */
+  roundOff?: number;
   total: number;
   paid: number;
   credit: number;

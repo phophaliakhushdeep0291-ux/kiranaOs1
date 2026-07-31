@@ -1,4 +1,4 @@
-import { roundMoney } from "@/lib/money";
+import { applyRoundOff, roundMoney, roundToRupee } from "@/lib/money";
 import type { Product } from "@/lib/api/client";
 import type { CartItem } from "./billing-types";
 
@@ -7,7 +7,7 @@ export function clampAmount(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-export { roundMoney };
+export { applyRoundOff, roundMoney, roundToRupee };
 
 /** Quantities support millesimal precision (for example 0.005 kg = 5 g). */
 export function roundQuantity(value: number): number {

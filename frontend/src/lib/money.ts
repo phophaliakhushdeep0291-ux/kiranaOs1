@@ -36,6 +36,30 @@ export function moneyExceeds(value: unknown, limit: unknown): boolean {
   return toPaise(value) > toPaise(limit);
 }
 
+/**
+ * Round a bill total to the nearest whole rupee — the "₹0.50-and-up rounds up"
+ * convention every Indian counter uses. Kept here beside roundMoney so the billing
+ * UI, the offline bill validator, and the sync payload all round by the SAME rule
+ * and can never disagree by a paisa. The backend mirrors this (Math.round on its
+ * paise-reconciled total) so a synced bill reconciles on replay.
+ */
+export function roundToRupee(value: unknown): number {
+  return Math.round(roundMoney(Number(value))) || 0;
+}
+
+/**
+ * Apply nearest-rupee round-off to a bill total. Returns the `payable` (a whole
+ * rupee when enabled) and the signed `roundOff` adjustment (payable − raw) — the
+ * figure the receipt shows and the drawer needs so collected cash matches the
+ * recorded total. Disabled → paise pass through untouched.
+ */
+export function applyRoundOff(rawTotal: unknown, enabled: boolean): { payable: number; roundOff: number } {
+  const raw = roundMoney(Number(rawTotal));
+  if (!enabled) return { payable: raw, roundOff: 0 };
+  const payable = roundToRupee(raw);
+  return { payable, roundOff: roundMoney(payable - raw) };
+}
+
 export function formatMoney(value: unknown): string {
   const rounded = roundMoney(Number(value));
   const hasPaise = Math.abs(toPaise(rounded)) % 100 !== 0;

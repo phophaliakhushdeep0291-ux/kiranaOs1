@@ -11,12 +11,17 @@ import type { GstMode } from "@/lib/gst";
 export interface TaxConfig {
   mode: GstMode;
   defaultRate: number;
+  /** Round each bill total to the nearest rupee at the counter (Taxes & GST → "Round off"). */
+  roundOff: boolean;
 }
 
 export const DEFAULT_TAX_CONFIG: TaxConfig = {
   // Kirana counter default: MRP prices already include GST.
   mode: "inclusive",
   defaultRate: 0,
+  // Nearest-rupee round-off is near-universal at an Indian counter, so it is on
+  // unless the shop turns it off — matching the Taxes settings page default.
+  roundOff: true,
 };
 
 const PREFS_KEY = "kirana:settings-prefs:v1";
@@ -33,10 +38,11 @@ export function setTaxConfigCache(config: Partial<TaxConfig>) {
 
 export async function loadTaxConfig(): Promise<TaxConfig> {
   try {
-    const prefs = await offlineDB.getSetting<{ taxes?: { mode?: string; defaultRate?: string | number } }>(PREFS_KEY);
+    const prefs = await offlineDB.getSetting<{ taxes?: { mode?: string; defaultRate?: string | number; roundOff?: boolean } }>(PREFS_KEY);
     const saved = prefs?.taxes ?? {};
     const mode: GstMode = saved.mode === "exclusive" || saved.mode === "none" ? saved.mode : "inclusive";
-    cache = { mode, defaultRate: Number(saved.defaultRate) || 0 };
+    // Absent (older saved prefs) counts as on — the settings page ships it on.
+    cache = { mode, defaultRate: Number(saved.defaultRate) || 0, roundOff: saved.roundOff !== false };
   } catch {
     /* keep whatever is cached */
   }

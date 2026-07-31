@@ -60,6 +60,10 @@ export const confirmBillSchema = z.object({
   loyaltyPointsToRedeem: z.coerce.number().int().min(1).max(100000000).optional(),
   actualAmount: moneyAmount().optional(),
   buyerPaidAmount: moneyAmount().optional(),
+  // Round the bill total to the nearest rupee (shop's Taxes → "Round off" setting).
+  // The server rounds its own authoritative grandTotal so the paid/credit amounts the
+  // client sends (already rounded) reconcile; the delta is derivable, so no stored column.
+  roundOff: z.boolean().default(false),
   waivedAmount: moneyAmount().default(0),
   creditAmount: moneyAmount().default(0).optional(),
   payments: z.array(paymentSchema).default([]),
