@@ -108,6 +108,7 @@ export async function confirmBill(shopId, body, actor = {}) {
     actualAmount: inputActualAmount,
     buyerPaidAmount: inputBuyerPaidAmount,
     waivedAmount: inputWaivedAmount = 0,
+    roundOff: roundOffEnabled = false,
   } = body;
   const billIdentity = normalizeBillIdentity(shopId, body, actor);
   const requestedLocationId = body.locationId ?? body.location_id ?? actor?.locationId ?? null;
@@ -364,9 +365,17 @@ export async function confirmBill(shopId, body, actor = {}) {
       throw err;
     }
 
-    const grandTotal = gstMode === "exclusive"
+    const rawGrandTotal = gstMode === "exclusive"
       ? addMoney(subtractMoney(subtotal, billDiscount), totalGst)
       : subtractMoney(subtotal, billDiscount);
+    // Nearest-rupee round-off (shop's Taxes → "Round off" setting, carried on the bill).
+    // Rounding the authoritative total here — before every paid/credit/coverage check
+    // below — is what lets the counter collect a whole rupee without tripping
+    // "paid exceeds bill" or "payment total does not match grand total". The client
+    // rounds by the same rule (Math.round on the paise-reconciled total), so a synced
+    // offline bill reconciles identically on replay. The delta is derivable
+    // (grandTotal − (subtotal − discount [+gst])), so nothing new is stored.
+    const grandTotal = roundOffEnabled ? round2(Math.round(rawGrandTotal)) : rawGrandTotal;
 
     const waivedAmount = round2(inputWaivedAmount);
 

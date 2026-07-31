@@ -19,7 +19,7 @@ import { BillingOrderQrButton } from "@/features/customer-order/BillingOrderQrBu
 import { BILLING_DRAFT_KEY, formatHeldBillAge, HELD_BILLS_KEY, isHeldBillStale, newBillId, pruneExpiredHeldBills, upsertOpenBill } from "./open-bills";
 import { updateCustomerOrder } from "@/features/orders/api";
 import { BillingVoicePanel } from "./components/BillingVoicePanel";
-import { billNeedsCustomer, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
+import { applyRoundOff, billNeedsCustomer, calculateCartSubtotal, calculateLineDiscountTotal, cartItemGross, cartItemLineDiscount, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productSearchText, roundMoney, roundQuantity } from "./billing-calculations";
 import { resolveLinePrice } from "@/features/pricing/resolve-line-price";
 import { useShopPricingRules } from "@/features/pricing/pricing-rules-cache";
 import { writeBillingReceiptErrorWindow, writeBillingReceiptPendingWindow, writeBillingReceiptWindow } from "./billing-print";
@@ -316,7 +316,12 @@ export default function Billing() {
   const effectiveLoyaltyPoints = Math.min(Math.max(0, Math.floor(loyaltyPointsToRedeem)), loyaltyMaxPoints);
   const loyaltyDiscount = roundMoney((effectiveLoyaltyPoints * redemptionPaisePerPoint) / 100);
   const totalDiscount = roundMoney(safeDiscount + loyaltyDiscount);
-  const grandTotal = roundMoney(Math.max(0, payableBase - totalDiscount));
+  const rawGrandTotal = roundMoney(Math.max(0, payableBase - totalDiscount));
+  // Nearest-rupee round-off (shop's Taxes → "Round off" setting). grandTotal becomes
+  // the whole-rupee figure the counter collects, so every downstream tender/split/
+  // credit/change-due and the stored total stay consistent with the cash in the drawer.
+  const roundOffEnabled = getTaxConfigSync().roundOff;
+  const { payable: grandTotal, roundOff: roundOffAmount } = applyRoundOff(rawGrandTotal, roundOffEnabled);
   const effectiveGiftCardAmount = roundMoney(Math.min(Math.max(0, giftCardAmount), giftCardBalance ?? 0, grandTotal));
   const totalGst = gstBreakdown.gst;
   const splitCash = typeof splitCashAmount === "number" ? clampAmount(splitCashAmount, 0, grandTotal) : 0;
@@ -1123,6 +1128,7 @@ export default function Billing() {
       items: cart,
       subtotal,
       discount: totalDiscount,
+      roundOff: roundOffAmount,
       total: grandTotal,
       paid,
       credit,
@@ -1258,6 +1264,9 @@ export default function Billing() {
         clientBillId: activeBillId,
         billType: nextBillType,
         gstMode: getTaxConfigSync().mode,
+        // Ride the round-off setting with the bill so the offline validator and the
+        // server round the total the same way this counter just did (and payments reconcile).
+        roundOff: roundOffEnabled,
         customerId: resolvedCustomerId || undefined,
         customerName: resolvedCustomerName || "Walk-in",
         customerMobile: resolvedCustomerMobile || undefined,
@@ -1635,6 +1644,7 @@ export default function Billing() {
         gstIgst={gstBreakdown.igst}
         gstSupplyType={gstBreakdown.supplyType}
         grandTotal={grandTotal}
+        roundOff={roundOffAmount}
         paymentMode={paymentMode}
         setPaymentMode={setPaymentMode}
         paidAmount={paidAmount}

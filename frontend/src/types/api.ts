@@ -458,6 +458,12 @@ export interface BillInput {
   discount?: number;
   /** Optional free-text reason for the bill-level discount (discounts report). */
   discountReason?: string;
+  /**
+   * Round the bill total to the nearest rupee (shop's Taxes → "Round off" setting).
+   * Carried on the bill so the offline validator and the server round identically and
+   * the tendered cash reconciles against the recorded total.
+   */
+  roundOff?: boolean;
   offerId?: string;
   offerCode?: string;
   offerDiscount?: number;

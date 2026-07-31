@@ -68,6 +68,8 @@ interface BillingSummaryProps {
   gstIgst?: number;
   gstSupplyType?: "intrastate" | "interstate";
   grandTotal: number;
+  /** Signed nearest-rupee round-off applied to reach grandTotal; 0 when off. */
+  roundOff?: number;
   paymentMode: PaymentSelection;
   setPaymentMode: Dispatch<SetStateAction<PaymentSelection>>;
   paidAmount: number | "";
@@ -193,6 +195,7 @@ export function BillingSummary({
   gstIgst,
   gstSupplyType,
   grandTotal,
+  roundOff = 0,
   paymentMode,
   setPaymentMode,
   paidAmount,
@@ -588,6 +591,16 @@ export function BillingSummary({
                   placeholder="e.g. regular customer"
                   className="w-full max-w-[200px] rounded-[7px] border border-transparent bg-[#f7f9fd] px-2 py-1 text-right text-[11px] font-semibold text-[#31527e] placeholder:text-[#9aa7bd] focus:border-[#dbe8ff] focus:bg-white focus:outline-none"
                 />
+              </div>
+            )}
+
+            {/* Round off — the nearest-rupee adjustment folded into the grand total. */}
+            {roundOff !== 0 && (
+              <div className="flex h-[29px] items-center justify-between text-[12px]">
+                <span className="font-semibold text-[#536383]">Round off</span>
+                <span data-testid="text-round-off" className="font-black text-[#13274d]">
+                  {roundOff > 0 ? "+" : "−"}{fmtRs(Math.abs(roundOff))}
+                </span>
               </div>
             )}
 

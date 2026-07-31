@@ -55,6 +55,8 @@ export interface ReceiptSnapshot {
   rows: ReceiptLine[];
   subtotal: number;
   discount: number;
+  /** Signed nearest-rupee round-off folded into the total; omitted/0 when off. */
+  roundOff?: number;
   total: number;
   paid: number;
   credit: number;
@@ -258,6 +260,7 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
           <div class="line"><span>Subtotal</span><strong>${formatReceiptMoney(snapshot.subtotal)}</strong></div>
           ${snapshot.gst && snapshot.gst.gst > 0 && snapshot.gst.mode === "exclusive" ? `<div class="line"><span>GST (${snapshot.gst.supplyType === "interstate" ? "IGST" : "CGST + SGST"})</span><strong>+${formatReceiptMoney(snapshot.gst.gst)}</strong></div>` : ""}
           ${snapshot.discount > 0 ? `<div class="line"><span>Discount</span><strong>-${formatReceiptMoney(snapshot.discount)}</strong></div>` : ""}
+          ${snapshot.roundOff ? `<div class="line"><span>Round off</span><strong>${snapshot.roundOff > 0 ? "+" : "-"}${formatReceiptMoney(Math.abs(snapshot.roundOff))}</strong></div>` : ""}
           <div class="line grand"><span>Total</span><strong>${formatReceiptMoney(snapshot.total)}</strong></div>
           <div class="line"><span>Paid</span><strong>${formatReceiptMoney(snapshot.paid)}</strong></div>
           <div class="line due"><span>Due / Udhar</span><strong>${formatReceiptMoney(snapshot.credit)}</strong></div>

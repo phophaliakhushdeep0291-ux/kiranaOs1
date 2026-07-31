@@ -190,6 +190,9 @@ export const billCreationSchema = z
     waivedAmount: money.optional(),
     allowAdvancePayment: z.boolean().optional(),
     advanceAmount: money.optional(),
+    // Round the bill total to the nearest rupee (shop's Taxes → "Round off" setting).
+    // Carried on the bill so the offline validator and the server round identically.
+    roundOff: z.boolean().optional(),
     payments: z.array(billPaymentSchema).default([]),
   })
   .superRefine((bill, ctx) => {
@@ -212,7 +215,11 @@ export const billCreationSchema = z
       ? bill.items.reduce((sum, item) => sum + lineNet(item) * (item.gstRate / 100), 0)
       : 0;
     const payableBase = subtotal + gstToAdd;
-    const total = Math.max(0, payableBase - bill.discount);
+    const rawTotal = Math.max(0, payableBase - bill.discount);
+    // When round-off is on the counter collects (and tenders) the nearest rupee, so
+    // the paid-vs-total guard below must compare against that same rounded figure —
+    // otherwise a legitimate ₹248 tender on a ₹247.60 bill is wrongly rejected.
+    const total = bill.roundOff ? Math.round(rawTotal) : rawTotal;
     const paid = bill.payments.reduce((sum, payment) => sum + payment.amount, 0);
 
     if (bill.discount > payableBase) {

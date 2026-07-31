@@ -5,6 +5,7 @@ import { getActiveLocationId } from "@/features/stores/location-context";
 import { createLocalId, emitLocalDataChanged, normaliseInstantCacheValue, readInstantCache, upsertCachedListItem, writeInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation, enqueueOutboxOperation } from "@/features/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
+import { applyRoundOff } from "@/lib/money";
 import { normaliseLocalCustomer } from "@/features/customers/local-actions";
 import type { Bill, BillInput, BillInputItem, BillPayment, Customer, Product } from "@/types/api";
 import { buildAuditLogOutboxInput, buildAuditLogRow, type AuditLogRow } from "@/features/audit-logs/local-actions";
@@ -391,8 +392,12 @@ function calculateBillAmounts(data: BillInput) {
   }, 0));
   const discount = roundMoney(readNumber(data.discount, 0));
   const payableBase = gstMode === "exclusive" ? roundMoney(subtotal + gst) : subtotal;
-  const total = roundMoney(Math.max(0, payableBase - discount));
-  return { subtotal, gst, discount, total, gstMode, payableBase };
+  const rawTotal = roundMoney(Math.max(0, payableBase - discount));
+  // Nearest-rupee round-off rides on the bill (shop's Taxes → "Round off" setting).
+  // Applying it here keeps the stored total, the paid-vs-total guards, and the drawer
+  // all on the rounded figure the counter actually collected.
+  const { payable: total, roundOff } = applyRoundOff(rawTotal, (data as { roundOff?: boolean }).roundOff === true);
+  return { subtotal, gst, discount, total, gstMode, payableBase, roundOff };
 }
 
 function hasCustomerReference(data: BillInput) {
