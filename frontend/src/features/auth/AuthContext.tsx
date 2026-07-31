@@ -6,7 +6,7 @@ import { AUTH_SESSION_STORAGE_KEY, clearAuthStorage, getAuthValue, loadAuthSessi
 import { writeAuditLog } from "@/features/audit-logs/local-actions";
 import { activateDevice, heartbeatDevice, reportDeviceHealth } from "@/features/devices/api";
 import { collectDeviceHealth } from "@/lib/device-health/collectDeviceHealth";
-import { ensureCurrentDeviceRegistered, writeOfflineLicenseToken } from "@/features/devices/license";
+import { ensureCurrentDeviceRegistered, markCurrentDeviceActivated, writeOfflineLicenseToken } from "@/features/devices/license";
 import { getOfflineScope } from "@/lib/offline/context";
 import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { clearSessionLockState } from "@/features/settings/SessionLockGate";
@@ -34,6 +34,7 @@ async function activateCurrentDeviceSafely() {
       : "This device";
     await ensureCurrentDeviceRegistered(deviceName);
     const response = await activateDevice(deviceName, scope.device_id);
+    await markCurrentDeviceActivated(response.device.device_name ?? response.device.deviceName ?? deviceName);
     if (response.license) await writeOfflineLicenseToken(response.license, "backend-activation");
   } catch {
     // Login must not fail just because the backend/device activation endpoint is temporarily unavailable.

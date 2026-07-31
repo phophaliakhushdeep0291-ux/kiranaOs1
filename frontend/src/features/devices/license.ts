@@ -431,10 +431,19 @@ export async function ensureCurrentDeviceRegistered(
     .get(CURRENT_DEVICE_ROW_ID)
     .catch(() => undefined);
   const payload = isRecord(existing?.payload) ? existing.payload : {};
+  const sameScope = existing?.tenant_id === scope.tenant_id
+    && existing?.store_id === scope.store_id
+    && existing?.device_fingerprint === scope.device_id;
+  const previousStatus = sameScope && typeof payload.status === "string"
+    ? payload.status
+    : "pending_activation";
+  const status: DeviceRecordStatus = previousStatus === "active"
+    ? "active"
+    : "pending_activation";
   const row: DeviceLicenseCacheRow = {
     id: CURRENT_DEVICE_ROW_ID,
     device_fingerprint: scope.device_id,
-    status: "active",
+    status,
     payload: {
       ...payload,
       device_id: scope.device_id,
@@ -443,7 +452,7 @@ export async function ensureCurrentDeviceRegistered(
         (typeof payload.device_name === "string"
           ? payload.device_name
           : "This device"),
-      status: "active",
+      status,
       activated_at:
         typeof payload.activated_at === "string" ? payload.activated_at : now,
       last_active_at: now,
@@ -460,6 +469,23 @@ export async function ensureCurrentDeviceRegistered(
   };
   await dexieDB.device_license_cache.put(row);
   return deviceRowToRegistration(row) as DeviceRegistration;
+}
+
+export async function markCurrentDeviceActivated(deviceName?: string): Promise<DeviceRegistration> {
+  const registration = await ensureCurrentDeviceRegistered(deviceName);
+  const now = nowIso();
+  const existing = await dexieDB.device_license_cache.get(CURRENT_DEVICE_ROW_ID);
+  if (!existing) throw new Error("Current device registration could not be persisted");
+  const payload = isRecord(existing?.payload) ? existing.payload : {};
+  const row: DeviceLicenseCacheRow = {
+    ...existing,
+    status: "active",
+    payload: { ...payload, status: "active", last_active_at: now },
+    updated_at: now,
+    sync_status: "synced",
+  };
+  await dexieDB.device_license_cache.put(row);
+  return deviceRowToRegistration(row) ?? registration;
 }
 
 export async function createPendingDeviceRegistration(

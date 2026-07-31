@@ -26,7 +26,6 @@ import {
   type LocalDbHealthReport,
 } from "@/features/recovery/health";
 import { retryFailedSyncOperations, runSyncCycle } from "@/features/sync";
-import { FeatureGate, UpgradePrompt } from "@/features/subscription";
 import { OfflineConfidenceMeter } from "@/features/innovation/components/OfflineConfidenceMeter";
 
 const BILLING_DRAFT_KEY = "kirana-os:billing-draft:v1";
@@ -64,7 +63,7 @@ async function readRecoverySnapshot(): Promise<RecoverySnapshot> {
       runLocalDbHealthCheck().catch(() => null),
     ]);
     return {
-      dbState: healthReport?.status === "problem" ? "problem" : "healthy",
+      dbState: !healthReport || healthReport.status === "problem" ? "problem" : "healthy",
       draftExists: isMeaningfulDraft(draft),
       pendingSyncCount: outbox.filter(
         (row) =>
@@ -160,18 +159,7 @@ export default function RecoveryModePage() {
   };
 
   return (
-    <FeatureGate
-      featureName="recovery_mode"
-      fallback={
-        <div className="w-full max-w-none p-6">
-          <UpgradePrompt
-            featureName="recovery_mode"
-            description="Recovery mode is available on Standard and above. Old data remains viewable."
-          />
-        </div>
-      }
-    >
-      <div className="w-full max-w-none space-y-6 p-4 sm:p-6">
+    <div className="w-full max-w-none space-y-6 p-4 sm:p-6">
         <div>
           <h1 className="text-3xl font-black tracking-tight">Recovery mode</h1>
           <p className="mt-2 text-muted-foreground">
@@ -299,7 +287,6 @@ export default function RecoveryModePage() {
             </Button>
           </RecoveryActionCard>
         </div>
-      </div>
-    </FeatureGate>
+    </div>
   );
 }

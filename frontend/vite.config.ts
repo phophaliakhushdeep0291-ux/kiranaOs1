@@ -103,10 +103,11 @@ export default defineConfig({
         passes: 4,
         toplevel: true,
         keep_fargs: false,
+        booleans_as_integers: true,
         unsafe_arrows: true,
       },
       mangle: { toplevel: true },
-      format: { comments: false },
+      format: { comments: false, semicolons: false },
     },
     outDir: path.resolve(projectRoot, "dist/public"),
     emptyOutDir: true,
@@ -114,9 +115,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // Merge only very small compatible lazy chunks. This preserves route-level
-        // loading while avoiding dozens of sub-8 kB requests and repeated gzip
+        // loading while avoiding dozens of sub-6.6 kB requests and repeated gzip
         // framing/dictionaries across feature helper modules.
-        experimentalMinChunkSize: 9_000,
+        experimentalMinChunkSize: 6_550,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],

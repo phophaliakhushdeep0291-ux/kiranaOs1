@@ -2,7 +2,7 @@
 
 Current decision: **NO-GO — candidate/external/manual evidence incomplete**
 Gate owner: Release owner  
-Last evaluated: 2026-07-22
+Last evaluated: 2026-07-31
 
 No new feature should enter a release branch while the P0 production gate is red. This document records the decision; `PRODUCTION_CHECKLIST.md` contains the full operational checklist.
 
@@ -23,8 +23,8 @@ Run against a clean checkout with supported Node versions and frozen installs.
 | Gate | Command/evidence | Status |
 |---|---|---|
 | Frontend typecheck | `cd frontend && npm run typecheck` | Local candidate passed 2026-07-31 |
-| Frontend tests | `cd frontend && npm run test` | Local candidate passed 2026-07-31: 862 passed, 1 skipped |
-| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local candidate passed 2026-07-31: 3058.1 kB raw / 911.3 kB gzip; startup, aggregate bundle and production-app checks passed |
+| Frontend tests | `cd frontend && npm run test` | Local candidate passed 2026-07-31: 877 passed, 1 skipped across 146 passed files and 1 skipped file |
+| Frontend production build/security | `cd frontend && npm run build && npm run security:check` | Local candidate passed 2026-07-31: startup 947.2 kB raw / 281.2 kB gzip; total 3052.7 kB raw / 911.1 kB gzip; fixed bundle budgets and production-app checks passed |
 | Backend tests | `cd backend && npm test` | Local baseline passed 2026-07-18, including AI hallucination, GST, loyalty and payment integrity suites |
 | Backend production check | `cd backend && npm run prod:check` | Local baseline passed after Railway packaging fix |
 | Integration tests | Isolated DB run, including billing/sync/tenant paths | SQLite baseline: 153 passed, 1 PostgreSQL-only suite skipped; focused owner-RBAC expansion passed 13/13 |
