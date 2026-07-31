@@ -687,12 +687,10 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
         pendingCount={pendingCount}
         failedCount={failedCount}
         salesDelta={salesDelta}
-        cashDelta={cashDelta}
-        upiDelta={upiDelta}
-        bankDelta={bankDelta}
         outstandingDelta={outstandingDelta}
         profitDelta={profitDelta}
         expenseDelta={expenseDelta}
+        lowStockCount={lowStockCount}
         period={period}
         onPeriodChange={setPeriod}
         periodSales={periodSales}
@@ -1039,12 +1037,10 @@ interface MobileGeneralDashboardProps {
   pendingCount: number;
   failedCount: number;
   salesDelta: number | null;
-  cashDelta: number | null;
-  upiDelta: number | null;
-  bankDelta: number | null;
   outstandingDelta: number | null;
   profitDelta: number | null;
   expenseDelta: number | null;
+  lowStockCount: number;
   period: DashboardPeriod;
   onPeriodChange: (period: DashboardPeriod) => void;
   periodSales: number;
@@ -1062,12 +1058,10 @@ function MobileGeneralDashboard({
   pendingCount,
   failedCount,
   salesDelta,
-  cashDelta,
-  upiDelta,
-  bankDelta,
   outstandingDelta,
   profitDelta,
   expenseDelta,
+  lowStockCount,
   period,
   onPeriodChange,
   periodSales,
@@ -1086,7 +1080,7 @@ function MobileGeneralDashboard({
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75">Today’s net sales</p>
             <p className="mt-2 font-display text-[34px] font-black leading-none tracking-[-0.04em]">{fmtCompactRs(dashboard.revenue)}</p>
             <div className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-blue-100/75">
-              <MobileDelta delta={salesDelta} />
+              <MobileDelta delta={salesDelta} inverse />
               <span>·</span>
               <span>{dashboard.billCount.toLocaleString("en-IN")} bills</span>
             </div>
@@ -1127,20 +1121,18 @@ function MobileGeneralDashboard({
       )}
 
       <section>
-        <div className="mb-3.5 flex items-center justify-between gap-3">
-          <h2 className="font-display text-[20px] font-black text-[#071333]">Business Overview</h2>
-          <span className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-[#d7e0ec] bg-white px-3 text-[14px] font-bold text-[#102347]">
-            <CalendarCheck size={16} /> Today
-          </span>
+        <div className="mb-3 flex items-center justify-between gap-3 px-0.5">
+          <div>
+            <h2 className="font-display text-[19px] font-black text-[#071333]">Shop health</h2>
+            <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">The numbers that need your attention</p>
+          </div>
+          <Link href="/reports" className="inline-flex min-h-11 items-center gap-1 rounded-[12px] px-3 text-[12px] font-black text-[var(--brand)]">All reports <ChevronRight size={15} /></Link>
         </div>
-        <div className="grid auto-rows-fr grid-cols-2 gap-3 min-[460px]:grid-cols-3">
-          <MobileMetricCard label="Total Sales" value={dashboard.revenue} previous={dashboard.previousRevenue} delta={salesDelta} color="var(--brand)" icon={<ShoppingCart size={13} />} iconClass="border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)]" />
-          <MobileMetricCard label="Cash Collection" value={dashboard.cashCollected} previous={dashboard.previousCashCollected} delta={cashDelta} color="#18ad50" icon={<Wallet size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
-          <MobileMetricCard label="UPI Collection" value={dashboard.upiCollected} previous={dashboard.previousUpiCollected} delta={upiDelta} color="#7447eb" icon={<Smartphone size={13} />} iconClass="border-[#ddd3ff] bg-[#f0ebff] text-[#7047eb]" />
-          <MobileMetricCard label="Bank Collection" value={dashboard.bankCollected} previous={dashboard.previousBankCollected} delta={bankDelta} color="var(--brand)" icon={<Landmark size={13} />} iconClass="border-[var(--brand-border)] bg-[#eaf2ff] text-[var(--brand)]" />
-          <MobileMetricCard label="Profit (Est.)" value={dashboard.grossProfit} previous={dashboard.previousGrossProfit} delta={profitDelta} color="#18ad50" icon={<TrendingUp size={13} />} iconClass="border-[#c8f1d5] bg-[#e7faee] text-[#159447]" />
-          <MobileMetricCard label="Outstanding Udhar" value={dashboard.totalOutstanding} previous={dashboard.previousOutstanding} delta={outstandingDelta} color="#ff304f" icon={<AlertTriangle size={13} />} iconClass="border-[#ffcfd7] bg-[#ffecef] text-[#ff304f]" positiveIsBad />
-          <MobileMetricCard label="Expense Total" value={dashboard.expensesToday} previous={dashboard.previousExpenses} delta={expenseDelta} color="#f39a0b" icon={<Wallet size={13} />} iconClass="border-[#ffdca8] bg-[#fff2df] text-[#f39a0b]" positiveIsBad />
+        <div className="grid grid-cols-2 gap-2.5">
+          <MobileHealthCard href="/reports" label="Gross profit" value={fmtCompactRs(dashboard.grossProfit)} detail="Estimated today" delta={profitDelta} icon={<TrendingUp size={18} />} tone="green" />
+          <MobileHealthCard href="/customers" label="Udhar due" value={fmtCompactRs(dashboard.totalOutstanding)} detail={`${dashboard.outstandingCustomers.length} customers`} delta={outstandingDelta} positiveIsBad icon={<AlertTriangle size={18} />} tone="red" />
+          <MobileHealthCard href="/expenses" label="Expenses" value={fmtCompactRs(dashboard.expensesToday)} detail="Recorded today" delta={expenseDelta} positiveIsBad icon={<Wallet size={18} />} tone="amber" />
+          <MobileHealthCard href="/inventory" label="Low stock" value={lowStockCount.toLocaleString("en-IN")} detail={lowStockCount > 0 ? "Items to reorder" : "Stock is healthy"} icon={<Package size={18} />} tone={lowStockCount > 0 ? "violet" : "green"} />
         </div>
       </section>
 
@@ -1181,50 +1173,52 @@ function MobileGeneralDashboard({
           <MobileInsight tone="emerald" icon={<TrendingUp size={15} />} title={salesDelta == null ? "No sales yesterday to compare against yet." : `Sales ${salesDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(salesDelta)}% compared with yesterday.`} subtitle="Review the sales trend and payment mix." />
           <MobileInsight tone="orange" icon={<Package size={15} />} title={`${ownerReport?.topProducts[0]?.name ?? "Your top product"} is leading sales.`} subtitle="Keep the best sellers available in stock." />
           <MobileInsight tone="rose" icon={<Users size={15} />} title={`${dashboard.outstandingCustomers.length} customers have outstanding dues.`} subtitle="Follow up to improve cash flow." />
-          <Link href="/reports" className="flex items-center justify-center gap-2 border-t border-[#e7edf5] py-2.5 text-[11px] font-black text-[var(--brand)]">View Detailed Insights <ArrowUpRight size={12} /></Link>
+          <Link href="/reports" className="flex min-h-12 items-center justify-center gap-2 border-t border-[#e7edf5] text-[12px] font-black text-[var(--brand)]">View detailed insights <ArrowUpRight size={14} /></Link>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-2">
-        <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white">
-          <div className="flex items-center justify-between border-b border-[#edf2f8] px-2.5 py-2.5">
-            <h2 className="text-[11px] font-black text-[#102347]">Top Products</h2>
-            <Link href="/products" className="text-[9px] font-black text-[var(--brand)]">View all</Link>
+      <section className="grid gap-3">
+        <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
+          <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
+            <h2 className="text-[14px] font-black text-[#102347]">Top products</h2>
+            <Link href="/products" className="inline-flex min-h-10 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
           </div>
-          <div className="divide-y divide-[#edf2f8] px-2">
+          <div className="divide-y divide-[#edf2f8] px-3.5">
             {(topRows.length > 0 ? topRows : recentProducts.slice(0, 5).map((product) => ({ productId: product.id, name: product.name, quantitySold: Number(product.stockQuantity ?? 0), revenue: productPrice(product), profitEstimate: 0 }))).map((row) => (
-              <Link key={row.productId} href="/products" className="flex items-center gap-1.5 py-2">
+              <Link key={row.productId} href="/products" className="flex min-h-[60px] items-center gap-3 py-2.5">
                 <ProductAvatar product={productsById.get(row.productId) ?? ({ id: row.productId, name: row.name } as Product)} compact />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[9px] font-black text-[#102347]">{row.name}</p>
-                  <p className="text-[8px] font-semibold text-[#718096]">{row.quantitySold.toLocaleString("en-IN")} qty</p>
+                  <p className="truncate text-[13px] font-black text-[#102347]">{row.name}</p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{row.quantitySold.toLocaleString("en-IN")} sold</p>
                 </div>
-                <span className="whitespace-nowrap text-[9px] font-black text-[#102347]">{fmtCompactRs(row.revenue)}</span>
+                <span className="whitespace-nowrap text-[13px] font-black text-[#102347]">{fmtCompactRs(row.revenue)}</span>
+                <ChevronRight size={16} className="text-[#a2adbd]" />
               </Link>
             ))}
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[12px] border border-[#e1e9f3] bg-white">
-          <div className="flex items-center justify-between border-b border-[#edf2f8] px-2.5 py-2.5">
-            <h2 className="text-[11px] font-black text-[#102347]">Recent Bills</h2>
-            <Link href="/bills" className="text-[9px] font-black text-[var(--brand)]">View all</Link>
+        <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
+          <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
+            <h2 className="text-[14px] font-black text-[#102347]">Recent bills</h2>
+            <Link href="/bills" className="inline-flex min-h-10 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
           </div>
-          <div className="divide-y divide-[#edf2f8] px-2">
+          <div className="divide-y divide-[#edf2f8] px-3.5">
             {recentBills.slice(0, 5).map((bill) => (
-              <Link key={bill.id ?? bill.billNo} href={`/bills/${bill.id ?? ""}`} className="block py-2">
-                <div className="flex items-center justify-between gap-1">
-                  <span className="truncate text-[9px] font-black text-[#102347]">{compactBillNumber(bill.billNo ?? bill.billNumber)}</span>
-                  <span className="whitespace-nowrap text-[9px] font-black text-[#102347]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
+              <Link key={bill.id ?? bill.billNo} href={`/bills/${bill.id ?? ""}`} className="flex min-h-[64px] items-center gap-3 py-2.5">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[#eef4ff] text-[var(--brand)]"><ReceiptText size={18} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[13px] font-black text-[#102347]">Bill #{compactBillNumber(bill.billNo ?? bill.billNumber)}</span>
+                    <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
+                  </div>
+                  <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? "Walk-in customer"}</span>
                 </div>
-                <div className="mt-1 flex items-center justify-between gap-1">
-                  <span className="truncate text-[8px] font-semibold text-[#718096]">{bill.customerName ?? "Walk-in"}</span>
-                  <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
-                </div>
+                <span className="whitespace-nowrap text-[13px] font-black text-[#102347]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
+                <ChevronRight size={16} className="text-[#a2adbd]" />
               </Link>
             ))}
           </div>
-          <Link href="/bills" className="flex items-center justify-center gap-1 border-t border-[#edf2f8] py-2.5 text-[9px] font-black text-[var(--brand)]">View All Bills <ArrowUpRight size={10} /></Link>
         </div>
       </section>
 
@@ -1241,53 +1235,43 @@ function MobileHeroStat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function MobileMetricCard({ label, value, previous, delta, color, icon, iconClass, positiveIsBad = false }: {
+function MobileHealthCard({ href, label, value, detail, delta, positiveIsBad = false, icon, tone }: {
+  href: string;
   label: string;
-  value: number;
-  previous: number;
-  delta: number | null;
-  color: string;
-  icon: ReactNode;
-  iconClass: string;
+  value: string;
+  detail: string;
+  delta?: number | null;
   positiveIsBad?: boolean;
+  icon: ReactNode;
+  tone: "green" | "red" | "amber" | "violet";
 }) {
-  const spark = mobileSparkline(previous, value);
-  const gradientId = `dashboard-mobile-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const iconTone = tone === "green" ? "bg-[#e8f9ee] text-[#159447]" : tone === "red" ? "bg-[#ffedf0] text-[#e63c51]" : tone === "amber" ? "bg-[#fff3e1] text-[#d98200]" : "bg-[#f0ebff] text-[#7047eb]";
   const bad = delta != null && (positiveIsBad ? delta > 0 : delta < 0);
-  const deltaColor = delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : bad ? "text-[#ef3340]" : "text-[#16a34a]";
+  const deltaTone = delta == null ? "text-[#7b8799]" : bad ? "text-[#df3347]" : "text-[#159447]";
   return (
-    <div className="flex min-h-[142px] min-w-0 flex-col rounded-[16px] border border-[#e2eaf4] bg-white p-3.5 shadow-[0_10px_26px_rgba(26,57,112,0.055)]">
-      <div className="flex min-h-[34px] items-center gap-2">
-        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border", iconClass)}>{icon}</span>
-        <span className="min-w-0 text-[12px] font-bold leading-tight text-[#102347]">{label}</span>
+    <Link href={href} className="flex min-h-[142px] min-w-0 flex-col rounded-[19px] border border-[#e1e9f3] bg-white p-3.5 shadow-[0_10px_26px_rgba(26,57,112,0.055)] transition-transform active:scale-[0.98]">
+      <div className="flex items-start justify-between gap-2">
+        <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[13px]", iconTone)}>{icon}</span>
+        <ChevronRight size={16} className="mt-1 text-[#a2adbd]" />
       </div>
-      <p className="mt-4 truncate font-display text-[24px] font-black tracking-tight text-[#071333]">{fmtCompactRs(value)}</p>
-      <div className={cn("mt-2 flex items-center gap-1 text-[12px] font-black", deltaColor)}>
-        {delta == null ? (
-          <span>—</span>
-        ) : (
-          <>{delta === 0 ? <Minus size={12} /> : delta > 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(delta)}%</>
-        )}
-        <span className="font-semibold text-[#7b8799]">vs yesterday</span>
+      <p className="mt-3 text-[11px] font-bold text-[#62708a]">{label}</p>
+      <p className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[#071333]">{value}</p>
+      <div className="mt-auto flex min-w-0 items-center gap-1 pt-2 text-[10.5px] font-bold">
+        {delta != null ? <span className={deltaTone}>{delta === 0 ? "No change" : `${delta > 0 ? "+" : ""}${delta}%`}</span> : null}
+        <span className="truncate text-[#7b8799]">{delta != null ? "· " : ""}{detail}</span>
       </div>
-      <div className="mt-auto h-10 pt-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={spark} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
-            <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.28} /><stop offset="70%" stopColor={color} stopOpacity={0.08} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs>
-            <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.8} fill={`url(#${gradientId})`} dot={false} isAnimationActive={false} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
+    </Link>
   );
 }
 
-function MobileDelta({ delta }: { delta: number | null }) {
-  const color = delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
+function MobileDelta({ delta, inverse = false }: { delta: number | null; inverse?: boolean }) {
+  const color = inverse
+    ? delta == null || delta === 0 ? "text-blue-100/70" : delta > 0 ? "text-emerald-300" : "text-rose-300"
+    : delta == null ? "text-[#94a3b8]" : delta === 0 ? "text-[#718096]" : delta > 0 ? "text-[#16a34a]" : "text-[#ef3340]";
   return (
     <span className="inline-flex items-center gap-1 text-[9px] font-semibold">
       <span className={cn("inline-flex items-center gap-0.5 font-bold", color)}>{delta == null ? <span>—</span> : <>{delta === 0 ? <Minus size={9} /> : delta > 0 ? <ArrowUpRight size={9} /> : <ArrowDownRight size={9} />}{Math.abs(delta)}%</>}</span>
-      <span className="text-[#7b8799]">vs yesterday</span>
+      <span className={inverse ? "text-blue-100/70" : "text-[#7b8799]"}>vs yesterday</span>
     </span>
   );
 }
@@ -1295,11 +1279,11 @@ function MobileDelta({ delta }: { delta: number | null }) {
 function MobileInsight({ tone, icon, title, subtitle }: { tone: "emerald" | "orange" | "rose"; icon: ReactNode; title: string; subtitle: string }) {
   const toneClass = tone === "emerald" ? "bg-[#e8f9ee] text-[#159447]" : tone === "orange" ? "bg-[#fff3e1] text-[#e98400]" : "bg-[#ffecef] text-[#ef3340]";
   return (
-    <div className="flex gap-2.5 border-b border-[#edf2f8] px-3 py-2.5">
-      <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", toneClass)}>{icon}</span>
+    <div className="flex min-h-[68px] gap-3 border-b border-[#edf2f8] px-3.5 py-3">
+      <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[13px]", toneClass)}>{icon}</span>
       <div className="min-w-0">
-        <p className="text-[10px] font-black leading-snug text-[#253854]">{title}</p>
-        <p className="mt-0.5 text-[9px] font-medium leading-snug text-[#718096]">{subtitle}</p>
+        <p className="text-[12px] font-black leading-snug text-[#253854]">{title}</p>
+        <p className="mt-1 text-[11px] font-medium leading-snug text-[#718096]">{subtitle}</p>
       </div>
     </div>
   );

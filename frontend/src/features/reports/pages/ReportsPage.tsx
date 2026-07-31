@@ -64,6 +64,21 @@ const PANEL = "min-w-0 overflow-hidden rounded-[8px] border border-[#e2e9f3] bg-
 const GRID_STROKE = "#e7edf5";
 const AXIS_COLOR = "#6f7f9b";
 
+function usePhoneReportLayout() {
+  const query = "(max-width: 767px)";
+  const [isPhone, setIsPhone] = useState(() => typeof window !== "undefined" && window.matchMedia(query).matches);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const sync = () => setIsPhone(media.matches);
+    media.addEventListener("change", sync);
+    sync();
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  return isPhone;
+}
+
 function fmt(value: number | undefined) {
   if (value == null || !Number.isFinite(value)) return "—";
   return `₹${Math.round(value).toLocaleString("en-IN")}`;
@@ -172,6 +187,7 @@ async function listExpensesOrEmpty(params: ExpenseDateParams): Promise<Expense[]
 
 export default function ReportsPage() {
   const { toast } = useToast();
+  const isPhoneLayout = usePhoneReportLayout();
   const [from, setFrom] = useState(daysAgoInput(6));
   const [to, setTo] = useState(todayInput());
   const [period, setPeriod] = useState<ReportPeriod>("week");
@@ -479,25 +495,29 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <MobileReportsOverview
-        loading={loading || expenseSummary.isLoading}
-        periodLabel={rangeLabel(range.from, range.to)}
-        sales={selected?.sales ?? 0}
-        previousSales={previous?.sales ?? 0}
-        cash={snapshot?.paymentBreakdown.cashIn ?? 0}
-        upi={snapshot?.paymentBreakdown.upiIn ?? 0}
-        bank={snapshot?.paymentBreakdown.bankIn ?? 0}
-        profit={selected?.profitEstimate ?? 0}
-        netProfit={netProfit ?? 0}
-        expenses={expenseTotal ?? 0}
-        udhar={snapshot?.pendingUdhar ?? 0}
-      />
+      {isPhoneLayout ? (
+        <MobileReportsOverview
+          loading={loading || expenseSummary.isLoading}
+          periodLabel={rangeLabel(range.from, range.to)}
+          sales={selected?.sales ?? 0}
+          previousSales={previous?.sales ?? 0}
+          cash={snapshot?.paymentBreakdown.cashIn ?? 0}
+          upi={snapshot?.paymentBreakdown.upiIn ?? 0}
+          bank={snapshot?.paymentBreakdown.bankIn ?? 0}
+          profit={selected?.profitEstimate ?? 0}
+          netProfit={netProfit ?? 0}
+          expenses={expenseTotal ?? 0}
+          udhar={snapshot?.pendingUdhar ?? 0}
+        />
+      ) : null}
 
-      <section className="hidden min-w-0 grid-cols-2 gap-2 md:grid lg:grid-cols-4">
-        {kpis.map((kpi) => (
-          <KpiCard key={kpi.label} {...kpi} loading={loading || (kpi.label.includes("Expense") && expenseSummary.isLoading)} />
-        ))}
-      </section>
+      {!isPhoneLayout ? (
+        <section className="hidden min-w-0 grid-cols-2 gap-2 md:grid lg:grid-cols-4">
+          {kpis.map((kpi) => (
+            <KpiCard key={kpi.label} {...kpi} loading={loading || (kpi.label.includes("Expense") && expenseSummary.isLoading)} />
+          ))}
+        </section>
+      ) : null}
 
       <AccountingControlPanel from={range.from} to={range.to} />
 
@@ -696,7 +716,7 @@ export default function ReportsPage() {
           <div className="divide-y divide-[#e8edf5] px-3">
             {loading ? <Skeleton className="my-3 h-28" /> : insights.map((insight) => <InsightRow key={insight.title} {...insight} />)}
           </div>
-          <Link href="/daily-closing" className="mx-3 mb-3 flex h-8 items-center justify-center rounded-[6px] border border-[#dfe7f2] text-[11px] font-bold text-[var(--brand)] hover:bg-[#f6f9ff]">View Detailed Insights <span className="ml-2">→</span></Link>
+          <Link href="/daily-closing" className="mx-3 mb-3 flex h-11 items-center justify-center rounded-xl border border-[#dfe7f2] text-[11px] font-bold text-[var(--brand)] hover:bg-[#f6f9ff] sm:h-8 sm:rounded-[6px]">View Detailed Insights <span className="ml-2">→</span></Link>
         </Panel>
       </section>
 
@@ -853,7 +873,7 @@ function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (perio
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="inline-flex h-10 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white sm:h-7 sm:min-w-[92px] sm:rounded-[6px] sm:px-2.5 sm:text-[9.5px] sm:font-semibold">
+        <button type="button" className="inline-flex h-11 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white sm:h-7 sm:min-w-[92px] sm:rounded-[6px] sm:px-2.5 sm:text-[9.5px] sm:font-semibold">
           {REPORT_PERIOD_LABELS[value]} <ChevronDown size={11} aria-hidden="true" />
         </button>
       </PopoverTrigger>

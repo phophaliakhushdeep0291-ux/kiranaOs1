@@ -24,6 +24,7 @@ import {
   Menu,
   Package,
   PercentSquare,
+  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -253,6 +254,76 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
 ];
 
+const MOBILE_NAV: { href: string; label: string; Icon: React.ElementType }[] = [
+  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+  { href: "/billing", label: "Billing", Icon: ShoppingCart },
+  { href: "/inventory", label: "Inventory", Icon: Package },
+  { href: "/customers", label: "Customers", Icon: Users },
+];
+
+interface MobileMenuItem {
+  href: string;
+  label: string;
+  Icon: React.ElementType;
+  children?: SubItem[];
+}
+
+const MOBILE_MENU: MobileMenuItem[] = [
+  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
+  { href: "/billing", label: "Billing", Icon: ShoppingCart },
+  {
+    href: "/inventory",
+    label: "Inventory",
+    Icon: Package,
+    children: [
+      { href: "/products?add=1", label: "Add Product" },
+      { href: "/products", label: "Products" },
+      { href: "/categories", label: "Categories" },
+      { href: "/inventory/stock-in", label: "Stock In" },
+      { href: "/inventory/stock-out", label: "Stock Out" },
+      { href: "/inventory/adjustments", label: "Adjustments" },
+      { href: "/inventory/stock-transfers", label: "Stock Transfers" },
+      { href: "/inventory/stock-counts", label: "Stock Counts" },
+      { href: "/inventory/batches", label: "Batch & Expiry" },
+    ],
+  },
+  { href: "/customers", label: "Customers / Udhar", Icon: Users },
+  { href: "/purchase-bills", label: "Purchases", Icon: Truck },
+  {
+    href: "/assurance",
+    label: "Financial Assurance",
+    Icon: ShieldCheck,
+    children: [
+      { href: "/assurance", label: "Dashboard" },
+      { href: "/assurance/findings", label: "Findings" },
+      { href: "/assurance/review-queue", label: "Review Queue" },
+      { href: "/assurance/evidence", label: "Evidence Requests" },
+      { href: "/assurance/cases", label: "Investigation Cases" },
+      { href: "/assurance/runs", label: "Audit Runs" },
+      { href: "/assurance/rules", label: "Rules & Thresholds" },
+      { href: "/assurance/report", label: "Assurance Report" },
+    ],
+  },
+  {
+    href: "/bills",
+    label: "Sales",
+    Icon: TrendingUp,
+    children: [
+      { href: "/bills", label: "Billing History" },
+      { href: "/orders-received", label: "Orders Received" },
+      { href: "/sales-overview", label: "Sales Overview" },
+    ],
+  },
+  { href: "/returns", label: "Returns", Icon: Undo2 },
+  { href: "/reports", label: "Reports", Icon: BarChart3 },
+  { href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
+  { href: "/expenses", label: "Expenses", Icon: Wallet },
+  { href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
+  { href: "/loyalty", label: "Loyalty", Icon: Gift },
+  { href: "/gift-cards", label: "Gift Cards", Icon: Gift },
+  { href: "/settings", label: "Settings", Icon: Settings },
+];
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function readLS(key: string, fallback: string) {
@@ -271,6 +342,12 @@ function isActive(loc: string, href: string) {
   const current = cleanPath(loc);
   const target = cleanPath(href);
   return current === target || (target !== "/dashboard" && current.startsWith(target + "/"));
+}
+function isMobileNavActive(loc: string, href: string) {
+  if (href === "/inventory") {
+    return ["/inventory", "/products", "/categories"].some((path) => isActive(loc, path));
+  }
+  return isActive(loc, href);
 }
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map(s => s[0] ?? "").join("").toUpperCase() || "O";
@@ -677,52 +754,6 @@ export function Layout({ children }: { children: ReactNode }) {
           onOpenSearch={() => setPaletteOpen(true)}
         />
 
-        {/* Legacy mobile topbar retained temporarily while routes migrate to the new shell. */}
-        <header aria-hidden="true" className="hidden">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-4">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Open navigation" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-[var(--brand)] transition-colors active:bg-[#eef4ff] hover:bg-[#eef4ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/30">
-                    <Menu size={29} strokeWidth={2} aria-hidden="true" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="max-h-[calc(100vh-96px)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto p-2">
-                  <MobileMenuList loc={loc} />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Ar<span className="text-[var(--brand)]">tha</span></span>
-                <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">{btDef.navConfig.tagline}</span>
-              </Link>
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <Link href="/sync-status" aria-label="Notifications" className="relative grid h-11 w-11 place-items-center rounded-full text-[#071333] transition-colors active:bg-[#f3f7fc] hover:bg-[#f3f7fc]">
-                <Bell size={25} strokeWidth={1.9} aria-hidden="true" />
-                {attentionCount > 0 && <span className="absolute right-0 top-0 grid h-5 min-w-5 place-items-center rounded-full bg-[#ef233c] px-1 text-[10px] font-black text-white ring-2 ring-white">{attentionCount}</span>}
-              </Link>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Open profile menu" className="grid h-11 w-11 place-items-center rounded-full bg-[var(--brand)] text-[12px] font-black text-white shadow-[0_10px_22px_rgba(7,95,255,0.18)] ring-4 ring-[#eef4ff]">
-                    {initials(storeName)}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {locations.length > 1 && <>
-                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">Working location</div>
-                    {locations.map((location) => <DropdownMenuItem key={location.id} onClick={() => switchLocation(location.id)} className={cn(location.id === activeStoreLocation?.id && "bg-primary/8 text-primary")}><Store size={14} className="mr-2" /><span className="truncate">{location.name}</span></DropdownMenuItem>)}
-                    <DropdownMenuSeparator />
-                  </>}
-                  <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
-                  <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive"><LogOut size={14} className="mr-2" /> Logout</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </header>
-
         <SubscriptionStatusBanner />
         {backendStatus.browserOnline && !backendStatus.backendReachable && backendStatus.checkedAt && (
           <BackendUnreachableBanner apiBaseUrl={getApiBaseUrl()} />
@@ -741,61 +772,6 @@ export function Layout({ children }: { children: ReactNode }) {
           {children}
         </main>
 
-        {/* Legacy mobile navigation retained temporarily while route tests migrate. */}
-        <nav aria-hidden="true" className="hidden">
-          <div className="grid grid-cols-5 items-end px-2.5 py-1.5">
-            {MOBILE_NAV.filter((item) => item.href === "/dashboard" || item.href === "/inventory").map(({ href, label, Icon }) => {
-              const active = isMobileNavActive(loc, href);
-              return (
-                <Link key={href} href={href}>
-                  <div aria-current={active ? "page" : undefined} className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200", active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]")}>
-                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
-                      <Icon size={21} strokeWidth={2.1} aria-hidden="true" />
-                    </div>
-                    <span className="leading-none">{label}</span>
-                  </div>
-                </Link>
-              );
-            })}
-
-            <Link href="/billing">
-              <div aria-label="Create bill" aria-current={isMobileNavActive(loc, "/billing") ? "page" : undefined} className="relative flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-end gap-1 rounded-2xl text-[11px] font-bold text-[var(--brand)]">
-                <div className={cn("absolute -top-5 grid h-[64px] w-[64px] place-items-center rounded-full bg-[var(--brand)] text-white shadow-[0_16px_34px_rgba(7,92,255,0.34)] ring-[7px] ring-white transition-transform active:scale-95", isMobileNavActive(loc, "/billing") && "outline outline-2 outline-offset-2 outline-blue-200")}>
-                  <Plus size={31} strokeWidth={2.2} aria-hidden="true" />
-                </div>
-                <span className="sr-only">Create bill</span>
-              </div>
-            </Link>
-
-            {MOBILE_NAV.filter((item) => item.href === "/customers").map(({ href, label, Icon }) => {
-              const active = isMobileNavActive(loc, href);
-              return (
-                <Link key={href} href={href}>
-                  <div aria-current={active ? "page" : undefined} className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200", active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]")}>
-                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
-                      <Icon size={21} strokeWidth={2.1} aria-hidden="true" />
-                    </div>
-                    <span className="leading-none">{label}</span>
-                  </div>
-                </Link>
-              );
-            })}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" aria-label="Open more navigation" className="flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold text-[#4d5d7a] transition-all duration-200 active:text-[#102347]">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl transition-colors">
-                    <Settings size={21} strokeWidth={2.1} aria-hidden="true" />
-                  </div>
-                  <span className="leading-none">More</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="end" className="mb-2 max-h-[calc(100vh-120px)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto p-2">
-                <MobileMenuList loc={loc} />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </nav>
         <MobileBottomNav
           location={loc}
           storeName={storeName}
@@ -818,54 +794,6 @@ export function Layout({ children }: { children: ReactNode }) {
 }
 
 // ── Sidebar nav components ────────────────────────────────────────────────────
-
-function MobileMenuList({ loc }: { loc: string }) {
-  return (
-    <>
-      {MOBILE_MENU.map(({ href, label, Icon, children }) => {
-        const childActive = children?.some((child) => isActive(loc, child.href)) ?? false;
-        const active = isActive(loc, href) || childActive;
-        return (
-          <div key={href} className="py-0.5">
-            <DropdownMenuItem asChild>
-              <Link
-                href={href}
-                className={cn(
-                  "flex cursor-pointer items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-black text-[#102347]",
-                  active && "bg-[#eef4ff] text-[var(--brand)]",
-                )}
-              >
-                <Icon size={16} aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-              </Link>
-            </DropdownMenuItem>
-            {children?.length ? (
-              <div className="mb-1 ml-7 mt-1 grid gap-1 border-l border-[#dbe6f5] pl-2">
-                {children.map((child) => {
-                  const subActive = isActive(loc, child.href);
-                  return (
-                    <DropdownMenuItem key={child.href} asChild>
-                      <Link
-                        href={child.href}
-                        className={cn(
-                          "flex cursor-pointer items-center rounded-[7px] px-2.5 py-2 text-[12px] font-bold text-[#53627d]",
-                          subActive && "bg-[#f5f8ff] text-[var(--brand)]",
-                        )}
-                      >
-                        {child.label}
-                      </Link>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </div>
-            ) : null}
-            {children?.length ? <DropdownMenuSeparator className="my-1" /> : null}
-          </div>
-        );
-      })}
-    </>
-  );
-}
 
 function SidebarLink({ item, loc, collapsed, labelOverride }: {
   item: LinkItem; loc: string; collapsed: boolean; labelOverride?: string;
