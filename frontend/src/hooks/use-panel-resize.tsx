@@ -88,7 +88,7 @@ export function PanelResizeHandle({ onResizeStart }: { onResizeStart: (e: ReactM
       title="Drag to resize"
       className="group absolute inset-y-0 left-0 z-10 hidden w-2.5 -translate-x-1/2 cursor-col-resize lg:block"
     >
-      <span className="mx-auto block h-full w-1 bg-transparent transition-colors group-hover:bg-[#0057ff]/30" />
+      <span className="mx-auto block h-full w-1 bg-transparent transition-colors group-hover:bg-[var(--brand)]/30" />
     </div>
   );
 }

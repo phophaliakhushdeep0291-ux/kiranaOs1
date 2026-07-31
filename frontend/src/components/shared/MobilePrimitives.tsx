@@ -1,4 +1,4 @@
-﻿import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { Link } from "wouter";
 import { CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -163,7 +163,7 @@ export function MobileSection({ title, subtitle, action, children, className, ..
     <section className={cn("mobile-card-premium md:hidden overflow-hidden rounded-[20px]", className)} {...props}>
       <div className="flex min-h-[58px] items-start justify-between gap-3 border-b border-[#edf2f8] px-4 py-3.5">
         <div className="min-w-0">
-          <h2 className="truncate font-display text-[18px] font-extrabold leading-tight tracking-normal text-[#07133f]">{title}</h2>
+          <h2 className="truncate font-display text-[18px] font-extrabold leading-tight tracking-normal text-[var(--brand-ink)]">{title}</h2>
           {subtitle ? <p className="mt-1 line-clamp-2 text-[12px] font-medium leading-snug text-[#64708b]">{subtitle}</p> : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
@@ -195,13 +195,13 @@ function MobileListCardInner({ leading, title, subtitle, meta, amount, status, a
     >
       {leading ? <div className="shrink-0">{leading}</div> : null}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-black leading-tight text-[#07133f]">{title}</div>
+        <div className="truncate text-[15px] font-black leading-tight text-[var(--brand-ink)]">{title}</div>
         {subtitle ? <div className="mt-1 truncate text-[12px] font-medium text-[#53617d]">{subtitle}</div> : null}
         {meta ? <div className="mt-1 line-clamp-2 text-[11px] font-medium leading-snug text-[#77839c]">{meta}</div> : null}
       </div>
       {(amount || status || action) ? (
         <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-          {amount ? <div className="text-[15px] font-black text-[#07133f]">{amount}</div> : null}
+          {amount ? <div className="text-[15px] font-black text-[var(--brand-ink)]">{amount}</div> : null}
           {status ? <div>{status}</div> : null}
           {action ?? <ChevronRight className="h-4 w-4 text-[#44527a]" />}
         </div>
@@ -248,7 +248,7 @@ function MobileActionTileInner({ icon, label, helper, className, ...props }: Omi
       {...props}
     >
       <div className="mx-auto grid h-11 w-11 place-items-center rounded-[15px] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]">{icon}</div>
-      <div className="mt-2 text-[13px] font-black leading-tight text-[#07133f]">{label}</div>
+      <div className="mt-2 text-[13px] font-black leading-tight text-[var(--brand-ink)]">{label}</div>
       {helper ? <div className="mt-1 text-[11px] font-medium leading-snug text-[#64708b]">{helper}</div> : null}
     </div>
   );

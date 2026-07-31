@@ -55,6 +55,10 @@ router.get("/monthly-breakdown", requireRole("owner"), requireFeature("monthly_r
 // Backward-compatible existing operational summary.
 router.get("/payment-summary", ctrl.paymentSummary);
 
+// Owner/admin diagnostic only: proves whether the append-only accounting journal
+// can safely replace operational-table/snapshot reads. It does not switch report authority.
+router.get("/financial-ledger-reconciliation", requireRole("owner", "admin"), ctrl.financialLedgerReconciliation);
+
 // Async report export jobs. POST/cancel require owner PIN; list/status/download are owner/admin-only and shop-scoped.
 router.post("/exports", requireRole("owner", "admin"), requireOwnerPin, requireFeature("csv_import_export"), validate(exportReportSchema), ctrl.createReportExportJob);
 router.get("/exports", requireRole("owner", "admin"), validateQuery(exportListSchema), ctrl.listReportExportJobs);

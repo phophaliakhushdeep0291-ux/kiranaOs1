@@ -53,6 +53,7 @@ function resolveBillBusinessDate(actor = {}) {
 export async function listBills(shopId, { from, to, status, customerId, locationId, page, limit }) {
   const where = {
     shopId,
+    deletedAt: null,
     ...(status !== "all" && { status }),
     ...(customerId && { customerId }),
     ...(locationId && { locationId }),
@@ -80,11 +81,31 @@ export async function listBills(shopId, { from, to, status, customerId, location
 // ─────────────────────────────────────────────────────────────
 export async function getBill(shopId, id) {
   const bill = await db.bill.findFirst({
-    where: { id, shopId },
+    where: { id, shopId, deletedAt: null },
     include: { items: true, payments: true, customer: true, location: true, giftCardTransactions: true },
   });
   if (!bill) throw new AppError("Bill not found", 404);
   return bill;
+}
+
+export async function softDeleteBill(shopId, billId, { reason }) {
+  const bill = await db.bill.findFirst({ where: { id: billId, shopId } });
+  if (!bill) throw new AppError("Bill not found", 404);
+  if (bill.deletedAt) return bill;
+  return db.bill.update({
+    where: { id: bill.id },
+    data: { deletedAt: new Date(), deletedReason: reason },
+  });
+}
+
+export async function restoreDeletedBill(shopId, billId) {
+  const bill = await db.bill.findFirst({ where: { id: billId, shopId } });
+  if (!bill) throw new AppError("Bill not found", 404);
+  if (!bill.deletedAt) return bill;
+  return db.bill.update({
+    where: { id: bill.id },
+    data: { deletedAt: null, deletedReason: null },
+  });
 }
 
 // ─────────────────────────────────────────────────────────────

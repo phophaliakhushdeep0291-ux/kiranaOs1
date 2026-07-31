@@ -68,36 +68,6 @@ function productStockUnit(product: Product) {
   return product.baseUnit ?? product.stockUnit ?? product.unit ?? product.displayUnit ?? "unit";
 }
 
-function productIdentityKeys(product: Product): string[] {
-  return [
-    product.id,
-    (product as Product & { productId?: string }).productId,
-    (product as Product & { local_id?: string }).local_id,
-    (product as Product & { server_id?: string }).server_id,
-  ].filter((value): value is string => typeof value === "string" && value.length > 0);
-}
-
-function mergeProductRows(queryRows: Product[], localRows: Product[]): Product[] {
-  const merged: Product[] = [];
-  const keyToIndex = new Map<string, number>();
-
-  const upsert = (product: Product) => {
-    const keys = productIdentityKeys(product);
-    const existingIndex = keys.map((key) => keyToIndex.get(key)).find((index): index is number => index !== undefined);
-    if (existingIndex === undefined) {
-      const index = merged.push(product) - 1;
-      keys.forEach((key) => keyToIndex.set(key, index));
-      return;
-    }
-    merged[existingIndex] = { ...merged[existingIndex], ...product };
-    productIdentityKeys(merged[existingIndex]).forEach((key) => keyToIndex.set(key, existingIndex));
-  };
-
-  localRows.forEach(upsert);
-  queryRows.forEach(upsert);
-  return merged;
-}
-
 function productBelongsToActiveLocation(product: Product) {
   const activeLocationId = getActiveLocationId();
   if (!activeLocationId) return true;
@@ -207,6 +177,12 @@ export default function Billing() {
   const [printConfirmOpen, setPrintConfirmOpen] = useState(false);
   const [pendingPrintBillType, setPendingPrintBillType] = useState<BillTypeSelection | null>(null);
   const [mobileCheckoutOpen, setMobileCheckoutOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileCheckoutOpen) return;
+    document.body.setAttribute("data-app-mobile-task-open", "true");
+    return () => document.body.removeAttribute("data-app-mobile-task-open");
+  }, [mobileCheckoutOpen]);
   const [sensitiveApproval, setSensitiveApproval] = useState<{ ownerPin: string; reason: string; actions: BillingSensitiveAction[] } | null>(null);
   const [pendingSensitiveBillType, setPendingSensitiveBillType] = useState<BillTypeSelection | null>(null);
   const [voiceCommand, setVoiceCommand] = useState("");
@@ -412,7 +388,13 @@ export default function Billing() {
     };
   }, []);
 
-  const productRows = useMemo(() => mergeProductRows(products.data ?? [], localProductRows), [products.data, localProductRows]);
+  // The products repository already reconciles server rows with pending local
+  // work. Direct IndexedDB rows are only an instant first-paint fallback; using
+  // them after an authoritative empty response resurrects removed products.
+  const productRows = useMemo(
+    () => products.data === undefined ? localProductRows : products.data,
+    [products.data, localProductRows],
+  );
 
   const allProducts = useMemo(() => productRows.filter((product) => product.deletedAt == null && (product as { deleted_at?: unknown }).deleted_at == null && !String(product.id ?? "").startsWith("demo_")), [productRows]);
 
@@ -1589,7 +1571,7 @@ export default function Billing() {
         <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#e1e8f2] bg-white px-4 lg:hidden">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#64748b]">Checkout</p>
-            <h2 className="font-display text-[19px] font-black text-[#102347]">Review &amp; collect ₹{grandTotal.toLocaleString("en-IN")}</h2>
+            <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">Review &amp; collect ₹{grandTotal.toLocaleString("en-IN")}</h2>
           </div>
           <button
             type="button"
@@ -1714,7 +1696,7 @@ export default function Billing() {
                 {cart.length} item{cart.length === 1 ? "" : "s"}
                 {creditAmount > 0 ? " · udhar" : ""}
               </div>
-              <div className="font-display text-[20px] font-black leading-tight text-[#0f1e3d]">
+              <div className="font-display text-[20px] font-black leading-tight text-[var(--brand-ink)]">
                 ₹{grandTotal.toLocaleString("en-IN")}
               </div>
             </div>
@@ -1723,7 +1705,7 @@ export default function Billing() {
               data-testid="mobile-save-bill"
               onClick={() => setMobileCheckoutOpen(true)}
               disabled={confirmBill.isPending || !newBillingFeature.allowed}
-              className="inline-flex h-12 min-w-[150px] items-center justify-center rounded-xl bg-[#0057ff] px-5 text-[15px] font-black text-white shadow-sm transition-transform active:scale-[0.99] disabled:opacity-50"
+              className="inline-flex h-12 min-w-[150px] items-center justify-center rounded-xl bg-[var(--brand)] px-5 text-[15px] font-black text-white shadow-sm transition-transform active:scale-[0.99] disabled:opacity-50"
             >
               {confirmBill.isPending
                 ? "Saving…"

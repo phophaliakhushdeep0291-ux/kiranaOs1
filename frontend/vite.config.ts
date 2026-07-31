@@ -31,21 +31,42 @@ function stampServiceWorkerBuild() {
       if (!fs.existsSync(swPath)) return;
       const source = fs.readFileSync(swPath, "utf8");
       const publicRoot = path.resolve(projectRoot, "dist/public");
-      const assetsRoot = path.join(publicRoot, "assets");
-      const collectAssets = (dir: string): string[] => fs.existsSync(dir)
-        ? fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-            const absolute = path.join(dir, entry.name);
-            if (entry.isDirectory()) return collectAssets(absolute);
-            if (!/\.(?:js|css)$/.test(entry.name)) return [];
-            return [`/${path.relative(publicRoot, absolute).replaceAll("\\", "/")}`];
-          })
-        : [];
-      const coreAssets = collectAssets(assetsRoot).sort();
+      const manifestPath = path.join(publicRoot, ".vite", "manifest.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Record<string, {
+        file?: string;
+        imports?: string[];
+        css?: string[];
+        assets?: string[];
+      }>;
+      const criticalEntries = [
+        "index.html",
+        "src/features/dashboard/pages/DashboardPage.tsx",
+        "src/features/billing/pages/BillingPage.tsx",
+        "src/features/products/pages/ProductsPage.tsx",
+        "src/features/customers/pages/CustomersPage.tsx",
+        "src/features/inventory/pages/InventoryPage.tsx",
+        "src/features/bills/pages/BillsPage.tsx",
+        "src/features/purchases/pages/PurchaseBillsPage.tsx",
+        "src/features/reports/pages/ReportsPage.tsx",
+        "src/features/sync/pages/SyncStatusPage.tsx",
+      ];
+      const coreAssets = new Set<string>();
+      const visited = new Set<string>();
+      const includeRecord = (key: string) => {
+        if (visited.has(key)) return;
+        visited.add(key);
+        const record = manifest[key];
+        if (!record) throw new Error(`Critical offline entry is missing from Vite manifest: ${key}`);
+        if (record.file) coreAssets.add(`/${record.file}`);
+        for (const file of [...(record.css ?? []), ...(record.assets ?? [])]) coreAssets.add(`/${file}`);
+        for (const imported of record.imports ?? []) includeRecord(imported);
+      };
+      criticalEntries.forEach(includeRecord);
       fs.writeFileSync(
         swPath,
         source
           .replaceAll("__KIRANA_BUILD_ID__", buildId)
-          .replace("__KIRANA_CORE_ASSETS__", JSON.stringify(coreAssets)),
+          .replace("__KIRANA_CORE_ASSETS__", JSON.stringify([...coreAssets].sort())),
       );
     },
   };
@@ -78,7 +99,12 @@ export default defineConfig({
     terserOptions: {
       ecma: 2020,
       module: true,
-      compress: { passes: 4, toplevel: true },
+      compress: {
+        passes: 4,
+        toplevel: true,
+        keep_fargs: false,
+        unsafe_arrows: true,
+      },
       mangle: { toplevel: true },
       format: { comments: false },
     },
@@ -87,6 +113,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
+        // Merge only very small compatible lazy chunks. This preserves route-level
+        // loading while avoiding dozens of sub-8 kB requests and repeated gzip
+        // framing/dictionaries across feature helper modules.
+        experimentalMinChunkSize: 9_000,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],

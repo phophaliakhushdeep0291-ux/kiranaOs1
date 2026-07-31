@@ -1,7 +1,7 @@
-// FinancialLedger is the append-only accounting source of truth. Domain tables
-// (Bill / Payment / UdharLedger / StockLedger) keep the detail; this ledger keeps one
-// canonical, never-edited money row per economic effect so dashboards/reports cannot
-// double-count. Reversals are posted as NEW rows, never by editing old ones.
+// FinancialLedger is the append-only accounting journal and future report read model.
+// Customer-facing reports remain operational-table/snapshot derived until historical
+// backfill and the owner reconciliation gate both prove zero variance. Reversals are
+// posted as NEW rows, never by editing old ones.
 //
 // Convention: a reversal is the SAME entryType with a NEGATED amount. So every KPI is a
 // plain sum of its entryType and cancellations/restores net out exactly:

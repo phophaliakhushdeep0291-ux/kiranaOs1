@@ -101,7 +101,7 @@ const MODE_META: Record<string, { label: string; chip: string; color: string }> 
   cash: { label: "Cash", chip: CHIP_TONES.green, color: "#20b75a" },
   upi: { label: "UPI", chip: CHIP_TONES.violet, color: "#7c3ff2" },
   card: { label: "Card", chip: CHIP_TONES.blue, color: "#f6ad14" },
-  split: { label: "Split", chip: CHIP_TONES.blue, color: "#1264f6" },
+  split: { label: "Split", chip: CHIP_TONES.blue, color: "var(--brand)" },
   udhar: { label: "Credit (Udhar)", chip: CHIP_TONES.amber, color: "#ff7a1a" },
   bank: { label: "Bank Transfer", chip: CHIP_TONES.blue, color: "#0ea5e9" },
 };
@@ -279,8 +279,9 @@ function dateMatches(bill: BillRecord, from: string, to: string) {
 
 function realSaleRows(rows: BillRecord[]) {
   // Estimates (kacha bills) count as sales — same money and stock effects as pakka bills,
-  // only the EST- number series differs — so the stat cards include them.
-  return rows.filter((bill) => bill.status !== "cancelled" && !isDeleted(bill));
+  // only the EST- number series differs. History deletion hides a row but must not
+  // rewrite financial summaries; cancellation is the action that removes a sale.
+  return rows.filter((bill) => bill.status !== "cancelled" && !isMergedTwin(bill));
 }
 
 function activeEstimateRows(rows: BillRecord[]) {
@@ -388,7 +389,7 @@ export default function BillsPage() {
   const staffFallback = shop?.name || "Mukesh Store";
 
   const periodBills = useMemo(
-    () => bills.filter((bill) => !isDeleted(bill) && dateMatches(bill, fromDate, toDate)),
+    () => bills.filter((bill) => !isMergedTwin(bill) && dateMatches(bill, fromDate, toDate)),
     [bills, fromDate, toDate],
   );
 
@@ -446,7 +447,7 @@ export default function BillsPage() {
 
   const analytics = useMemo(() => {
     const previous = previousRangeFor(fromDate, toDate);
-    const previousRows = bills.filter((bill) => !isDeleted(bill) && dateMatches(bill, previous.from, previous.to));
+    const previousRows = bills.filter((bill) => !isMergedTwin(bill) && dateMatches(bill, previous.from, previous.to));
     const currentReal = realSaleRows(periodBills);
     const previousReal = realSaleRows(previousRows);
     const sum = (rows: BillRecord[], getter: (bill: BillRecord) => number) => rows.reduce((total, bill) => total + getter(bill), 0);
@@ -500,7 +501,7 @@ export default function BillsPage() {
 
   const paymentBreakdown = useMemo(() => {
     const totals = new Map<string, number>();
-    for (const bill of realSaleRows(filtered)) {
+    for (const bill of realSaleRows(periodBills)) {
       const key = paymentModeOf(bill);
       totals.set(key, (totals.get(key) ?? 0) + billTotal(bill));
     }
@@ -508,7 +509,7 @@ export default function BillsPage() {
     return order
       .map((key) => ({ key, value: totals.get(key) ?? 0, ...MODE_META[key] }))
       .filter((row) => row.value > 0);
-  }, [filtered]);
+  }, [periodBills]);
 
   const recentActivities = useMemo(() => filtered.filter((bill) => !isDeleted(bill)).slice(0, 4).map((bill) => {
     const status = paymentStatusOf(bill);
@@ -670,9 +671,9 @@ export default function BillsPage() {
   const deletingEstimate = pinAction?.action === "delete" && isEstimateBill(pinAction.bill);
 
   return (
-    <div className="app-docked-page space-y-4 bg-white p-4 font-sans sm:p-5 2xl:p-6">
+    <div className="app-docked-page space-y-3 bg-transparent p-3.5 font-sans sm:p-5 lg:space-y-4 lg:bg-white 2xl:p-6">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hidden flex-wrap items-center gap-2 lg:flex">
           <span className={cn("inline-flex h-10 items-center gap-2 rounded-[9px] border px-3 text-[11px] font-bold", backupStatus.cls)}>
             <BackupStatusIcon size={14} />
             <span>{backupStatus.label}</span>
@@ -680,44 +681,46 @@ export default function BillsPage() {
           </span>
           {counts.pending > 0 && <Link href="/sync-status" className="inline-flex h-10 items-center rounded-[9px] border border-amber-200 bg-amber-50 px-3 text-[11px] font-bold text-amber-700">{counts.pending} pending sync</Link>}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-10 min-w-[218px] justify-between rounded-[8px] border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f]">
-                <span className="inline-flex items-center gap-2"><CalendarDays size={15} className="text-[var(--brand)]" />{formatRange(fromDate, toDate)}</span>
-                <ChevronDown size={13} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              {(Object.keys(PERIOD_LABELS) as BillPeriod[]).map((key) => (
-                <DropdownMenuItem key={key} onClick={() => applyPeriod(key)} className={cn("text-[12px] font-semibold", period === key && "text-[var(--brand)]")}>{PERIOD_LABELS[key]}</DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#24385f]" onClick={() => document.getElementById("billing-history-table")?.scrollIntoView({ block: "start", behavior: "smooth" })}>
+        <div className="grid grid-cols-2 items-center gap-2 lg:flex lg:flex-wrap">
+          <div className="col-span-2 lg:contents">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-11 w-full justify-between rounded-[12px] border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] lg:h-10 lg:w-auto lg:min-w-[218px] lg:rounded-[8px]">
+                  <span className="inline-flex items-center gap-2"><CalendarDays size={15} className="text-[var(--brand)]" />{formatRange(fromDate, toDate)}</span>
+                  <ChevronDown size={13} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                {(Object.keys(PERIOD_LABELS) as BillPeriod[]).map((key) => (
+                  <DropdownMenuItem key={key} onClick={() => applyPeriod(key)} className={cn("text-[12px] font-semibold", period === key && "text-[var(--brand)]")}>{PERIOD_LABELS[key]}</DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <Button variant="outline" className="hidden h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[#24385f] lg:inline-flex" onClick={() => document.getElementById("billing-history-table")?.scrollIntoView({ block: "start", behavior: "smooth" })}>
             <Filter size={15} /> Filters
           </Button>
-          <Button onClick={exportCsv} disabled={filtered.length === 0} variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[var(--brand)]">
+          <Button onClick={exportCsv} disabled={filtered.length === 0} variant="outline" className="hidden h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[var(--brand)] lg:inline-flex">
             <Download size={15} /> Export
           </Button>
-          <Button onClick={requestEstimateCleanup} disabled={counts.estimates === 0 || isSaving} variant="outline" className="h-10 rounded-[8px] border-rose-100 bg-white px-4 text-[12px] font-bold text-rose-600 hover:border-rose-200 hover:bg-rose-50">
+          <Button onClick={requestEstimateCleanup} disabled={counts.estimates === 0 || isSaving} variant="outline" className="hidden h-10 rounded-[8px] border-rose-100 bg-white px-4 text-[12px] font-bold text-rose-600 hover:border-rose-200 hover:bg-rose-50 lg:inline-flex">
             <Trash2 size={15} /> Clear Estimates
           </Button>
-          <Button asChild variant="outline" className="h-10 rounded-[8px] border-[#dfe7f2] bg-white px-4 text-[12px] font-bold text-[var(--brand)]">
-            <Link href="/billing?billType=estimate"><FileText size={15} />Estimate Bill</Link>
+          <Button asChild variant="outline" className="h-12 w-full rounded-[14px] border-[#dfe7f2] bg-white px-3 text-[11px] font-bold text-[var(--brand)] lg:h-10 lg:w-auto lg:rounded-[8px] lg:px-4 lg:text-[12px]">
+            <Link href="/billing?billType=estimate"><FileText size={15} />New estimate</Link>
           </Button>
-          <Button asChild className="h-10 rounded-[8px] bg-[var(--brand)] px-5 text-[12px] font-bold text-white shadow-[0_9px_20px_rgba(7,95,255,0.22)] hover:bg-[#0054e8]">
-            <Link href="/billing?billType=normal_sale"><Plus size={15} />Pakka Bill</Link>
+          <Button asChild className="h-12 w-full rounded-[14px] bg-[var(--brand)] px-3 text-[11px] font-bold text-white shadow-[0_9px_20px_rgba(7,95,255,0.22)] hover:bg-[#0054e8] lg:h-10 lg:w-auto lg:rounded-[8px] lg:px-5 lg:text-[12px]">
+            <Link href="/billing?billType=normal_sale"><Plus size={15} />New pakka bill</Link>
           </Button>
         </div>
       </div>
 
-      <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 items-stretch gap-2.5 lg:grid-cols-3 lg:gap-3 xl:grid-cols-6">
         <BillKpiCard label="Total Bills" value={String(analytics.totalBills)} delta={analytics.totalBillsDelta} data={analytics.sparks.totalBills} color={BLUE} icon={<ReceiptText size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Total Sales" value={money(analytics.totalSales)} delta={analytics.totalSalesDelta} data={analytics.sparks.totalSales} color={PURPLE} icon={<IndianRupee size={17} />} iconClass="border-[#dfd3ff] bg-[#f1edff] text-[#7c3ff2] shadow-[0_10px_22px_rgba(124,63,242,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
-        <BillKpiCard label="Paid Bills" value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard mobileHidden label="Paid Bills" value={String(analytics.paidBills)} delta={analytics.paidBillsDelta} data={analytics.sparks.paidBills} color={GREEN} icon={<CheckCircle2 size={17} />} iconClass="border-[#c9efd5] bg-[#eaf9ef] text-[#19a84e] shadow-[0_10px_22px_rgba(25,184,90,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Udhar Bills" value={String(analytics.udharBills)} delta={analytics.udharBillsDelta} data={analytics.sparks.udharBills} color={ORANGE} icon={<Wallet size={17} />} iconClass="border-[#ffe1b5] bg-[#fff3df] text-[#f28a00] shadow-[0_10px_22px_rgba(255,159,10,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
-        <BillKpiCard label="Average Bill Value" value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
+        <BillKpiCard mobileHidden label="Average Bill Value" value={money(analytics.avgBill)} delta={analytics.avgBillDelta} data={analytics.sparks.avgBill} color={BLUE} icon={<CreditCard size={17} />} iconClass="border-[#d3e2ff] bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_10px_22px_rgba(7,95,255,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} />
         <BillKpiCard label="Cancelled Bills" value={String(analytics.cancelledBills)} delta={analytics.cancelledBillsDelta} data={analytics.sparks.cancelledBills} color={RED} icon={<Ban size={17} />} iconClass="border-[#ffcfd8] bg-[#ffecef] text-[#ff314f] shadow-[0_10px_22px_rgba(255,49,79,0.18)]" loading={isLoading} comparisonLabel={period === "all" ? "all time" : "vs last week"} deltaPositiveIsBad />
       </div>
 
@@ -785,7 +788,7 @@ export default function BillsPage() {
           <div className="grid h-56 place-items-center px-4 text-center">
             <div>
               <ReceiptText size={28} className="mx-auto text-[#9aa8bc]" />
-              <p className="mt-2 text-[14px] font-bold text-[#13254a]">No bills found</p>
+              <p className="mt-2 text-[14px] font-bold text-[var(--brand-ink)]">No bills found</p>
               <p className="mt-1 text-[12px] text-[#7a879f]">Try a different filter or create a new bill.</p>
             </div>
           </div>
@@ -804,11 +807,11 @@ export default function BillsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <Link href={`/bills/${bill.id}`} className="min-w-0 flex-1">
                         <p className="truncate text-[14px] font-extrabold text-[var(--brand)]">Bill #{compactBillNo(billNo(bill))}</p>
-                        <p className="mt-1 truncate text-xs font-bold text-[#102347]">{bill.customerName || "Walk-in Customer"}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-[var(--brand-ink)]">{bill.customerName || "Walk-in Customer"}</p>
                         <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{date.date} {date.time ? `• ${date.time}` : ""} • {itemsCount(bill) || 0} items</p>
                       </Link>
                       <div className="text-right">
-                        <p className="text-[15px] font-black text-[#07133f]">{money(billTotal(bill))}</p>
+                        <p className="text-[15px] font-black text-[var(--brand-ink)]">{money(billTotal(bill))}</p>
                         <div className="mt-1 flex justify-end"><StatusBadge status={status} /></div>
                       </div>
                     </div>
@@ -871,7 +874,7 @@ export default function BillsPage() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 font-black text-[var(--brand)]">{compactBillNo(billNo(bill))}</td>
                         <td className="min-w-[145px] px-4 py-2.5">
-                          <p className="font-bold text-[#13254a]">{bill.customerName || "Walk-in Customer"}</p>
+                          <p className="font-bold text-[var(--brand-ink)]">{bill.customerName || "Walk-in Customer"}</p>
                           <p className="mt-0.5 text-[#6f7f9b]">{bill.customerMobile || "-"}</p>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5">
@@ -881,7 +884,7 @@ export default function BillsPage() {
                         <td className="px-4 py-2.5 text-right font-bold">{itemsCount(bill) || "-"}</td>
                         <td className="px-4 py-2.5"><ModeBadge mode={mode} /></td>
                         <td className="px-4 py-2.5"><span className="rounded-[5px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill)}</span></td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-black text-[#102347]">{money(billTotal(bill))}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-black text-[var(--brand-ink)]">{money(billTotal(bill))}</td>
                         <td className="px-4 py-2.5"><StatusBadge status={status} /></td>
                         <td className="px-4 py-2.5 font-semibold">{staffNameOf(bill, staffFallback)}</td>
                         <td className="px-4 py-2.5"><SyncBadgeMini sync={sync} /></td>
@@ -973,7 +976,7 @@ export default function BillsPage() {
   );
 }
 
-function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loading, comparisonLabel, deltaPositiveIsBad }: {
+function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loading, comparisonLabel, deltaPositiveIsBad, mobileHidden = false }: {
   label: string;
   value: string;
   delta: number;
@@ -984,25 +987,26 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
   loading?: boolean;
   comparisonLabel?: string;
   deltaPositiveIsBad?: boolean;
+  mobileHidden?: boolean;
 }) {
   const positive = delta > 0;
   const bad = deltaPositiveIsBad ? positive : delta < 0;
   const DeltaIcon = delta === 0 ? null : positive ? ArrowUpRight : ArrowDownRight;
   const gradientId = `bill-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <article className={cn(CARD, "flex h-[150px] min-w-0 flex-col overflow-hidden p-4")}>
+    <article className={cn(CARD, "h-[126px] min-w-0 flex-col overflow-hidden rounded-[18px] p-3.5 lg:h-[150px] lg:rounded-[12px] lg:p-4", mobileHidden ? "hidden md:flex" : "flex")}>
       <div className="grid h-10 grid-cols-[36px_minmax(0,1fr)] items-start gap-3">
         <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border", iconClass)}>{icon}</span>
         <p className="min-h-[30px] min-w-0 overflow-hidden pt-0.5 text-[12px] font-semibold leading-[15px] text-[#34486e]">{label}</p>
       </div>
-      <p className="mt-2 min-h-[24px] truncate font-display text-[22px] font-black leading-none text-[#101f40]">{loading ? "..." : value}</p>
+      <p className="mt-2 min-h-[24px] truncate font-display text-[22px] font-black leading-none text-[var(--brand-ink)]">{loading ? "..." : value}</p>
       <div className="mt-2 flex h-4 items-center gap-1 text-[10px]">
         <span className={cn("inline-flex items-center gap-0.5 font-black", delta === 0 ? "text-[#70809a]" : bad ? "text-[#ff334d]" : "text-[#10a948]")}>
           {DeltaIcon ? <DeltaIcon size={11} /> : null}{Math.abs(delta)}%
         </span>
         <span className="font-semibold text-[#7a879f]">{comparisonLabel ?? "vs last week"}</span>
       </div>
-      <div className="mt-auto h-9 pt-2">
+      <div className="mt-auto hidden h-9 pt-2 lg:block">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}>
             <defs>
@@ -1070,7 +1074,7 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[#13254a]">Recent Billing Activity</h2>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Recent Billing Activity</h2>
         <Link href="/bills" className="text-[11px] font-bold text-[var(--brand)]">View all</Link>
       </header>
       <div className="divide-y divide-[#edf2f8]">
@@ -1080,7 +1084,7 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
           <Link key={row.id} href={`/bills/${row.bill.id}`} className="grid grid-cols-[34px_1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-[#fbfcfe]">
             <span className={cn("grid h-8 w-8 place-items-center rounded-full", toneClass(row.tone))}><IndianRupee size={14} /></span>
             <span className="min-w-0">
-              <span className="block truncate text-[12px] font-black text-[#13254a]">{row.title}</span>
+              <span className="block truncate text-[12px] font-black text-[var(--brand-ink)]">{row.title}</span>
               <span className="mt-0.5 block truncate text-[10.5px] font-semibold text-[#6f7f9b]">{row.sub}</span>
             </span>
             <span className="text-[10.5px] font-semibold text-[#405273]">{row.time}</span>
@@ -1096,7 +1100,7 @@ function PaymentBreakdownCard({ rows, total, period }: { rows: Array<{ key: stri
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[#13254a]">Payment Mode Breakdown</h2>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Payment Mode Breakdown</h2>
         <span className="rounded-[6px] border border-[#dfe7f2] bg-[#fbfcfe] px-2.5 py-1 text-[10px] font-bold text-[#405273]">{period}</span>
       </header>
       <div className="grid min-h-[220px] items-center gap-3 px-4 py-4 sm:grid-cols-[184px_1fr]">
@@ -1136,7 +1140,7 @@ function TopCustomersCard({ rows }: { rows: Array<{ name: string; bills: number;
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[#13254a]">Top Customers</h2>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Top Customers</h2>
         <Link href="/customers" className="text-[11px] font-bold text-[var(--brand)]">View all</Link>
       </header>
       {rows.length === 0 ? (

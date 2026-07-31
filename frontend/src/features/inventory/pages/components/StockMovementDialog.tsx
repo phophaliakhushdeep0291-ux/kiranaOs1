@@ -112,7 +112,7 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{mode === "in" ? "New Stock In" : "New Stock Out"}</h2>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{mode === "in" ? "New Stock In" : "New Stock Out"}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{mode === "in" ? "Add incoming stock to a product." : "Record stock leaving inventory."}</p>
         </div>
         <button onClick={close} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>

@@ -70,19 +70,19 @@ IDs are permanent. Split a requirement instead of reusing or renumbering an ID.
 
 | ID | Requirement | Acceptance evidence | Current repository evidence | Priority |
 |---|---|---|---|---|
-| SYNC-001 | Local reads/writes remain usable offline and queue transparently. | Offline mutation tests; airplane-mode billing QA. | Dexie/local-first and outbox modules/tests. | P0 |
-| SYNC-002 | Retries and multiple devices cannot duplicate financial or stock effects. | Idempotency/concurrency tests; two-device QA. | Sync idempotency, monotonic feed and integration tests. | P0 |
-| SYNC-003 | Conflicts are deterministic, visible and recoverable without data loss. | Conflict-policy tests; forced-conflict QA. | Conflict ledger/reconciliation modules; certify policies. | P0 |
-| SYNC-004 | User sees pending, failed, last-success and actionable recovery status. | State tests; offline/failed/recovered mobile QA. | Sync status page and repair tests. | P0 |
+| SYNC-001 | Local reads/writes remain usable offline and queue transparently. | Offline mutation tests; airplane-mode billing QA. | Live 390px cash-bill proof covers stable local save, reload durability, automatic reconciliation and one visible synced bill. Offline mutation/sync suites cover retry paths; full airplane-mode toggle QA remains open. | P0 |
+| SYNC-002 | Retries and multiple devices cannot duplicate financial or stock effects. | Idempotency/concurrency tests; two-device QA. | Backend sync integration passes 40/40, including exact-once financial ledger, stock, same-bill replay and multi-device acknowledgement. A live same-content repeat-sale defect was fixed by requiring durable identity parity before repair-time merging; regression and live cash/split proof preserve both genuine bills. | P0 |
+| SYNC-003 | Conflicts are deterministic, visible and recoverable without data loss. | Conflict-policy tests; forced-conflict QA. | Backend integration proves persisted redacted conflicts, idempotent reporting and optimistic audited owner resolution across devices. Live forced-conflict/two-device QA remains open. | P0 |
+| SYNC-004 | User sees pending, failed, last-success and actionable recovery status. | State tests; offline/failed/recovered mobile QA. | Live 390px Cloud Backup shows online backend, last success under one minute, pending/failed/conflicts 0, current-device sequence lag 0 and no overflow; failed/recovered live QA remains open. | P0 |
 | SYNC-005 | Backup and restore are documented, tested and meet declared RPO/RTO. | Automated restore proof and signed run record. | Backup artifacts and disaster-recovery scripts. | P0 |
 
 ### Reports and owner control
 
 | ID | Requirement | Acceptance evidence | Current repository evidence | Priority |
 |---|---|---|---|---|
-| RPT-001 | Daily closing reconciles cash, bank/UPI, udhar, refunds and expected drawer. | Timezone/money tests; closing QA. | Closing snapshots and cash split tests. | P0 |
-| RPT-002 | GST report and invoice totals agree exactly for the selected tax mode. | Compliance parity tests; sample return QA. | Compliance/GST tests. | P0 |
-| RPT-003 | Owner sees sales, P&L, top products, dues, staff sales and inventory health. | Aggregation/range tests; 390px report QA. | Reports modules/tests; FinancialLedger read-model decision open. | P1 |
+| RPT-001 | Daily closing reconciles cash, bank/UPI, udhar, refunds and expected drawer. | Timezone/money tests; closing QA. | Exact API fixture reconciles mixed tender, udhar recovery, refund, cash expense, live closing and persisted snapshot; focused report integration passes 12/12. Premium layout passes 375/390/430/768 live geometry with zero overflow and 44px main-content controls. | P0 |
+| RPT-002 | GST report and invoice totals agree exactly for the selected tax mode. | Compliance parity tests; sample return QA. | Inclusive-GST release fixture nets the invoice/credit note to ₹100 taxable + ₹18 tax with exact report parity and estimate exclusion. Exclusive-GST discount policy remains tracked in BUG-003. | P0 |
+| RPT-003 | Owner sees sales, P&L, top products, dues, staff sales and inventory health. | Aggregation/range tests; 390px report QA. | Operational tables + locked snapshots are the report authority. Owner/admin reconciliation gates any future FinancialLedger read cutover with exact-paise variance; focused backend integration passes 11/11. Premium report hierarchy passes 375/390/430/768 live geometry with zero overflow and focused frontend coverage. | P1 |
 | RPT-004 | Authorized exports produce CSV/PDF with shop/date context and no cross-tenant data. | Export and tenant isolation tests; file inspection QA. | Export workers/tests. | P1 |
 
 ### Hardware, online ordering and administration

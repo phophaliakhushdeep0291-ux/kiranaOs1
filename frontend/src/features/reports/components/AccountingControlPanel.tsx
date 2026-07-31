@@ -37,7 +37,7 @@ export function AccountingControlPanel({ from, to }: { from: string; to: string 
       <article className="rounded-[10px] border border-[#e2e9f3] bg-white p-4 shadow-[0_4px_18px_rgba(31,60,110,0.045)]">
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-slate-100 text-slate-600"><Landmark size={18} /></span>
-          <div><h2 className="text-sm font-black text-[#13254a]">Accounting integrity</h2><p className="mt-1 text-xs leading-5 text-[#66758f]">{ownerOnly ? "Owner access is required for shop-wide accounting balances." : "Connect to the server to verify the accounting ledger. No offline estimate is shown as reconciled."}</p></div>
+          <div><h2 className="text-sm font-black text-[var(--brand-ink)]">Accounting integrity</h2><p className="mt-1 text-xs leading-5 text-[#66758f]">{ownerOnly ? "Owner access is required for shop-wide accounting balances." : "Connect to the server to verify the accounting ledger. No offline estimate is shown as reconciled."}</p></div>
         </div>
       </article>
     );
@@ -53,7 +53,7 @@ export function AccountingControlPanel({ from, to }: { from: string; to: string 
       <header className="flex flex-col gap-3 border-b border-[#e7edf5] bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_55%,#f3fff8_100%)] p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-[#eaf2ff] text-[var(--brand)]"><Landmark size={19} /></span>
-          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-black text-[#10224a]">Accounting integrity</h2><span className={cn("rounded-full px-2 py-1 text-[10px] font-extrabold", statusClass)}>{status.label}</span></div><p className="mt-1 text-[11px] leading-5 text-[#66758f]">{status.detail} Shop-wide control · {report.calculationVersion}</p></div>
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-black text-[var(--brand-ink)]">Accounting integrity</h2><span className={cn("rounded-full px-2 py-1 text-[10px] font-extrabold", statusClass)}>{status.label}</span></div><p className="mt-1 text-[11px] leading-5 text-[#66758f]">{status.detail} Shop-wide control · {report.calculationVersion}</p></div>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-bold text-[#52617c]"><Landmark size={14} className="text-emerald-600" /> Integer-paise evidence</div>
       </header>
@@ -69,10 +69,10 @@ export function AccountingControlPanel({ from, to }: { from: string; to: string 
         <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[650px] border-collapse text-[11px]">
             <thead><tr className="bg-[#f5f7fb] text-[#52617c]"><th className="rounded-l-[6px] px-3 py-2 text-left">Account</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-right">Debit balance</th><th className="rounded-r-[6px] px-3 py-2 text-right">Credit balance</th></tr></thead>
-            <tbody className="divide-y divide-[#e8edf4]">{report.trialBalance.accounts.map((account) => <tr key={account.code}><td className="px-3 py-2 font-bold text-[#17294d]">{account.code} · {account.name}</td><td className="px-3 py-2 capitalize text-[#64738e]">{account.category}</td><td className="px-3 py-2 text-right font-bold">{money(account.debitBalance.amount)}</td><td className="px-3 py-2 text-right font-bold">{money(account.creditBalance.amount)}</td></tr>)}</tbody>
+            <tbody className="divide-y divide-[#e8edf4]">{report.trialBalance.accounts.map((account) => <tr key={account.code}><td className="px-3 py-2 font-bold text-[var(--brand-ink)]">{account.code} · {account.name}</td><td className="px-3 py-2 capitalize text-[#64738e]">{account.category}</td><td className="px-3 py-2 text-right font-bold">{money(account.debitBalance.amount)}</td><td className="px-3 py-2 text-right font-bold">{money(account.creditBalance.amount)}</td></tr>)}</tbody>
           </table>
         </div>
-        <div className="space-y-2 sm:hidden">{report.trialBalance.accounts.map((account) => <div key={account.code} className="rounded-[8px] border border-[#e5ebf3] p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-xs font-black text-[#17294d]">{account.name}</p><p className="mt-0.5 text-[10px] font-bold uppercase text-[#74819a]">{account.code} · {account.category}</p></div><Landmark size={15} className="text-[var(--brand)]" /></div><div className="mt-3 grid grid-cols-2 gap-2 text-[10px]"><BalanceValue label="Debit balance" value={account.debitBalance.amount} /><BalanceValue label="Credit balance" value={account.creditBalance.amount} /></div></div>)}</div>
+        <div className="space-y-2 sm:hidden">{report.trialBalance.accounts.map((account) => <div key={account.code} className="rounded-[8px] border border-[#e5ebf3] p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-xs font-black text-[var(--brand-ink)]">{account.name}</p><p className="mt-0.5 text-[10px] font-bold uppercase text-[#74819a]">{account.code} · {account.category}</p></div><Landmark size={15} className="text-[var(--brand)]" /></div><div className="mt-3 grid grid-cols-2 gap-2 text-[10px]"><BalanceValue label="Debit balance" value={account.debitBalance.amount} /><BalanceValue label="Credit balance" value={account.creditBalance.amount} /></div></div>)}</div>
 
         {report.status === "attention_required" ? <div className="mt-3 rounded-[8px] border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-900"><div className="flex items-center gap-2 font-black"><AlertTriangle size={14} /> Exceptions are not hidden</div><p className="mt-1">{report.coverage.exceptionGroups} source groups and {report.coverage.unmappedRows} unmapped rows remain open. Open exceptions are returned by the API for investigation.</p></div> : report.status === "balanced" ? <div className="mt-3 flex items-center gap-2 rounded-[8px] border border-emerald-200 bg-emerald-50 p-3 text-[11px] font-bold text-emerald-800"><Landmark size={14} /> Mapped ledger activity balances to zero for this period.</div> : null}
 
@@ -83,9 +83,9 @@ export function AccountingControlPanel({ from, to }: { from: string; to: string 
 }
 
 function ControlStat({ label, value, detail, alert }: { label: string; value: string; detail: string; alert?: boolean }) {
-  return <div className="min-w-0 bg-white p-3"><p className="truncate text-[9px] font-bold uppercase tracking-wide text-[#74819a]">{label}</p><p className={cn("mt-1 truncate text-base font-black", alert ? "text-amber-700" : "text-[#10224a]")}>{value}</p><p className="mt-0.5 truncate text-[10px] text-[#7b89a0]">{detail}</p></div>;
+  return <div className="min-w-0 bg-white p-3"><p className="truncate text-[9px] font-bold uppercase tracking-wide text-[#74819a]">{label}</p><p className={cn("mt-1 truncate text-base font-black", alert ? "text-amber-700" : "text-[var(--brand-ink)]")}>{value}</p><p className="mt-0.5 truncate text-[10px] text-[#7b89a0]">{detail}</p></div>;
 }
 
 function BalanceValue({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-[6px] bg-[#f5f7fb] p-2"><p className="text-[#74819a]">{label}</p><p className="mt-1 font-black text-[#17294d]">{money(value)}</p></div>;
+  return <div className="rounded-[6px] bg-[#f5f7fb] p-2"><p className="text-[#74819a]">{label}</p><p className="mt-1 font-black text-[var(--brand-ink)]">{money(value)}</p></div>;
 }

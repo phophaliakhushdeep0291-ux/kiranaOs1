@@ -216,7 +216,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
             <select
               value={mapping[field] ?? ""}
               onChange={(event) => changeMapping(field, event.target.value)}
-              className="h-9 w-full rounded-[7px] border border-[#d8e2ef] bg-white px-2 text-[12px] font-medium text-[#17223b] outline-none focus:border-[#0866ff]"
+              className="h-9 w-full rounded-[7px] border border-[#d8e2ef] bg-white px-2 text-[12px] font-medium text-[#17223b] outline-none focus:border-[var(--brand)]"
             >
               <option value="">Not mapped</option>
               {(result?.headers ?? []).map((header, index) => (
@@ -238,8 +238,8 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
     <Dialog open={open} onOpenChange={(value) => { onOpenChange(value); if (!value) reset(); }}>
       <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto bg-[#f8fafc] p-0">
         <DialogHeader className="border-b border-[#e0e7f1] bg-white px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-[18px] font-black text-[#0f1e3d]">
-            <FileSpreadsheet size={20} className="text-[#0866ff]" />
+          <DialogTitle className="flex items-center gap-2 text-[18px] font-black text-[var(--brand-ink)]">
+            <FileSpreadsheet size={20} className="text-[var(--brand)]" />
             Migrate products and opening stock
           </DialogTitle>
           <p className="text-[12px] text-[#64748b]">Dry-run first, review every conflict, then save all accepted rows as one transaction.</p>
@@ -253,8 +253,8 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
             <span className="text-[#64748b]">Exports from Excel, Vyapar, myBillBook, or Tally can be mapped below after saving as CSV.</span>
           </div>
 
-          <label className="flex min-h-16 cursor-pointer items-center gap-3 rounded-[8px] border border-dashed border-[#b9c8dd] bg-white p-4 text-sm transition-colors hover:border-[#0866ff] hover:bg-[#f6f9ff]">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[#0866ff]">
+          <label className="flex min-h-16 cursor-pointer items-center gap-3 rounded-[8px] border border-dashed border-[#b9c8dd] bg-white p-4 text-sm transition-colors hover:border-[var(--brand)] hover:bg-[#f6f9ff]">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand)]">
               <Upload size={19} />
             </span>
             <span className="min-w-0 flex-1">
@@ -272,7 +272,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
                   <h3 className="text-[13px] font-black text-[#17223b]">Column mapping</h3>
                   <p className="text-[11px] text-[#71809a]">Detected {SOURCE_LABELS[result.source]}. Confirm the financial and packet fields.</p>
                 </div>
-                <span className="rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-[10px] font-bold text-[#075bd8]">{result.rows.length} data rows</span>
+                <span className="rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-[10px] font-bold text-[var(--brand)]">{result.rows.length} data rows</span>
               </div>
               {renderMappingFields(PRIORITY_MAPPING_FIELDS)}
               <details className="rounded-[7px] border border-[#e3e9f2] bg-[#fbfcfe] px-3 py-2">
@@ -307,14 +307,14 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
                   <div className="inline-flex rounded-[7px] border border-[#d8e2ef] bg-[#f7f9fc] p-1 text-[11px] font-bold">
                     <button
                       type="button"
-                      className={cn("rounded-[5px] px-3 py-1.5", strategy === "skip-existing" ? "bg-white text-[#0866ff] shadow-sm" : "text-[#64748b]")}
+                      className={cn("rounded-[5px] px-3 py-1.5", strategy === "skip-existing" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#64748b]")}
                       onClick={() => setStrategy("skip-existing")}
                     >
                       Skip existing (safer)
                     </button>
                     <button
                       type="button"
-                      className={cn("rounded-[5px] px-3 py-1.5", strategy === "update-existing" ? "bg-white text-[#0866ff] shadow-sm" : "text-[#64748b]")}
+                      className={cn("rounded-[5px] px-3 py-1.5", strategy === "update-existing" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#64748b]")}
                       onClick={() => setStrategy("update-existing")}
                     >
                       Update matched
@@ -402,7 +402,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
                 <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" />Saving products, audit trail, and backup queue</span>
                 <span>{progress}%</span>
               </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-[#0866ff] transition-all" style={{ width: `${progress}%` }} /></div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-[var(--brand)] transition-all" style={{ width: `${progress}%` }} /></div>
             </div>
           )}
 

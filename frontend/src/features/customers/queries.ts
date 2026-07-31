@@ -89,6 +89,40 @@ async function readCustomersFromIndexedDB(params?: ListCustomersParams): Promise
   }
 }
 
+function customerKeys(customer: Customer): string[] {
+  const row = customer as Customer & { local_id?: unknown; server_id?: unknown; localId?: unknown; serverId?: unknown };
+  return [customer.id, row.local_id, row.server_id, row.localId, row.serverId]
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function isDeviceOwnedCustomer(customer: Customer): boolean {
+  const row = customer as Customer & { demo_data?: unknown; sync_status?: unknown };
+  return row.demo_data === true || customer.id.startsWith("demo_") || customer.id.startsWith("local_") ||
+    ["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(String(row.sync_status ?? "").toLowerCase());
+}
+
+export function mergeCustomers(serverRows: Customer[], localRows: Customer[], retainSyncedLocal = false): Customer[] {
+  const rows: Customer[] = [];
+  const keyToIndex = new Map<string, number>();
+  const add = (customer: Customer) => {
+    const keys = customerKeys(customer);
+    const index = keys.map((key) => keyToIndex.get(key)).find((value): value is number => value !== undefined);
+    if (index === undefined) {
+      const nextIndex = rows.push(customer) - 1;
+      keys.forEach((key) => keyToIndex.set(key, nextIndex));
+      return;
+    }
+    rows[index] = { ...rows[index], ...customer };
+    customerKeys(rows[index]).forEach((key) => keyToIndex.set(key, index));
+  };
+  serverRows.forEach(add);
+  for (const local of localRows) {
+    if (!retainSyncedLocal && !isDeviceOwnedCustomer(local)) continue;
+    add(local);
+  }
+  return rows.filter((customer) => customer.deletedAt == null && (customer as Customer & { deleted_at?: unknown }).deleted_at == null);
+}
+
 export function useListCustomers(
   params?: ListCustomersParams,
   options?: QueryHookOptions<ListCustomersResponse, ListCustomersQueryKey>,
@@ -101,19 +135,21 @@ export function useListCustomers(
     initialData: extra.initialData ?? cached,
     queryFn: async () => {
       const liveCached = readCachedCustomers(params);
-      if (!isBrowserOnline()) return liveCached;
+      const fromDB = await readCustomersFromIndexedDB(params);
+      const localRows = mergeCustomers([], [...liveCached, ...fromDB], true);
+      if (!isBrowserOnline()) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
       try {
         const fresh = (await customersApi.listCustomers(params)).map(normaliseCustomerForCache);
-        const cacheSource = params?.search ? await customersApi.listCustomers({ limit: 1000 }) : fresh;
-        void cacheCustomers(cacheSource.map(normaliseCustomerForCache));
-        return fresh;
-      } catch (error) {
-        if (liveCached.length > 0) return liveCached;
-        if (isNetworkLikeError(error)) {
-          const fromDB = await readCustomersFromIndexedDB(params);
-          if (fromDB.length > 0) { void cacheCustomers(fromDB); return fromDB; }
+        if (params?.search) {
+          const fullServerRows = await customersApi.listCustomers({ limit: 1000 });
+          void cacheCustomers(mergeCustomers(fullServerRows, localRows).map(normaliseCustomerForCache));
+          return filterCachedCustomers(mergeCustomers(fresh, localRows), params).map(normaliseCustomerForCache);
         }
-        if (isNetworkLikeError(error)) return liveCached;
+        const merged = filterCachedCustomers(mergeCustomers(fresh, localRows), params).map(normaliseCustomerForCache);
+        void cacheCustomers(merged);
+        return merged;
+      } catch (error) {
+        if (isNetworkLikeError(error)) return filterCachedCustomers(localRows, params).map(normaliseCustomerForCache);
         throw error;
       }
     },

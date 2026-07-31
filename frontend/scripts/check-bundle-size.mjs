@@ -14,10 +14,8 @@ const MAX_JS_CHUNK_BYTES = 900 * 1024;
 // dependency duplication and unlimited aggregate growth.
 const MAX_INITIAL_JS_BYTES = 950 * 1024;
 const MAX_INITIAL_GZIP_BYTES = 300 * 1024;
-// The assurance control plane and registration-aware transfer compliance are
-// independently lazy surfaces. Keep startup/per-chunk ceilings fixed; the
-// aggregate cap includes only a 10 kB gzip feature allowance and remains below
-// the matching 3 MiB uncompressed ceiling.
+// Lazy features must stay inside the fixed aggregate production budget too;
+// otherwise route growth is hidden by repeatedly moving the release gate.
 const MAX_TOTAL_JS_BYTES = 3.00 * 1024 * 1024;
 const MAX_TOTAL_GZIP_BYTES = 912 * 1024;
 

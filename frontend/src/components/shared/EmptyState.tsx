@@ -16,12 +16,12 @@ export function EmptyState({ title, description, icon, action, className, ...pro
 
   return (
     <div
-      className={cn("flex min-h-28 w-full flex-col items-center justify-center rounded-lg border border-dashed bg-muted/15 p-5 text-center", className)}
+      className={cn("flex min-h-36 w-full flex-col items-center justify-center rounded-[14px] border border-dashed border-[#dce5f1] bg-[#f8fafd] p-6 text-center", className)}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       {...props}
     >
-      <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-background text-muted-foreground shadow-xs">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-[12px] bg-white text-muted-foreground shadow-sm ring-1 ring-[#e4eaf3]">
         {icon ?? <Inbox className="h-5 w-5" aria-hidden="true" />}
       </div>
       <p id={titleId} className="font-medium text-foreground">{title}</p>

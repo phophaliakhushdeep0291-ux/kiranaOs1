@@ -108,18 +108,18 @@ export default function ProductPricingPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-5">
       <button onClick={() => navigate("/products")} className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold text-[#405273] hover:text-[var(--brand)]"><ArrowLeft size={14} /> Products</button>
-      <h1 className="font-display text-xl font-black text-[#0f1e3d]">{product.name} — Pricing</h1>
+      <h1 className="font-display text-xl font-black text-[var(--brand-ink)]">{product.name} — Pricing</h1>
       <p className="mt-0.5 text-[12px] text-[#6d7c98]">Set quantity slabs, group prices, and customer exceptions. The billing engine uses these automatically.</p>
 
       <div className="mt-4 rounded-2xl border border-[#dce7f7] bg-[#f8fbff] p-3">
         <p className="text-[10.5px] font-black uppercase tracking-wide text-[#6d7c98]">Price rule scope</p>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <button type="button" disabled={!activeLocationId} onClick={() => setPricingScope("store")} className={`rounded-xl border p-3 text-left transition ${pricingScope === "store" ? "border-[var(--brand)] bg-white shadow-sm" : "border-transparent bg-transparent"} disabled:opacity-50`}>
-            <span className="flex items-center gap-2 text-[12px] font-black text-[#13254a]"><MapPin size={14} className="text-[var(--brand)]" />Current store</span>
+            <span className="flex items-center gap-2 text-[12px] font-black text-[var(--brand-ink)]"><MapPin size={14} className="text-[var(--brand)]" />Current store</span>
             <span className="mt-1 block text-[10.5px] text-[#6d7c98]">Overrides company prices only at this location.</span>
           </button>
           <button type="button" onClick={() => setPricingScope("all")} className={`rounded-xl border p-3 text-left transition ${pricingScope === "all" ? "border-[var(--brand)] bg-white shadow-sm" : "border-transparent bg-transparent"}`}>
-            <span className="flex items-center gap-2 text-[12px] font-black text-[#13254a]"><Building2 size={14} className="text-[var(--brand)]" />All stores</span>
+            <span className="flex items-center gap-2 text-[12px] font-black text-[var(--brand-ink)]"><Building2 size={14} className="text-[var(--brand)]" />All stores</span>
             <span className="mt-1 block text-[10.5px] text-[#6d7c98]">A company-wide default inherited by every location.</span>
           </button>
         </div>
@@ -147,7 +147,7 @@ export default function ProductPricingPage() {
               >
                 <span className="flex items-start justify-between gap-2">
                   <span>
-                    <span className="block text-[13px] font-black text-[#13254a]">{row.name}</span>
+                    <span className="block text-[13px] font-black text-[var(--brand-ink)]">{row.name}</span>
                     <span className="mt-0.5 block text-[10.5px] font-semibold text-[#6d7c98]">1 {row.unitType} removes {row.conversionToBase} {product.baseUnit ?? "base units"}</span>
                   </span>
                   {row.isDefault ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-700">Default</span> : null}
@@ -226,13 +226,13 @@ export default function ProductPricingPage() {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-[10.5px] font-bold uppercase text-[#8290a8]">{label}</p><p className="mt-0.5 text-sm font-black text-[#13254a]">{value}</p></div>;
+  return <div><p className="text-[10.5px] font-bold uppercase text-[#8290a8]">{label}</p><p className="mt-0.5 text-sm font-black text-[var(--brand-ink)]">{value}</p></div>;
 }
 
 function Section({ icon, title, hint, children }: { icon: React.ReactNode; title: string; hint: string; children: React.ReactNode }) {
   return (
     <div className="mt-4 rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-      <p className="inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><span className="text-[var(--brand)]">{icon}</span>{title}</p>
+      <p className="inline-flex items-center gap-2 text-[13.5px] font-black text-[var(--brand-ink)]"><span className="text-[var(--brand)]">{icon}</span>{title}</p>
       <p className="mt-0.5 text-[11.5px] text-[#8290a8]">{hint}</p>
       <div className="mt-3 space-y-2">{children}</div>
     </div>
@@ -244,7 +244,7 @@ function Row({ main, price, onDelete, busy }: { main: string; price: string; onD
     <div className="flex items-center justify-between rounded-xl border border-[#eef2f8] bg-[#f9fbfe] px-3 py-2">
       <span className="text-[12.5px] font-semibold text-[#334364]">{main}</span>
       <span className="flex items-center gap-3">
-        <span className="text-[13px] font-black text-[#0f1e3d]">{price}</span>
+        <span className="text-[13px] font-black text-[var(--brand-ink)]">{price}</span>
         <button type="button" disabled={busy} onClick={onDelete} aria-label="Remove" className="text-[#9aa7bd] hover:text-red-600 disabled:opacity-40"><Trash2 size={15} /></button>
       </span>
     </div>
@@ -309,7 +309,7 @@ function SellingUnitAdd({ product, onAdd, disabled }: { product: Product; onAdd:
 
   return (
     <div className="rounded-xl border border-[#dce7f7] bg-[#f9fbff] p-3">
-      <p className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-black text-[#13254a]"><Box size={14} className="text-[var(--brand)]" />New selling unit</p>
+      <p className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-black text-[var(--brand-ink)]"><Box size={14} className="text-[var(--brand)]" />New selling unit</p>
       <div className="grid gap-2 sm:grid-cols-3">
         <label className="text-[10px] font-bold uppercase text-[#6d7c98]">Sell as
           <select className={`${inputCls} mt-1 w-full normal-case`} value={unitType} onChange={(event) => setUnitType(event.target.value)}>

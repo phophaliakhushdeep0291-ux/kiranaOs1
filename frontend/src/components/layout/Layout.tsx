@@ -24,7 +24,6 @@ import {
   Menu,
   Package,
   PercentSquare,
-  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -48,6 +47,7 @@ import { ReportIssueButton } from "@/features/support";
 import { DemoModeBanner } from "@/features/demo/DemoModeBanner";
 import { SyncAlertBanner } from "@/features/sync/SyncAlertBanner";
 import { CommandPalette } from "./CommandPalette";
+import { MobileBottomNav, MobileTopBar } from "./MobileAppChrome";
 import { apiRequest, getApiBaseUrl } from "@/lib/api/http";
 import { getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/stores/location-context";
 import { cn } from "@/lib/utils";
@@ -253,76 +253,6 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
 ];
 
-const MOBILE_NAV: { href: string; label: string; Icon: React.ElementType }[] = [
-  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { href: "/billing", label: "Billing", Icon: ShoppingCart },
-  { href: "/inventory", label: "Inventory", Icon: Package },
-  { href: "/customers", label: "Customers", Icon: Users },
-];
-
-interface MobileMenuItem {
-  href: string;
-  label: string;
-  Icon: React.ElementType;
-  children?: SubItem[];
-}
-
-const MOBILE_MENU: MobileMenuItem[] = [
-  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { href: "/billing", label: "Billing", Icon: ShoppingCart },
-  {
-    href: "/inventory",
-    label: "Inventory",
-    Icon: Package,
-    children: [
-      { href: "/products?add=1", label: "Add Product" },
-      { href: "/products", label: "Products" },
-      { href: "/categories", label: "Categories" },
-      { href: "/inventory/stock-in", label: "Stock In" },
-      { href: "/inventory/stock-out", label: "Stock Out" },
-      { href: "/inventory/adjustments", label: "Adjustments" },
-      { href: "/inventory/stock-transfers", label: "Stock Transfers" },
-      { href: "/inventory/stock-counts", label: "Stock Counts" },
-      { href: "/inventory/batches", label: "Batch & Expiry" },
-    ],
-  },
-  { href: "/customers", label: "Customers / Udhar", Icon: Users },
-  { href: "/purchase-bills", label: "Purchases", Icon: Truck },
-  {
-    href: "/assurance",
-    label: "Financial Assurance",
-    Icon: ShieldCheck,
-    children: [
-      { href: "/assurance", label: "Dashboard" },
-      { href: "/assurance/findings", label: "Findings" },
-      { href: "/assurance/review-queue", label: "Review Queue" },
-      { href: "/assurance/evidence", label: "Evidence Requests" },
-      { href: "/assurance/cases", label: "Investigation Cases" },
-      { href: "/assurance/runs", label: "Audit Runs" },
-      { href: "/assurance/rules", label: "Rules & Thresholds" },
-      { href: "/assurance/report", label: "Assurance Report" },
-    ],
-  },
-  {
-    href: "/bills",
-    label: "Sales",
-    Icon: TrendingUp,
-    children: [
-      { href: "/bills", label: "Billing History" },
-      { href: "/orders-received", label: "Orders Received" },
-      { href: "/sales-overview", label: "Sales Overview" },
-    ],
-  },
-  { href: "/returns", label: "Returns", Icon: Undo2 },
-  { href: "/reports", label: "Reports", Icon: BarChart3 },
-  { href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
-  { href: "/expenses", label: "Expenses", Icon: Wallet },
-  { href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
-  { href: "/loyalty", label: "Loyalty", Icon: Gift },
-  { href: "/gift-cards", label: "Gift Cards", Icon: Gift },
-  { href: "/settings", label: "Settings", Icon: Settings },
-];
-
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function readLS(key: string, fallback: string) {
@@ -341,12 +271,6 @@ function isActive(loc: string, href: string) {
   const current = cleanPath(loc);
   const target = cleanPath(href);
   return current === target || (target !== "/dashboard" && current.startsWith(target + "/"));
-}
-function isMobileNavActive(loc: string, href: string) {
-  if (href === "/inventory") {
-    return ["/inventory", "/products", "/categories"].some((path) => isActive(loc, path));
-  }
-  return isActive(loc, href);
 }
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map(s => s[0] ?? "").join("").toUpperCase() || "O";
@@ -420,6 +344,13 @@ export function Layout({ children }: { children: ReactNode }) {
     : backendStatus.browserOnline
       ? "bg-sky-500"
       : "bg-amber-500";
+  const mobileConnectionTone = hasSyncProblems
+    ? "attention" as const
+    : isSyncing || hasPendingSync
+      ? "busy" as const
+      : isOnline
+        ? "good" as const
+        : "offline" as const;
   const pageHasOwnTopbarActions = loc === "/reports" || loc === "/sales-overview";
 
   const [sidebarWidth, setSidebarWidth] = useState(() => clampW(Number(readLS(SIDEBAR_WIDTH_KEY, String(DEFAULT_WIDTH)))));
@@ -501,6 +432,9 @@ export function Layout({ children }: { children: ReactNode }) {
   const storeLocation = activeStoreLocation
     ? `${activeStoreLocation.name}${activeStoreLocation.city ? ` · ${activeStoreLocation.city}` : ""}`
     : [shop?.city, shop?.address].filter(Boolean)[0] ?? user?.email ?? "Owner";
+  const mobileStoreLocation = activeStoreLocation
+    ? `${activeStoreLocation.code || activeStoreLocation.name}${activeStoreLocation.city ? ` · ${activeStoreLocation.city}` : ""}`
+    : storeLocation;
 
   // apply business-type nav label overrides
   const labelOverrides: Record<string, string> = {
@@ -534,7 +468,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Logo */}
         <div className={cn("flex items-center border-b border-white/10", collapsed ? "flex-col gap-3 p-3" : "gap-3 px-4 py-5")}>
           <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[#075cf7] text-white shadow-[0_14px_28px_rgba(0,91,255,0.30)] ring-1 ring-white/20">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_14px_28px_rgba(0,91,255,0.30)] ring-1 ring-white/20">
               <ShoppingCart size={20} aria-hidden="true" />
             </div>
             {!collapsed && (
@@ -588,7 +522,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   {attentionCount > 0 && <span className="ml-auto text-[11px] font-bold text-amber-300">{attentionCount}</span>}
                 </div>
                 <p className="mt-1 text-[11px] text-sidebar-foreground/50">{connectionDetail}</p>
-                <Link href="/sync-status" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-[10px] border border-white/12 bg-white/5 text-[12px] font-bold text-white transition-colors hover:border-[#075cf7]/70 hover:bg-[#075cf7]">
+                <Link href="/sync-status" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-[10px] border border-white/12 bg-white/5 text-[12px] font-bold text-white transition-colors hover:border-[var(--brand)]/70 hover:bg-[var(--brand)]">
                   <RefreshCw size={13} aria-hidden="true" /> Sync Now
                 </Link>
               </div>
@@ -597,7 +531,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex w-full items-center gap-3 rounded-[14px] border border-white/10 bg-white/[0.045] px-3 py-3 text-sm transition-colors hover:bg-white/8">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#075cf7] text-xs font-bold text-white ring-2 ring-white/15">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-xs font-bold text-white ring-2 ring-white/15">
                       {initials(storeName)}
                     </div>
                     <div className="min-w-0 flex-1 text-left">
@@ -645,12 +579,12 @@ export function Layout({ children }: { children: ReactNode }) {
             type="button"
             aria-label="Toggle sidebar"
             onClick={() => setCollapsed((c) => !c)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[#0f2147] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary"
           >
             <Menu size={19} aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[22px] font-black tracking-tight text-[#0f2147] leading-none">{getPageTitle(loc)}</h1>
+            <h1 className="truncate font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)] leading-none">{getPageTitle(loc)}</h1>
             {getPageSubtitle(loc) && (
               <p className="mt-1.5 hidden truncate text-[12px] font-medium leading-none text-[#64748b] 2xl:block">{getPageSubtitle(loc)}</p>
             )}
@@ -661,7 +595,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <button type="button" className="flex h-11 max-w-[210px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-white px-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
                 <Store size={16} className="shrink-0 text-primary" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[11px] font-black text-[#0f2147]">{activeStoreLocation.name}</span>
+                  <span className="block truncate text-[11px] font-black text-[var(--brand-ink)]">{activeStoreLocation.name}</span>
                   <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-[#64748b]">{activeStoreLocation.code}{activeStoreLocation.isPrimary ? " · Primary" : " · Branch"}</span>
                 </span>
                 <ChevronDown size={13} className="shrink-0 text-muted-foreground" />
@@ -702,7 +636,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"
-              className="relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[#0f2147] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary">
+              className="relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary">
               <Bell size={18} aria-hidden="true" />
               {attentionCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
@@ -716,10 +650,10 @@ export function Layout({ children }: { children: ReactNode }) {
             <DropdownMenuTrigger asChild>
               <button className="flex max-w-[230px] min-w-0 items-center gap-3 rounded-[14px] border border-[#dfe8f5] bg-white px-2.5 py-2 text-sm shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
                 <div className="hidden min-w-0 max-w-[150px] text-right 2xl:block">
-                  <div className="truncate text-[13px] font-extrabold leading-tight text-[#0f2147]">{storeName}</div>
+                  <div className="truncate text-[13px] font-extrabold leading-tight text-[var(--brand-ink)]">{storeName}</div>
                   <div className="truncate text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
                 </div>
-                <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[#075cf7] text-sm font-bold text-white ring-2 ring-[#e7f0ff]">
+                <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[var(--brand)] text-sm font-bold text-white ring-2 ring-[#e7f0ff]">
                   {initials(storeName)}
                 </div>
                 <ChevronDown size={13} className="text-muted-foreground" aria-hidden="true" />
@@ -736,51 +670,15 @@ export function Layout({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </header>
 
-        {/* Mobile topbar */}
-        <header data-app-mobile-topbar="true" className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b border-[#edf2f8] bg-white/98 px-4 pb-2 pt-[max(0.65rem,env(safe-area-inset-top))] shadow-[0_8px_22px_rgba(15,35,80,0.035)] backdrop-blur-xl lg:hidden">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-4">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Open navigation" className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] text-[var(--brand)] transition-colors active:bg-[#eef4ff] hover:bg-[#eef4ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/30">
-                    <Menu size={29} strokeWidth={2} aria-hidden="true" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="max-h-[calc(100vh-96px)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto p-2">
-                  <MobileMenuList loc={loc} />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Link href="/dashboard" className="min-w-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <span className="block truncate font-display text-[30px] font-black leading-none tracking-tight text-[#071333]">Ar<span className="text-[var(--brand)]">tha</span></span>
-                <span className="mt-1 block truncate text-[11px] font-semibold text-[#33456b]">{btDef.navConfig.tagline}</span>
-              </Link>
-            </div>
-            <div className="flex shrink-0 items-center gap-3">
-              <Link href="/sync-status" aria-label="Notifications" className="relative grid h-11 w-11 place-items-center rounded-full text-[#071333] transition-colors active:bg-[#f3f7fc] hover:bg-[#f3f7fc]">
-                <Bell size={25} strokeWidth={1.9} aria-hidden="true" />
-                {attentionCount > 0 && <span className="absolute right-0 top-0 grid h-5 min-w-5 place-items-center rounded-full bg-[#ef233c] px-1 text-[10px] font-black text-white ring-2 ring-white">{attentionCount}</span>}
-              </Link>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" aria-label="Open profile menu" className="grid h-11 w-11 place-items-center rounded-full bg-[var(--brand)] text-[12px] font-black text-white shadow-[0_10px_22px_rgba(7,95,255,0.18)] ring-4 ring-[#eef4ff]">
-                    {initials(storeName)}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {locations.length > 1 && <>
-                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-wider text-muted-foreground">Working location</div>
-                    {locations.map((location) => <DropdownMenuItem key={location.id} onClick={() => switchLocation(location.id)} className={cn(location.id === activeStoreLocation?.id && "bg-primary/8 text-primary")}><Store size={14} className="mr-2" /><span className="truncate">{location.name}</span></DropdownMenuItem>)}
-                    <DropdownMenuSeparator />
-                  </>}
-                  <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
-                  <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive"><LogOut size={14} className="mr-2" /> Logout</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </header>
+        <MobileTopBar
+          pageTitle={getPageTitle(loc)}
+          storeName={storeName}
+          storeLocation={mobileStoreLocation}
+          connectionLabel={connectionLabel}
+          connectionTone={mobileConnectionTone}
+          attentionCount={attentionCount}
+          onOpenSearch={() => setPaletteOpen(true)}
+        />
 
         <SubscriptionStatusBanner />
         {backendStatus.browserOnline && !backendStatus.backendReachable && backendStatus.checkedAt && (
@@ -800,118 +698,30 @@ export function Layout({ children }: { children: ReactNode }) {
           {children}
         </main>
 
-        {/* Mobile bottom nav */}
-        <nav data-app-mobile-bottom-nav="true" aria-label="Mobile navigation" className="mx-3 mb-3 mt-2 shrink-0 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_16px_40px_rgba(15,35,71,0.12)] backdrop-blur-xl lg:hidden">
-          <div className="grid grid-cols-5 items-end px-2.5 py-1.5">
-            {MOBILE_NAV.filter((item) => item.href === "/dashboard" || item.href === "/inventory").map(({ href, label, Icon }) => {
-              const active = isMobileNavActive(loc, href);
-              return (
-                <Link key={href} href={href}>
-                  <div aria-current={active ? "page" : undefined} className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200", active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]")}>
-                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
-                      <Icon size={21} strokeWidth={2.1} aria-hidden="true" />
-                    </div>
-                    <span className="leading-none">{label}</span>
-                  </div>
-                </Link>
-              );
-            })}
-
-            <Link href="/billing">
-              <div aria-label="Create bill" aria-current={isMobileNavActive(loc, "/billing") ? "page" : undefined} className="relative flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-end gap-1 rounded-2xl text-[11px] font-bold text-[var(--brand)]">
-                <div className={cn("absolute -top-5 grid h-[64px] w-[64px] place-items-center rounded-full bg-[var(--brand)] text-white shadow-[0_16px_34px_rgba(7,92,255,0.34)] ring-[7px] ring-white transition-transform active:scale-95", isMobileNavActive(loc, "/billing") && "outline outline-2 outline-offset-2 outline-blue-200")}>
-                  <Plus size={31} strokeWidth={2.2} aria-hidden="true" />
-                </div>
-                <span className="sr-only">Create bill</span>
-              </div>
-            </Link>
-
-            {MOBILE_NAV.filter((item) => item.href === "/customers").map(({ href, label, Icon }) => {
-              const active = isMobileNavActive(loc, href);
-              return (
-                <Link key={href} href={href}>
-                  <div aria-current={active ? "page" : undefined} className={cn("flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold transition-all duration-200", active ? "text-[var(--brand)]" : "text-[#4d5d7a] active:text-[#102347]")}>
-                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-200", active ? "bg-[var(--brand-soft)] text-[var(--brand)] shadow-[0_8px_18px_rgba(7,95,255,0.08)]" : "bg-transparent")}>
-                      <Icon size={21} strokeWidth={2.1} aria-hidden="true" />
-                    </div>
-                    <span className="leading-none">{label}</span>
-                  </div>
-                </Link>
-              );
-            })}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button type="button" aria-label="Open more navigation" className="flex min-h-[var(--app-mobile-nav-height)] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-bold text-[#4d5d7a] transition-all duration-200 active:text-[#102347]">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-2xl transition-colors">
-                    <Settings size={21} strokeWidth={2.1} aria-hidden="true" />
-                  </div>
-                  <span className="leading-none">More</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="end" className="mb-2 max-h-[calc(100vh-120px)] w-[min(21rem,calc(100vw-1.5rem))] overflow-y-auto p-2">
-                <MobileMenuList loc={loc} />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </nav>
+        <MobileBottomNav
+          location={loc}
+          storeName={storeName}
+          storeLocation={mobileStoreLocation}
+          connectionLabel={connectionLabel}
+          connectionDetail={connectionDetail}
+          connectionTone={mobileConnectionTone}
+          locations={locations}
+          activeLocationId={activeStoreLocation?.id}
+          onSwitchLocation={switchLocation}
+          onOpenSearch={() => setPaletteOpen(true)}
+          onLogout={logout}
+        />
       </div>
-      {cleanPath(loc) !== "/billing" && <VoiceAssistant />}
-      <ReportIssueButton />
+      <div className="hidden lg:contents">
+        {cleanPath(loc) !== "/billing" && <VoiceAssistant />}
+        <ReportIssueButton />
+      </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }
 
 // ── Sidebar nav components ────────────────────────────────────────────────────
-
-function MobileMenuList({ loc }: { loc: string }) {
-  return (
-    <>
-      {MOBILE_MENU.map(({ href, label, Icon, children }) => {
-        const childActive = children?.some((child) => isActive(loc, child.href)) ?? false;
-        const active = isActive(loc, href) || childActive;
-        return (
-          <div key={href} className="py-0.5">
-            <DropdownMenuItem asChild>
-              <Link
-                href={href}
-                className={cn(
-                  "flex cursor-pointer items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-black text-[#102347]",
-                  active && "bg-[#eef4ff] text-[var(--brand)]",
-                )}
-              >
-                <Icon size={16} aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate">{label}</span>
-              </Link>
-            </DropdownMenuItem>
-            {children?.length ? (
-              <div className="mb-1 ml-7 mt-1 grid gap-1 border-l border-[#dbe6f5] pl-2">
-                {children.map((child) => {
-                  const subActive = isActive(loc, child.href);
-                  return (
-                    <DropdownMenuItem key={child.href} asChild>
-                      <Link
-                        href={child.href}
-                        className={cn(
-                          "flex cursor-pointer items-center rounded-[7px] px-2.5 py-2 text-[12px] font-bold text-[#53627d]",
-                          subActive && "bg-[#f5f8ff] text-[var(--brand)]",
-                        )}
-                      >
-                        {child.label}
-                      </Link>
-                    </DropdownMenuItem>
-                  );
-                })}
-              </div>
-            ) : null}
-            {children?.length ? <DropdownMenuSeparator className="my-1" /> : null}
-          </div>
-        );
-      })}
-    </>
-  );
-}
 
 function SidebarLink({ item, loc, collapsed, labelOverride }: {
   item: LinkItem; loc: string; collapsed: boolean; labelOverride?: string;
@@ -928,7 +738,7 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
           "group flex min-h-[44px] items-center rounded-[10px] text-[14px] font-semibold transition-all duration-150",
           collapsed ? "justify-center px-0" : "gap-3 px-3",
           active
-            ? "bg-[#075cf7] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]"
+            ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]"
             : item.emphasis
               ? "text-white/90 hover:bg-white/10 hover:text-white"
               : "text-white/76 hover:bg-white/8 hover:text-white"
@@ -939,7 +749,7 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
           <>
             <span className="flex-1 truncate">{label}</span>
             {item.badge && !active && (
-              <span className="rounded-[6px] bg-[#075cf7] px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
+              <span className="rounded-[6px] bg-[var(--brand)] px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
                 {item.badge}
               </span>
             )}
@@ -961,7 +771,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
       <Link href={firstHref}>
         <div title={item.label}
           className={cn("flex h-[44px] items-center justify-center rounded-[10px] transition-all duration-150",
-            groupActive ? "bg-[#075cf7] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]" : "text-white/76 hover:bg-white/8 hover:text-white")}>
+            groupActive ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]" : "text-white/76 hover:bg-white/8 hover:text-white")}>
           <item.Icon size={18} aria-hidden="true" />
         </div>
       </Link>
@@ -1052,4 +862,3 @@ function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
     </div>
   );
 }
-

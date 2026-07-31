@@ -321,7 +321,7 @@ export function BillingSummary({
         data-testid="bill-summary-resize-handle"
         title="Drag to resize"
         onMouseDown={onStartSummaryResize}
-        className="absolute left-0 top-0 z-20 hidden h-full w-2 -translate-x-1 cursor-col-resize bg-transparent hover:bg-[#0057ff]/20 active:bg-[#0057ff]/30 lg:block"
+        className="absolute left-0 top-0 z-20 hidden h-full w-2 -translate-x-1 cursor-col-resize bg-transparent hover:bg-[var(--brand)]/20 active:bg-[var(--brand)]/30 lg:block"
       />
 
       {/* ── Scrollable body ── */}
@@ -330,7 +330,7 @@ export function BillingSummary({
 
           {/* Customer selector — 52px */}
           <div className="flex h-[52px] items-center gap-0 rounded-[10px] border border-[#e3eaf3] bg-white px-3.5">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef4ff] text-[#0057ff]">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#eef4ff] text-[var(--brand)]">
               <User size={15} />
             </span>
             <div className="ml-[11px] min-w-0 flex-1">
@@ -347,7 +347,7 @@ export function BillingSummary({
             </div>
             <button
               onClick={() => setShowCustomerOptions((v) => !v)}
-              className="ml-auto inline-flex min-h-[40px] shrink-0 items-center px-2 text-[12px] font-extrabold text-[#0057ff] hover:underline"
+              className="ml-auto inline-flex min-h-[40px] shrink-0 items-center px-2 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
             >
               Change
             </button>
@@ -490,7 +490,7 @@ export function BillingSummary({
             />
             {cart.length > 0 && (
               <div className="flex h-[43px] items-center border-t border-[#edf1f6] px-3.5">
-                <button className="text-[12px] font-extrabold text-[#0057ff] hover:underline">
+                <button className="text-[12px] font-extrabold text-[var(--brand)] hover:underline">
                   + Add more items
                 </button>
                 <span className="ml-auto text-[12px] font-bold text-[#536383]">
@@ -565,13 +565,13 @@ export function BillingSummary({
                     onChange={(e) => setDiscount(clampAmount(Number(e.target.value) || 0, 0, subtotal))}
                     onBlur={() => setEditingDiscount(false)}
                     onKeyDown={(e) => e.key === "Enter" && setEditingDiscount(false)}
-                    className="w-16 rounded-[7px] border border-[#dbe8ff] bg-white px-2 py-1 text-right text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0057ff]"
+                    className="w-16 rounded-[7px] border border-[#dbe8ff] bg-white px-2 py-1 text-right text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                     placeholder="₹ 0"
                   />
                 )}
                 <button
                   onClick={() => setEditingDiscount((v) => !v)}
-                  className="inline-flex h-9 items-center rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-3 text-[11px] font-extrabold text-[#0057ff] hover:bg-[#eaf2ff]"
+                  className="inline-flex h-9 items-center rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-3 text-[11px] font-extrabold text-[var(--brand)] hover:bg-[#eaf2ff]"
                 >
                   {safeDiscount > 0 && !editingDiscount ? "Edit" : "Apply"}
                 </button>
@@ -606,8 +606,8 @@ export function BillingSummary({
 
             {/* Grand total */}
             <div className="mt-2 flex items-center justify-between border-t border-[#edf1f6] pt-3">
-              <span className="font-display text-[18px] font-black tracking-tight text-[#0f1e3d]">Grand Total</span>
-              <span className="font-display text-[21px] font-black tracking-tight text-[#0f1e3d]" data-testid="text-total">
+              <span className="font-display text-[18px] font-black tracking-tight text-[var(--brand-ink)]">Grand Total</span>
+              <span className="font-display text-[21px] font-black tracking-tight text-[var(--brand-ink)]" data-testid="text-total">
                 {fmtRs(grandTotal)}
               </span>
             </div>
@@ -615,14 +615,14 @@ export function BillingSummary({
 
           {/* Coupon box — dashed blue */}
           <button onClick={() => setCouponExpanded((value) => !value)} aria-expanded={couponExpanded} className="flex h-[42px] w-full items-center gap-2.5 rounded-[9px] border border-dashed border-[#b9cdf6] bg-white px-3.5 transition-colors hover:bg-[#f5f9ff]">
-            <Tag size={15} className="text-[#0057ff]" />
-            <span className="text-[12px] font-extrabold text-[#0057ff]">Apply Coupon Code</span>
-            <ChevronRight size={15} className={`ml-auto text-[#0057ff] transition-transform ${couponExpanded ? "rotate-90" : ""}`} />
+            <Tag size={15} className="text-[var(--brand)]" />
+            <span className="text-[12px] font-extrabold text-[var(--brand)]">Apply Coupon Code</span>
+            <ChevronRight size={15} className={`ml-auto text-[var(--brand)] transition-transform ${couponExpanded ? "rotate-90" : ""}`} />
           </button>
           {couponExpanded && (
             <div className="rounded-[9px] border border-[#dbe8ff] bg-[#f8fbff] p-2.5">
               <div className="flex items-center gap-2">
-                <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder="Enter coupon code" className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[#0057ff]" />
+                <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder="Enter coupon code" className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[var(--brand)]" />
                 <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-[var(--brand)] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
               </div>
               {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
@@ -760,7 +760,7 @@ export function BillingSummary({
             { key: "Ctrl+S", label: "Save" },
           ].map(({ key, label }) => (
             <div key={key} className="flex flex-col items-center justify-center gap-1.5">
-              <kbd className="inline-flex h-[22px] min-w-[28px] items-center justify-center rounded-[6px] bg-[var(--brand-soft)] px-1.5 font-mono text-[10px] font-black text-[#0057ff]">
+              <kbd className="inline-flex h-[22px] min-w-[28px] items-center justify-center rounded-[6px] bg-[var(--brand-soft)] px-1.5 font-mono text-[10px] font-black text-[var(--brand)]">
                 {key}
               </kbd>
               <span className="text-[10px] font-bold text-[#5d6f8d]">{label}</span>

@@ -20,8 +20,8 @@ describe("estimate bills work like real bills under their own number series", ()
   });
 
   it("counts estimates in the bill-history stats like real sales", () => {
-    // realSaleRows only drops cancelled/deleted rows — estimates stay in the stat cards.
-    expect(billsPage).toContain('return rows.filter((bill) => bill.status !== "cancelled" && !isDeleted(bill));');
+    // Cancellation reverses the sale; history deletion only hides its row.
+    expect(billsPage).toContain('return rows.filter((bill) => bill.status !== "cancelled" && !isMergedTwin(bill));');
     expect(billsPage).not.toContain('!isEstimateBill(bill) && !isDeleted(bill)');
   });
 

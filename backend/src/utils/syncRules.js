@@ -2,6 +2,8 @@ export const SYNC_EVENT_TYPES = Object.freeze({
   CREATE_BILL: 'CREATE_BILL',
   CANCEL_BILL: 'CANCEL_BILL',
   RESTORE_BILL: 'RESTORE_BILL',
+  DELETE_BILL: 'DELETE_BILL',
+  RESTORE_DELETED_BILL: 'RESTORE_DELETED_BILL',
   SALE_RETURN: 'SALE_RETURN',
   CREATE_PRODUCT: 'CREATE_PRODUCT',
   UPDATE_PRODUCT: 'UPDATE_PRODUCT',
@@ -37,6 +39,8 @@ export const SYNC_EVENT_STATUSES = Object.freeze({
 export const OWNER_SYNC_EVENT_TYPES = new Set([
   SYNC_EVENT_TYPES.CANCEL_BILL,
   SYNC_EVENT_TYPES.RESTORE_BILL,
+  SYNC_EVENT_TYPES.DELETE_BILL,
+  SYNC_EVENT_TYPES.RESTORE_DELETED_BILL,
   SYNC_EVENT_TYPES.SALE_RETURN,
   SYNC_EVENT_TYPES.DELETE_PRODUCT,
   SYNC_EVENT_TYPES.RESTORE_PRODUCT,
@@ -167,15 +171,6 @@ export function classifySyncError(error) {
 
   const statusCode = error?.statusCode ?? 500;
 
-  if ([400, 404, 409].includes(statusCode)) {
-    return {
-      syncStatus: SYNC_EVENT_STATUSES.CONFLICT,
-      resultStatus: 'conflict',
-      code: explicitCode || messageCode || (statusCode === 404 ? 'NOT_FOUND' : statusCode === 409 ? 'CONFLICT' : 'INVALID_EVENT'),
-      retryable: false,
-    };
-  }
-
   if (statusCode === 401 || statusCode === 403) {
     return {
       syncStatus: SYNC_EVENT_STATUSES.FAILED,
@@ -185,6 +180,50 @@ export function classifySyncError(error) {
     };
   }
 
+  // A few 4xx really are worth another attempt: the request was fine, the server
+  // just wasn't ready for it yet.
+  if (statusCode === 408 || statusCode === 425 || statusCode === 429) {
+    return {
+      syncStatus: SYNC_EVENT_STATUSES.FAILED,
+      resultStatus: 'failed',
+      code: 'SERVER_ERROR',
+      retryable: true,
+    };
+  }
+
+  // Every other 4xx is the server saying "this request is wrong and will stay
+  // wrong" — retrying it unchanged can never succeed.
+  //
+  // This used to be an allowlist of [400, 404, 409], so the 41 different 422s the
+  // app throws (and 402, 413) fell through to the SERVER_ERROR default below and
+  // came back retryable. A shop with no GSTIN on its location hit
+  // SELLER_GSTIN_REQUIRED (422) on every GST invoice and was told "Saving a bill
+  // failed because of a temporary server problem — this will retry automatically",
+  // forever, when the actual fix was to enter a GSTIN. Classify by status class so
+  // a newly introduced 4xx can't silently become an infinite retry again.
+  if (statusCode >= 400 && statusCode < 500) {
+    return {
+      syncStatus: SYNC_EVENT_STATUSES.CONFLICT,
+      resultStatus: 'conflict',
+      // Prefer the AppError's own code (SELLER_GSTIN_REQUIRED, OFFER_DISCOUNT_MISMATCH,
+      // …) so the owner is told what to actually fix.
+      code:
+        explicitCode ||
+        messageCode ||
+        (statusCode === 404
+          ? 'NOT_FOUND'
+          : statusCode === 409
+            ? 'CONFLICT'
+            : statusCode === 402
+              ? 'SUBSCRIPTION_REQUIRED'
+              : statusCode === 422
+                ? 'BUSINESS_RULE_FAILED'
+                : 'INVALID_EVENT'),
+      retryable: false,
+    };
+  }
+
+  // 5xx and anything with no status at all: genuinely worth retrying.
   return {
     syncStatus: SYNC_EVENT_STATUSES.FAILED,
     resultStatus: 'failed',

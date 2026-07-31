@@ -20,6 +20,7 @@ vi.mock("@/lib/offline/db", () => ({
 
 vi.mock("@/lib/offline/instant-cache", () => ({
   createLocalId: vi.fn((prefix: string) => `${prefix}_test_1`),
+  emitLocalDataChanged: vi.fn(),
   removeCachedListItem: vi.fn(),
   upsertCachedListItem: vi.fn(),
 }));

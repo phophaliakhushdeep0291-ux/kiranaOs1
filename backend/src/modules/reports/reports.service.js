@@ -6,6 +6,7 @@ import { env } from "../../config/env.js";
 import { getReportRangeLimit } from "../feature-gates/featureGate.service.js";
 import { getLocationQuantity, resolveOperationalLocation } from "../stores/location-context.service.js";
 import { validateGstin } from "../../utils/gst.js";
+import { summarizeFinancialLedger } from "../finance/financial-ledger.service.js";
 import { baseQtyToRateQty } from "../../utils/units.js";
 
 // Estimates (kacha bills) are full sales — stock, tender, udhar — so they count in every
@@ -925,6 +926,85 @@ export async function getPaymentSummary(shopId, { from, to, locationId }) {
 // Kept here for backward compatibility with Phase 11 imports/tests. The real
 // persisted implementation lives in dailyClosingSnapshot.service.js.
 // ─────────────────────────────────────────────────────────────
+// Owner-only all-time parity gate between the operational report authority and the
+// append-only accounting journal. This deliberately avoids date/location filters:
+// cancellation and restore rows are journaled at activity time, while operational
+// reports describe the bill's current state, and FinancialLedger has no locationId.
+// A scoped comparison would therefore look precise while comparing different truths.
+export async function getFinancialLedgerReconciliation(shopId) {
+  const [activeBills, recoveredUdhar, customers, ledgerRows] = await Promise.all([
+    db.bill.findMany({
+      where: { shopId, status: "active" },
+      include: { payments: true },
+    }),
+    db.udharLedger.findMany({
+      where: {
+        shopId,
+        type: "payment",
+        mode: { in: ["cash", "upi", "bank"] },
+        reversedAt: null,
+      },
+      select: { mode: true, amount: true },
+    }),
+    db.customer.findMany({
+      where: { shopId },
+      select: { udharAmount: true },
+    }),
+    db.financialLedger.findMany({
+      where: { shopId },
+      select: { entryType: true, amountPaise: true },
+    }),
+  ]);
+
+  const billPayments = activeBills.flatMap((bill) => bill.payments);
+  const operational = {
+    sales: sumMoney(activeBills.map((bill) => bill.grandTotal)),
+    cashCollected: addMoney(
+      sumPaymentsByMode(billPayments, "cash"),
+      sumMoney(recoveredUdhar.filter((row) => row.mode === "cash").map((row) => row.amount))
+    ),
+    upiCollected: addMoney(
+      sumPaymentsByMode(billPayments, "upi"),
+      sumMoney(recoveredUdhar.filter((row) => row.mode === "upi").map((row) => row.amount))
+    ),
+    bankCollected: addMoney(
+      sumPaymentsByMode(billPayments, "bank"),
+      sumMoney(recoveredUdhar.filter((row) => row.mode === "bank").map((row) => row.amount))
+    ),
+    outstanding: sumMoney(customers.map((customer) => customer.udharAmount)),
+  };
+  const journalSummary = summarizeFinancialLedger(ledgerRows);
+  const journal = {
+    sales: journalSummary.sales,
+    cashCollected: journalSummary.cashCollected,
+    upiCollected: journalSummary.upiCollected,
+    bankCollected: journalSummary.bankCollected,
+    outstanding: journalSummary.outstanding,
+  };
+  const variancePaise = Object.fromEntries(
+    Object.keys(operational).map((key) => [key, toPaise(journal[key]) - toPaise(operational[key])])
+  );
+  const readyForCutover = Object.values(variancePaise).every((variance) => variance === 0);
+
+  return {
+    authority: "operational_tables_and_locked_snapshots",
+    journalRole: "append_only_reconciliation_candidate",
+    comparisonScope: "shop_all_time_current_state",
+    readyForCutover,
+    operational,
+    journal,
+    variancePaise,
+    rowCounts: {
+      activeBills: activeBills.length,
+      recoveredUdharPayments: recoveredUdhar.length,
+      customers: customers.length,
+      financialLedger: ledgerRows.length,
+    },
+    unsupportedUntilBackfill: ["historical_period_restatement", "location_scoped_journal"],
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 export async function generateDailyClosingSnapshot(shopId, storeIdOrDate, maybeDate, options = {}) {
   const date = maybeDate ?? storeIdOrDate;
   const storeId = maybeDate ? storeIdOrDate : null;

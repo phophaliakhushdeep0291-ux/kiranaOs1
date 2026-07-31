@@ -4,7 +4,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
-import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill } from "../bills/bills.service.js";
+import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
 import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "../customers/customers.schema.js";
 import { createCustomer, recordUdharPayment, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
@@ -135,6 +135,64 @@ function canonicalConflictResolution(value) {
   return value;
 }
 
+const MUTABLE_CONFLICT_ENTITIES = new Set(["product", "products", "customer", "customers", "supplier", "suppliers"]);
+
+function conflictEntitySnapshot(rawSnapshot, entityType) {
+  const snapshot = rawSnapshot && typeof rawSnapshot === "object" && !Array.isArray(rawSnapshot) ? rawSnapshot : {};
+  const payload = snapshot.payload && typeof snapshot.payload === "object" && !Array.isArray(snapshot.payload) ? snapshot.payload : {};
+  const singular = String(entityType).toLowerCase().replace(/s$/, "");
+  for (const candidate of [payload[singular], snapshot[singular], payload.entity, snapshot.entity, payload, snapshot]) {
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      !Array.isArray(candidate) &&
+      Object.keys(candidate).length > 0
+    ) return candidate;
+  }
+  return {};
+}
+
+async function applyMutableConflictChoice(shopId, conflict, resolution, mergedPayload) {
+  const entityType = String(conflict.entityType ?? "").toLowerCase();
+  if (!MUTABLE_CONFLICT_ENTITIES.has(entityType)) {
+    throw new AppError(
+      "Financial, stock, bill, payment, udhar, and purchase conflicts cannot be overwritten. Use the record's reversal or compensating-entry workflow.",
+      409,
+      "SYNC_CONFLICT_COMPENSATING_ENTRY_REQUIRED",
+    );
+  }
+  const local = safeJsonParse(conflict.localSnapshotJson) ?? {};
+  const server = safeJsonParse(conflict.serverSnapshotJson) ?? {};
+  const selected = resolution === "manual_merge"
+    ? mergedPayload
+    : resolution === "use_local"
+      ? conflictEntitySnapshot(local, entityType)
+      : conflictEntitySnapshot(server, entityType);
+  if (!selected || typeof selected !== "object" || Array.isArray(selected) || Object.keys(selected).length === 0) {
+    throw new AppError("The selected conflict version is unavailable", 409, "SYNC_CONFLICT_SNAPSHOT_MISSING");
+  }
+
+  const id = String(selected.serverId ?? selected.server_id ?? selected.id ?? conflict.entityId ?? "");
+  if (!id) throw new AppError("Conflict record identity is unavailable", 409, "SYNC_CONFLICT_ENTITY_ID_MISSING");
+  if (entityType.startsWith("product")) {
+    const parsed = updateProductSchema.parse(selected);
+    delete parsed.stockBaseQty;
+    delete parsed.costPerRateUnit;
+    delete parsed.baseUpdatedAt;
+    await updateProduct(shopId, id, parsed);
+  } else if (entityType.startsWith("customer")) {
+    const candidate = { ...selected };
+    delete candidate.udharAmount;
+    delete candidate.totalUdhar;
+    const parsed = updateCustomerSchema.parse(candidate);
+    delete parsed.udharAmount;
+    await updateCustomer(shopId, id, parsed);
+  } else {
+    await updateSupplier(shopId, id, updateSupplierSchema.parse(selected));
+  }
+  return selected;
+}
+
 export async function reportSyncConflict(shopId, input, actor = {}) {
   const create = {
     shopId,
@@ -238,7 +296,7 @@ export async function resolveSyncConflict(shopId, input, actor = {}) {
 
   const expectedVersion = input.expected_version ?? existing.version;
   const resolvedAt = new Date();
-  const changed = await db.syncConflict.updateMany({
+  const claimed = await db.syncConflict.updateMany({
     where: {
       id: existing.id,
       shopId,
@@ -246,21 +304,39 @@ export async function resolveSyncConflict(shopId, input, actor = {}) {
       version: expectedVersion,
     },
     data: {
-      status: targetStatus,
-      resolution,
-      mergedPayloadJson: snapshotJson(input.merged_payload),
-      resolutionNote: input.note ?? null,
-      resolvedByUserId: actor.userId ?? null,
-      resolvedByDeviceId: actor.deviceId ?? null,
-      resolvedAt,
+      status: "resolving",
       version: { increment: 1 },
       expiresAt: syncConflictExpiry(),
     },
   });
-  if (changed.count !== 1) {
+  if (claimed.count !== 1) {
     throw new AppError("Sync conflict changed on another device; refresh before resolving", 409, "SYNC_CONFLICT_VERSION_MISMATCH");
   }
-  const updated = await db.syncConflict.findUnique({ where: { id: existing.id } });
+  let selectedPayload = input.merged_payload;
+  try {
+    if (targetStatus === "resolved") {
+      selectedPayload = await applyMutableConflictChoice(shopId, existing, resolution, input.merged_payload);
+    }
+  } catch (error) {
+    await db.syncConflict.updateMany({
+      where: { id: existing.id, shopId, status: "resolving" },
+      data: { status: "open", expiresAt: syncConflictExpiry() },
+    });
+    throw error;
+  }
+  const updated = await db.syncConflict.update({
+    where: { id: existing.id },
+    data: {
+      status: targetStatus,
+      resolution,
+      mergedPayloadJson: snapshotJson(selectedPayload),
+      resolutionNote: input.note ?? null,
+      resolvedByUserId: actor.userId ?? null,
+      resolvedByDeviceId: actor.deviceId ?? null,
+      resolvedAt,
+      expiresAt: syncConflictExpiry(),
+    },
+  });
   await createAuditLog({
     shopId,
     userId: actor.userId ?? null,
@@ -1092,6 +1168,12 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.RESTORE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyRestoreBill(shopId, event, context);
+    case SYNC_EVENT_TYPES.DELETE_BILL:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyDeleteBill(shopId, event, context);
+    case SYNC_EVENT_TYPES.RESTORE_DELETED_BILL:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyRestoreDeletedBill(shopId, event, context);
     case SYNC_EVENT_TYPES.SALE_RETURN:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyCreateSaleReturn(shopId, event, user, context);
@@ -1343,6 +1425,19 @@ async function applyCancelBill(shopId, event, context) {
   };
 }
 
+async function applyDeleteBill(shopId, event, context) {
+  const payload = cancelPayloadSchema.parse(getEventPayload(event));
+  const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
+  if (!billId) throw new AppError("billId required for DELETE_BILL sync event", 400);
+  const bill = await softDeleteBill(shopId, billId, { reason: payload.reason });
+  return {
+    type: event.type,
+    billId: bill.id,
+    status: bill.status,
+    deletedAt: bill.deletedAt,
+  };
+}
+
 
 async function applyCreateSaleReturn(shopId, event, user, context) {
   const payload = getEventPayload(event);
@@ -1401,6 +1496,20 @@ async function applyRestoreBill(shopId, event, context) {
     type: event.type,
     billId: bill.id,
     status: bill.status,
+    restoredAt: bill.updatedAt,
+  };
+}
+
+async function applyRestoreDeletedBill(shopId, event, context) {
+  const payload = restoreBillPayloadSchema.parse(getEventPayload(event));
+  const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
+  if (!billId) throw new AppError("billId required for RESTORE_DELETED_BILL sync event", 400);
+  const bill = await restoreDeletedBill(shopId, billId);
+  return {
+    type: event.type,
+    billId: bill.id,
+    status: bill.status,
+    deletedAt: bill.deletedAt,
     restoredAt: bill.updatedAt,
   };
 }

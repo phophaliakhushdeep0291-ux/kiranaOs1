@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
-  CalendarDays,
   CheckCircle2,
   ChefHat,
   ChevronRight,
@@ -326,6 +325,7 @@ export default function OrdersReceivedPage() {
       yesterdayCount: yesterdays.length,
       newOrders: allOrdersQuery.data?.newCount ?? 0,
       preparing: allOrders.filter((o) => o.status === "accepted").length,
+      ready: allOrders.filter((o) => o.status === "ready").length,
       doneToday: todays.filter((o) => o.status === "fulfilled").length,
     };
   }, [allOrders, allOrdersQuery.data?.newCount]);
@@ -340,12 +340,17 @@ export default function OrdersReceivedPage() {
   }, [selectedId, allOrders, orders]);
 
   return (
-    <div className="app-docked-page mx-auto max-w-6xl px-4 py-5">
+    <div className="app-docked-page mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-5">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-xl font-black text-[#0f1e3d]">Orders Received</h1>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">View and manage newly received customer orders.</p>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-xl font-black text-[var(--brand-ink)]">Online orders</h1>
+            {(stats.newOrders + stats.preparing + stats.ready) > 0 ? (
+              <span className="rounded-full bg-[#eaf2ff] px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[var(--brand)]">{stats.newOrders + stats.preparing + stats.ready} active</span>
+            ) : null}
+          </div>
+          <p className="mt-0.5 text-[12px] text-[#6d7c98]">{stats.ordersToday} received today · Live queue refreshes every 20 seconds</p>
         </div>
         <button
           type="button"
@@ -353,7 +358,7 @@ export default function OrdersReceivedPage() {
             void ordersQuery.refetch();
             void allOrdersQuery.refetch();
           }}
-          className="grid h-9 w-9 place-items-center rounded-lg border border-[#dfe7f2] bg-white text-[#405273] hover:bg-[var(--brand-softer)]"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#dfe7f2] bg-white text-[#405273] shadow-sm hover:bg-[var(--brand-softer)]"
           aria-label="Refresh orders"
         >
           <RefreshCw size={16} className={ordersQuery.isFetching || allOrdersQuery.isFetching ? "animate-spin" : ""} />
@@ -361,35 +366,34 @@ export default function OrdersReceivedPage() {
       </div>
 
       {/* Stats strip */}
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard
-          icon={<CalendarDays size={18} />}
-          tint="bg-[#eaf2ff] text-[var(--brand)]"
-          label="Orders Today"
-          value={stats.ordersToday}
-          sub={todayDelta == null ? "first orders today" : `${todayDelta >= 0 ? "↑" : "↓"} ${Math.abs(todayDelta)}% vs yesterday`}
-          subTone={todayDelta == null ? "text-[#8290a8]" : todayDelta >= 0 ? "text-[#16a34a]" : "text-[#e11d48]"}
-        />
+      <div className="mb-5 grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
         <StatCard
           icon={<Inbox size={18} />}
-          tint="bg-[#e9fbf0] text-[#16a34a]"
-          label="New Orders"
+          tint="bg-[#eaf2ff] text-[var(--brand)]"
+          label="Needs review"
           value={stats.newOrders}
-          sub="awaiting confirmation"
+          sub="confirm before preparing"
         />
         <StatCard
           icon={<ChefHat size={18} />}
           tint="bg-[#fff7ed] text-[#c2410c]"
-          label="Preparing"
+          label="In preparation"
           value={stats.preparing}
           sub="accepted, being prepared"
         />
         <StatCard
-          icon={<PackageCheck size={18} />}
+          icon={<CheckCircle2 size={18} />}
           tint="bg-[#f3efff] text-[#7c3aed]"
-          label="Done Today"
+          label="Ready now"
+          value={stats.ready}
+          sub="waiting for handover"
+        />
+        <StatCard
+          icon={<PackageCheck size={18} />}
+          tint="bg-[#e9fbf0] text-[#16a34a]"
+          label="Completed today"
           value={stats.doneToday}
-          sub="completed today"
+          sub={todayDelta == null ? "today's completed orders" : `${stats.ordersToday} total received today`}
         />
       </div>
 
@@ -403,30 +407,45 @@ export default function OrdersReceivedPage() {
           onMessage={() => messageCustomer(selectedOrder, selectedOrder.status === "accepted" ? "ready" : "received")}
           onMarkReady={() => statusMutation.mutate({ id: selectedOrder.id, next: "ready" })}
           onMarkDone={() => statusMutation.mutate({ id: selectedOrder.id, next: "fulfilled" })}
-          onReject={() => statusMutation.mutate({ id: selectedOrder.id, next: "rejected" })}
+          onReject={() => {
+            if (window.confirm(`Reject ${orderCode(selectedOrder.id)}? The customer will see this order as declined.`)) {
+              statusMutation.mutate({ id: selectedOrder.id, next: "rejected" });
+            }
+          }}
           onPrint={() => printOrderSlip(selectedOrder)}
           onCopy={() => void copyOrderDetails(selectedOrder)}
         />
       ) : (
-        <div className="mx-auto max-w-3xl">
-          <div className="mb-4 flex gap-1.5 overflow-x-auto">
+        <div className="mx-auto max-w-4xl">
+          <div className="sticky top-0 z-10 -mx-3 mb-4 flex gap-2 overflow-x-auto border-y border-[#e7edf5] bg-[#f7f9fc]/95 px-3 py-2.5 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.value}
                 type="button"
                 onClick={() => setStatus(tab.value)}
-                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${
-                  status === tab.value ? "bg-[var(--brand)] text-white" : "border border-[#dfe7f2] bg-white text-[#536383] hover:bg-[var(--brand-softer)]"
+                className={`min-h-10 whitespace-nowrap rounded-xl px-3.5 text-[12px] font-bold transition ${
+                  status === tab.value ? "bg-[var(--brand)] text-white shadow-[0_8px_20px_rgba(7,95,255,0.2)]" : "border border-[#dfe7f2] bg-white text-[#536383] hover:bg-[var(--brand-softer)]"
                 }`}
               >
                 {tab.label}
-                {tab.value === "new" && (newCount ?? 0) > 0 ? ` (${newCount})` : ""}
+                {tab.value === "new" && stats.newOrders > 0 ? ` ${stats.newOrders}` : ""}
+                {tab.value === "accepted" && stats.preparing > 0 ? ` ${stats.preparing}` : ""}
+                {tab.value === "ready" && stats.ready > 0 ? ` ${stats.ready}` : ""}
               </button>
             ))}
           </div>
 
           {ordersQuery.isLoading ? (
-            <p className="py-16 text-center text-sm text-[#8290a8]">Loading orders...</p>
+            <div className="space-y-3" aria-label="Loading orders">
+              {[0, 1, 2].map((key) => <div key={key} className="h-40 animate-pulse rounded-2xl border border-[#e6ecf4] bg-white" />)}
+            </div>
+          ) : ordersQuery.isError ? (
+            <div className="rounded-2xl border border-[#fecdd3] bg-[#fff7f7] px-5 py-10 text-center">
+              <XCircle size={28} className="mx-auto text-[#e11d48]" />
+              <p className="mt-3 text-sm font-black text-[#9f1239]">Could not load online orders</p>
+              <p className="mt-1 text-xs text-[#7f1d1d]">Check the connection and try again. Existing billing data is unchanged.</p>
+              <button type="button" onClick={() => void ordersQuery.refetch()} className="mt-4 min-h-11 rounded-xl bg-[var(--brand)] px-5 text-xs font-black text-white">Try again</button>
+            </div>
           ) : orders.length === 0 ? (
             <div className="flex flex-col items-center py-16 text-center">
               <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#eef2f8] text-[#94a3b8]"><Inbox size={26} /></div>
@@ -439,11 +458,11 @@ export default function OrdersReceivedPage() {
                 <li
                   key={order.id}
                   onClick={() => setSelectedId(order.id)}
-                  className="cursor-pointer rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)] transition hover:border-[#c9dcff]"
+                  className={`cursor-pointer rounded-2xl border bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)] transition hover:border-[#c9dcff] ${order.status === "new" ? "border-l-4 border-l-[var(--brand)] border-y-[#dce7f8] border-r-[#dce7f8]" : order.status === "ready" ? "border-l-4 border-l-[#7c3aed] border-y-[#e6dcff] border-r-[#e6dcff]" : "border-[#e6ecf4]"}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-bold text-[#13254a]">{order.customerName}</p>
+                      <p className="truncate font-bold text-[var(--brand-ink)]">{order.customerName}</p>
                       <a
                         href={`tel:${order.customerMobile}`}
                         onClick={(e) => e.stopPropagation()}
@@ -451,9 +470,10 @@ export default function OrdersReceivedPage() {
                       >
                         <Phone size={12} /> {order.customerMobile}
                       </a>
-                      {order.customerAddress ? (
-                        <p className="mt-1 flex items-start gap-1 text-[12px] text-[#5b6b85]"><MapPin size={12} className="mt-0.5 shrink-0" /> {order.customerAddress}</p>
-                      ) : null}
+                      <p className="mt-1 flex items-center gap-1 text-[11px] font-bold text-[#6d7c98]">
+                        {order.fulfillmentType === "pickup" ? <ShoppingCart size={12} /> : <MapPin size={12} />}
+                        {order.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"}{order.promisedSlot ? ` · ${order.promisedSlot}` : ""}
+                      </p>
                     </div>
                     <div className="flex shrink-0 items-start gap-2 text-right">
                       <div>
@@ -473,42 +493,55 @@ export default function OrdersReceivedPage() {
                       {order.items.slice(0, 3).map((it) => `${it.qty}× ${it.name}`).join(" · ")}
                       {order.items.length > 3 ? ` +${order.items.length - 3} more` : ""}
                     </span>
-                    <span className="ml-3 shrink-0 font-black text-[#0f1e3d]">{fmtRs(order.estimatedTotal)}</span>
+                    <span className="ml-3 shrink-0 font-black text-[var(--brand-ink)]">{fmtRs(order.estimatedTotal)}</span>
                   </div>
 
                   {!(["rejected", "cancelled", "fulfilled"] as CustomerOrder["status"][]).includes(order.status) ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={openingOrderId != null}
-                        onClick={(e: MouseEvent) => { e.stopPropagation(); acceptAndBill(order); }}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-2 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
-                      >
-                        <ShoppingCart size={14} /> {openingOrderId === order.id ? "Opening..." : "Open in Billing"}
-                      </button>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                      {order.status === "new" ? (
+                        <button
+                          type="button"
+                          onClick={(e: MouseEvent) => { e.stopPropagation(); setSelectedId(order.id); }}
+                          className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold text-white shadow-sm sm:col-span-1"
+                        >
+                          <ChevronRight size={15} /> Review & confirm
+                        </button>
+                      ) : order.status === "accepted" ? (
+                        <button
+                          type="button"
+                          disabled={openingOrderId != null}
+                          onClick={(e: MouseEvent) => { e.stopPropagation(); acceptAndBill(order); }}
+                          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-3 text-[12px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
+                        >
+                          <ShoppingCart size={14} /> {openingOrderId === order.id ? "Opening..." : "Open in Billing"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={statusMutation.isPending}
+                          onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: "fulfilled" }); }}
+                          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#16a34a] px-3 text-[12px] font-bold text-white shadow-sm disabled:opacity-60"
+                        >
+                          <PackageCheck size={14} /> Complete handover
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={(e: MouseEvent) => { e.stopPropagation(); messageCustomer(order, order.status === "accepted" ? "ready" : "received"); }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#bfe6cd] bg-[#f0fbf4] px-3 py-2 text-[12px] font-bold text-[#16a34a]"
+                        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12px] font-bold text-[#16a34a]"
                       >
                         <MessageCircle size={14} /> Message
                       </button>
-                      <button
-                        type="button"
-                        disabled={statusMutation.isPending}
-                        onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: order.status === "accepted" ? "ready" : "fulfilled" }); }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe3ee] bg-white px-3 py-2 text-[12px] font-bold text-[#405273]"
-                      >
-                        <CheckCircle2 size={14} /> {order.status === "accepted" ? "Mark ready" : "Mark done"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={statusMutation.isPending}
-                        onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: "rejected" }); }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#f0d5d5] bg-[#fff5f5] px-3 py-2 text-[12px] font-bold text-[#e11d48]"
-                      >
-                        <XCircle size={14} /> Reject
-                      </button>
+                      {order.status === "accepted" ? (
+                        <button
+                          type="button"
+                          disabled={statusMutation.isPending}
+                          onClick={(e: MouseEvent) => { e.stopPropagation(); statusMutation.mutate({ id: order.id, next: "ready" }); }}
+                          className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-3 text-[12px] font-bold text-[#405273] sm:col-span-1"
+                        >
+                          <CheckCircle2 size={14} /> Mark ready
+                        </button>
+                      ) : null}
                     </div>
                   ) : null}
                 </li>
@@ -555,7 +588,7 @@ function StatCard({
         <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tint}`}>{icon}</span>
         <div className="min-w-0">
           <p className="truncate text-[12px] font-semibold text-[#6d7c98]">{label}</p>
-          <p className="font-display text-xl font-black leading-tight text-[#0f1e3d]">{value}</p>
+          <p className="font-display text-xl font-black leading-tight text-[var(--brand-ink)]">{value}</p>
         </div>
       </div>
       <p className={`mt-2 truncate text-[11px] font-semibold ${subTone}`}>{sub}</p>
@@ -653,7 +686,7 @@ function OrderDetail({
             <div className="flex items-start gap-4">
               <span className={`grid h-14 w-14 shrink-0 place-items-center rounded-2xl ${banner.tint}`}>{banner.icon}</span>
               <div className="min-w-0">
-                <h2 className="font-display text-lg font-black text-[#0f1e3d]">{banner.title}</h2>
+                <h2 className="font-display text-lg font-black text-[var(--brand-ink)]">{banner.title}</h2>
                 <p className="mt-0.5 text-[12.5px] text-[#5b6b85]">{banner.desc}</p>
               </div>
             </div>
@@ -662,7 +695,7 @@ function OrderDetail({
               <BannerField label="Date & Time" value={fullDateTime(order.createdAt)} />
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Order Source</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[#13254a]"><QrCode size={13} className="text-[var(--brand)]" /> {CHANNEL_LABEL[order.sourceChannel]}</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-bold text-[var(--brand-ink)]"><QrCode size={13} className="text-[var(--brand)]" /> {CHANNEL_LABEL[order.sourceChannel]}</p>
               </div>
               <div>
                 <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">Status</p>
@@ -674,9 +707,21 @@ function OrderDetail({
           </div>
 
           {/* Items table */}
-          <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-            <p className="mb-3 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><ShoppingCart size={15} className="text-[var(--brand)]" /> Order Items</p>
-            <div className="overflow-x-auto">
+          <div className="rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)] sm:p-5">
+            <p className="mb-3 inline-flex items-center gap-2 text-[13.5px] font-black text-[var(--brand-ink)]"><ShoppingCart size={15} className="text-[var(--brand)]" /> Order Items</p>
+            <div className="space-y-2 sm:hidden">
+              {order.items.map((it, i) => (
+                <div key={`${it.productId}-${i}`} className="flex items-center gap-3 rounded-xl border border-[#edf2f8] bg-[#fbfdff] p-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#eef4ff] text-sm font-black text-[var(--brand)]">{it.name.charAt(0).toUpperCase()}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12.5px] font-black text-[var(--brand-ink)]">{it.name}</p>
+                    <p className="mt-0.5 text-[11px] font-semibold capitalize text-[#6d7c98]">{it.qty} × {it.unit} · {fmtRs(it.price)} each</p>
+                  </div>
+                  <span className="shrink-0 text-[13px] font-black tabular-nums text-[var(--brand-ink)]">{fmtRs(it.qty * it.price)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full min-w-[430px] text-[12.5px]">
                 <thead>
                   <tr className="border-b border-[#eef2f8] text-left text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">
@@ -697,23 +742,23 @@ function OrderDetail({
                           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[#f0f4fa] text-[11px] font-black text-[#8fa0ba]">
                             {it.name.charAt(0).toUpperCase()}
                           </span>
-                          <span className="min-w-0 truncate font-bold text-[#13254a]">{it.name}</span>
+                          <span className="min-w-0 truncate font-bold text-[var(--brand-ink)]">{it.name}</span>
                         </span>
                       </td>
-                      <td className="py-2.5 pr-2 text-right font-bold tabular-nums text-[#13254a]">{it.qty}</td>
+                      <td className="py-2.5 pr-2 text-right font-bold tabular-nums text-[var(--brand-ink)]">{it.qty}</td>
                       <td className="py-2.5 pr-2 capitalize text-[#5b6b85]">{it.unit}</td>
                       <td className="py-2.5 pr-2 text-right tabular-nums text-[#5b6b85]">{fmtMoney(it.price)}</td>
-                      <td className="py-2.5 text-right font-bold tabular-nums text-[#13254a]">{fmtMoney(it.qty * it.price)}</td>
+                      <td className="py-2.5 text-right font-bold tabular-nums text-[var(--brand-ink)]">{fmtMoney(it.qty * it.price)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="mt-3 ml-auto w-full max-w-[260px] space-y-1.5 text-[12.5px]">
+            <div className="mt-4 ml-auto w-full max-w-[300px] space-y-1.5 text-[12.5px]">
               <div className="flex items-center justify-between text-[#5b6b85]">
                 <span>Subtotal</span><span className="tabular-nums">{fmtRs(order.estimatedTotal)}</span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-[#f4f8ff] px-2.5 py-2 text-[13.5px] font-black text-[#0f1e3d]">
+              <div className="flex items-center justify-between rounded-lg bg-[#f4f8ff] px-2.5 py-2 text-[13.5px] font-black text-[var(--brand-ink)]">
                 <span>Estimated Total</span><span className="tabular-nums">{fmtRs(order.estimatedTotal)}</span>
               </div>
               <p className="text-[10.5px] leading-snug text-[#8290a8]">Discounts, delivery and GST are applied at billing.</p>
@@ -723,43 +768,45 @@ function OrderDetail({
           {/* Fulfillment progress */}
           {order.status !== "rejected" && order.status !== "cancelled" && (
             <div className="rounded-2xl border border-[#e6ecf4] bg-white p-5 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-              <p className="mb-4 inline-flex items-center gap-2 text-[13.5px] font-black text-[#0f1e3d]"><PackageCheck size={15} className="text-[var(--brand)]" /> Fulfillment Progress</p>
+              <p className="mb-4 inline-flex items-center gap-2 text-[13.5px] font-black text-[var(--brand-ink)]"><PackageCheck size={15} className="text-[var(--brand)]" /> Fulfillment Progress</p>
               <FulfillmentStepper order={order} />
             </div>
           )}
 
           {/* Action bar */}
           {active && (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,35,80,0.06)] sm:flex sm:flex-wrap">
               <button
                 type="button"
                 disabled={opening}
                 onClick={onAcceptBill}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[var(--brand)] px-4 py-2.5 text-[12.5px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70"
+                className="col-span-2 inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl bg-[var(--brand)] px-4 text-[12.5px] font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70 sm:col-span-1"
               >
                 <CheckCircle2 size={15} /> {opening ? "Opening..." : order.status === "new" ? "Confirm & Open in Billing" : "Open in Billing"}
               </button>
-              <button type="button" onClick={onPrint} className="inline-flex items-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-4 py-2.5 text-[12.5px] font-bold text-[#405273]">
+              <button type="button" onClick={onPrint} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-3 text-[12.5px] font-bold text-[#405273]">
                 <Printer size={15} /> Print Slip
               </button>
-              <button type="button" onClick={onMessage} className="inline-flex items-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-4 py-2.5 text-[12.5px] font-bold text-[#16a34a]">
+              <button type="button" onClick={onMessage} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfe6cd] bg-[#f0fbf4] px-3 text-[12.5px] font-bold text-[#16a34a]">
                 <MessageCircle size={15} /> WhatsApp Customer
               </button>
-              <button
-                type="button"
-                disabled={mutationPending}
-                onClick={order.status === "accepted" ? onMarkReady : onMarkDone}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-4 py-2.5 text-[12.5px] font-bold text-[#405273]"
-              >
-                <PackageCheck size={15} /> {order.status === "accepted" ? "Mark Ready" : "Mark Done"}
-              </button>
+              {order.status !== "new" ? (
+                <button
+                  type="button"
+                  disabled={mutationPending}
+                  onClick={order.status === "accepted" ? onMarkReady : onMarkDone}
+                  className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#dbe3ee] bg-white px-3 text-[12.5px] font-bold text-[#405273] sm:col-span-1"
+                >
+                  <PackageCheck size={15} /> {order.status === "accepted" ? "Mark Ready" : "Complete handover"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={mutationPending}
                 onClick={onReject}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#f0d5d5] bg-[#fff5f5] px-4 py-2.5 text-[12.5px] font-bold text-[#e11d48]"
+                className="col-span-2 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#f0d5d5] bg-[#fff5f5] px-3 text-[12.5px] font-bold text-[#e11d48] sm:col-span-1"
               >
-                <XCircle size={15} /> Cancel Order
+                <XCircle size={15} /> Reject order
               </button>
             </div>
           )}
@@ -772,7 +819,7 @@ function OrderDetail({
             <div className="flex items-center gap-3">
               <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#eaf2ff] font-display text-[14px] font-black text-[var(--brand)]">{initials}</span>
               <div className="min-w-0">
-                <p className="flex items-center gap-2 font-bold text-[#13254a]">
+                <p className="flex items-center gap-2 font-bold text-[var(--brand-ink)]">
                   <span className="truncate">{order.customerName}</span>
                   {order.status === "new" && <span className="rounded-full bg-[#e9fbf0] px-2 py-0.5 text-[9.5px] font-black uppercase text-[#16a34a]">New</span>}
                 </p>
@@ -806,7 +853,7 @@ function OrderDetail({
             <InfoRow label="Total Items" value={`${order.itemCount} item${order.itemCount === 1 ? "" : "s"} · ${totalQty} qty`} />
             <InfoRow label="Estimated Amount" value={fmtRs(order.estimatedTotal)} />
             <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2.5">
-              <span className="text-[13px] font-black text-[#0f1e3d]">Grand Total</span>
+              <span className="text-[13px] font-black text-[var(--brand-ink)]">Grand Total</span>
               <span className="font-display text-[16px] font-black text-[var(--brand)]">{fmtRs(order.estimatedTotal)}</span>
             </div>
             <p className="mt-1 text-[10.5px] text-[#8290a8]">Estimated — final price is set when you bill it.</p>
@@ -830,7 +877,7 @@ function OrderDetail({
               <QuickAction icon={<MessageCircle size={16} />} label="WhatsApp" onClick={onMessage} />
               <QuickAction icon={<Printer size={16} />} label="Print Slip" onClick={onPrint} />
               <QuickAction icon={<Copy size={16} />} label="Copy Details" onClick={onCopy} />
-              <QuickAction icon={<PackageCheck size={16} />} label={order.status === "accepted" ? "Mark Ready" : "Mark Done"} disabled={!active || mutationPending || order.status === "new"} onClick={order.status === "accepted" ? onMarkReady : onMarkDone} />
+              <QuickAction icon={<PackageCheck size={16} />} label={order.status === "accepted" ? "Mark Ready" : order.status === "ready" ? "Complete" : "Next status"} disabled={!active || mutationPending || order.status === "new"} onClick={order.status === "accepted" ? onMarkReady : onMarkDone} />
               <QuickAction icon={<XCircle size={16} />} label="Reject" tone="danger" disabled={!active || mutationPending} onClick={onReject} />
             </div>
           </SideCard>
@@ -844,7 +891,7 @@ function BannerField({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <p className="text-[10.5px] font-bold uppercase tracking-wide text-[#8290a8]">{label}</p>
-      <p className="mt-1 truncate text-[12.5px] font-bold text-[#13254a]">{value}</p>
+      <p className="mt-1 truncate text-[12.5px] font-bold text-[var(--brand-ink)]">{value}</p>
     </div>
   );
 }
@@ -892,7 +939,7 @@ function FulfillmentStepper({ order }: { order: CustomerOrder }) {
             : "Pending";
           return (
             <div key={step.label} className="px-1">
-              <p className={`text-[11px] font-black leading-tight ${done || activeStep ? "text-[#13254a]" : "text-[#9aa7bd]"}`}>{step.label}</p>
+              <p className={`text-[11px] font-black leading-tight ${done || activeStep ? "text-[var(--brand-ink)]" : "text-[#9aa7bd]"}`}>{step.label}</p>
               <p className="mt-0.5 truncate text-[10px] font-semibold text-[#8290a8]">{sub}</p>
             </div>
           );
@@ -905,7 +952,7 @@ function FulfillmentStepper({ order }: { order: CustomerOrder }) {
 function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-[#e6ecf4] bg-white p-4 shadow-[0_6px_20px_rgba(15,35,80,0.05)]">
-      <p className="mb-3 text-[13px] font-black text-[#0f1e3d]">{title}</p>
+      <p className="mb-3 text-[13px] font-black text-[var(--brand-ink)]">{title}</p>
       {children}
     </div>
   );
@@ -918,7 +965,7 @@ function InfoRow({ label, value, chip, chipClass, mono }: { label: string; value
       {chip ? (
         <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase ${chipClass ?? "bg-[#eef2f8] text-[#536383]"}`}>{chip}</span>
       ) : (
-        <span className={`min-w-0 truncate text-right font-bold text-[#13254a] ${mono ? "font-mono text-[11px]" : ""}`}>{value}</span>
+        <span className={`min-w-0 truncate text-right font-bold text-[var(--brand-ink)] ${mono ? "font-mono text-[11px]" : ""}`}>{value}</span>
       )}
     </div>
   );

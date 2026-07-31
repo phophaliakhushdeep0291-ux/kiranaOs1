@@ -133,7 +133,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
     <div className="app-docked-page">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <h2 className="font-display text-[22px] font-black tracking-tight text-[#102347]">{title}</h2>
+          <h2 className="font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">{title}</h2>
           <p className="mt-1 text-[13px] text-[#64748b]">{description}</p>
         </div>
         <Button
@@ -157,7 +157,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
         <div className="relative">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
           <Input
-            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#102347] focus-visible:border-[#075cf7] focus-visible:bg-white focus-visible:ring-0"
+            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
             placeholder={`Search ${title.toLowerCase()}...`}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -170,8 +170,8 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
           <div className="py-14 text-center text-[13px] text-[#64748b]">Loading movement history...</div>
         ) : scopedRows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#075cf7]">{icon}</span>
-            <p className="text-[13px] font-black text-[#102347]">{emptyTitle}</p>
+            <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]">{icon}</span>
+            <p className="text-[13px] font-black text-[var(--brand-ink)]">{emptyTitle}</p>
             <p className="max-w-sm text-[12px] leading-5 text-[#64748b]">{emptyText}</p>
           </div>
         ) : (
@@ -196,7 +196,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
                     <tr key={String(row.id ?? index)} className="border-b border-[#eef2f8] last:border-0">
                       <td className="whitespace-nowrap px-4 py-3 text-[#52627e]">{rowDate(row)}</td>
                       <td className="px-4 py-3 font-mono text-[12px] uppercase text-[#52627e]" title={String(row.id ?? "-")}>{String(row.id ?? "-").slice(-8)}</td>
-                      <td className="px-4 py-3 font-bold text-[#102347]">{String(row.productName ?? row.product_name ?? "-")}</td>
+                      <td className="px-4 py-3 font-bold text-[var(--brand-ink)]">{String(row.productName ?? row.product_name ?? "-")}</td>
                       <td className={cn("px-4 py-3 text-right font-black", delta >= 0 ? "text-emerald-600" : "text-rose-600")}>
                         {delta >= 0 ? "+" : ""}{delta.toLocaleString("en-IN")}
                       </td>
@@ -216,7 +216,7 @@ export function InventoryRegisterView({ mode }: { mode: RegisterMode }) {
 
 function Kpi({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "blue" | "green" | "violet" | "amber" }) {
   const toneClass = {
-    blue: "bg-[var(--brand-soft)] text-[#075cf7]",
+    blue: "bg-[var(--brand-soft)] text-[var(--brand)]",
     green: "bg-emerald-50 text-emerald-600",
     violet: "bg-violet-50 text-violet-600",
     amber: "bg-amber-50 text-amber-600",
@@ -228,7 +228,7 @@ function Kpi({ icon, label, value, tone }: { icon: React.ReactNode; label: strin
         <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
         <span className={cn("grid h-9 w-9 place-items-center rounded-[10px]", toneClass)}>{icon}</span>
       </div>
-      <p className="mt-2 font-display text-[24px] font-black leading-none text-[#102347]">{value}</p>
+      <p className="mt-2 font-display text-[24px] font-black leading-none text-[var(--brand-ink)]">{value}</p>
     </div>
   );
 }

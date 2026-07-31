@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const layout = readFileSync("src/components/layout/Layout.tsx", "utf8");
+const mobileChrome = readFileSync("src/components/layout/MobileAppChrome.tsx", "utf8");
+const styles = readFileSync("src/index.css", "utf8");
 
 describe("desktop app shell behavior", () => {
   it("keeps the sidebar fixed while the page content scrolls", () => {
@@ -35,10 +37,23 @@ describe("desktop app shell behavior", () => {
 
   it("keeps mobile bottom navigation in its own row so it cannot cover page actions", () => {
     expect(layout).toContain("pb-[var(--app-mobile-content-bottom-clearance)] lg:pb-0");
-    expect(layout).toContain("mx-3 mb-3 mt-2 shrink-0");
+    expect(mobileChrome).toContain("mx-3 mb-3 mt-2 shrink-0");
     expect(layout).not.toContain("fixed inset-x-3 bottom-3");
-    expect(layout).toContain("min-h-[var(--app-mobile-nav-height)]");
-    expect(layout).toContain("pb-[env(safe-area-inset-bottom)]");
+    expect(styles).toContain("min-height: 56px");
+    expect(styles).toContain("calc(8px + env(safe-area-inset-bottom))");
     expect(layout).toContain("overscroll-contain");
+  });
+
+  it("uses one task-oriented mobile shell with stable top-level destinations", () => {
+    expect(layout).toContain("<MobileTopBar");
+    expect(layout).toContain("<MobileBottomNav");
+    expect(layout).not.toContain("Legacy mobile topbar");
+    expect(layout).not.toContain("Legacy mobile navigation");
+    for (const label of ["Home", "Sell", "Stock", "Customers"]) {
+      expect(mobileChrome).toContain(`label: "${label}"`);
+    }
+    expect(mobileChrome).toContain("Open all app areas");
+    expect(mobileChrome).toContain("Search products, bills, customers");
+    expect(mobileChrome).toContain("Backup & sync");
   });
 });

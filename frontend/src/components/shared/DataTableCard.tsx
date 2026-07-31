@@ -22,8 +22,8 @@ export function DataTableCard({ title, description, actions, children, loading =
   const titleId = `data-table-title-${id.replace(/:/g, "")}`;
 
   return (
-    <section className={cn("premium-panel min-w-0 p-3 text-card-foreground sm:p-4", className)} aria-labelledby={titleId} {...props}>
-      <div className="mb-3 flex min-w-0 flex-col gap-2 md:flex-row md:items-start md:justify-between">
+    <section className={cn("premium-panel min-w-0 overflow-hidden p-0 text-card-foreground", className)} aria-labelledby={titleId} {...props}>
+      <div className="flex min-w-0 flex-col gap-2 border-b border-[#edf1f6] px-4 py-3.5 md:flex-row md:items-start md:justify-between md:px-5 md:py-4">
         <div className="min-w-0">
           <h2 id={titleId} className="break-words text-base font-bold text-foreground">{title}</h2>
           {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p> : null}
@@ -31,7 +31,7 @@ export function DataTableCard({ title, description, actions, children, loading =
         {actions ? <div className="responsive-action-row shrink-0 md:justify-end">{actions}</div> : null}
       </div>
       {loading ? (
-        <div className="space-y-2" role="status" aria-live="polite" aria-busy="true" aria-label="Loading table data">
+        <div className="space-y-2 p-4" role="status" aria-live="polite" aria-busy="true" aria-label="Loading table data">
           {Array.from({ length: loadingRows }).map((_, index) => <Skeleton key={index} className="h-10 w-full" />)}
         </div>
       ) : error ? (
@@ -39,14 +39,14 @@ export function DataTableCard({ title, description, actions, children, loading =
           icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
           title="Unable to load data"
           description={error}
-          className="border-destructive/30 bg-destructive/5"
+          className="m-4 border-destructive/30 bg-destructive/5"
           role="alert"
         />
       ) : empty ? (
-        emptyState ?? <EmptyState title="No data found" description="There is nothing to show right now." />
+        emptyState ?? <EmptyState className="m-4" title="No data found" description="There is nothing to show right now." />
       ) : (
         <div
-          className="app-table-scroll min-w-0 overflow-x-auto"
+          className="app-table-scroll min-w-0 overflow-x-auto p-3 md:p-4"
           role="region"
           aria-label={tableLabel ?? "Scrollable data table"}
           tabIndex={0}

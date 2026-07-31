@@ -15,7 +15,6 @@ export type ListProductsResponse = Product[];
 export interface CreateProductVariables { data: ProductInput }
 export interface UpdateProductVariables { id: string; data: ProductInput }
 export interface DeleteProductVariables { id: string; ownerPin: string; reason?: string }
-export type ProductWithProductId = Product & { productId: string };
 
 export const getListProductsQueryKey = (params?: ListProductsParams) => ["products", getActiveLocationId() ?? "company", params ?? {}] as const;
 
@@ -23,10 +22,6 @@ type ListProductsQueryKey = ReturnType<typeof getListProductsQueryKey>;
 
 function isNetworkLikeError(error: unknown) {
   return !(error instanceof ApiClientError) || !isBrowserOnline();
-}
-
-function withProductId(product: Product): ProductWithProductId {
-  return { ...product, productId: product.id };
 }
 
 function filterCachedProducts(products: Product[], params?: ListProductsParams): Product[] {
@@ -52,21 +47,63 @@ export async function cacheProducts(products: Product[]) {
   }
 }
 
-function readCachedProducts(params?: ListProductsParams): ProductWithProductId[] {
-  return filterCachedProducts(readInstantCache<Product[]>(`${PRODUCTS_CACHE_KEY}:${getActiveLocationId() ?? "company"}`, []), params).map(withProductId);
+function readCachedProducts(params?: ListProductsParams): Product[] {
+  return filterCachedProducts(readInstantCache<Product[]>(`${PRODUCTS_CACHE_KEY}:${getActiveLocationId() ?? "company"}`, []), params);
 }
 
-async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<ProductWithProductId[]> {
+async function readProductsFromIndexedDB(params?: ListProductsParams): Promise<Product[]> {
   try {
     const rows = await offlineDB.getAll<Product>("products");
     const locationId = getActiveLocationId();
     const locationAwareRows = locationId && rows.some((row) => Boolean((row as Product & { inventoryLocationId?: string }).inventoryLocationId))
       ? rows.filter((row) => (row as Product & { inventoryLocationId?: string }).inventoryLocationId === locationId)
       : rows;
-    return filterCachedProducts(locationAwareRows, params).map(withProductId);
+    return filterCachedProducts(locationAwareRows, params);
   } catch {
     return [];
   }
+}
+
+function productKeys(product: Product): string[] {
+  const row = product as Product & { productId?: unknown; local_id?: unknown; server_id?: unknown; localId?: unknown; serverId?: unknown };
+  return [product.id, row.productId, row.local_id, row.server_id, row.localId, row.serverId]
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function isDeviceOwnedProduct(product: Product): boolean {
+  const row = product as Product & { demo_data?: unknown; sync_status?: unknown; server_id?: unknown; serverId?: unknown };
+  if (row.demo_data === true || product.id.startsWith("demo_") || product.id.startsWith("local_")) return true;
+  if (typeof row.server_id === "string" || typeof row.serverId === "string") {
+    return ["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(String(row.sync_status ?? "").toLowerCase());
+  }
+  return ["pending_sync", "syncing", "failed", "conflict", "local_only"].includes(String(row.sync_status ?? "").toLowerCase());
+}
+
+export function mergeProducts(serverRows: Product[], localRows: Product[], retainSyncedLocal = false): Product[] {
+  const rows: Product[] = [];
+  const keyToIndex = new Map<string, number>();
+  const add = (product: Product) => {
+    const keys = productKeys(product);
+    const index = keys.map((key) => keyToIndex.get(key)).find((value): value is number => value !== undefined);
+    if (index === undefined) {
+      const nextIndex = rows.push(product) - 1;
+      keys.forEach((key) => keyToIndex.set(key, nextIndex));
+      return;
+    }
+    rows[index] = { ...rows[index], ...product };
+    productKeys(rows[index]).forEach((key) => keyToIndex.set(key, index));
+  };
+
+  serverRows.forEach(add);
+  for (const local of localRows) {
+    if (!retainSyncedLocal && !isDeviceOwnedProduct(local)) continue;
+    const deleted = local.deletedAt != null || (local as Product & { deleted_at?: unknown }).deleted_at != null;
+    if (deleted) {
+      const indexes = productKeys(local).map((key) => keyToIndex.get(key)).filter((value): value is number => value !== undefined);
+      indexes.forEach((index) => { rows[index] = { ...rows[index], ...local }; });
+    } else add(local);
+  }
+  return rows;
 }
 
 export function useListProducts(
@@ -81,26 +118,21 @@ export function useListProducts(
     initialData: extra.initialData ?? (cached.length > 0 ? cached : undefined),
     queryFn: async () => {
       const liveCached = readCachedProducts(params);
-      if (liveCached.length === 0) {
-        const fromDB = await readProductsFromIndexedDB(params);
-        if (fromDB.length > 0) {
-          void cacheProducts(fromDB);
-          return fromDB;
-        }
-      }
-      if (!isBrowserOnline()) return liveCached;
+      const fromDB = await readProductsFromIndexedDB(params);
+      const localRows = mergeProducts([], [...liveCached, ...fromDB], true);
+      if (!isBrowserOnline()) return filterCachedProducts(localRows, params);
       try {
-        const fresh = (await productsApi.listProducts(params)).map(withProductId);
-        const cacheSource = params?.search ? await productsApi.listProducts({ limit: 500 }) : fresh;
-        void cacheProducts(cacheSource.map(withProductId));
-        return fresh;
-      } catch (error) {
-        if (liveCached.length > 0) return liveCached;
-        if (isNetworkLikeError(error)) {
-          const fromDB = await readProductsFromIndexedDB(params);
-          if (fromDB.length > 0) { void cacheProducts(fromDB); return fromDB; }
+        const fresh = await productsApi.listProducts(params);
+        if (params?.search) {
+          const fullServerRows = await productsApi.listProducts({ limit: 500 });
+          void cacheProducts(mergeProducts(fullServerRows, localRows));
+          return filterCachedProducts(mergeProducts(fresh, localRows), params);
         }
-        if (isNetworkLikeError(error)) return liveCached;
+        const merged = filterCachedProducts(mergeProducts(fresh, localRows), params);
+        void cacheProducts(merged);
+        return merged;
+      } catch (error) {
+        if (isNetworkLikeError(error)) return filterCachedProducts(localRows, params);
         throw error;
       }
     },

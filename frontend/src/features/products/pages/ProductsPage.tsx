@@ -122,7 +122,10 @@ export default function ProductsPage() {
   const products = useListProducts({ limit: 1000 }, {
     query: { placeholderData: (previousData: Product[] | undefined) => previousData ?? [], staleTime: 2 * 60_000 },
   });
-  const productRows = (products.data?.length ?? 0) > 0 ? products.data ?? [] : localProductRows;
+  // `[]` is an authoritative, successfully loaded catalogue. Falling back to
+  // every IndexedDB row when the server returns an empty list resurrects stale
+  // products; use the direct DB paint only until the repository has resolved.
+  const productRows = products.data === undefined ? localProductRows : products.data;
 
   const form = useForm<ProductFormData>({
     resolver: zodResolver(productFormSchema),
@@ -429,7 +432,7 @@ export default function ProductsPage() {
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" aria-hidden="true" />
           <Input
             data-testid="input-search"
-            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[#0057ff] focus-visible:bg-white focus-visible:ring-0"
+            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
             placeholder="Search by product name, barcode or SKU"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -484,7 +487,7 @@ export default function ProductsPage() {
           ) : pagedRows.length === 0 ? (
             <div className="rounded-[16px] border border-dashed border-[#d8e2f1] px-4 py-12 text-center">
               <Package size={26} className="mx-auto text-[#94a3b8]" />
-              <p className="mt-2 text-sm font-black text-[#102347]">No products found</p>
+              <p className="mt-2 text-sm font-black text-[var(--brand-ink)]">No products found</p>
               <p className="mt-1 text-xs text-[#64748b]">Add a product or clear the current filters.</p>
             </div>
           ) : pagedRows.map((product) => {
@@ -504,7 +507,7 @@ export default function ProductsPage() {
                     {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(product.name, product.category)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-black text-[#102347]">{product.name}</p>
+                    <p className="truncate text-[14px] font-black text-[var(--brand-ink)]">{product.name}</p>
                     <p className="mt-0.5 truncate text-[11px] font-semibold capitalize text-[#64748b]">{product.category || "General"} · {unit}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-[15px] font-black text-[var(--brand)]">{rs(price)}</span>
@@ -537,7 +540,7 @@ export default function ProductsPage() {
                     type="checkbox"
                     aria-label="Select all products on this page"
                     data-testid="bulk-select-page"
-                    className="h-4 w-4 cursor-pointer accent-[#0057ff]"
+                    className="h-4 w-4 cursor-pointer accent-[var(--brand)]"
                     checked={pageAllSelected}
                     onChange={togglePage}
                   />
@@ -581,7 +584,7 @@ export default function ProductsPage() {
                           type="checkbox"
                           aria-label={`Select ${product.name}`}
                           data-testid={`bulk-select-${product.id}`}
-                          className="h-4 w-4 cursor-pointer accent-[#0057ff]"
+                          className="h-4 w-4 cursor-pointer accent-[var(--brand)]"
                           checked={selectedIds.has(product.id)}
                           onChange={() => toggleOne(product.id)}
                         />
@@ -630,7 +633,7 @@ export default function ProductsPage() {
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button
-                              className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[#0057ff]"
+                              className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[var(--brand)]"
                               aria-label={`Actions for ${product.name}`}
                             >
                               <MoreVertical size={16} />
@@ -780,7 +783,7 @@ function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNod
       <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] sm:h-11 sm:w-11 sm:rounded-[12px] ${iconClass}`}>{icon}</span>
       <div className="min-w-0">
         <p className="text-[11px] font-semibold leading-tight text-[#6d7c98] sm:text-[12px]">{label}</p>
-        <p className="font-display text-[20px] font-black leading-tight tracking-tight text-[#0f1e3d] sm:text-[22px]">{value}</p>
+        <p className="font-display text-[20px] font-black leading-tight tracking-tight text-[var(--brand-ink)] sm:text-[22px]">{value}</p>
         <p className="hidden text-[11px] text-[#9aa6bb] sm:block">{sub}</p>
       </div>
     </div>
@@ -813,12 +816,12 @@ function FiltersButton({
       <PopoverTrigger asChild>
         <button
           data-testid="button-filters"
-          className="relative flex h-11 shrink-0 items-center gap-2 rounded-[10px] border border-[#e3eaf3] bg-white px-4 text-[13px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] data-[state=open]:border-[#0057ff]"
+          className="relative flex h-11 shrink-0 items-center gap-2 rounded-[10px] border border-[#e3eaf3] bg-white px-4 text-[13px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] data-[state=open]:border-[var(--brand)]"
         >
           <SlidersHorizontal size={14} className="text-[#6b7a9a]" />
           Filters
           {activeCount > 0 && (
-            <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[#0057ff] px-1 text-[10px] font-black text-white">{activeCount}</span>
+            <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[var(--brand)] px-1 text-[10px] font-black text-white">{activeCount}</span>
           )}
           <ChevronDown size={14} className="text-[#6b7a9a]" />
         </button>
@@ -826,7 +829,7 @@ function FiltersButton({
       <PopoverContent align="end" className="w-[264px] p-0">
         <div className="flex items-center justify-between border-b border-[#eef1f6] px-4 py-2.5">
           <span className="text-[13px] font-black text-[#13274d]">Filters</span>
-          <button onClick={clearAll} disabled={activeCount === 0} className="text-[12px] font-bold text-[#0057ff] transition-colors disabled:text-[#9aa6bb]">Clear all</button>
+          <button onClick={clearAll} disabled={activeCount === 0} className="text-[12px] font-bold text-[var(--brand)] transition-colors disabled:text-[#9aa6bb]">Clear all</button>
         </div>
         <div className="space-y-4 p-4">
           <FilterGroup label="Stock" value={stockFilter} onChange={setStockFilter} options={[["all", "All"], ["in", "In Stock"], ["low", "Low Stock"], ["out", "Out of Stock"]]} />
@@ -848,7 +851,7 @@ function FilterGroup({ label, value, onChange, options }: { label: string; value
             key={v}
             onClick={() => onChange(v)}
             className={`rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
-              value === v ? "border-[#0057ff] bg-[#0057ff] text-white" : "border-[#e3eaf3] bg-white text-[#45577a] hover:bg-[#f7f9fd]"
+              value === v ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#e3eaf3] bg-white text-[#45577a] hover:bg-[#f7f9fd]"
             }`}
           >
             {l}
@@ -884,7 +887,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
             key={p}
             onClick={() => onChange(p)}
             className={`grid h-8 min-w-8 place-items-center rounded-lg px-2 text-[12px] font-bold transition-colors ${
-              p === page ? "bg-[#0057ff] text-white shadow-[0_4px_10px_rgba(0,87,255,0.25)]" : "border border-[#e3eaf3] text-[#45577a] hover:bg-[#f7f9fd]"
+              p === page ? "bg-[var(--brand)] text-white shadow-[0_4px_10px_rgba(0,87,255,0.25)]" : "border border-[#e3eaf3] text-[#45577a] hover:bg-[#f7f9fd]"
             }`}
           >
             {p}

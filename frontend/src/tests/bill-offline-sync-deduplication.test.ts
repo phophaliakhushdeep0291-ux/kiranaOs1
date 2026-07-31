@@ -150,13 +150,16 @@ describe("offline bill sync deduplication", () => {
     // deleted_at on the local optimistic row. The recycle bin filters
     // isDeleted && !isMergedTwin, so a merge-tombstone must be recognisable —
     // otherwise every synced bill leaves a phantom "deleted" entry.
-    const mergeTombstone = { id: "bill_local_1", billNo: "PENDING-ABC123", deleted_at: "2026-06-07T02:20:41.000Z", merged_into_id: "server_bill_1" };
+    // NOTE: a real tombstone carries server_id === merged_into_id (tombstoneMergedRow
+    // stamps both with the surviving row's server id). Fixtures without server_id let
+    // a self-check that counted server_id pass here while failing on every live bill.
+    const mergeTombstone = { id: "bill_local_1", billNo: "PENDING-ABC123", server_id: "server_bill_1", deleted_at: "2026-06-07T02:20:41.000Z", merged_into_id: "server_bill_1" };
     const userDeleted = { id: "server_bill_2", billNo: "KOS-2026-000020", deleted_at: "2026-06-08T10:00:00.000Z" };
     const activeBill = { id: "server_bill_1", billNo: "KOS-2026-000004" };
 
     expect(isMergedBillTwin(mergeTombstone)).toBe(true);
     // camelCase variant — a DIFFERENT id than the row's own, i.e. a genuine twin.
-    expect(isMergedBillTwin({ id: "bill_local_9", mergedIntoId: "server_bill_1", deletedAt: "2026-06-07T02:20:41.000Z" })).toBe(true);
+    expect(isMergedBillTwin({ id: "bill_local_9", server_id: "server_bill_1", mergedIntoId: "server_bill_1", deletedAt: "2026-06-07T02:20:41.000Z" })).toBe(true);
     expect(isMergedBillTwin(userDeleted)).toBe(false);  // a real user delete stays in the recycle bin
     expect(isMergedBillTwin(activeBill)).toBe(false);
 
@@ -184,10 +187,12 @@ describe("offline bill sync deduplication", () => {
     };
     expect(isMergedBillTwin(survivor)).toBe(false);
 
-    // A genuine tombstone (points at a DIFFERENT row) is still a twin.
+    // A genuine tombstone (points at a DIFFERENT row) is still a twin. Shaped exactly
+    // as reconcile writes it: server_id === merged_into_id === the surviving row.
     const tombstone = {
       id: "bill_local_1",
       billNo: "PENDING-5A5A3A",
+      server_id: "cmrs6m2ik0060u66k5s9b2iz1",
       deleted_at: "2026-07-19T19:21:34.635Z",
       merged_into_id: "cmrs6m2ik0060u66k5s9b2iz1",
     };

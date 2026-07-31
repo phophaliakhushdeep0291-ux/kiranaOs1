@@ -178,7 +178,7 @@ export default function MerchantSetupPage() {
           <div className="flex min-w-0 flex-col justify-between rounded-[12px] border border-[#e7edf7] bg-[#f8fbff] p-4">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">Next best action</p>
-              <p className="mt-1 text-[15px] font-black text-[#102347]">{continueStep?.title ?? "Run a final bill test"}</p>
+              <p className="mt-1 text-[15px] font-black text-[var(--brand-ink)]">{continueStep?.title ?? "Run a final bill test"}</p>
               <p className="mt-1 text-[12px] text-[#64748b]">{continueStep?.detail ?? "Your setup checks are complete."}</p>
             </div>
             <Button
@@ -210,7 +210,7 @@ export default function MerchantSetupPage() {
                     </span>
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <h3 className="font-display text-[15px] font-black text-[#102347]">{step.title}</h3>
+                        <h3 className="font-display text-[15px] font-black text-[var(--brand-ink)]">{step.title}</h3>
                         <ReadyPill step={step} />
                       </div>
                       <p className="mt-1 text-[12px] leading-5 text-[#64748b]">{step.description}</p>
@@ -250,7 +250,7 @@ export default function MerchantSetupPage() {
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between rounded-[10px] border border-[#eef2f8] px-3 py-2">
                   <span className="text-[12px] font-semibold text-[#64748b]">{label}</span>
-                  <span className="font-display text-[18px] font-black text-[#102347]">{value}</span>
+                  <span className="font-display text-[18px] font-black text-[var(--brand-ink)]">{value}</span>
                 </div>
               ))}
             </div>

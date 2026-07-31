@@ -12,7 +12,7 @@ export function PageHeader({ title, description, eyebrow, actions, className, ..
   return (
     <header
       className={cn(
-        "mb-4 flex w-full min-w-0 flex-col gap-3 overflow-hidden sm:mb-5 md:flex-row md:items-start md:justify-between",
+        "premium-page-header mb-4 flex w-full min-w-0 flex-col gap-3 overflow-hidden sm:mb-5 md:flex-row md:items-start md:justify-between",
         className,
       )}
       {...props}

@@ -219,9 +219,9 @@ export default function SecuritySettingsPage() {
           />
           <div className="space-y-3 px-5 pb-5">
             <div className="flex items-center gap-3 rounded-[10px] border border-[#eef2f8] px-4 py-3">
-              <span className="font-mono text-[18px] tracking-[0.3em] text-[#102347]">{pinQ.data?.hasPin ? "•••••" : "—"}</span>
+              <span className="font-mono text-[18px] tracking-[0.3em] text-[var(--brand-ink)]">{pinQ.data?.hasPin ? "•••••" : "—"}</span>
               <div className="flex-1">
-                <p className="text-[12px] font-bold text-[#102347]">{pinQ.data?.hasPin ? "PIN active" : pinQ.isError ? "Status unavailable offline" : "No owner PIN yet"}</p>
+                <p className="text-[12px] font-bold text-[var(--brand-ink)]">{pinQ.data?.hasPin ? "PIN active" : pinQ.isError ? "Status unavailable offline" : "No owner PIN yet"}</p>
                 <p className="text-[11px] text-[#64748b]">
                   {pinQ.data?.hasPin
                     ? `${protectedCount} of ${PROTECTED_ACTIONS.length} actions ask for it`
@@ -285,7 +285,7 @@ export default function SecuritySettingsPage() {
                   const on = locked || rule.on;
                   return (
                     <tr key={a.key} className={i < PROTECTED_ACTIONS.length - 1 ? "border-b border-[#eef2f8]" : ""}>
-                      <td className="px-3 py-2.5 font-bold text-[#102347]">
+                      <td className="px-3 py-2.5 font-bold text-[var(--brand-ink)]">
                         {a.label}
                         {locked ? <span className="ml-1.5 align-middle"><Badge tone="blue">Server enforced</Badge></span> : null}
                       </td>
@@ -344,7 +344,7 @@ export default function SecuritySettingsPage() {
                 <div key={id} className={`flex flex-wrap items-center gap-3 py-2.5 ${i < devices.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[#f4f7fb] text-[#536583]"><MonitorSmartphone size={15} /></span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-bold text-[#102347]">{deviceLabel(device)}{isCurrent && <span className="ml-1.5"><Badge tone="blue">Current</Badge></span>}</p>
+                    <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{deviceLabel(device)}{isCurrent && <span className="ml-1.5"><Badge tone="blue">Current</Badge></span>}</p>
                     <p className="text-[11px] text-[#64748b]">{[device.platform || device.operatingSystem, `last seen ${relativeTime(deviceSeenAt(device))}`].filter(Boolean).join(" · ")}</p>
                   </div>
                   <Badge tone={blocked ? "red" : device.status === "active" ? "green" : "gray"}>{blocked ? "Blocked" : device.status === "active" ? "Active" : device.status || "Idle"}</Badge>
@@ -372,7 +372,7 @@ export default function SecuritySettingsPage() {
             ) : (eventsQ.data ?? []).length === 0 ? (
               <div className="py-8 text-center">
                 <ShieldCheck className="mx-auto text-[#b5c0d2]" size={26} />
-                <p className="mt-2 text-[13px] font-black text-[#102347]">No security events yet</p>
+                <p className="mt-2 text-[13px] font-black text-[var(--brand-ink)]">No security events yet</p>
                 <p className="mt-1 text-[11px] text-[#64748b]">Approvals, cancellations and sign-ins will appear here as they happen.</p>
               </div>
             ) : (eventsQ.data ?? []).map((row, i, arr) => {
@@ -427,7 +427,7 @@ function ChangePinDialog({ open, onOpenChange, onChanged }: { open: boolean; onO
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[400px]">
         <DialogHeader>
-          <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">Update Owner PIN</DialogTitle>
+          <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Update Owner PIN</DialogTitle>
           <p className="text-[12px] text-[#6d7c98]">Change the owner login PIN / password.</p>
         </DialogHeader>
         <form onSubmit={form.handleSubmit((v) => changePassword.mutate({ data: { currentPassword: v.currentPassword, newPassword: v.newPassword } }))} className="space-y-3.5">

@@ -97,7 +97,7 @@ export function ReportIssueButton() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Report a problem"
-        className="fixed bottom-[max(1rem,calc(env(safe-area-inset-bottom)+92px))] left-4 z-40 flex h-11 items-center gap-2 rounded-full border border-[#dfe8f5] bg-white px-4 text-[13px] font-bold text-[#0f2147] shadow-[0_12px_28px_rgba(15,35,80,0.16)] transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 print:hidden lg:bottom-6 lg:left-auto lg:right-[84px]"
+        className="fixed bottom-[max(1rem,calc(env(safe-area-inset-bottom)+92px))] left-4 z-40 flex h-11 items-center gap-2 rounded-full border border-[#dfe8f5] bg-white px-4 text-[13px] font-bold text-[var(--brand-ink)] shadow-[0_12px_28px_rgba(15,35,80,0.16)] transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 print:hidden lg:bottom-6 lg:left-auto lg:right-[84px]"
       >
         <LifeBuoy size={17} aria-hidden="true" />
         <span className="hidden sm:inline">Report a problem</span>

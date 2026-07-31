@@ -12,6 +12,7 @@ import {
   dedupeBillsForDisplay,
   dedupeBillItemsForDisplay,
   dedupePaymentsForDisplay,
+  isMergedBillTwin,
 } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 
@@ -324,7 +325,7 @@ function isRejectedBySync(bill: RecordLike): boolean {
 function isSaleBill(bill: RecordLike): boolean {
   // Estimates (kacha bills) count as sales — they move stock, tender, and udhar just like a
   // pakka bill and only differ by their EST- number series.
-  return !isDeleted(bill) && !isCancelledBill(bill) && !isRejectedBySync(bill);
+  return !isMergedBillTwin(bill) && !isCancelledBill(bill) && !isRejectedBySync(bill);
 }
 
 function billTotal(bill: RecordLike): number {
@@ -924,7 +925,7 @@ function buildSupplierDueRows(
 export function aggregateFinancialRows(input: FinancialAggregationInput): FinancialAggregationSnapshot {
   const date = input.date ?? todayInputValue();
   const range = input.range ?? { from: date, to: date };
-  const bills = dedupeBillsForDisplay((input.bills ?? []).filter((row) => !isDeleted(row)));
+  const bills = dedupeBillsForDisplay(input.bills ?? [], { includeUserDeleted: true });
   const billItems = (input.billItems ?? []).filter((row) => !isDeleted(row));
   const payments = dedupePaymentsForDisplay((input.payments ?? []).filter((row) => !isDeleted(row)));
   const ledger = dedupeLedgerEntries((input.ledger ?? []).filter((row) => !isDeleted(row)));

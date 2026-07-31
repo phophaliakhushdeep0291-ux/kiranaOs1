@@ -782,34 +782,39 @@ export default function CustomersPage() {
   const showLegacyCustomerPanel: boolean = false;
 
   return (
-    <div className="app-docked-page space-y-5 bg-white">
-      <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-        <SyncBadge status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="app-docked-page space-y-4 bg-transparent lg:space-y-5">
+      <section className="rounded-[18px] border border-[#e2e8f2] bg-white p-4 shadow-[0_10px_30px_rgba(15,35,80,0.05)] lg:flex lg:items-center lg:justify-between lg:gap-6 lg:p-5">
+        <div className="min-w-0">
+          <div className="hidden items-center gap-3 lg:flex"><span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={19} /></span><div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Customer credit</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">Track every balance, collection promise and payment from one workspace</p></div></div>
+          <SyncBadge className="hidden lg:mt-3 lg:inline-flex" status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
+        </div>
+        <div className="grid grid-cols-2 items-center gap-2 lg:flex lg:flex-wrap">
+          <div className="col-span-2 lg:contents">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 w-full justify-between rounded-[12px] border-[#dfe7f2] bg-white px-3.5 text-[11px] font-bold text-[#24385f] lg:w-auto lg:min-w-[215px]"><span className="inline-flex items-center gap-2"><CalendarDays size={16} className="text-[var(--brand)]" />{formatShortDate(rangeFrom)} - {formatShortDate(rangeTo)}</span><ChevronRight size={13} className="rotate-90" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56"><DropdownMenuItem onClick={() => applyRange(0)}>Today</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(6)}>Last 7 days</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(29)}>Last 30 days</DropdownMenuItem></DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 min-w-[215px] justify-between rounded-[10px] border-[#dfe7f2] bg-white px-3.5 text-[11px] font-bold text-[#24385f]"><span className="inline-flex items-center gap-2"><CalendarDays size={16} className="text-[#1768f5]" />{formatShortDate(rangeFrom)} - {formatShortDate(rangeTo)}</span><ChevronRight size={13} className="rotate-90" /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56"><DropdownMenuItem onClick={() => applyRange(0)}>Today</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(6)}>Last 7 days</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(29)}>Last 30 days</DropdownMenuItem></DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold"><Filter size={16} />Filters</Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><Button variant="outline" className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Filter size={16} />Filters</Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>All customers</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>With balance</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={exportCustomers} className="h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold"><Download size={16} />Export</Button>
-          <Button variant="outline" onClick={() => openPayment()} className="h-11 gap-2 rounded-[10px] border-[#bfd4f5] bg-[var(--brand-softer)] px-3.5 text-[11px] font-bold text-[#174eaa] hover:bg-[#edf5ff]"><Wallet size={16} />Record Payment</Button>
-          <Button onClick={openCreate} className="inline-flex h-11 items-center justify-center gap-2.5 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] px-[18px] text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[#0758df] hover:to-[#004ed0]"><Plus size={16} className="shrink-0" /><span>Add Customer</span></Button>
+          <Button variant="outline" onClick={exportCustomers} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />Export</Button>
+          <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[#bfd4f5] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[#174eaa] hover:bg-[#edf5ff] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />Collect payment</Button>
+          <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--brand)] to-[#0057e7] px-3 text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[var(--brand-strong)] hover:to-[var(--brand-strong)] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>Add customer</span></Button>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-6">
-        <CustomerMetricCard label="Total Customers" value={String(totals.customers)} change={metricChanges.customers} color="#1768f5" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[#1768f5]" spark={metricSparks.customers} />
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:gap-4 2xl:grid-cols-6">
+        <CustomerMetricCard mobileHidden label="Total Customers" value={String(totals.customers)} change={metricChanges.customers} color="var(--brand)" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.customers} />
         <CustomerMetricCard label="Total Outstanding" value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
         <CustomerMetricCard label="Overdue Amount" value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
         <CustomerMetricCard label="Udhar Collected" value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
-        <CustomerMetricCard label="Customers with Balance" value={String(totals.active)} change={metricChanges.active} color="#1768f5" icon={<UserCheck size={18} />} iconClass="bg-[var(--brand-soft)] text-[#1768f5]" spark={metricSparks.active} />
-        <CustomerMetricCard label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
+        <CustomerMetricCard label="Customers with Balance" value={String(totals.active)} change={metricChanges.active} color="var(--brand)" icon={<UserCheck size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.active} />
+        <CustomerMetricCard mobileHidden label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
       </section>
 
-      <section className="grid min-w-0 items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(560px,1fr)_360px]">
+      <section className="grid min-w-0 items-start gap-4 xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[380px_minmax(580px,1fr)_380px]">
         <CustomerListPanelV3 customers={filteredCustomers} selectedId={selectedId} loading={isLoading} search={search} filter={filter} total={totals.customers} onSearch={setSearch} onFilter={setFilter} onSelect={setSelectedId} />
         <CustomerPaymentWorkspaceV3 customer={selectedCustomer} risk={selectedRisk} creditLimit={creditLimit} paymentRows={paymentRows} paymentForm={paymentForm} saving={saving} onEdit={openEdit} onPaymentChange={setPaymentForm} onCollect={() => void recordPayment()} onReminder={shareWhatsApp} />
         <CustomerInsightsPanelV3 customer={selectedCustomer} risk={selectedRisk} ageing={ageing} received={selectedReceivedInRange} pending={Math.max(0, selectedCustomer?.ledgerBalance ?? 0)} collectionChange={metricChanges.received} payments={paymentRows} onReminder={shareWhatsApp} rangeLabel={rangeLabel} onCycleRange={cycleRange} onViewAllPayments={() => document.getElementById("customer-ledger-register")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
@@ -823,7 +828,7 @@ export default function CustomersPage() {
             <div className="relative">
               <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
               <Input
-                className="h-11 rounded-[12px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[#075cf7] focus-visible:bg-white focus-visible:ring-0"
+                className="h-11 rounded-[12px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
                 placeholder="Search customers by name or mobile"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -842,7 +847,7 @@ export default function CustomersPage() {
                   className={cn(
                     "h-9 rounded-[10px] border px-2 text-[11px] font-black transition-colors",
                     filter === key
-                      ? "border-[#075cf7] bg-[#075cf7] text-white shadow-[0_8px_18px_rgba(0,91,255,0.22)]"
+                      ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_8px_18px_rgba(0,91,255,0.22)]"
                       : "border-[#e6ecf4] bg-white text-[#334466] hover:bg-[var(--brand-softer)]",
                   )}
                 >
@@ -853,7 +858,7 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex items-center justify-between px-4 py-3">
-            <p className="text-[12px] font-bold text-[#64748b]">Sort: <span className="text-[#102347]">Highest balance</span></p>
+            <p className="text-[12px] font-bold text-[#64748b]">Sort: <span className="text-[var(--brand-ink)]">Highest balance</span></p>
             <Button onClick={openCreate} variant="outline" className="h-8 rounded-[9px] px-3 text-[12px] font-bold">
               <Plus size={14} className="mr-1" /> Add
             </Button>
@@ -865,7 +870,7 @@ export default function CustomersPage() {
             ) : filteredCustomers.length === 0 ? (
               <div className="rounded-[14px] border border-dashed border-[#d8e2f1] px-4 py-10 text-center">
                 <Users size={26} className="mx-auto text-[#94a3b8]" />
-                <p className="mt-2 text-[13px] font-bold text-[#102347]">No customers found</p>
+                <p className="mt-2 text-[13px] font-bold text-[var(--brand-ink)]">No customers found</p>
                 <p className="mt-1 text-[12px] text-[#64748b]">Add a customer or clear filters.</p>
               </div>
             ) : (
@@ -879,18 +884,18 @@ export default function CustomersPage() {
                     className={cn(
                       "mb-2 flex w-full items-center gap-3 rounded-[14px] border p-3 text-left transition-all",
                       active
-                        ? "border-[#075cf7] bg-[var(--brand-soft)] shadow-[0_10px_22px_rgba(0,91,255,0.10)]"
+                        ? "border-[var(--brand)] bg-[var(--brand-soft)] shadow-[0_10px_22px_rgba(0,91,255,0.10)]"
                         : "border-transparent bg-white hover:border-[var(--brand-border)] hover:bg-[#f8fbff]",
                     )}
                   >
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-[13px] font-black text-[#075cf7]">{initials(customer.name)}</span>
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-[13px] font-black text-[var(--brand)]">{initials(customer.name)}</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-black text-[#102347]">{customer.name}</span>
+                      <span className="block truncate text-[13px] font-black text-[var(--brand-ink)]">{customer.name}</span>
                       <span className="mt-0.5 block truncate text-[12px] text-[#52627e]">{customer.mobile || "No mobile"}</span>
                       <span className="mt-1 block text-[11px] text-[#64748b]">{customer.ledgerMetrics.lastBillAt ? "Last bill " + formatShortDate(customer.ledgerMetrics.lastBillAt) : "No recent bill"}</span>
                     </span>
                     <span className="shrink-0 text-right">
-                      <span className={cn("block text-[13px] font-black", customer.ledgerBalance > 0 ? "text-rose-600" : "text-[#102347]")}>{fmtMoney(customer.ledgerBalance)}</span>
+                      <span className={cn("block text-[13px] font-black", customer.ledgerBalance > 0 ? "text-rose-600" : "text-[var(--brand-ink)]")}>{fmtMoney(customer.ledgerBalance)}</span>
                       <span className={cn("mt-1 inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[10px] font-black ring-1 ring-inset", risk.cls)}>
                         <span className={cn("h-1.5 w-1.5 rounded-full", risk.dot)} />
                         {risk.label}
@@ -907,7 +912,7 @@ export default function CustomersPage() {
           {!selectedCustomer || !selectedRisk || !selectedTrust ? (
             <div className="rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-5 py-16 text-center shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
               <Users size={30} className="mx-auto text-[#94a3b8]" />
-              <p className="mt-3 font-display text-[18px] font-black text-[#102347]">Select a customer</p>
+              <p className="mt-3 font-display text-[18px] font-black text-[var(--brand-ink)]">Select a customer</p>
               <p className="mt-1 text-[13px] text-[#64748b]">Ledger, payment history, and trust details will appear here.</p>
             </div>
           ) : (
@@ -915,11 +920,11 @@ export default function CustomersPage() {
               <div className="rounded-[16px] border border-[#e6ecf4] bg-white p-5 shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex min-w-0 gap-4">
-                    <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[#e7efff] font-display text-[22px] font-black text-[#075cf7]">{initials(selectedCustomer.name)}</span>
+                    <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[#e7efff] font-display text-[22px] font-black text-[var(--brand)]">{initials(selectedCustomer.name)}</span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="truncate font-display text-[21px] font-black tracking-tight text-[#102347]">{selectedCustomer.name}</h2>
-                        <button onClick={() => openEdit(selectedCustomer)} className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[12px] font-bold text-[#075cf7] hover:bg-[var(--brand-soft)]">
+                        <h2 className="truncate font-display text-[21px] font-black tracking-tight text-[var(--brand-ink)]">{selectedCustomer.name}</h2>
+                        <button onClick={() => openEdit(selectedCustomer)} className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]">
                           <Pencil size={13} /> Edit
                         </button>
                         <span className={cn("inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-black", selectedTrust!.cls)}>
@@ -983,7 +988,7 @@ export default function CustomersPage() {
               <div className="rounded-[16px] border border-[#e6ecf4] bg-white shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
                 <div className="flex items-center gap-6 overflow-x-auto border-b border-[#edf2f8] px-5">
                   {([["ledger", "Ledger"], ["transactions", "Transactions"], ["payments", "Payment History"], ["notes", `Notes${selectedCustomer.notes ? " (1)" : ""}`]] as const).map(([key, label]) => (
-                    <button key={key} onClick={() => setActiveTab(key)} className={cn("h-12 whitespace-nowrap border-b-2 text-[13px] font-black transition-colors", activeTab === key ? "border-[#075cf7] text-[#075cf7]" : "border-transparent text-[#536383] hover:text-[#102347]")}>{label}</button>
+                    <button key={key} onClick={() => setActiveTab(key)} className={cn("h-12 whitespace-nowrap border-b-2 text-[13px] font-black transition-colors", activeTab === key ? "border-[var(--brand)] text-[var(--brand)]" : "border-transparent text-[#536383] hover:text-[var(--brand-ink)]")}>{label}</button>
                   ))}
                 </div>
                 {activeTab === "ledger" && (
@@ -1011,11 +1016,11 @@ export default function CustomersPage() {
                               return (
                                 <tr key={row.id} className="border-b border-[#eef2f8] last:border-0">
                                   <td className="px-3 py-3 text-[#52627e]">{formatShortDate(row.display_date)}</td>
-                                  <td className="max-w-[220px] truncate px-3 py-3 font-semibold text-[#102347]">{row.note || row.source_id || row.display_type}</td>
+                                  <td className="max-w-[220px] truncate px-3 py-3 font-semibold text-[var(--brand-ink)]">{row.note || row.source_id || row.display_type}</td>
                                   <td className="px-3 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", row.display_type === "PAYMENT" ? CHIP_TONES.green : CHIP_TONES.blue)}>{row.display_type}</span></td>
-                                  <td className="px-3 py-3 text-right font-bold text-[#102347]">{signed > 0 ? fmtMoney(signed) : "-"}</td>
+                                  <td className="px-3 py-3 text-right font-bold text-[var(--brand-ink)]">{signed > 0 ? fmtMoney(signed) : "-"}</td>
                                   <td className="px-3 py-3 text-right font-bold text-emerald-600">{signed < 0 ? fmtMoney(Math.abs(signed)) : "-"}</td>
-                                  <td className="px-3 py-3 text-right font-black text-[#102347]">{fmtMoney(row.running_balance)}</td>
+                                  <td className="px-3 py-3 text-right font-black text-[var(--brand-ink)]">{fmtMoney(row.running_balance)}</td>
                                 </tr>
                               );
                             })
@@ -1024,7 +1029,7 @@ export default function CustomersPage() {
                       </table>
                     </div>
                     <div className="border-t border-[#edf2f8] px-5 py-3 text-center">
-                      <Link href={`/customers/${selectedCustomer.id}`} className="inline-flex items-center gap-2 text-[13px] font-black text-[#075cf7] hover:underline">
+                      <Link href={`/customers/${selectedCustomer.id}`} className="inline-flex items-center gap-2 text-[13px] font-black text-[var(--brand)] hover:underline">
                         View Full Ledger <ChevronRight size={14} />
                       </Link>
                     </div>
@@ -1037,12 +1042,12 @@ export default function CustomersPage() {
                     ) : (
                       billRows.slice(0, 8).map((bill, index) => (
                         <div key={String(bill.id ?? index)} className={cn("flex items-center gap-3 py-2.5", index < Math.min(billRows.length, 8) - 1 && "border-b border-[#eef2f8]")}>
-                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[#075cf7]"><FileText size={15} /></span>
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><FileText size={15} /></span>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[12.5px] font-black text-[#102347]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</p>
+                            <p className="truncate text-[12.5px] font-black text-[var(--brand-ink)]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</p>
                             <p className="text-[11px] text-[#94a3b8]">{formatShortDate(getDate(bill, ["businessDate", "business_date", "createdAt", "created_at"]))}</p>
                           </div>
-                          <span className="text-[13px] font-black text-[#102347]">{fmtMoney(getAmount(bill, ["grandTotal", "grand_total", "totalAmount", "total_amount"]))}</span>
+                          <span className="text-[13px] font-black text-[var(--brand-ink)]">{fmtMoney(getAmount(bill, ["grandTotal", "grand_total", "totalAmount", "total_amount"]))}</span>
                           <span className={cn("rounded-[7px] px-2 py-[3px] text-[10.5px] font-black", money(bill.creditAmount) > 0 ? CHIP_TONES.red : CHIP_TONES.green)}>{money(bill.creditAmount) > 0 ? "Due" : "Paid"}</span>
                         </div>
                       ))
@@ -1058,7 +1063,7 @@ export default function CustomersPage() {
                         <div key={String(payment.id ?? index)} className={cn("flex items-center gap-3 py-2.5", index < Math.min(paymentRows.length, 8) - 1 && "border-b border-[#eef2f8]")}>
                           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-emerald-50 text-emerald-600"><Wallet size={15} /></span>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-black text-[#102347]">{fmtMoney(getAmount(payment, ["amount", "paidAmount", "paid_amount"]))}</p>
+                            <p className="text-[13px] font-black text-[var(--brand-ink)]">{fmtMoney(getAmount(payment, ["amount", "paidAmount", "paid_amount"]))}</p>
                             <p className="text-[11px] text-[#94a3b8]">{formatShortDate(getDate(payment, ["paidAt", "paid_at", "createdAt", "created_at"]))}</p>
                           </div>
                           <span className={cn("rounded-[7px] px-2 py-[3px] text-[10.5px] font-black", String(payment.mode ?? "").toLowerCase() === "upi" ? CHIP_TONES.violet : CHIP_TONES.green)}>{String(payment.mode ?? "cash").toUpperCase()}</span>
@@ -1080,7 +1085,7 @@ export default function CustomersPage() {
 
               <button
                 onClick={() => openPayment(selectedCustomer)}
-                className="flex w-full items-center justify-between rounded-[14px] bg-gradient-to-b from-[#075cf7] to-[var(--brand-strong)] p-4 text-left text-white shadow-[0_14px_28px_rgba(0,91,255,0.26)] transition-transform hover:-translate-y-0.5"
+                className="flex w-full items-center justify-between rounded-[14px] bg-gradient-to-b from-[var(--brand)] to-[var(--brand-strong)] p-4 text-left text-white shadow-[0_14px_28px_rgba(0,91,255,0.26)] transition-transform hover:-translate-y-0.5"
               >
                 <span className="flex items-center gap-3">
                   <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-white/15"><Wallet size={18} /></span>
@@ -1100,8 +1105,8 @@ export default function CustomersPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 text-center shadow-[0_10px_24px_rgba(15,35,80,0.045)] transition-all hover:-translate-y-0.5 hover:border-[var(--brand-border)] hover:bg-[#f8fbff]">
-                      <span className="mx-auto grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[#075cf7]"><MoreHorizontal size={18} /></span>
-                      <span className="mt-2 block text-[12px] font-black text-[#102347]">More</span>
+                      <span className="mx-auto grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><MoreHorizontal size={18} /></span>
+                      <span className="mt-2 block text-[12px] font-black text-[var(--brand-ink)]">More</span>
                       <span className="mt-0.5 block text-[10.5px] font-medium text-[#64748b]">More Options</span>
                     </button>
                   </DropdownMenuTrigger>
@@ -1143,7 +1148,7 @@ export default function CustomersPage() {
                   >
                     <div className="grid h-[76px] w-[76px] place-items-center rounded-full bg-white text-center shadow-inner">
                       <div>
-                        <p className="font-display text-[16px] font-black text-[#102347]">{fmtMoney(total)}</p>
+                        <p className="font-display text-[16px] font-black text-[var(--brand-ink)]">{fmtMoney(total)}</p>
                         <p className="text-[10px] font-semibold text-[#64748b]">Total Due</p>
                       </div>
                     </div>
@@ -1169,7 +1174,7 @@ export default function CustomersPage() {
                   return (
                     <div key={String(payment.id ?? index)} className="flex items-center justify-between gap-3 text-[12px]">
                       <span className="text-[#52627e]">{formatShortDate(date)}</span>
-                      <span className="font-black text-[#102347]">{fmtMoney(amount)}</span>
+                      <span className="font-black text-[var(--brand-ink)]">{fmtMoney(amount)}</span>
                       <span className={cn("rounded-[7px] px-2 py-[3px] text-[10px] font-black", String(payment.mode ?? "").toLowerCase() === "upi" ? CHIP_TONES.violet : CHIP_TONES.green)}>{String(payment.mode ?? "cash").toUpperCase()}</span>
                     </div>
                   );
@@ -1186,7 +1191,7 @@ export default function CustomersPage() {
                 {billRows.slice(0, 5).map((bill, index) => (
                   <div key={String(bill.id ?? index)} className="flex items-center justify-between gap-3 text-[12px]">
                     <span className="text-[#52627e]">{formatShortDate(bill.businessDate ?? bill.business_date ?? bill.createdAt ?? bill.created_at)}</span>
-                    <span className="font-semibold text-[#102347]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</span>
+                    <span className="font-semibold text-[var(--brand-ink)]">{String(bill.billNumber ?? bill.billNo ?? "Bill")}</span>
                     <span className={cn("rounded-[7px] px-2 py-[3px] text-[10px] font-black", money(bill.creditAmount) > 0 ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700")}>
                       {money(bill.creditAmount) > 0 ? "Due" : "Paid"}
                     </span>
@@ -1264,16 +1269,16 @@ export default function CustomersPage() {
   );
 }
 
-function CustomerMetricCard({ label, value, change, color, icon, iconClass, spark }: { label: string; value: string; change: number; color: string; icon: React.ReactNode; iconClass: string; spark: number[] }) {
+function CustomerMetricCard({ label, value, change, color, icon, iconClass, spark, mobileHidden = false }: { label: string; value: string; change: number; color: string; icon: React.ReactNode; iconClass: string; spark: number[]; mobileHidden?: boolean }) {
   const data = spark.map((item, index) => ({ index, value: item }));
   const gradientId = `customer-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <article className="flex h-[150px] flex-col overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+    <article className={cn("h-[126px] flex-col overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white p-3.5 shadow-[0_10px_30px_rgba(15,35,80,0.05)] lg:h-[154px] lg:p-4", mobileHidden ? "hidden md:flex" : "flex")}>
       <div className="flex shrink-0 items-center gap-3">
         <span className={cn("grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[12px]", iconClass)}>{icon}</span>
         <p className="min-w-0 text-[12px] font-bold leading-snug text-[#34486e]">{label}</p>
       </div>
-      <p className="mt-2.5 shrink-0 truncate text-[21px] font-black leading-[1.18] text-[#071b3a]">{value}</p>
+      <p className="mt-2.5 shrink-0 truncate text-[21px] font-black leading-[1.18] text-[var(--brand-ink)]">{value}</p>
       <div className="mt-1.5 flex shrink-0 items-center gap-1 text-[10px]">
         <span className={cn("inline-flex items-center gap-0.5 font-bold", change === 0 ? "text-[#71809a]" : change < 0 ? "text-rose-600" : "text-emerald-600")}>
           {change === 0 ? null : change < 0 ? <ArrowDownRight size={11} /> : <ArrowUpRight size={11} />}
@@ -1281,7 +1286,7 @@ function CustomerMetricCard({ label, value, change, color, icon, iconClass, spar
         </span>
         <span className="whitespace-nowrap text-[#7a879f]">vs last week</span>
       </div>
-      <div className="mt-auto h-7 w-full shrink-0">
+      <div className="mt-auto hidden h-7 w-full shrink-0 lg:block">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 3, right: 2, left: 2, bottom: 0 }}>
             <defs>
@@ -1300,15 +1305,15 @@ function CustomerMetricCard({ label, value, change, color, icon, iconClass, spar
 }
 
 function CustomerListPanelV3({ customers, selectedId, loading, search, filter, total, onSearch, onFilter, onSelect }: { customers: CustomerWithLedger[]; selectedId: string | null; loading: boolean; search: string; filter: "all" | "udhar" | "bad" | "due" | "promise" | "cleared"; total: number; onSearch: (value: string) => void; onFilter: (value: "all" | "udhar" | "bad" | "due" | "promise" | "cleared") => void; onSelect: (value: string) => void }) {
-  const avatarTones = ["bg-[var(--brand-soft)] text-[#0b63f6]", "bg-[#ecfdf5] text-[#16a34a]", "bg-[#f5f3ff] text-[#7c3aed]", "bg-[#fff7ed] text-[#f97316]", "bg-[#fef2f2] text-[#ef4444]"];
+  const avatarTones = ["bg-[var(--brand-soft)] text-[var(--brand)]", "bg-[#ecfdf5] text-[#16a34a]", "bg-[#f5f3ff] text-[#7c3aed]", "bg-[#fff7ed] text-[#f97316]", "bg-[#fef2f2] text-[#ef4444]"];
   return (
-    <section className="min-h-0 overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-      <header className="flex h-[54px] items-center px-[18px]"><h2 className="text-[15px] font-extrabold text-[#071b3a]">Customers</h2></header>
+    <section className="min-h-0 overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
+      <header className="flex h-[58px] items-center justify-between px-[18px]"><h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">Customers</h2><span className="rounded-full bg-[#f2f5f9] px-2.5 py-1 text-[9px] font-black text-[#60708e]">{customers.length} shown</span></header>
       <div className="border-y border-[#e8edf4] p-3.5">
         <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search by name or mobile" className="h-10 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
-        <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", "All Customers"], ["udhar", "With Balance"], ["due", "Overdue"], ["cleared", "Cleared"]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-9 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[#0b63f6] bg-[var(--brand-soft)] text-[#0b63f6]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
+        <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", "All Customers"], ["udhar", "With Balance"], ["due", "Overdue"], ["cleared", "Cleared"]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-9 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
       </div>
-      <div className="max-h-[590px] overflow-y-auto p-3">
+      <div className="app-scrollbar max-h-[610px] overflow-y-auto p-3">
         {loading ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">Loading customers...</p> : customers.length === 0 ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">No customers found</p> : customers.map((customer, index) => {
           const risk = riskInfo(customer);
           const active = selectedId === customer.id;
@@ -1323,21 +1328,21 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
               className={cn(
                 "relative mb-2 grid min-h-[78px] w-full grid-cols-[40px_minmax(0,1fr)_92px] items-center gap-3 rounded-[12px] border px-3 py-2.5 text-left transition-all last:mb-0",
                 active
-                  ? "border-[#0b63f6] bg-[var(--brand-soft)] shadow-[0_8px_18px_rgba(11,99,246,0.10)]"
+                  ? "border-[var(--brand)] bg-[var(--brand-soft)] shadow-[0_8px_18px_rgba(11,99,246,0.10)]"
                   : "border-transparent hover:border-[#dce7f6] hover:bg-[#f8fbff]",
               )}
             >
               <span className="relative h-10 w-10 shrink-0">
                 <span className={cn("grid h-10 w-10 place-items-center rounded-full text-[11px] font-black", avatarTones[index % avatarTones.length])}>{initials(customer.name)}</span>
-                {active && <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full border-2 border-white bg-[#0b63f6] text-white"><CheckCircle2 size={11} /></span>}
+                {active && <span className="absolute -bottom-0.5 -right-0.5 grid h-4 w-4 place-items-center rounded-full border-2 border-white bg-[var(--brand)] text-white"><CheckCircle2 size={11} /></span>}
               </span>
               <span className="min-w-0 pr-1">
-                <span className="block truncate text-[12px] font-black leading-4 text-[#102347]">{customer.name}</span>
+                <span className="block truncate text-[12px] font-black leading-4 text-[var(--brand-ink)]">{customer.name}</span>
                 <span className="mt-1 block truncate text-[10px] leading-3 text-[#60708e]">{customer.address || "No address"}</span>
                 <span className="mt-1 block truncate text-[9.5px] leading-3 text-[#7c899f]">{customer.mobile || "No mobile"} - {formatCustomerActivityDateTime(lastActivity)}</span>
               </span>
               <span className="flex min-w-[92px] flex-col items-end pr-1 text-right">
-                <span className="block text-[12px] font-black leading-4 text-[#102347]">{fmtMoney(customer.ledgerBalance)}</span>
+                <span className="block text-[12px] font-black leading-4 text-[var(--brand-ink)]">{fmtMoney(customer.ledgerBalance)}</span>
                 <span className={cn("mt-1 block text-[9px] font-bold leading-3", customer.ledgerBalance <= 0 ? "text-emerald-600" : ageing.thirtyPlus > 0 ? "text-rose-600" : "text-amber-600")}>{ageLabel}</span>
                 <span className={cn("mt-1 inline-flex rounded-[8px] px-2 py-1 text-[9px] font-bold leading-none", risk.cls)}>{badgeLabel}</span>
               </span>
@@ -1358,8 +1363,8 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
     return (
       <div className="grid min-h-[430px] place-items-center rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-6 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="max-w-[260px]">
-          <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#0b63f6]"><Users size={24} /></span>
-          <p className="mt-3 text-[16px] font-extrabold text-[#071b3a]">Select a customer</p>
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={24} /></span>
+          <p className="mt-3 text-[16px] font-extrabold text-[var(--brand-ink)]">Select a customer</p>
           <p className="mt-1 text-[12px] leading-5 text-[#60708e]">Choose a customer from the list to view balance, collect payment, and inspect ledger history.</p>
         </div>
       </div>
@@ -1387,9 +1392,9 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
     <section className="min-w-0 space-y-5">
       <article className="min-h-[128px] overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex flex-col gap-4 p-[18px] sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[#0b63f6]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[#071b3a]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{risk.label}</span><button onClick={() => onEdit(customer)} title="Edit customer" className="grid h-7 w-7 place-items-center rounded-[8px] text-[#0b63f6] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
+          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{risk.label}</span><button onClick={() => onEdit(customer)} title="Edit customer" className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
           <div className="flex items-center gap-3">
-            <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[#0b63f6] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_rgba(11,99,246,0.20)] transition-colors hover:bg-[#0057e7]"><BookOpen size={15} />View Ledger</Link>
+            <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_rgba(11,99,246,0.20)] transition-colors hover:bg-[#0057e7]"><BookOpen size={15} />View Ledger</Link>
             <InfoMini label="Last Payment" value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
           </div>
         </div>
@@ -1397,16 +1402,16 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
       </article>
 
       <article className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-        <h2 className="text-[15px] font-extrabold text-[#071b3a]">Record Udhar Payment</h2>
+        <h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">Record Udhar Payment</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-[120px_1fr]"><div><p className="text-[10px] font-bold uppercase text-[#75839d]">Amount Due</p><p className="mt-1.5 text-[19px] font-black text-rose-600">{fmtMoney(outstanding)}</p></div><div><Label className="text-[10px] font-bold text-[#52627e]">Payment Amount <span className="text-rose-500">*</span></Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-[#52627e]">₹</span><Input id="customer-payment-amount" type="number" inputMode="decimal" min="0" step="0.01" max={outstanding} value={paymentForm.amount} onChange={(event) => setTotal(event.target.value)} className="h-10 rounded-[10px] border-[#dfe7f2] pl-8 text-[13px] font-bold" placeholder="0.00" /></div></div></div>
-        <div className="mt-3 grid grid-cols-[1.45fr_repeat(4,1fr)] gap-2"><button onClick={() => chooseAmount(outstanding)} className="min-h-9 rounded-[8px] border border-[#0b63f6] bg-[var(--brand-soft)] px-1 text-[9px] font-bold text-[#0b63f6]">Full Due ({fmtMoney(outstanding)})</button>{[500,1000,2000].map((amount) => <button key={amount} onClick={() => chooseAmount(amount)} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{fmtMoney(amount)}</button>)}<button onClick={() => document.getElementById("customer-payment-amount")?.focus()} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">Custom</button></div>
+        <div className="mt-3 grid grid-cols-[1.45fr_repeat(4,1fr)] gap-2"><button onClick={() => chooseAmount(outstanding)} className="min-h-9 rounded-[8px] border border-[var(--brand)] bg-[var(--brand-soft)] px-1 text-[9px] font-bold text-[var(--brand)]">Full Due ({fmtMoney(outstanding)})</button>{[500,1000,2000].map((amount) => <button key={amount} onClick={() => chooseAmount(amount)} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">{fmtMoney(amount)}</button>)}<button onClick={() => document.getElementById("customer-payment-amount")?.focus()} className="h-9 rounded-[8px] border border-[#dfe7f2] text-[10px] font-bold text-[#405273] hover:bg-[#f8faff]">Custom</button></div>
         <p className="mt-4 text-[10px] font-bold text-[#52627e]">Payment Mode</p>
-        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['cash','Cash',<Banknote key="cash" size={15} />],['upi','UPI',<CreditCard key="upi" size={15} />],['bank','Bank',<Landmark key="bank" size={15} />],['split','Split',<ArrowLeftRight key="split" size={15} />]] as const).map(([mode,label,icon]) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(total), upiAmount: "0" } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[#0b63f6] bg-[var(--brand-soft)] text-[#0b63f6]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
-        {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[#071b3a]">{fmtMoney(paymentTotal)}</span></p></div>}
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['cash','Cash',<Banknote key="cash" size={15} />],['upi','UPI',<CreditCard key="upi" size={15} />],['bank','Bank',<Landmark key="bank" size={15} />],['split','Split',<ArrowLeftRight key="split" size={15} />]] as const).map(([mode,label,icon]) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(total), upiAmount: "0" } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
+        {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[var(--brand-ink)]">{fmtMoney(paymentTotal)}</span></p></div>}
         {moneyExceeds(paymentTotal, outstanding) && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
         <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">Payment Note <span className="font-medium text-[#94a3b8]">(Optional)</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder="Payment note / reference" /></div>
-        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] text-[12px] font-bold shadow-[0_8px_18px_rgba(11,99,246,0.20)]"><CheckCircle2 size={16} />{saving ? "Saving..." : "Collect Payment"}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[#0b63f6]"><Bell size={16} />Send Reminder</Button></div>
-        <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[#0b63f6]" />After payment, customer balance and ledger update automatically.</p>
+        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[#0057e7] text-[12px] font-bold shadow-[0_8px_18px_rgba(11,99,246,0.20)]"><CheckCircle2 size={16} />{saving ? "Saving..." : "Collect Payment"}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />Send Reminder</Button></div>
+        <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[var(--brand)]" />After payment, customer balance and ledger update automatically.</p>
       </article>
     </section>
   );
@@ -1419,7 +1424,7 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
         <div className="grid min-h-[430px] place-items-center rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-6 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
           <div className="max-w-[230px]">
             <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-[#fff7ed] text-[#f97316]"><Wallet size={22} /></span>
-            <p className="mt-3 text-[15px] font-extrabold text-[#071b3a]">Customer insights</p>
+            <p className="mt-3 text-[15px] font-extrabold text-[var(--brand-ink)]">Customer insights</p>
             <p className="mt-1 text-[12px] leading-5 text-[#60708e]">Ageing, recent payments, and credit risk will appear after selecting a customer.</p>
           </div>
         </div>
@@ -1443,10 +1448,10 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
   const recentPayments = [...payments].sort((a, b) => paymentDate(b).localeCompare(paymentDate(a))).slice(0, 4);
   return (
     <aside className="space-y-5 xl:col-span-2 2xl:col-span-1">
-      <RightCardV3 title="Ageing Summary" info><div className="flex items-center gap-4"><div className="grid h-[130px] w-[130px] shrink-0 place-items-center rounded-full" style={{ background: total > 0 ? `conic-gradient(${stops})` : "#e7edf5" }}><div className="grid h-[94px] w-[94px] place-items-center rounded-full bg-white text-center"><div><p className="text-[16px] font-black text-[#071b3a]">{fmtMoney(total)}</p><p className="text-[10px] text-[#71809a]">Total Due</p></div></div></div><div className="min-w-0 flex-1 space-y-3">{buckets.map((row) => <div key={row.label} className="grid grid-cols-[9px_1fr_auto] items-center gap-2 text-[10px]"><span className="h-[9px] w-[9px] rounded-full" style={{ background: row.color }} /><span className="text-[#52627e]">{row.label}</span><span className="text-right font-black text-[#102347]">{fmtMoney(row.value)} <span className="block text-[8px] font-medium text-[#94a3b8]">{total > 0 ? `${Math.round(row.value / total * 1000) / 10}%` : "0%"}</span></span></div>)}</div></div></RightCardV3>
-      <RightCardV3 title="Collection Progress" action={rangeLabel} onAction={onCycleRange} pill info><div className="flex items-center gap-5"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(#0b63f6 0 ${collection}%, #e9eef6 ${collection}% 100%)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-center"><div><p className="text-[18px] font-black text-[#071b3a]">{Math.round(collection)}%</p><p className="text-[9px] font-semibold text-[#71809a]">Collected</p></div></div></div><div className="grid min-w-0 flex-1 grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold text-[#71809a]">Collected</p><p className="mt-1 text-[14px] font-black text-[#102347]">{fmtMoney(received)}</p><p className={cn("mt-2 text-[9px] font-semibold", collectionChange < 0 ? "text-rose-600" : "text-emerald-600")}>vs previous period: {collectionChange >= 0 ? "↑" : "↓"} {Math.abs(collectionChange)}%</p></div><div><p className="text-[10px] font-semibold text-[#71809a]">Pending</p><p className="mt-1 text-[14px] font-black text-[#102347]">{fmtMoney(pending)}</p></div></div></div></RightCardV3>
-      <RightCardV3 title="Recent Payments Received" action="View all" onAction={onViewAllPayments}>{recentPayments.length === 0 ? <p className="py-4 text-center text-[11px] text-[#71809a]">No payments recorded yet.</p> : <div className="divide-y divide-[#edf1f6]">{recentPayments.map((payment, index) => { const mode = String(payment.mode ?? "cash").toLowerCase(); const modeLabel = mode === "upi" ? "UPI" : mode === "cash" ? "Cash" : mode.replace(/\b\w/g, (letter) => letter.toUpperCase()); return <div key={String(payment.id ?? index)} className="grid min-h-10 grid-cols-[7px_1fr_auto_auto] items-center gap-2.5 text-[10.5px]"><span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /><span className="text-[#52627e]">{formatShortDate(paymentDate(payment))}</span><span className="font-black text-[#102347]">{fmtMoney(paymentAmount(payment))}</span><span className="min-w-[54px] text-right text-[#52627e]">{modeLabel}</span></div>; })}</div>}</RightCardV3>
-      <RightCardV3 title="Credit Risk"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk?.label ?? "No customer"}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[#0b63f6]"><Bell size={13} />Send Reminder</Button></div></RightCardV3>
+      <RightCardV3 title="Ageing Summary" info><div className="flex items-center gap-4"><div className="grid h-[130px] w-[130px] shrink-0 place-items-center rounded-full" style={{ background: total > 0 ? `conic-gradient(${stops})` : "#e7edf5" }}><div className="grid h-[94px] w-[94px] place-items-center rounded-full bg-white text-center"><div><p className="text-[16px] font-black text-[var(--brand-ink)]">{fmtMoney(total)}</p><p className="text-[10px] text-[#71809a]">Total Due</p></div></div></div><div className="min-w-0 flex-1 space-y-3">{buckets.map((row) => <div key={row.label} className="grid grid-cols-[9px_1fr_auto] items-center gap-2 text-[10px]"><span className="h-[9px] w-[9px] rounded-full" style={{ background: row.color }} /><span className="text-[#52627e]">{row.label}</span><span className="text-right font-black text-[var(--brand-ink)]">{fmtMoney(row.value)} <span className="block text-[8px] font-medium text-[#94a3b8]">{total > 0 ? `${Math.round(row.value / total * 1000) / 10}%` : "0%"}</span></span></div>)}</div></div></RightCardV3>
+      <RightCardV3 title="Collection Progress" action={rangeLabel} onAction={onCycleRange} pill info><div className="flex items-center gap-5"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--brand) 0 ${collection}%, #e9eef6 ${collection}% 100%)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-center"><div><p className="text-[18px] font-black text-[var(--brand-ink)]">{Math.round(collection)}%</p><p className="text-[9px] font-semibold text-[#71809a]">Collected</p></div></div></div><div className="grid min-w-0 flex-1 grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold text-[#71809a]">Collected</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(received)}</p><p className={cn("mt-2 text-[9px] font-semibold", collectionChange < 0 ? "text-rose-600" : "text-emerald-600")}>vs previous period: {collectionChange >= 0 ? "↑" : "↓"} {Math.abs(collectionChange)}%</p></div><div><p className="text-[10px] font-semibold text-[#71809a]">Pending</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(pending)}</p></div></div></div></RightCardV3>
+      <RightCardV3 title="Recent Payments Received" action="View all" onAction={onViewAllPayments}>{recentPayments.length === 0 ? <p className="py-4 text-center text-[11px] text-[#71809a]">No payments recorded yet.</p> : <div className="divide-y divide-[#edf1f6]">{recentPayments.map((payment, index) => { const mode = String(payment.mode ?? "cash").toLowerCase(); const modeLabel = mode === "upi" ? "UPI" : mode === "cash" ? "Cash" : mode.replace(/\b\w/g, (letter) => letter.toUpperCase()); return <div key={String(payment.id ?? index)} className="grid min-h-10 grid-cols-[7px_1fr_auto_auto] items-center gap-2.5 text-[10.5px]"><span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /><span className="text-[#52627e]">{formatShortDate(paymentDate(payment))}</span><span className="font-black text-[var(--brand-ink)]">{fmtMoney(paymentAmount(payment))}</span><span className="min-w-[54px] text-right text-[#52627e]">{modeLabel}</span></div>; })}</div>}</RightCardV3>
+      <RightCardV3 title="Credit Risk"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk?.label ?? "No customer"}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[var(--brand)]"><Bell size={13} />Send Reminder</Button></div></RightCardV3>
     </aside>
   );
 }
@@ -1467,11 +1472,11 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
   return (
     <section className="overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf4] px-[18px] py-4">
-        <div><div className="flex items-center gap-1.5"><h2 className="text-[16px] font-extrabold text-[#071b3a]">Udhar Ledger</h2><Info size={13} className="text-[#94a3b8]" /></div><p className="mt-1 text-[12px] text-[#71809a]">View every bill, payment, and balance movement</p></div>
+        <div><div className="flex items-center gap-1.5"><h2 className="text-[16px] font-extrabold text-[var(--brand-ink)]">Udhar Ledger</h2><Info size={13} className="text-[#94a3b8]" /></div><p className="mt-1 text-[12px] text-[#71809a]">View every bill, payment, and balance movement</p></div>
         <div className="flex flex-wrap items-center gap-2">
           <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="h-9 min-w-[110px] justify-between rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold">{entryFilter === "all" ? "All Entries" : entryFilter === "bill" ? "Bills" : "Payments"}<ChevronRight size={12} className="rotate-90" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-36"><DropdownMenuItem onClick={() => setEntryFilter("all")}>All Entries</DropdownMenuItem><DropdownMenuItem onClick={() => setEntryFilter("bill")}>Bills</DropdownMenuItem><DropdownMenuItem onClick={() => setEntryFilter("payment")}>Payments</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
-          <Button variant="outline" className="h-9 gap-1.5 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold"><CalendarDays size={13} className="text-[#0b63f6]" />{fromDate} - {toDate}<ChevronRight size={12} className="rotate-90" /></Button>
-          <Button variant="outline" onClick={onPrint} disabled={!customer} className="h-9 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold text-[#0b63f6]"><Download size={14} className="mr-1.5" />Download Statement</Button>
+          <Button variant="outline" className="h-9 gap-1.5 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold"><CalendarDays size={13} className="text-[var(--brand)]" />{fromDate} - {toDate}<ChevronRight size={12} className="rotate-90" /></Button>
+          <Button variant="outline" onClick={onPrint} disabled={!customer} className="h-9 rounded-[10px] border-[#d6e2f2] px-3 text-[10px] font-bold text-[var(--brand)]"><Download size={14} className="mr-1.5" />Download Statement</Button>
         </div>
       </header>
       <div className="grid min-w-0 2xl:grid-cols-[minmax(0,1fr)_270px]">
@@ -1493,7 +1498,7 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
                     <span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", entryBadge(row))}>{entryLabel(row)}</span>
                     <span className="text-[11px] font-semibold text-[#71809a]">{formatShortDate(row.display_date)}</span>
                   </div>
-                  <p className="mt-1 truncate text-[12px] font-bold text-[#102347]">{String(row.note || entryLabel(row))}</p>
+                  <p className="mt-1 truncate text-[12px] font-bold text-[var(--brand-ink)]">{String(row.note || entryLabel(row))}</p>
                   <p className="mt-1 truncate text-[11px] text-[#60708e]">{String(row.source_id ?? "—")} • {String(row.mode ?? "System")}</p>
                 </div>
                 <div className="text-right">
@@ -1511,19 +1516,19 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
             <tbody className="divide-y divide-[#e8edf4]">
               {loading ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">Loading ledger...</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">No ledger entries found.</td></tr> : visibleRows.slice(0, 8).map((row) => {
                 const signed = Number(row.signed_amount ?? 0);
-                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[#0b63f6]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[#071b3a]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title="Ledger actions" className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[var(--brand-soft)] hover:text-[#0b63f6]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
+                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[var(--brand)]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[var(--brand-ink)]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title="Ledger actions" className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
               })}
             </tbody>
           </table>
         </div>
-        <aside className="hidden border-l border-[#e8edf4] bg-[#f8faff] p-4 2xl:block"><h3 className="text-[13px] font-black text-[#0b63f6]">How udhar works:</h3><div className="mt-4 space-y-4 text-[10.5px] leading-4 text-[#52627e]"><HelpLineV3 tone="bg-[#fff7ed] text-[#f97316]" icon={<FileText size={14} />} text="Bills on credit increase customer balance." /><HelpLineV3 tone="bg-[#ecfdf5] text-[#16a34a]" icon={<Wallet size={14} />} text="Payments reduce the outstanding balance." /><HelpLineV3 tone="bg-[var(--brand-soft)] text-[#0b63f6]" icon={<CheckCircle2 size={14} />} text="Every movement is recorded in the udhar ledger." /><HelpLineV3 tone="bg-[#f5f3ff] text-[#7c3aed]" icon={<Download size={14} />} text="Statements can be shared as PDF or WhatsApp." /></div></aside>
+        <aside className="hidden border-l border-[#e8edf4] bg-[#f8faff] p-4 2xl:block"><h3 className="text-[13px] font-black text-[var(--brand)]">How udhar works:</h3><div className="mt-4 space-y-4 text-[10.5px] leading-4 text-[#52627e]"><HelpLineV3 tone="bg-[#fff7ed] text-[#f97316]" icon={<FileText size={14} />} text="Bills on credit increase customer balance." /><HelpLineV3 tone="bg-[#ecfdf5] text-[#16a34a]" icon={<Wallet size={14} />} text="Payments reduce the outstanding balance." /><HelpLineV3 tone="bg-[var(--brand-soft)] text-[var(--brand)]" icon={<CheckCircle2 size={14} />} text="Every movement is recorded in the udhar ledger." /><HelpLineV3 tone="bg-[#f5f3ff] text-[#7c3aed]" icon={<Download size={14} />} text="Statements can be shared as PDF or WhatsApp." /></div></aside>
       </div>
     </section>
   );
 }
 
 function CompactSummaryV3({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
-  return <div className="border-b border-r border-[#e8edf4] px-3 py-3.5 last:border-r-0"><p className="text-[9px] font-bold uppercase text-[#75839d]">{label}</p><p className={cn("mt-1.5 text-[12px] font-black text-[#102347]", danger && "text-rose-600")}>{value}</p></div>;
+  return <div className="border-b border-r border-[#e8edf4] px-3 py-3.5 last:border-r-0"><p className="text-[9px] font-bold uppercase text-[#75839d]">{label}</p><p className={cn("mt-1.5 text-[12px] font-black text-[var(--brand-ink)]", danger && "text-rose-600")}>{value}</p></div>;
 }
 
 function HelpLineV3({ icon, text, tone }: { icon: React.ReactNode; text: string; tone: string }) {
@@ -1534,7 +1539,7 @@ function InfoMini({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <p className="text-[11px] font-bold text-[#64748b]">{label}</p>
-      <p className="mt-1 text-[12px] font-black text-[#102347]">{value}</p>
+      <p className="mt-1 text-[12px] font-black text-[var(--brand-ink)]">{value}</p>
     </div>
   );
 }
@@ -1543,7 +1548,7 @@ function SummaryCell({ label, value, valueClass }: { label: string; value: strin
   return (
     <div className="border-b border-[#e8eef7] pb-3 last:border-0 md:border-b-0 md:border-r md:pb-0 md:pr-4 md:last:border-r-0">
       <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{label}</p>
-      <p className={cn("mt-1 font-display text-[21px] font-black tracking-tight text-[#102347]", valueClass)}>{value}</p>
+      <p className={cn("mt-1 font-display text-[21px] font-black tracking-tight text-[var(--brand-ink)]", valueClass)}>{value}</p>
     </div>
   );
 }
@@ -1551,8 +1556,8 @@ function SummaryCell({ label, value, valueClass }: { label: string; value: strin
 function ActionTile({ icon, title, sub, onClick }: { icon: React.ReactNode; title: string; sub: string; onClick?: () => void }) {
   return (
     <button onClick={onClick} className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 text-center shadow-[0_10px_24px_rgba(15,35,80,0.045)] transition-all hover:-translate-y-0.5 hover:border-[var(--brand-border)] hover:bg-[#f8fbff]">
-      <span className="mx-auto grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[#075cf7]">{icon}</span>
-      <span className="mt-2 block text-[12px] font-black text-[#102347]">{title}</span>
+      <span className="mx-auto grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]">{icon}</span>
+      <span className="mt-2 block text-[12px] font-black text-[var(--brand-ink)]">{title}</span>
       <span className="mt-0.5 block text-[10.5px] font-medium text-[#64748b]">{sub}</span>
     </button>
   );
@@ -1562,8 +1567,8 @@ function RightCard({ title, action, onAction, children }: { title: string; actio
   return (
     <div className="rounded-[8px] border border-[#e2e9f3] bg-white p-4 shadow-[0_5px_18px_rgba(31,60,110,0.045)]">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-[12px] font-extrabold text-[#102347]">{title}</h3>
-        {action ? <button onClick={onAction} className={cn("text-[9.5px] font-black text-[#075cf7] hover:underline", action.startsWith("This Week") && "rounded-[5px] border border-[#dfe7f2] bg-[#fbfcfe] px-2 py-1 text-[#405273] no-underline")}>{action}</button> : null}
+        <h3 className="text-[12px] font-extrabold text-[var(--brand-ink)]">{title}</h3>
+        {action ? <button onClick={onAction} className={cn("text-[9.5px] font-black text-[var(--brand)] hover:underline", action.startsWith("This Week") && "rounded-[5px] border border-[#dfe7f2] bg-[#fbfcfe] px-2 py-1 text-[#405273] no-underline")}>{action}</button> : null}
       </div>
       {children}
     </div>
@@ -1574,8 +1579,8 @@ function RightCardV3({ title, action, onAction, info = false, pill = false, chil
   return (
     <div className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5"><h3 className="text-[14px] font-extrabold text-[#071b3a]">{title}</h3>{info && <Info size={13} className="text-[#94a3b8]" />}</div>
-        {action ? <button type="button" onClick={onAction} disabled={!onAction} className={cn("text-[10px] font-black text-[#0b63f6] hover:underline disabled:cursor-default disabled:opacity-60 disabled:hover:no-underline", pill && "rounded-[8px] border border-[#dfe7f2] bg-[#f8faff] px-2.5 py-1.5 text-[9px] text-[#405273] no-underline hover:bg-[#eef4ff]")}>{action}{pill && <ChevronRight size={10} className="ml-1 inline rotate-90" />}</button> : null}
+        <div className="flex items-center gap-1.5"><h3 className="text-[14px] font-extrabold text-[var(--brand-ink)]">{title}</h3>{info && <Info size={13} className="text-[#94a3b8]" />}</div>
+        {action ? <button type="button" onClick={onAction} disabled={!onAction} className={cn("text-[10px] font-black text-[var(--brand)] hover:underline disabled:cursor-default disabled:opacity-60 disabled:hover:no-underline", pill && "rounded-[8px] border border-[#dfe7f2] bg-[#f8faff] px-2.5 py-1.5 text-[9px] text-[#405273] no-underline hover:bg-[#eef4ff]")}>{action}{pill && <ChevronRight size={10} className="ml-1 inline rotate-90" />}</button> : null}
       </div>
       {children}
     </div>
@@ -1587,7 +1592,7 @@ function Legend({ color, inlineColor, label, value }: { color: string; inlineCol
     <div className="flex items-center gap-2 text-[9.5px]">
       <span className={cn("h-2 w-2 shrink-0 rounded-full", color)} style={inlineColor ? { backgroundColor: inlineColor } : undefined} />
       <span className="min-w-0 flex-1 truncate text-[#52627e]">{label}</span>
-      <span className="font-black text-[#102347]">{value}</span>
+      <span className="font-black text-[var(--brand-ink)]">{value}</span>
     </div>
   );
 }

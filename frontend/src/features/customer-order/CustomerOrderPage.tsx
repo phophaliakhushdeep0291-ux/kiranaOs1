@@ -66,7 +66,7 @@ import {
 
 const formatRs = (n: number) => `Rs ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const normalizeMobile = (value: string) => value.replace(/[\s-]/g, "");
-const timeSlots = ["Today, 6:00 PM - 8:00 PM", "Today, 8:00 PM - 10:00 PM", "Tomorrow, 9:00 AM - 11:00 AM"];
+const timeSlots = ["As soon as possible", "Within 2 hours", "Call me to confirm the time"];
 
 function newOrderIdempotencyKey(shopCode: string): string {
   const random =
@@ -282,7 +282,7 @@ export default function CustomerOrderPage() {
         <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#fff1f2] text-[#e11d48]">
           <Store size={26} />
         </div>
-        <h1 className="mt-4 font-display text-lg font-black text-[#102347]">
+        <h1 className="mt-4 font-display text-lg font-black text-[var(--brand-ink)]">
           {state.unavailable ? "Shop not available" : "Could not load shop"}
         </h1>
         <p className="mt-1 max-w-xs text-center text-sm text-[#5b6b85]">{state.message}</p>
@@ -311,8 +311,6 @@ export default function CustomerOrderPage() {
   }
 
   const { catalog, source } = state;
-  const shopLocation = catalog.location.city || catalog.shop.city || "Local store";
-
   async function changeStoreLocation(locationId: string) {
     if (locationId === catalog.location.id || switchingLocation) return;
     setSwitchingLocation(true);
@@ -330,17 +328,9 @@ export default function CustomerOrderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-[#071432] lg:bg-[#f4f8ff]">
-      <div className="lg:flex">
-        <CustomerSidebar
-          shopName={catalog.shop.name}
-          shopLocation={shopLocation}
-          trackedOrderId={trackedOrderId}
-          activeView={activeView}
-          onView={(view) => view === "orders" && trackedOrderId ? setShowTracker(true) : setActiveView(view)}
-        />
-
-        <div className="min-w-0 flex-1 lg:pl-[264px] xl:pl-[280px]">
+    <div className="min-h-screen bg-[#f6f8fc] text-[#071432]">
+      <div>
+        <div className="min-w-0">
           <StorefrontHeader
             catalog={catalog}
             source={source}
@@ -353,17 +343,12 @@ export default function CustomerOrderPage() {
           />
           <CustomerMobileNav activeView={activeView} onView={(view) => view === "orders" && trackedOrderId ? setShowTracker(true) : setActiveView(view)} />
 
-          <main className={`mx-auto w-full max-w-[1500px] px-3 pb-32 pt-4 sm:px-6 lg:px-8 lg:pb-8 ${activeView === "shop" ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
+          <main className={`mx-auto w-full max-w-[1380px] px-3 pb-32 pt-3 sm:px-6 sm:pt-5 lg:px-8 lg:pb-10 ${activeView === "shop" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
             {activeView === "shop" ? (
               <>
-                <section className="min-w-0 space-y-5">
+                <section className="min-w-0 space-y-4 sm:space-y-5">
+                  <StorePromiseStrip source={source} fulfillment={fulfillment} />
                   <CategoryRail categories={categories} active={category} onSelect={setCategory} />
-
-                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                    <PromoCard tone="green" title="Live store catalog" body="Only products currently available at this location are shown" />
-                    <PromoCard tone="blue" title="Store-confirmed order" body="The shop reviews availability before preparing your order" />
-                    <PromoCard tone="orange" title="Pickup or delivery" body="Choose how you want to receive the order at checkout" />
-                  </div>
 
                   <ShopProductsSection
                     products={products}
@@ -435,6 +420,7 @@ export default function CustomerOrderPage() {
           timeSlot={timeSlot}
           setTimeSlot={setTimeSlot}
           submitError={submitError}
+          onQtyChange={setItemQty}
           onPlace={() => void placeOrder()}
           onQr={() => setSheet("qr")}
           onClose={() => !placing && setSheet("none")}
@@ -469,19 +455,21 @@ function StorefrontHeader({
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[#e4ecf7] bg-white/95 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-2 pt-3 sm:px-6 lg:hidden">
-        <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[var(--brand)] shadow-[0_8px_24px_rgba(20,40,90,0.06)]">
-          <Menu size={21} />
-        </button>
+      <div className="mx-auto flex w-full max-w-[1380px] items-center gap-3 px-3 pb-2 pt-3 sm:px-6 lg:hidden">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_12px_30px_rgba(7,95,255,0.26)]">
-              <ShoppingCart size={21} />
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_12px_30px_rgba(7,95,255,0.24)]">
+              <Store size={21} />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-[#071432] sm:text-2xl">
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate font-display text-lg font-black tracking-[-0.03em] text-[#071432] sm:text-xl">
                 {catalog.shop.name || "Artha"}
-              </h1>
+                </h1>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#e8f9ee] px-2 py-1 text-[9px] font-black uppercase tracking-wide text-[#0f8f45]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> Open
+                </span>
+              </div>
               {catalog.locations.length > 1 ? (
                 <select
                   aria-label="Order from store"
@@ -498,10 +486,7 @@ function StorefrontHeader({
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
-        <button type="button" className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#405173] shadow-[0_8px_24px_rgba(20,40,90,0.06)] lg:hidden">
-          <Menu size={21} />
-        </button>
+      <div className="mx-auto flex w-full max-w-[1380px] items-center gap-3 px-3 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
         <div className="hidden min-w-0 items-center gap-3 lg:flex">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff7e8] text-[#f59e0b] shadow-[0_12px_30px_rgba(245,158,11,0.16)]">
             <Store size={24} />
@@ -531,16 +516,16 @@ function StorefrontHeader({
           </div>
         </div>
 
-        <div className="min-w-0 flex-1 lg:max-w-[520px]">
+        <div className="min-w-0 flex-1 lg:ml-auto lg:max-w-[520px]">
           <div className="flex items-center gap-2 rounded-2xl border border-[#dfe8f5] bg-white px-3 shadow-[0_8px_24px_rgba(20,40,90,0.04)]">
             <Search size={18} className="shrink-0 text-[#72819a]" />
             <input
               value={search}
               onChange={(e) => onSearch(e.target.value)}
-              placeholder="Search for atta, dal, oil, biscuits..."
+              placeholder="Search this store"
+              aria-label="Search products"
               className="min-w-0 flex-1 bg-transparent py-3 text-sm font-semibold outline-none placeholder:text-[#7d8ba4]"
             />
-            <span className="hidden rounded-md border border-[#d7e1ef] px-2 py-0.5 text-[10px] font-black text-[#52617a] sm:inline">Ctrl K</span>
           </div>
         </div>
 
@@ -559,15 +544,6 @@ function StorefrontHeader({
           >
             <ShoppingBag size={16} /> Self Pickup
           </button>
-        </div>
-
-        <div className="hidden items-center gap-2 rounded-2xl border border-[#dfe8f5] bg-white px-3 py-2 shadow-[0_8px_24px_rgba(20,40,90,0.04)] md:flex">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eaf2ff] text-sm font-black text-[var(--brand)]">RS</span>
-          <div>
-            <p className="text-xs font-black text-[#14213d]">Customer</p>
-            <p className="text-[11px] font-semibold text-[#7d8ba4]">Guest order</p>
-          </div>
-          <ChevronDown size={15} className="text-[#73819a]" />
         </div>
 
         {source === "cache" && (
@@ -596,11 +572,11 @@ function ShopProductsSection({
   setItemQty: (id: string, next: number) => void;
 }) {
   return (
-    <section className="rounded-[24px] border border-[#e4ecf7] bg-white p-4 shadow-[0_18px_60px_rgba(20,60,120,0.06)] sm:p-5">
+    <section className="rounded-[24px] border border-[#e4ecf7] bg-white p-3 shadow-[0_18px_60px_rgba(20,60,120,0.06)] sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-display text-xl font-black tracking-[-0.01em] text-[#081332]">Popular Products</h2>
-          <p className="mt-1 text-sm font-medium text-[#6d7890]">Select items and send your order directly to the shop.</p>
+          <h2 className="font-display text-lg font-black tracking-[-0.01em] text-[#081332] sm:text-xl">Shop products</h2>
+          <p className="mt-1 text-xs font-medium text-[#6d7890] sm:text-sm">{filtered.length} available product{filtered.length === 1 ? "" : "s"}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 text-xs font-semibold text-[#52617a] sm:flex">
@@ -635,7 +611,7 @@ function ShopProductsSection({
           {products.length === 0 ? "This shop has no items listed yet." : "No items match your search."}
         </div>
       ) : viewMode === "grid" ? (
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:mt-5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
           {filtered.map((p) => (
             <ProductCard key={p.id} product={p} qty={qty[p.id] ?? 0} onChange={(n) => setItemQty(p.id, n)} />
           ))}
@@ -660,7 +636,7 @@ const CUSTOMER_NAV: Array<{ view: CustomerStorefrontView; label: string; icon: t
 function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefrontView; onView: (view: CustomerStorefrontView) => void }) {
   return (
     <div className="border-b border-[#e4ecf7] bg-white/95 px-3 py-2 lg:hidden">
-      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="grid grid-cols-2 gap-2">
         {CUSTOMER_NAV.map((item) => {
           const Icon = item.icon;
           const active = activeView === item.view;
@@ -669,7 +645,7 @@ function CustomerMobileNav({ activeView, onView }: { activeView: CustomerStorefr
               type="button"
               key={item.view}
               onClick={() => onView(item.view)}
-              className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-xs font-black shadow-[0_8px_20px_rgba(20,40,90,0.04)] ${active ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe8f5] bg-white text-[#243653]"}`}
+              className={`inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black shadow-[0_8px_20px_rgba(20,40,90,0.04)] ${active ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[#dfe8f5] bg-white text-[#243653]"}`}
             >
               <Icon size={15} />
               {item.label.replace(" & Credits", "")}
@@ -755,8 +731,8 @@ function CategoryRail({
 }) {
   const all = [{ key: "all", label: "All" }, ...categories];
   return (
-    <div className="overflow-x-auto pb-1">
-      <div className="flex min-w-max gap-2 sm:gap-3">
+    <nav aria-label="Product categories" className="-mx-3 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
+      <div className="flex min-w-max gap-2">
         {all.map((cat) => {
           const selected = active === cat.key;
           return (
@@ -764,27 +740,46 @@ function CategoryRail({
               type="button"
               key={cat.key}
               onClick={() => onSelect(cat.key)}
-              className={`flex h-[72px] w-[74px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border bg-white text-center text-[10px] font-black transition sm:h-[82px] sm:w-[92px] sm:gap-2 sm:text-[11px] ${
+              aria-current={selected ? "true" : undefined}
+              className={`inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border px-3.5 text-xs font-black transition sm:h-12 sm:px-4 ${
                 selected
-                  ? "border-[var(--brand)] text-[var(--brand)] shadow-[0_14px_34px_rgba(7,95,255,0.16)]"
-                  : "border-[#dfe8f5] text-[#172544] hover:border-[#bcd0f4]"
+                  ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_24px_rgba(7,95,255,0.2)]"
+                  : "border-[#dfe8f5] bg-white text-[#243653] hover:border-[#bcd0f4]"
               }`}
             >
-              <span className={`grid h-8 w-8 place-items-center rounded-xl sm:h-9 sm:w-9 ${selected ? "bg-[#eaf2ff]" : "bg-[#f4f7fc]"}`}>
+              <span className={`grid h-7 w-7 place-items-center rounded-full text-[9px] ${selected ? "bg-white/15 text-white" : "bg-[#f4f7fc] text-[#405173]"}`}>
                 {"product" in cat && cat.product?.imageUrl ? (
-                  <img src={cat.product.imageUrl} alt="" className="h-7 w-7 object-contain sm:h-8 sm:w-8" />
+                  <img src={cat.product.imageUrl} alt="" className="h-6 w-6 object-contain" />
                 ) : cat.key === "all" ? (
-                  <ShoppingBag size={18} />
+                  <LayoutGrid size={14} />
                 ) : (
                   cat.label.slice(0, 2).toUpperCase()
                 )}
               </span>
-              <span className="line-clamp-1 px-1">{cat.label}</span>
+              <span>{cat.label}</span>
             </button>
           );
         })}
       </div>
-    </div>
+    </nav>
+  );
+}
+
+function StorePromiseStrip({ source, fulfillment }: { source: "network" | "cache"; fulfillment: FulfillmentMode }) {
+  const promises = [
+    { Icon: source === "cache" ? WifiOff : ShieldCheck, label: source === "cache" ? "Saved catalog" : "Live catalog" },
+    { Icon: fulfillment === "pickup" ? ShoppingBag : Truck, label: fulfillment === "pickup" ? "Store pickup" : "Delivery" },
+    { Icon: CheckCircle2, label: "Store confirms" },
+  ];
+  return (
+    <section aria-label="Ordering information" className="grid grid-cols-3 divide-x divide-[#e4ecf7] rounded-2xl border border-[#e4ecf7] bg-white px-1 py-3 shadow-[0_8px_28px_rgba(20,60,120,0.04)]">
+      {promises.map(({ Icon, label }) => (
+        <div key={label} className="flex min-w-0 flex-col items-center gap-1 px-1 text-center sm:flex-row sm:justify-center sm:gap-2">
+          <Icon size={16} className={source === "cache" && label === "Saved catalog" ? "text-[#c2410c]" : "text-[var(--brand)]"} />
+          <span className="truncate text-[10px] font-black text-[#52617a] sm:text-xs">{label}</span>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -810,8 +805,8 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
 
 function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
   return (
-    <article className="group rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_12px_35px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
-      <div className="relative grid aspect-[1.08/1] place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[var(--brand-soft)] sm:aspect-square">
+    <article className="group flex min-w-0 flex-col rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_8px_26px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
+      <div className="relative grid aspect-[1.2/1] place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[var(--brand-soft)] sm:aspect-square sm:rounded-2xl">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-[76%] w-[76%] object-contain transition duration-300 group-hover:scale-105" />
         ) : (
@@ -823,16 +818,16 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
           </div>
         )}
       </div>
-      <div className="mt-2 min-h-[82px] sm:mt-3 sm:min-h-[86px]">
+      <div className="mt-2 flex min-h-[88px] flex-1 flex-col sm:mt-3 sm:min-h-[96px]">
         <h3 className="line-clamp-2 text-[13px] font-black leading-snug text-[#0b1735] sm:text-sm">{product.name}</h3>
         <p className="mt-1 text-xs font-semibold text-[#4f5f7b]">{product.unit}</p>
-        <p className="mt-1.5 text-sm font-black text-[#071432] sm:mt-2 sm:text-base">
+        <p className="mt-auto pt-1.5 text-sm font-black text-[#071432] sm:text-base">
           {formatRs(product.price)}
           {product.mrp && product.mrp > product.price ? (
             <span className="ml-2 text-xs font-semibold text-[#95a3bb] line-through">{formatRs(product.mrp)}</span>
           ) : null}
         </p>
-        <p className="mt-1 text-xs font-black text-[#0f9f4a]">In Stock</p>
+        <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-[#0f9f4a]">Available</p>
       </div>
       {qty > 0 ? (
         <QuantityStepper qty={qty} onChange={onChange} />
@@ -840,7 +835,8 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
         <button
           type="button"
           onClick={() => onChange(1)}
-          className="mt-2 flex h-9 w-full items-center justify-center rounded-xl border border-[var(--brand-border)] bg-[#f8fbff] text-sm font-black text-[var(--brand)] transition hover:bg-[#eaf2ff] sm:mt-3 sm:h-10"
+          aria-label={`Add ${product.name} to order`}
+          className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-[var(--brand-border)] bg-[#f8fbff] text-sm font-black text-[var(--brand)] transition hover:bg-[#eaf2ff] sm:mt-3"
         >
           Add
         </button>
@@ -880,11 +876,11 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
 function QuantityStepper({ qty, onChange, compact = false }: { qty: number; onChange: (next: number) => void; compact?: boolean }) {
   return (
     <div className={`mt-2 flex items-center overflow-hidden rounded-xl border border-[#d9e4f2] bg-[#f8fbff] sm:mt-3 ${compact ? "mt-0 sm:mt-0" : ""}`}>
-      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-9 flex-1 place-items-center text-[var(--brand)] sm:h-10">
+      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-11 flex-1 place-items-center text-[var(--brand)]">
         <Minus size={16} />
       </button>
-      <span className="grid h-9 min-w-9 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums sm:h-10 sm:min-w-10">{qty}</span>
-      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-9 flex-1 place-items-center text-[var(--brand)] sm:h-10">
+      <span className="grid h-11 min-w-10 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums">{qty}</span>
+      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-11 flex-1 place-items-center text-[var(--brand)]">
         <Plus size={16} />
       </button>
     </div>
@@ -970,8 +966,8 @@ function OrderSummaryPanel({
           </button>
         </div>
         <div className="mt-3 space-y-2">
-          <CustomerDetailsFields form={form} setForm={setForm} mobileOk={mobileOk} compact />
-          <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className="w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-2.5 text-sm font-bold outline-none">
+          <CustomerDetailsFields form={form} setForm={setForm} mobileOk={mobileOk} fulfillment={fulfillment} compact />
+          <select aria-label="Preferred fulfillment time" value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className="w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-2.5 text-sm font-bold outline-none">
             {timeSlots.map((slot) => <option key={slot}>{slot}</option>)}
           </select>
         </div>
@@ -1006,17 +1002,17 @@ function CartLine({ item, onQtyChange }: { item: CartItem; onQtyChange: (id: str
         {item.product.imageUrl ? <img src={item.product.imageUrl} alt="" className="h-11 w-11 object-contain" /> : <ShoppingBag size={18} className="text-[#9ca9bd]" />}
       </div>
       <div className="min-w-0">
-        <p className="truncate text-sm font-black text-[#102347]">{item.product.name}</p>
+        <p className="truncate text-sm font-black text-[var(--brand-ink)]">{item.product.name}</p>
         <p className="text-xs font-bold text-[#61718c]">{formatRs(item.product.price)}</p>
         <div className="mt-1 flex w-24 items-center overflow-hidden rounded-lg border border-[#d9e4f2]">
-          <button type="button" onClick={() => onQtyChange(item.product.id, item.qty - 1)} className="grid h-7 flex-1 place-items-center text-[var(--brand)]"><Minus size={13} /></button>
+          <button type="button" aria-label={`Decrease ${item.product.name} quantity`} onClick={() => onQtyChange(item.product.id, item.qty - 1)} className="grid h-8 flex-1 place-items-center text-[var(--brand)]"><Minus size={13} /></button>
           <span className="grid h-7 w-8 place-items-center border-x border-[#d9e4f2] text-xs font-black">{item.qty}</span>
-          <button type="button" onClick={() => onQtyChange(item.product.id, item.qty + 1)} className="grid h-7 flex-1 place-items-center text-[var(--brand)]"><Plus size={13} /></button>
+          <button type="button" aria-label={`Increase ${item.product.name} quantity`} onClick={() => onQtyChange(item.product.id, item.qty + 1)} className="grid h-8 flex-1 place-items-center text-[var(--brand)]"><Plus size={13} /></button>
         </div>
       </div>
       <div className="text-right">
-        <p className="text-sm font-black text-[#102347]">{formatRs(item.lineTotal)}</p>
-        <button type="button" onClick={() => onQtyChange(item.product.id, 0)} className="mt-1 text-[#71809a]"><X size={15} /></button>
+        <p className="text-sm font-black text-[var(--brand-ink)]">{formatRs(item.lineTotal)}</p>
+        <button type="button" aria-label={`Remove ${item.product.name}`} onClick={() => onQtyChange(item.product.id, 0)} className="mt-1 grid h-8 w-8 place-items-center rounded-lg text-[#71809a] hover:bg-[#f1f5f9]"><X size={15} /></button>
       </div>
     </div>
   );
@@ -1035,7 +1031,7 @@ function PriceBreakdown({ totals }: { totals: ReturnType<typeof useOrderTotalsSh
   );
 }
 
-function Row({ label, value, valueClass = "text-[#102347]" }: { label: string; value: string; valueClass?: string }) {
+function Row({ label, value, valueClass = "text-[var(--brand-ink)]" }: { label: string; value: string; valueClass?: string }) {
   return (
     <div className="flex items-center justify-between">
       <span className="font-semibold text-[#60708b]">{label}</span>
@@ -1048,23 +1044,38 @@ function CustomerDetailsFields({
   form,
   setForm,
   mobileOk,
+  fulfillment,
   compact = false,
 }: {
   form: { name: string; mobile: string; address: string; note: string };
   setForm: React.Dispatch<React.SetStateAction<{ name: string; mobile: string; address: string; note: string }>>;
   mobileOk: boolean;
+  fulfillment: FulfillmentMode;
   compact?: boolean;
 }) {
-  const input = "w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-[var(--brand)]";
+  const input = "mt-1 w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-3 text-sm font-semibold outline-none transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[#eaf2ff]";
   return (
     <div className={compact ? "space-y-2" : "space-y-3"}>
-      <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Customer name" className={input} />
-      <div>
-        <input value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile number" className={input} />
+      <label className="block text-xs font-black text-[#405173]">
+        Name
+        <input autoComplete="name" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Your full name" className={input} />
+      </label>
+      <label className="block text-xs font-black text-[#405173]">
+        Mobile number
+        <input autoComplete="tel" value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile number" className={input} aria-describedby="mobile-help" />
         {form.mobile && !mobileOk ? <p className="mt-1 text-[11px] font-bold text-[#e11d48]">Enter a valid 10-digit mobile number.</p> : null}
-      </div>
-      <textarea value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={compact ? 2 : 3} placeholder="Delivery address / landmark (not required for pickup)" className={`${input} resize-none`} />
-      <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="Order notes (optional)" className={input} />
+        <span id="mobile-help" className="mt-1 block text-[10px] font-semibold text-[#7b89a0]">Used only for this order and status updates.</span>
+      </label>
+      {fulfillment === "delivery" ? (
+        <label className="block text-xs font-black text-[#405173]">
+          Delivery address
+          <textarea autoComplete="street-address" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} rows={compact ? 2 : 3} placeholder="House, street, area and landmark" className={`${input} resize-none`} />
+        </label>
+      ) : null}
+      <label className="block text-xs font-black text-[#405173]">
+        Note <span className="font-semibold text-[#8290a8]">(optional)</span>
+        <input value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="Substitutions, packaging or directions" className={input} />
+      </label>
     </div>
   );
 }
@@ -1072,16 +1083,16 @@ function CustomerDetailsFields({
 function MobileCartBar({ count, amount, disabled, onOpen }: { count: number; amount: number; disabled: boolean; onOpen: () => void }) {
   if (disabled) return null;
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#e4ecf7] bg-white/95 p-3 backdrop-blur lg:hidden">
-      <button type="button" onClick={onOpen} className="mx-auto flex w-full max-w-xl items-center gap-3 rounded-2xl bg-[var(--brand)] px-4 py-3 text-white shadow-[0_18px_42px_rgba(7,95,255,0.28)]">
-        <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/15">
-          <ShoppingCart size={20} />
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#dce6f4] bg-white/95 p-3 pb-[max(12px,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
+      <button type="button" onClick={onOpen} className="mx-auto flex min-h-14 w-full max-w-xl items-center gap-3 rounded-2xl bg-[var(--brand)] px-4 py-2.5 text-white shadow-[0_18px_42px_rgba(7,95,255,0.28)]">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/15">
+          <ShoppingBag size={19} />
         </span>
         <span className="min-w-0 flex-1 text-left">
-          <span className="block text-xs font-bold opacity-90">{count} item{count === 1 ? "" : "s"}</span>
-          <span className="block font-display text-lg font-black">{formatRs(amount)}</span>
+          <span className="block text-xs font-bold opacity-90">{count} item{count === 1 ? "" : "s"} · {formatRs(amount)}</span>
+          <span className="block text-[11px] font-semibold opacity-80">Estimated item total</span>
         </span>
-        <span className="text-sm font-black">Checkout</span>
+        <span className="text-sm font-black">Review order</span>
         <ChevronRight size={18} />
       </button>
     </div>
@@ -1101,6 +1112,7 @@ function CheckoutSheet({
   timeSlot,
   setTimeSlot,
   submitError,
+  onQtyChange,
   onPlace,
   onQr,
   onClose,
@@ -1117,50 +1129,69 @@ function CheckoutSheet({
   timeSlot: string;
   setTimeSlot: (slot: string) => void;
   submitError: string | null;
+  onQtyChange: (id: string, next: number) => void;
   onPlace: () => void;
   onQr: () => void;
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#0b1424]/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-[28px] bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#0b1424]/60 backdrop-blur-sm sm:items-center sm:p-5" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="checkout-title" className="flex h-[96dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[28px] bg-[#f7f9fc] shadow-2xl sm:h-auto sm:max-h-[92vh] sm:rounded-[28px]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-[#e4ecf7] bg-white px-4 py-4 sm:px-5">
           <div>
-            <h2 className="font-display text-xl font-black text-[#102347]">Confirm order</h2>
-            <p className="text-xs font-semibold text-[#6b7a93]">{cartItems.length} product{cartItems.length === 1 ? "" : "s"} selected</p>
+            <h2 id="checkout-title" className="font-display text-xl font-black text-[var(--brand-ink)]">Review your order</h2>
+            <p className="text-xs font-semibold text-[#6b7a93]">The store verifies availability and final amount.</p>
           </div>
-          <button type="button" aria-label="Close" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-xl text-[#64748b] hover:bg-[#f1f5fb]"><X size={18} /></button>
+          <button type="button" aria-label="Close checkout" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-xl text-[#64748b] hover:bg-[#f1f5fb]"><X size={19} /></button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+          <section className="rounded-2xl border border-[#e3ebf7] bg-white p-3.5">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-black text-[var(--brand-ink)]">1 · Items</h3>
+              <span className="text-xs font-bold text-[#6b7a93]">{totals.count} total</span>
+            </div>
+            <div className="space-y-2">
+              {cartItems.map((item) => <CartLine key={item.product.id} item={item} onQtyChange={onQtyChange} />)}
+            </div>
+            <PriceBreakdown totals={totals} />
+          </section>
+
+          <section className="rounded-2xl border border-[#e3ebf7] bg-white p-3.5">
+            <h3 className="text-sm font-black text-[var(--brand-ink)]">2 · Fulfillment</h3>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setFulfillment("delivery")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black ${fulfillment === "delivery" ? "border-[var(--brand)] bg-[#eaf2ff] text-[var(--brand)]" : "border-[#dfe8f5] text-[#52617a]"}`}><Truck size={16} /> Delivery</button>
+              <button type="button" onClick={() => setFulfillment("pickup")} className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black ${fulfillment === "pickup" ? "border-[var(--brand)] bg-[#eaf2ff] text-[var(--brand)]" : "border-[#dfe8f5] text-[#52617a]"}`}><ShoppingBag size={16} /> Store pickup</button>
+            </div>
+            <label className="mt-3 block text-xs font-black text-[#405173]">
+              Preferred time
+              <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className="mt-1 w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-3 text-sm font-bold outline-none focus:border-[var(--brand)]">
+                {timeSlots.map((slot) => <option key={slot}>{slot}</option>)}
+              </select>
+            </label>
+          </section>
+
+          <section className="rounded-2xl border border-[#e3ebf7] bg-white p-3.5">
+            <h3 className="mb-3 text-sm font-black text-[var(--brand-ink)]">3 · Contact details</h3>
+            <CustomerDetailsFields form={form} setForm={setForm} mobileOk={mobileOk} fulfillment={fulfillment} />
+          </section>
+
+          {submitError && (
+            <div role="alert" className="rounded-xl border border-[#fecdd3] bg-[#fff1f2] px-3 py-2.5 text-[12px] font-semibold text-[#be123c]">
+              {submitError}
+              <button type="button" onClick={onQr} className="ml-1 font-black underline">Show counter QR instead</button>
+            </div>
+          )}
         </div>
 
-        <div className="mt-4 rounded-2xl bg-[#f8fbff] p-3">
-          <PriceBreakdown totals={totals} />
-        </div>
-
-        <div className="mt-4 flex rounded-xl border border-[#dfe8f5] bg-[var(--brand-softer)] p-1">
-          <button type="button" onClick={() => setFulfillment("delivery")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "delivery" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#52617a]"}`}>Delivery</button>
-          <button type="button" onClick={() => setFulfillment("pickup")} className={`flex-1 rounded-lg px-3 py-2 text-xs font-black ${fulfillment === "pickup" ? "bg-white text-[var(--brand)] shadow-sm" : "text-[#52617a]"}`}>Self Pickup</button>
-        </div>
-
-        <div className="mt-4">
-          <CustomerDetailsFields form={form} setForm={setForm} mobileOk={mobileOk} />
-          <select value={timeSlot} onChange={(e) => setTimeSlot(e.target.value)} className="mt-3 w-full rounded-xl border border-[#dce6f4] bg-white px-3 py-2.5 text-sm font-bold outline-none">
-            {timeSlots.map((slot) => <option key={slot}>{slot}</option>)}
-          </select>
-        </div>
-
-        {submitError && (
-          <div className="mt-3 rounded-xl bg-[#fff1f2] px-3 py-2 text-[12px] font-semibold text-[#e11d48]">
-            {submitError}
-            <button type="button" onClick={onQr} className="ml-1 underline">Show QR instead</button>
+        <div className="border-t border-[#e4ecf7] bg-white p-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:px-5">
+          <div className="mb-3 flex items-start gap-2 rounded-xl bg-[#f4f8ff] px-3 py-2 text-[11px] font-semibold leading-4 text-[#52617a]">
+            <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[var(--brand)]" />
+            <span>No payment is taken now. The store confirms stock and the final payable amount before billing.</span>
           </div>
-        )}
-
-        <button type="button" disabled={!canPlace || placing} onClick={onPlace} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand)] py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-[#b8c6dc]">
-          {placing ? <><Loader2 size={17} className="animate-spin" /> Sending...</> : <><Send size={17} /> Place order</>}
-        </button>
-        <button type="button" onClick={onQr} className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#dce5f1] py-2.5 text-[12px] font-bold text-[#5b6b85]">
-          <QrCode size={14} /> No internet? Show QR at the counter
-        </button>
+          <button type="button" disabled={!canPlace || placing} onClick={onPlace} className="inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--brand)] px-4 text-sm font-black text-white shadow-[0_16px_32px_rgba(7,95,255,0.22)] disabled:cursor-not-allowed disabled:bg-[#b8c6dc] disabled:shadow-none">
+            {placing ? <><Loader2 size={17} className="animate-spin" /> Sending order...</> : <><Send size={17} /> Place order · {formatRs(totals.grandTotal)}</>}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1182,7 +1213,7 @@ function HowOrderingWorks() {
           <div key={num} className="flex items-center gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#eaf2ff] text-sm font-black text-[var(--brand)]">{num}</span>
             <div className="min-w-0">
-              <p className="text-xs font-black text-[#102347]">{title}</p>
+              <p className="text-xs font-black text-[var(--brand-ink)]">{title}</p>
               <p className="text-[11px] font-semibold text-[#70809a]">{body}</p>
             </div>
             {idx < steps.length - 1 && <ChevronRight size={16} className="ml-auto text-[#9ba8bd]" />}
@@ -1754,17 +1785,17 @@ function OrderQrOverlay({ urls, count, amount, onClose }: { urls: string[]; coun
               <button type="button" disabled={safePart === 0} onClick={() => setPart((p) => Math.max(0, p - 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[var(--brand)] disabled:opacity-40" aria-label="Previous QR">
                 <ChevronLeft size={18} />
               </button>
-              <span className="min-w-[92px] text-[13px] font-black text-[#102347]">Part {safePart + 1} of {total}</span>
+              <span className="min-w-[92px] text-[13px] font-black text-[var(--brand-ink)]">Part {safePart + 1} of {total}</span>
               <button type="button" disabled={safePart === total - 1} onClick={() => setPart((p) => Math.min(total - 1, p + 1))} className="grid h-9 w-9 place-items-center rounded-lg border border-[#d6e0ee] text-[var(--brand)] disabled:opacity-40" aria-label="Next QR">
                 <ChevronRight size={18} />
               </button>
             </div>
-            <h2 className="mt-3 font-display text-base font-black text-[#102347]">Big order - show all {total} QRs</h2>
+            <h2 className="mt-3 font-display text-base font-black text-[var(--brand-ink)]">Big order - show all {total} QRs</h2>
             <p className="mt-1 text-[12px] leading-relaxed text-[#5b6b85]">The shopkeeper scans each part in order. Final price is set by the shop.</p>
           </>
         ) : (
           <>
-            <h2 className="mt-4 font-display text-base font-black text-[#102347]">Show this at the counter</h2>
+            <h2 className="mt-4 font-display text-base font-black text-[var(--brand-ink)]">Show this at the counter</h2>
             <p className="mt-1 text-[12px] leading-relaxed text-[#5b6b85]">The shopkeeper scans it to load your order. Final price is set by the shop.</p>
           </>
         )}
@@ -1855,7 +1886,7 @@ function OrderTracker({
         <div className="grid h-14 w-14 place-items-center rounded-2xl bg-[#f1f5f9] text-[#64748b]">
           <ShoppingBag size={26} />
         </div>
-        <h1 className="mt-4 font-display text-lg font-black text-[#102347]">Order not found</h1>
+        <h1 className="mt-4 font-display text-lg font-black text-[var(--brand-ink)]">Order not found</h1>
         <p className="mt-1 max-w-xs text-center text-sm text-[#5b6b85]">This order is no longer available. You can place a new one.</p>
         <button type="button" onClick={onOrderAgain} className="mt-6 rounded-xl bg-[var(--brand)] px-5 py-3 text-sm font-bold text-white">Back to menu</button>
       </CenterScreen>
@@ -1866,7 +1897,7 @@ function OrderTracker({
   const currentIndex = declined ? -1 : STAGE_STEPS.findIndex((s) => s.key === stage);
 
   return (
-    <div className="min-h-screen bg-[#f5f8fd] text-[#102347]">
+    <div className="min-h-screen bg-[#f5f8fd] text-[var(--brand-ink)]">
       <header className="sticky top-0 z-20 border-b border-[#e4ecf7] bg-white/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-xl items-center gap-2">
           <button type="button" onClick={onBackToMenu} aria-label="Back to menu" className="grid h-9 w-9 place-items-center rounded-lg text-[#405273] hover:bg-[#f1f5fb]">
@@ -1893,7 +1924,7 @@ function OrderTracker({
         {declined ? (
           <div className="rounded-2xl border border-[#f4d4d4] bg-[#fff5f5] p-5 text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white text-[#e11d48]"><XCircle size={28} /></div>
-            <h2 className="mt-3 font-display text-lg font-black text-[#102347]">Order could not be taken</h2>
+            <h2 className="mt-3 font-display text-lg font-black text-[var(--brand-ink)]">Order could not be taken</h2>
             <p className="mt-1 text-[13px] text-[#5b6b85]">The shop declined this order. Please call them or place a new one.</p>
           </div>
         ) : (
@@ -1911,7 +1942,7 @@ function OrderTracker({
                     {i < STAGE_STEPS.length - 1 && <span className={`my-1 w-0.5 flex-1 ${i < currentIndex ? "bg-[#16a34a]" : "bg-[#e6ecf4]"}`} />}
                   </div>
                   <div className={i === STAGE_STEPS.length - 1 ? "pb-0" : "pb-6"}>
-                    <p className={`text-[14px] font-black ${active || done ? "text-[#102347]" : "text-[#9aa7bd]"}`}>{step.label}</p>
+                    <p className={`text-[14px] font-black ${active || done ? "text-[var(--brand-ink)]" : "text-[#9aa7bd]"}`}>{step.label}</p>
                     <p className="mt-0.5 text-[12px] font-medium text-[#6b7a93]">{step.key === "ready" && status?.fulfillmentType === "delivery" ? "Your order is ready for delivery handover" : step.sub}</p>
                     {active && (
                       <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[#eaf2ff] px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--brand)]">
@@ -1928,7 +1959,7 @@ function OrderTracker({
         {status && (
           <div className="mt-4 rounded-2xl border border-[#e6ecf4] bg-white p-4">
             <div className="flex items-center justify-between">
-              <p className="text-[13px] font-black text-[#102347]">Your order</p>
+              <p className="text-[13px] font-black text-[var(--brand-ink)]">Your order</p>
               <p className="text-[11px] font-semibold text-[#8290a8]">{orderTimeAgo(status.createdAt)}</p>
             </div>
             <div className="mt-2 space-y-1">
@@ -1940,11 +1971,11 @@ function OrderTracker({
               ))}
             </div>
             <div className="mt-3 grid gap-2 rounded-xl bg-[var(--brand-softer)] p-3 text-[12px] text-[#52617a] sm:grid-cols-2">
-              <p><span className="font-black text-[#102347]">Method:</span> {status.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"}</p>
-              {status.promisedSlot ? <p><span className="font-black text-[#102347]">Preferred:</span> {status.promisedSlot}</p> : null}
-              {status.location ? <p className="sm:col-span-2"><span className="font-black text-[#102347]">Store:</span> {status.location.name}{status.location.city ? ` · ${status.location.city}` : ""}</p> : null}
+              <p><span className="font-black text-[var(--brand-ink)]">Method:</span> {status.fulfillmentType === "pickup" ? "Store pickup" : "Delivery"}</p>
+              {status.promisedSlot ? <p><span className="font-black text-[var(--brand-ink)]">Preferred:</span> {status.promisedSlot}</p> : null}
+              {status.location ? <p className="sm:col-span-2"><span className="font-black text-[var(--brand-ink)]">Store:</span> {status.location.name}{status.location.city ? ` · ${status.location.city}` : ""}</p> : null}
             </div>
-            <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2 text-[14px] font-black text-[#0f1e3d]">
+            <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2 text-[14px] font-black text-[var(--brand-ink)]">
               <span>Estimated total</span><span>{formatRs(status.estimatedTotal)}</span>
             </div>
             <p className="mt-1 text-[11px] text-[#8290a8]">Final price is set by the shop.</p>

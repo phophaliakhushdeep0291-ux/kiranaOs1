@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const billingPage = readFileSync(new URL("../features/billing/pages/BillingPage.tsx", import.meta.url), "utf8");
 const billingSearch = readFileSync(new URL("../features/billing/pages/components/BillingSearch.tsx", import.meta.url), "utf8");
 const layout = readFileSync(new URL("../components/layout/Layout.tsx", import.meta.url), "utf8");
+const mobileChrome = readFileSync(new URL("../components/layout/MobileAppChrome.tsx", import.meta.url), "utf8");
 const dashboard = readFileSync(new URL("../features/dashboard/pages/DashboardPage.tsx", import.meta.url), "utf8");
 const products = readFileSync(new URL("../features/products/pages/ProductsPage.tsx", import.meta.url), "utf8");
 const productFormPanel = readFileSync(new URL("../features/products/pages/components/ProductFormPanel.tsx", import.meta.url), "utf8");
@@ -36,15 +37,16 @@ describe("POS workspace responsive design", () => {
   it("uses the local-first product catalogue inside billing", () => {
     expect(billingPage).toContain('import { useListProducts } from "@/features/products/queries";');
     expect(billingPage).toContain('window.addEventListener("kirana:local-data-changed", loadLocalProducts)');
-    expect(billingPage).toContain("mergeProductRows(products.data ?? [], localProductRows)");
+    expect(billingPage).toContain("products.data === undefined ? localProductRows : products.data");
+    expect(productQueries).toContain("mergeProducts(fresh, localRows)");
     expect(billingPage).not.toContain("useListProducts, type Bill");
     expect(productQueries).toContain("cached.length > 0 ? cached : undefined");
   });
 
   it("keeps mobile navigation unobstructed and removes redundant billing actions", () => {
     expect(layout.match(/cleanPath\(loc\) !== \"\/billing\"/g)).toHaveLength(1);
-    expect(layout).toContain('data-app-mobile-bottom-nav="true"');
-    expect(layout).toContain('data-app-mobile-topbar="true"');
+    expect(mobileChrome).toContain('data-app-mobile-bottom-nav="true"');
+    expect(mobileChrome).toContain('data-app-mobile-topbar="true"');
     expect(layout).not.toContain('aria-label="Create new bill"');
     expect(billingSummary).toContain("hidden grid-cols-5 gap-1.5 border-t");
   });

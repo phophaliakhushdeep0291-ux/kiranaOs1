@@ -113,7 +113,7 @@ export async function resolveConflict(req, res, next) {
       data: {
         resolutionRecorded: true,
         conflict,
-        message: "Conflict decision stored in the server audit ledger for every device.",
+        message: "Conflict decision applied and stored in the server audit ledger for every device.",
       },
     });
   } catch (err) { next(err); }

@@ -188,6 +188,28 @@ export function AppRoutes() {
   const [location] = useLocation();
   const isCustomerOrderPath = /^\/order\/[^/]+/.test(location);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Warm the two highest-frequency workspaces only after the browser is idle.
+    // Dynamic imports are cached by the module loader, so the eventual route
+    // transition can render immediately without adding pressure to first paint.
+    const warmCoreRoutes = () => {
+      if (location !== "/dashboard") void import("@/features/dashboard/pages/DashboardPage");
+      if (location !== "/billing") void import("@/features/billing/pages/BillingPage");
+    };
+    const browserWindow = window as typeof window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (browserWindow.requestIdleCallback) {
+      const handle = browserWindow.requestIdleCallback(warmCoreRoutes, { timeout: 2500 });
+      return () => browserWindow.cancelIdleCallback?.(handle);
+    }
+    const handle = window.setTimeout(warmCoreRoutes, 900);
+    return () => window.clearTimeout(handle);
+  }, [isAuthenticated, location]);
+
   if (isLoading && !isCustomerOrderPath) return <LoadingScreen />;
 
   return (

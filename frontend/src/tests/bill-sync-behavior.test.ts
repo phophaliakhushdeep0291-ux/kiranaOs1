@@ -277,6 +277,7 @@ import { pushPendingOutboxOperations } from "@/features/sync/engine";
 import {
   dedupeBillsForDisplay,
   dedupePaymentsForDisplay,
+  isMergedBillTwin,
   reconcileSyncedBillFromPush,
 } from "@/features/sync/bill-reconciliation";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
@@ -681,6 +682,95 @@ describe("bill sync behavior", () => {
     );
   });
 
+  it("never hardens a distinct same-content bill into an earlier server bill when both have durable identities", async () => {
+    const common = {
+      billType: "normal_sale",
+      customerName: "Walk-in",
+      grandTotal: 50,
+      paidAmount: 50,
+      creditAmount: 0,
+      items: [{ productId: "product_biscuit", name: "Biscuit", quantity: 1, ratePerRateUnit: 50 }],
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      deleted_at: null,
+    };
+    dbState.putInto("bills", {
+      ...common,
+      id: "server_bill_earlier_sale",
+      server_id: "server_bill_earlier_sale",
+      clientBillId: "bill_earlier_sale",
+      client_bill_id: "bill_earlier_sale",
+      idempotencyKey: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_earlier_sale",
+      idempotency_key: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_earlier_sale",
+      billNo: "KOS-2026-000003",
+      createdAt: "2026-06-07T09:00:00.000Z",
+      updatedAt: "2026-06-07T09:00:00.000Z",
+      sync_status: "synced",
+      status: "active",
+      isSynced: true,
+      is_synced: true,
+    });
+    dbState.putInto("bills", {
+      ...common,
+      id: "bill_distinct_split_sale",
+      local_id: "bill_distinct_split_sale",
+      clientBillId: "bill_distinct_split_sale",
+      client_bill_id: "bill_distinct_split_sale",
+      idempotencyKey: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_distinct_split_sale",
+      idempotency_key: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_distinct_split_sale",
+      billNo: "PENDING-SPLIT",
+      createdAt: "2026-06-07T09:02:00.000Z",
+      updatedAt: "2026-06-07T09:02:00.000Z",
+      sync_status: "pending_sync",
+      status: "pending_sync",
+      isSynced: false,
+      is_synced: false,
+    });
+    dbState.putInto("sync_outbox", {
+      op_id: "op_distinct_split_sale",
+      clientEventId: "op_distinct_split_sale",
+      idempotency_key: "op_distinct_split_sale",
+      entity_id: "bill_distinct_split_sale",
+      entity_type: "bill",
+      operation_type: "CREATE_BILL",
+      type: "CREATE_BILL",
+      payload: {
+        localBillId: "bill_distinct_split_sale",
+        clientBillId: "bill_distinct_split_sale",
+        idempotencyKey: "create-bill:tenant_sync_test:store_sync_test:device_sync_test:bill_distinct_split_sale",
+      },
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id,
+      client_created_at: "2026-06-07T09:02:00.000Z",
+      createdAt: 2,
+      retry_count: 0,
+      attempts: 0,
+      status: "PENDING",
+      sync_status: "pending_sync",
+      next_retry_at: null,
+    });
+
+    const result = await hardenLocalFinancialData();
+
+    expect(result.billsMerged).toBe(0);
+    expect(activeRows("bills").map((row) => row.id).sort()).toEqual([
+      "bill_distinct_split_sale",
+      "server_bill_earlier_sale",
+    ]);
+    expect(scopedRows("sync_outbox")).toContainEqual(
+      expect.objectContaining({
+        op_id: "op_distinct_split_sale",
+        status: "PENDING",
+        sync_status: "pending_sync",
+      }),
+    );
+    expect(scopedRows("id_mappings")).not.toContainEqual(
+      expect.objectContaining({ local_id: "bill_distinct_split_sale" }),
+    );
+  });
+
   it("pulled server bill merges (never conflicts) when client identity matches even if money and timestamp differ", async () => {
     // Local pending bill: offline udhar split (paid 40 / credit 60), created earlier.
     dbState.putInto("bills", {
@@ -935,9 +1025,13 @@ describe("bill sync behavior", () => {
       sync_status: "synced",
     });
     // A GENUINE twin (tombstone pointing at a DIFFERENT row) must be left alone.
+    // It carries server_id === merged_into_id, exactly as reconcile stamps it — the
+    // shape that a self-check counting server_id wrongly scrubbed, which put a phantom
+    // "deleted" bill in the recycle bin for every bill that synced.
     dbState.putInto("bills", {
       id: "bill_local_twin",
       local_id: "bill_local_twin",
+      server_id: "server_bill_twin",
       billNo: "PENDING-TWIN",
       grandTotal: 200,
       deleted_at: "2026-06-07T09:00:00.000Z",
@@ -959,6 +1053,78 @@ describe("bill sync behavior", () => {
     expect(scopedRows("bills")).toContainEqual(
       expect.objectContaining({ id: "bill_local_twin", merged_into_id: "server_bill_twin" }),
     );
+  });
+
+  it("restores merge-tombstone markers an earlier build scrubbed, without resurrecting real deletes", async () => {
+    // Regression: the self-merge repair used to count server_id as one of the row's own
+    // ids, so it cleared merged_into_id off every GENUINE tombstone. A tombstone without
+    // that marker is indistinguishable from a user-deleted bill, so each synced bill left
+    // a phantom in the recycle bin. Devices already carry the scrubbed rows — re-stamp them.
+    dbState.putInto("bills", {
+      id: "server_bill_survivor",
+      server_id: "server_bill_survivor",
+      billNo: "KOS-2026-000007",
+      grandTotal: 38,
+      status: "active",
+      deleted_at: null,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+    });
+    dbState.putInto("bills", {
+      id: "bill_local_scrubbed",
+      local_id: "bill_local_scrubbed",
+      server_id: "server_bill_survivor", // points at the row that replaced it
+      billNo: "PENDING-9A03C8",
+      grandTotal: 38,
+      deleted_at: "2026-07-31T12:26:18.329Z",
+      merged_into_id: null, // ← scrubbed by the old repair
+      mergedIntoId: null,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+    });
+    // A bill the user really deleted: keyed BY its server id. Must stay in the bin.
+    dbState.putInto("bills", {
+      id: "server_bill_user_deleted",
+      server_id: "server_bill_user_deleted",
+      billNo: "KOS-2026-000008",
+      grandTotal: 90,
+      deleted_at: "2026-07-31T12:40:00.000Z",
+      merged_into_id: null,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "synced",
+    });
+    // Deleted before it ever synced — no server_id, so it is a real delete too.
+    dbState.putInto("bills", {
+      id: "bill_local_never_synced",
+      local_id: "bill_local_never_synced",
+      billNo: "PENDING-NEVER",
+      grandTotal: 12,
+      deleted_at: "2026-07-31T12:41:00.000Z",
+      merged_into_id: null,
+      tenant_id: dbState.scope.tenant_id,
+      store_id: dbState.scope.store_id,
+      sync_status: "pending",
+    });
+
+    await hardenLocalFinancialData();
+
+    const rows = scopedRows("bills");
+    const byId = (id: string) => rows.find((row) => row.id === id);
+    // The scrubbed twin is re-marked, so the recycle bin drops it.
+    expect(byId("bill_local_scrubbed")).toEqual(
+      expect.objectContaining({ merged_into_id: "server_bill_survivor", mergedIntoId: "server_bill_survivor" }),
+    );
+    // Genuine deletes keep no marker and stay in the bin.
+    expect(byId("server_bill_user_deleted")?.merged_into_id ?? null).toBeNull();
+    expect(byId("bill_local_never_synced")?.merged_into_id ?? null).toBeNull();
+
+    const inRecycleBin = rows
+      .filter((row) => typeof row.deleted_at === "string" && !isMergedBillTwin(row as Record<string, unknown>))
+      .map((row) => row.id);
+    expect(inRecycleBin.sort()).toEqual(["bill_local_never_synced", "server_bill_user_deleted"]);
   });
 
   it("product created offline merges with its synced server echo instead of conflicting", async () => {

@@ -37,7 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageShell, SyncBadge } from "@/components/shared";
 import { buildLocalReportSnapshot, toDateInputValue, type DateRange } from "@/features/reports/local-reporting";
-import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
+import { dedupeBillsForDisplay, isMergedBillTwin } from "@/features/sync/bill-reconciliation";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -167,8 +167,8 @@ function billCredit(bill: LocalBill) {
   return readNumber(bill.creditAmount, Math.max(0, billTotal(bill) - billPaid(bill)));
 }
 
-function isDeleted(bill: LocalBill) {
-  return Boolean(bill.deleted_at ?? bill.deletedAt ?? bill.merged_into_id ?? bill.mergedIntoId);
+function isUserDeleted(bill: LocalBill) {
+  return Boolean(bill.deleted_at ?? bill.deletedAt) && !isMergedBillTwin(bill);
 }
 
 function isReturnBill(bill: LocalBill) {
@@ -178,7 +178,7 @@ function isReturnBill(bill: LocalBill) {
 function isSaleBill(bill: LocalBill) {
   // Estimates (kacha bills) count as sales — same money/stock effects, only the EST- series differs.
   const status = String(bill.status ?? "").toLowerCase();
-  return !isDeleted(bill) && !isReturnBill(bill) && !status.includes("cancel");
+  return !isMergedBillTwin(bill) && !isReturnBill(bill) && !status.includes("cancel");
 }
 
 function isWithinRange(bill: LocalBill, range: DateRange) {
@@ -219,7 +219,7 @@ function modeMeta(mode: string) {
 
 async function loadBills(): Promise<LocalBill[]> {
   const rows = await offlineDB.getAll<LocalBill>("bills").catch(() => []);
-  return dedupeBillsForDisplay(filterRowsForCurrentScope(rows)) as unknown as LocalBill[];
+  return dedupeBillsForDisplay(filterRowsForCurrentScope(rows), { includeUserDeleted: true }) as unknown as LocalBill[];
 }
 
 async function loadSalesData(range: DateRange) {
@@ -336,7 +336,7 @@ export default function SalesOverviewPage() {
     return map;
   }, [allBills]);
 
-  const recentSales = useMemo(() => [...saleBills].sort((a, b) => new Date(billDate(b)).getTime() - new Date(billDate(a)).getTime()).slice(0, 5), [saleBills]);
+  const recentSales = useMemo(() => saleBills.filter((bill) => !isUserDeleted(bill)).sort((a, b) => new Date(billDate(b)).getTime() - new Date(billDate(a)).getTime()).slice(0, 5), [saleBills]);
   const paymentRows = useMemo(() => {
     const payment = snapshot?.paymentBreakdown;
     const sales = selected?.sales ?? 0;
@@ -416,7 +416,7 @@ export default function SalesOverviewPage() {
   };
 
   return (
-    <PageShell className="mx-auto min-h-full w-full max-w-[1800px] space-y-3 !bg-white pb-8 text-[#10224a]">
+    <PageShell className="mx-auto min-h-full w-full max-w-[1800px] space-y-3 !bg-white pb-8 text-[var(--brand-ink)]">
       <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2 text-[11px]">
           <SyncBadge status={snapshot?.hasUnsyncedOperations ? "estimate" : "synced"} label={snapshot?.hasUnsyncedOperations ? "Local estimate" : "Synced"} />
@@ -448,7 +448,7 @@ export default function SalesOverviewPage() {
             </PopoverContent>
           </Popover>
           <Button variant="outline" onClick={exportSales} disabled={!snapshot || loading} className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-bold"><Download size={14} className="mr-2" />Export</Button>
-          <Button asChild className="h-9 rounded-[7px] bg-[var(--brand)] px-5 text-[12px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.22)] hover:bg-[#0052e0]"><Link href="/billing"><Plus size={14} className="mr-2" />New Sale</Link></Button>
+          <Button asChild className="h-9 rounded-[7px] bg-[var(--brand)] px-5 text-[12px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)]"><Link href="/billing"><Plus size={14} className="mr-2" />New Sale</Link></Button>
         </div>
       </section>
 
@@ -494,7 +494,7 @@ export default function SalesOverviewPage() {
               const max = Math.max(...storeRows.map((item) => item.sales), 1);
               return <div key={row.name} className="grid grid-cols-[1fr_86px_44px] items-center gap-3 text-[10px]">
                 <span className="truncate font-semibold text-[#34486e]">{row.name}</span>
-                <div><p className="mb-1 text-right font-black text-[#14264c]">{money(row.sales)}</p><div className="h-1.5 rounded-full bg-[#edf2f8]"><div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${Math.max(7, (row.sales / max) * 100)}%` }} /></div></div>
+                <div><p className="mb-1 text-right font-black text-[var(--brand-ink)]">{money(row.sales)}</p><div className="h-1.5 rounded-full bg-[#edf2f8]"><div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${Math.max(7, (row.sales / max) * 100)}%` }} /></div></div>
                 <span className="text-right font-semibold text-[#52617c]">{row.orders}</span>
               </div>;
             })}
@@ -539,7 +539,7 @@ export default function SalesOverviewPage() {
               <div key={row.label} className="grid grid-cols-[26px_1fr_auto] items-center gap-2 py-2.5 text-[11px]">
                 <span className="grid h-6 w-6 place-items-center rounded-[6px] bg-[var(--brand-soft)]" style={{ color: row.color }}><CalendarDays size={13} /></span>
                 <span className="font-semibold text-[#34486e]">{row.label}</span>
-                <span className="font-black text-[#14264c]">{money(row.value)}</span>
+                <span className="font-black text-[var(--brand-ink)]">{money(row.value)}</span>
               </div>
             ))}
           </div>
@@ -570,7 +570,7 @@ function MetricCard({ label, value, current, previous, icon, iconClass, color, s
       {loading ? <Skeleton className="h-full min-h-[112px]" /> : (
         <>
           <div className="flex min-w-0 items-center gap-3"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[9px]", iconClass)}>{icon}</span><p className="min-w-0 text-[11px] font-bold leading-snug text-[#34486e]">{label}</p></div>
-          <p className="mt-3 text-[22px] font-black leading-none text-[#101f40]">{value}</p>
+          <p className="mt-3 text-[22px] font-black leading-none text-[var(--brand-ink)]">{value}</p>
           <div className="mt-2 flex items-center gap-1 text-[10px]">
             <span className={cn("inline-flex items-center gap-0.5 font-black", change === 0 ? "text-[#64748b]" : bad ? "text-[#ff314f]" : "text-[#10a948]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span>
             <span className="font-medium text-[#7a879f]">vs last week</span>
@@ -590,7 +590,7 @@ function MetricCard({ label, value, current, previous, icon, iconClass, color, s
 }
 
 function Panel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
-  return <article className={PANEL}><header className="flex h-12 min-w-0 items-center justify-between gap-3 px-4"><h2 className="truncate text-[14px] font-black text-[#13254a]">{title}</h2>{action ? <div className="shrink-0">{action}</div> : null}</header>{children}</article>;
+  return <article className={PANEL}><header className="flex h-12 min-w-0 items-center justify-between gap-3 px-4"><h2 className="truncate text-[14px] font-black text-[var(--brand-ink)]">{title}</h2>{action ? <div className="shrink-0">{action}</div> : null}</header>{children}</article>;
 }
 
 function ChartFrame({ loading, empty, children }: { loading: boolean; empty: boolean; children: ReactNode }) {
@@ -650,7 +650,7 @@ function DonutPanel({ title, total, rows, centerLabel }: { title: string; total:
 function SmallTable({ title, action, actionHref, headers, loading, empty, children }: { title: string; action: string; actionHref: string; headers: string[]; loading: boolean; empty: boolean; children: ReactNode }) {
   return (
     <article className={cn(PANEL, "h-full")}>
-      <header className="flex h-11 items-center justify-between gap-3 px-4"><h2 className="truncate text-[13px] font-black text-[#13254a]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[var(--brand)]">{action}</Link></header>
+      <header className="flex h-11 items-center justify-between gap-3 px-4"><h2 className="truncate text-[13px] font-black text-[var(--brand-ink)]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[var(--brand)]">{action}</Link></header>
       {loading ? <Skeleton className="m-3 h-36" /> : empty ? <EmptyState label="No records in this period" /> : (
         <div className="overflow-x-auto px-2 pb-3">
           <table className="w-full min-w-[520px] border-collapse text-[10px]">

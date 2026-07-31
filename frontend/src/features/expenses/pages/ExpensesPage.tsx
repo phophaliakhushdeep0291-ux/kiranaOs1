@@ -29,7 +29,7 @@ const MODES: { value: string; label: string }[] = [
 const MODE_BADGE: Record<string, string> = {
   cash: CHIP_TONES.green, upi: CHIP_TONES.violet, bank: CHIP_TONES.blue, card: CHIP_TONES.blue, other: CHIP_TONES.gray,
 };
-const PALETTE = ["#0057ff", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#64748b"];
+const PALETTE = ["var(--brand)", "#22c55e", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#64748b"];
 const CATEGORY_ICON: Record<string, typeof Home> = {
   Rent: Home, Salaries: Users, Utilities: Zap, "Stock Purchase": Package, Transport: Truck,
   Maintenance: Wrench, Marketing: Megaphone, "Office Supplies": Receipt, "Mobile & Internet": Smartphone, Misc: MoreHorizontal,
@@ -154,7 +154,7 @@ export default function ExpensesPage() {
       <div className="space-y-4">
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-3.5 xl:grid-cols-4">
-          <Kpi icon={<Wallet size={16} />} iconBg="bg-[var(--brand-soft)] text-[#0057ff]" label="Today's Expenses" value={inr(ov?.today)}
+          <Kpi icon={<Wallet size={16} />} iconBg="bg-[var(--brand-soft)] text-[var(--brand)]" label="Today's Expenses" value={inr(ov?.today)}
             sub={todayDelta == null ? "vs yesterday" : `${Math.abs(todayDelta)}% vs yesterday`} subTone={todayDelta == null ? "muted" : todayDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
           <Kpi icon={<CalendarDays size={16} />} iconBg="bg-violet-50 text-violet-600" label="This Month's Expenses" value={inr(ov?.month)}
             sub={monthDelta == null ? "vs last month" : `${Math.abs(monthDelta)}% vs last month`} subTone={monthDelta == null ? "muted" : monthDelta <= 0 ? "good" : "bad"} loading={overviewQ.isLoading} />
@@ -187,7 +187,7 @@ export default function ExpensesPage() {
             </SelectContent>
           </Select>
           <Button variant="outline" className="h-10 gap-2 rounded-[10px] font-bold" onClick={exportCsv} disabled={rows.length === 0}><Download size={15} /> Export</Button>
-          <Button onClick={openAdd} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-10 gap-2 rounded-[10px] font-bold text-white hover:opacity-95">
+          <Button onClick={openAdd} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-10 gap-2 rounded-[10px] font-bold text-white hover:opacity-95">
             <Plus size={16} /> Add Expense
           </Button>
         </div>
@@ -196,7 +196,7 @@ export default function ExpensesPage() {
         <div className="grid grid-cols-1 gap-4 min-[430px]:grid-cols-2 xl:grid-cols-[380px_1fr]">
           {/* Category donut */}
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white p-5 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
-            <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Expenses by Category</h3>
+            <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">Expenses by Category</h3>
             <p className="text-[11px] text-[#64748b]">This month</p>
             {donutData.length === 0 ? (
               <p className="py-12 text-center text-[12px] text-[#94a3b8]">No expenses this month yet.</p>
@@ -214,7 +214,7 @@ export default function ExpensesPage() {
                   <div className="pointer-events-none absolute inset-0 grid place-items-center">
                     <div className="text-center">
                       <p className="text-[9px] font-semibold uppercase tracking-wide text-[#94a3b8]">Total</p>
-                      <p className="font-display text-[15px] font-black text-[#102347]">{inr(ov?.month)}</p>
+                      <p className="font-display text-[15px] font-black text-[var(--brand-ink)]">{inr(ov?.month)}</p>
                     </div>
                   </div>
                 </div>
@@ -223,7 +223,7 @@ export default function ExpensesPage() {
                     <li key={d.name} className="flex items-center gap-2 text-[11.5px]">
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.color }} />
                       <span className="flex-1 truncate font-semibold text-[#344668]">{d.name}</span>
-                      <span className="shrink-0 font-bold text-[#102347]">{inr(d.value)}</span>
+                      <span className="shrink-0 font-bold text-[var(--brand-ink)]">{inr(d.value)}</span>
                       <span className="shrink-0 text-[10px] text-[#94a3b8]">({ov?.month ? Math.round((d.value / ov.month) * 100) : 0}%)</span>
                     </li>
                   ))}
@@ -236,7 +236,7 @@ export default function ExpensesPage() {
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white p-5 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Monthly Spending Trend</h3>
+                <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">Monthly Spending Trend</h3>
                 <p className="text-[11px] text-[#64748b]">Last 6 months</p>
               </div>
             </div>
@@ -246,12 +246,12 @@ export default function ExpensesPage() {
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "#94a3b8" }} />
                   <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: "#94a3b8" }} tickFormatter={(v: number) => (v >= 1000 ? `₹${Math.round(v / 1000)}K` : `₹${v}`)} width={48} />
                   <Tooltip formatter={(v: number) => [inr(v), "Spent"]} labelStyle={{ fontWeight: 700 }} />
-                  <Line type="monotone" dataKey="total" stroke="#0057ff" strokeWidth={2.5} dot={{ r: 3.5, fill: "#fff", stroke: "#0057ff", strokeWidth: 2 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="total" stroke="var(--brand)" strokeWidth={2.5} dot={{ r: 3.5, fill: "#fff", stroke: "var(--brand)", strokeWidth: 2 }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
             <div className="mt-2 flex items-center justify-between border-t border-[#eef2f8] pt-2.5 text-[12px]">
-              <span className="text-[#64748b]">Average monthly expense: <span className="font-bold text-[#102347]">{inr(ov?.monthlyAverage)}</span></span>
+              <span className="text-[#64748b]">Average monthly expense: <span className="font-bold text-[var(--brand-ink)]">{inr(ov?.monthlyAverage)}</span></span>
               {trendDelta != null && (
                 <span className={cn("flex items-center gap-1 font-bold", trendDelta <= 0 ? "text-emerald-600" : "text-rose-500")}>
                   {trendDelta <= 0 ? <ArrowDown size={13} /> : <ArrowUp size={13} />}{Math.abs(trendDelta)}% vs 6 months ago
@@ -264,7 +264,7 @@ export default function ExpensesPage() {
         {/* All Expenses table */}
         <div className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
           <div className="flex items-center gap-2 border-b border-[#eef2f8] px-5 py-3.5">
-            <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">All Expenses</h3>
+            <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">All Expenses</h3>
             <span className="text-[11px] text-[#94a3b8]">{rows.length === 0 ? "" : `Showing ${(safePage - 1) * pageSize + 1} to ${Math.min(safePage * pageSize, rows.length)} of ${rows.length} expenses`}</span>
           </div>
           {expensesQ.isLoading ? (
@@ -273,8 +273,8 @@ export default function ExpensesPage() {
             <div className="py-12 text-center text-[13px] text-rose-600">Couldn't load expenses. Check your connection and retry.</div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#0057ff]"><Receipt size={22} /></span>
-              <p className="text-[13px] font-bold text-[#102347]">No expenses found</p>
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Receipt size={22} /></span>
+              <p className="text-[13px] font-bold text-[var(--brand-ink)]">No expenses found</p>
               <p className="text-[12px] text-[#64748b]">Add rent, salary, utilities and other costs to track your profit.</p>
             </div>
           ) : (
@@ -288,7 +288,7 @@ export default function ExpensesPage() {
                       <div className="flex items-start gap-3">
                         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px]" style={{ background: `${color}1a`, color }}><Icon size={18} /></span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[14px] font-extrabold text-[#07133f]">{e.title}</p>
+                          <p className="truncate text-[14px] font-extrabold text-[var(--brand-ink)]">{e.title}</p>
                           <p className="mt-1 truncate text-xs font-medium text-[#53617d]">{e.category}{e.vendor ? ` • ${e.vendor}` : ""}</p>
                           <div className="mt-2 flex flex-wrap items-center gap-2">
                             <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", MODE_BADGE[e.paymentMode] ?? MODE_BADGE.other)}>{MODES.find((m) => m.value === e.paymentMode)?.label ?? e.paymentMode}</span>
@@ -296,7 +296,7 @@ export default function ExpensesPage() {
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <p className="text-[15px] font-black text-[#07133f]">{inr(e.amount)}</p>
+                          <p className="text-[15px] font-black text-[var(--brand-ink)]">{inr(e.amount)}</p>
                           <p className="mt-1 text-[11px] font-medium text-[#71809b]">{fmtDate(e.spentAt)}</p>
                         </div>
                       </div>
@@ -331,7 +331,7 @@ export default function ExpensesPage() {
                         <tr key={e.id} className={i < pageRows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
                           <td className="whitespace-nowrap px-4 py-3 text-[#52627e]">{fmtDate(e.spentAt)}</td>
                           <td className="px-4 py-3">
-                            <span className="flex items-center gap-2 font-bold text-[#102347]">
+                            <span className="flex items-center gap-2 font-bold text-[var(--brand-ink)]">
                               <span className="grid h-6 w-6 shrink-0 place-items-center rounded-[6px]" style={{ background: `${color}1a`, color }}><Icon size={13} /></span>
                               {e.category}
                             </span>
@@ -339,7 +339,7 @@ export default function ExpensesPage() {
                           <td className="max-w-[160px] truncate px-4 py-3 text-[#344668]">{e.vendor || "—"}</td>
                           <td className="max-w-[200px] truncate px-4 py-3 text-[#344668]" title={e.notes ?? undefined}>{e.title}</td>
                           <td className="px-4 py-3"><span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", MODE_BADGE[e.paymentMode] ?? MODE_BADGE.other)}>{MODES.find((m) => m.value === e.paymentMode)?.label ?? e.paymentMode}</span></td>
-                          <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[#102347]">{inr(e.amount)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[var(--brand-ink)]">{inr(e.amount)}</td>
                           <td className="max-w-[120px] truncate px-4 py-3 text-[#52627e]">{e.recordedBy || "—"}</td>
                           <td className="px-4 py-3">
                             <span className={cn("rounded-[7px] px-2 py-[3px] text-[11px] font-bold", e.status === "pending" ? CHIP_TONES.amber : CHIP_TONES.green)}>{e.status === "pending" ? "Pending" : "Paid"}</span>
@@ -394,7 +394,7 @@ export default function ExpensesPage() {
 
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <DialogContent className="max-w-[380px]">
-          <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[#0f1e3d]">Delete this expense?</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Delete this expense?</DialogTitle></DialogHeader>
           <p className="text-[12px] text-[#52627e]">"{deleting?.title}" ({deleting ? inr(deleting.amount) : ""}) will move to the recycle bin. You can restore it later.</p>
           <div className="flex gap-2.5 pt-2">
             <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => setDeleting(null)}>Cancel</Button>
@@ -416,7 +416,7 @@ function Kpi({ icon, iconBg, label, value, sub, subTone, loading }: { icon: Reac
         <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[10px]", iconBg)}>{icon}</span>
         <p className="text-[11.5px] font-semibold text-[#64748b]">{label}</p>
       </div>
-      <p className="mt-2 truncate font-display text-[22px] font-black leading-none text-[#102347]">{loading ? "…" : value}</p>
+      <p className="mt-2 truncate font-display text-[22px] font-black leading-none text-[var(--brand-ink)]">{loading ? "…" : value}</p>
       <p className={cn("mt-1.5 flex items-center gap-1 text-[11px] font-bold", subClass)}>
         {subTone === "good" && <ArrowDown size={11} />}
         {subTone === "bad" && <ArrowUp size={11} />}
@@ -430,7 +430,7 @@ function PageBtn({ children, active, disabled, onClick }: { children: React.Reac
   return (
     <button onClick={onClick} disabled={disabled}
       className={cn("grid h-7 min-w-7 place-items-center rounded-[7px] px-1.5 text-[12px] font-bold transition-colors",
-        active ? "bg-[#0057ff] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
+        active ? "bg-[var(--brand)] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
       {children}
     </button>
   );
@@ -483,7 +483,7 @@ function ExpensePanel({ open, editing, saving, width, onResizeStart, onClose, on
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Expense" : "Add New Expense"}</h2>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing ? "Edit Expense" : "Add New Expense"}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this business expense" : "Record a new business expense"}</p>
         </div>
         <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
@@ -524,7 +524,7 @@ function ExpensePanel({ open, editing, saving, width, onResizeStart, onClose, on
 
           <div className="flex items-center justify-between rounded-[10px] border border-[#e7edf7] px-3.5 py-2.5">
             <div>
-              <p className="text-[13px] font-bold text-[#102347]">Recurring Expense</p>
+              <p className="text-[13px] font-bold text-[var(--brand-ink)]">Recurring Expense</p>
               <p className="text-[11px] text-[#64748b]">Repeats on a schedule (rent, salary…)</p>
             </div>
             <Switch checked={recurring} onCheckedChange={(v) => form.setValue("recurring", v)} />
@@ -545,7 +545,7 @@ function ExpensePanel({ open, editing, saving, width, onResizeStart, onClose, on
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           <div className="grid grid-cols-2 gap-2.5">
             <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+            <Button type="submit" disabled={saving} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
               {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><Receipt size={15} /> Save Expense</>}
             </Button>
           </div>

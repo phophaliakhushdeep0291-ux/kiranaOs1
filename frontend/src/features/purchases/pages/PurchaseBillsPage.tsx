@@ -177,6 +177,15 @@ export default function PurchaseBillsPage() {
         const next = await FinancialAggregationService.buildSnapshot().catch(() => null);
         if (!active) return;
 
+        // Paint the complete local snapshot before attempting cloud hydration.
+        // Previously the first visit kept the whole page behind a loader until
+        // the sync pull finished (or timed out), even though IndexedDB already
+        // contained everything needed to render purchases offline.
+        setSnapshot(next);
+        await reloadLocal();
+        if (!active) return;
+        if (showLoader) setLoading(false);
+
         if (
           !authLoading &&
           isAuthenticated &&
@@ -191,12 +200,8 @@ export default function PurchaseBillsPage() {
             if (!active) return;
             setSnapshot(afterImport);
             await reloadLocal();
-            return;
           }
         }
-
-        setSnapshot(next);
-        await reloadLocal();
       } finally {
         if (active && showLoader) setLoading(false);
       }
@@ -569,7 +574,7 @@ export default function PurchaseBillsPage() {
         {/* Purchase Bills table */}
         <div id="purchase-table" className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
           <div className="flex flex-col gap-3 border-b border-[#eef2f8] px-5 py-3.5 xl:flex-row xl:items-center xl:justify-between">
-            <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Purchase Bills</h3>
+            <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">Purchase Bills</h3>
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative w-full sm:w-64">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
@@ -591,10 +596,10 @@ export default function PurchaseBillsPage() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={exportCsv} disabled={filtered.length === 0} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
+              <Button onClick={exportCsv} disabled={filtered.length === 0} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
                 <Upload size={13} className="rotate-180" /> Export
               </Button>
-              <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
+              <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
                 <Plus size={14} /> Add Purchase
               </Button>
             </div>
@@ -627,8 +632,8 @@ export default function PurchaseBillsPage() {
             <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#64748b]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#0057ff]"><Truck size={22} /></span>
-              <p className="text-[13px] font-bold text-[#102347]">No purchase bills yet</p>
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Truck size={22} /></span>
+              <p className="text-[13px] font-bold text-[var(--brand-ink)]">No purchase bills yet</p>
               <p className="text-[12px] text-[#64748b]">Click "Add Purchase" to record your first supplier bill.</p>
             </div>
           ) : (
@@ -640,12 +645,12 @@ export default function PurchaseBillsPage() {
                     <article key={`${row.source}:${row.id}`} className="rounded-[16px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-[14px] font-extrabold text-[#07133f]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber}</p>
+                          <p className="truncate text-[14px] font-extrabold text-[var(--brand-ink)]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber}</p>
                           <p className="mt-1 truncate text-xs font-bold text-[#344668]">{row.supplierName}</p>
                           <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{safeDate(row.date)} • {rowItems(row) ?? 0} items</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[15px] font-black text-[#07133f]">{fmt(row.amount)}</p>
+                          <p className="text-[15px] font-black text-[var(--brand-ink)]">{fmt(row.amount)}</p>
                           <span className={cn("mt-1 inline-flex rounded-[7px] px-2 py-[3px] text-[11px] font-bold", STATUS_CLS[status] ?? STATUS_CLS.due)}>{STATUS_LABEL[status] ?? status}</span>
                         </div>
                       </div>
@@ -695,13 +700,13 @@ export default function PurchaseBillsPage() {
                       return (
                         <tr key={`${row.source}:${row.id}`} className={i < pageRows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
                           <td className="px-4 py-3">
-                            <p className="font-bold text-[#102347]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber}</p>
+                            <p className="font-bold text-[var(--brand-ink)]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber}</p>
                             <p className="text-[10px] text-[#94a3b8]">{row.source === "purchase_bill" ? "Purchase bill" : "Inventory movement"}</p>
                           </td>
                           <td className="px-4 py-3 font-semibold text-[#344668]">{row.supplierName}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-[#52627e]">{safeDate(row.date)}</td>
                           {cols.items && <td className="px-4 py-3 text-right text-[#52627e]">{(() => { const n = rowItems(row); return n != null ? n.toLocaleString("en-IN") : "—"; })()}</td>}
-                          <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[#102347]">{fmt(row.amount)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-black text-[var(--brand-ink)]">{fmt(row.amount)}</td>
                           {cols.paid && <td className="whitespace-nowrap px-4 py-3 text-right text-[#344668]">{fmt(row.paid)}</td>}
                           <td className={cn("whitespace-nowrap px-4 py-3 text-right font-bold", row.due > 0 ? "text-[#ef4444]" : "text-[#344668]")}>{fmt(row.due)}</td>
                           {cols.mode && <td className="px-4 py-3"><span className={cn("whitespace-nowrap rounded-[7px] px-2 py-[3px] text-[11px] font-bold", MODE_CLS[row.paymentMode] ?? "bg-[#eef2f8] text-[#64748b]")}>{modeLabel(row.paymentMode)}</span></td>}
@@ -760,7 +765,7 @@ export default function PurchaseBillsPage() {
           {/* Top suppliers */}
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3">
-              <h3 className="font-display text-[13.5px] font-black tracking-tight text-[#102347]">Top Suppliers</h3>
+              <h3 className="font-display text-[13.5px] font-black tracking-tight text-[var(--brand-ink)]">Top Suppliers</h3>
               <Select value={topRange} onValueChange={(value) => setTopRange(value as "month" | "all")}>
                 <SelectTrigger className="h-7 w-[110px] text-[11px]"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="month">This Month</SelectItem><SelectItem value="all">All Time</SelectItem></SelectContent>
@@ -769,8 +774,8 @@ export default function PurchaseBillsPage() {
             <div className="px-5 py-2">
               {topSuppliers.length === 0 ? <EmptyHint text="No purchases in this period." /> : topSuppliers.map((s, i) => (
                 <div key={s.name} className={cn("flex items-center gap-3 py-2.5", i < topSuppliers.length - 1 && "border-b border-[#eef2f8]")}>
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-[11px] font-black text-[#0057ff]">{i + 1}</span>
-                  <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-[#102347]">{s.name}</p>
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-[11px] font-black text-[var(--brand)]">{i + 1}</span>
+                  <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-[var(--brand-ink)]">{s.name}</p>
                   <span className="shrink-0 text-[11.5px] font-bold text-[#344668]">{fmt(s.amount)} <span className="text-[10px] font-semibold text-[#94a3b8]">({s.share}%)</span></span>
                 </div>
               ))}
@@ -781,7 +786,7 @@ export default function PurchaseBillsPage() {
           {/* Recent activity */}
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3">
-              <h3 className="font-display text-[13.5px] font-black tracking-tight text-[#102347]">Recent Purchase Activity</h3>
+              <h3 className="font-display text-[13.5px] font-black tracking-tight text-[var(--brand-ink)]">Recent Purchase Activity</h3>
               <a href="#purchase-table" className="text-[11.5px] font-bold text-[var(--brand)] hover:underline">View all</a>
             </div>
             <div className="px-5 py-2">
@@ -789,7 +794,7 @@ export default function PurchaseBillsPage() {
                 <div key={`${row.source}:${row.id}`} className={cn("flex items-center gap-3 py-2.5", i < recentRows.length - 1 && "border-b border-[#eef2f8]")}>
                   <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[8px]", row.due > 0 ? "bg-[#fdf3e1] text-[#d97706]" : "bg-[#e6f7ee] text-[#16a34a]")}><FileText size={14} /></span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-bold text-[#102347]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber} <span className="font-medium text-[#64748b]">from {row.supplierName}</span></p>
+                    <p className="truncate text-[12px] font-bold text-[var(--brand-ink)]">{row.invoiceNumber === "-" ? "Local purchase" : row.invoiceNumber} <span className="font-medium text-[#64748b]">from {row.supplierName}</span></p>
                     <p className="text-[10.5px] text-[#94a3b8]">{fmt(row.amount)} <span className="text-[#cbd5e1]">•</span> {STATUS_LABEL[effectiveStatus(row)]} <span className="text-[#cbd5e1]">•</span> {safeDate(row.date)}</p>
                   </div>
                 </div>
@@ -800,7 +805,7 @@ export default function PurchaseBillsPage() {
           {/* Due alerts */}
           <div className="rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3">
-              <h3 className="font-display text-[13.5px] font-black tracking-tight text-[#102347]">Purchase Due Alerts</h3>
+              <h3 className="font-display text-[13.5px] font-black tracking-tight text-[var(--brand-ink)]">Purchase Due Alerts</h3>
               <button onClick={() => { setShowFilters(true); setStatusFilter("due"); }} className="text-[11.5px] font-bold text-[var(--brand)] hover:underline">View all</button>
             </div>
             <div className="px-5 py-2">
@@ -809,9 +814,9 @@ export default function PurchaseBillsPage() {
                   {dueAlerts.map((row, i) => (
                     <div key={`${row.source}:${row.id}`} className={cn("flex items-center gap-3 py-2.5", i < dueAlerts.length - 1 && "border-b border-[#eef2f8]")}>
                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[#fdebeb] text-[#ef4444]"><AlertTriangle size={14} /></span>
-                      <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-[#102347]">{row.supplierName}</p>
+                      <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-[var(--brand-ink)]">{row.supplierName}</p>
                       <div className="shrink-0 text-right">
-                        <p className="text-[12.5px] font-black text-[#102347]">{fmt(row.due)}</p>
+                        <p className="text-[12.5px] font-black text-[var(--brand-ink)]">{fmt(row.due)}</p>
                         <p className="text-[10px] font-bold text-[#ef4444]">Due {daysSince(row.date)} day{daysSince(row.date) === 1 ? "" : "s"}</p>
                       </div>
                     </div>
@@ -1125,7 +1130,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">Add Purchase</h2>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Add Purchase</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">Add a new purchase bill</p>
         </div>
         <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
@@ -1201,7 +1206,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
               </Select>
               <Input className="h-9 px-2 text-[12px]" type="number" min="0" placeholder="0" value={line.qty} onChange={(e) => setLine(line.key, { qty: e.target.value })} />
               <Input className="h-9 px-2 text-[12px]" type="number" min="0" step="0.01" placeholder="₹0" value={line.cost} onChange={(e) => setLine(line.key, { cost: e.target.value })} />
-              <span className="truncate text-right text-[12px] font-bold text-[#102347]">{fmt(lineTotal(line))}</span>
+              <span className="truncate text-right text-[12px] font-bold text-[var(--brand-ink)]">{fmt(lineTotal(line))}</span>
               <button onClick={() => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== line.key) : prev))} className="grid h-7 w-7 place-items-center rounded text-rose-400 hover:bg-rose-50" aria-label="Remove line"><Trash2 size={13} /></button>
             </div>
           ))}
@@ -1212,8 +1217,8 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
 
           {/* Totals strip */}
           <div className="grid grid-cols-2 gap-y-2 rounded-[10px] bg-[#f7f9fd] px-3.5 py-3 sm:grid-cols-4">
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Total Items</p><p className="text-[13px] font-black text-[#102347]">{totalItems.toLocaleString("en-IN")}</p></div>
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Total Amount</p><p className="text-[13px] font-black text-[#102347]">{fmt(totalAmount)}</p></div>
+            <div><p className="text-[10px] font-semibold text-[#64748b]">Total Items</p><p className="text-[13px] font-black text-[var(--brand-ink)]">{totalItems.toLocaleString("en-IN")}</p></div>
+            <div><p className="text-[10px] font-semibold text-[#64748b]">Total Amount</p><p className="text-[13px] font-black text-[var(--brand-ink)]">{fmt(totalAmount)}</p></div>
             <div><p className="text-[10px] font-semibold text-[#64748b]">Paid Amount</p><p className="text-[13px] font-black text-[#16a34a]">{fmt(paidAmount)}</p></div>
             <div><p className="text-[10px] font-semibold text-[#64748b]">Due Amount</p><p className="text-[13px] font-black text-[#ef4444]">{fmt(dueAmount)}</p></div>
           </div>
@@ -1245,7 +1250,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
             maxLength={250}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Enter any notes about this purchase…"
-            className="h-20 w-full resize-none rounded-[10px] border border-[#e2e8f0] px-3 py-2 text-[12.5px] text-[#102347] outline-none placeholder:text-[#9aa6bb] focus:border-[var(--brand)]"
+            className="h-20 w-full resize-none rounded-[10px] border border-[#e2e8f0] px-3 py-2 text-[12.5px] text-[var(--brand-ink)] outline-none placeholder:text-[#9aa6bb] focus:border-[var(--brand)]"
           />
           <p className="text-right text-[10px] text-[#94a3b8]">{notes.length}/250</p>
         </section>
@@ -1254,7 +1259,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
       <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
         <div className="grid grid-cols-2 gap-2.5">
           <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
-          <Button type="button" onClick={() => void save()} disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+          <Button type="button" onClick={() => void save()} disabled={saving} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
             {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><ClipboardList size={15} /> Save Purchase</>}
           </Button>
         </div>
@@ -1282,7 +1287,7 @@ function Kpi({ label, value, icon, iconBg, sub, subTone = "muted", delta, deltaS
         <p className="text-[11.5px] font-semibold leading-tight text-[#64748b]">{label}</p>
         <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[10px]", iconBg)}>{icon}</span>
       </div>
-      <p className="truncate font-display text-[21px] font-black leading-none text-[#102347]">{loading ? "…" : value}</p>
+      <p className="truncate font-display text-[21px] font-black leading-none text-[var(--brand-ink)]">{loading ? "…" : value}</p>
       {line}
     </div>
   );
@@ -1295,7 +1300,7 @@ function Insight({ icon, iconBg, label, value, sub, subTone = "muted" }: { icon:
       <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", iconBg)}>{icon}</span>
       <div className="min-w-0">
         <p className="text-[10.5px] font-semibold text-[#64748b]">{label}</p>
-        <p className="truncate text-[13px] font-black text-[#102347]">{value}</p>
+        <p className="truncate text-[13px] font-black text-[var(--brand-ink)]">{value}</p>
         <p className={cn("truncate text-[10.5px] font-bold", cls)}>{sub}</p>
       </div>
     </div>
@@ -1306,7 +1311,7 @@ function PageBtn({ children, active, disabled, onClick }: { children: React.Reac
   return (
     <button onClick={onClick} disabled={disabled}
       className={cn("grid h-7 min-w-7 place-items-center rounded-[7px] px-1.5 text-[12px] font-bold transition-colors",
-        active ? "bg-[#0057ff] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
+        active ? "bg-[var(--brand)] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
       {children}
     </button>
   );
