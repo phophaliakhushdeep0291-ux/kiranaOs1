@@ -37,14 +37,21 @@ function uniqueById<T extends AnyRecord>(rows: T[]): T[] {
 
 const PRODUCT_ID_KEYS = ["id", "server_id", "serverId", "clientProductId", "client_product_id", "local_id", "localId"];
 const CUSTOMER_ID_KEYS = ["id", "server_id", "serverId", "clientCustomerId", "client_customer_id", "local_id", "localId"];
+const BILL_ID_KEYS = ["id", "server_id", "serverId", "clientBillId", "client_bill_id", "localBillId", "local_bill_id", "local_id", "localId"];
 
-// Bulk hydration overwrites local rows wholesale. Preserve UNSYNCED local edits/creates
-// (sync_status === "pending_sync") so a re-import doesn't clobber a change that hasn't pushed
-// yet — e.g. a just-edited stock/price/barcode. Pending local rows win until they sync (the
-// incremental pull already conflict-protects edits; this guards the bulk path).
+// A row is "unsynced" — carrying local work the server hasn't accepted — in any of these
+// states. A push that FAILED (e.g. a soft-delete whose CANCEL_BILL was rejected) lands in
+// "failed"/"conflict", not "pending_sync", so preserving only pending_sync would still let
+// bulk hydration resurrect it. Matches the udhar-ledger import below.
+const UNSYNCED_LOCAL_STATUSES = new Set(["pending_sync", "syncing", "failed", "conflict", "local_only"]);
+
+// Bulk hydration overwrites local rows wholesale. Preserve UNSYNCED local edits/creates/deletes
+// so a re-import doesn't clobber a change that hasn't been accepted by the server yet — e.g. a
+// just-edited stock/price/barcode, or a bill moved to the recycle bin. Local rows win until they
+// sync (the incremental pull already conflict-protects edits; this guards the bulk path).
 async function preserveLocalPending(table: string, serverRows: AnyRecord[], idKeys: string[]): Promise<AnyRecord[]> {
   const local = await offlineDB.getAll<AnyRecord>(table).catch(() => []);
-  const pending = local.filter((row) => String(row.sync_status) === "pending_sync");
+  const pending = local.filter((row) => UNSYNCED_LOCAL_STATUSES.has(String(row.sync_status ?? "synced").toLowerCase()));
   if (pending.length === 0) return serverRows;
   const pendingKeys = new Set<string>();
   for (const row of pending) for (const key of idKeys) {
@@ -135,8 +142,12 @@ async function importBills() {
   }
 
   if (bills.length > 0) {
-    await offlineDB.putMany("bills", bills as unknown as AnyRecord[]);
-    writeInstantCache("bills", bills);
+    // Preserve locally-unsynced bills (soft-deletes, cancellations, edits not yet accepted by the
+    // server) so a reload's bulk import doesn't resurrect a bill the shopkeeper just recycled —
+    // the server still lists it as active until its CANCEL_BILL/edit op syncs.
+    const merged = await preserveLocalPending("bills", bills as unknown as AnyRecord[], BILL_ID_KEYS);
+    await offlineDB.putMany("bills", merged);
+    writeInstantCache("bills", merged);
   }
   if (billItems.length > 0) await offlineDB.putMany("bill_items", uniqueById(billItems));
   if (payments.length > 0) {

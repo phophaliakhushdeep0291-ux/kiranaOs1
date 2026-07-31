@@ -1,3 +1,7 @@
+-- @replay-safe: every statement is idempotent (CREATE TABLE/INDEX IF NOT EXISTS,
+-- ADD COLUMN IF NOT EXISTS, DROP CONSTRAINT IF EXISTS before each ADD CONSTRAINT),
+-- so the deploy script (scripts/deploy-postgres-migrations.js) may auto-resolve
+-- and replay it on a P3009 failure without double-applying.
 CREATE TABLE IF NOT EXISTS "PurchaseReturn" (
   "id" TEXT NOT NULL, "shopId" TEXT NOT NULL, "locationId" TEXT NOT NULL, "supplierId" TEXT, "purchaseReceiptId" TEXT NOT NULL,
   "returnNumber" TEXT NOT NULL, "refundMode" TEXT NOT NULL DEFAULT 'supplier_credit', "totalAmount" DOUBLE PRECISION NOT NULL,

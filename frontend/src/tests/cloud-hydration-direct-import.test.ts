@@ -23,6 +23,20 @@ describe("cloud hydration direct import wiring", () => {
     expect(hydration).toContain("writeInstantCache(\"bills\"");
   });
 
+  it("does not resurrect locally-unsynced bills (soft-deletes/cancels) on bulk reload import", () => {
+    // Regression: importBills used to putMany server bills wholesale, with no preserveLocalPending
+    // guard (unlike products/customers/inventory). A bill moved to the recycle bin whose CANCEL_BILL
+    // had not yet synced was still ACTIVE on the server, so a reload's hydration overwrote the local
+    // deleted_at and the bill reappeared.
+    expect(hydration).toContain('preserveLocalPending("bills"');
+    // And a soft-delete whose push already FAILED sits in "failed"/"conflict", not "pending_sync" —
+    // the guard must protect the whole unsynced set, not just pending_sync.
+    expect(hydration).toContain("UNSYNCED_LOCAL_STATUSES");
+    for (const status of ["pending_sync", "syncing", "failed", "conflict", "local_only"]) {
+      expect(hydration).toContain(`"${status}"`);
+    }
+  });
+
   it("runs direct cloud hydration before normal sync cycle after login", () => {
     expect(bootstrap).toContain("const snapshot = await hydrateFromBackendSnapshot()");
     expect(bootstrap.indexOf("const snapshot = await hydrateFromBackendSnapshot()")).toBeLessThan(bootstrap.indexOf("const syncResult = await runSyncCycle()"));

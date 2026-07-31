@@ -1,3 +1,8 @@
+-- @replay-safe: every statement below is idempotent (IF NOT EXISTS guards), so if
+-- this migration fails mid-transaction the deploy script
+-- (scripts/deploy-postgres-migrations.js) can mark it rolled-back and replay it
+-- without double-applying. Keep it idempotent if you edit it.
+--
 -- Per-packaging stock: groundwork only. No behaviour change.
 --
 -- A product can already be sold in several packagings, but stock is a single
@@ -8,21 +13,21 @@
 -- pooled behaviour every existing product already has.
 
 ALTER TABLE "Product"
-  ADD COLUMN "packagingMode" TEXT NOT NULL DEFAULT 'pooled';
+  ADD COLUMN IF NOT EXISTS "packagingMode" TEXT NOT NULL DEFAULT 'pooled';
 
 -- Per-packaging counts, held in the unit's own counts (packets, boxes) rather
 -- than product base units, so "4 of the 500 g packs left" needs no conversion.
 -- NULL means "this packaging does not carry its own stock" — the pooled default.
 ALTER TABLE "ProductSellingUnit"
-  ADD COLUMN "onHandQty" DOUBLE PRECISION,
-  ADD COLUMN "lowStockThreshold" DOUBLE PRECISION,
-  ADD COLUMN "reorderLevel" DOUBLE PRECISION;
+  ADD COLUMN IF NOT EXISTS "onHandQty" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "lowStockThreshold" DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS "reorderLevel" DOUBLE PRECISION;
 
 -- Attribute a stock movement to a packaging, so a per-pack balance can be
 -- rebuilt and audited from the ledger. NULL on pooled products and legacy rows.
 ALTER TABLE "StockLedger"
-  ADD COLUMN "sellingUnitId" TEXT,
-  ADD COLUMN "sellingUnitQty" DOUBLE PRECISION;
+  ADD COLUMN IF NOT EXISTS "sellingUnitId" TEXT,
+  ADD COLUMN IF NOT EXISTS "sellingUnitQty" DOUBLE PRECISION;
 
-CREATE INDEX "StockLedger_shopId_sellingUnitId_idx"
+CREATE INDEX IF NOT EXISTS "StockLedger_shopId_sellingUnitId_idx"
   ON "StockLedger"("shopId", "sellingUnitId");
