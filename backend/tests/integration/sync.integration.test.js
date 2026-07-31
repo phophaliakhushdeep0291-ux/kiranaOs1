@@ -1261,6 +1261,27 @@ if (ctx.skip) {
       assert.ok(log);
       const pulled = assertSuccess(await ctx.get(`/api/sync/pull?since=1970-01-01T00%3A00%3A00.000Z&afterSeq=${Number(log.seq) - 1}&limit=10`, { token: ownerAuth.accessToken, headers: deviceHeaders }));
       assert.equal(pulled.changes.some((change) => change.entity_type === "expense" && change.entity?.title === "Generator diesel"), true);
+
+      const expense = await ctx.db.expense.findFirstOrThrow({ where: { shopId: tenant.shop.id, idempotencyKey: "create-expense:expense_local_1" } });
+      const updateEvent = {
+        eventId: "expense-update-offline-1",
+        type: "UPDATE_EXPENSE",
+        payload: { expenseId: expense.id, localExpenseId: "expense_local_1", changes: { ...event.payload.expense, amount: 900 } },
+      };
+      assert.equal(assertSuccess(await ctx.post("/api/sync/push", { events: [updateEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders })).summary.synced, 1);
+      assert.equal(assertSuccess(await ctx.post("/api/sync/push", { events: [updateEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders })).summary.duplicates, 1);
+      assert.equal((await ctx.db.expense.findUnique({ where: { id: expense.id } })).amount, 900);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "expense_update", sourceId: `${expense.id}:expense-update-offline-1` } }), 4);
+
+      const deleteEvent = {
+        eventId: "expense-delete-offline-1",
+        type: "DELETE_EXPENSE",
+        payload: { expenseId: expense.id, localExpenseId: "expense_local_1", ownerPin: "1234" },
+      };
+      assert.equal(assertSuccess(await ctx.post("/api/sync/push", { events: [deleteEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders })).summary.synced, 1);
+      assert.equal(assertSuccess(await ctx.post("/api/sync/push", { events: [deleteEvent] }, { token: ownerAuth.accessToken, headers: deviceHeaders })).summary.duplicates, 1);
+      assert.ok((await ctx.db.expense.findUnique({ where: { id: expense.id } })).deletedAt);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, sourceType: "expense_delete", sourceId: `${expense.id}:expense-delete-offline-1` } }), 2);
     });
 
     test("device sequence acknowledgements are monotonic, bounded, role-scoped, and tenant-scoped", async () => {

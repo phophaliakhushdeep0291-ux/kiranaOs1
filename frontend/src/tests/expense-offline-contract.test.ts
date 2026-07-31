@@ -12,10 +12,15 @@ describe("offline expense contract", () => {
     expect(actions).toContain('offlineDB.transaction(["expenses", "sync_outbox"]');
     expect(actions).toContain('operation_type: "CREATE_EXPENSE"');
     expect(actions).toContain('idempotency_key: idempotencyKey');
+    expect(actions).toContain('operation_type: "UPDATE_EXPENSE"');
+    expect(actions).toContain('operation_type: "DELETE_EXPENSE"');
+    expect(actions).toContain('if (!/^\\d{4}$/.test(ownerPin))');
   });
 
   it("renders local expenses immediately and pulls cross-device changes", () => {
     expect(page).toContain("createExpenseLocalFirst(vars.data)");
+    expect(page).toContain("updateExpenseLocalFirst(vars.id, vars.data)");
+    expect(page).toContain("deleteExpenseLocalFirst(vars.id, vars.ownerPin)");
     expect(page).toContain("mergeExpenseSnapshots");
     expect(pull).toContain('["expenses", "expense"]');
   });

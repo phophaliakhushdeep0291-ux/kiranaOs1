@@ -17,9 +17,8 @@ import {
   ArrowDown, ArrowUp, CalendarDays, Clock3, Download, Home, Loader2, Megaphone, MoreHorizontal,
   Package, Pencil, PieChart as PieIcon, Plus, Receipt, Search, Smartphone, Trash2, Truck, Users, Wallet, Wrench, X, Zap,
 } from "lucide-react";
-import { listExpenses, getExpenseOverview, updateExpense, deleteExpense } from "@/features/expenses/api";
-import { cacheServerExpenses, createExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots } from "@/features/expenses/local-actions";
-import { useOfflineStatus } from "@/features/sync";
+import { listExpenses, getExpenseOverview } from "@/features/expenses/api";
+import { cacheServerExpenses, createExpenseLocalFirst, deleteExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots, updateExpenseLocalFirst } from "@/features/expenses/local-actions";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import type { Expense, ExpenseInput } from "@/types/api";
 
@@ -69,7 +68,6 @@ type ExpenseFormData = z.infer<typeof expenseFormSchema>;
 export default function ExpensesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isOnline } = useOfflineStatus();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [rangeOption, setRangeOption] = useState("this-month");
@@ -78,6 +76,7 @@ export default function ExpensesPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState<Expense | null>(null);
+  const [deleteOwnerPin, setDeleteOwnerPin] = useState("");
   const [localExpenses, setLocalExpenses] = useState<Expense[]>([]);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:expenses-panel-width", { defaultWidth: 420 });
 
@@ -103,25 +102,17 @@ export default function ExpensesPage() {
 
   const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ["expenses"] }); void queryClient.invalidateQueries({ queryKey: ["expense-overview"] }); };
 
-  const offlineNotice = () => toast({
-    title: "You're offline",
-    description: "Creating expenses works offline. Reconnect before editing or deleting an existing expense.",
-    variant: "destructive",
-  });
-
   const saveMut = useMutation({
-    mutationFn: (vars: { id?: string; data: ExpenseInput }) => (vars.id ? updateExpense(vars.id, vars.data) : createExpenseLocalFirst(vars.data)),
+    mutationFn: (vars: { id?: string; data: ExpenseInput }) => (vars.id ? updateExpenseLocalFirst(vars.id, vars.data) : createExpenseLocalFirst(vars.data)),
     onSuccess: () => { refreshLocalExpenses(); invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved on this device", description: editing ? undefined : "Cloud backup will run automatically." }); },
     onError: (err: unknown) => {
-      if (!isOnline) return offlineNotice();
       toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
     },
   });
   const deleteMut = useMutation({
-    mutationFn: (id: string) => deleteExpense(id),
-    onSuccess: () => { invalidate(); setDeleting(null); toast({ title: "Expense moved to recycle bin" }); },
+    mutationFn: (vars: { id: string; ownerPin: string }) => deleteExpenseLocalFirst(vars.id, vars.ownerPin),
+    onSuccess: () => { refreshLocalExpenses(); invalidate(); setDeleting(null); setDeleteOwnerPin(""); toast({ title: "Expense moved to recycle bin", description: "The deletion is safe locally and queued for cloud backup." }); },
     onError: (err: unknown) => {
-      if (!isOnline) return offlineNotice();
       toast({ title: "Could not delete", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
     },
   });
@@ -414,13 +405,17 @@ export default function ExpensesPage() {
         onSubmit={(data) => saveMut.mutate({ id: editing?.id, data })}
       />
 
-      <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
+      <Dialog open={deleting !== null} onOpenChange={(o) => { if (!o) { setDeleting(null); setDeleteOwnerPin(""); } }}>
         <DialogContent className="max-w-[380px]">
           <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Delete this expense?</DialogTitle></DialogHeader>
           <p className="text-[12px] text-[#52627e]">"{deleting?.title}" ({deleting ? inr(deleting.amount) : ""}) will move to the recycle bin. You can restore it later.</p>
+          <div>
+            <Label htmlFor="expense-delete-owner-pin">Owner PIN</Label>
+            <Input id="expense-delete-owner-pin" type="password" inputMode="numeric" maxLength={4} value={deleteOwnerPin} onChange={(event) => setDeleteOwnerPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="4-digit PIN" className="mt-1 h-11" />
+          </div>
           <div className="flex gap-2.5 pt-2">
-            <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button className="h-11 flex-1 gap-2 rounded-[10px] bg-rose-600 font-black text-white hover:bg-rose-700" disabled={deleteMut.isPending} onClick={() => deleting && deleteMut.mutate(deleting.id)}>
+            <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => { setDeleting(null); setDeleteOwnerPin(""); }}>Cancel</Button>
+            <Button className="h-11 flex-1 gap-2 rounded-[10px] bg-rose-600 font-black text-white hover:bg-rose-700" disabled={deleteMut.isPending || deleteOwnerPin.length !== 4} onClick={() => deleting && deleteMut.mutate({ id: deleting.id, ownerPin: deleteOwnerPin })}>
               {deleteMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Delete
             </Button>
           </div>
