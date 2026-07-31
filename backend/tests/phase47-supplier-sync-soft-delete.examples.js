@@ -35,7 +35,12 @@ for (const type of ["CREATE_SUPPLIER", "UPDATE_SUPPLIER", "DELETE_SUPPLIER", "RE
 }
 assert.match(syncService, /db\.supplier\.findMany\(\{ where: buildWhere\("suppliers"\)/, "sync pull must include suppliers");
 assert.match(syncService, /db\.purchaseHistory\.findMany\(\{ where: buildWhere\("purchaseHistory"\)/, "sync pull must include purchaseHistory");
-assert.match(syncService, /const grouped = \{ products: \{\}, customers: \{\}, bills: \{\}, suppliers: \{\}(?:, ledgerEntries: \{\})? \}/, "sync id mappings response must include suppliers");
+// Check the grouping *contains* suppliers rather than pinning the whole literal.
+// Pinning it meant every new synced entity broke this test for an unrelated
+// reason — `expenses: {}` did exactly that — which teaches people to edit the
+// assertion to match whatever the code now says, the opposite of what a test is for.
+const groupedInit = syncService.match(/const grouped = \{[\s\S]*?\};/)?.[0] ?? "";
+assert.match(groupedInit, /\bsuppliers:\s*\{\}/, "sync id mappings response must include suppliers");
 
 assert.match(permissions, /OWNER_PIN_REQUIRED/, "owner PIN middleware must honor OWNER_PIN_REQUIRED");
 assert.doesNotMatch(permissions, /Owner token is enough for owner-only actions/, "production default must not silently bypass PIN for owner JWTs");

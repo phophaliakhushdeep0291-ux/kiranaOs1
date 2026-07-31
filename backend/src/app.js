@@ -104,11 +104,36 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // ── Health check ──────────────────────────────────────────────
+
+// Which build is actually serving. The platform injects this at deploy time
+// (Railway sets RAILWAY_GIT_COMMIT_SHA), so "did my fix reach production yet?"
+// is one curl with a definitive answer.
+//
+// Read straight from process.env rather than config/env.js on purpose: that
+// module exits the process on a schema miss, and a field that only exists to
+// answer a deploy question must never be able to stop the server booting. Absent
+// (local, docker run, a platform that sets none of these) simply reports unknown.
+//
+// Deliberately not validated against the git history: the point is to report what
+// IS running, including a commit nobody expected.
+const DEPLOY_COMMIT =
+  process.env.RAILWAY_GIT_COMMIT_SHA ||
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.GIT_COMMIT_SHA ||
+  process.env.SOURCE_VERSION ||
+  null;
+
+const DEPLOY_BRANCH = process.env.RAILWAY_GIT_BRANCH || process.env.VERCEL_GIT_COMMIT_REF || null;
+
 function healthPayload() {
   return {
     status: "ok",
     service: "KiranaOS Backend",
     version: "1.0.0",
+    // Short sha is enough to match against `git log` and keeps the public
+    // endpoint from advertising a full build fingerprint.
+    commit: DEPLOY_COMMIT ? DEPLOY_COMMIT.slice(0, 12) : "unknown",
+    ...(DEPLOY_BRANCH ? { branch: DEPLOY_BRANCH } : {}),
     environment: env.NODE_ENV,
     uptimeSeconds: Math.round(process.uptime()),
     time: new Date().toISOString(),
