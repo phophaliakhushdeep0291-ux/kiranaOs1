@@ -47,7 +47,15 @@ const sqliteUnifiedCommerceMigration = read("../prisma/migrations/20260729113000
 const postgresUnifiedCommerceMigration = read("../prisma-postgres/migrations/000073_unified_commerce_order_lifecycle/migration.sql");
 for (const [name, migration] of [["sqlite", sqliteUnifiedCommerceMigration], ["postgres", postgresUnifiedCommerceMigration]]) {
   for (const field of ["sourceChannel", "externalOrderId", "paymentStatus", "fulfillmentStatus"]) {
-    assert.ok(migration.includes(`ADD COLUMN "${field}"`), `${name} unified-commerce migration must persist ${field}`);
+    // `IF NOT EXISTS` is optional here: the postgres copy carries it so a failed
+    // deploy can replay the migration (see @replay-safe in the migration and
+    // tests/migration-deploy-recovery.examples.js); sqlite adds the column plain.
+    // Either way the column must be added.
+    assert.match(
+      migration,
+      new RegExp(`ADD COLUMN (?:IF NOT EXISTS )?"${field}"`),
+      `${name} unified-commerce migration must persist ${field}`,
+    );
   }
   for (const index of ["sourceChannel", "fulfillmentStatus", "paymentStatus"]) {
     assert.ok(migration.includes(`CustomerOrder_shopId_${index}_createdAt_idx`), `${name} unified-commerce migration must index ${index}`);

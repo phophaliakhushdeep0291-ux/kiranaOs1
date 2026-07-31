@@ -81,9 +81,14 @@ const migrationNames = listMigrationNames();
 const alreadyResolved = new Set();
 
 // Recover in a loop: a database can carry more than one failed record, and
-// resolving only the first would still leave the next deploy blocked. Bounded by
-// the migration count so nothing can spin forever.
-for (let attempt = 0; attempt < migrationNames.length; attempt += 1) {
+// resolving only the first would still leave the next deploy blocked.
+//
+// Bound: each migration can be resolved at most once (a second attempt hits the
+// alreadyResolved guard), so resolving costs at most one iteration per
+// migration — plus one final iteration to detect a migration that failed AGAIN
+// after replay and tell the operator so. Hence +1: without it, a database whose
+// every migration is failed exits on the loop bound and prints no diagnosis.
+for (let attempt = 0; attempt < migrationNames.length + 1; attempt += 1) {
   const failure = deployOutput(deploy);
   if (!failure.includes("P3009")) break;
 
