@@ -450,36 +450,50 @@ export default function ReportsPage() {
             <SyncBadge status="synced" label="Synced · Local reports ready" />
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="h-9 min-w-[220px] justify-between rounded-[7px] border-[#dfe7f2] bg-white px-3 text-[12px] font-semibold text-[#24385f]">
+              <Button variant="outline" className="col-span-3 h-11 min-w-0 justify-between rounded-xl border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] sm:col-auto sm:h-9 sm:min-w-[220px] sm:rounded-[7px] sm:font-semibold">
                 <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[#1264f6]" />{rangeLabel(range.from, range.to)}</span>
                 <span className="text-[#7e8ba3]">⌄</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-[320px] rounded-[8px] border-[#dfe7f2] p-3">
+            <PopoverContent align="end" className="w-[calc(100vw-2rem)] rounded-xl border-[#dfe7f2] p-3 sm:w-[320px] sm:rounded-[8px]">
               <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">From</Label><Input type="date" value={from} onChange={(event) => { setPeriod("custom"); setFrom(event.target.value); }} className="mt-1 h-9 rounded-[6px]" /></div>
-                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">To</Label><Input type="date" value={to} onChange={(event) => { setPeriod("custom"); setTo(event.target.value); }} className="mt-1 h-9 rounded-[6px]" /></div>
+                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">From</Label><Input type="date" value={from} onChange={(event) => { setPeriod("custom"); setFrom(event.target.value); }} className="mt-1 h-11 rounded-lg sm:h-9 sm:rounded-[6px]" /></div>
+                <div><Label className="text-[10px] font-bold uppercase text-[#74819a]">To</Label><Input type="date" value={to} onChange={(event) => { setPeriod("custom"); setTo(event.target.value); }} className="mt-1 h-11 rounded-lg sm:h-9 sm:rounded-[6px]" /></div>
               </div>
             </PopoverContent>
           </Popover>
           <Popover>
-            <PopoverTrigger asChild><Button variant="outline" className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-semibold"><Filter size={14} className="mr-2" />Filters</Button></PopoverTrigger>
+            <PopoverTrigger asChild><Button variant="outline" className="h-11 w-full rounded-xl border-[#dfe7f2] px-4 text-[12px] font-bold sm:h-9 sm:w-auto sm:rounded-[7px] sm:font-semibold"><Filter size={14} className="mr-2" />Filters</Button></PopoverTrigger>
             <PopoverContent align="end" className="w-48 rounded-[8px] p-2">
               {(["today", "week", "month"] as const).map((item) => (
-                <button key={item} className={cn("w-full rounded-[6px] px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc]", period === item && "bg-[var(--brand-soft)] text-[var(--brand)]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
+                <button key={item} className={cn("min-h-11 w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc] sm:min-h-0 sm:rounded-[6px]", period === item && "bg-[var(--brand-soft)] text-[var(--brand)]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
               ))}
-              <Link href="/daily-closing" className="mt-1 block border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[#1264f6]">Open daily closing</Link>
+              <Link href="/daily-closing" className="mt-1 flex min-h-11 items-center border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[#1264f6] sm:min-h-0">Open daily closing</Link>
             </PopoverContent>
           </Popover>
-          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-9 rounded-[7px] bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_7px_16px_rgba(7,95,255,0.2)] hover:bg-[#0052e0]"><Download size={14} className="mr-2" />Export</Button>
-          <Button variant="ghost" size="icon" title="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-9 w-9 rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
+          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[#0052e0] sm:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
+          <Button variant="outline" size="icon" title="Refresh reports" aria-label="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-11 w-11 rounded-xl border-[#dfe7f2] sm:h-9 sm:w-9 sm:rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
         </div>
       </section>
 
-      <section className="grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4">
+      <MobileReportsOverview
+        loading={loading || expenseSummary.isLoading}
+        periodLabel={rangeLabel(range.from, range.to)}
+        sales={selected?.sales ?? 0}
+        previousSales={previous?.sales ?? 0}
+        cash={snapshot?.paymentBreakdown.cashIn ?? 0}
+        upi={snapshot?.paymentBreakdown.upiIn ?? 0}
+        bank={snapshot?.paymentBreakdown.bankIn ?? 0}
+        profit={selected?.profitEstimate ?? 0}
+        netProfit={netProfit ?? 0}
+        expenses={expenseTotal ?? 0}
+        udhar={snapshot?.pendingUdhar ?? 0}
+      />
+
+      <section className="hidden min-w-0 grid-cols-2 gap-2 md:grid lg:grid-cols-4">
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} {...kpi} loading={loading || (kpi.label.includes("Expense") && expenseSummary.isLoading)} />
         ))}
@@ -696,7 +710,7 @@ function MobileReportList({ title, actionHref, children }: { title: string; acti
     <article className="rounded-[18px] border border-[#e4ebf4] bg-white shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
       <header className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
         <h2 className="text-[16px] font-extrabold text-[#07133f]">{title}</h2>
-        <Link href={actionHref} className="text-xs font-extrabold text-[var(--brand)]">View all</Link>
+        <Link href={actionHref} className="inline-flex min-h-11 items-center px-1 text-xs font-extrabold text-[var(--brand)]">View all</Link>
       </header>
       <div className="divide-y divide-[#edf2f8] px-3">
         {children ? children : <div className="py-8 text-center text-xs font-semibold text-[#8290a8]">No records in this period</div>}
@@ -707,7 +721,7 @@ function MobileReportList({ title, actionHref, children }: { title: string; acti
 
 function MobileReportRow({ title, subtitle, value, meta }: { title: ReactNode; subtitle?: ReactNode; value?: ReactNode; meta?: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-3">
+    <div className="flex min-h-14 items-center justify-between gap-3 py-3">
       <div className="min-w-0">
         <p className="truncate text-[13px] font-extrabold text-[#07133f]">{title}</p>
         {subtitle ? <p className="mt-1 truncate text-[11px] font-medium text-[#53617d]">{subtitle}</p> : null}
@@ -717,6 +731,99 @@ function MobileReportRow({ title, subtitle, value, meta }: { title: ReactNode; s
         {meta ? <div className="mt-1 text-[11px] font-bold text-[#64708b]">{meta}</div> : null}
       </div>
     </div>
+  );
+}
+
+function MobileReportsOverview({
+  loading,
+  periodLabel,
+  sales,
+  previousSales,
+  cash,
+  upi,
+  bank,
+  profit,
+  netProfit,
+  expenses,
+  udhar,
+}: {
+  loading: boolean;
+  periodLabel: string;
+  sales: number;
+  previousSales: number;
+  cash: number;
+  upi: number;
+  bank: number;
+  profit: number;
+  netProfit: number;
+  expenses: number;
+  udhar: number;
+}) {
+  const salesChange = delta(sales, previousSales);
+
+  if (loading) {
+    return <Skeleton className="h-[346px] rounded-[26px] md:hidden" data-testid="mobile-reports-overview-loading" />;
+  }
+
+  return (
+    <section className="space-y-3 md:hidden" aria-label="Mobile report overview" data-testid="mobile-reports-overview">
+      <article className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#071841] via-[var(--brand)] to-[#378cff] p-5 text-white shadow-[0_18px_46px_rgba(7,95,255,0.24)]">
+        <span className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full border border-white/15 bg-white/[0.06]" aria-hidden="true" />
+        <span className="pointer-events-none absolute -bottom-20 -left-16 h-40 w-40 rounded-full bg-[#54c9ff]/20 blur-2xl" aria-hidden="true" />
+        <div className="relative">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-white/65">Net sales</p>
+              <p className="mt-2 break-words text-[36px] font-black leading-none tracking-[-0.04em] tabular-nums">{fmt(sales)}</p>
+            </div>
+            <span className="max-w-[148px] rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-right text-[10px] font-bold leading-4 text-white/85 backdrop-blur-sm">{periodLabel}</span>
+          </div>
+          <div className="mt-3 flex items-center gap-2 text-[11px]">
+            <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-black", salesChange >= 0 ? "bg-emerald-300/20 text-emerald-100" : "bg-rose-300/20 text-rose-100")}>
+              {salesChange >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(salesChange)}%
+            </span>
+            <span className="font-semibold text-white/60">against the previous period</span>
+          </div>
+          <div className="mt-5 grid grid-cols-3 divide-x divide-white/15 rounded-2xl border border-white/10 bg-[#031331]/25 p-1 backdrop-blur-sm">
+            <MobileTenderStat label="Cash" value={cash} />
+            <MobileTenderStat label="UPI" value={upi} />
+            <MobileTenderStat label="Bank" value={bank} />
+          </div>
+        </div>
+      </article>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <MobilePulseTile label="Profit (Est.)" value={profit} detail="Before expenses" icon={<CircleDollarSign size={17} />} tone="emerald" />
+        <MobilePulseTile label="Net Profit" value={netProfit} detail="After expenses" icon={<TrendingUp size={17} />} tone="blue" />
+        <MobilePulseTile label="Expenses" value={expenses} detail="Selected period" icon={<Box size={17} />} tone="amber" />
+        <MobilePulseTile label="Udhar Due" value={udhar} detail="Needs collection" icon={<ReceiptIndianRupee size={17} />} tone="rose" />
+      </div>
+    </section>
+  );
+}
+
+function MobileTenderStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-0 px-2.5 py-2.5">
+      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-white/55">{label}</p>
+      <p className="mt-1 truncate text-[13px] font-black tabular-nums text-white">{fmt(value)}</p>
+    </div>
+  );
+}
+
+function MobilePulseTile({ label, value, detail, icon, tone }: { label: string; value: number; detail: string; icon: ReactNode; tone: "emerald" | "blue" | "amber" | "rose" }) {
+  const tones = {
+    emerald: "border-emerald-100 bg-gradient-to-br from-white to-emerald-50/70 text-emerald-700",
+    blue: "border-blue-100 bg-gradient-to-br from-white to-blue-50/75 text-blue-700",
+    amber: "border-amber-100 bg-gradient-to-br from-white to-amber-50/75 text-amber-700",
+    rose: "border-rose-100 bg-gradient-to-br from-white to-rose-50/70 text-rose-700",
+  }[tone];
+  return (
+    <article className={cn("min-w-0 rounded-[20px] border p-3.5 shadow-[0_10px_28px_rgba(15,23,42,0.055)]", tones)}>
+      <div className="flex items-center gap-2 text-[11px] font-extrabold"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white shadow-sm">{icon}</span><span className="truncate text-[#304467]">{label}</span></div>
+      <p className="mt-3 break-words text-[20px] font-black leading-none tracking-[-0.025em] text-[#07133f] tabular-nums">{fmt(value)}</p>
+      <p className="mt-2 text-[10px] font-semibold text-[#77859d]">{detail}</p>
+    </article>
   );
 }
 
@@ -737,7 +844,7 @@ function KpiCard({ label, value, previous, icon, iconClass, color, spark, positi
 
 function Panel({ title, subtitle, info, action, children }: { title: string; subtitle?: string; info?: boolean; action?: ReactNode; children: ReactNode }) {
   return <article className={PANEL}>
-    <header className="flex h-10 min-w-0 items-center justify-between gap-2 px-3.5"><div className="flex min-w-0 items-center gap-1.5"><h2 className="truncate text-[12px] font-extrabold text-[#13254a]">{title}</h2>{subtitle ? <span className="shrink-0 text-[9px] text-[#72809a]">{subtitle}</span> : null}{info ? <Info size={11} className="shrink-0 text-[#7e8ca4]" /> : null}</div><div className="shrink-0">{action}</div></header>
+    <header className="flex min-h-14 min-w-0 items-center justify-between gap-2 px-4 sm:h-10 sm:min-h-0 sm:px-3.5"><div className="flex min-w-0 items-center gap-1.5"><h2 className="truncate text-[13px] font-extrabold text-[#13254a] sm:text-[12px]">{title}</h2>{subtitle ? <span className="shrink-0 text-[9px] text-[#72809a]">{subtitle}</span> : null}{info ? <Info size={11} className="shrink-0 text-[#7e8ca4]" /> : null}</div><div className="shrink-0">{action}</div></header>
     {children}
   </article>;
 }
@@ -746,13 +853,13 @@ function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (perio
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" className="inline-flex h-7 min-w-[92px] items-center justify-between gap-2 rounded-[6px] border border-[#dfe6f0] bg-[#fbfcfe] px-2.5 text-[9.5px] font-semibold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white">
+        <button type="button" className="inline-flex h-10 min-w-[108px] items-center justify-between gap-2 rounded-xl border border-[#dfe6f0] bg-[#fbfcfe] px-3 text-[10px] font-bold text-[#405273] transition-colors hover:border-[#c7d4e6] hover:bg-white sm:h-7 sm:min-w-[92px] sm:rounded-[6px] sm:px-2.5 sm:text-[9.5px] sm:font-semibold">
           {REPORT_PERIOD_LABELS[value]} <ChevronDown size={11} aria-hidden="true" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={5} className="w-36 rounded-[7px] border-[#dfe7f2] p-1.5">
         {(["today", "week", "month"] as const).map((period) => (
-          <button key={period} type="button" onClick={() => onChange(period)} className={cn("w-full rounded-[5px] px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc]", value === period && "bg-[var(--brand-soft)] text-[var(--brand)]")}>
+          <button key={period} type="button" onClick={() => onChange(period)} className={cn("min-h-11 w-full rounded-lg px-2.5 py-2 text-left text-[11px] font-semibold text-[#405273] hover:bg-[#f2f6fc] sm:min-h-0 sm:rounded-[5px]", value === period && "bg-[var(--brand-soft)] text-[var(--brand)]")}>
             {REPORT_PERIOD_LABELS[period]}
           </button>
         ))}

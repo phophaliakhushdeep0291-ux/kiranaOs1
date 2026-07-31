@@ -127,6 +127,28 @@ describe("FinancialAggregationService", () => {
     expect(snapshot.cashDrawer.expectedClosingCash).toBe(85);
   });
 
+  it("counts estimate tenders and preserves them after history deletion", () => {
+    const deletedAt = `${date}T12:00:00.000`;
+    const snapshot = aggregateFinancialRows({
+      date,
+      bills: [
+        bill("estimate_cash", { billType: "estimate", grandTotal: 100, paidAmount: 100, creditAmount: 0, payments: [{ mode: "cash", amount: 100 }], deletedAt, deleted_at: deletedAt }),
+        bill("estimate_upi", { billType: "estimate", grandTotal: 200, paidAmount: 200, creditAmount: 0, payments: [{ mode: "upi", amount: 200 }] }),
+        bill("estimate_bank", { billType: "estimate", grandTotal: 300, paidAmount: 300, creditAmount: 0, payments: [{ mode: "bank", amount: 300 }] }),
+        bill("estimate_udhar", { billType: "estimate", grandTotal: 400, paidAmount: 0, creditAmount: 400, payments: [{ mode: "credit", amount: 400 }] }),
+      ],
+    });
+
+    expect(snapshot.revenueToday).toBe(1000);
+    expect(snapshot.cashSalesToday).toBe(100);
+    expect(snapshot.upiSalesToday).toBe(200);
+    expect(snapshot.bankSalesToday).toBe(300);
+    expect(snapshot.udharSalesToday).toBe(400);
+    expect(snapshot.totalCashCollectedToday).toBe(100);
+    expect(snapshot.totalUpiCollectedToday).toBe(200);
+    expect(snapshot.totalBankCollectedToday).toBe(300);
+  });
+
   it("nets a bill-level discount from fallback profit exactly once", () => {
     const snapshot = aggregateFinancialRows({
       date,

@@ -53,6 +53,8 @@ Replenishment and return-ledger addendum (2026-07-18): deterministic 30-day net-
 
 Accounting-integrity addendum (2026-07-22): bill postings now balance cash, UPI, bank, receivables, gift-card redemption/return liability and explicit waiver expense legs; supplier payments and reversals are projected into fixed debit/credit accounts. The owner-only shop control returns integer-paise trial-balance evidence, balanced source groups, coverage, unmapped rows and visible exceptions without inventing balancing entries. Contract coverage is 140 endpoints. This is a ledger control, not statutory-complete accounting: inventory valuation/COGS, purchase principal/AP, operating expenses, GST input/output liability, bank-statement matching, TDS/TCS and statutory statements remain open.
 
+Reporting-authority addendum (2026-07-31): operational tables and locked daily-closing snapshots remain the customer-facing report authority. `FinancialLedger` is an append-only journal and future read-model candidate. The owner/admin reconciliation endpoint compares supported shop-wide current-state KPIs at exact paise precision and refuses cutover evidence on any variance; focused integration passes 11/11, including staff denial, deliberate one-paise drift and cancellation netting. Historical period restatement, location-scoped journal parity and premium 390px report-flow QA remain open.
+
 ## Defect thresholds
 
 - Open P0: 0 required. BUG-001 is locally verified and BUG-010 is verified on Railway production. Formal candidate approval still requires the missing CI run URL and sign-offs.

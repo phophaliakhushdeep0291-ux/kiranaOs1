@@ -15,7 +15,7 @@ The original review below was a 2026-06-16 snapshot. Most items have since been 
 | 1 | `daysBetweenInclusive` +1 over-count | **FIXED** — `Math.round(...)`, no `+1` (`utils/dates.js:108`) |
 | 2 | Daily-closing staleness uses server TZ | **FIXED** — `dateRangeForDateOnly(date, DAILY_CLOSING_TIMEZONE)` (`dailyClosingSnapshot.service.js:106`) |
 | 3 | Grace period never applied on organic expiry | **FIXED** — `isSubscriptionActive` honors `graceEndsAt` for active rows (`subscription.service.js:311-318`) |
-| 4 | `FinancialLedger` written but never read | **OPEN (architectural)** — still write-only; not a user-facing calc bug. Consume it in reports or drop the "source of truth" framing. |
+| 4 | `FinancialLedger` written but never read | **RESOLVED (architecture + reconciliation)** — operational tables/locked snapshots remain report authority; the ledger is an append-only journal and future read-model candidate with an owner/admin zero-variance gate. |
 | 5 | Inclusive GST counted as gross profit | **INTENTIONAL** — correct for unregistered/composition kirana shops (full MRP = revenue). Revisit only for GST-registered tenants. |
 | 6 | Exclusive-GST discount applied after GST | **OPEN (minor, by-design)** — exclusive-mode + discount only; tax-treatment choice, not changed without a compliance decision. |
 | 7 | `getMonthlyBreakdown` buckets by server month | **FIXED** — shop-tz via `dateRangeForDateOnly` + `monthInShopTz` (`reports.service.js:40,526-530`) |
@@ -94,14 +94,14 @@ if (subscription.status === "active")
 
 **Fix:** either have `isSubscriptionActive` honor `graceEndsAt` while `status==="active"` (active if `currentPeriodEnd > now || graceEndsAt > now`), or add a scheduled job that flips `active → grace → expired` at the right boundaries.
 
-### 4. `FinancialLedger` is documented as the "source of truth" but is never read
-**File:** `backend/src/modules/finance/financial-ledger.service.js` (header comment) + all report code
+### 4. `FinancialLedger` report authority — resolved 2026-07-31
+**Files:** `backend/src/modules/finance/financial-ledger.service.js`, `backend/src/modules/reports/reports.service.js`, `backend/src/modules/reports/reports.routes.js`
 
-The header says this append-only ledger exists so "dashboards/reports cannot double-count," with KPI formulas (`today sales = sum(sale)`, etc.). But there are **zero reads** of `financialLedger` anywhere in `src/` — only `.create(...)`. Every dashboard/report (`reports.service.js`, daily closing) is derived directly from `bill` / `udharLedger`. (Reads exist only in tests.)
+The architecture is now explicit: operational domain tables and locked daily-closing snapshots remain authoritative for customer-facing reports. `FinancialLedger` is the append-only accounting journal and a future report read-model candidate, not the current displayed source of truth.
 
-**Impact:** the stated single-source-of-truth guarantee isn't wired up; it's dead write overhead. Worse, it would *diverge* from the bill-derived reports if anyone ever did read it — cancellations post reversals dated to the cancel day, and its `sale` rows use `grandTotal` regardless of GST mode, so period KPIs would not match the status-based report queries.
+An owner/admin-only `GET /api/reports/financial-ledger-reconciliation` gate compares current shop-wide sales, cash/UPI/bank collections and outstanding udhar at integer-paise precision. It deliberately does not accept date or location filters: cancellation/restore journal rows are activity-dated while operational reports describe current bill state, and the ledger does not yet carry `locationId`. Claiming scoped parity would compare unlike semantics.
 
-**Fix:** either consume the ledger in the reports layer (and reconcile the cancellation-dating/period semantics), or drop the "source of truth" framing so a future dev doesn't trust numbers it doesn't actually back.
+Read cutover is blocked unless every supported variance is zero. Historical period restatement and location-scoped journal reporting remain explicitly unsupported until backfill/schema work exists. Integration coverage proves role denial, clean parity, intentional one-paise drift detection and cancellation netting.
 
 ### 5. In "inclusive" GST mode, collected GST is counted as gross profit
 **File:** `backend/src/modules/bills/bills.service.js:152-163, 229`

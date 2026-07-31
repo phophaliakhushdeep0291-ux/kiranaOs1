@@ -1078,22 +1078,39 @@ function MobileGeneralDashboard({
   const productsById = new Map(recentProducts.map((product) => [product.id, product]));
 
   return (
-    <div className="mx-auto w-full max-w-[520px] space-y-5 bg-white px-4 pb-28 pt-2 lg:hidden">
-      <section className="flex items-center justify-between rounded-[18px] border border-[#d7eadf] bg-white px-4 py-3.5 shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
-        <div className="flex items-center gap-2.5">
-          <span className={cn("grid h-11 w-11 place-items-center rounded-full text-white shadow-[0_8px_18px_rgba(17,168,75,0.22)] ring-8 ring-[#e9f8ee]", syncHealthy && isOnline ? "bg-[#18b957]" : "bg-[#f59e0b]") }>
-            {isSyncing ? <RefreshCw size={20} className="animate-spin" /> : <CheckCircle2 size={21} />}
-          </span>
+    <div className="mx-auto w-full max-w-[560px] space-y-4 bg-transparent px-3.5 pb-5 pt-3 lg:hidden">
+      <section className="relative overflow-hidden rounded-[24px] bg-[#0b1f46] p-5 text-white shadow-[0_20px_44px_rgba(8,27,66,0.20)]">
+        <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full bg-[var(--brand)]/35 blur-2xl" aria-hidden="true" />
+        <div className="relative flex items-start justify-between gap-3">
           <div>
-            <p className={cn("text-[17px] font-black", syncHealthy && isOnline ? "text-[#159447]" : "text-[#b96d00]")}>
-              {isSyncing ? "Syncing" : !isOnline ? "Offline safe" : syncHealthy ? "Synced" : failedCount > 0 ? "Review needed" : `${pendingCount} pending`}
-            </p>
-            <p className="text-[13px] font-medium text-[#33456b]">{isOnline ? "Just now" : "Offline safe"}</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-blue-100/75">Today’s net sales</p>
+            <p className="mt-2 font-display text-[34px] font-black leading-none tracking-[-0.04em]">{fmtCompactRs(dashboard.revenue)}</p>
+            <div className="mt-2 flex items-center gap-2 text-[12px] font-semibold text-blue-100/75">
+              <MobileDelta delta={salesDelta} />
+              <span>·</span>
+              <span>{dashboard.billCount.toLocaleString("en-IN")} bills</span>
+            </div>
           </div>
+          <Link href="/sync-status" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 text-[11px] font-extrabold text-white backdrop-blur">
+            <span className={cn("h-2 w-2 rounded-full", syncHealthy && isOnline ? "bg-emerald-400" : failedCount > 0 ? "bg-rose-400" : "bg-amber-400")} />
+            {isSyncing ? "Syncing" : !isOnline ? "Offline safe" : syncHealthy ? "Synced" : failedCount > 0 ? "Review" : `${pendingCount} pending`}
+          </Link>
         </div>
-        <Link href="/sync-status" className="inline-flex h-11 items-center gap-2 rounded-[12px] border border-[#d9e3f2] bg-white px-4 text-[15px] font-black text-[var(--brand)]">
-          <RefreshCw size={18} /> Sync Now
-        </Link>
+
+        <div className="relative mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4">
+          <MobileHeroStat label="Cash" value={dashboard.cashCollected} />
+          <MobileHeroStat label="UPI" value={dashboard.upiCollected} />
+          <MobileHeroStat label="Bank" value={dashboard.bankCollected} />
+        </div>
+
+        <div className="relative mt-4 grid grid-cols-[1.35fr_1fr] gap-2.5">
+          <Link href="/billing" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] bg-white px-4 text-[13px] font-black text-[#0b1f46] shadow-[0_10px_24px_rgba(0,0,0,0.12)] active:scale-[0.98]">
+            <ShoppingCart size={18} /> New sale
+          </Link>
+          <Link href="/customers" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[15px] border border-white/15 bg-white/10 px-3 text-[12px] font-black text-white backdrop-blur active:scale-[0.98]">
+            <HandCoins size={17} /> Collect due
+          </Link>
+        </div>
       </section>
 
       {!dashboard.hasBusinessData && (
@@ -1211,6 +1228,15 @@ function MobileGeneralDashboard({
         </div>
       </section>
 
+    </div>
+  );
+}
+
+function MobileHeroStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-blue-100/60">{label}</p>
+      <p className="mt-1 truncate font-display text-[15px] font-black text-white">{fmtCompactRs(value)}</p>
     </div>
   );
 }

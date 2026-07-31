@@ -37,7 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageShell, SyncBadge } from "@/components/shared";
 import { buildLocalReportSnapshot, toDateInputValue, type DateRange } from "@/features/reports/local-reporting";
-import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
+import { dedupeBillsForDisplay, isMergedBillTwin } from "@/features/sync/bill-reconciliation";
 import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -167,8 +167,8 @@ function billCredit(bill: LocalBill) {
   return readNumber(bill.creditAmount, Math.max(0, billTotal(bill) - billPaid(bill)));
 }
 
-function isDeleted(bill: LocalBill) {
-  return Boolean(bill.deleted_at ?? bill.deletedAt ?? bill.merged_into_id ?? bill.mergedIntoId);
+function isUserDeleted(bill: LocalBill) {
+  return Boolean(bill.deleted_at ?? bill.deletedAt) && !isMergedBillTwin(bill);
 }
 
 function isReturnBill(bill: LocalBill) {
@@ -178,7 +178,7 @@ function isReturnBill(bill: LocalBill) {
 function isSaleBill(bill: LocalBill) {
   // Estimates (kacha bills) count as sales — same money/stock effects, only the EST- series differs.
   const status = String(bill.status ?? "").toLowerCase();
-  return !isDeleted(bill) && !isReturnBill(bill) && !status.includes("cancel");
+  return !isMergedBillTwin(bill) && !isReturnBill(bill) && !status.includes("cancel");
 }
 
 function isWithinRange(bill: LocalBill, range: DateRange) {
@@ -219,7 +219,7 @@ function modeMeta(mode: string) {
 
 async function loadBills(): Promise<LocalBill[]> {
   const rows = await offlineDB.getAll<LocalBill>("bills").catch(() => []);
-  return dedupeBillsForDisplay(filterRowsForCurrentScope(rows)) as unknown as LocalBill[];
+  return dedupeBillsForDisplay(filterRowsForCurrentScope(rows), { includeUserDeleted: true }) as unknown as LocalBill[];
 }
 
 async function loadSalesData(range: DateRange) {
@@ -336,7 +336,7 @@ export default function SalesOverviewPage() {
     return map;
   }, [allBills]);
 
-  const recentSales = useMemo(() => [...saleBills].sort((a, b) => new Date(billDate(b)).getTime() - new Date(billDate(a)).getTime()).slice(0, 5), [saleBills]);
+  const recentSales = useMemo(() => saleBills.filter((bill) => !isUserDeleted(bill)).sort((a, b) => new Date(billDate(b)).getTime() - new Date(billDate(a)).getTime()).slice(0, 5), [saleBills]);
   const paymentRows = useMemo(() => {
     const payment = snapshot?.paymentBreakdown;
     const sales = selected?.sales ?? 0;

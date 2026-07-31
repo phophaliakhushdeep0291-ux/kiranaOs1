@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import {
   BadgeIndianRupee,
@@ -29,6 +29,7 @@ import {
   WalletCards,
   WifiOff,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -73,7 +74,7 @@ interface MobileBottomNavProps {
   onLogout: () => void;
 }
 
-type NavIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string; "aria-hidden"?: boolean | "true" | "false" }>;
+type NavIcon = LucideIcon;
 
 interface NavigationItem {
   href: string;

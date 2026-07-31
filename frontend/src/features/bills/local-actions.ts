@@ -82,32 +82,6 @@ async function createCancellationLedgerCorrection(bill: Bill & Record<string, un
   await adjustCustomerUdhar(bill.customerId, -Math.abs(credit));
 }
 
-// Mirror of createCancellationLedgerCorrection for restores: the server re-applies the bill's
-// udhar when a bill is restored, so the local ledger re-adds the debt immediately too.
-async function createRestoreLedgerCorrection(bill: Bill & Record<string, unknown>, reason?: string) {
-  const credit = readNumber(bill.creditAmount, 0);
-  const now = new Date().toISOString();
-  if (credit <= 0 || !bill.customerId) return;
-  const entry = makeLocalEntity({
-    id: createLocalId("ledger_restore"),
-    customerId: bill.customerId ?? null,
-    customer_id: bill.customerId ?? null,
-    customerName: bill.customerName ?? null,
-    type: "bill_restore_correction",
-    source_type: "bill",
-    source_id: bill.id,
-    billId: bill.id,
-    bill_id: bill.id,
-    amount: Math.abs(credit),
-    note: reason || `Restored ${billNumberOf(bill)}`,
-    entry_at: now,
-    createdAt: now,
-    created_at: now,
-  }, "ledger_entry", "pending_sync");
-  await offlineDB.put("customer_ledger", entry);
-  await adjustCustomerUdhar(bill.customerId, Math.abs(credit));
-}
-
 export async function cancelBillWithOwnerPinLocalFirst(id: string, ownerPin: string, reason?: string): Promise<Bill> {
   parseOrThrow(ownerPinRequiredActionSchema, { action: "cancel_bill", ownerPin, entityId: id, reason });
   const existing = await findBill(id);
@@ -184,9 +158,6 @@ export async function restoreBillWithOwnerPinLocalFirst(id: string, ownerPin: st
     is_synced: false,
   } as Bill & Record<string, unknown>;
   await offlineDB.put("bills", updated);
-  // Restoring from the recycle bin syncs as RESTORE_BILL, which re-applies the bill's udhar on
-  // the server — re-add the customer's debt locally right away so balances stay coherent offline.
-  // The recycle-bin move wrote the matching -credit correction, so this nets out exactly.
   await writeAudit("restore_bill", updated, ownerPin, reason, existing);
   updateBillCache(updated);
   await enqueueOutboxOperation({

@@ -24,7 +24,6 @@ import {
   Menu,
   Package,
   PercentSquare,
-  Plus,
   RefreshCw,
   Search,
   Settings,
@@ -254,76 +253,6 @@ const NAV: NavItem[] = [
   { kind: "link", href: "/settings", label: "Settings", Icon: Settings },
 ];
 
-const MOBILE_NAV: { href: string; label: string; Icon: React.ElementType }[] = [
-  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { href: "/billing", label: "Billing", Icon: ShoppingCart },
-  { href: "/inventory", label: "Inventory", Icon: Package },
-  { href: "/customers", label: "Customers", Icon: Users },
-];
-
-interface MobileMenuItem {
-  href: string;
-  label: string;
-  Icon: React.ElementType;
-  children?: SubItem[];
-}
-
-const MOBILE_MENU: MobileMenuItem[] = [
-  { href: "/dashboard", label: "Dashboard", Icon: LayoutDashboard },
-  { href: "/billing", label: "Billing", Icon: ShoppingCart },
-  {
-    href: "/inventory",
-    label: "Inventory",
-    Icon: Package,
-    children: [
-      { href: "/products?add=1", label: "Add Product" },
-      { href: "/products", label: "Products" },
-      { href: "/categories", label: "Categories" },
-      { href: "/inventory/stock-in", label: "Stock In" },
-      { href: "/inventory/stock-out", label: "Stock Out" },
-      { href: "/inventory/adjustments", label: "Adjustments" },
-      { href: "/inventory/stock-transfers", label: "Stock Transfers" },
-      { href: "/inventory/stock-counts", label: "Stock Counts" },
-      { href: "/inventory/batches", label: "Batch & Expiry" },
-    ],
-  },
-  { href: "/customers", label: "Customers / Udhar", Icon: Users },
-  { href: "/purchase-bills", label: "Purchases", Icon: Truck },
-  {
-    href: "/assurance",
-    label: "Financial Assurance",
-    Icon: ShieldCheck,
-    children: [
-      { href: "/assurance", label: "Dashboard" },
-      { href: "/assurance/findings", label: "Findings" },
-      { href: "/assurance/review-queue", label: "Review Queue" },
-      { href: "/assurance/evidence", label: "Evidence Requests" },
-      { href: "/assurance/cases", label: "Investigation Cases" },
-      { href: "/assurance/runs", label: "Audit Runs" },
-      { href: "/assurance/rules", label: "Rules & Thresholds" },
-      { href: "/assurance/report", label: "Assurance Report" },
-    ],
-  },
-  {
-    href: "/bills",
-    label: "Sales",
-    Icon: TrendingUp,
-    children: [
-      { href: "/bills", label: "Billing History" },
-      { href: "/orders-received", label: "Orders Received" },
-      { href: "/sales-overview", label: "Sales Overview" },
-    ],
-  },
-  { href: "/returns", label: "Returns", Icon: Undo2 },
-  { href: "/reports", label: "Reports", Icon: BarChart3 },
-  { href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
-  { href: "/expenses", label: "Expenses", Icon: Wallet },
-  { href: "/offers", label: "Offers & Discounts", Icon: PercentSquare },
-  { href: "/loyalty", label: "Loyalty", Icon: Gift },
-  { href: "/gift-cards", label: "Gift Cards", Icon: Gift },
-  { href: "/settings", label: "Settings", Icon: Settings },
-];
-
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function readLS(key: string, fallback: string) {
@@ -342,12 +271,6 @@ function isActive(loc: string, href: string) {
   const current = cleanPath(loc);
   const target = cleanPath(href);
   return current === target || (target !== "/dashboard" && current.startsWith(target + "/"));
-}
-function isMobileNavActive(loc: string, href: string) {
-  if (href === "/inventory") {
-    return ["/inventory", "/products", "/categories"].some((path) => isActive(loc, path));
-  }
-  return isActive(loc, href);
 }
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map(s => s[0] ?? "").join("").toUpperCase() || "O";

@@ -368,18 +368,19 @@ describe("front office local-first cashier flow", () => {
     expect(rows("sync_outbox").find((row) => row.operation_type === "REVERSE_SUPPLIER_PAYMENT")?.payload).toEqual(expect.objectContaining({ paymentId: lastPayment.id }));
   });
 
-  it("recycle-bin move reverses udhar locally and restore re-applies it (mirrors server CANCEL/RESTORE)", async () => {
+  it("keeps udhar unchanged when a bill is hidden or restored from history", async () => {
     const bill = await createBillLocalFirst(billInput());
     expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200 }));
 
     await softDeleteBillWithOwnerPinLocalFirst(bill.id, "1234", "wrong bill");
-    // Server-side this op becomes CANCEL_BILL (udhar reversed there) — local must match now.
-    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
-    expect(rows("customer_ledger").some((entry) => entry.type === "bill_cancel_correction" && entry.amount === -200)).toBe(true);
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200, totalUdhar: 200 }));
+    expect(rows("customer_ledger").some((entry) => entry.type === "bill_cancel_correction")).toBe(false);
+    expect(rows("sync_outbox").at(-1)).toEqual(expect.objectContaining({ operation_type: "SOFT_DELETE_BILL_PENDING" }));
 
     await restoreBillWithOwnerPinLocalFirst(bill.id, "1234", "restore it");
     expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200, totalUdhar: 200 }));
-    expect(rows("customer_ledger").some((entry) => entry.type === "bill_restore_correction" && entry.amount === 200)).toBe(true);
+    expect(rows("customer_ledger").some((entry) => entry.type === "bill_restore_correction")).toBe(false);
+    expect(rows("sync_outbox").at(-1)).toEqual(expect.objectContaining({ operation_type: "RESTORE_BILL_PENDING" }));
   });
 
   it("keeps bill credit, same-amount udhar payments, reversal, purchase, and outbox output consistent", async () => {

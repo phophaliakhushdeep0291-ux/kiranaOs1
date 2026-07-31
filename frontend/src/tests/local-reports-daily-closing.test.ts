@@ -587,6 +587,30 @@ describe("local reports and daily closing", () => {
     expect(closing.cashReceived).toBe(100);
   });
 
+  it("keeps a history-deleted bill in financial calculations", async () => {
+    setRows({
+      bills: [
+        bill("bill_deleted_from_history", "2026-06-06T10:00:00.000Z", {
+          grandTotal: 500,
+          deletedAt: "2026-06-06T12:00:00.000Z",
+          deleted_at: "2026-06-06T12:00:00.000Z",
+        }),
+      ],
+      payments: [
+        payment("payment_deleted_bill", "2026-06-06T10:05:00.000Z", {
+          bill_id: "bill_deleted_from_history",
+          mode: "upi",
+          amount: 500,
+        }),
+      ],
+    });
+
+    const closing = await buildDailyClosingReport("2026-06-06");
+
+    expect(closing.totalSales).toBe(500);
+    expect(closing.upiReceived).toBe(500);
+  });
+
   it("counts estimate (kacha) bills and their payments like real sales", async () => {
     setRows({
       bills: [
