@@ -4,7 +4,7 @@ import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { AppError } from "../../middleware/error.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
-import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill } from "../bills/bills.service.js";
+import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
 import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "../customers/customers.schema.js";
 import { createCustomer, recordUdharPayment, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
@@ -1092,6 +1092,12 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.RESTORE_BILL:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyRestoreBill(shopId, event, context);
+    case SYNC_EVENT_TYPES.DELETE_BILL:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyDeleteBill(shopId, event, context);
+    case SYNC_EVENT_TYPES.RESTORE_DELETED_BILL:
+      await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
+      return applyRestoreDeletedBill(shopId, event, context);
     case SYNC_EVENT_TYPES.SALE_RETURN:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyCreateSaleReturn(shopId, event, user, context);
@@ -1343,6 +1349,19 @@ async function applyCancelBill(shopId, event, context) {
   };
 }
 
+async function applyDeleteBill(shopId, event, context) {
+  const payload = cancelPayloadSchema.parse(getEventPayload(event));
+  const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
+  if (!billId) throw new AppError("billId required for DELETE_BILL sync event", 400);
+  const bill = await softDeleteBill(shopId, billId, { reason: payload.reason });
+  return {
+    type: event.type,
+    billId: bill.id,
+    status: bill.status,
+    deletedAt: bill.deletedAt,
+  };
+}
+
 
 async function applyCreateSaleReturn(shopId, event, user, context) {
   const payload = getEventPayload(event);
@@ -1401,6 +1420,20 @@ async function applyRestoreBill(shopId, event, context) {
     type: event.type,
     billId: bill.id,
     status: bill.status,
+    restoredAt: bill.updatedAt,
+  };
+}
+
+async function applyRestoreDeletedBill(shopId, event, context) {
+  const payload = restoreBillPayloadSchema.parse(getEventPayload(event));
+  const billId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.BILL, payload.serverBillId ?? payload.billId ?? payload.localBillId, context);
+  if (!billId) throw new AppError("billId required for RESTORE_DELETED_BILL sync event", 400);
+  const bill = await restoreDeletedBill(shopId, billId);
+  return {
+    type: event.type,
+    billId: bill.id,
+    status: bill.status,
+    deletedAt: bill.deletedAt,
     restoredAt: bill.updatedAt,
   };
 }

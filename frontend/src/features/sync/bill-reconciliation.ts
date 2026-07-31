@@ -960,9 +960,14 @@ function syncPriority(row: Record<string, unknown>): number {
   return 3;
 }
 
-export function dedupeBillsForDisplay<T extends object>(bills: T[]): T[] {
+export function dedupeBillsForDisplay<T extends object>(
+  bills: T[],
+  options: { includeUserDeleted?: boolean } = {},
+): T[] {
   const candidates = bills
-    .filter((bill) => !isDeleted(bill as Record<string, unknown>))
+    .filter((bill) => options.includeUserDeleted
+      ? !isMergedBillTwin(bill as Record<string, unknown>)
+      : !isDeleted(bill as Record<string, unknown>))
     .map((bill) => withBillSyncFlag(bill));
   const sorted = [...candidates].sort((a, b) => {
     const priorityDelta =

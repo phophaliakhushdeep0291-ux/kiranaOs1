@@ -145,3 +145,37 @@ export async function cancel(req, res, next) {
     if (data.customerId) scheduleAuditEvaluation(req.shopId, ENTITY_TYPES.CUSTOMER, data.customerId, { userId: req.user?.userId });
   } catch (err) { next(err); }
 }
+
+export async function remove(req, res, next) {
+  try {
+    const data = await svc.softDeleteBill(req.shopId, req.params.id, req.body);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "BILL_MOVED_TO_RECYCLE_BIN",
+      entityType: "Bill",
+      entityId: data.id,
+      after: { deletedAt: data.deletedAt, deletedReason: data.deletedReason },
+      metadata: { reason: req.body?.reason ?? null, billNo: data.billNo },
+      req,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
+export async function restore(req, res, next) {
+  try {
+    const data = await svc.restoreDeletedBill(req.shopId, req.params.id);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "BILL_RESTORED_FROM_RECYCLE_BIN",
+      entityType: "Bill",
+      entityId: data.id,
+      after: { deletedAt: data.deletedAt },
+      metadata: { reason: req.body?.reason ?? null, billNo: data.billNo },
+      req,
+    });
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}

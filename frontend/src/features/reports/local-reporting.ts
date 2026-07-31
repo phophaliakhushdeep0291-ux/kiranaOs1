@@ -11,6 +11,7 @@ import {
 } from "@/features/finance/services/FinancialAggregationService";
 import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
 import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/product-pricing";
+import { isMergedBillTwin } from "@/features/sync/bill-reconciliation";
 
 export interface DateRange {
   from: string;
@@ -304,7 +305,7 @@ function isSaleBill(row: LocalBill): boolean {
   // Estimates (kacha bills) count as sales — same money and stock effects as a pakka bill,
   // only the EST- number series differs.
   const status = String(row.status ?? "").toLowerCase();
-  return !isDeleted(row) && !isRejectedBySync(row) && !status.includes("cancel");
+  return !isMergedBillTwin(row) && !isRejectedBySync(row) && !status.includes("cancel");
 }
 
 function billTotal(row: LocalBill): number {

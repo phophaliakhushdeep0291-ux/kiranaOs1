@@ -14,8 +14,8 @@ export const LOCAL_ONLY_SYNC_OPERATION_TYPES = new Set([
 
 const BACKEND_OPERATION_TYPE_MAP: Record<string, string> = {
   CANCEL_BILL_PENDING: "CANCEL_BILL",
-  RESTORE_BILL_PENDING: "RESTORE_BILL",
-  SOFT_DELETE_BILL_PENDING: "CANCEL_BILL",
+  RESTORE_BILL_PENDING: "RESTORE_DELETED_BILL",
+  SOFT_DELETE_BILL_PENDING: "DELETE_BILL",
   CREATE_SALE_RETURN: "SALE_RETURN",
   DELETE_PRODUCT_PENDING: "DELETE_PRODUCT",
   RESTORE_PRODUCT_PENDING: "RESTORE_PRODUCT",
@@ -385,12 +385,12 @@ function normaliseBillLifecyclePayload(
   backendType: string,
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (backendType !== "CANCEL_BILL" && backendType !== "RESTORE_BILL") return payload;
+  if (!["CANCEL_BILL", "RESTORE_BILL", "DELETE_BILL", "RESTORE_DELETED_BILL"].includes(backendType)) return payload;
   return {
     ...payload,
     billId: payload.serverBillId ?? payload.billId ?? payload.localBillId ?? payload.id,
     localBillId: payload.localBillId ?? payload.billId ?? payload.id,
-    reason: payload.reason ?? (backendType === "RESTORE_BILL" ? "Offline restore sync" : "Offline cancellation sync"),
+    reason: payload.reason ?? (backendType === "RESTORE_BILL" || backendType === "RESTORE_DELETED_BILL" ? "Offline restore sync" : "Offline bill lifecycle sync"),
   };
 }
 

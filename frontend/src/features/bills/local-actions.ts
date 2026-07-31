@@ -155,12 +155,6 @@ export async function softDeleteBillWithOwnerPinLocalFirst(id: string, ownerPin:
     is_synced: false,
   } as Bill & Record<string, unknown>;
   await offlineDB.put("bills", updated);
-  // Recycle-binning syncs to the server as CANCEL_BILL, which reverses the bill's udhar there.
-  // Mirror that locally right away (like cancel does) so an offline shop doesn't keep showing
-  // inflated customer debt until the next sync. Already-cancelled bills were corrected already.
-  if (existing.status !== "cancelled") {
-    await createCancellationLedgerCorrection(updated, reason ?? `Moved ${billNumberOf(updated)} to recycle bin`);
-  }
   await writeAudit("soft_delete_bill", updated, ownerPin, reason, existing);
   updateBillCache(updated);
   await enqueueOutboxOperation({
@@ -193,9 +187,6 @@ export async function restoreBillWithOwnerPinLocalFirst(id: string, ownerPin: st
   // Restoring from the recycle bin syncs as RESTORE_BILL, which re-applies the bill's udhar on
   // the server — re-add the customer's debt locally right away so balances stay coherent offline.
   // The recycle-bin move wrote the matching -credit correction, so this nets out exactly.
-  if (isDeletedBill(existing)) {
-    await createRestoreLedgerCorrection(updated, reason ?? `Restored ${billNumberOf(updated)} from recycle bin`);
-  }
   await writeAudit("restore_bill", updated, ownerPin, reason, existing);
   updateBillCache(updated);
   await enqueueOutboxOperation({

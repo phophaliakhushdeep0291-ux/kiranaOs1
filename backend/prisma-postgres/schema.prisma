@@ -550,6 +550,8 @@ model Bill {
   sourceDeviceId        String?
   cancelledAt           DateTime?
   cancelledReason       String?
+  deletedAt             DateTime?
+  deletedReason         String?
   returnOfBillId        String? // set on billType "sales_return": the original sale this return reverses
   refundMode            String? // cash | upi | bank | udhar | gift_card
   businessDate          DateTime  @default(now()) // when the sale happened; differs from createdAt for delayed offline sync
@@ -575,6 +577,7 @@ model Bill {
   @@index([shopId, locationId, status, createdAt])
   @@index([shopId, businessDate])
   @@index([shopId, status, businessDate])
+  @@index([shopId, deletedAt, businessDate])
   @@index([shopId, locationId, status, businessDate])
   @@index([shopId, returnOfBillId])
   @@index([shopId, offerId, status])

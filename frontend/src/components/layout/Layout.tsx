@@ -48,6 +48,7 @@ import { ReportIssueButton } from "@/features/support";
 import { DemoModeBanner } from "@/features/demo/DemoModeBanner";
 import { SyncAlertBanner } from "@/features/sync/SyncAlertBanner";
 import { CommandPalette } from "./CommandPalette";
+import { MobileBottomNav, MobileTopBar } from "./MobileAppChrome";
 import { apiRequest, getApiBaseUrl } from "@/lib/api/http";
 import { getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/stores/location-context";
 import { cn } from "@/lib/utils";
@@ -420,6 +421,13 @@ export function Layout({ children }: { children: ReactNode }) {
     : backendStatus.browserOnline
       ? "bg-sky-500"
       : "bg-amber-500";
+  const mobileConnectionTone = hasSyncProblems
+    ? "attention" as const
+    : isSyncing || hasPendingSync
+      ? "busy" as const
+      : isOnline
+        ? "good" as const
+        : "offline" as const;
   const pageHasOwnTopbarActions = loc === "/reports" || loc === "/sales-overview";
 
   const [sidebarWidth, setSidebarWidth] = useState(() => clampW(Number(readLS(SIDEBAR_WIDTH_KEY, String(DEFAULT_WIDTH)))));
@@ -736,8 +744,18 @@ export function Layout({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </header>
 
-        {/* Mobile topbar */}
-        <header data-app-mobile-topbar="true" className="sticky top-0 z-40 min-h-[var(--app-mobile-topbar-height)] border-b border-[#edf2f8] bg-white/98 px-4 pb-2 pt-[max(0.65rem,env(safe-area-inset-top))] shadow-[0_8px_22px_rgba(15,35,80,0.035)] backdrop-blur-xl lg:hidden">
+        <MobileTopBar
+          pageTitle={getPageTitle(loc)}
+          storeName={storeName}
+          storeLocation={storeLocation}
+          connectionLabel={connectionLabel}
+          connectionTone={mobileConnectionTone}
+          attentionCount={attentionCount}
+          onOpenSearch={() => setPaletteOpen(true)}
+        />
+
+        {/* Legacy mobile topbar retained temporarily while routes migrate to the new shell. */}
+        <header aria-hidden="true" className="hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-4">
               <DropdownMenu>
@@ -800,8 +818,8 @@ export function Layout({ children }: { children: ReactNode }) {
           {children}
         </main>
 
-        {/* Mobile bottom nav */}
-        <nav data-app-mobile-bottom-nav="true" aria-label="Mobile navigation" className="mx-3 mb-3 mt-2 shrink-0 rounded-[22px] border border-[#dbe7f6] bg-white/98 pb-[env(safe-area-inset-bottom)] shadow-[0_16px_40px_rgba(15,35,71,0.12)] backdrop-blur-xl lg:hidden">
+        {/* Legacy mobile navigation retained temporarily while route tests migrate. */}
+        <nav aria-hidden="true" className="hidden">
           <div className="grid grid-cols-5 items-end px-2.5 py-1.5">
             {MOBILE_NAV.filter((item) => item.href === "/dashboard" || item.href === "/inventory").map(({ href, label, Icon }) => {
               const active = isMobileNavActive(loc, href);
@@ -855,6 +873,19 @@ export function Layout({ children }: { children: ReactNode }) {
             </DropdownMenu>
           </div>
         </nav>
+        <MobileBottomNav
+          location={loc}
+          storeName={storeName}
+          storeLocation={storeLocation}
+          connectionLabel={connectionLabel}
+          connectionDetail={connectionDetail}
+          connectionTone={mobileConnectionTone}
+          locations={locations}
+          activeLocationId={activeStoreLocation?.id}
+          onSwitchLocation={switchLocation}
+          onOpenSearch={() => setPaletteOpen(true)}
+          onLogout={logout}
+        />
       </div>
       {cleanPath(loc) !== "/billing" && <VoiceAssistant />}
       <ReportIssueButton />
@@ -1052,4 +1083,3 @@ function BackendUnreachableBanner({ apiBaseUrl }: { apiBaseUrl: string }) {
     </div>
   );
 }
-

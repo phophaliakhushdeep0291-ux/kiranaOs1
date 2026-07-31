@@ -23,5 +23,7 @@ router.get("/:id", ctrl.get);
 router.post("/confirm", requireLocationAccess("sell"), requireFeature("basic_billing"), validate(confirmBillSchema), requireSensitiveBillApproval, ctrl.confirm);
 router.post("/returns", requireLocationAccess("sell"), requireFeature("basic_billing"), requireOwnerPin, validate(saleReturnSchema), ctrl.saleReturn);
 router.post("/:id/cancel", requireOwnerPin, validate(cancelBillSchema), ctrl.cancel);
+router.post("/:id/delete", requireOwnerPin, validate(cancelBillSchema), ctrl.remove);
+router.post("/:id/restore", requireOwnerPin, validate(cancelBillSchema), ctrl.restore);
 
 export default router;

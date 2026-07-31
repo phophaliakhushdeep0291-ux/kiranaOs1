@@ -43,6 +43,59 @@ if (ctx.skip) {
       assert.equal(typeof summary.total, "number");
     });
 
+    test("owner reconciliation proves journal parity, detects drift, and survives cancellation", async () => {
+      const tenant = await createTenant(ctx.db);
+      const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const staff = await createStaff(ctx.db, tenant.shop.id);
+      const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 75 });
+      const bill = await createPaidBillViaApi(ctx, auth.accessToken, product, {
+        quantity: 1,
+        ratePerRateUnit: 75,
+        payments: [{ mode: "cash", amount: 75 }],
+      });
+
+      assertFailure(await ctx.get("/api/reports/financial-ledger-reconciliation", { token: staffAuth.accessToken }), 403);
+
+      const reconciled = assertSuccess(await ctx.get("/api/reports/financial-ledger-reconciliation", { token: auth.accessToken }));
+      assert.equal(reconciled.authority, "operational_tables_and_locked_snapshots");
+      assert.equal(reconciled.journalRole, "append_only_reconciliation_candidate");
+      assert.equal(reconciled.comparisonScope, "shop_all_time_current_state");
+      assert.equal(reconciled.readyForCutover, true);
+      assert.deepEqual(reconciled.variancePaise, {
+        sales: 0,
+        cashCollected: 0,
+        upiCollected: 0,
+        bankCollected: 0,
+        outstanding: 0,
+      });
+
+      await ctx.db.financialLedger.create({
+        data: {
+          shopId: tenant.shop.id,
+          sourceType: "reconciliation_fixture",
+          sourceId: "intentional-drift",
+          entryType: "sale",
+          direction: "debit",
+          amountPaise: 1n,
+          businessDate: new Date(),
+          idempotencyKey: "reconciliation:intentional-drift",
+        },
+      });
+      const drifted = assertSuccess(await ctx.get("/api/reports/financial-ledger-reconciliation", { token: auth.accessToken }));
+      assert.equal(drifted.readyForCutover, false);
+      assert.equal(drifted.variancePaise.sales, 1);
+      await ctx.db.financialLedger.deleteMany({ where: { shopId: tenant.shop.id, sourceType: "reconciliation_fixture" } });
+
+      await ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "reconciliation cancellation" }, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+      const cancelled = assertSuccess(await ctx.get("/api/reports/financial-ledger-reconciliation", { token: auth.accessToken }));
+      assert.equal(cancelled.readyForCutover, true);
+      assert.equal(cancelled.operational.sales, 0);
+      assert.equal(cancelled.journal.sales, 0);
+      assert.equal(cancelled.operational.cashCollected, 0);
+      assert.equal(cancelled.journal.cashCollected, 0);
+    });
+
     test("report data is shop-scoped", async () => {
       const a = await createTenant(ctx.db);
       const b = await createTenant(ctx.db);

@@ -161,6 +161,10 @@ export async function paymentSummary(req, res, next) {
   try { res.json({ success: true, data: await svc.getPaymentSummary(req.shopId, scopedQuery(req)) }); }
   catch (err) { next(err); }
 }
+export async function financialLedgerReconciliation(req, res, next) {
+  try { res.json({ success: true, data: await svc.getFinancialLedgerReconciliation(req.shopId) }); }
+  catch (err) { next(err); }
+}
 export async function exportBills(req, res, next) {
   try {
     const data = await svc.exportBillsData(req.shopId, scopedQuery(req));
