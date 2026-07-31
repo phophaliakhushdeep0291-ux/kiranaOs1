@@ -251,7 +251,20 @@ export async function recordPurchase(shopId, data, identity = {}) {
     });
     if (!product) throw new AppError("Product not found", 404);
 
-    const qtyInBase = toBaseQty(quantity, enteredUnit, product.baseUnit);
+    // Receiving against a specific packaging ("12 boxes of the 8-pack"): `quantity`
+    // counts that pack, so the base quantity comes from the pack's own conversion.
+    // Resolved against this product so a stale or mistyped id cannot post stock
+    // onto another product's packaging.
+    const receivedSellingUnit = data.sellingUnitId
+      ? await tx.productSellingUnit.findFirst({ where: { id: data.sellingUnitId, shopId, productId: product.id } })
+      : null;
+    if (data.sellingUnitId && !receivedSellingUnit) {
+      throw new AppError("That packaging does not belong to this product", 400, "SELLING_UNIT_PRODUCT_MISMATCH");
+    }
+
+    const qtyInBase = receivedSellingUnit
+      ? round2(quantity * Number(receivedSellingUnit.conversionToBase))
+      : toBaseQty(quantity, enteredUnit, product.baseUnit);
     const factor = Number(data.conversionToBase ?? data.conversion_to_base ?? 0) > 0
       ? Number(data.conversionToBase ?? data.conversion_to_base)
       : rateUnitToBase(product.rateUnit, product.baseUnit);
@@ -278,6 +291,9 @@ export async function recordPurchase(shopId, data, identity = {}) {
         ...(updateCost && { costPerRateUnit: newCost, ...moneyShadows({ costPerRateUnit: newCost }) }),
         ...(updateMinPrice && { minPricePerRateUnit: pricePerRateUnit, ...moneyShadows({ minPricePerRateUnit: pricePerRateUnit }) }),
       },
+      packs: receivedSellingUnit
+        ? new Map([[receivedSellingUnit.id, { sellingUnit: receivedSellingUnit, qty: round2(quantity) }]])
+        : null,
     });
 
     // The purchase row is written FIRST so the stock movement can point at it.
@@ -311,6 +327,11 @@ export async function recordPurchase(shopId, data, identity = {}) {
         changeBaseQty: qtyInBase,
         oldStockBaseQty: stockResult.oldStock,
         newStockBaseQty: stockResult.newStock,
+        // Which packaging this receipt was counted in, so a per-size history can be
+        // reconstructed later without re-deriving it from base units (which cannot
+        // distinguish 8 single packets from one 8-pack).
+        sellingUnitId: receivedSellingUnit?.id ?? null,
+        sellingUnitQty: receivedSellingUnit ? round2(quantity) : null,
         purchaseBillAmount: billAmount,
         calculatedBuyRate: pricePerRateUnit,
         ...purchasePayment,
