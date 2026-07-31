@@ -6,6 +6,7 @@ import type { Expense, ExpenseInput } from "@/types/api";
 
 type LocalExpense = Expense & {
   local_id: string;
+  server_id?: string;
   tenant_id: string;
   store_id: string;
   device_id: string;
@@ -13,7 +14,7 @@ type LocalExpense = Expense & {
   updated_at: string;
   deleted_at: null;
   version: number;
-  sync_status: "pending_sync";
+  sync_status: "pending_sync" | "syncing" | "synced" | "failed" | "conflict" | "local_only";
 };
 
 export async function createExpenseLocalFirst(data: ExpenseInput): Promise<Expense> {

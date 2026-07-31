@@ -76,6 +76,8 @@ const LOCAL_IDENTITY_PAYLOAD_KEYS = new Set([
   "local_purchase_history_id",
   "localPurchaseBillId",
   "local_purchase_bill_id",
+  "localExpenseId",
+  "local_expense_id",
   "local_items",
   "local_payments",
   "local_ledger_entries",
@@ -154,6 +156,8 @@ const ID_MAPPING_ENTITY_ALIASES: Record<string, string> = {
   stock_ledger: "stock_ledger",
   inventoryMovements: "inventory_movement",
   inventory_movements: "inventory_movement",
+  expenses: "expense",
+  expense: "expense",
 };
 
 function normalizeMappingEntityType(entityType: string): string {
@@ -232,6 +236,7 @@ export async function replaceReferences(
     "inventory_movements",
     "suppliers",
     "purchase_bills",
+    "expenses",
     "settings",
     "sync_outbox",
   ];
@@ -244,6 +249,7 @@ export async function replaceReferences(
           Record<string, unknown>,
           string
         >;
+        if (!table || typeof table.filter !== "function") continue;
         await table.filter(rowMatchesCurrentScope).modify((row) => {
           const replaced = deepReplaceExact(row, localId, serverId);
           if (isRecord(replaced)) Object.assign(row, replaced);
@@ -488,6 +494,7 @@ export async function replaceLocalEntityId(
       "customer_ledger",
       "inventory_movements",
       "purchase_bills",
+      "expenses",
     ]);
     if (financialTables.has(tableName)) {
       const now = nowIso();

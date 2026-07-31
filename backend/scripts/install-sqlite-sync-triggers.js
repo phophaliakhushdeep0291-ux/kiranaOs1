@@ -8,6 +8,7 @@ const directEntities = [
   ["UdharLedger", "udhar_ledger"],
   ["Supplier", "supplier"],
   ["PurchaseHistory", "purchase_history"],
+  ["Expense", "expense"],
 ];
 
 const statements = [];

@@ -239,6 +239,10 @@ function collectIdentityKeysFromRecord(record: unknown): string[] {
     "local_product_id",
     "serverProductId",
     "server_product_id",
+    "expenseId",
+    "expense_id",
+    "localExpenseId",
+    "local_expense_id",
   ];
   return keys.map((key) => readString(record[key])).filter((key): key is string => Boolean(key));
 }
