@@ -606,8 +606,8 @@ export function BillingSummary({
 
             {/* Grand total */}
             <div className="mt-2 flex items-center justify-between border-t border-[#edf1f6] pt-3">
-              <span className="font-display text-[18px] font-black tracking-tight text-[#0f1e3d]">Grand Total</span>
-              <span className="font-display text-[21px] font-black tracking-tight text-[#0f1e3d]" data-testid="text-total">
+              <span className="font-display text-[18px] font-black tracking-tight text-[var(--brand-ink)]">Grand Total</span>
+              <span className="font-display text-[21px] font-black tracking-tight text-[var(--brand-ink)]" data-testid="text-total">
                 {fmtRs(grandTotal)}
               </span>
             </div>

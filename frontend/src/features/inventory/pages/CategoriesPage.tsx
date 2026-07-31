@@ -128,7 +128,7 @@ export default function CategoriesPage() {
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[12px] ${c.cls}`}>{c.icon}</span>
             <div className="min-w-0">
               <p className="text-[12px] font-semibold text-[#6d7c98]">{c.label}</p>
-              <p className="font-display text-[22px] font-black leading-tight tracking-tight text-[#0f1e3d]">{c.value.toLocaleString("en-IN")}</p>
+              <p className="font-display text-[22px] font-black leading-tight tracking-tight text-[var(--brand-ink)]">{c.value.toLocaleString("en-IN")}</p>
               <p className="text-[11px] text-[#9aa6bb]">{c.sub}</p>
             </div>
           </div>
@@ -140,7 +140,7 @@ export default function CategoriesPage() {
         <div className="relative min-w-0 flex-1">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
           <Input
-            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
+            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
             placeholder="Search categories..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -272,7 +272,7 @@ function CategoryDialog({
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Category" : "Add Category"}</h2>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing ? "Edit Category" : "Add Category"}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this category." : "Create a new product category."}</p>
         </div>
         <button onClick={() => onOpenChange(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>

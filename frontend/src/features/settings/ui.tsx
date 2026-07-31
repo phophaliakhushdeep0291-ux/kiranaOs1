@@ -20,12 +20,12 @@ const BADGE_TONES: Record<Tone, string> = {
 };
 
 const KPI_TONES: Record<Tone, { ring: string; value: string }> = {
-  blue: { ring: "bg-[var(--brand-soft)] text-[var(--brand)]", value: "text-[#102347]" },
-  green: { ring: "bg-emerald-50 text-emerald-600", value: "text-[#102347]" },
-  amber: { ring: "bg-amber-50 text-amber-600", value: "text-[#102347]" },
-  red: { ring: "bg-rose-50 text-rose-600", value: "text-[#102347]" },
-  gray: { ring: "bg-[#eef2f8] text-[#64748b]", value: "text-[#102347]" },
-  violet: { ring: "bg-violet-50 text-violet-600", value: "text-[#102347]" },
+  blue: { ring: "bg-[var(--brand-soft)] text-[var(--brand)]", value: "text-[var(--brand-ink)]" },
+  green: { ring: "bg-emerald-50 text-emerald-600", value: "text-[var(--brand-ink)]" },
+  amber: { ring: "bg-amber-50 text-amber-600", value: "text-[var(--brand-ink)]" },
+  red: { ring: "bg-rose-50 text-rose-600", value: "text-[var(--brand-ink)]" },
+  gray: { ring: "bg-[#eef2f8] text-[#64748b]", value: "text-[var(--brand-ink)]" },
+  violet: { ring: "bg-violet-50 text-violet-600", value: "text-[var(--brand-ink)]" },
 };
 
 function labelControl(node: ReactNode, label: string, descriptionId?: string) {
@@ -51,7 +51,7 @@ export function CardHead({ icon, title, sub, action }: { icon?: ReactNode; title
       <div className="flex min-w-0 items-center gap-2.5">
         {icon && <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand)]">{icon}</span>}
         <div className="min-w-0">
-          <h3 className="truncate font-display text-[14px] font-black tracking-tight text-[#102347]">{title}</h3>
+          <h3 className="truncate font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">{title}</h3>
           {sub && <p className="line-clamp-2 text-[11px] text-[#64748b]">{sub}</p>}
         </div>
       </div>
@@ -82,7 +82,7 @@ export function Info({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
       <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
-      <p className="truncate text-[13px] font-bold text-[#102347]">{value}</p>
+      <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{value}</p>
     </div>
   );
 }
@@ -93,7 +93,7 @@ export function RowToggle({ label, desc, pill, last }: { label: string; desc?: s
   return (
     <div className={cn("flex min-w-0 flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:gap-3", !last && "border-b border-[#eef2f8]")}>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-bold text-[#102347]">{label}</p>
+        <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{label}</p>
         {desc && <p id={descriptionId} className="truncate text-[11px] text-[#64748b]">{desc}</p>}
       </div>
       <div className="flex min-w-0 shrink-0 justify-start sm:justify-end">{labelControl(pill, label, descriptionId)}</div>

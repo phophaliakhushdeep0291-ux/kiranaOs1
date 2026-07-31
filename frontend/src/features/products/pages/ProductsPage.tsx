@@ -432,7 +432,7 @@ export default function ProductsPage() {
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" aria-hidden="true" />
           <Input
             data-testid="input-search"
-            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
+            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
             placeholder="Search by product name, barcode or SKU"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -487,7 +487,7 @@ export default function ProductsPage() {
           ) : pagedRows.length === 0 ? (
             <div className="rounded-[16px] border border-dashed border-[#d8e2f1] px-4 py-12 text-center">
               <Package size={26} className="mx-auto text-[#94a3b8]" />
-              <p className="mt-2 text-sm font-black text-[#102347]">No products found</p>
+              <p className="mt-2 text-sm font-black text-[var(--brand-ink)]">No products found</p>
               <p className="mt-1 text-xs text-[#64748b]">Add a product or clear the current filters.</p>
             </div>
           ) : pagedRows.map((product) => {
@@ -507,7 +507,7 @@ export default function ProductsPage() {
                     {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain" /> : getProductEmoji(product.name, product.category)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-black text-[#102347]">{product.name}</p>
+                    <p className="truncate text-[14px] font-black text-[var(--brand-ink)]">{product.name}</p>
                     <p className="mt-0.5 truncate text-[11px] font-semibold capitalize text-[#64748b]">{product.category || "General"} · {unit}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="text-[15px] font-black text-[var(--brand)]">{rs(price)}</span>
@@ -783,7 +783,7 @@ function StatCard({ icon, iconClass, label, value, sub }: { icon: React.ReactNod
       <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[11px] sm:h-11 sm:w-11 sm:rounded-[12px] ${iconClass}`}>{icon}</span>
       <div className="min-w-0">
         <p className="text-[11px] font-semibold leading-tight text-[#6d7c98] sm:text-[12px]">{label}</p>
-        <p className="font-display text-[20px] font-black leading-tight tracking-tight text-[#0f1e3d] sm:text-[22px]">{value}</p>
+        <p className="font-display text-[20px] font-black leading-tight tracking-tight text-[var(--brand-ink)] sm:text-[22px]">{value}</p>
         <p className="hidden text-[11px] text-[#9aa6bb] sm:block">{sub}</p>
       </div>
     </div>

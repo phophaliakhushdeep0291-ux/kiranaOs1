@@ -286,7 +286,7 @@ export default function StoreProfilePage() {
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-display text-[20px] font-black tracking-tight text-[#0f1e3d]">{biz.name || shop?.name || "My Store"}</h2>
+                <h2 className="font-display text-[20px] font-black tracking-tight text-[var(--brand-ink)]">{biz.name || shop?.name || "My Store"}</h2>
                 {/* GSTIN is the one identity claim the server actually validates. */}
                 {shop?.gstNumber
                   ? <Badge tone="green"><BadgeCheck size={12} /> GST registered</Badge>
@@ -371,7 +371,7 @@ export default function StoreProfilePage() {
               const h = hours[day] ?? DEFAULT_DAY;
               return (
                 <div key={day} className="flex flex-col gap-2 border-b border-[#eef2f8] py-2 last:border-0 sm:flex-row sm:items-center sm:gap-3">
-                  <span className="w-[84px] shrink-0 text-[12px] font-bold text-[#102347]">{day}</span>
+                  <span className="w-[84px] shrink-0 text-[12px] font-bold text-[var(--brand-ink)]">{day}</span>
                   <Switch checked={h.open} onCheckedChange={(v) => setDay(day, { ...h, open: v })} />
                   {h.open ? (
                     <div className="flex flex-1 items-center gap-1.5 sm:justify-end">
@@ -410,7 +410,7 @@ export default function StoreProfilePage() {
                 <div key={d.key} className="flex flex-wrap items-center gap-3 border-b border-[#eef2f8] py-2.5 last:border-0">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[#f4f7fb] text-[#536583]"><FileText size={14} /></span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-bold text-[#102347]">{d.label}</span>
+                    <span className="block truncate text-[13px] font-bold text-[var(--brand-ink)]">{d.label}</span>
                     {doc ? <span className="block truncate text-[11px] text-[#64748b]">{doc.name} · {formatFileSize(doc.size)} · {new Date(doc.at).toLocaleDateString("en-IN")}</span> : null}
                   </span>
                   {doc

@@ -122,7 +122,7 @@ export default function ImportOrderPage() {
     return (
       <Centered>
         <Icon tone="blue"><Layers size={26} /></Icon>
-        <h1 className="mt-4 font-display text-lg font-black text-[#102347]">Big order — {have} of {total} QRs scanned</h1>
+        <h1 className="mt-4 font-display text-lg font-black text-[var(--brand-ink)]">Big order — {have} of {total} QRs scanned</h1>
         <p className="mt-1 max-w-sm text-center text-sm text-[#5b6b85]">
           Open your camera again and scan the next QR on the customer’s phone. They’ll show all {total} in order.
         </p>
@@ -147,7 +147,7 @@ export default function ImportOrderPage() {
     return (
       <Centered>
         <Icon tone="rose"><AlertTriangle size={26} /></Icon>
-        <h1 className="mt-4 font-display text-lg font-black text-[#102347]">Invalid order link</h1>
+        <h1 className="mt-4 font-display text-lg font-black text-[var(--brand-ink)]">Invalid order link</h1>
         <p className="mt-1 max-w-sm text-center text-sm text-[#5b6b85]">
           This page opens a customer’s scanned order. Scan the QR shown on the customer’s phone again.
         </p>
@@ -173,7 +173,7 @@ export default function ImportOrderPage() {
       <div className="mb-4 flex items-center gap-3">
         <Icon tone="blue"><ScanLine size={22} /></Icon>
         <div>
-          <h1 className="font-display text-xl font-black text-[#102347]">Customer order</h1>
+          <h1 className="font-display text-xl font-black text-[var(--brand-ink)]">Customer order</h1>
           <p className="text-[12px] font-semibold text-[#6b7a93]">Review the scanned items, then add to billing.</p>
         </div>
       </div>
@@ -194,12 +194,12 @@ export default function ImportOrderPage() {
                 className="flex items-center gap-3 rounded-2xl border border-[#e6edf6] bg-white p-3 shadow-[0_4px_14px_rgba(26,57,112,0.04)]"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-[#102347]">{line.product.name}</p>
+                  <p className="truncate text-sm font-bold text-[var(--brand-ink)]">{line.product.name}</p>
                   <p className="text-[12px] font-semibold text-[#5b6b85]">
                     {line.quantity} {line.unit} × {formatRs(line.rate)}
                   </p>
                 </div>
-                <p className="font-display text-sm font-black text-[#102347]">{formatRs(line.rate * line.quantity)}</p>
+                <p className="font-display text-sm font-black text-[var(--brand-ink)]">{formatRs(line.rate * line.quantity)}</p>
               </li>
             ))}
           </ul>

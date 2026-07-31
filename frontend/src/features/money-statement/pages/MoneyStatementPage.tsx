@@ -223,7 +223,7 @@ export default function MoneyStatementPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search name, mobile, bill no, supplier..."
-                className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-[#102347] outline-none placeholder:text-[#7a879b]"
+                className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-[var(--brand-ink)] outline-none placeholder:text-[#7a879b]"
               />
             </label>
             <div className="flex flex-wrap gap-2">
@@ -232,20 +232,20 @@ export default function MoneyStatementPage() {
                   key={item}
                   type="button"
                   onClick={() => setPresetRange(item)}
-                  className={cn("h-11 rounded-[12px] border px-4 text-[12px] font-black capitalize transition", preset === item ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(7,95,255,0.20)]" : "border-[#dbe4f0] bg-white text-[#102347] hover:border-[#b9c8dd]")}
+                  className={cn("h-11 rounded-[12px] border px-4 text-[12px] font-black capitalize transition", preset === item ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(7,95,255,0.20)]" : "border-[#dbe4f0] bg-white text-[var(--brand-ink)] hover:border-[#b9c8dd]")}
                 >
                   {item}
                 </button>
               ))}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
-              <input type="date" value={range.from} onChange={(event) => { setPreset("week"); setRange((old) => ({ ...old, from: event.target.value })); }} className="h-11 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[12px] font-bold text-[#102347]" />
-              <input type="date" value={range.to} onChange={(event) => { setPreset("week"); setRange((old) => ({ ...old, to: event.target.value })); }} className="h-11 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[12px] font-bold text-[#102347]" />
+              <input type="date" value={range.from} onChange={(event) => { setPreset("week"); setRange((old) => ({ ...old, from: event.target.value })); }} className="h-11 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[12px] font-bold text-[var(--brand-ink)]" />
+              <input type="date" value={range.to} onChange={(event) => { setPreset("week"); setRange((old) => ({ ...old, to: event.target.value })); }} className="h-11 rounded-[12px] border border-[#dbe4f0] bg-white px-3 text-[12px] font-bold text-[var(--brand-ink)]" />
             </div>
             <button
               type="button"
               onClick={refresh}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-[#dbe4f0] bg-white px-4 text-[12px] font-black text-[#102347] hover:border-[#b9c8dd]"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-[#dbe4f0] bg-white px-4 text-[12px] font-black text-[var(--brand-ink)] hover:border-[#b9c8dd]"
             >
               <RefreshCw size={15} className={loading ? "animate-spin" : undefined} /> Refresh
             </button>
@@ -315,15 +315,15 @@ export default function MoneyStatementPage() {
                     className="cursor-pointer text-[12px] font-semibold text-[#253854] outline-none transition-colors hover:bg-[#fbfdff] focus-visible:bg-[var(--brand-soft)]"
                   >
                     <td className="px-4 py-3">
-                      <p className="font-black text-[#102347]">{row.dateLabel}</p>
+                      <p className="font-black text-[var(--brand-ink)]">{row.dateLabel}</p>
                       <p className="text-[11px] text-[#718096]">{row.timeLabel}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-black text-[#102347]">{row.partyName}</p>
+                      <p className="font-black text-[var(--brand-ink)]">{row.partyName}</p>
                       {row.partyMobile && <p className="text-[11px] text-[#718096]">{row.partyMobile}</p>}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-black text-[#102347]">{row.source}</p>
+                      <p className="font-black text-[var(--brand-ink)]">{row.source}</p>
                       <p className="text-[11px] text-[#718096]">{row.reference}</p>
                     </td>
                     <td className="px-4 py-3"><ModeBadge mode={row.mode} /></td>
@@ -341,7 +341,7 @@ export default function MoneyStatementPage() {
               <button key={row.id} type="button" onClick={() => setSelectedRowId(row.id)} className="w-full p-4 text-left transition-colors active:bg-[#f5f9ff]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-[14px] font-black text-[#102347]">{row.partyName}</p>
+                    <p className="truncate text-[14px] font-black text-[var(--brand-ink)]">{row.partyName}</p>
                     <p className="mt-1 text-[11px] font-semibold text-[#718096]">{row.dateLabel} · {row.timeLabel}</p>
                   </div>
                   <p className={cn("text-[17px] font-black", row.direction === "in" ? "text-[#159447]" : "text-[#ef3340]")}>
@@ -361,7 +361,7 @@ export default function MoneyStatementPage() {
             <div className="grid min-h-[260px] place-items-center px-4 py-10 text-center">
               <div>
                 <div className="mx-auto grid h-14 w-14 place-items-center rounded-[16px] bg-[var(--brand-soft)] text-[var(--brand)]"><Landmark size={24} /></div>
-                <p className="mt-4 text-[17px] font-black text-[#102347]">No money movement found</p>
+                <p className="mt-4 text-[17px] font-black text-[var(--brand-ink)]">No money movement found</p>
                 <p className="mt-1 text-[12px] font-semibold text-[#718096]">Try a different date, mode, or search term.</p>
               </div>
             </div>
@@ -482,7 +482,7 @@ function MoneyStatementDetailPanel({ row, onClose }: { row: MoneyStatementRow; o
                   <tbody className="divide-y divide-[#edf2f8]">
                     {items.map((item) => (
                       <tr key={item.id} className="text-[12px] font-semibold text-[#253854]">
-                        <td className="px-4 py-3 font-black text-[#102347]">{item.name}</td>
+                        <td className="px-4 py-3 font-black text-[var(--brand-ink)]">{item.name}</td>
                         <td className="px-4 py-3 text-right">{item.quantity} {item.unit ?? ""}</td>
                         <td className="px-4 py-3 text-right">{money(item.rate)}</td>
                         <td className="px-4 py-3 text-right font-black">{money(item.amount)}</td>
@@ -497,7 +497,7 @@ function MoneyStatementDetailPanel({ row, onClose }: { row: MoneyStatementRow; o
                   <div className="mx-auto grid h-12 w-12 place-items-center rounded-[14px] bg-[#f3f7fc] text-[#62708a]">
                     <PackageOpen size={21} />
                   </div>
-                  <p className="mt-3 text-[13px] font-black text-[#102347]">
+                  <p className="mt-3 text-[13px] font-black text-[var(--brand-ink)]">
                     {detail?.kind === "udhar-payment" ? "Payment against outstanding udhar" : "No item rows found"}
                   </p>
                   <p className="mt-1 text-[11px] font-semibold text-[#718096]">{detail?.note || row.note || "This entry has no item-level details saved locally."}</p>

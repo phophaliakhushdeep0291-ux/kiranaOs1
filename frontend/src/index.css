@@ -108,6 +108,8 @@
      re-declares the same five tokens on one hue. */
   --brand: hsl(217 100% 51%);
   --brand-strong: hsl(220 100% 45%);
+  --brand-ink: color-mix(in srgb, var(--brand) 30%, #07101f);
+  --brand-ink-soft: color-mix(in srgb, var(--brand) 17%, #334155);
   --brand-soft: hsl(217 100% 96%);
   --brand-softer: hsl(217 100% 98%);
   --brand-border: hsl(217 100% 90%);
@@ -1383,7 +1385,7 @@ html[data-density="compact"] {
 
   .kirana-mobile-kpi-label {
     min-width: 0;
-    color: #102347;
+    color: var(--brand-ink);
     font-size: 0.78rem;
     font-weight: 800;
     line-height: 1.2;
@@ -1451,7 +1453,7 @@ html[data-density="compact"] {
     border: 1px solid #dce7f5;
     background: #ffffff;
     padding-inline: 0.95rem;
-    color: #102347;
+    color: var(--brand-ink);
     font-size: 0.82rem;
     font-weight: 850;
     white-space: nowrap;
@@ -1542,7 +1544,7 @@ html[data-density="compact"] {
     --app-mobile-content-bottom-clearance: 1.25rem;
     --mobile-surface: #ffffff;
     --mobile-canvas: #ffffff;
-    --mobile-ink: #0a1538;
+    --mobile-ink: var(--brand-ink);
     --mobile-muted: #62708b;
     --mobile-line: #e3e9f3;
     --mobile-brand: var(--brand);
@@ -2126,7 +2128,7 @@ html[data-density="compact"] {
   }
 
   .premium-page-header h1 {
-    color: #10224a;
+    color: var(--brand-ink);
     font-size: 1.15rem;
   }
 

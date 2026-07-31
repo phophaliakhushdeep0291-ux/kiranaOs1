@@ -153,7 +153,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
             <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[12px] ${c.cls}`}>{c.icon}</span>
             <div className="min-w-0">
               <p className="text-[12px] font-semibold text-[#6d7c98]">{c.label}</p>
-              <p className="font-display text-[22px] font-black leading-tight tracking-tight text-[#0f1e3d]">{c.value}</p>
+              <p className="font-display text-[22px] font-black leading-tight tracking-tight text-[var(--brand-ink)]">{c.value}</p>
               <p className="text-[11px] text-[#9aa6bb]">{c.sub}</p>
             </div>
           </div>
@@ -165,7 +165,7 @@ export function StockStatusView({ mode }: { mode: "in" | "out" }) {
         <div className="relative min-w-0 flex-1">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" aria-hidden="true" />
           <Input
-            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
+            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
             placeholder="Search by product name, barcode or SKU"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

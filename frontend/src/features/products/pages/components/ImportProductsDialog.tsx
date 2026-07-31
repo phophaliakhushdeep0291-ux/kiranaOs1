@@ -238,7 +238,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
     <Dialog open={open} onOpenChange={(value) => { onOpenChange(value); if (!value) reset(); }}>
       <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto bg-[#f8fafc] p-0">
         <DialogHeader className="border-b border-[#e0e7f1] bg-white px-5 py-4">
-          <DialogTitle className="flex items-center gap-2 text-[18px] font-black text-[#0f1e3d]">
+          <DialogTitle className="flex items-center gap-2 text-[18px] font-black text-[var(--brand-ink)]">
             <FileSpreadsheet size={20} className="text-[var(--brand)]" />
             Migrate products and opening stock
           </DialogTitle>

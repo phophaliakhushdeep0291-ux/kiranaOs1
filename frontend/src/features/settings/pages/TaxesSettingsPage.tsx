@@ -301,7 +301,7 @@ export default function TaxesSettingsPage() {
               <div key={r} className={`flex items-center gap-3 py-2.5 ${i < arr.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
                 <span className="grid h-8 w-12 shrink-0 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[13px] font-black text-[var(--brand)]">{r}%</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-bold text-[#102347]">{RATE_INFO[r]}</p>
+                  <p className="text-[13px] font-bold text-[var(--brand-ink)]">{RATE_INFO[r]}</p>
                   <p className="text-[11px] text-[#64748b]">{tax.defaultRate === r ? "Default rate" : "Tap to use on products"}</p>
                 </div>
                 {tax.defaultRate === r && <Badge tone="blue">Default</Badge>}
@@ -344,7 +344,7 @@ export default function TaxesSettingsPage() {
                 {!hsnSummaryQ.isLoading && hsnRows.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-[#64748b]">Add products to build the HSN classification summary.</td></tr> : null}
                 {hsnRows.map((row, i) => (
                   <tr key={row.cat} className={i < hsnRows.length - 1 ? "border-b border-[#eef2f8]" : ""}>
-                    <td className="px-3 py-2.5 font-bold text-[#102347]">{row.cat}</td>
+                    <td className="px-3 py-2.5 font-bold text-[var(--brand-ink)]">{row.cat}</td>
                     <td className="px-3 py-2.5"><Badge tone={row.rate === "Mixed" ? "amber" : "gray"}>{row.rate}</Badge></td>
                     <td className="px-3 py-2.5 font-mono text-[#344668]"><span className="inline-flex items-center gap-2">{row.hsn}{!row.consistent ? <Badge tone="amber">Review</Badge> : <Badge tone="green">Valid</Badge>}</span></td>
                     <td className="px-3 py-2.5 text-[#64748b]">{row.count} products</td>
@@ -403,14 +403,14 @@ export default function TaxesSettingsPage() {
           <div className="px-5 pb-4">
             <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3">
-                <div><p className="text-[13px] font-black text-[#102347]">Compliance readiness</p><p className="mt-0.5 text-[11px] text-[#64748b]">Server-validated—not a local preference</p></div>
+                <div><p className="text-[13px] font-black text-[var(--brand-ink)]">Compliance readiness</p><p className="mt-0.5 text-[11px] text-[#64748b]">Server-validated—not a local preference</p></div>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-black ${readinessQ.data?.legallyReady ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{readinessQ.isLoading ? "Checking…" : `${readinessQ.data?.score ?? 0}%`}</span>
               </div>
               <div className="mt-3 space-y-2">
                 {(readinessQ.data?.checks ?? []).map((check) => (
                   <div key={check.key} className="flex items-start gap-2">
                     {check.ready ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-600" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />}
-                    <div><p className="text-[12px] font-bold text-[#102347]">{check.label}</p><p className="text-[11px] leading-4 text-[#64748b]">{check.detail}</p></div>
+                    <div><p className="text-[12px] font-bold text-[var(--brand-ink)]">{check.label}</p><p className="text-[11px] leading-4 text-[#64748b]">{check.detail}</p></div>
                   </div>
                 ))}
               </div>

@@ -42,7 +42,7 @@ export default function DeviceRemovedPage() {
         <div className="grid h-14 w-14 place-items-center rounded-lg bg-rose-50 text-rose-600">
           <ShieldAlert className="h-7 w-7" />
         </div>
-        <h1 className="mt-5 text-2xl font-black text-[#102347]">This device was removed from the shop</h1>
+        <h1 className="mt-5 text-2xl font-black text-[var(--brand-ink)]">This device was removed from the shop</h1>
         <p className="mt-2 text-sm leading-6 text-[#60708e]">
           Cloud access and synchronization have stopped. Local business records remain on this device and have not been deleted.
         </p>

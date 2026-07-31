@@ -176,7 +176,7 @@ export default function SyncSettingsPage() {
             {(pendingCount + failedCount + conflictCount) === 0 ? (
               <div className="flex flex-col items-center gap-2 py-6 text-center">
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 size={22} /></span>
-                <p className="text-[13px] font-bold text-[#102347]">Everything is synced</p>
+                <p className="text-[13px] font-bold text-[var(--brand-ink)]">Everything is synced</p>
                 <p className="text-[11px] text-[#64748b]">No changes are waiting to upload.</p>
               </div>
             ) : (
@@ -240,7 +240,7 @@ export default function SyncSettingsPage() {
             ) : backups.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-7 text-center">
                 <span className="grid h-11 w-11 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Archive size={20} /></span>
-                <p className="text-[13px] font-bold text-[#102347]">No portable snapshot yet</p>
+                <p className="text-[13px] font-bold text-[var(--brand-ink)]">No portable snapshot yet</p>
                 <p className="max-w-sm text-[11px] text-[#64748b]">Create one before a major import, migration, device replacement, or support recovery.</p>
               </div>
             ) : backups.slice(0, 8).map((artifact) => (
@@ -248,7 +248,7 @@ export default function SyncSettingsPage() {
                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><Archive size={16} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[12px] font-bold text-[#102347]">{backupTime(artifact.completed_at ?? artifact.created_at)}</p>
+                    <p className="text-[12px] font-bold text-[var(--brand-ink)]">{backupTime(artifact.completed_at ?? artifact.created_at)}</p>
                     <Badge tone={backupTone(artifact.status)}>{artifact.status.replace("_", " ")}</Badge>
                   </div>
                   <p className="mt-1 truncate text-[11px] text-[#64748b]">

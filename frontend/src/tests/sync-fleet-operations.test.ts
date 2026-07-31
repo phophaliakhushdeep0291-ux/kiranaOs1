@@ -30,4 +30,12 @@ describe("sync fleet operations", () => {
       expect(page).toContain(label);
     }
   });
+
+  it("never offers destructive version selection for financial conflicts", () => {
+    expect(page).toContain('["product", "products", "customer", "customers", "supplier", "suppliers"]');
+    expect(page).toContain("allowsDirectConflictChoice(conflict.entity_type)");
+    expect(page).toContain("Correction required");
+    expect(page).toContain("Use reversal / correction workflow");
+    expect(page).toContain("Financial history is append-only");
+  });
 });

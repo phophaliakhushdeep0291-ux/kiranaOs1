@@ -70,7 +70,7 @@ export function OwnerOrderingCard({
               <QrCodeView value={orderUrl} size={150} title="Customer order page QR" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold text-[#102347]">Your “Order here” QR</p>
+              <p className="text-[13px] font-bold text-[var(--brand-ink)]">Your “Order here” QR</p>
               <p className="mt-1 text-[12px] leading-relaxed text-[#52627e]">
                 Print this and place it at your counter. Customers scan it, pick items on their phone, and show you a QR
                 you scan to load their order into a new bill.

@@ -822,7 +822,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                 <span className="grid h-[18px] w-[18px] place-items-center rounded-full border border-[#b9c7dc] text-[10px] font-black text-[#60708a]">i</span>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2.5">
-                <p className="font-sans text-[24px] font-bold leading-none text-[#102347] dark:text-card-foreground">{fmtRs(periodSales)}</p>
+                <p className="font-sans text-[24px] font-bold leading-none text-[var(--brand-ink)] dark:text-card-foreground">{fmtRs(periodSales)}</p>
                 <DashboardPeriodSelect value={period} onChange={setPeriod} />
                 {periodSalesDelta !== null && (
                   <span className="flex items-center gap-1.5 text-[11px] font-semibold">
@@ -933,7 +933,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
                             navigate(href);
                           }
                         }}
-                        className="cursor-pointer border-b border-[#edf2f8] text-[#102347] transition-colors last:border-0 hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/40 dark:text-card-foreground"
+                        className="cursor-pointer border-b border-[#edf2f8] text-[var(--brand-ink)] transition-colors last:border-0 hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/40 dark:text-card-foreground"
                       >
                         <td className="whitespace-nowrap px-4 py-1.5 font-semibold text-[#152744] dark:text-card-foreground">{compactBillNumber(bill.billNo ?? bill.billNumber)}</td>
                         <td className={cn("whitespace-nowrap px-4 py-1.5 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
@@ -1189,7 +1189,7 @@ function MobileGeneralDashboard({
       <section className="grid gap-3">
         <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
-            <h2 className="text-[14px] font-black text-[#102347]">Top products</h2>
+            <h2 className="text-[14px] font-black text-[var(--brand-ink)]">Top products</h2>
             <Link href="/products" className="inline-flex min-h-10 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-3.5">
@@ -1197,10 +1197,10 @@ function MobileGeneralDashboard({
               <Link key={row.productId} href="/products" className="flex min-h-[60px] items-center gap-3 py-2.5">
                 <ProductAvatar product={productsById.get(row.productId) ?? ({ id: row.productId, name: row.name } as Product)} compact />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-black text-[#102347]">{row.name}</p>
+                  <p className="truncate text-[13px] font-black text-[var(--brand-ink)]">{row.name}</p>
                   <p className="mt-0.5 text-[11px] font-semibold text-[#718096]">{row.quantitySold.toLocaleString("en-IN")} sold</p>
                 </div>
-                <span className="whitespace-nowrap text-[13px] font-black text-[#102347]">{fmtCompactRs(row.revenue)}</span>
+                <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(row.revenue)}</span>
                 <ChevronRight size={16} className="text-[#a2adbd]" />
               </Link>
             ))}
@@ -1209,7 +1209,7 @@ function MobileGeneralDashboard({
 
         <div className="overflow-hidden rounded-[20px] border border-[#e1e9f3] bg-white shadow-[0_10px_28px_rgba(26,57,112,0.055)]">
           <div className="flex items-center justify-between border-b border-[#edf2f8] px-4 py-3.5">
-            <h2 className="text-[14px] font-black text-[#102347]">Recent bills</h2>
+            <h2 className="text-[14px] font-black text-[var(--brand-ink)]">Recent bills</h2>
             <Link href="/bills" className="inline-flex min-h-10 items-center px-2 text-[11px] font-black text-[var(--brand)]">View all</Link>
           </div>
           <div className="divide-y divide-[#edf2f8] px-3.5">
@@ -1218,12 +1218,12 @@ function MobileGeneralDashboard({
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[13px] bg-[#eef4ff] text-[var(--brand)]"><ReceiptText size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-[13px] font-black text-[#102347]">Bill #{compactBillNumber(bill.billNo ?? bill.billNumber)}</span>
+                    <span className="truncate text-[13px] font-black text-[var(--brand-ink)]">Bill #{compactBillNumber(bill.billNo ?? bill.billNumber)}</span>
                     <RecentBillPaymentBadge mode={recentBillPaymentMode(bill as unknown as Record<string, unknown>)} />
                   </div>
                   <span className="mt-1 block truncate text-[11px] font-semibold text-[#718096]">{bill.customerName ?? "Walk-in customer"}</span>
                 </div>
-                <span className="whitespace-nowrap text-[13px] font-black text-[#102347]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
+                <span className="whitespace-nowrap text-[13px] font-black text-[var(--brand-ink)]">{fmtCompactRs(bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0)}</span>
                 <ChevronRight size={16} className="text-[#a2adbd]" />
               </Link>
             ))}
@@ -1369,7 +1369,7 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
         {loading ? (
           <div className="mt-2 h-7 w-3/4 animate-pulse rounded bg-[#edf2f8]" />
         ) : (
-          <p className="mt-1.5 break-words font-sans text-[20px] font-bold leading-none text-[#102347] dark:text-card-foreground 2xl:mt-2 2xl:text-[22px]">{value}</p>
+          <p className="mt-1.5 break-words font-sans text-[20px] font-bold leading-none text-[var(--brand-ink)] dark:text-card-foreground 2xl:mt-2 2xl:text-[22px]">{value}</p>
         )}
         <div className="mt-2.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] font-medium 2xl:mt-3 2xl:text-[11px]">
           {delta === null || delta === undefined ? (
@@ -1412,7 +1412,7 @@ function ShopWorkflowPanel({ businessType, compact = false }: { businessType: Bu
       <div className="flex flex-col gap-3 border-b border-[#e8eef6] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--brand)]">Tools for your shop type</p>
-          <h2 className="mt-1 font-display text-[18px] font-black text-[#102347]">{workflow.title}</h2>
+          <h2 className="mt-1 font-display text-[18px] font-black text-[var(--brand-ink)]">{workflow.title}</h2>
           <p className="mt-1 max-w-3xl text-[11.5px] font-semibold leading-5 text-[#65748f]">{workflow.subtitle}</p>
         </div>
         <Link href="/settings/store-profile" className="inline-flex min-h-10 shrink-0 items-center gap-1.5 self-start rounded-[10px] border border-[var(--brand-border)] bg-white px-3 text-[11px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]">
@@ -1443,7 +1443,7 @@ function QuickStartLink({ href, step, icon, title, detail }: { href: string; ste
         <span className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-[var(--brand)] text-[9px] font-black text-white ring-2 ring-white">{step}</span>
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[12px] font-black text-[#102347] group-hover:text-[var(--brand)]">{title}</span>
+        <span className="block text-[12px] font-black text-[var(--brand-ink)] group-hover:text-[var(--brand)]">{title}</span>
         <span className="mt-0.5 block text-[10px] font-semibold text-[#718096]">{detail}</span>
       </span>
       <ChevronRight size={15} className="shrink-0 text-[#9aa8bc] group-hover:text-[var(--brand)]" />
@@ -1489,7 +1489,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
           <div>
-            <p className="font-sans text-[17px] font-extrabold leading-none text-[#102347] dark:text-card-foreground">{fmtRs(displayTotal)}</p>
+            <p className="font-sans text-[17px] font-extrabold leading-none text-[var(--brand-ink)] dark:text-card-foreground">{fmtRs(displayTotal)}</p>
             <p className={cn("mt-1 text-[11px] font-semibold", DASH_MUTED)}>Total Sales</p>
           </div>
         </div>
@@ -1503,7 +1503,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
                 <span className={cn("h-2 w-2 rounded-full", row.dot)} />
                 <span className="truncate">{row.label}</span>
               </span>
-              <span className="shrink-0 whitespace-nowrap font-black text-[#102347] dark:text-card-foreground">{fmtRs(row.value)} {realTotal > 0 ? `(${pct}%)` : ""}</span>
+              <span className="shrink-0 whitespace-nowrap font-black text-[var(--brand-ink)] dark:text-card-foreground">{fmtRs(row.value)} {realTotal > 0 ? `(${pct}%)` : ""}</span>
             </div>
           );
         })}
@@ -1534,7 +1534,7 @@ function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["l
                 <div className="flex min-h-[48px] items-center gap-3 rounded-[10px] px-2 py-1 transition-colors hover:bg-[#f8fbff]">
                   <ProductAvatar product={product ?? { id: item.productId, name: item.name } as Product} compact />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-black leading-tight text-[#102347] dark:text-card-foreground">{item.name}</p>
+                    <p className="truncate text-sm font-black leading-tight text-[var(--brand-ink)] dark:text-card-foreground">{item.name}</p>
                     <p className={cn("text-xs font-semibold", DASH_MUTED)}>Stock: {item.stock} {item.unit ?? "pcs"}</p>
                   </div>
                   <span className={cn("shrink-0 rounded-[7px] px-2 py-1 text-[11px] font-black", isCritical ? "bg-[#fff0f2] text-[#ff304f]" : "bg-[#fff4e6] text-[#ff8a00]")}>
@@ -1569,7 +1569,7 @@ function InsightRow({ icon, label, value, href, tone }: {
         <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border", toneClass)}>{icon}</span>
         <span className="min-w-0">
           <span className={cn("block truncate text-[11px] font-semibold", DASH_MUTED)}>{label}</span>
-          <span className="block truncate text-[12px] font-black text-[#102347] dark:text-card-foreground">{value}</span>
+          <span className="block truncate text-[12px] font-black text-[var(--brand-ink)] dark:text-card-foreground">{value}</span>
         </span>
       </div>
       {href ? <ChevronRight size={14} className="shrink-0 text-[#5f6f88]" aria-hidden="true" /> : null}
@@ -1617,9 +1617,9 @@ function RecentProductsRail({ products }: { products: Product[] }) {
               <div className="flex h-full items-center gap-3 px-4 py-3 transition-colors group-hover:bg-[#f8fbff]">
                 <ProductAvatar product={product} compact />
                 <div className="min-w-0">
-                  <p className="truncate text-[12px] font-black text-[#102347]">{product.name}</p>
+                  <p className="truncate text-[12px] font-black text-[var(--brand-ink)]">{product.name}</p>
                   <p className={cn("mt-0.5 text-[11px] font-semibold", DASH_MUTED)}>{productUnitLabel(product)}</p>
-                  <p className="mt-1 text-[12px] font-black text-[#102347]">{fmtRs(productPrice(product))}</p>
+                  <p className="mt-1 text-[12px] font-black text-[var(--brand-ink)]">{fmtRs(productPrice(product))}</p>
                 </div>
               </div>
             </Link>

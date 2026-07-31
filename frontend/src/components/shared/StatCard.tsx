@@ -59,7 +59,7 @@ export function StatCard({ label, value, description, icon, loading = false, ton
         </div>
       ) : (
         <div className="min-w-0">
-          <p className="break-words font-display text-[1.55rem] font-black leading-tight tracking-tight text-[#06123a] tabular-nums sm:text-3xl sm:text-foreground">
+          <p className="break-words font-display text-[1.55rem] font-black leading-tight tracking-tight text-[var(--brand-ink)] tabular-nums sm:text-3xl sm:text-foreground">
             {value}
           </p>
           {description ? (

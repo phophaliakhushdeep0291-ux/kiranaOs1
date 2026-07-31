@@ -403,7 +403,7 @@ export default function AdvancedSettingsPage() {
               <div className="flex flex-wrap gap-2">
                 {(Object.entries(ACCENT_COLORS) as [AccentColor, { label: string; swatch: string }][]).map(([key, def]) => (
                   <button key={key} type="button" onClick={() => setAccent(key)} title={def.label}
-                    className={`h-8 w-8 rounded-full border-2 transition-transform ${accent === key ? "scale-110 border-[#0f1e3d]" : "border-transparent hover:scale-105"}`}
+                    className={`h-8 w-8 rounded-full border-2 transition-transform ${accent === key ? "scale-110 border-[var(--brand-ink)]" : "border-transparent hover:scale-105"}`}
                     style={{ background: def.swatch }} aria-label={def.label} />
                 ))}
               </div>
@@ -464,7 +464,7 @@ export default function AdvancedSettingsPage() {
               ["Outbox", outboxQ.data ? `${outboxQ.data.pending} pending · ${outboxQ.data.conflicts} conflict(s)` : "Reading…"],
               ["Storage", storage?.measured ? formatBytes(storage.usageBytes) : "Not reported"],
             ].map(([k, v]) => (
-              <div key={k}><p className="text-[11px] font-semibold text-[#64748b]">{k}</p><p className="text-[13px] font-bold text-[#102347]">{v}</p></div>
+              <div key={k}><p className="text-[11px] font-semibold text-[#64748b]">{k}</p><p className="text-[13px] font-bold text-[var(--brand-ink)]">{v}</p></div>
             ))}
             <div className="mt-1 grid gap-2 sm:col-span-2 sm:grid-cols-2">
               <Button variant="outline" className="h-9 flex-1 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={copyDiagnostics}><HardDrive size={14} /> Copy diagnostics</Button>
@@ -517,7 +517,7 @@ function DangerDialog({ item, error, running, onClose, onConfirm }: {
     <Dialog open={item !== null} onOpenChange={(o) => { if (!o && !running) onClose(); }}>
       <DialogContent className="max-w-[400px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-display text-[16px] font-black tracking-tight text-[#0f1e3d]">
+          <DialogTitle className="flex items-center gap-2 font-display text-[16px] font-black tracking-tight text-[var(--brand-ink)]">
             <span className="grid h-7 w-7 place-items-center rounded-[8px] bg-rose-100 text-rose-600"><AlertTriangle size={15} /></span>
             {item?.label}
           </DialogTitle>

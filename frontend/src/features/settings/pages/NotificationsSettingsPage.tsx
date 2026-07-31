@@ -230,7 +230,7 @@ export default function NotificationsSettingsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-[14px] font-black text-[#102347]">Delivery pipeline</p>
+                      <p className="text-[14px] font-black text-[var(--brand-ink)]">Delivery pipeline</p>
                       <Badge tone={statusQ.isError ? "red" : liveStatus.tone}>
                         {statusQ.isError ? "Status unavailable" : liveStatus.label}
                       </Badge>
@@ -300,7 +300,7 @@ export default function NotificationsSettingsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="truncate text-[13px] font-black text-[#102347]">{template.name}</p>
+                        <p className="truncate text-[13px] font-black text-[var(--brand-ink)]">{template.name}</p>
                         <Badge tone={template.active ? "green" : "gray"}>{template.active ? "Active" : "Paused"}</Badge>
                       </div>
                       <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#64748b]">{template.templateText}</p>
@@ -339,7 +339,7 @@ export default function NotificationsSettingsPage() {
           ) : logs.length === 0 ? (
             <div className="py-10 text-center">
               <MessageCircle className="mx-auto text-[#b5c0d2]" size={28} />
-              <p className="mt-2 text-[13px] font-black text-[#102347]">No reminder attempts yet</p>
+              <p className="mt-2 text-[13px] font-black text-[var(--brand-ink)]">No reminder attempts yet</p>
               <p className="mt-1 text-[11px] text-[#64748b]">Send from a customer account to create the first auditable record.</p>
             </div>
           ) : (
@@ -351,7 +351,7 @@ export default function NotificationsSettingsPage() {
                 <tbody>
                   {logs.map((log) => (
                     <tr key={log.id} className="border-t border-[#eef2f8]">
-                      <td className="px-4 py-3"><p className="font-black text-[#102347]">{log.customerName || "Customer"}</p><p className="text-[10px] text-[#8290a8]">{log.customerMobileMasked || "No mobile shown"}</p></td>
+                      <td className="px-4 py-3"><p className="font-black text-[var(--brand-ink)]">{log.customerName || "Customer"}</p><p className="text-[10px] text-[#8290a8]">{log.customerMobileMasked || "No mobile shown"}</p></td>
                       <td className="max-w-[340px] px-4 py-3 text-[#52627e]"><p className="line-clamp-2">{log.messagePreview}</p>{log.error ? <p className="mt-1 text-[10px] font-bold text-rose-600">{log.error}</p> : null}</td>
                       <td className="px-4 py-3 font-bold uppercase text-[#52627e]">{log.provider || "disabled"}</td>
                       <td className="px-4 py-3"><DeliveryBadge status={log.status} /></td>
@@ -368,7 +368,7 @@ export default function NotificationsSettingsPage() {
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="max-w-[580px]">
           <DialogHeader>
-            <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing?.name}</DialogTitle>
+            <DialogTitle className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <textarea
@@ -401,7 +401,7 @@ function ReadinessCheck({ label, ready, value }: { label: string; ready: boolean
         {ready ? <CheckCircle2 size={13} className="text-emerald-600" /> : <AlertTriangle size={13} className="text-amber-600" />}
         <span className="text-[10px] font-black uppercase tracking-wide text-[#64748b]">{label}</span>
       </div>
-      <p className="mt-1 truncate text-[12px] font-black text-[#102347]">{value}</p>
+      <p className="mt-1 truncate text-[12px] font-black text-[var(--brand-ink)]">{value}</p>
     </div>
   );
 }

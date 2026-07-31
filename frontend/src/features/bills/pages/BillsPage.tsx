@@ -788,7 +788,7 @@ export default function BillsPage() {
           <div className="grid h-56 place-items-center px-4 text-center">
             <div>
               <ReceiptText size={28} className="mx-auto text-[#9aa8bc]" />
-              <p className="mt-2 text-[14px] font-bold text-[#13254a]">No bills found</p>
+              <p className="mt-2 text-[14px] font-bold text-[var(--brand-ink)]">No bills found</p>
               <p className="mt-1 text-[12px] text-[#7a879f]">Try a different filter or create a new bill.</p>
             </div>
           </div>
@@ -807,11 +807,11 @@ export default function BillsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <Link href={`/bills/${bill.id}`} className="min-w-0 flex-1">
                         <p className="truncate text-[14px] font-extrabold text-[var(--brand)]">Bill #{compactBillNo(billNo(bill))}</p>
-                        <p className="mt-1 truncate text-xs font-bold text-[#102347]">{bill.customerName || "Walk-in Customer"}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-[var(--brand-ink)]">{bill.customerName || "Walk-in Customer"}</p>
                         <p className="mt-0.5 text-[11px] font-medium text-[#71809b]">{date.date} {date.time ? `• ${date.time}` : ""} • {itemsCount(bill) || 0} items</p>
                       </Link>
                       <div className="text-right">
-                        <p className="text-[15px] font-black text-[#07133f]">{money(billTotal(bill))}</p>
+                        <p className="text-[15px] font-black text-[var(--brand-ink)]">{money(billTotal(bill))}</p>
                         <div className="mt-1 flex justify-end"><StatusBadge status={status} /></div>
                       </div>
                     </div>
@@ -874,7 +874,7 @@ export default function BillsPage() {
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 font-black text-[var(--brand)]">{compactBillNo(billNo(bill))}</td>
                         <td className="min-w-[145px] px-4 py-2.5">
-                          <p className="font-bold text-[#13254a]">{bill.customerName || "Walk-in Customer"}</p>
+                          <p className="font-bold text-[var(--brand-ink)]">{bill.customerName || "Walk-in Customer"}</p>
                           <p className="mt-0.5 text-[#6f7f9b]">{bill.customerMobile || "-"}</p>
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5">
@@ -884,7 +884,7 @@ export default function BillsPage() {
                         <td className="px-4 py-2.5 text-right font-bold">{itemsCount(bill) || "-"}</td>
                         <td className="px-4 py-2.5"><ModeBadge mode={mode} /></td>
                         <td className="px-4 py-2.5"><span className="rounded-[5px] bg-[var(--brand-soft)] px-2 py-1 text-[10px] font-black text-[var(--brand)]">{billTypeOf(bill)}</span></td>
-                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-black text-[#102347]">{money(billTotal(bill))}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right font-black text-[var(--brand-ink)]">{money(billTotal(bill))}</td>
                         <td className="px-4 py-2.5"><StatusBadge status={status} /></td>
                         <td className="px-4 py-2.5 font-semibold">{staffNameOf(bill, staffFallback)}</td>
                         <td className="px-4 py-2.5"><SyncBadgeMini sync={sync} /></td>
@@ -999,7 +999,7 @@ function BillKpiCard({ label, value, delta, data, color, icon, iconClass, loadin
         <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[9px] border", iconClass)}>{icon}</span>
         <p className="min-h-[30px] min-w-0 overflow-hidden pt-0.5 text-[12px] font-semibold leading-[15px] text-[#34486e]">{label}</p>
       </div>
-      <p className="mt-2 min-h-[24px] truncate font-display text-[22px] font-black leading-none text-[#101f40]">{loading ? "..." : value}</p>
+      <p className="mt-2 min-h-[24px] truncate font-display text-[22px] font-black leading-none text-[var(--brand-ink)]">{loading ? "..." : value}</p>
       <div className="mt-2 flex h-4 items-center gap-1 text-[10px]">
         <span className={cn("inline-flex items-center gap-0.5 font-black", delta === 0 ? "text-[#70809a]" : bad ? "text-[#ff334d]" : "text-[#10a948]")}>
           {DeltaIcon ? <DeltaIcon size={11} /> : null}{Math.abs(delta)}%
@@ -1074,7 +1074,7 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[#13254a]">Recent Billing Activity</h2>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Recent Billing Activity</h2>
         <Link href="/bills" className="text-[11px] font-bold text-[var(--brand)]">View all</Link>
       </header>
       <div className="divide-y divide-[#edf2f8]">
@@ -1084,7 +1084,7 @@ function RecentActivityCard({ rows }: { rows: Array<{ id: string; title: string;
           <Link key={row.id} href={`/bills/${row.bill.id}`} className="grid grid-cols-[34px_1fr_auto] items-center gap-3 px-4 py-3 transition-colors hover:bg-[#fbfcfe]">
             <span className={cn("grid h-8 w-8 place-items-center rounded-full", toneClass(row.tone))}><IndianRupee size={14} /></span>
             <span className="min-w-0">
-              <span className="block truncate text-[12px] font-black text-[#13254a]">{row.title}</span>
+              <span className="block truncate text-[12px] font-black text-[var(--brand-ink)]">{row.title}</span>
               <span className="mt-0.5 block truncate text-[10.5px] font-semibold text-[#6f7f9b]">{row.sub}</span>
             </span>
             <span className="text-[10.5px] font-semibold text-[#405273]">{row.time}</span>
@@ -1100,7 +1100,7 @@ function PaymentBreakdownCard({ rows, total, period }: { rows: Array<{ key: stri
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[#13254a]">Payment Mode Breakdown</h2>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Payment Mode Breakdown</h2>
         <span className="rounded-[6px] border border-[#dfe7f2] bg-[#fbfcfe] px-2.5 py-1 text-[10px] font-bold text-[#405273]">{period}</span>
       </header>
       <div className="grid min-h-[220px] items-center gap-3 px-4 py-4 sm:grid-cols-[184px_1fr]">
@@ -1140,7 +1140,7 @@ function TopCustomersCard({ rows }: { rows: Array<{ name: string; bills: number;
   return (
     <section className={cn(CARD, "overflow-hidden")}>
       <header className="flex h-12 items-center justify-between border-b border-[#e8edf4] px-4">
-        <h2 className="text-[14px] font-extrabold text-[#13254a]">Top Customers</h2>
+        <h2 className="text-[14px] font-extrabold text-[var(--brand-ink)]">Top Customers</h2>
         <Link href="/customers" className="text-[11px] font-bold text-[var(--brand)]">View all</Link>
       </header>
       {rows.length === 0 ? (

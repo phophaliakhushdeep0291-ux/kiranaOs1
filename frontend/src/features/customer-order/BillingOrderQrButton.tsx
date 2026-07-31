@@ -72,7 +72,7 @@ export function BillingOrderQrButton() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1424]/70 p-4 backdrop-blur-sm" onClick={() => setOpen(false)}>
           <div className="w-[min(92vw,360px)] rounded-3xl bg-white p-6 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <p className="font-display text-base font-black text-[#102347]">Order here</p>
+              <p className="font-display text-base font-black text-[var(--brand-ink)]">Order here</p>
               <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#64748b] hover:bg-[#f1f5fb]">
                 <X size={18} />
               </button>
@@ -97,7 +97,7 @@ export function BillingOrderQrButton() {
                 <div className="mx-auto mt-4 grid h-16 w-16 place-items-center rounded-2xl bg-[#eaf2ff] text-[var(--brand)]">
                   <QrCode size={30} />
                 </div>
-                <p className="mt-3 text-[13px] font-bold text-[#102347]">Customer QR ordering is off</p>
+                <p className="mt-3 text-[13px] font-bold text-[var(--brand-ink)]">Customer QR ordering is off</p>
                 <p className="mt-1.5 text-[12px] leading-relaxed text-[#5b6b85]">
                   Turn it on to get a printable “Order here” QR. Customers scan it, pick items on their own phone, and
                   show you a QR that loads their order into a bill. Only item names and selling prices are shared —

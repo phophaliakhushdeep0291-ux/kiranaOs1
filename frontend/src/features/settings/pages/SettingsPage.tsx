@@ -122,7 +122,7 @@ export default function SettingsPage() {
             <Link key={item.href} href={item.href} className={`flex min-h-[68px] items-center gap-3 px-4 py-3 transition-colors active:bg-[#f4f7fc] ${index < rows.length - 1 ? "border-b border-[#edf1f7]" : ""}`}>
               <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[13px] ${item.tone}`}><item.icon size={19} /></span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[13px] font-black text-[#102347]">{item.label}</span>
+                <span className="block text-[13px] font-black text-[var(--brand-ink)]">{item.label}</span>
                 <span className="mt-0.5 block truncate text-[11px] text-[#6d7c98]">{item.desc}</span>
               </span>
               <ChevronRight size={17} className="shrink-0 text-[#9aa8bd]" />
@@ -132,7 +132,7 @@ export default function SettingsPage() {
 
         <Link href="/settings/advanced" className="flex min-h-14 items-center gap-3 rounded-[16px] border border-[#e2eaf6] bg-white px-4 shadow-[0_8px_22px_rgba(15,35,80,0.045)]">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]"><Sliders size={18} /></span>
-          <span className="flex-1 text-[13px] font-black text-[#102347]">Advanced tools & data</span>
+          <span className="flex-1 text-[13px] font-black text-[var(--brand-ink)]">Advanced tools & data</span>
           <ChevronRight size={17} className="text-[#9aa8bd]" />
         </Link>
       </section>
@@ -145,7 +145,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3.5 border-b border-[#eef2f8] px-5 pb-4">
             <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-2xl">🏪</span>
             <div className="min-w-0">
-              <p className="truncate font-display text-[16px] font-black text-[#102347]">{shopName}</p>
+              <p className="truncate font-display text-[16px] font-black text-[var(--brand-ink)]">{shopName}</p>
               <p className="truncate text-[12px] text-[#52627e]">{shopAddress}</p>
             </div>
           </div>
@@ -174,7 +174,7 @@ export default function SettingsPage() {
               </ul>
               <div>
                 <p className="text-[11px] text-[#64748b]">Usage this month</p>
-                <p className="font-display text-[18px] font-black text-[#102347]">{snapshot?.status === "active" ? "Active" : "—"}</p>
+                <p className="font-display text-[18px] font-black text-[var(--brand-ink)]">{snapshot?.status === "active" ? "Active" : "—"}</p>
                 <p className="mt-1 text-[11px] text-[#64748b]">Manage billing & invoices in your plan.</p>
                 <Link href="/settings/billing" className="mt-3 inline-flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline">View plan <ChevronRight size={13} /></Link>
               </div>
@@ -212,7 +212,7 @@ export default function SettingsPage() {
                 <div key={id} className="flex items-center gap-3 py-2.5">
                   <MonitorSmartphone size={16} className="text-[#536583]" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-bold text-[#102347]">{device.deviceName || device.device_name || "Unnamed device"}{isCurrent ? " · This device" : ""}</p>
+                    <p className="truncate text-[13px] font-bold text-[var(--brand-ink)]">{device.deviceName || device.device_name || "Unnamed device"}{isCurrent ? " · This device" : ""}</p>
                     <p className="text-[11px] text-[#64748b]">{device.platform || device.operatingSystem || "web"} · {device.status === "active" ? "Active" : device.status || "Idle"}</p>
                   </div>
                   <Badge tone={device.status === "blocked" ? "red" : device.status === "active" ? "green" : "gray"}>{device.status === "blocked" ? "Blocked" : device.status === "active" ? "Active" : "Idle"}</Badge>
@@ -313,7 +313,7 @@ export default function SettingsPage() {
             <Link key={l.href} href={l.href} className="flex items-center gap-3 rounded-[10px] border border-[#e7edf7] bg-white px-3 py-2.5 transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-softer)]">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><l.icon size={16} /></span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-bold text-[#102347]">{l.label}</span>
+                <span className="block truncate text-[13px] font-bold text-[var(--brand-ink)]">{l.label}</span>
                 <span className="block truncate text-[11px] text-[#64748b]">{l.desc}</span>
               </span>
               <ChevronRight size={15} className="shrink-0 text-[#9aa6bb]" />
@@ -327,7 +327,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[var(--brand-soft)] text-[var(--brand)]"><Settings2 size={16} /></span>
           <div>
-            <p className="text-[13px] font-extrabold text-[#102347]">About Artha</p>
+            <p className="text-[13px] font-extrabold text-[var(--brand-ink)]">About Artha</p>
             <p className="text-[11px] text-[#64748b]">Version {appVersion()} · build {buildId()}</p>
           </div>
         </div>
@@ -350,7 +350,7 @@ function OverviewStat({ label, value, sub }: { label: string; value: string; sub
   return (
     <div className="rounded-[8px] border border-[#e7edf7] p-3">
       <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
-      <p className="font-display text-[20px] font-black text-[#102347]">{value}</p>
+      <p className="font-display text-[20px] font-black text-[var(--brand-ink)]">{value}</p>
       <p className="text-[10px] text-[#9aa6bb]">{sub}</p>
     </div>
   );

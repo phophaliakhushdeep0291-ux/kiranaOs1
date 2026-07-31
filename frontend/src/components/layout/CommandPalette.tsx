@@ -178,10 +178,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               else if (event.key === "Escape") { event.preventDefault(); onClose(); }
             }}
             placeholder="Search products, customers, bills…"
-            className="h-12 flex-1 bg-transparent text-[14px] text-[#0f2147] outline-none placeholder:text-[#94a3b8]"
+            className="h-12 flex-1 bg-transparent text-[14px] text-[var(--brand-ink)] outline-none placeholder:text-[#94a3b8]"
             aria-label="Search products, customers and bills"
           />
-          <button onClick={onClose} className="rounded-md p-1 text-[#94a3b8] hover:bg-[#f1f4f8] hover:text-[#0f2147]" aria-label="Close search">
+          <button onClick={onClose} className="rounded-md p-1 text-[#94a3b8] hover:bg-[#f1f4f8] hover:text-[var(--brand-ink)]" aria-label="Close search">
             <X size={16} />
           </button>
         </div>
@@ -213,7 +213,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                     <Icon size={15} aria-hidden="true" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold text-[#0f2147]">{item.title}</span>
+                    <span className="block truncate text-[13px] font-semibold text-[var(--brand-ink)]">{item.title}</span>
                     {item.subtitle && <span className="block truncate text-[11px] text-[#64748b]">{item.subtitle}</span>}
                   </span>
                   <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{item.kind}</span>

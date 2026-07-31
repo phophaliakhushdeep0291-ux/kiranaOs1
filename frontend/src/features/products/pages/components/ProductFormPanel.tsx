@@ -287,7 +287,7 @@ export function ProductFormPanel({
       {/* Header */}
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">
             {editing ? "Edit Product" : "Add New Product"}
           </h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">
@@ -614,7 +614,7 @@ export function ProductFormPanel({
                 maxLength={250}
                 rows={3}
                 placeholder={productEntry.notesPlaceholder}
-                className="w-full resize-none rounded-[10px] border border-[#e3eaf3] bg-white px-3 py-2 text-[13px] text-[#0f2147] placeholder:text-[#6b7a9a] focus:border-[var(--brand)] focus:outline-none focus:ring-0"
+                className="w-full resize-none rounded-[10px] border border-[#e3eaf3] bg-white px-3 py-2 text-[13px] text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus:border-[var(--brand)] focus:outline-none focus:ring-0"
               />
               <p className="mt-1 text-right text-[10px] text-[#9aa6bb]">{description.length}/250</p>
             </Field>

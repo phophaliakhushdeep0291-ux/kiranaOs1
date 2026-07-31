@@ -285,7 +285,7 @@ export function BankReconciliationPanel({ from, to }: { from: string; to: string
       <article className="rounded-[10px] border border-[#dfe7f2] bg-white p-4 shadow-[0_4px_18px_rgba(31,60,110,0.045)]">
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-blue-50 text-blue-700"><Landmark size={19} /></span>
-          <div className="min-w-0 flex-1"><h2 className="text-sm font-black text-[#13254a]">Bank & UPI reconciliation</h2><p className="mt-1 text-xs leading-5 text-[#66758f]">Statement CSV import and owner-confirmed ledger matching are included from the Growth plan.</p></div>
+          <div className="min-w-0 flex-1"><h2 className="text-sm font-black text-[var(--brand-ink)]">Bank & UPI reconciliation</h2><p className="mt-1 text-xs leading-5 text-[#66758f]">Statement CSV import and owner-confirmed ledger matching are included from the Growth plan.</p></div>
         </div>
         <div className="mt-3"><UpgradePrompt compact featureName="csv_import_export" description={feature.reason} /></div>
       </article>
@@ -299,7 +299,7 @@ export function BankReconciliationPanel({ from, to }: { from: string; to: string
           <div className="flex min-w-0 items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[9px] bg-[#eaf2ff] text-[var(--brand)]"><Landmark size={19} /></span>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-black text-[#10224a]">Bank & UPI reconciliation</h2><span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-extrabold text-emerald-800">Owner-confirmed only</span></div>
+              <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-black text-[var(--brand-ink)]">Bank & UPI reconciliation</h2><span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-extrabold text-emerald-800">Owner-confirmed only</span></div>
               <p className="mt-1 text-[11px] leading-5 text-[#66758f]">Import statement evidence, inspect deterministic candidates, and explicitly link recorded ledger impacts. Suggestions never post a match.</p>
             </div>
           </div>
@@ -444,7 +444,7 @@ function TransactionCard({
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-2.5">
               <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[7px]", transaction.direction === "credit" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>{transaction.direction === "credit" ? <ArrowDownLeft size={15} /> : <ArrowUpRight size={15} />}</span>
-              <div className="min-w-0"><p className="truncate text-xs font-black text-[#17294d]">{transaction.description}</p><p className="mt-1 truncate text-[10px] text-[#718099]">{transaction.reference || "No statement reference"} · {dateLabel(transaction.transactionDate)}</p></div>
+              <div className="min-w-0"><p className="truncate text-xs font-black text-[var(--brand-ink)]">{transaction.description}</p><p className="mt-1 truncate text-[10px] text-[#718099]">{transaction.reference || "No statement reference"} · {dateLabel(transaction.transactionDate)}</p></div>
             </div>
             <span className={cn("shrink-0 rounded-full border px-2 py-1 text-[9px] font-extrabold capitalize", statusTone(transaction.matchStatus))}>{transaction.matchStatus}</span>
           </div>
@@ -483,7 +483,7 @@ function TransactionCard({
                   <label key={candidate.ledgerRowId} className="flex cursor-pointer items-center gap-2 rounded-[6px] border border-[#e2e8f1] bg-white p-2 hover:border-blue-300">
                     <Checkbox checked={selected.includes(candidate.ledgerRowId)} onCheckedChange={(checked) => onToggle(candidate.ledgerRowId, checked === true)} aria-label={`Select ${candidate.entryType} ${money(candidate.amount.amount)}`} />
                     <span className="min-w-0 flex-1"><span className="block truncate text-[10px] font-bold text-[#24385f]">{candidate.entryType} · {candidate.sourceId}</span><span className="block truncate text-[9px] text-[#7b879b]">{dateLabel(candidate.businessDate)} · {candidate.dateDeltaDays}d gap · {candidate.confidence.replaceAll("_", " ")}</span></span>
-                    <strong className="shrink-0 text-[10px] text-[#17294d]">{money(candidate.amount.amount)}</strong>
+                    <strong className="shrink-0 text-[10px] text-[var(--brand-ink)]">{money(candidate.amount.amount)}</strong>
                   </label>
                 ))}
                 {!transaction.allocationOptions.length ? <div className="rounded-[7px] border border-dashed border-[#ccd7e6] p-3 text-center text-[10px] leading-4 text-[#718099]">No direct recorded bank/UPI impact matches this direction and date window. Record the missing ledger event or review it manually; the app will not invent a match.</div> : null}
@@ -503,9 +503,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function SummaryStat({ label, value, detail, alert, good }: { label: string; value: string; detail: string; alert?: boolean; good?: boolean }) {
-  return <div className="min-w-0 bg-white p-3"><p className="truncate text-[9px] font-bold uppercase tracking-wide text-[#74819a]">{label}</p><p className={cn("mt-1 truncate text-base font-black", alert ? "text-amber-700" : good ? "text-emerald-700" : "text-[#10224a]")}>{value}</p><p className="mt-0.5 truncate text-[10px] text-[#7b89a0]">{detail}</p></div>;
+  return <div className="min-w-0 bg-white p-3"><p className="truncate text-[9px] font-bold uppercase tracking-wide text-[#74819a]">{label}</p><p className={cn("mt-1 truncate text-base font-black", alert ? "text-amber-700" : good ? "text-emerald-700" : "text-[var(--brand-ink)]")}>{value}</p><p className="mt-0.5 truncate text-[10px] text-[#7b89a0]">{detail}</p></div>;
 }
 
 function MiniValue({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
-  return <div className="rounded-[6px] bg-[#f4f7fb] p-2"><p className="text-[9px] text-[#74819a]">{label}</p><p className={cn("mt-0.5 truncate text-xs font-black", alert ? "text-amber-700" : "text-[#17294d]")}>{value}</p></div>;
+  return <div className="rounded-[6px] bg-[#f4f7fb] p-2"><p className="text-[9px] text-[#74819a]">{label}</p><p className={cn("mt-0.5 truncate text-xs font-black", alert ? "text-amber-700" : "text-[var(--brand-ink)]")}>{value}</p></div>;
 }

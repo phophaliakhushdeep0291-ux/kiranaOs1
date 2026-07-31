@@ -142,7 +142,12 @@ function conflictEntitySnapshot(rawSnapshot, entityType) {
   const payload = snapshot.payload && typeof snapshot.payload === "object" && !Array.isArray(snapshot.payload) ? snapshot.payload : {};
   const singular = String(entityType).toLowerCase().replace(/s$/, "");
   for (const candidate of [payload[singular], snapshot[singular], payload.entity, snapshot.entity, payload, snapshot]) {
-    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) return candidate;
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      !Array.isArray(candidate) &&
+      Object.keys(candidate).length > 0
+    ) return candidate;
   }
   return {};
 }

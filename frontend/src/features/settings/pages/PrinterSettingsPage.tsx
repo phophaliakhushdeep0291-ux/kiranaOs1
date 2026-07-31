@@ -283,7 +283,7 @@ export default function PrinterSettingsPage() {
               <div key={j.id} className={`flex items-center gap-3 py-2.5 ${i < jobs.length - 1 ? "border-b border-[#eef2f8]" : ""}`}>
                 <span className={`grid h-8 w-8 place-items-center rounded-[8px] ${["sent", "opened", "saved"].includes(j.status) ? "bg-emerald-50 text-emerald-600" : j.status === "pending" ? "bg-blue-50 text-blue-600" : "bg-rose-50 text-rose-600"}`}>{j.status === "pending" ? <RefreshCcw size={15} className="animate-spin" /> : ["sent", "opened", "saved"].includes(j.status) ? <CheckCircle2 size={15} /> : <XCircle size={15} />}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-bold text-[#102347]">{j.title}</p>
+                  <p className="text-[13px] font-bold text-[var(--brand-ink)]">{j.title}</p>
                   <p className="text-[11px] text-[#64748b]">{j.time}</p>
                 </div>
                 {j.status === "failed" ? <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button> : <Badge tone={j.status === "pending" ? "blue" : "green"}>{j.status === "saved" ? "Saved" : j.status === "sent" ? "Sent to printer" : j.status === "opened" ? "Dialog opened" : "Sending"}</Badge>}
@@ -302,7 +302,7 @@ export default function PrinterSettingsPage() {
         <div className="grid gap-3 px-5 pb-5 sm:grid-cols-2 xl:grid-cols-5">
           {hardwareCapabilities.map((capability) => {
             const Icon = capability.icon;
-            return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[var(--brand)] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : "Unavailable"}</Badge></div><p className="mt-3 text-[12px] font-black text-[#102347]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;
+            return <div key={capability.label} className="rounded-xl border border-[#e5eaf2] bg-[#f8fafc] p-3"><div className="flex items-center justify-between"><span className="grid h-8 w-8 place-items-center rounded-lg bg-white text-[var(--brand)] shadow-sm"><Icon size={16} /></span><Badge tone={capability.ready ? "green" : "amber"}>{capability.ready ? "Available" : "Unavailable"}</Badge></div><p className="mt-3 text-[12px] font-black text-[var(--brand-ink)]">{capability.label}</p><p className="mt-1 text-[10.5px] leading-4 text-[#64748b]">{capability.detail}</p></div>;
           })}
         </div>
       </Card>

@@ -1571,7 +1571,7 @@ export default function Billing() {
         <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#e1e8f2] bg-white px-4 lg:hidden">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#64748b]">Checkout</p>
-            <h2 className="font-display text-[19px] font-black text-[#102347]">Review &amp; collect ₹{grandTotal.toLocaleString("en-IN")}</h2>
+            <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">Review &amp; collect ₹{grandTotal.toLocaleString("en-IN")}</h2>
           </div>
           <button
             type="button"
@@ -1696,7 +1696,7 @@ export default function Billing() {
                 {cart.length} item{cart.length === 1 ? "" : "s"}
                 {creditAmount > 0 ? " · udhar" : ""}
               </div>
-              <div className="font-display text-[20px] font-black leading-tight text-[#0f1e3d]">
+              <div className="font-display text-[20px] font-black leading-tight text-[var(--brand-ink)]">
                 ₹{grandTotal.toLocaleString("en-IN")}
               </div>
             </div>

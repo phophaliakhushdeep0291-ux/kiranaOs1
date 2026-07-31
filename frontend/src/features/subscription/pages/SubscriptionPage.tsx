@@ -70,18 +70,18 @@ export default function SubscriptionPage() {
         <CardHeader className="border-b border-[#dbe7f7] bg-[linear-gradient(135deg,var(--brand-softer)_0%,var(--brand-soft)_100%)] p-5 sm:p-6">
           <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--brand)]">Current plan</p>
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <CardTitle className="flex items-center gap-2.5 font-display text-2xl font-black tracking-tight text-[#102347]">
+            <CardTitle className="flex items-center gap-2.5 font-display text-2xl font-black tracking-tight text-[var(--brand-ink)]">
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-[var(--brand)] shadow-sm ring-1 ring-[#d8e5fa]"><StateIcon className="h-5 w-5" /></span>
               {snapshot.plan.name}
             </CardTitle>
-            <p className="font-display text-2xl font-black tracking-tight text-[#102347]">₹{snapshot.plan.price}<span className="text-sm font-semibold text-[#66758d]">/month</span></p>
+            <p className="font-display text-2xl font-black tracking-tight text-[var(--brand-ink)]">₹{snapshot.plan.price}<span className="text-sm font-semibold text-[#66758d]">/month</span></p>
           </div>
           <CardDescription className="max-w-2xl text-sm leading-6 text-[#536383]">{planMessage}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 p-4 sm:p-5 md:grid-cols-4">
-          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Plan status</p><p className="mt-1 font-bold capitalize text-[#102347]">{snapshot.status.replace(/_/g, " ")}</p></div>
-          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Access until</p><p className="mt-1 text-sm font-bold text-[#102347]">{formatDate(snapshot.currentPeriodEnd)}</p></div>
-          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Offline protection</p><p className="mt-1 text-sm font-bold text-[#102347]">{formatDate(snapshot.offlineGraceEndsAt)}</p></div>
+          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Plan status</p><p className="mt-1 font-bold capitalize text-[var(--brand-ink)]">{snapshot.status.replace(/_/g, " ")}</p></div>
+          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Access until</p><p className="mt-1 text-sm font-bold text-[var(--brand-ink)]">{formatDate(snapshot.currentPeriodEnd)}</p></div>
+          <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Offline protection</p><p className="mt-1 text-sm font-bold text-[var(--brand-ink)]">{formatDate(snapshot.offlineGraceEndsAt)}</p></div>
           <div className="rounded-[13px] border border-[#e0e8f3] bg-[#fbfcfe] p-3.5"><p className="text-xs font-semibold text-muted-foreground">Automatic backup</p><Badge className="mt-1" variant={snapshot.cloudSyncAllowed ? "default" : "destructive"}>{snapshot.cloudSyncAllowed ? "Protected" : "Paused"}</Badge></div>
         </CardContent>
       </Card>
@@ -127,7 +127,7 @@ export default function SubscriptionPage() {
             return (
               <button key={plan.code} onClick={handleClick} className={`rounded-[14px] border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${isCurrent ? "border-primary bg-[#f3f7ff] ring-1 ring-primary/15" : "border-[#e0e8f3] hover:bg-muted"}`}>
                 <div className="flex items-center justify-between"><p className="font-semibold">{plan.name}</p>{isCurrent && <Badge>Current</Badge>}</div>
-                <p className="mt-1 text-sm font-bold text-[#102347]">₹{plan.price}<span className="font-medium text-muted-foreground">/month</span></p>
+                <p className="mt-1 text-sm font-bold text-[var(--brand-ink)]">₹{plan.price}<span className="font-medium text-muted-foreground">/month</span></p>
                 <p className="mt-2 text-xs text-muted-foreground">{plan.maxStores} store · {plan.maxDevices} devices · {plan.maxStaff || "no"} staff</p>
                 <p className={`mt-2 text-xs font-medium ${isCurrent ? "text-primary" : "text-muted-foreground"}`}>{hint}</p>
               </button>

@@ -246,7 +246,7 @@ export default function CustomerDetailPage() {
           <div className="flex min-w-0 items-center gap-4">
             <Link href="/customers"><Button size="icon" variant="outline" className="h-10 w-10 shrink-0 rounded-[12px]" aria-label="Back to customers"><ArrowLeft size={17} /></Button></Link>
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[var(--brand-soft)] text-sm font-black text-[var(--brand)]">{customer.name.split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase()}</span>
-            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#7b879b]">Customer account</p><h1 className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[#10224a]">{customer.name}</h1><p className="mt-1 truncate text-xs font-medium text-[#66758f]">{customer.mobile || "No phone"} {customer.address ? `• ${customer.address}` : ""}</p></div>
+            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#7b879b]">Customer account</p><h1 className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">{customer.name}</h1><p className="mt-1 truncate text-xs font-medium text-[#66758f]">{customer.mobile || "No phone"} {customer.address ? `• ${customer.address}` : ""}</p></div>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
             <FeatureGate featureName="whatsapp_reminders" fallback={<UpgradePrompt compact featureName="whatsapp_reminders" description="Automated WhatsApp reminders require Pro." />}>

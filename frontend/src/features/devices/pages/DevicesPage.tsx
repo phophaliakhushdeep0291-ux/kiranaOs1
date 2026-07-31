@@ -88,7 +88,7 @@ function DeviceHealthStrip({ health }: { health?: DeviceHealthDto }) {
   return (
     <div className="xl:col-span-full">
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[#e8edf4] bg-[#f8fafd] px-3 py-2 text-xs">
-        <span className="flex items-center gap-1.5 font-bold text-[#102347]">
+        <span className="flex items-center gap-1.5 font-bold text-[var(--brand-ink)]">
           <Activity className="h-3.5 w-3.5" aria-hidden="true" />
           <span className={`rounded-full border px-2 py-0.5 ${healthTone(health.overallStatus)}`}>
             {health.overallStatus}{typeof health.healthScore === "number" ? ` · ${health.healthScore}/100` : ""}
@@ -96,7 +96,7 @@ function DeviceHealthStrip({ health }: { health?: DeviceHealthDto }) {
         </span>
         {items.map((item) => (
           <span key={item.label} className="text-[#60708e]">
-            {item.label}: <span className="font-semibold text-[#102347]">{item.value}</span>
+            {item.label}: <span className="font-semibold text-[var(--brand-ink)]">{item.value}</span>
           </span>
         ))}
         <span className="ml-auto text-[11px] text-[#8a97ab]">Health {relative(health.createdAt)}</span>
@@ -307,7 +307,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
       <section className="overflow-hidden rounded-lg border border-[#e1e8f2] bg-white">
         <div className="flex flex-col gap-2 border-b border-[#e8edf4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-black text-[#102347]">Registered devices</h2>
+            <h2 className="font-black text-[var(--brand-ink)]">Registered devices</h2>
             <p className="text-sm text-[#60708e]">{canManageDevices ? "Logging out keeps a slot. Removing a device frees it and revokes access immediately." : "Only owners and authorized administrators can rename, block, or remove shop devices."}</p>
           </div>
           <Badge variant="outline" className="w-fit">{devices.length} total</Badge>
@@ -328,7 +328,7 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
                   <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]"><DeviceIcon device={device} /></div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate font-black text-[#102347]">{deviceNameOf(device)}</h3>
+                      <h3 className="truncate font-black text-[var(--brand-ink)]">{deviceNameOf(device)}</h3>
                       {current ? <Badge className="bg-[var(--brand)] text-white">This device</Badge> : null}
                       <Badge variant="outline" className={statusStyle(status)}>{status.replace(/_/g, " ")}</Badge>
                     </div>
@@ -338,13 +338,13 @@ export default function DevicesPage({ embedded = false }: { embedded?: boolean }
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs xl:grid-cols-1">
-                  <div><p className="font-semibold text-[#8a97ab]">Last active</p><p className="mt-1 font-bold text-[#102347]">{relative(device.lastSeenAt || device.last_active_at)}</p></div>
-                  <div><p className="font-semibold text-[#8a97ab]">Last login</p><p className="mt-1 font-bold text-[#102347]">{relative(device.lastLoginAt)}</p></div>
+                  <div><p className="font-semibold text-[#8a97ab]">Last active</p><p className="mt-1 font-bold text-[var(--brand-ink)]">{relative(device.lastSeenAt || device.last_active_at)}</p></div>
+                  <div><p className="font-semibold text-[#8a97ab]">Last login</p><p className="mt-1 font-bold text-[var(--brand-ink)]">{relative(device.lastLoginAt)}</p></div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs xl:grid-cols-1">
-                  <div><p className="font-semibold text-[#8a97ab]">Last user</p><p className="mt-1 font-bold text-[#102347]">{device.lastUserName || "Not available"}</p></div>
-                  <div className="flex items-center gap-1.5 font-bold text-[#102347]">{device.activity === "online" ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5 text-[#94a3b8]" />}Last sync {relative(device.lastSyncAt)}</div>
+                  <div><p className="font-semibold text-[#8a97ab]">Last user</p><p className="mt-1 font-bold text-[var(--brand-ink)]">{device.lastUserName || "Not available"}</p></div>
+                  <div className="flex items-center gap-1.5 font-bold text-[var(--brand-ink)]">{device.activity === "online" ? <Wifi className="h-3.5 w-3.5 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5 text-[#94a3b8]" />}Last sync {relative(device.lastSyncAt)}</div>
                 </div>
 
                 {canManageDevices ? <div className="flex min-w-0 flex-wrap gap-2 xl:justify-end">

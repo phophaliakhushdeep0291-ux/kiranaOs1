@@ -720,7 +720,7 @@ export default function InventoryPage() {
                     <button key={item.id} type="button" onClick={() => openMovement("purchase", item)} className="grid w-full grid-cols-[58px_1fr_auto] items-center gap-3 px-4 py-4 text-left transition-colors hover:bg-[#f8fbff]">
                       <InventoryProductAvatar item={item} />
                       <span className="min-w-0">
-                        <span className="block truncate text-[14px] font-extrabold text-[#071b3a]">{item.name}</span>
+                        <span className="block truncate text-[14px] font-extrabold text-[var(--brand-ink)]">{item.name}</span>
                         <span className="mt-1 block truncate text-[12px] font-medium text-[#52627d]">SKU: {item.sku ?? item.barcode ?? "-"}</span>
                         <span className="mt-1 block truncate text-[12px] text-[#718096]">Category: {item.category ?? "General"}</span>
                       </span>

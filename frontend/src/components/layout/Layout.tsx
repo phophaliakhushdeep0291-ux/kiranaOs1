@@ -579,12 +579,12 @@ export function Layout({ children }: { children: ReactNode }) {
             type="button"
             aria-label="Toggle sidebar"
             onClick={() => setCollapsed((c) => !c)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[#0f2147] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary"
           >
             <Menu size={19} aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[22px] font-black tracking-tight text-[#0f2147] leading-none">{getPageTitle(loc)}</h1>
+            <h1 className="truncate font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)] leading-none">{getPageTitle(loc)}</h1>
             {getPageSubtitle(loc) && (
               <p className="mt-1.5 hidden truncate text-[12px] font-medium leading-none text-[#64748b] 2xl:block">{getPageSubtitle(loc)}</p>
             )}
@@ -595,7 +595,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <button type="button" className="flex h-11 max-w-[210px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-white px-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
                 <Store size={16} className="shrink-0 text-primary" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[11px] font-black text-[#0f2147]">{activeStoreLocation.name}</span>
+                  <span className="block truncate text-[11px] font-black text-[var(--brand-ink)]">{activeStoreLocation.name}</span>
                   <span className="block truncate text-[9px] font-bold uppercase tracking-wide text-[#64748b]">{activeStoreLocation.code}{activeStoreLocation.isPrimary ? " · Primary" : " · Branch"}</span>
                 </span>
                 <ChevronDown size={13} className="shrink-0 text-muted-foreground" />
@@ -636,7 +636,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"
-              className="relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[#0f2147] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary">
+              className="relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary">
               <Bell size={18} aria-hidden="true" />
               {attentionCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
@@ -650,7 +650,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <DropdownMenuTrigger asChild>
               <button className="flex max-w-[230px] min-w-0 items-center gap-3 rounded-[14px] border border-[#dfe8f5] bg-white px-2.5 py-2 text-sm shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
                 <div className="hidden min-w-0 max-w-[150px] text-right 2xl:block">
-                  <div className="truncate text-[13px] font-extrabold leading-tight text-[#0f2147]">{storeName}</div>
+                  <div className="truncate text-[13px] font-extrabold leading-tight text-[var(--brand-ink)]">{storeName}</div>
                   <div className="truncate text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
                 </div>
                 <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[var(--brand)] text-sm font-bold text-white ring-2 ring-[#e7f0ff]">

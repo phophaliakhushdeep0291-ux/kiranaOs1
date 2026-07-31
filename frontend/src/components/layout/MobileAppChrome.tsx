@@ -251,7 +251,7 @@ export function MobileBottomNav({
               <div className="flex min-w-0 items-center gap-3 text-left">
                 <span className="mobile-profile-avatar">{storeName.split(" ").map((part) => part[0]).slice(0, 2).join("").toUpperCase() || "A"}</span>
                 <div className="min-w-0 flex-1">
-                  <DrawerTitle className="truncate font-display text-[19px] font-black text-[#0a1538]">{storeName}</DrawerTitle>
+                  <DrawerTitle className="truncate font-display text-[19px] font-black text-[var(--brand-ink)]">{storeName}</DrawerTitle>
                   <DrawerDescription className="mt-0.5 truncate text-[12px] font-semibold text-[#62708b]">{storeLocation}</DrawerDescription>
                 </div>
                 <DrawerClose asChild>

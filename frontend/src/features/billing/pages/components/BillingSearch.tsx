@@ -293,7 +293,7 @@ export function BillingSearch({
                 <Input
                   ref={searchInputRef}
                   data-testid="input-product-search"
-                  className="h-full flex-1 border-0 bg-transparent p-0 text-[14px] font-semibold text-[#0f2147] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="h-full flex-1 border-0 bg-transparent p-0 text-[14px] font-semibold text-[var(--brand-ink)] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
                   placeholder="Search by product name, barcode or SKU"
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
@@ -567,7 +567,7 @@ export function BillingSearch({
           </div>
           {/* Grand total — right aligned */}
           <div className="shrink-0 text-left sm:ml-auto sm:text-right">
-            <p className="font-display text-[22px] font-black tracking-tight text-[#0f1e3d]">
+            <p className="font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">
               ₹{cartGrandTotal.toLocaleString("en-IN")}
             </p>
             <p className="mt-1 text-[12px] font-semibold text-[#536383]">Grand Total</p>
@@ -618,7 +618,7 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
       <p className="mt-1 truncate text-[12px] font-medium text-[#687895]">{subtitle}</p>
 
       {/* Price — absolute bottom-left, ₹X.00 */}
-      <span className="absolute bottom-3 left-3 text-[15px] font-black text-[#0f1e3d]">
+      <span className="absolute bottom-3 left-3 text-[15px] font-black text-[var(--brand-ink)]">
         ₹{priceLabel}
       </span>
 

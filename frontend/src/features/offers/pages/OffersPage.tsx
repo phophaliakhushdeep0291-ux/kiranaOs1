@@ -111,7 +111,7 @@ export default function OffersPage() {
           {/* Offers table */}
           <div className="overflow-hidden rounded-[14px] border border-[#e6ecf4] bg-white shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
             <div className="flex items-center justify-between border-b border-[#eef2f8] px-5 py-3.5">
-              <h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">All Offers & Campaigns</h3>
+              <h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">All Offers & Campaigns</h3>
               <Button onClick={openCreate} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-2 rounded-[9px] font-bold text-white hover:opacity-95">
                 <Plus size={15} /> New Offer
               </Button>
@@ -123,7 +123,7 @@ export default function OffersPage() {
             ) : rows.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-12 text-center">
                 <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Ticket size={22} /></span>
-                <p className="text-[13px] font-bold text-[#102347]">No offers yet</p>
+                <p className="text-[13px] font-bold text-[var(--brand-ink)]">No offers yet</p>
                 <p className="text-[12px] text-[#64748b]">Create a coupon or auto-discount to boost sales.</p>
               </div>
             ) : (
@@ -154,8 +154,8 @@ export default function OffersPage() {
                                 </span>
                               </span>
                               <div className="min-w-0">
-                                <p className="truncate font-bold text-[#102347]">{o.title}</p>
-                                {o.code ? <span className="mt-0.5 inline-block rounded-[5px] bg-[#0f1e3d] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-white">{o.code}</span> : <span className="text-[11px] text-[#94a3b8]">Auto-apply</span>}
+                                <p className="truncate font-bold text-[var(--brand-ink)]">{o.title}</p>
+                                {o.code ? <span className="mt-0.5 inline-block rounded-[5px] bg-[var(--brand-ink)] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-white">{o.code}</span> : <span className="text-[11px] text-[#94a3b8]">Auto-apply</span>}
                               </div>
                             </div>
                           </td>
@@ -207,7 +207,7 @@ export default function OffersPage() {
 
       <Dialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
         <DialogContent className="max-w-[380px]">
-          <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[#0f1e3d]">Delete this offer?</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-display text-[16px] font-black text-[var(--brand-ink)]">Delete this offer?</DialogTitle></DialogHeader>
           <p className="text-[12px] text-[#52627e]">"{deleting?.title}" will move to the recycle bin and stop applying at billing.</p>
           <div className="flex gap-2.5 pt-2">
             <Button variant="outline" className="h-11 flex-1 rounded-[10px] font-bold" onClick={() => setDeleting(null)}>Cancel</Button>
@@ -232,7 +232,7 @@ function CouponTester() {
   });
   return (
     <div className="h-fit rounded-[14px] border border-[#e6ecf4] bg-white p-5 shadow-[0_8px_24px_rgba(15,35,80,0.04)]">
-      <div className="mb-3 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand)]"><Ticket size={15} /></span><h3 className="font-display text-[14px] font-black tracking-tight text-[#102347]">Coupon tester</h3></div>
+      <div className="mb-3 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-[8px] bg-[var(--brand-soft)] text-[var(--brand)]"><Ticket size={15} /></span><h3 className="font-display text-[14px] font-black tracking-tight text-[var(--brand-ink)]">Coupon tester</h3></div>
       <p className="mb-3 text-[11px] text-[#64748b]">Check what discount applies for a bill — exactly what billing will compute.</p>
       <div className="space-y-2.5">
         <div><Label className="mb-1 block text-[11px] font-semibold text-[#45577a]">Bill subtotal (₹)</Label><Input className="h-9" type="number" value={subtotal} onChange={(e) => setSubtotal(e.target.value)} /></div>
@@ -259,7 +259,7 @@ function Kpi({ icon, label, value, tone }: { icon: React.ReactNode; label: strin
         <p className="text-[11px] font-semibold text-[#64748b]">{label}</p>
         <span className={`grid h-8 w-8 place-items-center rounded-[9px] ${ring}`}>{icon}</span>
       </div>
-      <p className="mt-1.5 truncate font-display text-[24px] font-black leading-none text-[#102347]">{value}</p>
+      <p className="mt-1.5 truncate font-display text-[24px] font-black leading-none text-[var(--brand-ink)]">{value}</p>
     </div>
   );
 }
@@ -309,7 +309,7 @@ function OfferPanel({ open, editing, saving, width, onResizeStart, onClose, onSu
       <PanelResizeHandle onResizeStart={onResizeStart} />
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[#0f1e3d]">{editing ? "Edit Offer" : "Create New Offer"}</h2>
+          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{editing ? "Edit Offer" : "Create New Offer"}</h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">{editing ? "Update this discount or promotion" : "Set up a new discount or promotional offer"}</p>
         </div>
         <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
@@ -361,7 +361,7 @@ function OfferPanel({ open, editing, saving, width, onResizeStart, onClose, onSu
 
           <div className="flex items-center justify-between rounded-[10px] border border-[#e7edf7] px-3.5 py-2.5">
             <div>
-              <p className="text-[13px] font-bold text-[#102347]">Status — Active</p>
+              <p className="text-[13px] font-bold text-[var(--brand-ink)]">Status — Active</p>
               <p className="text-[11px] text-[#64748b]">Offer will be live immediately</p>
             </div>
             <Switch checked={form.watch("active")} onCheckedChange={(v) => form.setValue("active", v)} />
