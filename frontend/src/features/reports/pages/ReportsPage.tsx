@@ -36,6 +36,7 @@ import {
   ReceiptIndianRupee,
   RefreshCw,
   ShoppingBag,
+  ShieldCheck,
   Sparkles,
   TrendingUp,
   WalletCards,
@@ -60,7 +61,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseSummary } from "@/types/api";
 
-const PANEL = "min-w-0 overflow-hidden rounded-[8px] border border-[#e2e9f3] bg-white shadow-[0_4px_18px_rgba(31,60,110,0.045)]";
+const PANEL = "min-w-0 overflow-hidden rounded-[16px] border border-[#e2e9f3] bg-white shadow-[0_10px_30px_rgba(31,60,110,0.055)]";
 const GRID_STROKE = "#e7edf5";
 const AXIS_COLOR = "#6f7f9b";
 
@@ -199,6 +200,7 @@ export default function ReportsPage() {
   const [exportPinOpen, setExportPinOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [controlsOpen, setControlsOpen] = useState(false);
 
   const range = useMemo(() => safeDateRange(from, to), [from, to]);
   const priorRange = useMemo(() => previousRange(range.from, range.to), [range.from, range.to]);
@@ -457,16 +459,22 @@ export default function ReportsPage() {
   ];
 
   return (
-    <PageShell className="mx-auto min-h-full w-full max-w-[1800px] space-y-3 !bg-[#ffffff] pb-8 text-[#10224a] sm:space-y-3.5">
-      <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-center gap-2 text-[11px] text-[#6c7c98]">
-          {snapshot?.hasUnsyncedOperations ? (
-            <SyncBadge status="estimate" label={`${snapshot.pendingSyncCount + snapshot.failedSyncCount} changes awaiting sync`} />
-          ) : (
-            <SyncBadge status="synced" label="Synced · Local reports ready" />
-          )}
+    <PageShell className="reports-page mx-auto min-h-full w-full max-w-[1800px] space-y-4 pb-10 text-[#10224a] lg:space-y-5">
+      <section className="rounded-[18px] border border-[#dfe7f2] bg-white p-4 shadow-[0_10px_32px_rgba(31,60,110,0.055)] lg:flex lg:items-center lg:justify-between lg:gap-6 lg:p-5">
+        <div className="min-w-0">
+          <div className="hidden items-center gap-3 lg:flex">
+            <span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><BarChart3 size={19} /></span>
+            <div><h2 className="text-[17px] font-black tracking-tight text-[#10224a]">Business overview</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">Sales, collections, profit and stock performance in one clear view</p></div>
+          </div>
+          <div className="flex min-w-0 items-center gap-2 text-[11px] text-[#6c7c98] lg:mt-3">
+            {snapshot?.hasUnsyncedOperations ? (
+              <SyncBadge status="estimate" label={`${snapshot.pendingSyncCount + snapshot.failedSyncCount} changes awaiting sync`} />
+            ) : (
+              <SyncBadge status="synced" label="Synced · Local reports ready" />
+            )}
+          </div>
         </div>
-        <div className="grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+        <div className="mt-3 grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center lg:mt-0 lg:justify-end">
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="col-span-3 h-11 min-w-0 justify-between rounded-xl border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] sm:col-auto sm:h-9 sm:min-w-[220px] sm:rounded-[7px] sm:font-semibold">
@@ -519,11 +527,7 @@ export default function ReportsPage() {
         </section>
       ) : null}
 
-      <AccountingControlPanel from={range.from} to={range.to} />
-
-      <BankReconciliationPanel from={range.from} to={range.to} />
-
-      <section className="grid items-stretch gap-3 xl:grid-cols-3 2xl:grid-cols-[1.05fr_1.05fr_1.12fr]">
+      <section className="grid items-stretch gap-4 xl:grid-cols-3 2xl:grid-cols-[1.05fr_1.05fr_1.12fr]">
         <Panel title="Sales Trend" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="flex items-baseline gap-4 px-3.5 pt-1 text-[11px]">
             <span className="text-[#60708e]">Total Sales</span>
@@ -635,7 +639,7 @@ export default function ReportsPage() {
         </MobileReportList>
       </section>
 
-      <section className="hidden items-start gap-3 md:grid xl:grid-cols-3">
+      <section className="hidden items-start gap-4 md:grid xl:grid-cols-3">
         <DenseTable title="Top Products" action="View all" actionHref="/products" headers={["Product", "Category", "Qty Sold", "Sales (₹)", "Margin (%)"]} loading={loading} empty={!snapshot?.topProducts.length}>
           {snapshot?.topProducts.slice(0, 5).map((row) => <tr key={row.productId}><Td strong>{row.name}</Td><Td>{row.category}</Td><Td right>{row.quantitySold}</Td><Td right strong>{fmt(row.revenue)}</Td><Td right>{row.marginPct.toFixed(1)}%</Td></tr>)}
           {snapshot?.topProducts.length ? <tr className="font-bold"><Td>Total</Td><Td /><Td right>{snapshot.topProducts.reduce((sum, row) => sum + row.quantitySold, 0)}</Td><Td right>{fmt(snapshot.topProducts.reduce((sum, row) => sum + row.revenue, 0))}</Td><Td /></tr> : null}
@@ -661,7 +665,7 @@ export default function ReportsPage() {
         </DenseTable>
       </section>
 
-      <section className="grid items-start gap-3 md:grid-cols-2">
+      <section className="grid items-start gap-4 md:grid-cols-2">
         <Panel title="Sales by Hour" subtitle={peakHour ? `Peak ${hourLabel(peakHour.hour)} • ${fmt(peakHour.sales)} (${peakHour.bills} bills)` : "(No sales in this period)"} info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="h-[150px] px-2 pb-2">
             {loading ? <Skeleton className="h-full" /> : (
@@ -695,7 +699,7 @@ export default function ReportsPage() {
         </Panel>
       </section>
 
-      <section className="grid items-start gap-3 xl:grid-cols-3 2xl:grid-cols-[0.9fr_1.1fr_1fr]">
+      <section className="grid items-start gap-4 xl:grid-cols-3 2xl:grid-cols-[0.9fr_1.1fr_1fr]">
         <Panel title="Stock Movement Snapshot" info action={<PeriodPill value={period} onChange={applyPeriod} />}>
           <div className="grid grid-cols-2 divide-x divide-y divide-[#e8edf5] px-3 pb-3">
             <StockStat icon={<PackagePlus size={15} />} label="Total Stock In" value={fmt(snapshot?.stockMovement.totalIn)} deltaValue="Value received" tone="blue" />
@@ -718,6 +722,17 @@ export default function ReportsPage() {
           </div>
           <Link href="/daily-closing" className="mx-3 mb-3 flex h-11 items-center justify-center rounded-xl border border-[#dfe7f2] text-[11px] font-bold text-[var(--brand)] hover:bg-[#f6f9ff] sm:h-8 sm:rounded-[6px]">View Detailed Insights <span className="ml-2">→</span></Link>
         </Panel>
+      </section>
+
+      <section className="overflow-hidden rounded-[18px] border border-[#dfe7f2] bg-white shadow-[0_10px_30px_rgba(31,60,110,0.05)]">
+        <button type="button" className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-[#f8faff] lg:p-5" aria-expanded={controlsOpen} onClick={() => setControlsOpen((value) => !value)}>
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-[#eef3fb] text-[#445775]"><ShieldCheck size={18} /></span>
+            <span className="min-w-0"><span className="block text-sm font-black text-[#14264c]">Financial controls</span><span className="mt-1 block text-[11px] leading-4 text-[#718099]">Accounting integrity and bank reconciliation for owners and finance review</span></span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-2 text-[11px] font-bold text-[var(--brand)]">{controlsOpen ? "Hide controls" : "Open controls"}<ChevronDown size={15} className={cn("transition-transform", controlsOpen && "rotate-180")} /></span>
+        </button>
+        {controlsOpen ? <div className="space-y-4 border-t border-[#e7edf5] bg-[#f7f9fc] p-3 sm:p-4 lg:p-5"><AccountingControlPanel from={range.from} to={range.to} /><BankReconciliationPanel from={range.from} to={range.to} /></div> : null}
       </section>
 
       <OwnerPinModal open={exportPinOpen} onCancel={() => { if (!exporting) setExportPinOpen(false); }} title="Approve data export" description="Reports contain sensitive shop data. Owner PIN and reason are required before export." confirmLabel="Export data" reasonRequired loading={exporting} error={exportError} onConfirm={({ ownerPin, reason }) => confirmExport(ownerPin, reason)} />
@@ -852,10 +867,10 @@ function KpiCard({ label, value, previous, icon, iconClass, color, spark, positi
   const favorable = positiveIsBad ? change <= 0 : change >= 0;
   const points = spark.length > 1 ? spark.map((item, index) => ({ index, value: item })) : [{ index: 0, value: 0 }, { index: 1, value: value ?? 0 }];
   const gradientId = `report-kpi-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-  return <article className={cn(PANEL, "h-full min-h-[126px] p-3")}>
+  return <article className={cn(PANEL, "h-full min-h-[148px] p-4")}>
     {loading ? <Skeleton className="h-full min-h-[98px]" /> : <>
-      <div className="flex min-w-0 items-center gap-2"><span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[7px]", iconClass)}>{icon}</span><p className="min-w-0 truncate text-[10.5px] font-semibold leading-tight text-[#34486e]">{label}</p></div>
-      <p className="mt-2 whitespace-nowrap text-[20px] font-black leading-none text-[#101f40]">{fmt(value)}</p>
+      <div className="flex min-w-0 items-center gap-2.5"><span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[10px]", iconClass)}>{icon}</span><p className="min-w-0 truncate text-[11px] font-bold leading-tight text-[#52617c]">{label}</p></div>
+      <p className="mt-3 whitespace-nowrap text-[22px] font-black leading-none tracking-[-0.025em] text-[#101f40]">{fmt(value)}</p>
       <div className="mt-2 flex min-w-0 items-center gap-1 text-[9.5px]"><span className={cn("inline-flex shrink-0 items-center gap-0.5 font-bold", favorable ? "text-[#10a948]" : "text-[#ff334d]")}>{change >= 0 ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}{Math.abs(change)}%</span><span className="truncate text-[#7a879f]">vs last period</span></div>
       <div className="mt-1 h-[24px]"><ResponsiveContainer width="100%" height="100%"><AreaChart data={points} margin={{ top: 2, right: 1, left: 1, bottom: 0 }}><defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.28} /><stop offset="70%" stopColor={color} stopOpacity={0.08} /><stop offset="100%" stopColor={color} stopOpacity={0} /></linearGradient></defs><Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.7} fill={`url(#${gradientId})`} dot={{ r: 1.5, fill: "white", stroke: color, strokeWidth: 1.2 }} isAnimationActive={false} /></AreaChart></ResponsiveContainer></div>
     </>}
@@ -864,7 +879,7 @@ function KpiCard({ label, value, previous, icon, iconClass, color, spark, positi
 
 function Panel({ title, subtitle, info, action, children }: { title: string; subtitle?: string; info?: boolean; action?: ReactNode; children: ReactNode }) {
   return <article className={PANEL}>
-    <header className="flex min-h-14 min-w-0 items-center justify-between gap-2 px-4 sm:h-10 sm:min-h-0 sm:px-3.5"><div className="flex min-w-0 items-center gap-1.5"><h2 className="truncate text-[13px] font-extrabold text-[#13254a] sm:text-[12px]">{title}</h2>{subtitle ? <span className="shrink-0 text-[9px] text-[#72809a]">{subtitle}</span> : null}{info ? <Info size={11} className="shrink-0 text-[#7e8ca4]" /> : null}</div><div className="shrink-0">{action}</div></header>
+    <header className="flex min-h-14 min-w-0 items-center justify-between gap-3 border-b border-[#edf1f6] px-4"><div className="flex min-w-0 items-center gap-1.5"><h2 className="truncate text-[13px] font-extrabold text-[#13254a]">{title}</h2>{subtitle ? <span className="shrink-0 text-[9px] text-[#72809a]">{subtitle}</span> : null}{info ? <Info size={12} className="shrink-0 text-[#7e8ca4]" /> : null}</div><div className="shrink-0">{action}</div></header>
     {children}
   </article>;
 }
@@ -889,7 +904,7 @@ function PeriodPill({ value, onChange }: { value: ReportPeriod; onChange: (perio
 }
 
 function ChartFrame({ loading, empty, children }: { loading: boolean; empty: boolean; children: ReactNode }) {
-  return <div className="h-[166px] px-2 pb-2 2xl:h-[186px]">{loading ? <Skeleton className="h-full" /> : empty ? <EmptyChart /> : children}</div>;
+  return <div className="h-[210px] px-3 pb-3 pt-2 2xl:h-[228px]">{loading ? <Skeleton className="h-full" /> : empty ? <EmptyChart /> : children}</div>;
 }
 
 function EmptyChart() {
@@ -907,11 +922,11 @@ function TrendLabel({ current, previous }: { current: number; previous: number }
 }
 
 function DenseTable({ title, action, actionHref, headers, loading, empty, children }: { title: string; action: string; actionHref: string; headers: string[]; loading: boolean; empty: boolean; children: ReactNode }) {
-  return <article className={cn(PANEL, "h-full")}><header className="flex h-9 min-w-0 items-center justify-between gap-2 px-3.5"><h2 className="truncate text-[12px] font-extrabold text-[#13254a]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[var(--brand)] hover:underline">{action}</Link></header>{loading ? <Skeleton className="m-3 h-32" /> : empty ? <div className="grid h-32 place-items-center text-[11px] text-[#8290a8]">No records in this period</div> : <div className="overflow-x-auto px-2 pb-1.5"><table className="w-full min-w-[430px] border-collapse text-[9px]"><thead><tr className="bg-[#f5f7fb]">{headers.map((header, index) => <th key={header} className={cn("border-y border-[#e5ebf3] px-2 py-1 font-bold text-[#52617c]", index ? "text-right" : "text-left")}>{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{children}</tbody></table></div>}</article>;
+  return <article className={cn(PANEL, "h-full")}><header className="flex min-h-12 min-w-0 items-center justify-between gap-2 border-b border-[#edf1f6] px-4"><h2 className="truncate text-[12px] font-extrabold text-[#13254a]">{title}</h2><Link href={actionHref} className="shrink-0 text-[10px] font-bold text-[var(--brand)] hover:underline">{action}</Link></header>{loading ? <Skeleton className="m-3 h-32" /> : empty ? <div className="grid h-32 place-items-center text-[11px] text-[#8290a8]">No records in this period</div> : <div className="overflow-x-auto p-3"><table className="w-full min-w-[430px] border-collapse text-[10px]"><thead><tr className="bg-[#f5f7fb]">{headers.map((header, index) => <th key={header} className={cn("border-y border-[#e5ebf3] px-2.5 py-2 font-bold text-[#52617c]", index ? "text-right" : "text-left")}>{header}</th>)}</tr></thead><tbody className="divide-y divide-[#e8edf4]">{children}</tbody></table></div>}</article>;
 }
 
 function Td({ children, right, strong }: { children?: ReactNode; right?: boolean; strong?: boolean }) {
-  return <td className={cn("whitespace-nowrap px-2 py-1 text-[#344666]", right && "text-right", strong && "font-bold text-[#17294d]")}>{children}</td>;
+  return <td className={cn("whitespace-nowrap px-2.5 py-2 text-[#344666]", right && "text-right", strong && "font-bold text-[#17294d]")}>{children}</td>;
 }
 
 function RiskChip({ balance }: { balance: number }) {

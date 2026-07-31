@@ -318,9 +318,7 @@
 
 @layer components {
   .app-shell {
-    background:
-      radial-gradient(circle at 82% 0%, hsl(var(--primary) / 0.035), transparent 28rem),
-      linear-gradient(180deg, #ffffff 0%, #ffffff 48%, #fbfdff 100%);
+    background: #ffffff;
   }
 
   .app-main-scroll {
@@ -1543,7 +1541,7 @@ html[data-density="compact"] {
     --app-mobile-bottom-nav-clearance: calc(var(--app-mobile-nav-height) + 0.75rem + env(safe-area-inset-bottom));
     --app-mobile-content-bottom-clearance: 1.25rem;
     --mobile-surface: #ffffff;
-    --mobile-canvas: #f5f7fb;
+    --mobile-canvas: #ffffff;
     --mobile-ink: #0a1538;
     --mobile-muted: #62708b;
     --mobile-line: #e3e9f3;
@@ -2045,7 +2043,7 @@ html[data-density="compact"] {
 @media (min-width: 1024px) {
   :root {
     --app-page-gutter: clamp(1.25rem, 0.85rem + 0.8vw, 2rem);
-    --desktop-canvas: #f6f8fc;
+    --desktop-canvas: #ffffff;
     --desktop-surface: rgba(255, 255, 255, 0.96);
     --desktop-line: #e2e8f2;
     --desktop-shadow: 0 1px 2px rgba(15, 35, 80, 0.025), 0 12px 34px rgba(15, 35, 80, 0.055);
@@ -2053,9 +2051,7 @@ html[data-density="compact"] {
   }
 
   .app-shell {
-    background:
-      radial-gradient(circle at 84% -8%, color-mix(in srgb, var(--brand) 5%, transparent), transparent 30rem),
-      var(--desktop-canvas);
+    background: #ffffff;
   }
 
   .app-main-scroll,
@@ -2118,5 +2114,65 @@ html[data-density="compact"] {
 
   .app-loading-header {
     backdrop-filter: blur(16px);
+  }
+
+  .premium-page-header {
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--desktop-line);
+    border-radius: 18px;
+    background: var(--desktop-surface);
+    padding: 1.15rem 1.25rem;
+    box-shadow: var(--desktop-shadow);
+  }
+
+  .premium-page-header h1 {
+    color: #10224a;
+    font-size: 1.15rem;
+  }
+
+  /* Older feature pages predate the shared premium primitives. Restrict this
+     compatibility layer to content surfaces so controls and dialogs retain
+     their intentionally compact geometry. */
+  .app-route-ready :where(article, section)[class*="bg-white"][class*="border"],
+  .app-route-ready :where(article, section)[class*="bg-card"][class*="border"] {
+    border-color: var(--desktop-line) !important;
+  }
+
+  .app-route-ready > :where(.app-page-shell, .app-docked-page)
+    :where(article, section)[class*="bg-white"][class*="shadow"] {
+    box-shadow: var(--desktop-shadow) !important;
+  }
+
+  .app-route-ready > :where(.app-page-shell, .app-docked-page)
+    > :where(article, section)[class*="border"][class*="bg-white"],
+  .app-route-ready > :where(.app-page-shell, .app-docked-page)
+    > :where(.grid, .flex)
+    > :where(article, section)[class*="border"][class*="bg-white"] {
+    border-radius: 16px !important;
+  }
+
+  .app-route-ready :where(table) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .app-route-ready :where(thead th) {
+    color: #52617c;
+  }
+
+  .app-route-ready :where(tbody tr) {
+    transition: background-color 140ms ease;
+  }
+
+  .app-route-ready :where(tbody tr:hover) {
+    background-color: color-mix(in srgb, var(--brand) 2.8%, white);
+  }
+
+  .app-route-ready :where(input, textarea, select)[class*="border"] {
+    border-color: #dbe3ee;
+    box-shadow: 0 1px 2px rgba(15, 35, 80, 0.02);
+  }
+
+  .app-route-ready :where(input, textarea, select)[class*="border"]:focus {
+    border-color: color-mix(in srgb, var(--brand) 42%, #dbe3ee);
   }
 }

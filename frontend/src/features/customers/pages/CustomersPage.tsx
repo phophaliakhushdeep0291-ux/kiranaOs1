@@ -782,31 +782,33 @@ export default function CustomersPage() {
   const showLegacyCustomerPanel: boolean = false;
 
   return (
-    <div className="app-docked-page space-y-5 bg-white">
+    <div className="app-docked-page space-y-3 bg-transparent lg:space-y-5 lg:bg-white">
       <section className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-        <SyncBadge status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
-        <div className="flex flex-wrap items-center gap-2">
+        <SyncBadge className="hidden lg:inline-flex" status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
+        <div className="grid grid-cols-2 items-center gap-2 lg:flex lg:flex-wrap">
+          <div className="col-span-2 lg:contents">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 w-full justify-between rounded-[12px] border-[#dfe7f2] bg-white px-3.5 text-[11px] font-bold text-[#24385f] lg:w-auto lg:min-w-[215px]"><span className="inline-flex items-center gap-2"><CalendarDays size={16} className="text-[#1768f5]" />{formatShortDate(rangeFrom)} - {formatShortDate(rangeTo)}</span><ChevronRight size={13} className="rotate-90" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56"><DropdownMenuItem onClick={() => applyRange(0)}>Today</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(6)}>Last 7 days</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(29)}>Last 30 days</DropdownMenuItem></DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 min-w-[215px] justify-between rounded-[10px] border-[#dfe7f2] bg-white px-3.5 text-[11px] font-bold text-[#24385f]"><span className="inline-flex items-center gap-2"><CalendarDays size={16} className="text-[#1768f5]" />{formatShortDate(rangeFrom)} - {formatShortDate(rangeTo)}</span><ChevronRight size={13} className="rotate-90" /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56"><DropdownMenuItem onClick={() => applyRange(0)}>Today</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(6)}>Last 7 days</DropdownMenuItem><DropdownMenuItem onClick={() => applyRange(29)}>Last 30 days</DropdownMenuItem></DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="outline" className="h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold"><Filter size={16} />Filters</Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><Button variant="outline" className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Filter size={16} />Filters</Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>All customers</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>With balance</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={exportCustomers} className="h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold"><Download size={16} />Export</Button>
-          <Button variant="outline" onClick={() => openPayment()} className="h-11 gap-2 rounded-[10px] border-[#bfd4f5] bg-[var(--brand-softer)] px-3.5 text-[11px] font-bold text-[#174eaa] hover:bg-[#edf5ff]"><Wallet size={16} />Record Payment</Button>
-          <Button onClick={openCreate} className="inline-flex h-11 items-center justify-center gap-2.5 rounded-[10px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] px-[18px] text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[#0758df] hover:to-[#004ed0]"><Plus size={16} className="shrink-0" /><span>Add Customer</span></Button>
+          <Button variant="outline" onClick={exportCustomers} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />Export</Button>
+          <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[#bfd4f5] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[#174eaa] hover:bg-[#edf5ff] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />Collect payment</Button>
+          <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[#0b63f6] to-[#0057e7] px-3 text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[#0758df] hover:to-[#004ed0] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>Add customer</span></Button>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-6">
-        <CustomerMetricCard label="Total Customers" value={String(totals.customers)} change={metricChanges.customers} color="#1768f5" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[#1768f5]" spark={metricSparks.customers} />
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:gap-4 2xl:grid-cols-6">
+        <CustomerMetricCard mobileHidden label="Total Customers" value={String(totals.customers)} change={metricChanges.customers} color="#1768f5" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[#1768f5]" spark={metricSparks.customers} />
         <CustomerMetricCard label="Total Outstanding" value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
         <CustomerMetricCard label="Overdue Amount" value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
         <CustomerMetricCard label="Udhar Collected" value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
         <CustomerMetricCard label="Customers with Balance" value={String(totals.active)} change={metricChanges.active} color="#1768f5" icon={<UserCheck size={18} />} iconClass="bg-[var(--brand-soft)] text-[#1768f5]" spark={metricSparks.active} />
-        <CustomerMetricCard label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
+        <CustomerMetricCard mobileHidden label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
       </section>
 
       <section className="grid min-w-0 items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(560px,1fr)_360px]">
@@ -1264,11 +1266,11 @@ export default function CustomersPage() {
   );
 }
 
-function CustomerMetricCard({ label, value, change, color, icon, iconClass, spark }: { label: string; value: string; change: number; color: string; icon: React.ReactNode; iconClass: string; spark: number[] }) {
+function CustomerMetricCard({ label, value, change, color, icon, iconClass, spark, mobileHidden = false }: { label: string; value: string; change: number; color: string; icon: React.ReactNode; iconClass: string; spark: number[]; mobileHidden?: boolean }) {
   const data = spark.map((item, index) => ({ index, value: item }));
   const gradientId = `customer-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
-    <article className="flex h-[150px] flex-col overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+    <article className={cn("h-[126px] flex-col overflow-hidden rounded-[18px] border border-[#e6ecf5] bg-white p-3.5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] lg:h-[150px] lg:rounded-[16px] lg:p-4", mobileHidden ? "hidden md:flex" : "flex")}>
       <div className="flex shrink-0 items-center gap-3">
         <span className={cn("grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[12px]", iconClass)}>{icon}</span>
         <p className="min-w-0 text-[12px] font-bold leading-snug text-[#34486e]">{label}</p>
@@ -1281,7 +1283,7 @@ function CustomerMetricCard({ label, value, change, color, icon, iconClass, spar
         </span>
         <span className="whitespace-nowrap text-[#7a879f]">vs last week</span>
       </div>
-      <div className="mt-auto h-7 w-full shrink-0">
+      <div className="mt-auto hidden h-7 w-full shrink-0 lg:block">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 3, right: 2, left: 2, bottom: 0 }}>
             <defs>
