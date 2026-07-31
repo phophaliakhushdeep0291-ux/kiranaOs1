@@ -382,6 +382,44 @@ export function retryableBillCancellationValidationConflict(event: PendingSyncEv
   return mentionsServerBillId || (mentionsNullType && message.includes("invalid_type"));
 }
 
+/**
+ * A repair sweep re-queues an event by flipping it back to PENDING. That
+ * deliberately bypasses the automatic retry cap, because the sweep only fires
+ * once it believes the *cause* is gone (a server fix shipped, a dependency
+ * arrived) — so the attempts already burned against the old cause shouldn't
+ * count against the fresh one.
+ *
+ * The hazard is that the sweep's belief can be wrong. If the cause is still
+ * present the server rejects again, the event goes back to CONFLICT/FAILED, and
+ * the next sweep re-queues it: an unbounded sweep↔push loop that pushes on every
+ * sync cycle forever. A production device reached retry_count 108 this way while
+ * the server-side fix was still unreleased.
+ *
+ * So a re-queue resets the retry budget (the cause is believed fixed) but is
+ * itself bounded. After MAX_REPAIR_REQUEUES failed attempts to rescue the same
+ * event, we stop and leave it for the owner to retry by hand — an honest "needs
+ * attention" beats a loop that silently burns battery and data.
+ */
+export const MAX_REPAIR_REQUEUES = 3;
+
+function requeuedForRetry(event: PendingSyncEvent, now: string): PendingSyncEvent | null {
+  const requeues = Number(event.repair_requeues ?? 0);
+  if (requeues >= MAX_REPAIR_REQUEUES) return null;
+  return {
+    ...event,
+    status: "PENDING",
+    sync_status: "pending_sync",
+    error_message: null,
+    last_error: null,
+    next_retry_at: null,
+    last_attempt_at: now,
+    // The blocking cause is believed gone, so the old attempts no longer apply.
+    retry_count: 0,
+    attempts: 0,
+    repair_requeues: requeues + 1,
+  };
+}
+
 async function repairRetryableBillCancellationConflicts(): Promise<number> {
   await dexieDB.open();
   const rows = filterRowsForCurrentScope(
@@ -392,17 +430,10 @@ async function repairRetryableBillCancellationConflicts(): Promise<number> {
   const now = nowIso();
   let repaired = 0;
   for (const event of rows) {
+    const requeued = requeuedForRetry(event, now);
+    if (!requeued) continue;
     const normalizedPayload = buildBackendSyncOperation(event, payloadRecord(event))?.payload ?? event.payload;
-    await dexieDB.sync_outbox.put({
-      ...event,
-      payload: normalizedPayload,
-      status: "PENDING",
-      sync_status: "pending_sync",
-      error_message: null,
-      last_error: null,
-      next_retry_at: null,
-      last_attempt_at: now,
-    });
+    await dexieDB.sync_outbox.put({ ...requeued, payload: normalizedPayload });
     repaired += 1;
   }
   return repaired;
@@ -418,17 +449,10 @@ async function repairRetryablePurchaseAndLedgerValidationConflicts(): Promise<nu
   const now = nowIso();
   let repaired = 0;
   for (const event of rows) {
+    const requeued = requeuedForRetry(event, now);
+    if (!requeued) continue;
     const normalizedPayload = buildBackendSyncOperation(event, payloadRecord(event))?.payload ?? event.payload;
-    await dexieDB.sync_outbox.put({
-      ...event,
-      payload: normalizedPayload,
-      status: "PENDING",
-      sync_status: "pending_sync",
-      error_message: null,
-      last_error: null,
-      next_retry_at: null,
-      last_attempt_at: now,
-    });
+    await dexieDB.sync_outbox.put({ ...requeued, payload: normalizedPayload });
     repaired += 1;
   }
   return repaired;
@@ -527,15 +551,9 @@ export async function repairRetryableBillValidationConflicts(): Promise<number> 
   const now = nowIso();
   let repaired = 0;
   for (const event of rows) {
-    await dexieDB.sync_outbox.put({
-      ...event,
-      status: "PENDING",
-      sync_status: "pending_sync",
-      error_message: null,
-      last_error: null,
-      next_retry_at: null,
-      last_attempt_at: now,
-    });
+    const requeued = requeuedForRetry(event, now);
+    if (!requeued) continue;
+    await dexieDB.sync_outbox.put(requeued);
     repaired += 1;
   }
   return repaired;

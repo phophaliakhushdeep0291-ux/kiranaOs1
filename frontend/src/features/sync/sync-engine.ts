@@ -105,6 +105,12 @@ export async function retryFailedSyncOperations(
           error_message: null,
           last_error: null,
           next_retry_at: null,
+          // An explicit "Retry" from the owner outranks the repair-sweep bound, so
+          // a change the sweeps gave up on can be rescued by hand — and can be
+          // swept again later. retry_count is deliberately NOT reset: PENDING
+          // already bypasses the attempt cap, and the count is the history the
+          // Sync Status screen shows ("Retries: 108").
+          repair_requeues: 0,
         });
         const entityType = entityTypeFromOperation(row.operation_type, row.entity_type);
         const tableName = tableNameForEntity(entityType);

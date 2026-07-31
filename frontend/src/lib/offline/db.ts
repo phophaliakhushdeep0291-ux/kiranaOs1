@@ -72,6 +72,9 @@ export interface PendingSyncEvent {
   sync_status: SyncStatus;
   next_retry_at?: string | null;
   last_error?: string | null;
+  // How many times a repair sweep has re-queued this event after it failed
+  // validation. Bounds the sweep↔push loop; see MAX_REPAIR_REQUEUES.
+  repair_requeues?: number;
 }
 
 function isCriticalBillSyncEvent(event: PendingSyncEvent): boolean {
