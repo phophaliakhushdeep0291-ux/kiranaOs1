@@ -24,6 +24,7 @@ const EMPTY_EXTRA_PACK = {
   packSizeUnit: "gram",
   price: "",
   barcode: "",
+  openingQty: "",
 };
 
 interface ProductFormPanelProps {
@@ -153,6 +154,28 @@ export function ProductFormPanel({
         isActive: true,
       },
     ], { shouldDirty: true, shouldValidate: true });
+
+    // Opening quantity is a stock-IN expressed in this pack, not a second count for it.
+    // Every pack size draws on one base-unit pool, so "20 x 500 g packets" is 10,000 g
+    // added to that pool. Storing it per pack instead would create a number nothing
+    // decrements on sale, which drifts from the real stock the moment you sell one.
+    const openingQty = Number(extraPack.openingQty);
+    if (openingQty > 0) {
+      const packConversion = sellingUnitConversion(size, extraPack.packSizeUnit);
+      const addedInDefaultUnits = packBaseQuantity > 0
+        ? (openingQty * packConversion) / packBaseQuantity
+        : 0;
+      if (addedInDefaultUnits > 0) {
+        const current = Number(form.getValues("stockQuantity")) || 0;
+        const next = Math.round((current + addedInDefaultUnits) * 1000) / 1000;
+        form.setValue("stockQuantity", next, { shouldDirty: true, shouldValidate: true });
+        toast({
+          title: `Added ${openingQty} x ${sellingUnitName(extraPack.unitType, size, extraPack.packSizeUnit)}`,
+          description: `Opening stock is now ${next} ${currentSellingUnitName}. All pack sizes share this one stock.`,
+        });
+      }
+    }
+
     setExtraPack(EMPTY_EXTRA_PACK);
     setExtraPackOpen(false);
   }
@@ -492,9 +515,27 @@ export function ProductFormPanel({
                         </Select>
                       </Field>
                     </div>
-                    <Field label="Pack barcode (Optional)">
-                      <Input className="h-9" value={extraPack.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder="Barcode for this size" />
-                    </Field>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label="Opening quantity (Optional)">
+                        <Input
+                          className="h-9"
+                          type="number"
+                          min="0"
+                          step="1"
+                          data-testid="input-extra-pack-opening-qty"
+                          value={extraPack.openingQty}
+                          onChange={(event) => setExtraPack((current) => ({ ...current, openingQty: event.target.value }))}
+                          placeholder="0"
+                        />
+                      </Field>
+                      <Field label="Pack barcode (Optional)">
+                        <Input className="h-9" value={extraPack.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder="Barcode for this size" />
+                      </Field>
+                    </div>
+                    <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">
+                      How many of this pack you have now. It is added to the product's opening
+                      stock — every pack size sells from that one stock.
+                    </p>
                     <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[var(--brand)] text-[11.5px] font-black text-white hover:bg-[#0052e8]">Add pack to product</button>
                   </div>
                 ) : null}
