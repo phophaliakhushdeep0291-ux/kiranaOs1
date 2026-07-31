@@ -117,7 +117,7 @@ export const billingRules = [
     category: RULE_CATEGORIES.RECONCILIATION,
     severity: SEVERITY.CRITICAL,
     defaultWeight: 40,
-    version: 2,
+    version: 3,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED],
     evidenceTypes: [EVIDENCE_TYPES.SALES_INVOICE],
@@ -131,6 +131,11 @@ export const billingRules = [
           ? lineTotal - billDiscount + money(bill.gst)
           : lineTotal - billDiscount;
       if (!moneyDiffers(expected, bill.grandTotal)) return passed;
+      // A bill may legitimately round its grand total to the nearest rupee (the shop's
+      // "Round off" setting). Accept that whole-rupee value too — the gap is under ₹0.50,
+      // far below the arithmetic manipulation this rule exists to catch. Anything further
+      // off is still flagged.
+      if (!moneyDiffers(Math.round(expected), bill.grandTotal)) return passed;
       return triggered({
         lineTotalSum: lineTotal,
         discount: money(bill.discount),
