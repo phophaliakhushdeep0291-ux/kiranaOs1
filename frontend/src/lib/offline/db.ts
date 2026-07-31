@@ -123,6 +123,7 @@ export class KiranaDexieDB extends Dexie {
   inventory_movements!: Table<OfflineRow, string>;
   suppliers!: Table<OfflineRow, string>;
   purchase_bills!: Table<OfflineRow, string>;
+  expenses!: Table<OfflineRow, string>;
   settings!: Table<LocalSettingRow, string>;
   sync_outbox!: Table<PendingSyncEvent, string>;
   sync_cursor!: Table<SyncCursorRow, string>;
@@ -373,6 +374,45 @@ export class KiranaDexieDB extends Dexie {
       staff_users:
         "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
     });
+
+    this.version(6).stores({
+      products:
+        "id, local_id, server_id, [tenant_id+store_id], name, category, barcode, sku, updated_at, sync_status, deleted_at",
+      customers:
+        "id, local_id, server_id, [tenant_id+store_id], name, mobile, type, updated_at, sync_status, deleted_at",
+      bills:
+        "id, local_id, server_id, [tenant_id+store_id], billNo, billNumber, billType, status, customerId, customer_id, createdAt, created_at, updated_at, sync_status",
+      bill_items:
+        "id, bill_id, billId, product_id, productId, [tenant_id+store_id], created_at, sync_status",
+      payments:
+        "id, bill_id, billId, customer_id, customerId, mode, paid_at, created_at, [tenant_id+store_id], sync_status",
+      customer_ledger:
+        "id, customer_id, customerId, [tenant_id+store_id], type, source_type, entry_at, created_at, sync_status",
+      inventory_movements:
+        "id, product_id, productId, type, reference_id, [tenant_id+store_id], created_at, sync_status",
+      suppliers:
+        "id, local_id, server_id, [tenant_id+store_id], name, mobile, updated_at, sync_status, deleted_at",
+      purchase_bills:
+        "id, local_id, server_id, [tenant_id+store_id], supplierId, supplier_id, invoiceNumber, invoice_number, status, dueDate, due_date, created_at, sync_status, deleted_at",
+      expenses:
+        "id, local_id, server_id, [tenant_id+store_id], category, paymentMode, status, spentAt, created_at, updated_at, sync_status, deleted_at",
+      settings: "key, [tenant_id+store_id], updated_at, expires_at",
+      sync_outbox:
+        "clientEventId, op_id, type, operation_type, entity_type, entity_id, client_created_at, createdAt, attempts, retry_count, [tenant_id+store_id], status, sync_status, next_retry_at, last_attempt_at",
+      sync_cursor: "id, entity_type, [tenant_id+store_id], updated_at",
+      sync_conflicts:
+        "id, entity_type, entity_id, [tenant_id+store_id], resolution, created_at, sync_status",
+      id_mappings:
+        "local_id, server_id, entity_type, [tenant_id+store_id], updated_at",
+      local_audit_logs:
+        "id, action, entity_type, entity_id, actor_id, created_at, [tenant_id+store_id]",
+      subscription_cache:
+        "id, plan_code, [tenant_id+store_id], updated_at, sync_status",
+      device_license_cache:
+        "id, device_fingerprint, status, [tenant_id+store_id], updated_at, sync_status",
+      staff_users:
+        "id, local_id, server_id, [tenant_id+store_id], name, mobile, role, isActive, active, updated_at, sync_status, deleted_at",
+    });
   }
 }
 
@@ -388,6 +428,7 @@ const BUSINESS_TABLES = new Set([
   "inventory_movements",
   "suppliers",
   "purchase_bills",
+  "expenses",
   "sync_conflicts",
   "local_audit_logs",
   "subscription_cache",

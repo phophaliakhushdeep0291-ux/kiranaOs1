@@ -27,6 +27,7 @@ export const SYNC_EVENT_TYPES = Object.freeze({
   UPDATE_SUPPLIER: 'UPDATE_SUPPLIER',
   DELETE_SUPPLIER: 'DELETE_SUPPLIER',
   RESTORE_SUPPLIER: 'RESTORE_SUPPLIER',
+  CREATE_EXPENSE: 'CREATE_EXPENSE',
 });
 
 export const SYNC_EVENT_STATUSES = Object.freeze({
@@ -112,7 +113,7 @@ export function buildSyncResult({ eventId, clientEventId, type, status, success,
 
 function deriveServerId(result) {
   if (!result || typeof result !== 'object') return null;
-  return result.billId ?? result.productId ?? result.customerId ?? result.supplierId ?? result.ledgerEntryId ?? result.reversalLedgerEntryId ?? result.purchaseHistoryId ?? result.stockLedgerId ?? null;
+  return result.billId ?? result.productId ?? result.customerId ?? result.supplierId ?? result.expenseId ?? result.ledgerEntryId ?? result.reversalLedgerEntryId ?? result.purchaseHistoryId ?? result.stockLedgerId ?? null;
 }
 
 function promoteSyncResultFields(result) {
@@ -142,6 +143,8 @@ function promoteSyncResultFields(result) {
     'amountPaid',
     'newBalance',
     'idempotentReplay',
+    'expenseId',
+    'localExpenseId',
   ];
   return Object.fromEntries(keys.filter((key) => result[key] !== undefined).map((key) => [key, result[key]]));
 }

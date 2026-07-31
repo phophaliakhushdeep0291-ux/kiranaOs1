@@ -9,6 +9,7 @@ const loginPage = readFileSync("src/features/auth/pages/LoginPage.tsx", "utf8");
 const devicesPage = readFileSync("src/features/devices/pages/DevicesPage.tsx", "utf8");
 const removedPage = readFileSync("src/features/devices/pages/DeviceRemovedPage.tsx", "utf8");
 const routes = readFileSync("src/app/routes.tsx", "utf8");
+const license = readFileSync("src/features/devices/license.ts", "utf8");
 
 describe("device-bound frontend sessions", () => {
   it("keeps one durable identity and hydrates it before network requests", () => {
@@ -42,5 +43,14 @@ describe("device-bound frontend sessions", () => {
     expect(devicesPage).toContain("Log out device");
     expect(devicesPage).toContain("Log out & remove");
     expect(devicesPage).not.toContain("Add device");
+  });
+
+  it("does not claim a new device is active before server activation succeeds", () => {
+    expect(license).toContain('"pending_activation"');
+    expect(license).toContain("markCurrentDeviceActivated");
+    const activateRequest = authContext.indexOf("await activateDevice(");
+    const markActive = authContext.indexOf("await markCurrentDeviceActivated(");
+    expect(activateRequest).toBeGreaterThan(-1);
+    expect(markActive).toBeGreaterThan(activateRequest);
   });
 });

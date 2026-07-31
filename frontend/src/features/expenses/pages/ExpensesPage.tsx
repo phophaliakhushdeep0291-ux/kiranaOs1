@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,7 +17,8 @@ import {
   ArrowDown, ArrowUp, CalendarDays, Clock3, Download, Home, Loader2, Megaphone, MoreHorizontal,
   Package, Pencil, PieChart as PieIcon, Plus, Receipt, Search, Smartphone, Trash2, Truck, Users, Wallet, Wrench, X, Zap,
 } from "lucide-react";
-import { listExpenses, getExpenseOverview, createExpense, updateExpense, deleteExpense } from "@/features/expenses/api";
+import { listExpenses, getExpenseOverview, updateExpense, deleteExpense } from "@/features/expenses/api";
+import { cacheServerExpenses, createExpenseLocalFirst, listLocalExpenses, mergeExpenseSnapshots } from "@/features/expenses/local-actions";
 import { useOfflineStatus } from "@/features/sync";
 import { CHIP_TONES } from "@/lib/chip-tones";
 import type { Expense, ExpenseInput } from "@/types/api";
@@ -77,26 +78,40 @@ export default function ExpensesPage() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState<Expense | null>(null);
+  const [localExpenses, setLocalExpenses] = useState<Expense[]>([]);
   const { width: panelWidth, isResizing, isDesktop, onResizeStart } = usePanelResize("kirana:expenses-panel-width", { defaultWidth: 420 });
 
   const range = useMemo(() => rangeFor(rangeOption), [rangeOption]);
   const filters = { ...range, search: search.trim() || undefined, category: category === "all" ? undefined : category };
-  const expensesQ = useQuery({ queryKey: ["expenses", filters], queryFn: () => listExpenses(filters) });
+  const refreshLocalExpenses = useCallback(() => {
+    void listLocalExpenses().then(setLocalExpenses);
+  }, []);
+  useEffect(() => {
+    refreshLocalExpenses();
+    window.addEventListener("kirana:local-data-changed", refreshLocalExpenses);
+    return () => window.removeEventListener("kirana:local-data-changed", refreshLocalExpenses);
+  }, [refreshLocalExpenses]);
+  const expensesQ = useQuery({
+    queryKey: ["expenses", filters],
+    queryFn: async () => {
+      const rows = await listExpenses(filters);
+      await cacheServerExpenses(rows);
+      return rows;
+    },
+  });
   const overviewQ = useQuery({ queryKey: ["expense-overview"], queryFn: getExpenseOverview });
 
   const invalidate = () => { void queryClient.invalidateQueries({ queryKey: ["expenses"] }); void queryClient.invalidateQueries({ queryKey: ["expense-overview"] }); };
 
-  // Expenses are online-first (unlike bills). Offline they can't be saved yet,
-  // so say so plainly instead of a misleading "Try again" that won't help.
   const offlineNotice = () => toast({
     title: "You're offline",
-    description: "Expenses need a connection right now. Reconnect and save again — your typed details stay in the form.",
+    description: "Creating expenses works offline. Reconnect before editing or deleting an existing expense.",
     variant: "destructive",
   });
 
   const saveMut = useMutation({
-    mutationFn: (vars: { id?: string; data: ExpenseInput }) => (vars.id ? updateExpense(vars.id, vars.data) : createExpense(vars.data)),
-    onSuccess: () => { invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved" }); },
+    mutationFn: (vars: { id?: string; data: ExpenseInput }) => (vars.id ? updateExpense(vars.id, vars.data) : createExpenseLocalFirst(vars.data)),
+    onSuccess: () => { refreshLocalExpenses(); invalidate(); setPanelOpen(false); setEditing(null); toast({ title: editing ? "Expense updated" : "Expense saved on this device", description: editing ? undefined : "Cloud backup will run automatically." }); },
     onError: (err: unknown) => {
       if (!isOnline) return offlineNotice();
       toast({ title: "Could not save", description: (err as { data?: { message?: string } })?.data?.message ?? "Try again", variant: "destructive" });
@@ -111,7 +126,14 @@ export default function ExpensesPage() {
     },
   });
 
-  const rows = expensesQ.data ?? [];
+  const rows = mergeExpenseSnapshots(expensesQ.data ?? [], localExpenses).filter((expense) => {
+    if (category !== "all" && expense.category !== category) return false;
+    const needle = search.trim().toLowerCase();
+    if (needle && ![expense.title, expense.vendor, expense.notes].some((value) => String(value ?? "").toLowerCase().includes(needle))) return false;
+    if (range.from && new Date(expense.spentAt).getTime() < new Date(range.from).getTime()) return false;
+    if (range.to && new Date(expense.spentAt).getTime() > new Date(range.to).getTime()) return false;
+    return true;
+  });
   const ov = overviewQ.data;
   const topCategory = ov ? Object.entries(ov.byCategory).sort((a, b) => b[1] - a[1])[0] : undefined;
   const todayDelta = ov ? pctDelta(ov.today, ov.yesterday) : null;

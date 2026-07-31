@@ -38,7 +38,8 @@ export type SyncOutboxOperationType =
   | "AUDIT_LOG_APPEND"
   | "RESTORE_CUSTOMER_PENDING"
   | "RESTORE_PRODUCT_PENDING"
-  | "RESTORE_SUPPLIER_PENDING";
+  | "RESTORE_SUPPLIER_PENDING"
+  | "CREATE_EXPENSE";
 
 export type SyncOutboxEntityType =
   | "customer"
@@ -53,7 +54,8 @@ export type SyncOutboxEntityType =
   | "staff"
   | "subscription"
   | "device_license"
-  | "audit_log";
+  | "audit_log"
+  | "expense";
 
 export interface EnqueueOutboxOperationInput {
   entity_type: SyncOutboxEntityType;
