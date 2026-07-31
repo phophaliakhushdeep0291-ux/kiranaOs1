@@ -13,6 +13,8 @@ import { createProductSchema, updateProductSchema } from "../products/products.s
 import { createProduct, restoreDeletedProduct, softDeleteProduct, updateProduct } from "../products/products.service.js";
 import { createSupplierSchema, updateSupplierSchema } from "../suppliers/suppliers.schema.js";
 import { createSupplier, restoreSupplier, softDeleteSupplier, updateSupplier } from "../suppliers/suppliers.service.js";
+import { createExpenseSchema } from "../expenses/expenses.schema.js";
+import { createExpense } from "../expenses/expenses.service.js";
 import { doesBodyTouchProtectedFields } from "../../utils/permissionRules.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
@@ -1230,6 +1232,8 @@ async function applySyncEvent(shopId, event, user, context) {
     case SYNC_EVENT_TYPES.RESTORE_SUPPLIER:
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyRestoreSupplier(shopId, event, context);
+    case SYNC_EVENT_TYPES.CREATE_EXPENSE:
+      return applyCreateExpense(shopId, event, user, context);
     default:
       throw new AppError(`Unsupported sync event type: ${event.type}`, 400);
   }
@@ -1422,6 +1426,33 @@ async function applyCancelBill(shopId, event, context) {
     billId: bill.id,
     status: bill.status,
     cancelledAt: bill.cancelledAt,
+  };
+}
+
+async function applyCreateExpense(shopId, event, user, context) {
+  const payload = getEventPayload(event);
+  const body = payload.expense ?? payload;
+  const localExpenseId = String(
+    payload.localExpenseId ?? body.localExpenseId ?? body.clientExpenseId ?? event.eventId,
+  );
+  const idempotencyKey = String(body.idempotencyKey ?? payload.idempotencyKey ?? event.eventId);
+  const parsed = createExpenseSchema.parse({
+    ...body,
+    idempotencyKey,
+    clientExpenseId: body.clientExpenseId ?? localExpenseId,
+  });
+  const expense = await createExpense(shopId, parsed, {
+    idempotencyKey,
+    clientExpenseId: localExpenseId,
+    sourceDeviceId: context?.deviceId ?? null,
+    userId: user?.userId ?? user?.id ?? null,
+  });
+  return {
+    expenseId: expense.id,
+    localExpenseId,
+    idempotencyKey,
+    idempotentReplay: expense.idempotentReplay === true,
+    expense,
   };
 }
 

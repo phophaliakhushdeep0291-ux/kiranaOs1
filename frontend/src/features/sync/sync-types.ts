@@ -115,6 +115,8 @@ export function tableNameForEntity(entityType?: string): string | null {
     purchase_bills: "purchase_bills",
     purchase_history: "purchase_bills",
     purchasehistory: "purchase_bills",
+    expense: "expenses",
+    expenses: "expenses",
     setting: "settings",
     settings: "settings",
     subscription: "subscription_cache",
@@ -139,6 +141,7 @@ export function entityTypeFromOperation(operationType: string, fallback?: string
   if (operationType.includes("STOCK")) return "inventory_movement";
   if (operationType.includes("PURCHASE")) return "purchase_history";
   if (operationType.includes("SUPPLIER")) return "supplier";
+  if (operationType.includes("EXPENSE")) return "expense";
   if (operationType.includes("SETTINGS")) return "settings";
   if (operationType.includes("SUBSCRIPTION")) return "subscription";
   if (operationType.includes("STAFF")) return "staff";
