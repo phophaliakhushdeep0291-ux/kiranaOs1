@@ -18,6 +18,15 @@ export function buildId(): string {
   }
 }
 
+/**
+ * Single source of truth for the support address customers/shopkeepers see.
+ * It was hardcoded in three places under two different domains
+ * (support@kiranaos.app in Settings, support@kiranaos.in in the order portal),
+ * so support requests landed in inconsistent, off-brand inboxes.
+ * ── Set this to the real monitored Artha support inbox before going live. ──
+ */
+export const SUPPORT_EMAIL = "support@kiranaos.app";
+
 /** Marketing-facing app version. Derived from the build stamp so it can't drift. */
 export function appVersion(): string {
   const id = buildId();

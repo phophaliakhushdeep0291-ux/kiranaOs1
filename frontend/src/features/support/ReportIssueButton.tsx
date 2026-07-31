@@ -198,6 +198,19 @@ export function ReportIssueButton() {
                 <Button variant="outline" className="min-h-11" onClick={() => handleOpenChange(false)} disabled={submitting}>
                   Cancel
                 </Button>
+                {!assistantAnswer && (
+                  <Button variant="secondary" className="min-h-11" onClick={handleAsk} disabled={asking || submitting || !description.trim()}>
+                    {asking ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Checking...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 size={16} aria-hidden="true" /> Get instant help
+                      </>
+                    )}
+                  </Button>
+                )}
                 <Button className="min-h-11" onClick={handleSubmit} disabled={submitting || !description.trim()}>
                   {submitting ? (
                     <>

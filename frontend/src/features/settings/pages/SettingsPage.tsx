@@ -13,7 +13,7 @@ import {
 import { SettingsShell } from "@/features/settings/SettingsShell";
 import { Card, CardHead, Info, Badge } from "@/features/settings/ui";
 import { DEFAULT_PRINTER_CONFIG, PRINTER_CONNECTION_LABELS, type PrinterConfig } from "@/features/settings/printer-config";
-import { appVersion, buildId } from "@/features/settings/app-info";
+import { appVersion, buildId, SUPPORT_EMAIL } from "@/features/settings/app-info";
 import { checkOwnerPin } from "@/features/settings/api";
 import { listStaff } from "@/features/staff/api";
 import { listDevices } from "@/features/devices/api";
@@ -334,7 +334,7 @@ export default function SettingsPage() {
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] font-bold text-[var(--brand)]">
           <Link href="/settings/advanced" className="hover:underline">Diagnostics</Link>
           <Link href="/settings/setup" className="hover:underline">Setup checklist</Link>
-          <a href="mailto:support@kiranaos.app?subject=Artha%20support" className="hover:underline">Contact Support</a>
+          <a href={`mailto:${SUPPORT_EMAIL}?subject=Artha%20support`} className="hover:underline">Contact Support</a>
         </div>
       </div>
       </div>

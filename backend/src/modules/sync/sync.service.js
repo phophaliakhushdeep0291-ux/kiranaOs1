@@ -311,17 +311,29 @@ async function recordSyncEventConflict(shopId, event, classified, error, user) {
   return publicSyncConflict(row);
 }
 
+// Bills cancelled/restored offline before their first sync have no server id yet, so the
+// client legitimately sends `serverBillId: null` (and a null/short reason). `.optional()` only
+// tolerates a *missing* key, not an explicit null, and `.default()` never fires for null — so
+// these were rejected with `INVALID_EVENT` and got stuck as conflicts. Accept nullish ids, and
+// coerce a null/blank/too-short reason to the default instead of throwing.
+const nullishBillId = z.string().min(1).nullish();
+const cancellationReason = (fallback) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim().length >= 3 ? value.trim() : undefined),
+    z.string().default(fallback),
+  );
+
 const cancelPayloadSchema = z.object({
-  billId: z.string().min(1).optional(),
-  serverBillId: z.string().min(1).optional(),
-  reason: z.string().min(3).default("Offline cancellation sync"),
+  billId: nullishBillId,
+  serverBillId: nullishBillId,
+  reason: cancellationReason("Offline cancellation sync"),
 }).passthrough();
 
 
 const restoreBillPayloadSchema = z.object({
-  billId: z.string().min(1).optional(),
-  serverBillId: z.string().min(1).optional(),
-  reason: z.string().min(3).default("Offline restore sync"),
+  billId: nullishBillId,
+  serverBillId: nullishBillId,
+  reason: cancellationReason("Offline restore sync"),
 }).passthrough();
 
 const createProductPayloadSchema = z.object({

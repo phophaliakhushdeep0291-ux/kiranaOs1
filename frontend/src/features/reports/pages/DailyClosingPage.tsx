@@ -7,6 +7,21 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { buildDailyClosingReport, toDateInputValue, type DailyClosingReport } from "@/features/reports/local-reporting";
 import { buildDrawerCount, loadDrawerCounts, saveDrawerCount, type DrawerCount } from "@/features/reports/drawer-counts";
+import {
+  buildCashMovement,
+  buildOpeningFloat,
+  loadCashMovements,
+  loadDrawerAdjustments,
+  loadOpeningFloats,
+  openingFloatFor,
+  removeCashMovement,
+  saveCashMovement,
+  saveOpeningFloat,
+  type CashMovement,
+  type CashMovementKind,
+  type OpeningFloat,
+} from "@/features/reports/cash-drawer";
+import { listExpenses } from "@/features/expenses/api";
 import { shareDailyClosingOnWhatsapp } from "@/features/reports/daily-summary-share";
 import { useAuth } from "@/features/auth/useAuth";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
@@ -59,12 +74,33 @@ export default function DailyClosingPage() {
     cashUpi: notif.dailyCashUpi !== false,
     udhar: notif.dailyUdhar !== false,
   };
+  // Only CASH expenses leave the till. A UPI or bank expense never touches the drawer,
+  // so counting it here would report a phantom short. Offline the call fails and the
+  // total stays 0 — the float and movements still apply.
+  async function loadCashExpenseTotal(forDate: string): Promise<number> {
+    try {
+      const rows = await listExpenses({ from: forDate, to: forDate });
+      return (rows ?? [])
+        .filter((row) => String((row as { paymentMode?: string }).paymentMode ?? "cash").toLowerCase() === "cash")
+        .filter((row) => !(row as { deletedAt?: string | null }).deletedAt)
+        .reduce((sum, row) => sum + (Number((row as { amount?: number }).amount) || 0), 0);
+    } catch {
+      return 0;
+    }
+  }
+
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [report, setReport] = useState<DailyClosingReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawerCounts, setDrawerCounts] = useState<DrawerCount[]>([]);
   const [countedDraft, setCountedDraft] = useState("");
   const [savingCount, setSavingCount] = useState(false);
+  const [openingFloats, setOpeningFloats] = useState<OpeningFloat[]>([]);
+  const [floatDraft, setFloatDraft] = useState("");
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>([]);
+  const [movementAmount, setMovementAmount] = useState("");
+  const [movementNote, setMovementNote] = useState("");
+  const [cashExpenses, setCashExpenses] = useState(0);
   const reportRef = useRef<DailyClosingReport | null>(null);
   const refreshTimer = useRef<number | null>(null);
 
@@ -75,7 +111,16 @@ export default function DailyClosingPage() {
   const load = useCallback(async (options?: { showLoader?: boolean }) => {
     const showLoader = options?.showLoader ?? !reportRef.current;
     if (showLoader) setLoading(true);
-    try { setReport(await buildDailyClosingReport(date)); }
+    try {
+      // The float and till movements live on this device; cash expenses are server-backed,
+      // so they are fetched and handed to the same drawer calculation.
+      const [drawer, expenseCash] = await Promise.all([
+        loadDrawerAdjustments(date),
+        loadCashExpenseTotal(date),
+      ]);
+      setCashExpenses(expenseCash);
+      setReport(await buildDailyClosingReport(date, { ...drawer, cashExpenses: expenseCash }));
+    }
     finally { if (showLoader) setLoading(false); }
   }, [date]);
 
@@ -102,7 +147,40 @@ export default function DailyClosingPage() {
 
   useEffect(() => {
     void loadDrawerCounts().then(setDrawerCounts);
+    void loadOpeningFloats().then(setOpeningFloats);
+    void loadCashMovements().then(setCashMovements);
   }, []);
+
+  // Re-prime the float box when the date changes; typing must not be overwritten.
+  useEffect(() => {
+    const declared = openingFloats.find((row) => row.date === date);
+    setFloatDraft(declared ? String(declared.amount) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
+
+  const declaredFloat = openingFloatFor(openingFloats, date);
+  const movementsForDate = cashMovements.filter((row) => row.date === date);
+
+  async function saveFloatForDate() {
+    const amount = Number(floatDraft);
+    if (floatDraft.trim() === "" || !Number.isFinite(amount) || amount < 0) return;
+    setOpeningFloats(await saveOpeningFloat(buildOpeningFloat(date, amount)));
+    await load({ showLoader: false });
+  }
+
+  async function addCashMovement(kind: CashMovementKind) {
+    const amount = Number(movementAmount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    setCashMovements(await saveCashMovement(buildCashMovement(date, kind, amount, movementNote)));
+    setMovementAmount("");
+    setMovementNote("");
+    await load({ showLoader: false });
+  }
+
+  async function deleteCashMovement(id: string) {
+    setCashMovements(await removeCashMovement(id));
+    await load({ showLoader: false });
+  }
 
   // Prefill the count input when switching to a date that was already counted.
   useEffect(() => {
@@ -188,7 +266,8 @@ export default function DailyClosingPage() {
                   {fmt(report?.expectedCashInDrawer)}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Cash sales + old udhar cash recovery - supplier cash paid
+                  Opening float + cash sales + old udhar cash recovery + cash in
+                  &nbsp;-&nbsp; supplier cash paid - cash expenses - cash out
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300">
@@ -252,6 +331,110 @@ export default function DailyClosingPage() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── The till: money in the drawer that never went through a bill ──── */}
+      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+        <div className="border-b px-5 py-3 sm:px-6">
+          <p className="app-muted-label">Opening float &amp; cash in / out</p>
+        </div>
+        <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div>
+            <Label className="app-muted-label" htmlFor="opening-float">Opening float for {date}</Label>
+            <div className="mt-2 flex gap-2">
+              <Input
+                id="opening-float"
+                data-testid="input-opening-float"
+                type="number"
+                min="0"
+                step="1"
+                inputMode="decimal"
+                placeholder="0"
+                value={floatDraft}
+                onChange={(event) => setFloatDraft(event.target.value)}
+                className="h-11 text-lg font-bold tabular-nums"
+              />
+              <Button onClick={() => void saveFloatForDate()} className="h-11 shrink-0">Save</Button>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              The change you put in the drawer this morning. Declared each day rather than
+              carried over, so yesterday&apos;s shortage never hides inside today&apos;s expected cash.
+              {declaredFloat > 0 ? ` Currently ${fmt(declaredFloat)}.` : ""}
+            </p>
+            <div className="mt-4 rounded-xl border bg-muted/30 p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Cash expenses today</span>
+                <span className="font-bold tabular-nums" data-testid="text-cash-expenses">{fmt(cashExpenses)}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Cash-paid expenses only — UPI and bank expenses never leave the drawer.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <Label className="app-muted-label">Record cash in / out</Label>
+            <div className="mt-2 grid grid-cols-[0.8fr_1.2fr] gap-2">
+              <Input
+                data-testid="input-cash-movement-amount"
+                type="number"
+                min="0"
+                step="1"
+                inputMode="decimal"
+                placeholder="Amount"
+                value={movementAmount}
+                onChange={(event) => setMovementAmount(event.target.value)}
+                className="h-11 font-bold tabular-nums"
+              />
+              <Input
+                data-testid="input-cash-movement-note"
+                placeholder="Reason (e.g. petrol, extra change)"
+                value={movementNote}
+                onChange={(event) => setMovementNote(event.target.value)}
+                className="h-11"
+              />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Button variant="outline" className="h-10 flex-1" onClick={() => void addCashMovement("in")}>
+                <ArrowDownRight size={15} className="mr-1.5" /> Cash in
+              </Button>
+              <Button variant="outline" className="h-10 flex-1" onClick={() => void addCashMovement("out")}>
+                <ArrowUpRight size={15} className="mr-1.5" /> Cash out
+              </Button>
+            </div>
+
+            {movementsForDate.length === 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Nothing recorded for {date}. Log money you add to or take from the till so the
+                count at closing can actually match.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-1.5">
+                {movementsForDate.map((row) => (
+                  <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-black uppercase", row.kind === "in" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>
+                        {row.kind === "in" ? "In" : "Out"}
+                      </span>
+                      <span className="truncate text-muted-foreground">{row.note || "No reason given"}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="font-bold tabular-nums">{row.kind === "in" ? "+" : "-"}{fmt(row.amount)}</span>
+                      <button
+                        type="button"
+                        onClick={() => void deleteCashMovement(row.id)}
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label={`Remove ${row.kind === "in" ? "cash in" : "cash out"} of ${fmt(row.amount)}`}
+                      >
+                        <XCircle size={15} />
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>

@@ -2,7 +2,7 @@ import * as svc from "./diagnostics.service.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { generateIncidentReport } from "./incident-report.service.js";
-import { answerSupportQuestion } from "./assistant.service.js";
+import { answerAssistant } from "./assistant.service.js";
 
 function headerDeviceId(req) {
   const raw = req.headers["x-device-id"];
@@ -134,7 +134,7 @@ export async function incidentReport(req, res, next) {
 
 export async function assistant(req, res, next) {
   try {
-    const result = await answerSupportQuestion({
+    const result = await answerAssistant({
       shopId: req.shopId,
       deviceId: resolveDeviceId(req),
       question: req.body.question,
