@@ -15,7 +15,7 @@ import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { useAppTheme, ACCENT_COLORS, type AccentColor } from "@/features/settings/theme";
 import { useAppLanguage, type AppLanguage } from "@/features/settings/i18n";
 import { setLandingPagePref } from "@/features/settings/landing-page";
-import { appVersion, buildId, databaseVersion, formatBytes, measureStorage } from "@/features/settings/app-info";
+import { appVersion, buildId, databaseVersion, formatBytes, measureStorage, SUPPORT_EMAIL } from "@/features/settings/app-info";
 import { DATE_FORMATS, applyAppPreferences } from "@/features/settings/app-preferences";
 import { verifyOwnerPin } from "@/features/settings/api";
 import { useAuth } from "@/features/auth/useAuth";
@@ -113,7 +113,7 @@ function downloadCsvTemplate(filename: string, headers: string[]) {
 }
 
 function mailSupport(subject: string, body: string) {
-  window.location.href = `mailto:support@kiranaos.app?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 export default function AdvancedSettingsPage() {

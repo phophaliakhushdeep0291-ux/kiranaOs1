@@ -17,6 +17,19 @@ export interface DateRange {
   to: string;
 }
 
+/**
+ * Till movements for one closing date that do not flow through sales: the float the
+ * owner declares in the morning, cash added to or taken from the drawer, and expenses
+ * paid in cash. Supplied by the caller because expenses are server-backed while the
+ * float and movements are local.
+ */
+export interface DrawerAdjustments {
+  openingCash?: number;
+  cashIn?: number;
+  cashOut?: number;
+  cashExpenses?: number;
+}
+
 export interface ReportPaymentBreakdown {
   cash: number;
   upi: number;
@@ -636,7 +649,7 @@ async function loadLocalFinanceRows(): Promise<LocalFinanceRows> {
   return { bills, billItems, payments, ledger, products, customers, suppliers, inventoryMovements, purchaseBills, outbox };
 }
 
-function aggregate(rows: LocalFinanceRows, range: DateRange): FinancialAggregationSnapshot {
+function aggregate(rows: LocalFinanceRows, range: DateRange, drawer?: DrawerAdjustments): FinancialAggregationSnapshot {
   return aggregateFinancialRows({
     bills: rows.bills,
     billItems: rows.billItems,
@@ -649,16 +662,22 @@ function aggregate(rows: LocalFinanceRows, range: DateRange): FinancialAggregati
     purchaseBills: rows.purchaseBills,
     date: range.to,
     range,
+    // Till adjustments only make sense for a single day's drawer, so they are passed
+    // for the closing snapshot and left off the multi-day trend ranges.
+    openingCash: drawer?.openingCash,
+    cashIn: drawer?.cashIn,
+    cashOut: drawer?.cashOut,
+    cashExpenses: drawer?.cashExpenses,
   });
 }
 
-export async function buildLocalReportSnapshot(range: DateRange): Promise<LocalReportSnapshot> {
+export async function buildLocalReportSnapshot(range: DateRange, drawer?: DrawerAdjustments): Promise<LocalReportSnapshot> {
   const rows = await loadLocalFinanceRows();
   const today = toDateInputValue(new Date());
   const todayRange = { from: today, to: today };
   const sevenDayRange = { from: toDateInputValue(addDays(startOfLocalDay(), -6)), to: today };
   const thirtyDayRange = { from: toDateInputValue(addDays(startOfLocalDay(), -29)), to: today };
-  const selectedSnapshot = aggregate(rows, range);
+  const selectedSnapshot = aggregate(rows, range, drawer);
   const previousSelectedSnapshot = aggregate(rows, previousRange(range));
   const todaySnapshot = aggregate(rows, todayRange);
   const sevenDaySnapshot = aggregate(rows, sevenDayRange);
@@ -708,8 +727,8 @@ export async function buildLocalReportSnapshot(range: DateRange): Promise<LocalR
   };
 }
 
-export async function buildDailyClosingReport(date: string): Promise<DailyClosingReport> {
-  const snapshot = await buildLocalReportSnapshot({ from: date, to: date });
+export async function buildDailyClosingReport(date: string, drawer?: DrawerAdjustments): Promise<DailyClosingReport> {
+  const snapshot = await buildLocalReportSnapshot({ from: date, to: date }, drawer);
   return {
     date,
     totalSales: snapshot.selected.sales,

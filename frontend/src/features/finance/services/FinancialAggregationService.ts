@@ -36,6 +36,16 @@ export interface FinancialAggregationInput {
   date?: string;
   range?: { from: string; to: string };
   generatedAt?: string;
+  /**
+   * Till adjustments that do not flow through sales. Without these the expected drawer
+   * only reflects money that moved through bills, so the over/short at closing is wrong
+   * for any shop that keeps a float or pays anything out of the till.
+   * Expenses are server-backed (no offline table), so the caller supplies the cash total.
+   */
+  openingCash?: number;
+  cashIn?: number;
+  cashOut?: number;
+  cashExpenses?: number;
 }
 
 export interface RevenueBreakdownRow {
@@ -100,6 +110,9 @@ export interface CashDrawerSummary {
   supplierCashPaid: number;
   expenses: number;
   ownerWithdrawals: number;
+  /** Cash put into or taken out of the till outside sales (pay-in / paid-out). */
+  cashIn: number;
+  cashOut: number;
   expectedClosingCash: number;
 }
 
@@ -943,16 +956,32 @@ export function aggregateFinancialRows(input: FinancialAggregationInput): Financ
   const supplierBankPaidToday = roundMoney(todaySupplierRows.filter((row) => row.paymentMode === "bank").reduce((sum, row) => sum + row.paid, 0));
   const purchaseDueToday = roundMoney(todaySupplierRows.reduce((sum, row) => sum + row.due, 0));
   const supplierDue = roundMoney(supplierDueRows.reduce((sum, row) => sum + row.due, 0));
-  const expensesToday = 0;
+  // These were hardcoded to 0, so the expected drawer ignored the morning float and any
+  // cash paid out during the day — it reported a short for every shop that pays rent from
+  // the till, and a permanent over for every shop that keeps change in it.
+  const openingCashToday = roundMoney(Math.max(0, Number(input.openingCash) || 0));
+  const cashInToday = roundMoney(Math.max(0, Number(input.cashIn) || 0));
+  const cashOutToday = roundMoney(Math.max(0, Number(input.cashOut) || 0));
+  const expensesToday = roundMoney(Math.max(0, Number(input.cashExpenses) || 0));
   const ownerWithdrawalToday = 0;
   const cashDrawer: CashDrawerSummary = {
-    openingCash: 0,
+    openingCash: openingCashToday,
     cashSales: cashSalesToday,
     cashUdharRecovery: oldUdhar.cash,
     supplierCashPaid: supplierCashPaidToday,
     expenses: expensesToday,
     ownerWithdrawals: ownerWithdrawalToday,
-    expectedClosingCash: roundMoney(totalCashCollectedToday - supplierCashPaidToday - expensesToday - ownerWithdrawalToday),
+    cashIn: cashInToday,
+    cashOut: cashOutToday,
+    expectedClosingCash: roundMoney(
+      openingCashToday
+      + totalCashCollectedToday
+      + cashInToday
+      - supplierCashPaidToday
+      - expensesToday
+      - cashOutToday
+      - ownerWithdrawalToday,
+    ),
   };
 
   return {

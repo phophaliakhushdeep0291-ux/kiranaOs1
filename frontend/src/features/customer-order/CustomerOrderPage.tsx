@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildOrderQrPayloads } from "@/lib/qr/cart-codec";
+import { SUPPORT_EMAIL } from "@/features/settings/app-info";
 import {
   loadCustomerCatalog,
   readCachedCatalog,
@@ -1637,7 +1638,7 @@ function SupportPortalPage({ catalog }: { catalog: CustomerCatalog; onView: (vie
       <aside className="space-y-4">
         <PortalCard><h2 className="font-display text-lg font-black">Store Contact</h2><div className="mt-4 flex gap-3"><IconBubble icon={Store} tone="orange" /><div><p className="font-black">{catalog.shop.name}</p><p className="text-sm text-[#66758f]">{catalog.shop.city || "Local store"}</p><p className="text-xs font-black text-[#0f9f4a]">Open</p></div></div><button type="button" className="mt-4 w-full rounded-xl border border-[var(--brand-border)] py-3 text-sm font-black text-[var(--brand)]"><Phone size={15} className="inline" /> Call Store</button><button type="button" className="mt-2 w-full rounded-xl border border-[#cdebd8] bg-[#f1fbf5] py-3 text-sm font-black text-[#0f9f4a]"><MessageCircle size={15} className="inline" /> WhatsApp Store</button></PortalCard>
         <PortalCard><h2 className="font-display text-lg font-black">Store Operating Hours</h2>{["Mon - Fri 7:00 AM - 10:00 PM", "Saturday 7:00 AM - 10:00 PM", "Sunday 7:00 AM - 10:00 PM"].map((row) => <p key={row} className="border-b border-[#edf2f8] py-3 text-sm font-semibold text-[#52617a]">{row}</p>)}</PortalCard>
-        <PortalCard><h2 className="font-display text-lg font-black text-[#ef4444]">Emergency Support</h2><InfoLine text="Customer Support (24x7): +91 98920 12345" /><InfoLine text="Email: support@kiranaos.in" /></PortalCard>
+        <PortalCard><h2 className="font-display text-lg font-black text-[#ef4444]">Emergency Support</h2><InfoLine text="Customer Support (24x7): +91 98920 12345" /><InfoLine text={`Email: ${SUPPORT_EMAIL}`} /></PortalCard>
       </aside>
     </div>
   );
