@@ -236,42 +236,34 @@ export default function CustomerDetailPage() {
     } finally { setSaving(false); }
   }
 
-  if (isLoading) return <div className="p-6 text-muted-foreground">Loading customer ledger from local database...</div>;
-  if (!customer) return <div className="p-6 space-y-4"><Link href="/customers"><Button variant="outline"><ArrowLeft size={15} className="mr-1" />Back</Button></Link><Card><CardContent className="py-10 text-center text-muted-foreground">Customer not found.</CardContent></Card></div>;
+  if (isLoading) return <div className="app-page-shell"><div className="h-48 animate-pulse rounded-[18px] border border-[#e2e8f2] bg-white shadow-sm" /></div>;
+  if (!customer) return <div className="app-page-shell space-y-4"><Link href="/customers"><Button variant="outline"><ArrowLeft size={15} className="mr-1" />Back</Button></Link><Card><CardContent className="py-14 text-center text-muted-foreground">Customer not found.</CardContent></Card></div>;
 
   return (
-    <div className="p-6 space-y-5 w-full max-w-none">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-2">
-          <Link href="/customers"><Button size="sm" variant="outline"><ArrowLeft size={15} className="mr-1" />Customers</Button></Link>
-          <div>
-            <h1 className="text-2xl font-bold">{customer.name}</h1>
-            <p className="text-sm text-muted-foreground">{customer.mobile || "No phone"} {customer.address ? `• ${customer.address}` : ""}</p>
+    <div className="app-page-shell w-full max-w-none space-y-5">
+      <section className="overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
+        <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
+          <div className="flex min-w-0 items-center gap-4">
+            <Link href="/customers"><Button size="icon" variant="outline" className="h-10 w-10 shrink-0 rounded-[12px]" aria-label="Back to customers"><ArrowLeft size={17} /></Button></Link>
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[var(--brand-soft)] text-sm font-black text-[var(--brand)]">{customer.name.split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase()}</span>
+            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#7b879b]">Customer account</p><h1 className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[#10224a]">{customer.name}</h1><p className="mt-1 truncate text-xs font-medium text-[#66758f]">{customer.mobile || "No phone"} {customer.address ? `• ${customer.address}` : ""}</p></div>
+          </div>
+          <div className="flex flex-wrap gap-2 lg:justify-end">
+            <FeatureGate featureName="whatsapp_reminders" fallback={<UpgradePrompt compact featureName="whatsapp_reminders" description="Automated WhatsApp reminders require Pro." />}>
+              <Button variant="outline" disabled={reminder.isPending || !customer.mobile || Number(customer.ledgerBalance || 0) <= 0} onClick={() => reminder.mutate(customer.id)} title={!customer.mobile ? "Add a customer mobile number first" : Number(customer.ledgerBalance || 0) <= 0 ? "No pending udhar to remind" : undefined}>{reminder.isPending ? <Loader2 size={15} className="mr-1 animate-spin" /> : <MessageCircle size={15} className="mr-1" />}WhatsApp reminder</Button>
+            </FeatureGate>
+            <Button variant="outline" onClick={() => { const ok = printStatement(customer.name, ledger); if (!ok) toast({ title: "Print blocked", variant: "destructive" }); }}><FileText size={15} className="mr-1" />Statement</Button>
+            <Button variant="outline" onClick={() => setAdjustOpen(true)}><ShieldAlert size={15} className="mr-1" />Adjustment</Button>
+            <Button disabled={customer.ledgerBalance <= 0} onClick={() => setPaymentOpen(true)} title={customer.ledgerBalance <= 0 ? "No pending udhar to collect" : undefined}><CreditCard size={15} className="mr-1" />Record payment</Button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <FeatureGate featureName="whatsapp_reminders" fallback={<UpgradePrompt compact featureName="whatsapp_reminders" description="Automated WhatsApp reminders require Pro." />}>
-            <Button
-              variant="outline"
-              disabled={reminder.isPending || !customer.mobile || Number(customer.ledgerBalance || 0) <= 0}
-              onClick={() => reminder.mutate(customer.id)}
-              title={!customer.mobile ? "Add a customer mobile number first" : Number(customer.ledgerBalance || 0) <= 0 ? "No pending udhar to remind" : undefined}
-            >
-              {reminder.isPending ? <Loader2 size={15} className="mr-1 animate-spin" /> : <MessageCircle size={15} className="mr-1" />}
-              WhatsApp reminder
-            </Button>
-          </FeatureGate>
-          <Button variant="outline" onClick={() => { const ok = printStatement(customer.name, ledger); if (!ok) toast({ title: "Print blocked", variant: "destructive" }); }}><FileText size={15} className="mr-1" />Statement</Button>
-          <Button variant="outline" onClick={() => setAdjustOpen(true)}><ShieldAlert size={15} className="mr-1" />Adjustment</Button>
-          <Button disabled={customer.ledgerBalance <= 0} onClick={() => setPaymentOpen(true)} title={customer.ledgerBalance <= 0 ? "No pending udhar to collect" : undefined}><CreditCard size={15} className="mr-1" />Record payment</Button>
-        </div>
-      </div>
+      </section>
 
       {customer.ledgerMetrics.warning ? <Card className="border-destructive"><CardContent className="py-3 text-sm text-destructive font-medium">{customer.ledgerMetrics.warning}</CardContent></Card> : null}
       {hasNegativeLedgerHistory ? <Card className="border-amber-300 bg-amber-50"><CardContent className="py-3 text-sm font-medium text-amber-900">Old overpayment data was detected in this ledger. Current udhar never goes below {formatMoney(0)}; affected historical balances are marked for reconciliation.</CardContent></Card> : null}
 
-      <div className="grid gap-3 md:grid-cols-5">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Current udhar</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-destructive">{formatMoney(Math.max(0, customer.ledgerBalance))}</CardContent></Card>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <Card className="border-t-2 border-t-rose-500"><CardHeader className="pb-2"><CardTitle className="text-sm">Current udhar</CardTitle></CardHeader><CardContent className="text-2xl font-black text-destructive">{formatMoney(Math.max(0, customer.ledgerBalance))}</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Trust score</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{customer.ledgerMetrics.trustScore}/100</div><Badge variant={customer.ledgerMetrics.isBadCustomer ? "destructive" : "outline"}>{customer.ledgerMetrics.isBadCustomer ? "Bad customer warning" : "Acceptable"}</Badge></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Udhar limit</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{typeof customer.udharLimit === "number" ? formatMoney(customer.udharLimit) : "—"}</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Due date</CardTitle></CardHeader><CardContent className="font-semibold"><CalendarClock size={15} className="inline mr-1" />{formatShortDate(customer.dueDate)}</CardContent></Card>
@@ -279,9 +271,9 @@ export default function CustomerDetailPage() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">0–7 days</CardTitle></CardHeader><CardContent className="text-xl font-bold">{formatMoney(customer.ledgerMetrics.ageing.zeroToSeven)}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">7–30 days</CardTitle></CardHeader><CardContent className="text-xl font-bold">{formatMoney(customer.ledgerMetrics.ageing.sevenToThirty)}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">30+ days</CardTitle></CardHeader><CardContent className="text-xl font-bold text-destructive">{formatMoney(customer.ledgerMetrics.ageing.thirtyPlus)}</CardContent></Card>
+        <Card className="border-t-2 border-t-emerald-500"><CardHeader className="pb-2"><CardTitle className="text-sm">0–7 days</CardTitle></CardHeader><CardContent className="text-xl font-black">{formatMoney(customer.ledgerMetrics.ageing.zeroToSeven)}</CardContent></Card>
+        <Card className="border-t-2 border-t-amber-500"><CardHeader className="pb-2"><CardTitle className="text-sm">7–30 days</CardTitle></CardHeader><CardContent className="text-xl font-black">{formatMoney(customer.ledgerMetrics.ageing.sevenToThirty)}</CardContent></Card>
+        <Card className="border-t-2 border-t-rose-500"><CardHeader className="pb-2"><CardTitle className="text-sm">30+ days</CardTitle></CardHeader><CardContent className="text-xl font-black text-destructive">{formatMoney(customer.ledgerMetrics.ageing.thirtyPlus)}</CardContent></Card>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">

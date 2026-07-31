@@ -140,7 +140,7 @@ export default function CategoriesPage() {
         <div className="relative min-w-0 flex-1">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
           <Input
-            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[#0057ff] focus-visible:bg-white focus-visible:ring-0"
+            className="h-11 rounded-[10px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[#0f2147] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
             placeholder="Search categories..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -199,7 +199,7 @@ export default function CategoriesPage() {
                     <div className="flex justify-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[#0057ff]" aria-label={`Actions for ${c.name}`}>
+                        <button className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8] data-[state=open]:bg-[#eef4ff] data-[state=open]:text-[var(--brand)]" aria-label={`Actions for ${c.name}`}>
                           <MoreVertical size={16} />
                         </button>
                       </DropdownMenuTrigger>
@@ -336,7 +336,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
     <div className="flex items-center gap-1">
       <button onClick={() => onChange(Math.max(1, page - 1))} disabled={page <= 1} className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40" aria-label="Previous"><ChevronLeft size={15} /></button>
       {pages.map((p, i) => p === "…" ? <span key={`e${i}`} className="px-1.5 text-[12px] text-[#9aa6bb]">…</span> : (
-        <button key={p} onClick={() => onChange(p)} className={`grid h-8 min-w-8 place-items-center rounded-lg px-2 text-[12px] font-bold transition-colors ${p === page ? "bg-[#0057ff] text-white shadow-[0_4px_10px_rgba(0,87,255,0.25)]" : "border border-[#e3eaf3] text-[#45577a] hover:bg-[#f7f9fd]"}`}>{p}</button>
+        <button key={p} onClick={() => onChange(p)} className={`grid h-8 min-w-8 place-items-center rounded-lg px-2 text-[12px] font-bold transition-colors ${p === page ? "bg-[var(--brand)] text-white shadow-[0_4px_10px_rgba(0,87,255,0.25)]" : "border border-[#e3eaf3] text-[#45577a] hover:bg-[#f7f9fd]"}`}>{p}</button>
       ))}
       <button onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className="grid h-8 w-8 place-items-center rounded-lg border border-[#e3eaf3] text-[#536383] transition-colors hover:bg-[#f7f9fd] disabled:opacity-40" aria-label="Next"><ChevronRight size={15} /></button>
     </div>

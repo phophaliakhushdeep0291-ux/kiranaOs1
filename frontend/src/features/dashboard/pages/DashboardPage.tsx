@@ -29,7 +29,8 @@ import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/produ
 import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useBusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
+import { useBusinessType, type BusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
+import { getShopWorkflow } from "@/features/settings/shop-workflows";
 import { cn } from "@/lib/utils";
 import type { Bill, Product } from "@/types/api";
 
@@ -299,6 +300,7 @@ interface DashboardStats {
 }
 
 interface LayoutProps {
+  businessType: BusinessType;
   btDef: BusinessTypeDefinition;
   dashboard: DashboardStats;
   ownerReport: LocalReportSnapshot | null;
@@ -319,7 +321,7 @@ interface LayoutProps {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const { def: btDef } = useBusinessType();
+  const { businessType, def: btDef } = useBusinessType();
   const { toast } = useToast();
   const today = format(new Date(), "yyyy-MM-dd");
   const yesterday = format(new Date(Date.now() - 86_400_000), "yyyy-MM-dd");
@@ -446,7 +448,7 @@ export default function Dashboard() {
   };
 
   const layoutProps: LayoutProps = {
-    btDef, dashboard, ownerReport, financialSnapshot, isLoading,
+    businessType, btDef, dashboard, ownerReport, financialSnapshot, isLoading,
     cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations,
     seedingDemo, userName: user?.name ?? "Owner",
     onLoadDemo: () => void loadDemoShop(),
@@ -475,7 +477,7 @@ export default function Dashboard() {
 
 type PaymentSlice = { label: string; value: number; color: string; dot: string };
 
-function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
+function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
   const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
   const [, navigate] = useLocation();
   const [period, setPeriod] = useState<DashboardPeriod>("week");
@@ -677,6 +679,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
   return (
     <>
       {!isDesktopViewport && <MobileGeneralDashboard
+        businessType={businessType}
         dashboard={dashboard}
         ownerReport={ownerReport}
         salesChartData={salesChartData}
@@ -714,6 +717,8 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
           </div>
         </section>
       )}
+
+      <ShopWorkflowPanel businessType={businessType} compact />
 
       {/* Counter focus */}
       <div className="grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
@@ -830,7 +835,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
                 )}
               </div>
             </div>
-            <Link href="/reports" className="rounded-[9px] border border-[#bfd3ff] bg-[var(--brand-soft)] px-4 py-2 text-[12px] font-black text-[#0057ff] shadow-[0_6px_14px_rgba(0,87,255,0.06)] transition-colors hover:bg-[#e2edff]">
+            <Link href="/reports" className="rounded-[9px] border border-[#bfd3ff] bg-[var(--brand-soft)] px-4 py-2 text-[12px] font-black text-[var(--brand)] shadow-[0_6px_14px_rgba(0,87,255,0.06)] transition-colors hover:bg-[#e2edff]">
               View Report
             </Link>
           </div>
@@ -928,7 +933,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
                             navigate(href);
                           }
                         }}
-                        className="cursor-pointer border-b border-[#edf2f8] text-[#102347] transition-colors last:border-0 hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0057ff]/40 dark:text-card-foreground"
+                        className="cursor-pointer border-b border-[#edf2f8] text-[#102347] transition-colors last:border-0 hover:bg-[#f8fbff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]/40 dark:text-card-foreground"
                       >
                         <td className="whitespace-nowrap px-4 py-1.5 font-semibold text-[#152744] dark:text-card-foreground">{compactBillNumber(bill.billNo ?? bill.billNumber)}</td>
                         <td className={cn("whitespace-nowrap px-4 py-1.5 font-medium", DASH_MUTED)}>{bill.createdAt ? format(new Date(bill.createdAt), "hh:mm a") : "—"}</td>
@@ -1009,7 +1014,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
           {/* Demo seed */}
           {!dashboard.hasBusinessData && (
             <button type="button" onClick={onLoadDemo} disabled={seedingDemo}
-              className="flex w-full items-center justify-center gap-2 rounded-[14px] border border-dashed border-[#cbd8ea] py-3 text-sm font-bold text-[#62708a] transition-colors hover:border-[#0057ff]/40 hover:text-[#0057ff]">
+              className="flex w-full items-center justify-center gap-2 rounded-[14px] border border-dashed border-[#cbd8ea] py-3 text-sm font-bold text-[#62708a] transition-colors hover:border-[var(--brand)]/40 hover:text-[var(--brand)]">
               <Sparkles size={15} aria-hidden="true" />
               {seedingDemo ? "Loading demo…" : "Load demo shop data"}
             </button>
@@ -1027,6 +1032,7 @@ function GeneralLayout({ dashboard, ownerReport, isLoading, lowStockCount, seedi
 // ─── General layout sub-components ────────────────────────────────────────────
 
 interface MobileGeneralDashboardProps {
+  businessType: BusinessType;
   dashboard: DashboardStats;
   ownerReport: LocalReportSnapshot | null;
   salesChartData: Array<{ date: string; sales: number }>;
@@ -1048,6 +1054,7 @@ interface MobileGeneralDashboardProps {
 }
 
 function MobileGeneralDashboard({
+  businessType,
   dashboard,
   ownerReport,
   salesChartData,
@@ -1119,6 +1126,8 @@ function MobileGeneralDashboard({
           </div>
         </section>
       )}
+
+      <ShopWorkflowPanel businessType={businessType} compact />
 
       <section>
         <div className="mb-3 flex items-center justify-between gap-3 px-0.5">
@@ -1395,6 +1404,37 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
   );
 }
 
+function ShopWorkflowPanel({ businessType, compact = false }: { businessType: BusinessType; compact?: boolean }) {
+  const workflow = getShopWorkflow(businessType);
+  const tones = ["primary", "amber", "teal", "violet"] as const;
+  return (
+    <section className={cn("overflow-hidden rounded-[18px] border border-[#dfe8f5] bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_64%)] shadow-[0_10px_28px_rgba(26,57,112,0.055)]", !compact && "mb-6")} data-testid="shop-workflow-panel">
+      <div className="flex flex-col gap-3 border-b border-[#e8eef6] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.15em] text-[var(--brand)]">Tools for your shop type</p>
+          <h2 className="mt-1 font-display text-[18px] font-black text-[#102347]">{workflow.title}</h2>
+          <p className="mt-1 max-w-3xl text-[11.5px] font-semibold leading-5 text-[#65748f]">{workflow.subtitle}</p>
+        </div>
+        <Link href="/settings/store-profile" className="inline-flex min-h-10 shrink-0 items-center gap-1.5 self-start rounded-[10px] border border-[var(--brand-border)] bg-white px-3 text-[11px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]">
+          Change shop type <ChevronRight size={14} />
+        </Link>
+      </div>
+      <div className="grid gap-2.5 p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-4">
+        {workflow.actions.map((action, index) => (
+          <Link key={`${action.href}-${action.label}`} href={action.href} className="group flex min-h-[86px] items-center gap-3 rounded-[14px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_5px_14px_rgba(26,57,112,0.04)] transition hover:-translate-y-0.5 hover:border-[var(--brand-border)] hover:shadow-[0_10px_22px_rgba(26,57,112,0.08)]">
+            <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[11px]", ACTION_ICON_BG[tones[index]])}>{ACTION_ICON[action.icon]}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12px] font-black text-[#13274d]">{action.label}</span>
+              <span className="mt-1 block text-[10.5px] font-semibold leading-4 text-[#718096]">{action.detail}</span>
+            </span>
+            <ChevronRight size={15} className="shrink-0 text-[#9ca9bb] transition-transform group-hover:translate-x-0.5 group-hover:text-[var(--brand)]" />
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function QuickStartLink({ href, step, icon, title, detail }: { href: string; step: string; icon: ReactNode; title: string; detail: string }) {
   return (
     <Link href={href} className="group flex min-h-[64px] items-center gap-3 rounded-[14px] border border-[#dbe6f5] bg-white p-3 text-left shadow-[0_8px_20px_rgba(15,35,80,0.04)] transition-all hover:-translate-y-0.5 hover:border-[#9fc0ff] hover:shadow-[0_12px_28px_rgba(7,95,255,0.10)]">
@@ -1477,7 +1517,7 @@ function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["l
     <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0 2xl:p-5")}>
       <div className="flex items-center justify-between gap-3">
         <p className={DASH_TITLE}>Low Stock Alerts</p>
-        <Link href="/inventory" className="text-[12px] font-black text-[#0057ff] hover:underline">View all</Link>
+        <Link href="/inventory" className="text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
       </div>
       <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 2xl:justify-evenly">
         {items.length === 0 ? (
@@ -1606,7 +1646,7 @@ function ProductAvatar({ product, compact = false }: { product: Product; compact
     );
   }
   return (
-    <div className={cn(size, radius, "grid shrink-0 place-items-center bg-[var(--brand-soft)] text-sm font-black text-[#0057ff] shadow-[0_6px_14px_rgba(0,87,255,0.08)]")}>
+    <div className={cn(size, radius, "grid shrink-0 place-items-center bg-[var(--brand-soft)] text-sm font-black text-[var(--brand)] shadow-[0_6px_14px_rgba(0,87,255,0.08)]")}>
       {product.name.slice(0, 2).toUpperCase()}
     </div>
   );
@@ -1638,7 +1678,7 @@ function fmtRs(n: number | undefined | null) {
 
 // ─── RESTAURANT layout ────────────────────────────────────────────────────────
 
-function RestaurantLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
+function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
   const { t } = useAppLanguage();
   const dbCfg = btDef.dashboard;
   const avgOrder = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
@@ -1711,6 +1751,8 @@ function RestaurantLayout({ btDef, dashboard, ownerReport, isLoading, cashInDraw
         </div>
       </section>
 
+      <ShopWorkflowPanel businessType={businessType} />
+
       <StatsGrid className="mb-6">
         <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} orders`} icon={<ChefHat size={20} aria-hidden="true" />} loading={isLoading} tone="green" data-testid="metric-revenue" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
         <StatCard label="Orders Today" value={String(dashboard.billCount)} description={avgOrder > 0 ? `Avg ${fmt(avgOrder)} per order` : "No orders yet"} icon={<ReceiptText size={20} aria-hidden="true" />} loading={isLoading} tone="blue" />
@@ -1766,7 +1808,7 @@ function RestaurantLayout({ btDef, dashboard, ownerReport, isLoading, cashInDraw
 
 // ─── TECHNICAL layout (auto_parts) ───────────────────────────────────────────
 
-function TechnicalLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
+function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
   const { t } = useAppLanguage();
   const dbCfg = btDef.dashboard;
   const lowStockItems = ownerReport?.lowStock ?? [];
@@ -1844,6 +1886,8 @@ function TechnicalLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawe
         </div>
       </section>
 
+      <ShopWorkflowPanel businessType={businessType} />
+
       <StatsGrid className="mb-6">
         <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} bills · tap for details`} icon={<Wrench size={20} aria-hidden="true" />} loading={isLoading} tone="green" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />
         <StatCard label="Supplier Dues" value={dashboard.supplierDue > 0 ? fmt(dashboard.supplierDue) : "Clear"} description={dashboard.purchaseDue > 0 ? `Today due ${fmt(dashboard.purchaseDue)}` : "No urgent due"} icon={<Truck size={20} aria-hidden="true" />} loading={isLoading} tone={dashboard.supplierDue > 0 ? "red" : "green"} />
@@ -1894,7 +1938,7 @@ function TechnicalLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawe
 
 // ─── MEDICAL layout (pharmacy) ────────────────────────────────────────────────
 
-function MedicalLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
+function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
   const { t } = useAppLanguage();
   const dbCfg = btDef.dashboard;
   const lowStockItems = ownerReport?.lowStock ?? [];
@@ -1963,6 +2007,8 @@ function MedicalLayout({ btDef, dashboard, ownerReport, isLoading, cashInDrawer,
           </div>
         </div>
       </section>
+
+      <ShopWorkflowPanel businessType={businessType} />
 
       <StatsGrid className="mb-6">
         <StatCard label={dbCfg.kpi.revenue} value={fmt(dashboard.revenue)} description={`${dashboard.billCount} dispensing counters`} icon={<ClipboardList size={20} aria-hidden="true" />} loading={isLoading} tone="green" role="button" tabIndex={0} className="cursor-pointer" onClick={() => openDrilldown("revenue")} onKeyDown={drilldownKeyHandler("revenue")} />

@@ -36,10 +36,10 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
           className={cn(
             "flex shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] font-bold transition-colors",
             bill.active
-              ? "border-[#0057ff] bg-white text-[#0057ff] shadow-[0_2px_8px_rgba(0,87,255,0.15)]"
+              ? "border-[var(--brand)] bg-white text-[var(--brand)] shadow-[0_2px_8px_rgba(0,87,255,0.15)]"
               : bill.stale
                 ? "border-amber-300 bg-amber-50 text-amber-700 hover:border-amber-400"
-                : "border-[#dbe3ef] bg-white text-[#475569] hover:border-[#0057ff] hover:text-[#0057ff]",
+                : "border-[#dbe3ef] bg-white text-[#475569] hover:border-[var(--brand)] hover:text-[var(--brand)]",
           )}
         >
           {bill.stale ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" /> : <ReceiptText size={13} />}
@@ -51,7 +51,7 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
         type="button"
         onClick={onNew}
         title="Start a new bill"
-        className="ml-auto flex shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[#0057ff] px-2.5 py-1 text-[12px] font-bold text-[#0057ff] hover:bg-[var(--brand-soft)]"
+        className="ml-auto flex shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[var(--brand)] px-2.5 py-1 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]"
       >
         <Plus size={14} /> New bill
       </button>

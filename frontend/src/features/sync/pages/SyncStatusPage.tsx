@@ -49,6 +49,7 @@ import {
 import { getCurrentSubscriptionSnapshot } from "@/features/subscription/access";
 import type { SyncConflictRecord, SyncFleetResponse, SyncStatusResponse } from "@/types/api";
 import { repairResolvedSyncStatusNoise } from "@/features/sync/sync-status-repair";
+import { tableNameForEntity } from "@/features/sync/sync-types";
 import { PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 
 interface ConflictRow extends OfflineRow {
@@ -670,6 +671,31 @@ function OperationList({
 
 type ConflictResolution = "use_local" | "use_server" | "resolved_by_owner" | "ignored_by_owner";
 
+function allowsDirectConflictChoice(entityType: unknown) {
+  return ["product", "products", "customer", "customers", "supplier", "suppliers"]
+    .includes(String(entityType ?? "").toLowerCase());
+}
+
+async function applyResolvedConflictLocally(conflict: SyncConflictRecord) {
+  if (!allowsDirectConflictChoice(conflict.entity_type) || !isRecord(conflict.merged_payload)) return;
+  const table = tableNameForEntity(conflict.entity_type);
+  if (!table) return;
+  const selected = conflict.merged_payload;
+  const identities = new Set(
+    [conflict.entity_id, selected.id, selected.local_id, selected.localId, selected.server_id, selected.serverId]
+      .filter((value): value is string => typeof value === "string" && value.length > 0),
+  );
+  const existing = (await offlineDB.getAll<OfflineRow>(table).catch(() => []))
+    .find((row) => [row.id, row.local_id, row.server_id].some((value) => typeof value === "string" && identities.has(value)));
+  await offlineDB.put(table, {
+    ...(existing ?? {}),
+    ...selected,
+    id: existing?.id ?? String(selected.id ?? conflict.entity_id),
+    sync_status: "synced",
+    updated_at: new Date().toISOString(),
+  });
+}
+
 function conflictFieldDiff(conflict: ConflictRow) {
   const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
   const cloud = isRecord(conflict.server_snapshot) ? conflict.server_snapshot : {};
@@ -727,7 +753,7 @@ function ConflictList({
                       Open
                     </a>
                   </Button>
-                  {onMarkResolved ? (
+                  {onMarkResolved && allowsDirectConflictChoice(conflict.entity_type) ? (
                     <>
                       <Button size="sm" onClick={() => onMarkResolved(conflict.id, "use_local")}>
                         Keep local
@@ -739,12 +765,17 @@ function ConflictList({
                         Decide later
                       </Button>
                     </>
-                  ) : null}
+                  ) : onMarkResolved ? <Badge variant="outline">Use reversal / correction workflow</Badge> : null}
                 </div>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
                 {conflictSubject(conflict).reason} You can keep billing; local data has not been deleted.
               </p>
+              {!allowsDirectConflictChoice(conflict.entity_type) ? (
+                <p className="mt-2 rounded-md border border-amber-300 bg-amber-100/70 p-2 text-xs font-semibold text-amber-950">
+                  Financial and stock history is immutable. Open the record and use its reversal, return, or correction action instead of overwriting either version.
+                </p>
+              ) : null}
               {conflictFieldDiff(conflict).length > 0 && (
                 <div className="mt-3 overflow-x-auto rounded-md border bg-background text-xs">
                   <div className="grid min-w-[560px] grid-cols-[140px_1fr_1fr] border-b bg-muted/50 font-semibold">
@@ -1036,13 +1067,14 @@ export default function SyncStatusPage() {
         });
         serverConflictId = reported.conflict.id;
       }
-      await resolveSyncConflict({
+      const resolved = await resolveSyncConflict({
         conflict_id: serverConflictId,
         resolution,
         ...(typeof row?.server_record_version === "number"
           ? { expected_version: row.server_record_version }
           : {}),
       });
+      await applyResolvedConflictLocally(resolved.conflict);
       const now = new Date().toISOString();
       if (row) {
         await dexieDB.sync_conflicts.put({
@@ -1234,9 +1266,10 @@ export default function SyncStatusPage() {
                         Open record
                       </a>
                     </Button>
-                    <Button size="sm" onClick={() => void handleMarkConflictResolved(conflict.id, "resolved_by_owner")}>
-                      Mark resolved
-                    </Button>
+                    {allowsDirectConflictChoice(conflict.entity_type) ? <>
+                      <Button size="sm" onClick={() => void handleMarkConflictResolved(conflict.id, "use_local")}>Keep local</Button>
+                      <Button size="sm" variant="outline" onClick={() => void handleMarkConflictResolved(conflict.id, "use_server")}>Keep cloud</Button>
+                    </> : <Badge variant="outline">Correction required</Badge>}
                     <Button size="sm" variant="ghost" onClick={() => void handleMarkConflictResolved(conflict.id, "ignored_by_owner")}>
                       Ignore
                     </Button>

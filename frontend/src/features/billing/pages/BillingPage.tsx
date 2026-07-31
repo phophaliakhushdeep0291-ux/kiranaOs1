@@ -1705,7 +1705,7 @@ export default function Billing() {
               data-testid="mobile-save-bill"
               onClick={() => setMobileCheckoutOpen(true)}
               disabled={confirmBill.isPending || !newBillingFeature.allowed}
-              className="inline-flex h-12 min-w-[150px] items-center justify-center rounded-xl bg-[#0057ff] px-5 text-[15px] font-black text-white shadow-sm transition-transform active:scale-[0.99] disabled:opacity-50"
+              className="inline-flex h-12 min-w-[150px] items-center justify-center rounded-xl bg-[var(--brand)] px-5 text-[15px] font-black text-white shadow-sm transition-transform active:scale-[0.99] disabled:opacity-50"
             >
               {confirmBill.isPending
                 ? "Saving…"

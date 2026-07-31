@@ -169,7 +169,7 @@ function CartRow({
             aria-label={`Selling unit for ${item.product.name}`}
             value={item.sellingUnit?.unitCode ?? sellingUnits.find((unit) => unit.isDefault)?.unitCode ?? sellingUnits[0]?.unitCode}
             onChange={(event) => onUpdateUnit(lineKey, event.target.value)}
-            className="mt-1 h-6 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[#0057ff]"
+            className="mt-1 h-6 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[var(--brand)]"
           >
             {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{unit.name} · Rs {Number(unit.defaultPrice).toLocaleString("en-IN")}</option>)}
           </select>
@@ -194,7 +194,7 @@ function CartRow({
           <div
             className={cn(
               "mt-1 inline-flex h-[26px] items-center gap-0.5 rounded-[7px] border bg-white px-1.5 shadow-sm ring-2 ring-offset-0",
-              isBelowMin ? "border-red-300 ring-red-100" : "border-[#0057ff] ring-[#0057ff]/15",
+              isBelowMin ? "border-red-300 ring-red-100" : "border-[var(--brand)] ring-[var(--brand)]/15",
             )}
           >
             <span className="text-[11px] font-bold text-[#8290a8]">₹</span>
@@ -226,11 +226,11 @@ function CartRow({
           >
             <span className="tabular-nums">₹{item.rate.toLocaleString("en-IN")}/{item.unit}</span>
             {isBelowMin ? <span className="font-semibold">· below min</span> : null}
-            <Pencil size={10} className="text-[#9aa7bd] group-hover:text-[#0057ff]" aria-hidden="true" />
+            <Pencil size={10} className="text-[#9aa7bd] group-hover:text-[var(--brand)]" aria-hidden="true" />
           </button>
         )}
         {editingDiscount ? (
-          <div className="mt-1 inline-flex h-[26px] items-center gap-0.5 rounded-[7px] border border-[#0057ff] bg-white px-1.5 shadow-sm ring-2 ring-[#0057ff]/15">
+          <div className="mt-1 inline-flex h-[26px] items-center gap-0.5 rounded-[7px] border border-[var(--brand)] bg-white px-1.5 shadow-sm ring-2 ring-[var(--brand)]/15">
             <span className="text-[11px] font-bold text-[#8290a8]">−₹</span>
             <input
               ref={discountInputRef}
@@ -263,7 +263,7 @@ function CartRow({
           <button
             data-testid={`line-discount-add-${item.product.id}`}
             onClick={startEditDiscount}
-            className="group mt-1 inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[10px] font-bold leading-none -ml-1 text-[#9aa7bd] transition-colors hover:bg-[#eef4ff] hover:text-[#0057ff]"
+            className="group mt-1 inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[10px] font-bold leading-none -ml-1 text-[#9aa7bd] transition-colors hover:bg-[#eef4ff] hover:text-[var(--brand)]"
             title="Give a discount on this line only (₹ or %)"
           >
             <BadgePercent size={10} aria-hidden="true" />
@@ -277,7 +277,7 @@ function CartRow({
           onChange={(event) => onUpdateLineNote(lineKey, event.target.value)}
           placeholder="+ Receipt note"
           aria-label={`Receipt note for ${item.product.name}`}
-          className="mt-1 h-6 w-full max-w-[220px] rounded-md border border-transparent bg-transparent px-1.5 text-[10px] font-semibold text-[#9a6b00] placeholder:text-[#9aa7bd] hover:bg-[#fff8e6] focus:border-[#0057ff] focus:bg-white focus:outline-none"
+          className="mt-1 h-6 w-full max-w-[220px] rounded-md border border-transparent bg-transparent px-1.5 text-[10px] font-semibold text-[#9a6b00] placeholder:text-[#9aa7bd] hover:bg-[#fff8e6] focus:border-[var(--brand)] focus:bg-white focus:outline-none"
         />
         {/* Smart Pricing explanation — why this rate (only when a rule beat the default). */}
         {!item.manualRate && !item.isCustom && item.pricing && item.pricing.appliedRuleType !== "DEFAULT_PRICE" ? (

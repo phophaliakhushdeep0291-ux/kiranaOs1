@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, Package, Plus, Scale, ScanLine, Sparkles, Trash2, Upload, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useBusinessType } from "@/features/settings/business-types";
+import { getShopWorkflow } from "@/features/settings/shop-workflows";
+import { useFeature } from "@/features/subscription";
 import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAliases } from "@/features/products/product-reliability";
 import { fetchGroqAliasSuggestions } from "../product-aliases";
 import { baseUnitFor, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
@@ -78,7 +81,10 @@ export function ProductFormPanel({
   onSubmit,
 }: ProductFormPanelProps) {
   const { toast } = useToast();
-  const { def } = useBusinessType();
+  const { businessType, def } = useBusinessType();
+  const workflow = getShopWorkflow(businessType);
+  const productEntry = workflow.productEntry;
+  const batchFeature = useFeature("batch_expiry");
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [imgError, setImgError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -88,6 +94,7 @@ export function ProductFormPanel({
   const categories = def.categories.filter((c) => c !== "all");
   const imageUrl = form.watch("imageUrl");
   const description = form.watch("description") ?? "";
+  const batchTracking = form.watch("batchTrackingEnabled");
   const isLoose = !!form.watch("isLooseItem");
   const selectedUnit = form.watch("unit");
   const packSizeValue = Number(form.watch("packSizeValue") || 0);
@@ -294,6 +301,11 @@ export function ProductFormPanel({
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
         <div className="app-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <div className="mb-4 rounded-[12px] border border-[var(--brand-border)] bg-[var(--brand-softer)] p-3" data-testid="shop-product-entry-guide">
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[var(--brand)]">Optimized for {def.label}</p>
+            <p className="mt-1 text-[11.5px] font-semibold leading-5 text-[#52627e]">{productEntry.helper}</p>
+          </div>
+
           {/* Product type: Packed / Loose */}
           <div className="mb-5 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc] p-1">
             <TypeButton active={!isLoose} icon={<Package size={16} />} label="Packed Item" onClick={() => form.setValue("isLooseItem", false, { shouldDirty: true })} />
@@ -302,8 +314,8 @@ export function ProductFormPanel({
 
           {/* Basic Information */}
           <Section title="Basic Information">
-            <Field label="Product Name" required error={err.name?.message}>
-              <Input className="h-10" placeholder={isLoose ? "e.g. Sugar (loose)" : "e.g. Tata Salt 1kg"} {...form.register("name")} />
+            <Field label={productEntry.nameLabel} required error={err.name?.message}>
+              <Input className="h-10" placeholder={isLoose ? productEntry.looseNamePlaceholder : productEntry.namePlaceholder} {...form.register("name")} />
             </Field>
 
             {/* Category + Brand (brand hidden for loose) */}
@@ -312,8 +324,8 @@ export function ProductFormPanel({
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {CategoryField}
-                <Field label="Brand">
-                  <Input className="h-10" placeholder="e.g. Tata" {...form.register("brand")} />
+                <Field label={productEntry.brandLabel}>
+                  <Input className="h-10" placeholder={productEntry.brandPlaceholder} {...form.register("brand")} />
                 </Field>
               </div>
             )}
@@ -323,9 +335,9 @@ export function ProductFormPanel({
               UnitField
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="SKU / Barcode (Optional)" error={err.barcode?.message}>
+                <Field label={productEntry.identifierLabel} error={err.barcode?.message}>
                   <div className="relative">
-                    <Input className="h-10 pr-9" placeholder="Scan or type if available" {...form.register("barcode")} />
+                    <Input className="h-10 pr-9" placeholder={productEntry.identifierPlaceholder} {...form.register("barcode")} />
                     <ScanLine size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
                   </div>
                 </Field>
@@ -400,9 +412,9 @@ export function ProductFormPanel({
             {currentAliases.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {currentAliases.map((a) => (
-                  <span key={a} className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-2.5 py-1 text-[11px] font-bold text-[#0057ff]">
+                  <span key={a} className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-2.5 py-1 text-[11px] font-bold text-[var(--brand)]">
                     {a}
-                    <button type="button" onClick={() => removeAlias(a)} aria-label={`Remove ${a}`} className="text-[#0057ff]/60 hover:text-[#0057ff]"><X size={11} /></button>
+                    <button type="button" onClick={() => removeAlias(a)} aria-label={`Remove ${a}`} className="text-[var(--brand)]/60 hover:text-[var(--brand)]"><X size={11} /></button>
                   </span>
                 ))}
               </div>
@@ -422,7 +434,7 @@ export function ProductFormPanel({
             {suggestions.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {suggestions.map((a) => (
-                  <button key={a} type="button" onClick={() => appendAlias(a)} className="inline-flex items-center gap-1 rounded-full border border-[#e3eaf3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#45577a] transition-colors hover:border-[#0057ff]/40 hover:text-[#0057ff]">
+                  <button key={a} type="button" onClick={() => appendAlias(a)} className="inline-flex items-center gap-1 rounded-full border border-[#e3eaf3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#45577a] transition-colors hover:border-[var(--brand)]/40 hover:text-[var(--brand)]">
                     <Plus size={11} /> {a}
                   </button>
                 ))}
@@ -556,6 +568,22 @@ export function ProductFormPanel({
                 <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("reorderLevel")} />
               </Field>
             </div>
+            <div className={`flex items-start justify-between gap-4 rounded-[12px] border p-3.5 ${productEntry.recommendBatchTracking ? "border-teal-200 bg-teal-50" : "border-[#e3eaf3] bg-[#f8fafc]"}`} data-testid="shop-batch-guidance">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[12px] font-black text-[#13274d]">Batch and expiry tracking</p>
+                  {productEntry.recommendBatchTracking && <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-teal-700">Recommended</span>}
+                </div>
+                <p className="mt-1 text-[10.5px] font-semibold leading-4 text-[#65748f]">{productEntry.batchRecommendation}</p>
+                {!batchFeature.loading && !batchFeature.allowed && <p className="mt-1 text-[10.5px] font-bold text-amber-700">Available on {batchFeature.requiredPlan.name}.</p>}
+              </div>
+              <Switch
+                checked={batchTracking}
+                disabled={batchFeature.loading || !batchFeature.allowed}
+                onCheckedChange={(checked) => form.setValue("batchTrackingEnabled", checked, { shouldDirty: true })}
+                aria-label="Enable batch and expiry tracking"
+              />
+            </div>
           </Section>
 
           {/* Product Image */}
@@ -564,9 +592,9 @@ export function ProductFormPanel({
               <div className="grid h-[84px] w-[84px] shrink-0 place-items-center overflow-hidden rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc]">
                 {imageUrl ? <img src={imageUrl} alt="Product" className="h-full w-full object-contain" /> : <Upload size={20} className="text-[#9aa6bb]" />}
               </div>
-              <button type="button" onClick={() => fileRef.current?.click()} className="flex h-[84px] flex-1 flex-col items-center justify-center gap-1 rounded-[12px] border border-dashed border-[#cdd9ea] bg-[#fafbfe] text-center transition-colors hover:border-[#0057ff]/50">
-                <Upload size={18} className="text-[#0057ff]" />
-                <span className="text-[12px] font-bold text-[#0057ff]">{imageUrl ? "Replace Image" : "Upload Image"}</span>
+              <button type="button" onClick={() => fileRef.current?.click()} className="flex h-[84px] flex-1 flex-col items-center justify-center gap-1 rounded-[12px] border border-dashed border-[#cdd9ea] bg-[#fafbfe] text-center transition-colors hover:border-[var(--brand)]/50">
+                <Upload size={18} className="text-[var(--brand)]" />
+                <span className="text-[12px] font-bold text-[var(--brand)]">{imageUrl ? "Replace Image" : "Upload Image"}</span>
                 <span className="text-[10px] text-[#9aa6bb]">PNG, JPG up to 2MB</span>
               </button>
               <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => void handleFile(e.target.files?.[0])} />
@@ -580,13 +608,13 @@ export function ProductFormPanel({
 
           {/* Additional Information */}
           <Section title="Additional Information">
-            <Field label="Description (Optional)">
+            <Field label={productEntry.notesLabel}>
               <textarea
                 {...form.register("description")}
                 maxLength={250}
                 rows={3}
-                placeholder="Enter product description..."
-                className="w-full resize-none rounded-[10px] border border-[#e3eaf3] bg-white px-3 py-2 text-[13px] text-[#0f2147] placeholder:text-[#6b7a9a] focus:border-[#0057ff] focus:outline-none focus:ring-0"
+                placeholder={productEntry.notesPlaceholder}
+                className="w-full resize-none rounded-[10px] border border-[#e3eaf3] bg-white px-3 py-2 text-[13px] text-[#0f2147] placeholder:text-[#6b7a9a] focus:border-[var(--brand)] focus:outline-none focus:ring-0"
               />
               <p className="mt-1 text-right text-[10px] text-[#9aa6bb]">{description.length}/250</p>
             </Field>
@@ -597,7 +625,7 @@ export function ProductFormPanel({
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           {!editing && (
             <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
-              <input type="checkbox" aria-label="Keep panel open to add another product" checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[#0057ff]" />
+              <input type="checkbox" aria-label="Keep panel open to add another product" checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[var(--brand)]" />
               Keep panel open to add another product
             </label>
           )}
@@ -624,7 +652,7 @@ function TypeButton({ active, icon, label, onClick }: { active: boolean; icon: R
       type="button"
       onClick={onClick}
       className={`flex h-10 items-center justify-center gap-2 rounded-[9px] text-[13px] font-bold transition-all ${
-        active ? "bg-white text-[#0057ff] shadow-[0_2px_8px_rgba(15,23,42,0.08)]" : "text-[#6d7c98] hover:text-[#13274d]"
+        active ? "bg-white text-[var(--brand)] shadow-[0_2px_8px_rgba(15,23,42,0.08)]" : "text-[#6d7c98] hover:text-[#13274d]"
       }`}
     >
       {icon}

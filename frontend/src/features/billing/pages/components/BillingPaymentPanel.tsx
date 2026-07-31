@@ -126,10 +126,10 @@ export function BillingPaymentPanel({
           />
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.bank}`}
-            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eaf3ff] text-[#0b63f6]"><Landmark size={17} /></span>}
+            icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eaf3ff] text-[var(--brand)]"><Landmark size={17} /></span>}
             label="Bank"
             selected={paymentMode === BillPaymentMode.bank}
-            activeClass="border-[var(--brand-border)] bg-[#f3f7ff] text-[#0b63f6]"
+            activeClass="border-[var(--brand-border)] bg-[#f3f7ff] text-[var(--brand)]"
             onClick={() => setPaymentMode(BillPaymentMode.bank)}
           />
           <PayModeBtn
@@ -253,7 +253,7 @@ export function BillingPaymentPanel({
                   type="button"
                   data-testid={`tender-chip-${amount}`}
                   onClick={() => setCashTendered(amount)}
-                  className="rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#31527e] transition-colors hover:border-[#0057ff] hover:text-[#0057ff]"
+                  className="rounded-full border border-[#dbe3ef] bg-white px-2.5 py-1 text-[12px] font-bold text-[#31527e] transition-colors hover:border-[var(--brand)] hover:text-[var(--brand)]"
                 >
                   {fmtRs(amount)}
                 </button>

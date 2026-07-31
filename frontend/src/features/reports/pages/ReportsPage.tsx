@@ -292,7 +292,7 @@ export default function ReportsPage() {
     if (!payment) return [];
     return [
       { name: "Cash", value: payment.cash, color: "#20b75a" },
-      { name: "UPI", value: payment.upi, color: "#1264f6" },
+      { name: "UPI", value: payment.upi, color: "var(--brand)" },
       { name: "Bank", value: payment.bank, color: "#0ea5e9" },
       { name: "Udhar", value: payment.udhar, color: "#f5a30a" },
     ].filter((item) => item.value > 0);
@@ -387,8 +387,8 @@ export default function ReportsPage() {
       value: selected?.sales ?? 0,
       previous: previous?.sales ?? 0,
       icon: <ShoppingBag size={16} />,
-      color: "#1264f6",
-      iconClass: "bg-[var(--brand-soft)] text-[#1264f6]",
+      color: "var(--brand)",
+      iconClass: "bg-[var(--brand-soft)] text-[var(--brand)]",
       spark: trend.map((point) => point.sales),
     },
     {
@@ -452,8 +452,8 @@ export default function ReportsPage() {
       value: netProfit,
       previous: previousNetProfit,
       icon: <BarChart3 size={16} />,
-      color: "#1264f6",
-      iconClass: "bg-[var(--brand-soft)] text-[#1264f6]",
+      color: "var(--brand)",
+      iconClass: "bg-[var(--brand-soft)] text-[var(--brand)]",
       spark: trend.map((point) => point.profit - (expenseByDay.get(point.date) ?? 0)),
     },
   ];
@@ -478,7 +478,7 @@ export default function ReportsPage() {
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="col-span-3 h-11 min-w-0 justify-between rounded-xl border-[#dfe7f2] bg-white px-3 text-[12px] font-bold text-[#24385f] sm:col-auto sm:h-9 sm:min-w-[220px] sm:rounded-[7px] sm:font-semibold">
-                <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[#1264f6]" />{rangeLabel(range.from, range.to)}</span>
+                <span className="inline-flex items-center gap-2"><CalendarDays size={14} className="text-[var(--brand)]" />{rangeLabel(range.from, range.to)}</span>
                 <span className="text-[#7e8ba3]">⌄</span>
               </Button>
             </PopoverTrigger>
@@ -495,10 +495,10 @@ export default function ReportsPage() {
               {(["today", "week", "month"] as const).map((item) => (
                 <button key={item} className={cn("min-h-11 w-full rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-[#f2f6fc] sm:min-h-0 sm:rounded-[6px]", period === item && "bg-[var(--brand-soft)] text-[var(--brand)]")} onClick={() => applyPeriod(item)}>{REPORT_PERIOD_LABELS[item]}</button>
               ))}
-              <Link href="/daily-closing" className="mt-1 flex min-h-11 items-center border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[#1264f6] sm:min-h-0">Open daily closing</Link>
+              <Link href="/daily-closing" className="mt-1 flex min-h-11 items-center border-t border-[#edf1f6] px-3 py-2 text-xs font-semibold text-[var(--brand)] sm:min-h-0">Open daily closing</Link>
             </PopoverContent>
           </Popover>
-          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[#0052e0] sm:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
+          <Button onClick={() => { setExportError(null); setExportPinOpen(true); }} disabled={!snapshot || loading} className="h-11 w-full rounded-xl bg-[var(--brand)] px-4 text-[12px] font-bold shadow-[0_8px_20px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)] sm:h-9 sm:w-auto sm:rounded-[7px]"><Download size={14} className="mr-2" />Export</Button>
           <Button variant="outline" size="icon" title="Refresh reports" aria-label="Refresh reports" onClick={() => void loadReports({ showLoader: !snapshotRef.current })} disabled={loading && !snapshot} className="h-11 w-11 rounded-xl border-[#dfe7f2] sm:h-9 sm:w-9 sm:rounded-[7px]"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /></Button>
         </div>
       </section>
@@ -537,7 +537,7 @@ export default function ReportsPage() {
           <ChartFrame loading={loading} empty={trend.length === 0}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trend} margin={{ top: 14, right: 10, left: -12, bottom: 0 }}>
-                <defs><linearGradient id="salesArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1264f6" stopOpacity={0.2} /><stop offset="100%" stopColor="#1264f6" stopOpacity={0.01} /></linearGradient></defs>
+                <defs><linearGradient id="salesArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--brand)" stopOpacity={0.2} /><stop offset="100%" stopColor="var(--brand)" stopOpacity={0.01} /></linearGradient></defs>
                 <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeDasharray="2 4" />
                 <XAxis dataKey="label" tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} minTickGap={18} />
                 <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 9, fill: AXIS_COLOR }} axisLine={false} tickLine={false} width={44} />
@@ -935,7 +935,7 @@ function RiskChip({ balance }: { balance: number }) {
 }
 
 function StockStat({ icon, label, value, deltaValue, tone }: { icon: ReactNode; label: string; value: string; deltaValue: string; tone: "blue" | "red" | "green" | "amber" }) {
-  const colors = { blue: "bg-[var(--brand-soft)] text-[#1264f6]", red: "bg-[#ffedef] text-[#ff334d]", green: "bg-[#eaf9ef] text-[#16ad52]", amber: "bg-[#fff3e8] text-[#ff8a00]" }[tone];
+  const colors = { blue: "bg-[var(--brand-soft)] text-[var(--brand)]", red: "bg-[#ffedef] text-[#ff334d]", green: "bg-[#eaf9ef] text-[#16ad52]", amber: "bg-[#fff3e8] text-[#ff8a00]" }[tone];
   return <div className="flex min-h-[68px] gap-2.5 p-3"><span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-[7px]", colors)}>{icon}</span><div className="min-w-0"><p className="text-[9px] font-semibold text-[#64738e]">{label}</p><p className="mt-0.5 text-[14px] font-black text-[#15264b]">{value}</p><p className="mt-0.5 text-[8.5px] text-[#7b89a0]">{deltaValue}</p></div></div>;
 }
 

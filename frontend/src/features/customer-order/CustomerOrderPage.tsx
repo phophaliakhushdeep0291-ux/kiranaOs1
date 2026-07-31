@@ -66,7 +66,7 @@ import {
 
 const formatRs = (n: number) => `Rs ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 const normalizeMobile = (value: string) => value.replace(/[\s-]/g, "");
-const timeSlots = ["Today, 6:00 PM - 8:00 PM", "Today, 8:00 PM - 10:00 PM", "Tomorrow, 9:00 AM - 11:00 AM"];
+const timeSlots = ["As soon as possible", "Within 2 hours", "Call me to confirm the time"];
 
 function newOrderIdempotencyKey(shopCode: string): string {
   const random =
@@ -311,8 +311,6 @@ export default function CustomerOrderPage() {
   }
 
   const { catalog, source } = state;
-  const shopLocation = catalog.location.city || catalog.shop.city || "Local store";
-
   async function changeStoreLocation(locationId: string) {
     if (locationId === catalog.location.id || switchingLocation) return;
     setSwitchingLocation(true);
@@ -330,17 +328,9 @@ export default function CustomerOrderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-[#071432] lg:bg-[#f4f8ff]">
-      <div className="lg:flex">
-        <CustomerSidebar
-          shopName={catalog.shop.name}
-          shopLocation={shopLocation}
-          trackedOrderId={trackedOrderId}
-          activeView={activeView}
-          onView={(view) => view === "orders" && trackedOrderId ? setShowTracker(true) : setActiveView(view)}
-        />
-
-        <div className="min-w-0 flex-1 lg:pl-[264px] xl:pl-[280px]">
+    <div className="min-h-screen bg-[#f6f8fc] text-[#071432]">
+      <div>
+        <div className="min-w-0">
           <StorefrontHeader
             catalog={catalog}
             source={source}
@@ -353,17 +343,12 @@ export default function CustomerOrderPage() {
           />
           <CustomerMobileNav activeView={activeView} onView={(view) => view === "orders" && trackedOrderId ? setShowTracker(true) : setActiveView(view)} />
 
-          <main className={`mx-auto w-full max-w-[1500px] px-3 pb-32 pt-4 sm:px-6 lg:px-8 lg:pb-8 ${activeView === "shop" ? "grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
+          <main className={`mx-auto w-full max-w-[1380px] px-3 pb-32 pt-3 sm:px-6 sm:pt-5 lg:px-8 lg:pb-10 ${activeView === "shop" ? "grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_390px]" : ""}`}>
             {activeView === "shop" ? (
               <>
-                <section className="min-w-0 space-y-5">
+                <section className="min-w-0 space-y-4 sm:space-y-5">
+                  <StorePromiseStrip source={source} fulfillment={fulfillment} />
                   <CategoryRail categories={categories} active={category} onSelect={setCategory} />
-
-                  <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
-                    <PromoCard tone="green" title="Live store catalog" body="Only products currently available at this location are shown" />
-                    <PromoCard tone="blue" title="Store-confirmed order" body="The shop reviews availability before preparing your order" />
-                    <PromoCard tone="orange" title="Pickup or delivery" body="Choose how you want to receive the order at checkout" />
-                  </div>
 
                   <ShopProductsSection
                     products={products}
@@ -469,19 +454,21 @@ function StorefrontHeader({
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[#e4ecf7] bg-white/95 backdrop-blur-xl">
-      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-2 pt-3 sm:px-6 lg:hidden">
-        <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[var(--brand)] shadow-[0_8px_24px_rgba(20,40,90,0.06)]">
-          <Menu size={21} />
-        </button>
+      <div className="mx-auto flex w-full max-w-[1380px] items-center gap-3 px-3 pb-2 pt-3 sm:px-6 lg:hidden">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_12px_30px_rgba(7,95,255,0.26)]">
-              <ShoppingCart size={21} />
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--brand)] text-white shadow-[0_12px_30px_rgba(7,95,255,0.24)]">
+              <Store size={21} />
             </div>
             <div className="min-w-0">
-              <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-[#071432] sm:text-2xl">
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate font-display text-lg font-black tracking-[-0.03em] text-[#071432] sm:text-xl">
                 {catalog.shop.name || "Artha"}
-              </h1>
+                </h1>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#e8f9ee] px-2 py-1 text-[9px] font-black uppercase tracking-wide text-[#0f8f45]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#16a34a]" /> Open
+                </span>
+              </div>
               {catalog.locations.length > 1 ? (
                 <select
                   aria-label="Order from store"
@@ -498,10 +485,7 @@ function StorefrontHeader({
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[1500px] items-center gap-3 px-3 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
-        <button type="button" className="hidden h-11 w-11 shrink-0 place-items-center rounded-2xl border border-[#dce6f4] bg-white text-[#405173] shadow-[0_8px_24px_rgba(20,40,90,0.06)] lg:hidden">
-          <Menu size={21} />
-        </button>
+      <div className="mx-auto flex w-full max-w-[1380px] items-center gap-3 px-3 pb-3 pt-1 sm:px-6 lg:px-8 lg:py-3">
         <div className="hidden min-w-0 items-center gap-3 lg:flex">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#fff7e8] text-[#f59e0b] shadow-[0_12px_30px_rgba(245,158,11,0.16)]">
             <Store size={24} />
@@ -531,16 +515,16 @@ function StorefrontHeader({
           </div>
         </div>
 
-        <div className="min-w-0 flex-1 lg:max-w-[520px]">
+        <div className="min-w-0 flex-1 lg:ml-auto lg:max-w-[520px]">
           <div className="flex items-center gap-2 rounded-2xl border border-[#dfe8f5] bg-white px-3 shadow-[0_8px_24px_rgba(20,40,90,0.04)]">
             <Search size={18} className="shrink-0 text-[#72819a]" />
             <input
               value={search}
               onChange={(e) => onSearch(e.target.value)}
-              placeholder="Search for atta, dal, oil, biscuits..."
+              placeholder="Search this store"
+              aria-label="Search products"
               className="min-w-0 flex-1 bg-transparent py-3 text-sm font-semibold outline-none placeholder:text-[#7d8ba4]"
             />
-            <span className="hidden rounded-md border border-[#d7e1ef] px-2 py-0.5 text-[10px] font-black text-[#52617a] sm:inline">Ctrl K</span>
           </div>
         </div>
 
@@ -559,15 +543,6 @@ function StorefrontHeader({
           >
             <ShoppingBag size={16} /> Self Pickup
           </button>
-        </div>
-
-        <div className="hidden items-center gap-2 rounded-2xl border border-[#dfe8f5] bg-white px-3 py-2 shadow-[0_8px_24px_rgba(20,40,90,0.04)] md:flex">
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-[#eaf2ff] text-sm font-black text-[var(--brand)]">RS</span>
-          <div>
-            <p className="text-xs font-black text-[#14213d]">Customer</p>
-            <p className="text-[11px] font-semibold text-[#7d8ba4]">Guest order</p>
-          </div>
-          <ChevronDown size={15} className="text-[#73819a]" />
         </div>
 
         {source === "cache" && (
@@ -596,11 +571,11 @@ function ShopProductsSection({
   setItemQty: (id: string, next: number) => void;
 }) {
   return (
-    <section className="rounded-[24px] border border-[#e4ecf7] bg-white p-4 shadow-[0_18px_60px_rgba(20,60,120,0.06)] sm:p-5">
+    <section className="rounded-[24px] border border-[#e4ecf7] bg-white p-3 shadow-[0_18px_60px_rgba(20,60,120,0.06)] sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="font-display text-xl font-black tracking-[-0.01em] text-[#081332]">Popular Products</h2>
-          <p className="mt-1 text-sm font-medium text-[#6d7890]">Select items and send your order directly to the shop.</p>
+          <h2 className="font-display text-lg font-black tracking-[-0.01em] text-[#081332] sm:text-xl">Shop products</h2>
+          <p className="mt-1 text-xs font-medium text-[#6d7890] sm:text-sm">{filtered.length} available product{filtered.length === 1 ? "" : "s"}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-2 text-xs font-semibold text-[#52617a] sm:flex">
@@ -635,7 +610,7 @@ function ShopProductsSection({
           {products.length === 0 ? "This shop has no items listed yet." : "No items match your search."}
         </div>
       ) : viewMode === "grid" ? (
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:mt-5 sm:grid-cols-3 sm:gap-3 xl:grid-cols-4">
           {filtered.map((p) => (
             <ProductCard key={p.id} product={p} qty={qty[p.id] ?? 0} onChange={(n) => setItemQty(p.id, n)} />
           ))}
@@ -755,8 +730,8 @@ function CategoryRail({
 }) {
   const all = [{ key: "all", label: "All" }, ...categories];
   return (
-    <div className="overflow-x-auto pb-1">
-      <div className="flex min-w-max gap-2 sm:gap-3">
+    <nav aria-label="Product categories" className="-mx-3 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
+      <div className="flex min-w-max gap-2">
         {all.map((cat) => {
           const selected = active === cat.key;
           return (
@@ -764,27 +739,46 @@ function CategoryRail({
               type="button"
               key={cat.key}
               onClick={() => onSelect(cat.key)}
-              className={`flex h-[72px] w-[74px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border bg-white text-center text-[10px] font-black transition sm:h-[82px] sm:w-[92px] sm:gap-2 sm:text-[11px] ${
+              aria-current={selected ? "true" : undefined}
+              className={`inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border px-3.5 text-xs font-black transition sm:h-12 sm:px-4 ${
                 selected
-                  ? "border-[var(--brand)] text-[var(--brand)] shadow-[0_14px_34px_rgba(7,95,255,0.16)]"
-                  : "border-[#dfe8f5] text-[#172544] hover:border-[#bcd0f4]"
+                  ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_10px_24px_rgba(7,95,255,0.2)]"
+                  : "border-[#dfe8f5] bg-white text-[#243653] hover:border-[#bcd0f4]"
               }`}
             >
-              <span className={`grid h-8 w-8 place-items-center rounded-xl sm:h-9 sm:w-9 ${selected ? "bg-[#eaf2ff]" : "bg-[#f4f7fc]"}`}>
+              <span className={`grid h-7 w-7 place-items-center rounded-full text-[9px] ${selected ? "bg-white/15 text-white" : "bg-[#f4f7fc] text-[#405173]"}`}>
                 {"product" in cat && cat.product?.imageUrl ? (
-                  <img src={cat.product.imageUrl} alt="" className="h-7 w-7 object-contain sm:h-8 sm:w-8" />
+                  <img src={cat.product.imageUrl} alt="" className="h-6 w-6 object-contain" />
                 ) : cat.key === "all" ? (
-                  <ShoppingBag size={18} />
+                  <LayoutGrid size={14} />
                 ) : (
                   cat.label.slice(0, 2).toUpperCase()
                 )}
               </span>
-              <span className="line-clamp-1 px-1">{cat.label}</span>
+              <span>{cat.label}</span>
             </button>
           );
         })}
       </div>
-    </div>
+    </nav>
+  );
+}
+
+function StorePromiseStrip({ source, fulfillment }: { source: "network" | "cache"; fulfillment: FulfillmentMode }) {
+  const promises = [
+    { Icon: source === "cache" ? WifiOff : ShieldCheck, label: source === "cache" ? "Saved catalog" : "Live catalog" },
+    { Icon: fulfillment === "pickup" ? ShoppingBag : Truck, label: fulfillment === "pickup" ? "Store pickup" : "Delivery" },
+    { Icon: CheckCircle2, label: "Store confirms" },
+  ];
+  return (
+    <section aria-label="Ordering information" className="grid grid-cols-3 divide-x divide-[#e4ecf7] rounded-2xl border border-[#e4ecf7] bg-white px-1 py-3 shadow-[0_8px_28px_rgba(20,60,120,0.04)]">
+      {promises.map(({ Icon, label }) => (
+        <div key={label} className="flex min-w-0 flex-col items-center gap-1 px-1 text-center sm:flex-row sm:justify-center sm:gap-2">
+          <Icon size={16} className={source === "cache" && label === "Saved catalog" ? "text-[#c2410c]" : "text-[var(--brand)]"} />
+          <span className="truncate text-[10px] font-black text-[#52617a] sm:text-xs">{label}</span>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -810,8 +804,8 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
 
 function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
   return (
-    <article className="group rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_12px_35px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
-      <div className="relative grid aspect-[1.08/1] place-items-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[var(--brand-soft)] sm:aspect-square">
+    <article className="group flex min-w-0 flex-col rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_8px_26px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
+      <div className="relative grid aspect-[1.2/1] place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[var(--brand-soft)] sm:aspect-square sm:rounded-2xl">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-[76%] w-[76%] object-contain transition duration-300 group-hover:scale-105" />
         ) : (
@@ -823,16 +817,16 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
           </div>
         )}
       </div>
-      <div className="mt-2 min-h-[82px] sm:mt-3 sm:min-h-[86px]">
+      <div className="mt-2 flex min-h-[88px] flex-1 flex-col sm:mt-3 sm:min-h-[96px]">
         <h3 className="line-clamp-2 text-[13px] font-black leading-snug text-[#0b1735] sm:text-sm">{product.name}</h3>
         <p className="mt-1 text-xs font-semibold text-[#4f5f7b]">{product.unit}</p>
-        <p className="mt-1.5 text-sm font-black text-[#071432] sm:mt-2 sm:text-base">
+        <p className="mt-auto pt-1.5 text-sm font-black text-[#071432] sm:text-base">
           {formatRs(product.price)}
           {product.mrp && product.mrp > product.price ? (
             <span className="ml-2 text-xs font-semibold text-[#95a3bb] line-through">{formatRs(product.mrp)}</span>
           ) : null}
         </p>
-        <p className="mt-1 text-xs font-black text-[#0f9f4a]">In Stock</p>
+        <p className="mt-0.5 text-[10px] font-black uppercase tracking-wide text-[#0f9f4a]">Available</p>
       </div>
       {qty > 0 ? (
         <QuantityStepper qty={qty} onChange={onChange} />
@@ -840,7 +834,8 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
         <button
           type="button"
           onClick={() => onChange(1)}
-          className="mt-2 flex h-9 w-full items-center justify-center rounded-xl border border-[var(--brand-border)] bg-[#f8fbff] text-sm font-black text-[var(--brand)] transition hover:bg-[#eaf2ff] sm:mt-3 sm:h-10"
+          aria-label={`Add ${product.name} to order`}
+          className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-[var(--brand-border)] bg-[#f8fbff] text-sm font-black text-[var(--brand)] transition hover:bg-[#eaf2ff] sm:mt-3"
         >
           Add
         </button>
@@ -880,11 +875,11 @@ function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogPr
 function QuantityStepper({ qty, onChange, compact = false }: { qty: number; onChange: (next: number) => void; compact?: boolean }) {
   return (
     <div className={`mt-2 flex items-center overflow-hidden rounded-xl border border-[#d9e4f2] bg-[#f8fbff] sm:mt-3 ${compact ? "mt-0 sm:mt-0" : ""}`}>
-      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-9 flex-1 place-items-center text-[var(--brand)] sm:h-10">
+      <button type="button" aria-label="Decrease quantity" onClick={() => onChange(qty - 1)} className="grid h-11 flex-1 place-items-center text-[var(--brand)]">
         <Minus size={16} />
       </button>
-      <span className="grid h-9 min-w-9 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums sm:h-10 sm:min-w-10">{qty}</span>
-      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-9 flex-1 place-items-center text-[var(--brand)] sm:h-10">
+      <span className="grid h-11 min-w-10 place-items-center border-x border-[#d9e4f2] bg-white text-sm font-black tabular-nums">{qty}</span>
+      <button type="button" aria-label="Increase quantity" onClick={() => onChange(qty + 1)} className="grid h-11 flex-1 place-items-center text-[var(--brand)]">
         <Plus size={16} />
       </button>
     </div>

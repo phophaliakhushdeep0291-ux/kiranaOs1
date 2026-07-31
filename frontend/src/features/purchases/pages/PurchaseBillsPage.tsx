@@ -596,10 +596,10 @@ export default function PurchaseBillsPage() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={exportCsv} disabled={filtered.length === 0} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
+              <Button onClick={exportCsv} disabled={filtered.length === 0} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
                 <Upload size={13} className="rotate-180" /> Export
               </Button>
-              <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
+              <Button onClick={() => setPanelOpen(true)} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold text-white hover:opacity-95">
                 <Plus size={14} /> Add Purchase
               </Button>
             </div>
@@ -632,7 +632,7 @@ export default function PurchaseBillsPage() {
             <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#64748b]"><Loader2 size={16} className="animate-spin" /> Loading…</div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[#0057ff]"><Truck size={22} /></span>
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Truck size={22} /></span>
               <p className="text-[13px] font-bold text-[#102347]">No purchase bills yet</p>
               <p className="text-[12px] text-[#64748b]">Click "Add Purchase" to record your first supplier bill.</p>
             </div>
@@ -774,7 +774,7 @@ export default function PurchaseBillsPage() {
             <div className="px-5 py-2">
               {topSuppliers.length === 0 ? <EmptyHint text="No purchases in this period." /> : topSuppliers.map((s, i) => (
                 <div key={s.name} className={cn("flex items-center gap-3 py-2.5", i < topSuppliers.length - 1 && "border-b border-[#eef2f8]")}>
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-[11px] font-black text-[#0057ff]">{i + 1}</span>
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--brand-soft)] text-[11px] font-black text-[var(--brand)]">{i + 1}</span>
                   <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-[#102347]">{s.name}</p>
                   <span className="shrink-0 text-[11.5px] font-bold text-[#344668]">{fmt(s.amount)} <span className="text-[10px] font-semibold text-[#94a3b8]">({s.share}%)</span></span>
                 </div>
@@ -1259,7 +1259,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
       <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
         <div className="grid grid-cols-2 gap-2.5">
           <Button type="button" variant="outline" className="h-11 min-w-0 rounded-[10px] font-bold" onClick={onClose}>Cancel</Button>
-          <Button type="button" onClick={() => void save()} disabled={saving} style={{ background: "linear-gradient(180deg,#0057ff 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
+          <Button type="button" onClick={() => void save()} disabled={saving} style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white hover:opacity-95">
             {saving ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : <><ClipboardList size={15} /> Save Purchase</>}
           </Button>
         </div>
@@ -1311,7 +1311,7 @@ function PageBtn({ children, active, disabled, onClick }: { children: React.Reac
   return (
     <button onClick={onClick} disabled={disabled}
       className={cn("grid h-7 min-w-7 place-items-center rounded-[7px] px-1.5 text-[12px] font-bold transition-colors",
-        active ? "bg-[#0057ff] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
+        active ? "bg-[var(--brand)] text-white" : "text-[#52627e] hover:bg-[#eef2f8] disabled:opacity-40 disabled:hover:bg-transparent")}>
       {children}
     </button>
   );

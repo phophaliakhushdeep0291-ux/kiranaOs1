@@ -468,7 +468,7 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Logo */}
         <div className={cn("flex items-center border-b border-white/10", collapsed ? "flex-col gap-3 p-3" : "gap-3 px-4 py-5")}>
           <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[#075cf7] text-white shadow-[0_14px_28px_rgba(0,91,255,0.30)] ring-1 ring-white/20">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_14px_28px_rgba(0,91,255,0.30)] ring-1 ring-white/20">
               <ShoppingCart size={20} aria-hidden="true" />
             </div>
             {!collapsed && (
@@ -522,7 +522,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   {attentionCount > 0 && <span className="ml-auto text-[11px] font-bold text-amber-300">{attentionCount}</span>}
                 </div>
                 <p className="mt-1 text-[11px] text-sidebar-foreground/50">{connectionDetail}</p>
-                <Link href="/sync-status" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-[10px] border border-white/12 bg-white/5 text-[12px] font-bold text-white transition-colors hover:border-[#075cf7]/70 hover:bg-[#075cf7]">
+                <Link href="/sync-status" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-[10px] border border-white/12 bg-white/5 text-[12px] font-bold text-white transition-colors hover:border-[var(--brand)]/70 hover:bg-[var(--brand)]">
                   <RefreshCw size={13} aria-hidden="true" /> Sync Now
                 </Link>
               </div>
@@ -531,7 +531,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex w-full items-center gap-3 rounded-[14px] border border-white/10 bg-white/[0.045] px-3 py-3 text-sm transition-colors hover:bg-white/8">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#075cf7] text-xs font-bold text-white ring-2 ring-white/15">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-xs font-bold text-white ring-2 ring-white/15">
                       {initials(storeName)}
                     </div>
                     <div className="min-w-0 flex-1 text-left">
@@ -653,7 +653,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   <div className="truncate text-[13px] font-extrabold leading-tight text-[#0f2147]">{storeName}</div>
                   <div className="truncate text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
                 </div>
-                <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[#075cf7] text-sm font-bold text-white ring-2 ring-[#e7f0ff]">
+                <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[var(--brand)] text-sm font-bold text-white ring-2 ring-[#e7f0ff]">
                   {initials(storeName)}
                 </div>
                 <ChevronDown size={13} className="text-muted-foreground" aria-hidden="true" />
@@ -738,7 +738,7 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
           "group flex min-h-[44px] items-center rounded-[10px] text-[14px] font-semibold transition-all duration-150",
           collapsed ? "justify-center px-0" : "gap-3 px-3",
           active
-            ? "bg-[#075cf7] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]"
+            ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]"
             : item.emphasis
               ? "text-white/90 hover:bg-white/10 hover:text-white"
               : "text-white/76 hover:bg-white/8 hover:text-white"
@@ -749,7 +749,7 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
           <>
             <span className="flex-1 truncate">{label}</span>
             {item.badge && !active && (
-              <span className="rounded-[6px] bg-[#075cf7] px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
+              <span className="rounded-[6px] bg-[var(--brand)] px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
                 {item.badge}
               </span>
             )}
@@ -771,7 +771,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
       <Link href={firstHref}>
         <div title={item.label}
           className={cn("flex h-[44px] items-center justify-center rounded-[10px] transition-all duration-150",
-            groupActive ? "bg-[#075cf7] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]" : "text-white/76 hover:bg-white/8 hover:text-white")}>
+            groupActive ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]" : "text-white/76 hover:bg-white/8 hover:text-white")}>
           <item.Icon size={18} aria-hidden="true" />
         </div>
       </Link>

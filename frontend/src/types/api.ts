@@ -820,6 +820,7 @@ export interface SyncConflictRecord extends Record<string, unknown> {
   base_snapshot?: Record<string, unknown> | null;
   server_version?: string | number | null;
   resolution?: string | null;
+  merged_payload?: Record<string, unknown> | null;
   resolution_note?: string | null;
   version: number;
   detected_at: string;

@@ -1,7 +1,11 @@
 import { roundMoney } from "@/lib/money";
 import { dexieDB, filterRowsForCurrentScope, rowMatchesCurrentScope, type OfflineRow, type PendingSyncEvent } from "@/lib/offline/db";
 import { nowIso } from "@/lib/offline/context";
-import { isLikelySyncedCopyOfPendingBill } from "@/features/sync/bill-reconciliation";
+import {
+  billsShareClientIdentity,
+  hasDurableClientIdentity,
+  isLikelySyncedCopyOfPendingBill,
+} from "@/features/sync/bill-reconciliation";
 import {
   calculateLedgerBalance,
   dedupeLedgerEntries,
@@ -446,11 +450,15 @@ async function repairDuplicateBillEchoRows(): Promise<number> {
     if (!localRowId || usedLocalIds.has(localRowId)) continue;
     const winner = serverRows.find((serverRow) => {
       const serverRowId = readStringFrom(serverRow, ["id"]);
+      const identitiesProveSameBill = billsShareClientIdentity(localRow, serverRow);
+      const bothHaveDurableIdentity =
+        hasDurableClientIdentity(localRow) && hasDurableClientIdentity(serverRow);
       return (
         serverRowId &&
         serverRowId !== localRowId &&
         !usedServerIds.has(serverRowId) &&
-        isLikelySyncedCopyOfPendingBill(localRow, serverRow)
+        (identitiesProveSameBill ||
+          (!bothHaveDurableIdentity && isLikelySyncedCopyOfPendingBill(localRow, serverRow)))
       );
     });
     if (!winner) continue;

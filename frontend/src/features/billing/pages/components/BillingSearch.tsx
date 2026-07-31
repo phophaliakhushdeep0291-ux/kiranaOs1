@@ -288,7 +288,7 @@ export function BillingSearch({
 
             {/* Search box */}
             <div className="min-w-0 flex-1">
-              <div className="relative flex h-12 items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-white px-4 shadow-[0_3px_12px_rgba(30,55,90,0.035)] transition-colors focus-within:border-[#0057ff] sm:h-[50px]">
+              <div className="relative flex h-12 items-center gap-3 rounded-[10px] border border-[#e3eaf3] bg-white px-4 shadow-[0_3px_12px_rgba(30,55,90,0.035)] transition-colors focus-within:border-[var(--brand)] sm:h-[50px]">
                 <Search size={18} className="shrink-0 text-[#6b7a9a]" aria-hidden="true" />
                 <Input
                   ref={searchInputRef}
@@ -320,7 +320,7 @@ export function BillingSearch({
                   title="Scan barcode"
                   aria-label="Scan barcode"
                   onClick={openBarcodeScanner}
-                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] sm:h-9 sm:w-9"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] sm:h-9 sm:w-9"
                 >
                   <ScanLine size={16} aria-hidden="true" />
                 </button>
@@ -329,7 +329,7 @@ export function BillingSearch({
                   title="Voice billing"
                   aria-label="Open voice billing"
                   onClick={onToggleVoice}
-                  className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[#0057ff] sm:h-9 sm:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[#0057ff]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
+                  className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] sm:h-9 sm:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
                 >
                   <Mic size={16} aria-hidden="true" />
                 </button>
@@ -417,7 +417,7 @@ export function BillingSearch({
               </div>
               <div className="relative bg-black">
                 <video ref={videoRef} className="aspect-[4/3] w-full object-cover" muted playsInline />
-                <div className="pointer-events-none absolute inset-x-[14%] top-1/2 h-[2px] -translate-y-1/2 rounded-full bg-[#0057ff] shadow-[0_0_18px_rgba(0,87,255,0.9)]" />
+                <div className="pointer-events-none absolute inset-x-[14%] top-1/2 h-[2px] -translate-y-1/2 rounded-full bg-[var(--brand)] shadow-[0_0_18px_rgba(0,87,255,0.9)]" />
                 <div className="pointer-events-none absolute inset-[12%] rounded-[14px] border-2 border-white/80 shadow-[0_0_0_999px_rgba(0,0,0,0.22)]" />
               </div>
               <div className="flex items-center justify-between gap-3 px-4 py-3">
@@ -430,7 +430,7 @@ export function BillingSearch({
                     setScannerOpen(false);
                     searchInputRef.current?.focus();
                   }}
-                  className="h-11 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[#0057ff] hover:bg-[#f5f9ff] sm:h-9"
+                  className="h-11 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[var(--brand)] hover:bg-[#f5f9ff] sm:h-9"
                 >
                   Type instead
                 </button>
@@ -442,7 +442,7 @@ export function BillingSearch({
         <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1">
           {productsLoading && filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#536383]">
-              <Search size={22} className="animate-pulse text-[#0057ff]/60" />
+              <Search size={22} className="animate-pulse text-[var(--brand)]/60" />
               <p className="text-sm">Loading products…</p>
             </div>
           ) : filteredProducts.length === 0 ? (
@@ -480,7 +480,7 @@ export function BillingSearch({
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={() => setShowAll((v) => !v)}
-                  className="flex h-11 items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white px-7 text-[12px] font-semibold text-[#0057ff] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff] sm:h-[38px]"
+                  className="flex h-11 items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white px-7 text-[12px] font-semibold text-[var(--brand)] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff] sm:h-[38px]"
                 >
                   {showAll ? (
                     <>Show less <ChevronUp size={13} /></>
@@ -514,7 +514,7 @@ export function BillingSearch({
               {/* Items */}
               <div className="flex items-center gap-2.5">
                 <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[8px] bg-blue-50">
-                  <ReceiptText size={14} className="text-[#0057ff]" />
+                  <ReceiptText size={14} className="text-[var(--brand)]" />
                 </span>
                 <div>
                   <p className="text-[13px] font-black text-[#13274d]">
@@ -623,7 +623,7 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
       </span>
 
       {/* Add button — bottom-right, white with border, blue + */}
-      <span className="absolute bottom-2.5 right-2.5 grid h-7 w-7 place-items-center rounded-[10px] border border-[#dfe8f5] bg-white text-lg font-bold text-[#0057ff] transition-all group-hover:border-[#0057ff] group-hover:bg-[#f5f9ff]">
+      <span className="absolute bottom-2.5 right-2.5 grid h-7 w-7 place-items-center rounded-[10px] border border-[#dfe8f5] bg-white text-lg font-bold text-[var(--brand)] transition-all group-hover:border-[var(--brand)] group-hover:bg-[#f5f9ff]">
         +
       </span>
     </button>
@@ -637,7 +637,7 @@ function CategoryChip({ label, active, onClick }: { label: string; active: boole
       onClick={onClick}
       className={`h-11 shrink-0 rounded-[8px] border px-5 text-[12px] font-semibold capitalize transition-all sm:h-9 ${
         active
-          ? "border-[#0057ff] bg-[#0057ff] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
+          ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_8px_16px_rgba(0,87,255,0.2)]"
           : "border-[#e6ecf4] bg-white text-[#3a4a6b] hover:bg-[#f7f9fd]"
       }`}
     >
@@ -683,7 +683,7 @@ function RecentBillsPanel() {
         <h3 className="font-display text-[14px] font-black tracking-tight text-[#13274d]">Recent Bills</h3>
         <Link
           to="/bills"
-          className="flex items-center gap-0.5 text-[12px] font-extrabold text-[#0057ff] hover:underline"
+          className="flex items-center gap-0.5 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
         >
           View all <ChevronRight size={12} />
         </Link>
@@ -816,7 +816,7 @@ function BillingTipsPanel() {
             <span className="h-[13px] w-[13px] shrink-0 text-[#16a34a]">✓</span>
             <span>
               {tip.action}{" "}
-              <span className="inline-flex h-5 min-w-[26px] items-center justify-center rounded-[5px] bg-[var(--brand-soft)] px-1.5 text-[10px] font-black text-[#0057ff]">
+              <span className="inline-flex h-5 min-w-[26px] items-center justify-center rounded-[5px] bg-[var(--brand-soft)] px-1.5 text-[10px] font-black text-[var(--brand)]">
                 {tip.key}
               </span>{" "}
               {tip.detail}
@@ -825,7 +825,7 @@ function BillingTipsPanel() {
         ))}
       </div>
       <div className="mt-[18px] flex justify-center">
-        <button className="flex items-center gap-1.5 text-[12px] font-extrabold text-[#0057ff] hover:underline">
+        <button className="flex items-center gap-1.5 text-[12px] font-extrabold text-[var(--brand)] hover:underline">
           View all shortcuts <ChevronRight size={12} />
         </button>
       </div>

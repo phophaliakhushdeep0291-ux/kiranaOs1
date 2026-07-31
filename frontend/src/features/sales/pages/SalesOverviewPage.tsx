@@ -448,7 +448,7 @@ export default function SalesOverviewPage() {
             </PopoverContent>
           </Popover>
           <Button variant="outline" onClick={exportSales} disabled={!snapshot || loading} className="h-9 rounded-[7px] border-[#dfe7f2] px-4 text-[12px] font-bold"><Download size={14} className="mr-2" />Export</Button>
-          <Button asChild className="h-9 rounded-[7px] bg-[var(--brand)] px-5 text-[12px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.22)] hover:bg-[#0052e0]"><Link href="/billing"><Plus size={14} className="mr-2" />New Sale</Link></Button>
+          <Button asChild className="h-9 rounded-[7px] bg-[var(--brand)] px-5 text-[12px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.22)] hover:bg-[var(--brand-strong)]"><Link href="/billing"><Plus size={14} className="mr-2" />New Sale</Link></Button>
         </div>
       </section>
 

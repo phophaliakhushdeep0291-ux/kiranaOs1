@@ -101,7 +101,7 @@ const MODE_META: Record<string, { label: string; chip: string; color: string }> 
   cash: { label: "Cash", chip: CHIP_TONES.green, color: "#20b75a" },
   upi: { label: "UPI", chip: CHIP_TONES.violet, color: "#7c3ff2" },
   card: { label: "Card", chip: CHIP_TONES.blue, color: "#f6ad14" },
-  split: { label: "Split", chip: CHIP_TONES.blue, color: "#1264f6" },
+  split: { label: "Split", chip: CHIP_TONES.blue, color: "var(--brand)" },
   udhar: { label: "Credit (Udhar)", chip: CHIP_TONES.amber, color: "#ff7a1a" },
   bank: { label: "Bank Transfer", chip: CHIP_TONES.blue, color: "#0ea5e9" },
 };

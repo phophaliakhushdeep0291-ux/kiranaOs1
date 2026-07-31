@@ -1143,16 +1143,17 @@ if (ctx.skip) {
 
     test("owner conflict resolution is optimistic, audited, and visible across devices", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Server customer" });
       const conflict = assertSuccess(await ctx.post(
         "/api/sync/conflicts/report",
         {
           client_conflict_id: "resolution-conflict-1",
           entity_type: "customer",
-          entity_id: "customer_1",
+          entity_id: customer.id,
           reason_code: "VERSION_MISMATCH",
           message: "Customer changed on another device",
-          local_snapshot: { name: "Local customer" },
-          server_snapshot: { name: "Server customer" },
+          local_snapshot: { id: customer.id, name: "Local customer" },
+          server_snapshot: { id: customer.id, name: "Server customer" },
         },
         { token: ownerAuth.accessToken, headers: deviceHeaders },
       )).conflict;
@@ -1171,6 +1172,7 @@ if (ctx.skip) {
       assert.equal(resolved.resolution, "use_server");
       assert.equal(resolved.version, 2);
       assert.equal(resolved.resolved_by_user_id, tenant.owner.id);
+      assert.equal((await ctx.db.customer.findUnique({ where: { id: customer.id } })).name, "Server customer");
 
       const staleDecision = await ctx.post(
         "/api/sync/resolve-conflict",
@@ -1190,6 +1192,45 @@ if (ctx.skip) {
       ));
       assert.equal(history.conflicts[0].id, conflict.id);
       assert.equal(history.conflicts[0].resolution_note, "Reviewed against the paper ledger");
+    });
+
+    test("owner conflict resolution applies mutable local data but blocks financial overwrites", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Cloud name" });
+      const mutable = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
+        client_conflict_id: "apply-local-customer",
+        entity_type: "customer",
+        entity_id: customer.id,
+        reason_code: "VERSION_MISMATCH",
+        message: "Customer name changed offline",
+        local_snapshot: { id: customer.id, name: "Counter name" },
+        server_snapshot: { id: customer.id, name: "Cloud name" },
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;
+
+      assertSuccess(await ctx.post("/api/sync/resolve-conflict", {
+        conflict_id: mutable.id,
+        resolution: "use_local",
+        expected_version: mutable.version,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal((await ctx.db.customer.findUnique({ where: { id: customer.id } })).name, "Counter name");
+
+      const financial = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
+        client_conflict_id: "block-financial-overwrite",
+        entity_type: "payment",
+        entity_id: "payment_1",
+        reason_code: "VERSION_MISMATCH",
+        message: "Payment differs",
+        local_snapshot: { id: "payment_1", amount: 100 },
+        server_snapshot: { id: "payment_1", amount: 200 },
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;
+      const blocked = await ctx.post("/api/sync/resolve-conflict", {
+        conflict_id: financial.id,
+        resolution: "use_local",
+        expected_version: financial.version,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders });
+      assert.equal(blocked.status, 409);
+      assert.equal(blocked.body?.code, "SYNC_CONFLICT_COMPENSATING_ENTRY_REQUIRED");
+      assert.equal((await ctx.db.syncConflict.findUnique({ where: { id: financial.id } })).status, "open");
     });
 
     test("device sequence acknowledgements are monotonic, bounded, role-scoped, and tenant-scoped", async () => {
