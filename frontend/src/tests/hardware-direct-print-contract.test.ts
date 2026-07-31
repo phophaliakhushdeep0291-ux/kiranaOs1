@@ -14,6 +14,8 @@ describe("direct hardware print safety contract", () => {
   it("does not auto-print a second path after an ambiguous direct-print failure", () => {
     expect(receiptSource).toContain("writeReceiptWindow(popup, snapshot, { ...options, autoPrint: false })");
     expect(receiptSource).toContain("avoid a duplicate receipt");
+    expect(receiptSource).toContain("Retry same print job");
+    expect(receiptSource).toContain("writeUncertainDirectPrintFallback(popup, snapshot, options, submitSameJob)");
   });
 
   it("pulses the drawer once for a multi-copy job", () => {

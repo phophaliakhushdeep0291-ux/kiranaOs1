@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { Readable } from "node:stream";
 import { gzipSync, gunzipSync } from "node:zlib";
 import db from "../../db.js";
 import { env } from "../../config/env.js";
@@ -7,7 +8,6 @@ import { addJob, isQueueEnabled } from "../../lib/queue.js";
 import {
   deleteObject,
   getObject,
-  getObjectStream,
   putObject,
 } from "../../lib/objectStorage.js";
 import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
@@ -409,10 +409,19 @@ export async function openShopBackup(shopId, artifactId) {
     where: { id: artifactId, shopId, status: "completed", type: "shop_logical" },
   });
   if (!row?.objectKey) throw appError("Completed backup artifact not found", 404, "BACKUP_ARTIFACT_NOT_FOUND");
+  // Verify the exact encrypted envelope before handing it to the HTTP response.
+  // Object storage can acknowledge an upload and still suffer later corruption;
+  // discovering that only during a disaster-recovery drill is too late.
+  const encrypted = await getObject({ key: row.objectKey });
+  const checksum = crypto.createHash("sha256").update(encrypted).digest("hex");
+  if (!row.checksumSha256 || checksum !== row.checksumSha256) {
+    throw appError("Backup checksum mismatch", 409, "BACKUP_CHECKSUM_MISMATCH");
+  }
   return {
     kind: "stream",
     fileName: `kiranaos-shop-${shopId}-${row.id}.kosb`,
-    ...(await getObjectStream({ key: row.objectKey })),
+    stream: Readable.from(encrypted),
+    contentLength: encrypted.length,
   };
 }
 

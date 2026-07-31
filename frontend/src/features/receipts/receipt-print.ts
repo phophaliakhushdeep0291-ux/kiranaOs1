@@ -593,7 +593,12 @@ export function openReceiptWindow(snapshot: ReceiptSnapshot, options: ReceiptWin
   return true;
 }
 
-function writeUncertainDirectPrintFallback(popup: Window, snapshot: ReceiptSnapshot, options: ReceiptWindowOptions) {
+function writeUncertainDirectPrintFallback(
+  popup: Window,
+  snapshot: ReceiptSnapshot,
+  options: ReceiptWindowOptions,
+  retrySameJob: () => Promise<void>,
+) {
   // A local bridge error can happen after the printer accepted bytes but before the
   // browser received its acknowledgement. Never auto-print through a second path:
   // that could silently duplicate a receipt or open the drawer twice.
@@ -601,7 +606,22 @@ function writeUncertainDirectPrintFallback(popup: Window, snapshot: ReceiptSnaps
   const warning = popup.document.createElement("div");
   warning.setAttribute("role", "alert");
   warning.style.cssText = "max-width:88mm;margin:12px auto 0;padding:10px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;color:#92400e;font:700 12px/1.4 Arial,sans-serif";
-  warning.textContent = "Direct printer confirmation was lost. Inspect the printer before choosing Print / Save PDF below to avoid a duplicate receipt.";
+  warning.textContent = "Direct printer confirmation was lost. Inspect the printer first to avoid a duplicate receipt. Retry same job safely resumes the journaled print without submitting completed copies again.";
+  const retry = popup.document.createElement("button");
+  retry.type = "button";
+  retry.textContent = "Retry same print job";
+  retry.style.cssText = "display:block;margin-top:8px;padding:7px 10px;border:0;border-radius:6px;background:#92400e;color:white;font:700 12px Arial,sans-serif;cursor:pointer";
+  retry.addEventListener("click", () => {
+    retry.disabled = true;
+    retry.textContent = "Checking print journal…";
+    void retrySameJob().catch((error) => {
+      retry.disabled = false;
+      retry.textContent = "Retry same print job";
+      const message = error instanceof Error ? error.message : "Printer confirmation failed again.";
+      warning.firstChild!.textContent = `Still not confirmed: ${message} Inspect the printer before retrying or using Print / Save PDF.`;
+    });
+  });
+  warning.appendChild(retry);
   popup.document.body.insertBefore(warning, popup.document.body.firstChild);
 }
 
@@ -615,7 +635,7 @@ export function writeConfiguredReceiptWindow(popup: Window, snapshot: ReceiptSna
   writeReceiptPendingWindow(popup, snapshot);
   const renderOptions = { paperSize: options.paperSize ?? printer.paperSize, copies: options.copies ?? printer.copies };
   const jobId = `receipt:${snapshot.billNo}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-  void printHtmlViaHardwareBridge(printer.bridgeUrl, {
+  const directPrintInput = {
     // The bridge owns copy iteration and journals each physical submission. Sending
     // HTML that already contains N copies would produce N x N receipts.
     html: buildReceiptHtml(snapshot, { ...renderOptions, copies: 1 }),
@@ -624,13 +644,15 @@ export function writeConfiguredReceiptWindow(popup: Window, snapshot: ReceiptSna
     paperSize: renderOptions.paperSize ?? "80mm",
     autoCut: printer.autoCut,
     cashDrawer: printer.cashDrawer,
-  }).then(() => {
+  };
+  const submitSameJob = () => printHtmlViaHardwareBridge(printer.bridgeUrl, directPrintInput).then(() => {
     options.onDirectPrintSettled?.({ status: "sent" });
     if (!popup.closed) popup.close();
-  }).catch((error) => {
+  });
+  void submitSameJob().catch((error) => {
     const message = error instanceof Error ? error.message : "Direct printer confirmation failed.";
     options.onDirectPrintSettled?.({ status: "fallback", message });
-    if (!popup.closed) writeUncertainDirectPrintFallback(popup, snapshot, options);
+    if (!popup.closed) writeUncertainDirectPrintFallback(popup, snapshot, options, submitSameJob);
   });
 }
 

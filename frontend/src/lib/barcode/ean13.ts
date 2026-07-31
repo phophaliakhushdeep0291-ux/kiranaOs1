@@ -37,6 +37,18 @@ export function ean13CheckDigit(first12: string): number {
   return (10 - (sum % 10)) % 10;
 }
 
+/** Generate a valid in-store EAN-13 using the GS1 restricted-circulation 29 prefix. */
+export function generateInternalEan13(): string {
+  const bytes = new Uint8Array(10);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  }
+  const body = `29${[...bytes].map((value) => value % 10).join("")}`;
+  return body + String(ean13CheckDigit(body));
+}
+
 /**
  * Coerce a raw product barcode into a full 13-digit EAN-13, or null when the
  * content cannot be an EAN-13 (non-digits, wrong length, bad check digit).
