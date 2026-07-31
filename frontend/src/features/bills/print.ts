@@ -4,6 +4,7 @@ import { dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
 import { computeGstBreakdown, type GstMode } from "@/lib/gst";
 import { gstStateCode } from "@/lib/gstin";
+import { roundMoney } from "@/lib/money";
 
 export interface PrintableBillRow {
   name: string;
@@ -143,6 +144,18 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
   if (paymentLines.length === 0 && paid > 0) paymentLines.push({ mode: "paid", label: "Paid", amount: paid });
   if (credit > 0 && !paymentLines.some((payment) => payment.mode.toLowerCase() === "credit")) paymentLines.push({ mode: "credit", label: "Udhar", amount: credit });
 
+  // Recover the nearest-rupee round-off from the stored figures so a reprint shows the
+  // same "Round off" line the point-of-sale receipt did. The subtotal fallback above makes
+  // this exactly 0 when subtotal is missing; a value ≥ ₹1 would be a data artifact, not a
+  // rounding, so it is suppressed.
+  const subtotal = readNumber(bill.subtotal, total + readNumber(bill.discount, 0));
+  const gstMode = bill.gstMode ?? "inclusive";
+  const rawExpected = gstMode === "exclusive"
+    ? subtotal - readNumber(bill.discount, 0) + readNumber(bill.gst, 0)
+    : subtotal - readNumber(bill.discount, 0);
+  const derivedRoundOff = roundMoney(total - rawExpected);
+  const roundOff = Math.abs(derivedRoundOff) > 0 && Math.abs(derivedRoundOff) < 1 ? derivedRoundOff : 0;
+
   return {
     billNo: bill.billNumber ?? bill.billNo ?? bill.id,
     createdAt: bill.businessDate ?? bill.business_date ?? bill.createdAt,
@@ -152,8 +165,9 @@ export function buildPrintableBillSnapshot(bill: Bill, itemRows: unknown[] = [],
     buyerStateCode: bill.buyerStateCode ?? null,
     buyerAddress: bill.buyerAddress ?? null,
     rows,
-    subtotal: readNumber(bill.subtotal, total + readNumber(bill.discount, 0)),
+    subtotal,
     discount: readNumber(bill.discount, 0),
+    roundOff,
     total,
     paid,
     credit,
