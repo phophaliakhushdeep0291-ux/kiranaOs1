@@ -109,7 +109,7 @@ export async function answerSupportQuestion({ shopId, deviceId = null, question,
 // One assistant, three intents (§5 troubleshoot, §8 how-to, §9 data). Problem
 // words win first (a "why is inventory negative?" is a diagnosis, not a how-to).
 const PROBLEM_WORDS = /not working|isn'?t working|does ?n'?t work|error|failed|failing|broken|stuck|frozen|freeze|crash|wrong|incorrect|negative|lost|missing|can'?t|cannot|won'?t|slow|not syncing|not saving/i;
-const DATA_WORDS = /how much|profit|sales|revenue|turnover|\bowe\b|outstanding|udhar|receivable|summary|summaris|summariz|today|this month|this week|\btotal\b|export|download|which product|not selling|dead stock/i;
+const DATA_WORDS = /how much|profit|sales|revenue|turnover|\bowe[sd]?\b|owing|outstanding|udhar|receivable|summary|summaris|summariz|today|this month|this week|\btotal\b|export|download|which product|not selling|dead stock/i;
 const HOWTO_WORDS = /how do i|how to|how can i|where is|where do i|steps to|guide|tutorial|set up|enable/i;
 
 export function classifyIntent(question = "") {
@@ -164,7 +164,7 @@ function dataResult(kind, answer, steps, data) {
 async function answerData({ shopId, question }) {
   const q = String(question).toLowerCase();
 
-  if (/\bowe\b|outstanding|udhar|receivable|who.*(owe|pay|due)|money.*due/.test(q)) {
+  if (/\bowe[sd]?\b|owing|outstanding|udhar|receivable|who.*(owe|pay|due)|money.*due/.test(q)) {
     const summary = await getUdharSummary(shopId);
     const steps = summary.customers.slice(0, 5).map((c) => `${c.name || "Customer"} — ${formatRupees(c.udharAmount)}`);
     const answer = summary.customers.length
