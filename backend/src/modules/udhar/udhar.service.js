@@ -1,6 +1,7 @@
 import db from "../../db.js";
 import { sumMoney } from "../../utils/money.js";
 import { calculateCustomerUdharBalances } from "./udharBalance.service.js";
+import { rangeEndInclusive, rangeStart } from "../../utils/dateRange.js";
 
 export async function getUdharLedger(shopId, { from, to, customerId, type, page, limit }) {
   const where = {
@@ -8,7 +9,7 @@ export async function getUdharLedger(shopId, { from, to, customerId, type, page,
     ...(customerId && { customerId }),
     ...(type !== "all" && { type }),
     ...(from && to && {
-      businessDate: { gte: new Date(from), lte: new Date(to) },
+      businessDate: { gte: rangeStart(from), lte: rangeEndInclusive(to) },
     }),
   };
 

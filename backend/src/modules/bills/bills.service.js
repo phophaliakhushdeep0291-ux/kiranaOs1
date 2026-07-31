@@ -3,6 +3,7 @@ import { AppError } from "../../middleware/error.js";
 import { addMoney, moneyEquals, moneyShadows, multiplyMoney, round2, subtractMoney, sumMoney } from "../../utils/money.js";
 import { toBaseQty, baseQtyToRateQty } from "../../utils/units.js";
 import { generateBillNo } from "../../utils/billNumber.js";
+import { rangeEndInclusive, rangeStart } from "../../utils/dateRange.js";
 import { billSellerIdentity, locationSellerIdentity } from "../../utils/gstIdentity.js";
 import { ensureLegacyUdharOpeningLedger, syncCustomerUdharBalance } from "../udhar/udharBalance.service.js";
 import { postBillCancelledLedger, postBillCreatedLedger, postBillRestoredLedger, postSaleReturnLedger } from "../finance/financial-ledger.service.js";
@@ -58,7 +59,7 @@ export async function listBills(shopId, { from, to, status, customerId, location
     ...(customerId && { customerId }),
     ...(locationId && { locationId }),
     ...(from && to && {
-      businessDate: { gte: new Date(from), lte: new Date(to) },
+      businessDate: { gte: rangeStart(from), lte: rangeEndInclusive(to) },
     }),
   };
 

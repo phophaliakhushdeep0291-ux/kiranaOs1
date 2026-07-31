@@ -2,6 +2,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, multiplyMoney, round2, weightedAvgCost } from "../../utils/money.js";
 import { toBaseQty, rateUnitToBase } from "../../utils/units.js";
+import { rangeEndInclusive, rangeStart } from "../../utils/dateRange.js";
 import {
   decrementLocationInventory,
   getLocationQuantity,
@@ -523,7 +524,7 @@ export async function getLedger(shopId, { productId, action, locationId, from, t
     ...(action && { action }),
     ...(locationId && { locationId }),
     ...(from && to && {
-      createdAt: { gte: new Date(from), lte: new Date(to) },
+      createdAt: { gte: rangeStart(from), lte: rangeEndInclusive(to) },
     }),
   };
 

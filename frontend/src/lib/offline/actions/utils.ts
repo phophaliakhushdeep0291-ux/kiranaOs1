@@ -58,7 +58,16 @@ export function touchLocalEntity<T extends { id: string; updatedAt?: string; ver
 }
 
 export function validationError(error: z.ZodError): ApiClientError {
-  const message = error.issues[0]?.message ?? "Invalid input";
+  const issue = error.issues[0];
+  const base = issue?.message ?? "Invalid input";
+  // Name the offending field. A bare "Expected boolean, received number" on a
+  // failed bill save tells the counter nothing and is near-impossible to trace
+  // from a screenshot — the path is the only clue to WHICH value went bad.
+  const path = (issue?.path ?? [])
+    .map((segment) => (typeof segment === "number" ? `[${segment}]` : segment))
+    .join(".")
+    .replace(/\.\[/g, "[");
+  const message = path ? `${path}: ${base}` : base;
   return new ApiClientError(message, 400, { message, code: "LOCAL_VALIDATION_FAILED" });
 }
 

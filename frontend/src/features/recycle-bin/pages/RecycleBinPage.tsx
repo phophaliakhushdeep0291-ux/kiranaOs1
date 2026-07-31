@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { offlineDB } from "@/lib/offline/db";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { restoreBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
+import { isMergedBillTwin } from "@/features/sync/bill-reconciliation";
 import { permanentDeleteDisabledMessage, restoreEntityFromRecycleBinLocalFirst, type RecyclableEntityType } from "@/features/recycle-bin/local-actions";
 import { DataTableCard, EmptyState, FilterBar, PageHeader, PageShell, SearchInputWithIcon, SyncBadge } from "@/components/shared";
 
@@ -67,7 +68,10 @@ async function loadRecycleRows(): Promise<RecycleRow[]> {
     offlineDB.getAll<Record<string, unknown>>("suppliers").catch(() => []),
   ]);
   return [
-    ...bills.filter(isDeleted).map((row) => toRecycleRow("bill", row)),
+    // A merge twin is the local optimistic row tombstoned once its server copy synced
+    // back — a sync artifact, never something the user deleted. Without this filter the
+    // bin lists one phantom per synced bill, under its pre-sync PENDING-/LOCAL- number.
+    ...bills.filter((row) => isDeleted(row) && !isMergedBillTwin(row)).map((row) => toRecycleRow("bill", row)),
     ...customers.filter(isDeleted).map((row) => toRecycleRow("customer", row)),
     ...products.filter(isDeleted).map((row) => toRecycleRow("product", row)),
     ...suppliers.filter(isDeleted).map((row) => toRecycleRow("supplier", row)),

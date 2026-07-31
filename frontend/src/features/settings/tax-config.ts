@@ -33,7 +33,11 @@ export function getTaxConfigSync(): TaxConfig {
 }
 
 export function setTaxConfigCache(config: Partial<TaxConfig>) {
-  cache = { ...DEFAULT_TAX_CONFIG, ...config };
+  const merged = { ...DEFAULT_TAX_CONFIG, ...config };
+  // roundOff rides Shop.settingsJson across devices, so it arrives as untyped JSON.
+  // It is sent on every bill and validated as a strict boolean by both the offline
+  // validator and the server — a stray 0/1 here fails the save, not just the rounding.
+  cache = { ...merged, roundOff: merged.roundOff === true, defaultRate: Number(merged.defaultRate) || 0 };
 }
 
 export async function loadTaxConfig(): Promise<TaxConfig> {

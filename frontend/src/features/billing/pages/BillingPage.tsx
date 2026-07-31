@@ -158,7 +158,7 @@ export default function Billing() {
   const [paidAmount, setPaidAmount] = useState<number | "">(() => readBillingDraft().paidAmount ?? "");
   const [splitCashAmount, setSplitCashAmount] = useState<number | "">(() => readBillingDraft().splitCashAmount ?? "");
   const [splitUpiAmount, setSplitUpiAmount] = useState<number | "">(() => readBillingDraft().splitUpiAmount ?? "");
-  const [allowAdvancePayment, setAllowAdvancePayment] = useState(() => readBillingDraft().allowAdvancePayment ?? false);
+  const [allowAdvancePayment, setAllowAdvancePayment] = useState(() => readBillingDraft().allowAdvancePayment === true);
   const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
   const [heldBills, setHeldBills] = useState<HeldBill[]>([]);
   const [activeBillId, setActiveBillId] = useState<string>(() => readBillingDraft().activeBillId ?? newBillId());
@@ -474,7 +474,11 @@ export default function Billing() {
           setPaidAmount(draft.paidAmount ?? "");
           setSplitCashAmount(draft.splitCashAmount ?? "");
           setSplitUpiAmount(draft.splitUpiAmount ?? "");
-          setAllowAdvancePayment(draft.allowAdvancePayment ?? false);
+          // `=== true`, never `?? false`: the draft is unvalidated persisted JSON, and
+          // ?? only replaces null/undefined — a stored 0/1 would flow through as a
+          // NUMBER and every save would then fail Zod with "Expected boolean, received
+          // number", permanently, because the bad value is rewritten to the draft.
+          setAllowAdvancePayment(draft.allowAdvancePayment === true);
           setDraftRestored(Boolean(draft.cart?.length));
         }
         // Drop week-old parked carts on load — they're abandoned, not open, and
@@ -1248,7 +1252,10 @@ export default function Billing() {
         gstMode: getTaxConfigSync().mode,
         // Ride the round-off setting with the bill so the offline validator and the
         // server round the total the same way this counter just did (and payments reconcile).
-        roundOff: roundOffEnabled,
+        // Coerced hard: these three flags are the only booleans the bill schema (local AND
+        // server) accepts, and each is sourced from persisted/synced JSON that a stray
+        // number can poison — which blocks the save outright with a Zod type error.
+        roundOff: roundOffEnabled === true,
         customerId: resolvedCustomerId || undefined,
         customerName: resolvedCustomerName || "Walk-in",
         customerMobile: resolvedCustomerMobile || undefined,
@@ -1264,7 +1271,7 @@ export default function Billing() {
         actualAmount: grandTotal,
         buyerPaidAmount: paid,
         waivedAmount: 0,
-        allowAdvancePayment,
+        allowAdvancePayment: allowAdvancePayment === true,
         advanceAmount,
         items: cart.map((item) => ({
           productId: item.isCustom ? undefined : item.product.id,
@@ -1334,7 +1341,7 @@ export default function Billing() {
     setPaidAmount(bill.paidAmount ?? "");
     setSplitCashAmount(bill.splitCashAmount ?? "");
     setSplitUpiAmount(bill.splitUpiAmount ?? "");
-    setAllowAdvancePayment(bill.allowAdvancePayment ?? false);
+    setAllowAdvancePayment(bill.allowAdvancePayment === true);
     setDraftRestored(Boolean(bill.cart?.length));
   }
 

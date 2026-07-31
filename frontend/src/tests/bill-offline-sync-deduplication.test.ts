@@ -170,6 +170,29 @@ describe("offline bill sync deduplication", () => {
     expect(inRecycleBin.map((b) => b.id)).toEqual(["server_bill_2"]);
   });
 
+  it("keeps merge twins out of the Recycle Bin listing, under their pre-sync numbers", () => {
+    // Regression: the standalone Recycle Bin page filtered on deleted_at ALONE (the
+    // Bills page had its own, fixed, filter). Every synced bill left its tombstoned
+    // local row there — listed under the pre-sync "PENDING-…"/"…-LOCAL-…" number, so
+    // the shop saw bills it never deleted sitting in the bin.
+    const rows = [
+      // twin of a bill that synced fine and was NEVER deleted → must not be listed
+      { id: "bill_local_a", billNumber: "PENDING-9A03C8", server_id: "srv_a", merged_into_id: "srv_a", deleted_at: "2026-07-31T12:26:18.329Z" },
+      { id: "srv_a", billNumber: "KOS-2026-000001", server_id: "srv_a", deleted_at: null },
+      // a bill the shop really deleted → must stay listed
+      { id: "srv_b", billNumber: "KOS-2026-000002", server_id: "srv_b", deleted_at: "2026-07-31T12:40:00.000Z" },
+      // deleted before it ever synced → real delete, no server copy
+      { id: "bill_local_c", billNumber: "PENDING-NEVER", deleted_at: "2026-07-31T12:41:00.000Z" },
+    ];
+
+    // The predicate the Recycle Bin page applies to bills.
+    const listed = rows
+      .filter((row) => typeof row.deleted_at === "string" && !isMergedBillTwin(row as Record<string, unknown>))
+      .map((row) => row.billNumber);
+
+    expect(listed).toEqual(["KOS-2026-000002", "PENDING-NEVER"]);
+  });
+
   it("never treats a bill pointing at ITSELF as a merged twin", () => {
     // Observed live after an offline bill synced: the surviving server row inherited
     // merged_into_id from the tombstone it replaced, so it pointed at its own id.

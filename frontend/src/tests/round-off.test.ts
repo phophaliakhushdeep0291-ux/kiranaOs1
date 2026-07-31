@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyRoundOff, roundToRupee } from "@/lib/money";
 import { applyRoundOff as applyRoundOffFromBilling } from "@/features/billing/pages/billing-calculations";
 import { billCreationSchema } from "@/lib/validation";
+import { validationError } from "@/lib/offline/actions/utils";
 
 describe("nearest-rupee round-off", () => {
   it("rounds up from ₹0.50 and above (Indian counter convention)", () => {
@@ -68,5 +69,34 @@ describe("bill validation accepts the rounded tender", () => {
       payments: [{ mode: "cash", amount: 248 }],
     });
     expect(result.success).toBe(false);
+  });
+
+  it("names the offending field when a bill flag arrives as a number", () => {
+    // Live bug (2026-07-31): the counter could not save ANY bill — every attempt showed
+    // "Bill was not saved / Expected boolean, received number" with no field name, because
+    // validationError kept only issue.message. These flags come from persisted/synced JSON
+    // (billing draft, held bill, Shop.settingsJson), where `?? false` does NOT coerce a
+    // stored 0/1 — so the bad value round-tripped and blocked the counter permanently.
+    for (const field of ["roundOff", "allowAdvancePayment"] as const) {
+      const result = billCreationSchema.safeParse({
+        ...base,
+        [field]: 0,
+        payments: [{ mode: "cash", amount: 247.6 }],
+      });
+      expect(result.success).toBe(false);
+      if (result.success) continue;
+      expect(validationError(result.error).message).toContain(field);
+    }
+  });
+
+  it("reports a bad bill ITEM field with its index, not a bare type error", () => {
+    const result = billCreationSchema.safeParse({
+      ...base,
+      items: [{ ...base.items[0], wasPriceOverridden: 1 }],
+      payments: [{ mode: "cash", amount: 247.6 }],
+    });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(validationError(result.error).message).toContain("items[0].wasPriceOverridden");
   });
 });
