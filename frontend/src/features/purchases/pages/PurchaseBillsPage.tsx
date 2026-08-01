@@ -19,7 +19,7 @@ import {
 import { hydratePurchaseHistoryFromSyncPull } from "@/features/sync/cloud-hydration";
 import { useAuth } from "@/features/auth/useAuth";
 import { deletePurchaseLocal, listSupplierPaymentsLocal, recordPurchasePaymentLocal, reverseSupplierPaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
-import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
+import { recordPurchaseBatchLocalFirst } from "@/features/inventory/local-actions";
 import { createSupplierLocalFirst } from "@/features/suppliers/local-actions";
 import { offlineDB } from "@/lib/offline/db";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/product-pricing";
 import type { Product, Supplier } from "@/types/api";
 import { PurchaseOrdersPanel } from "@/features/purchases/components/PurchaseOrdersPanel";
+import { resolvePurchaseBarcode } from "@/features/purchases/purchase-barcode";
 
 function money(value: unknown) {
   const num = Number(value);
@@ -998,7 +999,8 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   const [paidInput, setPaidInput] = useState("");
   const [lines, setLines] = useState<PurchaseLine[]>([{ key: 1, productId: "", qty: "", cost: "" }]);
   const [notes, setNotes] = useState("");
-  const [fileName, setFileName] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanValue, setScanValue] = useState("");
   const keyRef = useRef(2);
 
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
@@ -1029,7 +1031,29 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   function reset() {
     setSupplierId(""); setNewSupplierName(""); setContact(""); setMobile("");
     setDate(new Date().toISOString().slice(0, 10)); setPurchaseNo(""); setPayMode("upi"); setPayStatus("due");
-    setPaidInput(""); setLines([{ key: keyRef.current++, productId: "", qty: "", cost: "" }]); setNotes(""); setFileName("");
+    setPaidInput(""); setLines([{ key: keyRef.current++, productId: "", qty: "", cost: "" }]); setNotes("");
+  }
+
+  function acceptBarcode() {
+    const product = resolvePurchaseBarcode(products, scanValue);
+    if (!product) {
+      toast({ title: "Barcode not found or duplicated", description: "Check the code or assign a unique barcode to the product.", variant: "destructive" });
+      return;
+    }
+    setLines((current) => {
+      const existing = current.find((line) => line.productId === product.id);
+      if (existing) {
+        return current.map((line) => line.key === existing.key
+          ? { ...line, qty: String((Number(line.qty) || 0) + 1) }
+          : line);
+      }
+      const empty = current.find((line) => !line.productId);
+      const cost = String(product.costPerRateUnit ?? product.costPrice ?? "");
+      if (empty) return current.map((line) => line.key === empty.key ? { ...line, productId: product.id, qty: "1", cost } : line);
+      return [...current, { key: keyRef.current++, productId: product.id, qty: "1", cost }];
+    });
+    setScanValue("");
+    toast({ title: `${product.name} added`, description: "Scan again to increase quantity." });
   }
 
   async function save() {
@@ -1085,14 +1109,18 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
         resolvedSupplierId = created.id;
       }
       const invoice = purchaseNo.trim() || `PUR-${format(new Date(), "yyMMdd-HHmmss")}`;
-      for (const line of validLines) {
+      let allocatedPaid = 0;
+      const purchaseLines = validLines.map((line, index) => {
         const product = products.find((p) => p.id === line.productId);
         const amount = lineTotal(line);
         const share = totalAmount > 0 ? amount / totalAmount : 0;
-        const linePaid = Math.round(paidAmount * share * 100) / 100;
+        const linePaid = index === validLines.length - 1
+          ? Math.round((paidAmount - allocatedPaid) * 100) / 100
+          : Math.round(paidAmount * share * 100) / 100;
+        allocatedPaid = Math.round((allocatedPaid + linePaid) * 100) / 100;
         const lineDue = Math.max(0, Math.round((amount - linePaid) * 100) / 100);
         const lineStatus = lineDue <= 0 ? "paid" : linePaid > 0 ? "partial" : "due";
-        await recordPurchaseLocalFirst({
+        return {
           productId: line.productId,
           productName: product?.name,
           quantity: Number(line.qty) || 0,
@@ -1109,8 +1137,9 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
           purchaseDueAmount: lineDue,
           purchaseDueDate: lineDue > 0 ? date : undefined,
           note: notes.trim() || undefined,
-        });
-      }
+        };
+      });
+      await recordPurchaseBatchLocalFirst(purchaseLines);
       toast({ title: `Purchase ${invoice} saved`, description: `${validLines.length} product${validLines.length === 1 ? "" : "s"} added to stock. ${dueAmount > 0 ? `${fmt(dueAmount)} due to ${supplierName}.` : "Fully paid."}` });
       reset();
       await onSaved();
@@ -1212,7 +1241,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
           ))}
           <div className="flex min-w-[420px] items-center justify-between pt-1">
             <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])} className="flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Plus size={13} /> Add Product</button>
-            <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[11.5px] font-bold" onClick={() => toast({ title: "Barcode scanning coming soon", description: "Use the product dropdown for now." })}><Barcode size={13} /> Scan Barcode</Button>
+            <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[11.5px] font-bold" onClick={() => setScanOpen(true)}><Barcode size={13} /> Scan Barcode</Button>
           </div>
 
           {/* Totals strip */}
@@ -1222,24 +1251,6 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
             <div><p className="text-[10px] font-semibold text-[#64748b]">Paid Amount</p><p className="text-[13px] font-black text-[#16a34a]">{fmt(paidAmount)}</p></div>
             <div><p className="text-[10px] font-semibold text-[#64748b]">Due Amount</p><p className="text-[13px] font-black text-[#ef4444]">{fmt(dueAmount)}</p></div>
           </div>
-        </section>
-
-        {/* Bill upload */}
-        <section className="space-y-2">
-          <h3 className="text-[13px] font-black text-[#13274d]">Bill Upload</h3>
-          <label className="flex cursor-pointer flex-col items-center gap-1 rounded-[10px] border border-dashed border-[#c9d6ea] px-4 py-4 text-center hover:border-[var(--brand)]">
-            <Upload size={16} className="text-[var(--brand)]" />
-            <span className="text-[12px] font-bold text-[var(--brand)]">Upload Bill / Invoice</span>
-            <span className="text-[10.5px] text-[#94a3b8]">PNG, JPG or PDF up to 5MB · stored after cloud storage lands</span>
-            <input type="file" accept=".png,.jpg,.jpeg,.pdf" className="hidden" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? "")} />
-          </label>
-          {fileName && (
-            <div className="flex items-center gap-2 rounded-[8px] border border-[#e7edf7] px-3 py-2">
-              <FileText size={14} className="shrink-0 text-[#536583]" />
-              <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#344668]">{fileName}</span>
-              <button onClick={() => setFileName("")} className="text-[#94a3b8] hover:text-[#ef4444]" aria-label="Remove file"><X size={14} /></button>
-            </div>
-          )}
         </section>
 
         {/* Notes */}
@@ -1255,6 +1266,28 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
           <p className="text-right text-[10px] text-[#94a3b8]">{notes.length}/250</p>
         </section>
       </div>
+
+      <Dialog open={scanOpen} onOpenChange={setScanOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Scan purchase product</DialogTitle>
+            <DialogDescription>Scan with a USB/Bluetooth scanner or type the product barcode or SKU, then press Enter.</DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            inputMode="numeric"
+            value={scanValue}
+            onChange={(event) => setScanValue(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); acceptBarcode(); } }}
+            placeholder="Scan barcode"
+            aria-label="Purchase product barcode"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScanOpen(false)}>Done</Button>
+            <Button onClick={acceptBarcode} disabled={!scanValue.trim()}>Add product</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
         <div className="grid grid-cols-2 gap-2.5">

@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/features/auth/useAuth";
 import { useListProducts } from "@/lib/api/client";
 import { offlineDB } from "@/lib/offline/db";
-import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, billingDraftFromHeldBill, heldBillFromBillingDraft, upsertOpenBill, billFromImportedCart } from "@/features/billing/pages/open-bills";
+import { BILLING_DRAFT_KEY, HELD_BILLS_KEY, billingDraftFromHeldBill, heldBillFromBillingDraft, upsertOpenBill, billFromImportedCart, importedCartFingerprint } from "@/features/billing/pages/open-bills";
 import type { BillingDraft, HeldBill } from "@/features/billing/pages/billing-types";
 import { alertCustomerOnWhatsapp } from "../notify";
 import { listCustomerOrders, updateCustomerOrder, type CustomerOrder } from "../api";
@@ -204,6 +204,8 @@ export default function OrdersReceivedPage() {
   }
 
   async function loadIntoBilling(order: CustomerOrder) {
+    const requestedItems = order.items.map((item) => ({ productId: item.productId, qty: item.qty }));
+    const requestedFingerprint = importedCartFingerprint(requestedItems);
     let catalogProducts = products;
     if (catalogProducts.length === 0 && productsQuery.isFetching) {
       const refreshed = await productsQuery.refetch();
@@ -219,7 +221,9 @@ export default function OrdersReceivedPage() {
     ]);
     const heldBills = currentHeldBills ?? [];
     const existingHeldOrder = heldBills.find((entry) => entry.sourceOrderId === order.id);
-    const activeOrderAlreadyOpen = activeDraft?.sourceOrderId === order.id && (activeDraft.cart?.length ?? 0) > 0;
+    const activeOrderAlreadyOpen = activeDraft?.sourceOrderId === order.id
+      && activeDraft.sourceOrderFingerprint === requestedFingerprint
+      && (activeDraft.cart?.length ?? 0) > 0;
 
     if (activeOrderAlreadyOpen) {
       if (order.status === "new") statusMutation.mutate({ id: order.id, next: "accepted" });
@@ -230,9 +234,11 @@ export default function OrdersReceivedPage() {
 
     const activeAsHeld = heldBillFromBillingDraft(activeDraft);
     let nextHeldBills = heldBills.filter((entry) => entry.sourceOrderId !== order.id && entry.id !== activeAsHeld?.id);
-    if (activeAsHeld) nextHeldBills = upsertOpenBill(nextHeldBills, activeAsHeld);
+    // A legacy/partial draft for this same order is replaced below. Preserve an
+    // unrelated active bill, but do not park the broken order copy again.
+    if (activeAsHeld && activeAsHeld.sourceOrderId !== order.id) nextHeldBills = upsertOpenBill(nextHeldBills, activeAsHeld);
 
-    if (existingHeldOrder) {
+    if (existingHeldOrder?.sourceOrderFingerprint === requestedFingerprint) {
       await Promise.all([
         offlineDB.setSetting(HELD_BILLS_KEY, nextHeldBills),
         offlineDB.setSetting(BILLING_DRAFT_KEY, billingDraftFromHeldBill(existingHeldOrder)),
@@ -243,11 +249,21 @@ export default function OrdersReceivedPage() {
       return;
     }
 
-    const { bill, matched, skipped } = billFromImportedCart(
+    const importOrder = () => billFromImportedCart(
       catalogProducts,
-      order.items.map((i) => ({ productId: i.productId, qty: i.qty })),
+      requestedItems,
       { label: `${order.customerName} (order)`, sourceOrderId: order.id },
     );
+    let imported = importOrder();
+    // A non-empty cache can still be partial (for example after a location or
+    // device switch). If any requested product is missing, refresh the complete
+    // catalog and rebuild before deciding that an item is unavailable.
+    if (imported.skipped.length > 0) {
+      const refreshed = await productsQuery.refetch();
+      catalogProducts = (refreshed.data ?? catalogProducts).filter((product) => product.deletedAt == null);
+      imported = importOrder();
+    }
+    const { bill, matched, skipped } = imported;
     if (matched === 0) {
       toast({ title: "No matching products", description: "These items are not in your catalog anymore.", variant: "destructive" });
       return;

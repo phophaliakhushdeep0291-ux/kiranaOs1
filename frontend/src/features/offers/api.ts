@@ -1,8 +1,22 @@
-import { apiRequest } from "@/lib/api/http";
+import { ApiClientError, apiRequest } from "@/lib/api/http";
+import { offlineDB } from "@/lib/offline/db";
 import type { ApplyOfferResult, Offer, OfferInput } from "@/types/api";
 
-export function listOffers() {
-  return apiRequest<Offer[]>("/offers");
+const OFFERS_CACHE_KEY = "offers:server-cache:v1";
+
+export async function listOffers() {
+  try {
+    const offers = await apiRequest<Offer[]>("/offers", { background: true });
+    await offlineDB.setSetting(OFFERS_CACHE_KEY, offers).catch(() => undefined);
+    return offers;
+  } catch (error) {
+    // Never hide authentication/permission/client errors behind old data. Cached
+    // offers are only a continuity fallback for an unreachable server.
+    if (error instanceof ApiClientError && error.status > 0 && error.status < 500 && ![408, 429].includes(error.status)) throw error;
+    const cached = await offlineDB.getSetting<Offer[]>(OFFERS_CACHE_KEY).catch(() => undefined);
+    if (cached) return cached;
+    throw error;
+  }
 }
 
 export function createOffer(data: OfferInput) {

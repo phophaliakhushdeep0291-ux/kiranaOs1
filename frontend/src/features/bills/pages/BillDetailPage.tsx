@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, MessageCircle, Pencil, Plus, Printer, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, Mail, MessageCircle, Pencil, Plus, Printer, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,10 @@ import { dedupeBillItemsForDisplay, dedupeBillsForDisplay, dedupePaymentsForDisp
 import { useAuth } from "@/features/auth/useAuth";
 import { billRecordToShareInput, resolveBillCustomerMobile, shareBillOnWhatsapp } from "@/features/bills/share";
 import { LoadingSkeleton } from "@/components/shared";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { apiRequest } from "@/lib/api/http";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 type AnyRow = Record<string, unknown>;
@@ -146,6 +150,10 @@ export default function BillDetailPage() {
   const [editMode, setEditMode] = useState<"edit" | "addon" | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [receiptEmail, setReceiptEmail] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailError, setEmailError] = useState("");
 
   const bill = data?.bill;
   const embeddedItems = useMemo(() => Array.isArray(bill?.items) ? bill.items as AnyRow[] : [], [bill]);
@@ -247,6 +255,22 @@ export default function BillDetailPage() {
     return <LoadingSkeleton variant="detail" rows={4} className="mx-auto max-w-5xl p-5" />;
   }
 
+  async function sendEmailReceipt() {
+    if (!bill || !receiptEmail.trim()) return;
+    setEmailSending(true);
+    setEmailError("");
+    try {
+      const serverId = String(bill.server_id ?? bill.serverId ?? bill.id);
+      await apiRequest(`/bills/${encodeURIComponent(serverId)}/email`, { method: "POST", body: JSON.stringify({ email: receiptEmail.trim() }) });
+      setEmailOpen(false);
+      toast({ title: "Receipt emailed", description: `Delivery was accepted for ${receiptEmail.trim()}.` });
+    } catch (error) {
+      setEmailError(error instanceof Error ? error.message : "Could not email this receipt.");
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
   if (!bill) {
     return (
       <div className="p-6 space-y-4">
@@ -269,6 +293,7 @@ export default function BillDetailPage() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />Print duplicate</Button>
           <Button variant="outline" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />Send on WhatsApp</Button>
+          <Button variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />Send by email</Button>
           {isDeleted(bill) ? (
             <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />Restore</Button>
           ) : (
@@ -362,6 +387,18 @@ export default function BillDetailPage() {
         gstMode={(bill.gstMode as "inclusive" | "exclusive" | "none" | undefined) ?? "inclusive"}
         onDone={() => { void refetch(); }}
       />
+
+      <Dialog open={emailOpen} onOpenChange={(open) => { if (!emailSending) setEmailOpen(open); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Email receipt</DialogTitle><DialogDescription>Send a server-rendered copy of {billNo(bill)}. This requires internet and a configured email provider.</DialogDescription></DialogHeader>
+          <div className="space-y-2 py-3">
+            <Label htmlFor="receipt-email">Customer email</Label>
+            <Input id="receipt-email" type="email" inputMode="email" autoComplete="email" value={receiptEmail} onChange={(event) => { setReceiptEmail(event.target.value); setEmailError(""); }} placeholder="customer@example.com" aria-invalid={Boolean(emailError) || undefined} aria-describedby={emailError ? "receipt-email-error" : undefined} />
+            {emailError && <p id="receipt-email-error" role="alert" className="text-xs font-semibold text-destructive">{emailError}</p>}
+          </div>
+          <DialogFooter><Button variant="outline" disabled={emailSending} onClick={() => setEmailOpen(false)}>Cancel</Button><Button disabled={emailSending || !receiptEmail.trim()} onClick={() => void sendEmailReceipt()}>{emailSending ? "Sending…" : "Send receipt"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <OwnerPinModal
         open={!!pinAction}

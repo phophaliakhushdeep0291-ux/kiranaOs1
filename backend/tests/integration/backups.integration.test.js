@@ -6,6 +6,7 @@ import { env } from "../../src/config/env.js";
 import {
   cleanupExpiredShopBackups,
   openShopBackup,
+  previewShopBackupRestore,
   processShopBackupArtifact,
   verifyBackupArtifactForTest,
 } from "../../src/modules/backups/backup.service.js";
@@ -167,6 +168,33 @@ if (ctx.skip) {
       );
     });
 
+    test("restore preview validates tenant, schema, structure, and record counts without changing data", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      await createProduct(ctx.db, tenant.shop.id, { name: "Restore Preview Rice" });
+      const artifact = await ctx.db.backupArtifact.create({
+        data: {
+          shopId: tenant.shop.id,
+          requestedByUserId: tenant.owner.id,
+          type: "shop_logical",
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+      await processShopBackupArtifact(artifact.id, tenant.shop.id);
+      const before = await ctx.db.product.count({ where: { shopId: tenant.shop.id } });
+      const preview = await previewShopBackupRestore(tenant.shop.id, artifact.id);
+      assert.equal(preview.restorable, true);
+      assert.equal(preview.table_counts.products, 1);
+      assert.equal(preview.credentials_preserved, true);
+      assert.ok(preview.record_count >= 1);
+      assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id } }), before, "preview is read-only");
+
+      const other = await createTenant(ctx.db, { ownerPin: "5678" });
+      await assert.rejects(
+        () => previewShopBackupRestore(other.shop.id, artifact.id),
+        (error) => error?.code === "BACKUP_ARTIFACT_NOT_FOUND" && error?.statusCode === 404,
+      );
+    });
+
     test("owner backup routes enforce PIN, role, tenant scope, audit, and protected download", async () => {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       await createProduct(ctx.db, tenant.shop.id, { name: "Route Backup Product" });
@@ -201,6 +229,21 @@ if (ctx.skip) {
       assert.equal(downloaded.status, 200);
       assert.equal(downloaded.text.startsWith("KOSB1"), true, "protected download returns the encrypted backup envelope");
 
+      const previewDenied = await ctx.post(
+        `/api/jobs/backups/${created.id}/restore-preview`,
+        {},
+        { token: ownerAuth.accessToken },
+      );
+      assert.equal(previewDenied.status, 403);
+      const previewed = await ctx.post(
+        `/api/jobs/backups/${created.id}/restore-preview`,
+        {},
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      );
+      assert.equal(previewed.status, 200, JSON.stringify(previewed.body));
+      assert.equal(previewed.body.data.preview.restorable, true);
+      assert.equal(previewed.body.data.preview.table_counts.products, 1);
+
       const staff = await createStaff(ctx.db, tenant.shop.id);
       const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);
       const staffDenied = await ctx.get("/api/jobs/backups", { token: staffAuth.accessToken });
@@ -218,7 +261,7 @@ if (ctx.skip) {
       });
       assert.deepEqual(
         new Set(auditActions.map((row) => row.action)),
-        new Set(["SHOP_BACKUP_REQUESTED", "SHOP_BACKUP_COMPLETED", "SHOP_BACKUP_DOWNLOADED"]),
+        new Set(["SHOP_BACKUP_REQUESTED", "SHOP_BACKUP_COMPLETED", "SHOP_BACKUP_DOWNLOADED", "SHOP_BACKUP_RESTORE_PREVIEWED"]),
       );
     });
 

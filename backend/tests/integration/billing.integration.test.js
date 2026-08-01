@@ -4,6 +4,7 @@ import { createIntegrationContext, resetDatabase, assertFailure, assertSuccess }
 import { billPayload, createCustomer, createPaidBillViaApi, createProduct, createTenant, login } from "./factories.js";
 import { restoreCancelledBill } from "../../src/modules/bills/bills.service.js";
 import { redeemPoints } from "../../src/modules/loyalty/loyalty.service.js";
+import { env } from "../../src/config/env.js";
 
 const ctx = await createIntegrationContext();
 
@@ -34,6 +35,27 @@ if (ctx.skip) {
       const stockLedger = await ctx.db.stockLedger.findMany({ where: { billId: bill.id, action: "sale" } });
       assert.equal(refreshedProduct.stockBaseQty, 8);
       assert.equal(stockLedger.length, 1);
+    });
+
+    test("emails a tenant-scoped receipt through the configured provider and audits only the recipient domain", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      env.EMAIL_PROVIDER = "console";
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 5, defaultPricePerRateUnit: 75 });
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product), { token: ownerAuth.accessToken }), 201);
+
+      assertFailure(await ctx.post(`/api/bills/${bill.id}/email`, { email: "not-an-email" }, { token: ownerAuth.accessToken }), 400);
+      const delivered = assertSuccess(await ctx.post(`/api/bills/${bill.id}/email`, { email: "buyer@example.com" }, { token: ownerAuth.accessToken }));
+      assert.equal(delivered.delivered, true);
+      assert.equal(delivered.provider, "console");
+
+      const audit = await ctx.db.auditLog.findFirst({ where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_RECEIPT_EMAILED" } });
+      assert.ok(audit);
+      assert.equal(audit.metadataJson.includes("example.com"), true);
+      assert.equal(audit.metadataJson.includes("buyer@"), false, "audit metadata does not retain the recipient local part");
+
+      const other = await createTenant(ctx.db);
+      const otherAuth = await login(ctx, other.ownerMobile, other.ownerPassword);
+      assertFailure(await ctx.post(`/api/bills/${bill.id}/email`, { email: "attacker@example.com" }, { token: otherAuth.accessToken }), 404);
     });
 
     test("sensitive bill actions survive validation and require the owner PIN", async () => {
@@ -374,6 +396,84 @@ if (ctx.skip) {
       // The reversal rows (same entryType, negated amount) net every KPI back to zero.
       assert.equal(await sumOf("sale"), 0, "sales net to zero after cancellation");
       assert.equal(await sumOf("cash_in"), 0, "cash collected nets to zero after cancellation");
+    });
+
+    test("release cancellation reverses mixed tender, udhar, stock and ledger exactly once with an owner audit", async () => {
+      const { tenant, ownerAuth } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Cancellation Proof Customer" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, defaultPricePerRateUnit: 100, costPerRateUnit: 60 });
+      const bill = assertSuccess(await ctx.post("/api/bills/confirm", billPayload(product, {
+        quantity: 3,
+        ratePerRateUnit: 100,
+        customerId: customer.id,
+        customerName: customer.name,
+        buyerPaidAmount: 150,
+        payments: [
+          { mode: "cash", amount: 100 },
+          { mode: "upi", amount: 50 },
+          { mode: "credit", amount: 150 },
+        ],
+      }), { token: ownerAuth.accessToken }), 201);
+
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 7);
+      assert.equal((await ctx.db.customer.findUnique({ where: { id: customer.id } })).udharAmount, 150);
+
+      const denied = await ctx.post(`/api/bills/${bill.id}/cancel`, { reason: "Owner proof" }, { token: ownerAuth.accessToken, ownerPin: "9999" });
+      assertFailure(denied, 403);
+      assert.equal((await ctx.db.bill.findUnique({ where: { id: bill.id } })).status, "active", "wrong PIN cannot change the bill");
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 7, "wrong PIN cannot restore stock");
+
+      const cancelled = assertSuccess(await ctx.post(
+        `/api/bills/${bill.id}/cancel`,
+        { reason: "Customer changed the order" },
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      ));
+      assert.equal(cancelled.status, "cancelled");
+      assert.equal(cancelled.cancelledReason, "Customer changed the order");
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 10, "all sold stock is restored");
+      assert.equal((await ctx.db.customer.findUnique({ where: { id: customer.id } })).udharAmount, 0, "the credit leg is fully reversed");
+
+      const stockRows = await ctx.db.stockLedger.findMany({ where: { shopId: tenant.shop.id, billId: bill.id }, orderBy: { createdAt: "asc" } });
+      assert.equal(stockRows.filter((row) => row.action === "sale").length, 1);
+      assert.equal(stockRows.filter((row) => row.action === "cancel_reversal").length, 1);
+      assert.equal(stockRows.reduce((sum, row) => sum + Number(row.changeBaseQty), 0), 0, "stock ledger nets to zero units");
+
+      const udharRows = await ctx.db.udharLedger.findMany({ where: { shopId: tenant.shop.id, billId: bill.id }, orderBy: { createdAt: "asc" } });
+      assert.equal(udharRows.filter((row) => row.type === "debit").length, 1);
+      assert.equal(udharRows.filter((row) => row.type === "payment").length, 1);
+      assert.equal(
+        udharRows.reduce((sum, row) => sum + (row.type === "debit" ? Number(row.amountPaise) : -Number(row.amountPaise)), 0),
+        0,
+        "udhar ledger nets to zero paise",
+      );
+
+      const financialRows = await ctx.db.financialLedger.findMany({ where: { shopId: tenant.shop.id, billId: bill.id } });
+      for (const entryType of ["sale", "cash_in", "upi_in", "udhar_debit"]) {
+        assert.equal(
+          financialRows.filter((row) => row.entryType === entryType).reduce((sum, row) => sum + Number(row.amountPaise), 0),
+          0,
+          `${entryType} nets to zero paise`,
+        );
+      }
+      assert.equal(financialRows.filter((row) => row.sourceType === "bill_cancel").length, 4, "one reversal row exists for every economic leg");
+
+      const audit = await ctx.db.auditLog.findFirst({
+        where: { shopId: tenant.shop.id, entityId: bill.id, action: "BILL_CANCELLED" },
+        orderBy: { createdAt: "desc" },
+      });
+      assert.ok(audit, "the authorized cancellation is audit logged");
+      assert.equal(JSON.parse(audit.metadataJson).reason, "Customer changed the order");
+      assert.equal(JSON.parse(audit.afterJson).cancelledReason, "Customer changed the order");
+
+      assertSuccess(await ctx.post(
+        `/api/bills/${bill.id}/cancel`,
+        { reason: "Lost response retry" },
+        { token: ownerAuth.accessToken, ownerPin: tenant.ownerPin },
+      ));
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } })).stockBaseQty, 10, "retry cannot restore stock twice");
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, action: "cancel_reversal" } }), 1);
+      assert.equal(await ctx.db.financialLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, sourceType: "bill_cancel" } }), 4);
+      assert.equal(await ctx.db.udharLedger.count({ where: { shopId: tenant.shop.id, billId: bill.id, type: "payment" } }), 1);
     });
 
     test("concurrent cancels restore stock only once", async () => {

@@ -709,7 +709,7 @@ export default function BillsPage() {
           <Button asChild variant="outline" className="h-12 w-full rounded-[14px] border-[#dfe7f2] bg-white px-3 text-[11px] font-bold text-[var(--brand)] lg:h-10 lg:w-auto lg:rounded-[8px] lg:px-4 lg:text-[12px]">
             <Link href="/billing?billType=estimate"><FileText size={15} />New estimate</Link>
           </Button>
-          <Button asChild className="h-12 w-full rounded-[14px] bg-[var(--brand)] px-3 text-[11px] font-bold text-white shadow-[0_9px_20px_rgba(7,95,255,0.22)] hover:bg-[#0054e8] lg:h-10 lg:w-auto lg:rounded-[8px] lg:px-5 lg:text-[12px]">
+          <Button asChild className="h-12 w-full rounded-[14px] bg-[var(--brand)] px-3 text-[11px] font-bold text-white shadow-[0_9px_20px_var(--brand-shadow)] hover:bg-[var(--brand-strong)] lg:h-10 lg:w-auto lg:rounded-[8px] lg:px-5 lg:text-[12px]">
             <Link href="/billing?billType=normal_sale"><Plus size={15} />New pakka bill</Link>
           </Button>
         </div>

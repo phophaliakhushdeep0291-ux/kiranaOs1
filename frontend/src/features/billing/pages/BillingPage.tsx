@@ -165,6 +165,7 @@ export default function Billing() {
   // If the workspace bill came from a customer QR order, its id — so finalizing marks that order
   // fulfilled + links the bill. Mirrored into a ref so the save-success callback reads it live.
   const [sourceOrderId, setSourceOrderId] = useState<string | undefined>(() => readBillingDraft().sourceOrderId);
+  const [sourceOrderFingerprint, setSourceOrderFingerprint] = useState<string | undefined>(() => readBillingDraft().sourceOrderFingerprint);
   const sourceOrderIdRef = useRef<string | undefined>(sourceOrderId);
   useEffect(() => { sourceOrderIdRef.current = sourceOrderId; }, [sourceOrderId]);
   const [lastBillNo, setLastBillNo] = useState<string | null>(null);
@@ -462,6 +463,7 @@ export default function Billing() {
         if (Object.keys(draft).length > 0) {
           if (draft.activeBillId) setActiveBillId(draft.activeBillId);
           setSourceOrderId(draft.sourceOrderId);
+          setSourceOrderFingerprint(draft.sourceOrderFingerprint);
           setCart(draft.cart ?? []);
           setDiscount(draft.discount ?? 0);
           setDiscountReason(draft.discountReason ?? "");
@@ -498,8 +500,8 @@ export default function Billing() {
 
   useEffect(() => {
     if (!draftHydrated) return;
-    writeBillingDraft({ activeBillId, sourceOrderId, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
-  }, [draftHydrated, activeBillId, sourceOrderId, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
+    writeBillingDraft({ activeBillId, sourceOrderId, sourceOrderFingerprint, cart, discount: safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment });
+  }, [draftHydrated, activeBillId, sourceOrderId, sourceOrderFingerprint, cart, safeDiscount, discountReason, appliedOffer, paymentMode, billType, selectedCustomerId, customerName, customerMobile, paidAmount, splitCashAmount, splitUpiAmount, allowAdvancePayment]);
 
   // Re-price the cart when a pricing input changes (customer, group, payment
   // mode, or the shop's rules). Manual/custom lines keep the cashier's price;
@@ -645,6 +647,7 @@ export default function Billing() {
 
   function resetCurrentBill() {
     setSourceOrderId(undefined);
+    setSourceOrderFingerprint(undefined);
     setCart([]);
     setDiscount(0);
     setDiscountReason("");
@@ -1103,6 +1106,7 @@ export default function Billing() {
 
   function makePrintableBill(nextBillType: BillTypeSelection, paid: number, credit: number, payments?: PrintableBill["payments"]): PrintableBill {
     const year = new Date().getFullYear();
+    const customerBalance = Number(resolvedCustomerRecord?.udharAmount ?? resolvedCustomerRecord?.totalUdhar);
     return {
       billNo: nextBillType === BillInputBillType.estimate ? `EST-${year}-LOCAL-${Date.now()}` : `LOCAL-${Date.now()}`,
       createdAt: new Date().toISOString(),
@@ -1118,6 +1122,7 @@ export default function Billing() {
       total: grandTotal,
       paid,
       credit,
+      previousUdhar: resolvedCustomerRecord && Number.isFinite(customerBalance) ? customerBalance : undefined,
       paymentMode,
       billType: nextBillType,
       payments,
@@ -1308,6 +1313,7 @@ export default function Billing() {
     return {
       id: activeBillId,
       sourceOrderId,
+      sourceOrderFingerprint,
       label: `${resolvedCustomerName || "Walk-in"} • ₹${grandTotal.toLocaleString("en-IN")} • ${cart.length} item${cart.length === 1 ? "" : "s"}`,
       createdAt: new Date().toISOString(),
       cart,
@@ -1329,6 +1335,7 @@ export default function Billing() {
   function loadBillIntoActive(bill: HeldBill) {
     setActiveBillId(bill.id);
     setSourceOrderId(bill.sourceOrderId);
+    setSourceOrderFingerprint(bill.sourceOrderFingerprint);
     setCart(bill.cart ?? []);
     setDiscount(bill.discount ?? 0);
     setDiscountReason(bill.discountReason ?? "");

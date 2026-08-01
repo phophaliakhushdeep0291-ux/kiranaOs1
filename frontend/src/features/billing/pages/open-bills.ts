@@ -95,6 +95,24 @@ export interface ImportedCartResult {
   skipped: string[];
 }
 
+/** Stable identity for deciding whether an existing draft contains this order. */
+export function importedCartFingerprint(items: EncodedCartItem[]): string {
+  const quantities = new Map<string, number>();
+  for (const item of items) {
+    const productId = String(item.productId ?? "").trim();
+    const qty = Number(item.qty ?? 0);
+    if (!productId || !Number.isFinite(qty) || qty <= 0) continue;
+    quantities.set(productId, Math.round(((quantities.get(productId) ?? 0) + qty) * 1_000) / 1_000);
+  }
+  return JSON.stringify([...quantities.entries()].sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function productIdentityKeys(product: Product): string[] {
+  const row = product as Product & Record<string, unknown>;
+  return [row.id, row.productId, row.server_id, row.serverId, row.local_id, row.localId]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+}
+
 /**
  * Build a new open bill from a QR-scanned customer cart. Each scanned {productId, qty} is matched
  * to one of the owner's live products; unknown ids are skipped (a different shop's code, or a
@@ -106,9 +124,18 @@ export function billFromImportedCart(
   items: EncodedCartItem[],
   opts: { now?: () => number; label?: string; sourceOrderId?: string } = {},
 ): ImportedCartResult {
-  const byId = new Map(products.map((p) => [p.id, p]));
+  // Online orders carry the server product id, while an offline-first catalog
+  // can still be keyed by its local id. Index every known identity so all order
+  // lines survive that local/server transition.
+  const byId = new Map<string, Product>();
+  for (const product of products) {
+    for (const key of productIdentityKeys(product)) {
+      if (!byId.has(key)) byId.set(key, product);
+    }
+  }
   const cart: CartItem[] = [];
   const skipped: string[] = [];
+  const matchedItems: EncodedCartItem[] = [];
   for (const { productId, qty } of items) {
     const product = byId.get(productId);
     if (!product) {
@@ -116,6 +143,7 @@ export function billFromImportedCart(
       continue;
     }
     const quantity = qty > 0 ? qty : 1;
+    matchedItems.push({ productId, qty: quantity });
     cart.push({
       product,
       quantity,
@@ -131,6 +159,7 @@ export function billFromImportedCart(
     cart,
     selectedCustomerId: "walk_in",
     sourceOrderId: opts.sourceOrderId,
+    sourceOrderFingerprint: opts.sourceOrderId ? importedCartFingerprint(matchedItems) : undefined,
   };
   return { bill, matched: cart.length, skipped };
 }

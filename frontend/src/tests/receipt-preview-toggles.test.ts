@@ -40,6 +40,12 @@ describe("receipt preview honours every toggle", () => {
     expect(html({ showMrp: false })).not.toContain("MRP <s>");
   });
 
+  it("previous and resulting udhar appear only when showPreviousUdhar is on", () => {
+    expect(html({ showPreviousUdhar: true })).toContain("Previous udhar");
+    expect(html({ showPreviousUdhar: true })).toContain("Total udhar after bill");
+    expect(html({ showPreviousUdhar: false })).not.toContain("Previous udhar");
+  });
+
   it("GSTIN is hidden when showGst is off", () => {
     expect(html({ showGst: true })).toContain("22AAAAA0000A1Z5");
     expect(html({ showGst: false })).not.toContain("22AAAAA0000A1Z5");

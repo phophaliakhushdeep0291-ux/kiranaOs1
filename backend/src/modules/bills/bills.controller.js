@@ -21,6 +21,16 @@ export async function get(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function emailReceipt(req, res, next) {
+  try {
+    const bill = await svc.getBill(req.shopId, req.params.id);
+    await assertLocationCapability({ shopId: req.shopId, userId: req.user?.userId, role: req.user?.role, locationId: bill.locationId, capability: "view" });
+    const delivery = await svc.emailBillReceipt(req.shopId, req.params.id, req.body.email);
+    await createAuditLog({ shopId: req.shopId, userId: req.user?.userId, action: "BILL_RECEIPT_EMAILED", entityType: "Bill", entityId: bill.id, metadata: { provider: delivery.provider, recipientDomain: req.body.email.split("@")[1] }, req });
+    res.json({ success: true, data: delivery });
+  } catch (err) { next(err); }
+}
+
 export async function confirm(req, res, next) {
   try {
     const data = await svc.confirmBill(req.shopId, req.body, {

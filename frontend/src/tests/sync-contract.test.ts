@@ -840,6 +840,39 @@ describe("sync backend contract", () => {
     );
   });
 
+  it("settles every local movement returned by a STOCK_PURCHASE_BATCH", async () => {
+    for (const id of ["batch_movement_1", "batch_movement_2"]) {
+      dbState.putInto("inventory_movements", {
+        id, local_id: id, productId: `server_product_${id}`, tenant_id: dbState.scope.tenant_id,
+        store_id: dbState.scope.store_id, device_id: dbState.scope.device_id, sync_status: "pending_sync",
+      });
+    }
+    dbState.putInto("sync_outbox", {
+      op_id: "op_purchase_batch_1", clientEventId: "op_purchase_batch_1", idempotency_key: "purchase-batch-1",
+      type: "STOCK_PURCHASE_BATCH", operation_type: "STOCK_PURCHASE_BATCH", entity_type: "inventory_movement",
+      entity_id: "purchase_batch_1", tenant_id: dbState.scope.tenant_id, store_id: dbState.scope.store_id,
+      device_id: dbState.scope.device_id, client_created_at: "2026-06-06T11:58:00.000Z",
+      status: "PENDING", sync_status: "pending_sync", retry_count: 0, attempts: 0, createdAt: 5, next_retry_at: null,
+      payload: { batchId: "purchase_batch_1", lines: [
+        { movementId: "batch_movement_1", clientMovementId: "batch_movement_1", productId: "server_product_batch_movement_1", quantity: 1 },
+        { movementId: "batch_movement_2", clientMovementId: "batch_movement_2", productId: "server_product_batch_movement_2", quantity: 1 },
+      ] },
+    });
+    mockedSyncPush.mockResolvedValueOnce({ results: [{
+      status: "SYNCED", batchId: "purchase_batch_1", movements: [
+        { localMovementId: "batch_movement_1", stockLedgerId: "server_batch_stock_1" },
+        { localMovementId: "batch_movement_2", stockLedgerId: "server_batch_stock_2" },
+      ],
+    }] });
+
+    expect(await pushPendingOutboxOperations()).toEqual(expect.objectContaining({ pushed: 1, failed: 0 }));
+    expect(new Set(scopedRows("inventory_movements").map((row) => row.sync_status))).toEqual(new Set(["synced"]));
+    expect(scopedRows("id_mappings")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ local_id: "batch_movement_1", server_id: "server_batch_stock_1" }),
+      expect.objectContaining({ local_id: "batch_movement_2", server_id: "server_batch_stock_2" }),
+    ]));
+  });
+
   it("pushes RECORD_PAYMENT operations that carry local payment and ledger identities", async () => {
     dbState.putInto("sync_outbox", {
       op_id: "op_record_payment_1",

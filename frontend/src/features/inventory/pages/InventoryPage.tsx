@@ -690,7 +690,7 @@ export default function InventoryPage() {
                       <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by product, SKU, barcode..." className="h-10 rounded-[8px] border-[#dfe6ef] bg-[#fbfcfe] pl-9 text-[12px] focus-visible:bg-white focus-visible:ring-1" />
                     </div>
                     <Button variant="outline" className="h-10 rounded-[8px] px-3 text-[12px]" onClick={() => setStockFilter(stockFilter === "all" ? "low" : "all")}><SlidersHorizontal size={14} className="mr-1.5" />Filters</Button>
-                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_rgba(7,95,255,0.18)] hover:bg-[#0054e8]" onClick={exportInventory}><Download size={14} className="mr-1.5" />Export</Button>
+                    <Button className="h-10 rounded-[8px] bg-[var(--brand)] px-4 text-[12px] shadow-[0_7px_16px_var(--brand-shadow)] hover:bg-[var(--brand-strong)]" onClick={exportInventory}><Download size={14} className="mr-1.5" />Export</Button>
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

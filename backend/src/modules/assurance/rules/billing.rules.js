@@ -451,7 +451,7 @@ export const billingRules = [
     category: RULE_CATEGORIES.CASH_CLOSING,
     severity: SEVERITY.HIGH,
     defaultWeight: 28,
-    version: 1,
+    version: 2,
     applicableEntityTypes: BILL,
     applicableEventTypes: [EVENT_TYPES.SALE_CREATED, EVENT_TYPES.OFFLINE_EVENT_SYNCED],
     evidenceTypes: [EVIDENCE_TYPES.OWNER_APPROVAL, EVIDENCE_TYPES.DEVICE_TIMESTAMP_METADATA, EVIDENCE_TYPES.STAFF_EXPLANATION],
@@ -460,7 +460,11 @@ export const billingRules = [
       const snapshot = ctx.closingSnapshot;
       if (!snapshot?.lockedAt) return passed;
       const lockedAt = new Date(snapshot.lockedAt).getTime();
-      const billTime = new Date(ctx.bill.createdAt).getTime();
+      // Offline replay deliberately preserves the time of sale in businessDate,
+      // while createdAt records when the server accepted the replay. Comparing
+      // createdAt to the lock would make every genuinely late replay look like a
+      // normal post-lock sale and suppress the finding.
+      const billTime = new Date(ctx.bill.businessDate ?? ctx.bill.createdAt).getTime();
       // A sale simply made later in the day is not backdated. That case is
       // reported once on the closing itself (CLOSING_LATE_TRANSACTION_AFTER_LOCK)
       // rather than on every bill, which would flood the shop with findings.
@@ -476,6 +480,7 @@ export const billingRules = [
         closingSnapshotId: snapshot.id,
         closingLockedAt: new Date(lockedAt).toISOString(),
         billTimestamp: new Date(billTime).toISOString(),
+        recordCreatedAt: new Date(ctx.bill.createdAt).toISOString(),
         syncedAfterLockAt: new Date(lateSyncEvents[0].createdAt).toISOString(),
         minutesLate: Math.round((new Date(lateSyncEvents[0].createdAt).getTime() - lockedAt) / 60000),
         syncEventIds: lateSyncEvents.map((event) => event.id),

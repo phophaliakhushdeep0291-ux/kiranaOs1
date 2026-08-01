@@ -110,8 +110,16 @@ export async function preparePendingOperations(
         event.operation_type,
         event.entity_type,
       );
+      const batchLineLocalIds = event.operation_type === "STOCK_PURCHASE_BATCH" && Array.isArray(event.payload.lines)
+        ? event.payload.lines.filter(isRecord).flatMap((line) => [
+          readString(line.movementId),
+          readString(line.localMovementId),
+          readString(line.clientMovementId),
+        ]).filter((id): id is string => Boolean(id))
+        : [];
       const allowedLocalIds = new Set<string>([
         event.entity_id,
+        ...batchLineLocalIds,
         ...preparedLocalIds,
       ]);
       const resolvedPayload = deepReplaceMappedIds(
@@ -243,6 +251,8 @@ function collectIdentityKeysFromRecord(record: unknown): string[] {
     "expense_id",
     "localExpenseId",
     "local_expense_id",
+    "batchId",
+    "batch_id",
   ];
   return keys.map((key) => readString(record[key])).filter((key): key is string => Boolean(key));
 }
@@ -331,6 +341,27 @@ async function handlePushResults(
     );
 
     if (normalized === "success") {
+      if (item.event.operation_type === "STOCK_PURCHASE_BATCH") {
+        const response = isRecord(result.result) ? result.result : result;
+        const movements = Array.isArray(response.movements) ? response.movements.filter(isRecord) : [];
+        const payloadLines = Array.isArray(item.event.payload.lines) ? item.event.payload.lines.filter(isRecord) : [];
+        for (let index = 0; index < payloadLines.length; index += 1) {
+          const line = payloadLines[index];
+          const movement = movements[index] ?? {};
+          const movementLocalId = readString(line.localMovementId)
+            ?? readString(line.movementId)
+            ?? readString(line.clientMovementId);
+          const movementServerId = readString(movement.stockLedgerId)
+            ?? readString(movement.movementId);
+          if (!movementLocalId || !movementServerId) continue;
+          await putIdMapping("inventory_movement", movementLocalId, movementServerId);
+          await replaceLocalEntityId("inventory_movement", movementLocalId, movementServerId, movement);
+          await markEntitySynced({ ...item.event, entity_id: movementLocalId }, movement, movementServerId);
+        }
+        await updateOutboxStatus([item.event], "SYNCED");
+        pushed += 1;
+        continue;
+      }
       const reconciledBill = await reconcileSyncedBillFromPush(
         item.event,
         result,

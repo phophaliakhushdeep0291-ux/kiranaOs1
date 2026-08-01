@@ -107,6 +107,10 @@ export const cancelBillSchema = z.object({
   reason: z.string().min(3, "Cancellation reason required"),
 });
 
+export const emailReceiptSchema = z.object({
+  email: z.string().trim().email().max(254),
+});
+
 export const saleReturnSchema = z.object({
   locationId: z.string().min(1).optional(),
   refundMode: z.enum(["cash", "upi", "bank", "udhar", "gift_card"]).default("cash"),

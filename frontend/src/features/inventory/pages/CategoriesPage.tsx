@@ -9,12 +9,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Boxes, ChevronLeft, ChevronRight, FolderTree, Layers, MoreVertical, Pencil, Plus, Power, Search, Trash2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isDeletedProduct } from "@/features/products/pages/product-pricing";
-import { descendantIds, loadCategories, newCategoryId, saveCategories, type ShopCategory } from "@/features/inventory/category-store";
+import { descendantIds, loadCategories, mergeCategories, newCategoryId, saveCategories, type ShopCategory } from "@/features/inventory/category-store";
+import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 
 const ROWS_PER_PAGE = 10;
 
 export default function CategoriesPage() {
   const { toast } = useToast();
+  const { prefs, patch: patchSettings, hydrated: settingsHydrated } = useSettingsPrefs();
   const products = useListProducts({ limit: 1000 }, {
     query: { placeholderData: (p: Product[] | undefined) => p ?? [], staleTime: 2 * 60_000 },
   });
@@ -33,40 +35,64 @@ export default function CategoriesPage() {
     if (seededRef.current) return;
     let active = true;
     (async () => {
-      const stored = await loadCategories();
+      if (!settingsHydrated) return;
+      const cloudCategories = Array.isArray(prefs.categories) ? prefs.categories as ShopCategory[] : null;
+      const localCategories = await loadCategories();
+      const stored = mergeCategories(cloudCategories, localCategories);
       if (!active) return;
       if (stored && stored.length) {
         setCats(stored);
+        void saveCategories(stored);
+        if (JSON.stringify(stored) !== JSON.stringify(cloudCategories ?? [])) {
+          void patchSettings({ categories: stored }, { immediate: true });
+        }
         seededRef.current = true;
         return;
       }
       if (!products.data) return; // wait for products to seed from
       const names = [...new Set(productList.map((p) => (p.category ?? "general").trim() || "general"))];
-      const seeded: ShopCategory[] = names.map((name) => ({ id: newCategoryId(), name, parentId: null, status: "active", createdAt: new Date().toISOString() }));
+      const now = new Date().toISOString();
+      const seeded: ShopCategory[] = names.map((name) => ({ id: newCategoryId(), name, parentId: null, status: "active", createdAt: now, updatedAt: now, deletedAt: null }));
       setCats(seeded);
       void saveCategories(seeded);
+      void patchSettings({ categories: seeded }, { immediate: true });
       seededRef.current = true;
     })();
     return () => { active = false; };
-  }, [products.data, productList]);
+  }, [patchSettings, prefs.categories, products.data, productList, settingsHydrated]);
+
+  // The shop query can arrive after IndexedDB hydration. Merge that later cloud
+  // value instead of letting the first local render permanently win this mount.
+  useEffect(() => {
+    if (!seededRef.current || !Array.isArray(prefs.categories)) return;
+    setCats((current) => {
+      const merged = mergeCategories(prefs.categories as ShopCategory[], current);
+      if (JSON.stringify(merged) === JSON.stringify(current)) return current;
+      void saveCategories(merged);
+      if (JSON.stringify(merged) !== JSON.stringify(prefs.categories)) void patchSettings({ categories: merged });
+      return merged;
+    });
+  }, [patchSettings, prefs.categories]);
 
   function persist(next: ShopCategory[]) {
     setCats(next);
     void saveCategories(next);
+    void patchSettings({ categories: next });
   }
 
   function productCount(name: string) {
     const n = name.trim().toLowerCase();
     return productList.filter((p) => ((p.category ?? "general").trim().toLowerCase()) === n).length;
   }
-  const nameById = useMemo(() => new Map(cats.map((c) => [c.id, c.name])), [cats]);
+  const visibleCats = useMemo(() => cats.filter((category) => !category.deletedAt), [cats]);
+  const nameById = useMemo(() => new Map(visibleCats.map((c) => [c.id, c.name])), [visibleCats]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return cats
+    return visibleCats
       .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.parentId && (nameById.get(c.parentId) ?? "").toLowerCase().includes(q)))
       .sort((a, b) => (a.parentId === b.parentId ? a.name.localeCompare(b.name) : a.parentId ? 1 : -1));
-  }, [cats, search, nameById]);
+  }, [visibleCats, search, nameById]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
   useEffect(() => { setPage(1); }, [search]);
@@ -76,9 +102,9 @@ export default function CategoriesPage() {
   const lastRow = Math.min(safePage * ROWS_PER_PAGE, rows.length);
 
   const stats = {
-    total: cats.length,
-    root: cats.filter((c) => !c.parentId).length,
-    sub: cats.filter((c) => c.parentId).length,
+    total: visibleCats.length,
+    root: visibleCats.filter((c) => !c.parentId).length,
+    sub: visibleCats.filter((c) => c.parentId).length,
     products: productList.length,
   };
 
@@ -88,24 +114,28 @@ export default function CategoriesPage() {
   function saveCategory(values: { name: string; parentId: string | null; status: "active" | "inactive" }) {
     const name = values.name.trim();
     if (!name) { toast({ title: "Category name required", variant: "destructive" }); return; }
-    const dupe = cats.find((c) => c.name.trim().toLowerCase() === name.toLowerCase() && c.id !== editing?.id);
+    const dupe = visibleCats.find((c) => c.name.trim().toLowerCase() === name.toLowerCase() && c.id !== editing?.id);
     if (dupe) { toast({ title: "Category already exists", variant: "destructive" }); return; }
     if (editing) {
-      persist(cats.map((c) => (c.id === editing.id ? { ...c, name, parentId: values.parentId, status: values.status } : c)));
+      persist(cats.map((c) => (c.id === editing.id ? { ...c, name, parentId: values.parentId, status: values.status, updatedAt: new Date().toISOString() } : c)));
       toast({ title: "Category updated" });
     } else {
-      persist([...cats, { id: newCategoryId(), name, parentId: values.parentId, status: values.status, createdAt: new Date().toISOString() }]);
+      const now = new Date().toISOString();
+      persist([...cats, { id: newCategoryId(), name, parentId: values.parentId, status: values.status, createdAt: now, updatedAt: now, deletedAt: null }]);
       toast({ title: "Category added" });
     }
     setDialogOpen(false);
   }
 
   function toggleStatus(c: ShopCategory) {
-    persist(cats.map((x) => (x.id === c.id ? { ...x, status: x.status === "active" ? "inactive" : "active" } : x)));
+    persist(cats.map((x) => (x.id === c.id ? { ...x, status: x.status === "active" ? "inactive" : "active", updatedAt: new Date().toISOString() } : x)));
   }
   function removeCategory(c: ShopCategory) {
-    // orphan children to root
-    persist(cats.filter((x) => x.id !== c.id).map((x) => (x.parentId === c.id ? { ...x, parentId: null } : x)));
+    // Keep a tombstone so another device cannot resurrect a deleted category.
+    const now = new Date().toISOString();
+    persist(cats.map((x) => x.id === c.id
+      ? { ...x, deletedAt: now, updatedAt: now }
+      : x.parentId === c.id ? { ...x, parentId: null, updatedAt: now } : x));
     toast({ title: "Category deleted" });
   }
 
@@ -229,7 +259,7 @@ export default function CategoriesPage() {
         )}
       </div>
 
-      <CategoryDialog open={dialogOpen} editing={editing} cats={cats} width={panelWidth} onResizeStart={onResizeStart} onOpenChange={setDialogOpen} onSave={saveCategory} />
+      <CategoryDialog open={dialogOpen} editing={editing} cats={visibleCats} width={panelWidth} onResizeStart={onResizeStart} onOpenChange={setDialogOpen} onSave={saveCategory} />
     </div>
   );
 }

@@ -7,7 +7,7 @@ describe("taxes plan gates", () => {
   it("does not call Business-only GST endpoints for lower plans", () => {
     expect(taxes).toContain('useFeature("gst_reports")');
     expect(taxes).toContain("enabled: gstReportsFeature.allowed");
-    expect(taxes).toContain("enabled: gstReportsFeature.allowed && ewayOpen");
+    expect(taxes).toContain("enabled: gstReportsFeature.allowed && (ewayOpen || eInvoiceOpen)");
   });
 
   it("shows an honest upgrade state instead of blaming connectivity", () => {

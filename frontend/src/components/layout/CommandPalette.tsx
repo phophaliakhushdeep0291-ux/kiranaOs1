@@ -201,7 +201,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   onClick={() => go(item)}
                   className={cn(
                     "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
-                    index === active ? "bg-[#f5f9ff]" : "hover:bg-[#f8fbff]",
+                    index === active ? "bg-[var(--brand-soft)]" : "hover:bg-[var(--brand-softer)]",
                   )}
                 >
                   <span

@@ -73,6 +73,10 @@ export function buildBillingReceiptSnapshot(bill: PrintableBill): ReceiptSnapsho
     total: bill.total,
     paid: bill.paid,
     credit: bill.credit,
+    previousUdhar: printer.showPreviousUdhar ? bill.previousUdhar : undefined,
+    udharAfterBill: printer.showPreviousUdhar && Number.isFinite(bill.previousUdhar)
+      ? Number(bill.previousUdhar) + bill.credit
+      : undefined,
     payments: bill.payments?.length ? bill.payments : fallbackPaymentLines(bill),
     shop,
     gst: printer.showGstBreakup && breakdown.gst > 0

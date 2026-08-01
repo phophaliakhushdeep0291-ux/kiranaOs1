@@ -1215,6 +1215,8 @@ async function applySyncEvent(shopId, event, user, context) {
       return applyRestoreCustomer(shopId, event, context);
     case SYNC_EVENT_TYPES.STOCK_PURCHASE:
       return applyStockPurchase(shopId, event, context);
+    case SYNC_EVENT_TYPES.STOCK_PURCHASE_BATCH:
+      return applyStockPurchaseBatch(shopId, event, context);
     case SYNC_EVENT_TYPES.STOCK_SALE:
       return applyStockSale(shopId, event, context);
     case SYNC_EVENT_TYPES.UPDATE_PURCHASE_BILL:
@@ -2079,6 +2081,49 @@ async function applyStockPurchase(shopId, event, context) {
     productId: data.productId,
     ...data,
   };
+}
+
+async function applyStockPurchaseBatch(shopId, event, context) {
+  const payload = getEventPayload(event);
+  const lines = Array.isArray(payload.lines) ? payload.lines : [];
+  if (lines.length === 0 || lines.length > 100) {
+    throw new AppError("STOCK_PURCHASE_BATCH requires 1 to 100 lines", 400);
+  }
+
+  const prepared = [];
+  for (const line of lines) {
+    const rawPayload = normalizeStockPurchaseSyncPayload(line);
+    const identity = getPurchaseIdentity(event, rawPayload);
+    const parsed = stockPurchasePayloadSchema.parse({
+      ...rawPayload,
+      idempotencyKey: identity.idempotencyKey ?? rawPayload.idempotencyKey,
+    });
+    parsed.productId = await resolveEntityReference(
+      shopId,
+      SYNC_ENTITY_TYPES.PRODUCT,
+      parsed.serverProductId ?? parsed.productId ?? parsed.localProductId,
+      context,
+    );
+    if (!parsed.productId) throw new AppError("productId required for STOCK_PURCHASE_BATCH line", 400);
+    prepared.push({ parsed, identity });
+  }
+
+  const movements = await db.$transaction(async (tx) => {
+    const results = [];
+    for (const { parsed, identity } of prepared) {
+      const data = await recordPurchase(shopId, parsed, identity, tx);
+      results.push({
+        localMovementId: parsed.movementId ?? parsed.localMovementId ?? parsed.localId ?? null,
+        movementId: data.stockLedgerId,
+        stockLedgerId: data.stockLedgerId,
+        productId: data.productId,
+        ...data,
+      });
+    }
+    return results;
+  });
+
+  return { type: event.type, batchId: payload.batchId ?? event.eventId, movements };
 }
 
 function compactText(value) {

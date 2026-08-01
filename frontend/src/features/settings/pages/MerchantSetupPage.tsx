@@ -182,7 +182,7 @@ export default function MerchantSetupPage() {
               <p className="mt-1 text-[12px] text-[#64748b]">{continueStep?.detail ?? "Your setup checks are complete."}</p>
             </div>
             <Button
-              className="mt-4 w-full rounded-[9px] bg-[var(--brand)] text-white hover:bg-[#004bd1]"
+              className="mt-4 w-full rounded-[9px] bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
               onClick={() => continueStep ? void openStep(continueStep) : navigate("/billing")}
             >
               Continue setup <ChevronRight size={16} />
@@ -228,7 +228,7 @@ export default function MerchantSetupPage() {
                         Not needed
                       </Button>
                     )}
-                    <Button className="rounded-[8px] bg-[var(--brand)] text-white hover:bg-[#004bd1]" onClick={() => void openStep(step)}>
+                    <Button className="rounded-[8px] bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]" onClick={() => void openStep(step)}>
                       {step.actionLabel}
                     </Button>
                   </div>

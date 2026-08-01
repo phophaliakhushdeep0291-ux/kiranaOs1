@@ -18,6 +18,7 @@ import { reapplyBillLoyaltyInTransaction, recordBillLoyaltyInTransaction, record
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
 import { allocateLotsForBill, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
+import { sendTransactionalEmail } from "../../lib/authEmail.js";
 
 const OFFLINE_BILL_MAX_AGE_MS = 366 * 24 * 60 * 60 * 1000;
 const OFFLINE_BILL_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -87,6 +88,48 @@ export async function getBill(shopId, id) {
   });
   if (!bill) throw new AppError("Bill not found", 404);
   return bill;
+}
+
+function receiptEscape(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function receiptMoney(value) {
+  return `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export async function emailBillReceipt(shopId, billId, email) {
+  const [shop, bill] = await Promise.all([
+    db.shop.findUnique({ where: { id: shopId }, select: { name: true, address: true, city: true, phone: true, gstNumber: true } }),
+    db.bill.findFirst({ where: { id: billId, shopId, deletedAt: null }, include: { items: true, payments: true } }),
+  ]);
+  if (!bill || !shop) throw new AppError("Bill not found", 404, "BILL_NOT_FOUND");
+  const itemLines = bill.items.map((item) => `${item.name} × ${item.quantity} ${item.enteredUnit} — ${receiptMoney(item.lineTotal)}`);
+  const text = [
+    shop.name,
+    [shop.address, shop.city].filter(Boolean).join(", "),
+    shop.gstNumber ? `GSTIN: ${shop.gstNumber}` : "",
+    "",
+    `Receipt ${bill.billNo}`,
+    `Date: ${bill.businessDate.toISOString()}`,
+    `Customer: ${bill.customerName || "Walk-in"}`,
+    "",
+    ...itemLines,
+    "",
+    `Subtotal: ${receiptMoney(bill.subtotal)}`,
+    Number(bill.discount) ? `Discount: -${receiptMoney(bill.discount)}` : "",
+    Number(bill.gst) ? `GST: ${receiptMoney(bill.gst)}` : "",
+    `Total: ${receiptMoney(bill.grandTotal)}`,
+    `Paid: ${receiptMoney(bill.paidAmount)}`,
+    Number(bill.creditAmount) ? `Udhar: ${receiptMoney(bill.creditAmount)}` : "",
+    "",
+    "Thank you for shopping with us.",
+  ].filter(Boolean).join("\n");
+  const rows = bill.items.map((item) => `<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0">${receiptEscape(item.name)}<br><small>${receiptEscape(`${item.quantity} ${item.enteredUnit}`)}</small></td><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;text-align:right">${receiptEscape(receiptMoney(item.lineTotal))}</td></tr>`).join("");
+  const html = `<!doctype html><html><body style="margin:0;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a"><div style="max-width:560px;margin:0 auto;padding:24px 12px"><div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px"><h1 style="margin:0;font-size:22px">${receiptEscape(shop.name)}</h1><p style="margin:6px 0 20px;color:#64748b">${receiptEscape([shop.address, shop.city].filter(Boolean).join(", "))}</p><h2 style="font-size:16px">Receipt ${receiptEscape(bill.billNo)}</h2><p style="color:#64748b;font-size:13px">${receiptEscape(bill.businessDate.toLocaleString("en-IN"))} · ${receiptEscape(bill.customerName || "Walk-in")}</p><table style="width:100%;border-collapse:collapse;font-size:14px">${rows}</table><p style="font-size:18px;font-weight:700;text-align:right">Total ${receiptEscape(receiptMoney(bill.grandTotal))}</p>${Number(bill.creditAmount) ? `<p style="text-align:right;color:#b45309">Udhar ${receiptEscape(receiptMoney(bill.creditAmount))}</p>` : ""}<p style="margin-top:24px;color:#64748b;font-size:13px">Thank you for shopping with us.</p></div></div></body></html>`;
+  const delivery = await sendTransactionalEmail({ to: email, subject: `${shop.name} receipt ${bill.billNo}`, text, html });
+  if (!delivery.delivered) throw new AppError("Email delivery provider is not configured", 503, "EMAIL_PROVIDER_NOT_READY");
+  return { delivered: true, provider: delivery.provider, email, billId: bill.id, billNo: bill.billNo };
 }
 
 export async function softDeleteBill(shopId, billId, { reason }) {

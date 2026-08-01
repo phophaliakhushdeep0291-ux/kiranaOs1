@@ -2,7 +2,7 @@
 
 Status: Baseline v1.0  
 Owner: Product and engineering  
-Last updated: 2026-07-16
+Last updated: 2026-08-01
 
 ## Product outcome
 
@@ -43,7 +43,7 @@ IDs are permanent. Split a requirement instead of reusing or renumbering an ID.
 | BILL-003 | Bill supports cash, UPI/card, split payment and udhar with exact tender reconciliation. | Paise parity and backend validation tests; payment QA. | Retail payment and money safety modules/tests. | P0 |
 | BILL-004 | Pakka GST invoice and estimate use separate number series and histories. | GST/estimate tests; print QA. | GST engine, estimate tests and estimate counter migration. | P0 |
 | BILL-005 | Cashier can hold and resume a draft without changing stock or ledger prematurely. | Draft lifecycle and crash-recovery tests; mobile hold/resume QA. | Open-bills implementation/tests; verify full flow. | P0 |
-| BILL-006 | Authorized user can refund/return/cancel with reversal entries, reason and audit log. | Reversal, stock and ledger tests; QA from bill history. | Return/reversal migrations and tests. | P0 |
+| BILL-006 | Authorized user can refund/return/cancel with reversal entries, reason and audit log. | Reversal, stock and ledger tests; QA from bill history. | Exact mixed cash/UPI/Udhar cancellation proof covers wrong-PIN denial, reason/audit persistence, zero-paise financial and Udhar netting, stock restoration and retry exact-once (backend billing 19/19). Offline cancellation now atomically restores pooled/per-pack stock and appends its Udhar/audit/outbox effects; focused frontend coverage passes 39/39. Live bill-history QA remains open. | P0 |
 | BILL-007 | Receipt can print, retry, and share without duplicating the bill. | Print/share tests and hardware journal QA. | Receipt tests/hardware bridge; retry journal to certify. | P1 |
 | BILL-008 | Owner approval is enforced for configured discount thresholds and sensitive edits. | Permission/audit tests; cashier-versus-owner QA. | Owner PIN and permission tests. | P0 |
 

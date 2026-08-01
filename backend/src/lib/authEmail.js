@@ -60,22 +60,26 @@ export async function sendPasswordResetEmail({ to, name, token }) {
   });
 }
 
+export async function sendTransactionalEmail({ to, subject, text, html }) {
+  return sendAuthEmail({ to, subject, text, html, devLink: undefined });
+}
+
 async function sendAuthEmail({ to, subject, text, html, devLink }) {
   if (!to) return { delivered: false, provider: env.EMAIL_PROVIDER, reason: "missing_recipient" };
 
   if (env.EMAIL_PROVIDER === "disabled") {
-    logger.warn({ type: "auth_email_disabled", to, subject });
+    logger.warn({ type: "auth_email_disabled", toMasked: maskEmail(to), subject });
     return { delivered: false, provider: "disabled", reason: "disabled" };
   }
 
   if (env.EMAIL_PROVIDER === "console") {
-    logger.info({ type: "auth_email_console", to, subject, link: devLink });
+    logger.info({ type: "auth_email_console", toMasked: maskEmail(to), subject, ...(devLink ? { link: devLink } : {}) });
     return { delivered: true, provider: "console", devLink };
   }
 
   if (env.EMAIL_PROVIDER === "gmail_smtp") {
     if (!env.GMAIL_SMTP_USER || !env.GMAIL_APP_PASSWORD) {
-      logger.error({ type: "auth_email_gmail_missing_config", to, subject });
+      logger.error({ type: "auth_email_gmail_missing_config", toMasked: maskEmail(to), subject });
       return { delivered: false, provider: "gmail_smtp", reason: "missing_config" };
     }
     await sendGmailSmtp({
@@ -91,6 +95,12 @@ async function sendAuthEmail({ to, subject, text, html, devLink }) {
   }
 
   return { delivered: false, provider: env.EMAIL_PROVIDER, reason: "unknown_provider" };
+}
+
+function maskEmail(value) {
+  const [local, domain] = String(value || "").split("@");
+  if (!domain) return "[REDACTED]";
+  return `${local?.slice(0, 1) || "*"}***@${domain}`;
 }
 
 function sendGmailSmtp({ username, password, from, to, subject, text, html }) {

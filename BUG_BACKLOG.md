@@ -1,7 +1,7 @@
 # Bug Backlog
 
 Status: Active  
-Last triage: 2026-07-18
+Last triage: 2026-08-01
 
 ## Severity and workflow
 
@@ -27,6 +27,7 @@ States: `New -> Reproduced -> In progress -> Fixed -> Verified -> Closed`; use `
 | BUG-009 | P1 | New | QUAL-003 | Full live mobile screenshot matrix is not automated or retained for all core pages. | Add Playwright/live QA harness and artifacts for all `MOBILE_UX_PLAN.md` QA IDs. |
 | BUG-010 | P0 | Verified | SYNC-005, QUAL-004 | Railway container crashed because `src/modules/backups/backup.service.js` was absent from the Git build. | Root cause: unanchored `backend/.gitignore` entry `backups` hid the source directory. Changed it to `/backups/`, made the service visible to Git, and added deployment/production-check regressions. Railway `/api/health`, `/health`, and `/health/ready` returned HTTP 200 on 2026-07-16; database and storage checks reported `ok`. |
 | BUG-011 | P0 | Verified | INV-002, SYNC-002 | A purchase-receipt retry key could alias a changed payload or a different PO, and successful retries duplicated the owner audit event. | Replay compatibility now binds the key to PO, payment, invoice, item quantities/rates and batch dates; mismatch returns `IDEMPOTENCY_KEY_REUSED`. Controller emits audit/webhook only for the first mutation. The branch-aware purchase integration proof passed on 2026-07-18. |
+| BUG-012 | P0 | Fixed | BILL-006, INV-002, SYNC-002 | An offline owner cancellation reversed local Udhar but left the sale's stock deducted until a later server pull; a repeated local action could append the cancellation correction twice. | Cancellation is now one local transaction across the bill, pooled/per-pack stock, inventory reversal, Udhar correction, audit and stable outbox event, with an already-cancelled guard. Focused frontend coverage passes 39/39 and the exact backend cancellation fixture passes 19/19. Complete live 390px cancellation/sync QA before marking Verified. |
 
 ## Fixed findings awaiting historical closure
 

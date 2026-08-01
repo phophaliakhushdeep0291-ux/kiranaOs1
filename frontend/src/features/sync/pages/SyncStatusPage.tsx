@@ -50,6 +50,7 @@ import { getCurrentSubscriptionSnapshot } from "@/features/subscription/access";
 import type { SyncConflictRecord, SyncFleetResponse, SyncStatusResponse } from "@/types/api";
 import { repairResolvedSyncStatusNoise } from "@/features/sync/sync-status-repair";
 import { tableNameForEntity } from "@/features/sync/sync-types";
+import { isSensitiveSyncKey, sanitizeSyncDiagnostic } from "@/features/sync/sensitive-data";
 import { PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 
 interface ConflictRow extends OfflineRow {
@@ -134,7 +135,7 @@ function safeString(value: unknown, fallback = "-") {
 
 function compactJson(value: unknown) {
   try {
-    return JSON.stringify(value, null, 2);
+    return JSON.stringify(sanitizeSyncDiagnostic(value), null, 2);
   } catch {
     return String(value);
   }
@@ -697,9 +698,12 @@ async function applyResolvedConflictLocally(conflict: SyncConflictRecord) {
 }
 
 function conflictFieldDiff(conflict: ConflictRow) {
-  const local = isRecord(conflict.local_snapshot) ? conflict.local_snapshot : {};
-  const cloud = isRecord(conflict.server_snapshot) ? conflict.server_snapshot : {};
+  const sanitizedLocal = sanitizeSyncDiagnostic(conflict.local_snapshot);
+  const sanitizedCloud = sanitizeSyncDiagnostic(conflict.server_snapshot);
+  const local = isRecord(sanitizedLocal) ? sanitizedLocal : {};
+  const cloud = isRecord(sanitizedCloud) ? sanitizedCloud : {};
   return [...new Set([...Object.keys(local), ...Object.keys(cloud)])]
+    .filter((key) => !isSensitiveSyncKey(key))
     .filter((key) => compactJson(local[key]) !== compactJson(cloud[key]))
     .slice(0, 20)
     .map((key) => ({ key, local: local[key], cloud: cloud[key] }));

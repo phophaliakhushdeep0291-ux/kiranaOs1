@@ -60,6 +60,10 @@ export interface ReceiptSnapshot {
   total: number;
   paid: number;
   credit: number;
+  /** Customer ledger balance immediately before this bill. */
+  previousUdhar?: number;
+  /** Customer ledger balance after this bill's credit is applied. */
+  udharAfterBill?: number;
   payments?: ReceiptPaymentLine[];
   status?: string | null;
   shop?: ReceiptShopInfo | null;
@@ -264,6 +268,8 @@ export function buildReceiptHtml(snapshot: ReceiptSnapshot, options: ReceiptRend
           <div class="line grand"><span>Total</span><strong>${formatReceiptMoney(snapshot.total)}</strong></div>
           <div class="line"><span>Paid</span><strong>${formatReceiptMoney(snapshot.paid)}</strong></div>
           <div class="line due"><span>Due / Udhar</span><strong>${formatReceiptMoney(snapshot.credit)}</strong></div>
+          ${Number.isFinite(snapshot.previousUdhar) ? `<div class="line"><span>Previous udhar</span><strong>${formatReceiptMoney(Number(snapshot.previousUdhar))}</strong></div>` : ""}
+          ${Number.isFinite(snapshot.udharAfterBill) ? `<div class="line due"><span>Total udhar after bill</span><strong>${formatReceiptMoney(Number(snapshot.udharAfterBill))}</strong></div>` : ""}
           ${Number(snapshot.savings) > 0 ? `<div class="line savings"><span>You saved</span><strong>${formatReceiptMoney(Number(snapshot.savings))}</strong></div>` : ""}
         </section>
         ${gstSection(snapshot)}

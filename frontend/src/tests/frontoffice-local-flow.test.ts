@@ -80,9 +80,9 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { createBillLocalFirst } from "@/features/billing/local-actions";
-import { restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
+import { cancelBillWithOwnerPinLocalFirst, restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
 import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
-import { recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
+import { recordPurchaseBatchLocalFirst, recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
 import { markPurchasePaidLocal, recordPurchasePaymentLocal, reverseSupplierPaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
 import { calculateLedgerBalance } from "@/features/ledger/accounting";
 
@@ -188,6 +188,26 @@ describe("front office local-first cashier flow", () => {
     seedFrontOffice();
   });
 
+  it("commits every line of a supplier invoice atomically and rolls all lines back on failure", async () => {
+    const common = { productId: "product_sugar", enteredUnit: "kg", supplierName: "Govind Traders", invoiceNumber: "INV-BATCH" };
+    await recordPurchaseBatchLocalFirst([
+      { ...common, quantity: 2, costPerRateUnit: 41, billAmount: 82 },
+      { ...common, quantity: 1, costPerRateUnit: 42, billAmount: 42 },
+    ]);
+    expect(rows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 13 }));
+    expect(rows("inventory_movements").filter((row) => row.invoiceNumber === "INV-BATCH")).toHaveLength(2);
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "STOCK_PURCHASE_BATCH")).toEqual([
+      expect.objectContaining({ payload: expect.objectContaining({ lines: expect.arrayContaining([expect.any(Object), expect.any(Object)]) }) }),
+    ]);
+
+    const before = clone(dbState.committed);
+    await expect(recordPurchaseBatchLocalFirst([
+      { ...common, invoiceNumber: "INV-ROLLBACK", quantity: 1, costPerRateUnit: 43, billAmount: 43 },
+      { ...common, invoiceNumber: "INV-ROLLBACK", quantity: 1, costPerRateUnit: 0, billAmount: 0 },
+    ])).rejects.toThrow(/purchase cost or bill amount/i);
+    expect(dbState.committed).toEqual(before);
+  });
+
   it("treats an udhar estimate exactly like an udhar pakka bill, just under the EST- series", async () => {
     const estimate = await createBillLocalFirst(billInput({
       billType: BillInputBillType.estimate,
@@ -256,6 +276,104 @@ describe("front office local-first cashier flow", () => {
         paymentStatus: "paid",
       }),
     }));
+  });
+
+  it("cancels stock and udhar locally exactly once before the server acknowledges it", async () => {
+    const bill = await createBillLocalFirst(billInput());
+
+    expect(rows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 6, stockQuantity: 6 }));
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 200, totalUdhar: 200 }));
+
+    const cancelled = await cancelBillWithOwnerPinLocalFirst(bill.id, "1234", "Customer changed the order");
+
+    expect(cancelled).toEqual(expect.objectContaining({
+      status: "cancelled",
+      cancelledReason: "Customer changed the order",
+      sync_status: "pending_sync",
+    }));
+    expect(rows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 10, stockQuantity: 10, stockNeedsReview: false }));
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({ udharAmount: 0, totalUdhar: 0 }));
+    expect(calculateLedgerBalance(ledgerFor("customer_ramesh"))).toBe(0);
+    expect(rows("inventory_movements")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "sale", billId: bill.id, quantity_delta: -4 }),
+      expect.objectContaining({ action: "cancel_reversal", billId: bill.id, quantity_delta: 4, stock_before: 6, stock_after: 10 }),
+    ]));
+    expect(rows("sync_outbox").filter((row) => row.operation_type === "CANCEL_BILL_PENDING")).toHaveLength(1);
+    expect(rows("local_audit_logs").filter((row) => row.action === "bill_cancelled")).toEqual([
+      expect.objectContaining({ entity_id: bill.id, reason: "Customer changed the order", owner_pin_provided: true }),
+    ]);
+
+    const countsAfterFirstCancel = {
+      movements: rows("inventory_movements").length,
+      ledger: rows("customer_ledger").length,
+      outbox: rows("sync_outbox").length,
+      audit: rows("local_audit_logs").length,
+    };
+    await cancelBillWithOwnerPinLocalFirst(bill.id, "1234", "Duplicate tap");
+
+    expect(rows("products")[0]).toEqual(expect.objectContaining({ stockBaseQty: 10, stockQuantity: 10 }));
+    expect({
+      movements: rows("inventory_movements").length,
+      ledger: rows("customer_ledger").length,
+      outbox: rows("sync_outbox").length,
+      audit: rows("local_audit_logs").length,
+    }).toEqual(countsAfterFirstCancel);
+  });
+
+  it("projects per-pack stock on offline sale and restores the same pack on cancellation", async () => {
+    const packetProduct: Product & Record<string, unknown> = {
+      ...rows("products")[0],
+      id: "product_packets",
+      name: "Noodles",
+      packagingMode: "per_pack",
+      baseUnit: "piece",
+      stockBaseQty: 60,
+      stockQuantity: 60,
+      defaultPricePerRateUnit: 60,
+      sellingUnits: [
+        { id: "unit_pack_6", name: "Pack of 6", unitType: "pack", unitCode: "pack6", conversionToBase: 6, defaultPrice: 60, onHandQty: 10, isDefault: true, isActive: true },
+      ],
+    };
+    dbState.committed.products = [packetProduct];
+    dbState.instant.products = [packetProduct];
+    dbState.instant.inventory = [packetProduct];
+
+    const bill = await createBillLocalFirst(billInput({
+      customerId: undefined,
+      customerName: "Walk-in",
+      customerMobile: undefined,
+      items: [{
+        productId: packetProduct.id,
+        sellingUnitId: "unit_pack_6",
+        sellingUnitCode: "pack6",
+        sellingUnitLabel: "Pack of 6",
+        conversionToBase: 6,
+        name: packetProduct.name,
+        quantity: 2,
+        enteredUnit: "Pack of 6",
+        ratePerRateUnit: 60,
+        gstRate: 0,
+      }],
+      actualAmount: 120,
+      buyerPaidAmount: 120,
+      payments: [{ mode: BillPaymentMode.cash, amount: 120 }],
+    }));
+
+    expect(rows("products")[0]).toEqual(expect.objectContaining({
+      stockBaseQty: 48,
+      sellingUnits: [expect.objectContaining({ id: "unit_pack_6", onHandQty: 8 })],
+    }));
+
+    await cancelBillWithOwnerPinLocalFirst(bill.id, "1234", "Wrong pack selected");
+
+    expect(rows("products")[0]).toEqual(expect.objectContaining({
+      stockBaseQty: 60,
+      sellingUnits: [expect.objectContaining({ id: "unit_pack_6", onHandQty: 10 })],
+    }));
+    expect(rows("inventory_movements").filter((row) => row.billId === bill.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "sale", quantity_delta: -12 }),
+      expect.objectContaining({ action: "cancel_reversal", quantity_delta: 12 }),
+    ]));
   });
 
   it("allows sale beyond available stock and carries the negative balance until stock is added", async () => {

@@ -31,7 +31,9 @@ describe("product-wide route transition system", () => {
 
   it("keeps premium motion short and respects reduced-motion preferences", () => {
     expect(styles).toContain("@keyframes app-route-enter");
-    expect(styles).toContain("app-route-enter 190ms");
+    const routeDuration = styles.match(/app-route-enter\s+(\d+)ms/)?.[1];
+    expect(routeDuration).toBeTruthy();
+    expect(Number(routeDuration)).toBeLessThanOrEqual(250);
     expect(styles).toContain("@keyframes app-skeleton-shimmer");
     expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
   });

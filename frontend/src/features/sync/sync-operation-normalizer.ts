@@ -25,6 +25,7 @@ const BACKEND_OPERATION_TYPE_MAP: Record<string, string> = {
   REVERSE_PAYMENT: "REVERSE_UDHAR_PAYMENT",
   CREATE_LEDGER_ADJUSTMENT: "CREATE_LEDGER_ADJUSTMENT",
   STOCK_PURCHASE: "STOCK_PURCHASE",
+  STOCK_PURCHASE_BATCH: "STOCK_PURCHASE_BATCH",
   STOCK_SALE: "STOCK_SALE",
   STOCK_DAMAGE: "ADJUST_STOCK",
   STOCK_CORRECTION: "ADJUST_STOCK",
@@ -39,6 +40,7 @@ const BACKEND_ENTITY_TYPE_MAP: Record<string, string> = {
   CREATE_LEDGER_ADJUSTMENT: "ledger_entry",
   REVERSE_UDHAR_PAYMENT: "ledger_entry",
   STOCK_PURCHASE: "inventory_movement",
+  STOCK_PURCHASE_BATCH: "inventory_movement",
   STOCK_SALE: "inventory_movement",
   ADJUST_STOCK: "inventory_movement",
   UPDATE_PURCHASE_BILL: "purchase_history",
@@ -80,6 +82,12 @@ function normaliseStockPayload(
   rawType: string,
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
+  if (backendType === "STOCK_PURCHASE_BATCH") {
+    const lines = Array.isArray(payload.lines)
+      ? payload.lines.filter(isRecord).map((line) => normaliseStockPayload("STOCK_PURCHASE", "STOCK_PURCHASE", line))
+      : [];
+    return { ...payload, lines };
+  }
   if (backendType === "ADJUST_STOCK") {
     const movementType = String(
       payload.movementType ?? payload.adjustmentType ?? rawType,

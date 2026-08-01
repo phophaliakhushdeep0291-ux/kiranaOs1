@@ -227,7 +227,7 @@ async function assertCompatibleDamageReplay(client, shopId, existing, data, loca
   });
 }
 
-export async function recordPurchase(shopId, data, identity = {}) {
+export async function recordPurchase(shopId, data, identity = {}, client = db) {
   const {
     productId, supplierId, supplierName,
     quantity, enteredUnit, billAmount,
@@ -235,8 +235,7 @@ export async function recordPurchase(shopId, data, identity = {}) {
   } = data;
   const { idempotencyKey = null, clientMovementId = null, sourceDeviceId = null } = identity;
 
-  try {
-    return await db.$transaction(async (tx) => {
+  const execute = async (tx) => {
     const location = await resolveOperationalLocation(shopId, data.locationId ?? identity.locationId ?? null, tx);
     if (idempotencyKey) {
       const existing = await tx.stockLedger.findFirst({ where: { shopId, idempotencyKey } });
@@ -365,7 +364,9 @@ export async function recordPurchase(shopId, data, identity = {}) {
       purchaseDueAmount: purchasePayment.purchaseDueAmount,
       purchaseDueDate: purchasePayment.purchaseDueDate?.toISOString?.().slice(0, 10) ?? null,
     };
-    });
+  };
+  try {
+    return client === db ? await db.$transaction(execute) : await execute(client);
   } catch (error) {
     if (isUniqueConstraintError(error) && idempotencyKey) {
       const existing = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey } });

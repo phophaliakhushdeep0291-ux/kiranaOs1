@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect, type ComponentType } from "react";
 import { Redirect, Route, Switch, useLocation } from "wouter";
-import { Layout } from "@/components/layout";
 import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { PageLoading } from "@/components/shared/PageLoading";
@@ -80,50 +79,19 @@ const AssuranceCasesPage = lazy(() => import("@/features/assurance/pages/CasesPa
 const RecycleBinPage = lazy(() => import("@/features/recycle-bin/pages/RecycleBinPage"));
 const SmartToolsPage = lazy(() => import("@/features/innovation/pages/SmartToolsPage"));
 const RecoveryModePage = lazy(() => import("@/features/recovery/pages/RecoveryModePage"));
+const AppLayout = lazy(() => import("@/components/layout").then((module) => ({ default: module.Layout })));
 
 const ROUTE_LOADING_LABELS: Record<string, string> = {
-  login: "Opening secure sign in…",
-  register: "Preparing shop registration…",
-  "forgot-password": "Opening account recovery…",
-  "reset-password": "Opening password reset…",
-  "verify-email": "Verifying your shop email…",
   dashboard: "Preparing today’s dashboard…",
   billing: "Opening a new bill…",
-  bills: "Loading bill history…",
-  products: "Loading your products…",
-  categories: "Loading product categories…",
-  customers: "Loading customers and udhar…",
-  inventory: "Checking current stock…",
-  "purchase-bills": "Loading purchases…",
-  suppliers: "Loading suppliers…",
-  expenses: "Loading expenses…",
-  offers: "Loading offers and coupons…",
-  reports: "Preparing business reports…",
-  "money-statement": "Preparing cash and payment activity…",
-  "daily-closing": "Preparing daily closing…",
-  settings: "Opening store settings…",
-  "settings/setup": "Checking merchant setup...",
-  plans: "Loading available plans…",
-  subscription: "Checking your subscription…",
-  devices: "Checking registered devices…",
-  staff: "Loading staff access…",
-  "audit-logs": "Loading audit history…",
-  "recycle-bin": "Loading recoverable records…",
-  "smart-tools": "Opening smart tools…",
-  "recovery-mode": "Preparing recovery tools…",
-  "sync-status": "Checking backup status…",
-  returns: "Loading returns…",
-  "orders-received": "Loading customer orders…",
-  "sales-overview": "Preparing sales overview…",
-  "import-order": "Preparing customer order…",
-  order: "Loading this store…",
 };
 
 function LoadingScreen() {
   const [location] = useLocation();
   const path = location.split(/[?#]/)[0].replace(/^\/+/, "");
   const section = path.split("/").filter(Boolean)[0] ?? "dashboard";
-  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? "Opening Artha..."} />;
+  const fallback = path.split("/").filter(Boolean).at(-1)?.replace(/-/g, " ");
+  return <PageLoading label={ROUTE_LOADING_LABELS[path] ?? ROUTE_LOADING_LABELS[section] ?? `Opening ${fallback || "Artha"}…`} />;
 }
 
 function LazyPage({ component: Component, featureName }: { component: ComponentType; featureName?: FeatureName }) {
@@ -162,11 +130,13 @@ function ProtectedRoute({ component: Component, featureName }: { component: Comp
 
   return (
     <SessionLockGate>
-      <Layout>
-        <ErrorBoundary>
-          <LazyPage component={Component} featureName={featureName} />
-        </ErrorBoundary>
-      </Layout>
+      <Suspense fallback={<LoadingScreen />}>
+        <AppLayout>
+          <ErrorBoundary>
+            <LazyPage component={Component} featureName={featureName} />
+          </ErrorBoundary>
+        </AppLayout>
+      </Suspense>
     </SessionLockGate>
   );
 }

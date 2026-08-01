@@ -11,6 +11,7 @@ import {
   createAndEnqueueShopBackup,
   listShopBackups,
   openShopBackup,
+  previewShopBackupRestore as previewRestore,
 } from "../backups/backup.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { pipeline } from "node:stream/promises";
@@ -93,6 +94,24 @@ export async function downloadShopBackup(req, res, next) {
   } catch (error) {
     if (res.headersSent) return res.destroy(error);
     return next(error);
+  }
+}
+
+export async function previewShopBackupRestore(req, res, next) {
+  try {
+    const preview = await previewRestore(req.shopId, req.params.id);
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "SHOP_BACKUP_RESTORE_PREVIEWED",
+      entityType: "BackupArtifact",
+      entityId: req.params.id,
+      metadata: { schemaVersion: preview.schema_version, recordCount: preview.record_count },
+      req,
+    });
+    res.json({ success: true, data: { preview } });
+  } catch (error) {
+    next(error);
   }
 }
 
