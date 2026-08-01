@@ -39,22 +39,22 @@ export function BillingVoicePanel({
           value={voiceCommand}
           onChange={(event) => onVoiceCommandChange(event.target.value)}
           className="min-h-20 resize-none bg-background px-3 py-2"
-          placeholder="Example: Ramesh ke naam 2 kilo chini 45 rupay kilo, ek tel packet 120, 500 udhar"
+          placeholder={t("billing.voice.placeholder")}
         />
         <Button type="button" variant={voiceListening ? "destructive" : "outline"} className="min-h-11" onClick={onStartVoiceListening}>
-          <Mic className="mr-2 h-4 w-4" />{voiceListening ? "Stop mic" : "Start mic"}
+          <Mic className="mr-2 h-4 w-4" />{voiceListening ? t("billing.voice.stopMic") : t("billing.voice.startMic")}
         </Button>
-        <Button type="button" className="min-h-11" onClick={onParseVoiceDraft}>Parse command</Button>
+        <Button type="button" className="min-h-11" onClick={onParseVoiceDraft}>{t("billing.voice.parse")}</Button>
       </div>
       <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${voiceListening ? "bg-primary/10 text-primary" : "bg-background text-muted-foreground"}`}>{voiceMicMessage}</p>
       {voiceDraft && (
         <div className="mt-3 rounded-xl border bg-background p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="font-semibold">AI draft review</div>
-            <Button type="button" size="sm" onClick={onAddVoiceDraftToCart} disabled={voiceDraft.lines.length === 0}>Add parsed items to cart</Button>
+            <div className="font-semibold">{t("billing.voice.draftTitle")}</div>
+            <Button type="button" size="sm" onClick={onAddVoiceDraftToCart} disabled={voiceDraft.lines.length === 0}>{t("billing.voice.addToCart")}</Button>
           </div>
-          {voiceDraft.customerName && <p className="mt-2 text-xs text-muted-foreground">Customer: {voiceDraft.customerName}</p>}
-          {voiceDraft.udharAmount !== undefined && <p className="text-xs text-muted-foreground">Udhar detected: ₹{voiceDraft.udharAmount.toLocaleString("en-IN")}</p>}
+          {voiceDraft.customerName && <p className="mt-2 text-xs text-muted-foreground">{t("billing.voice.customer", { name: voiceDraft.customerName })}</p>}
+          {voiceDraft.udharAmount !== undefined && <p className="text-xs text-muted-foreground">{t("billing.voice.udharDetected", { amount: voiceDraft.udharAmount.toLocaleString("en-IN") })}</p>}
           <div className="mt-2 space-y-1">
             {voiceDraft.lines.map((line) => (
               <div key={`${line.product.id}-${line.source}`} className="flex flex-wrap justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs">

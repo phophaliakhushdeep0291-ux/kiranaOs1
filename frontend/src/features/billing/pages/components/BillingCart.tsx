@@ -5,6 +5,7 @@ import { cartItemGross, cartItemLineDiscount, cartItemNet, productMinSellingPric
 import { cartItemKey, type CartItem } from "../billing-types";
 import { getProductEmoji, productPlaceholderColor } from "./BillingSearch";
 import { isScaleBillingUnit } from "@/features/hardware/local-hardware-bridge";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 interface BillingCartProps {
   cart: CartItem[];
@@ -19,6 +20,8 @@ interface BillingCartProps {
 }
 
 export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onUpdateLineDiscount, onUpdateLineNote, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
+  const { t } = useAppLanguage();
+
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
@@ -26,8 +29,8 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onU
           <ShoppingCart size={20} aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-bold text-[#13274d]">Cart is empty</p>
-          <p className="mt-0.5 text-xs text-[#536383]">Click products on the left to add</p>
+          <p className="text-sm font-bold text-[#13274d]">{t("billing.cart.empty")}</p>
+          <p className="mt-0.5 text-xs text-[#536383]">{t("billing.cart.emptyHint")}</p>
         </div>
       </div>
     );
@@ -74,6 +77,7 @@ function CartRow({
   scaleReading: boolean;
   onRemoveItem: (id: string) => void;
 }) {
+  const { t } = useAppLanguage();
   const [editingRate, setEditingRate] = useState(false);
   const [rateDraft, setRateDraft] = useState<string>(String(item.rate));
   const rateInputRef = useRef<HTMLInputElement | null>(null);
@@ -166,16 +170,16 @@ function CartRow({
         </p>
         {sellingUnits.length > 1 ? (
           <select
-            aria-label={`Selling unit for ${item.product.name}`}
+            aria-label={t("billing.cart.sellingUnitFor", { name: item.product.name })}
             value={item.sellingUnit?.unitCode ?? sellingUnits.find((unit) => unit.isDefault)?.unitCode ?? sellingUnits[0]?.unitCode}
             onChange={(event) => onUpdateUnit(lineKey, event.target.value)}
             className="mt-1 h-6 max-w-full rounded-md border border-[#dfe8f5] bg-white px-1.5 text-[10px] font-bold text-[#31527e] outline-none focus:border-[var(--brand)]"
           >
-            {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{unit.name} · Rs {Number(unit.defaultPrice).toLocaleString("en-IN")}</option>)}
+            {sellingUnits.map((unit) => <option key={unit.unitCode} value={unit.unitCode}>{t("billing.cart.unitOption", { name: unit.name, price: Number(unit.defaultPrice).toLocaleString("en-IN") })}</option>)}
           </select>
         ) : item.sellingUnit ? (
           <p className="mt-1 inline-flex max-w-full items-center rounded-md border border-[#dfe8f5] bg-[var(--brand-softer)] px-1.5 py-1 text-[10px] font-bold text-[#31527e]">
-            Pack: {item.sellingUnit.name}
+            {t("billing.cart.pack", { name: item.sellingUnit.name })}
           </p>
         ) : null}
         {canReadScale ? (
@@ -184,10 +188,10 @@ function CartRow({
             onClick={() => onReadScale(lineKey, scaleUnit)}
             disabled={scaleReading}
             className="mt-1 inline-flex h-6 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 text-[10px] font-extrabold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-70"
-            aria-label={`Read scale for ${item.product.name}`}
+            aria-label={t("billing.cart.readScaleFor", { name: item.product.name })}
           >
             {scaleReading ? <Loader2 size={11} className="animate-spin" /> : <Scale size={11} />}
-            {scaleReading ? "Reading..." : "Use scale"}
+            {scaleReading ? t("billing.cart.scaleReading") : t("billing.cart.useScale")}
           </button>
         ) : null}
         {editingRate ? (
@@ -222,10 +226,10 @@ function CartRow({
               "group mt-[5px] inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[11px] font-bold leading-none -ml-1 transition-colors hover:bg-[#eef4ff]",
               isBelowMin ? "text-red-600" : "text-[#2d4268]",
             )}
-            title="Tap to change rate per unit"
+            title={t("billing.cart.editRateHint")}
           >
             <span className="tabular-nums">₹{item.rate.toLocaleString("en-IN")}/{item.unit}</span>
-            {isBelowMin ? <span className="font-semibold">· below min</span> : null}
+            {isBelowMin ? <span className="font-semibold">{t("billing.cart.belowMin")}</span> : null}
             <Pencil size={10} className="text-[#9aa7bd] group-hover:text-[var(--brand)]" aria-hidden="true" />
           </button>
         )}
@@ -244,30 +248,30 @@ function CartRow({
                 if (e.key === "Enter") { e.preventDefault(); commitDiscount(); }
                 if (e.key === "Escape") { setEditingDiscount(false); }
               }}
-              placeholder="10 or 5%"
+              placeholder={t("billing.cart.discountPlaceholder")}
               className="w-14 border-0 bg-transparent p-0 text-[12px] font-extrabold tabular-nums text-[#13274d] focus:outline-none"
             />
-            <span className="whitespace-nowrap text-[10px] font-semibold text-[#8290a8]">off line</span>
+            <span className="whitespace-nowrap text-[10px] font-semibold text-[#8290a8]">{t("billing.cart.offLineSuffix")}</span>
           </div>
         ) : lineDiscount > 0 ? (
           <button
             data-testid={`line-discount-edit-${item.product.id}`}
             onClick={startEditDiscount}
             className="mt-1 inline-flex items-center gap-1 rounded-[6px] bg-[#e9f9f0] px-1.5 py-[2px] text-[10px] font-extrabold leading-none text-[#1a8a4e] transition-colors hover:bg-[#d8f3e5]"
-            title="Tap to change this line's discount"
+            title={t("billing.cart.editLineDiscountHint")}
           >
             <BadgePercent size={10} aria-hidden="true" />
-            −₹{lineDiscount.toLocaleString("en-IN")} off
+            {t("billing.cart.lineDiscountApplied", { amount: lineDiscount.toLocaleString("en-IN") })}
           </button>
         ) : (
           <button
             data-testid={`line-discount-add-${item.product.id}`}
             onClick={startEditDiscount}
             className="group mt-1 inline-flex items-center gap-1 rounded-[6px] px-1 py-[1px] text-[10px] font-bold leading-none -ml-1 text-[#9aa7bd] transition-colors hover:bg-[#eef4ff] hover:text-[var(--brand)]"
-            title="Give a discount on this line only (₹ or %)"
+            title={t("billing.cart.addLineDiscountHint")}
           >
             <BadgePercent size={10} aria-hidden="true" />
-            Line off
+            {t("billing.cart.lineOff")}
           </button>
         )}
         <input
@@ -275,8 +279,8 @@ function CartRow({
           maxLength={200}
           value={item.note ?? ""}
           onChange={(event) => onUpdateLineNote(lineKey, event.target.value)}
-          placeholder="+ Receipt note"
-          aria-label={`Receipt note for ${item.product.name}`}
+          placeholder={t("billing.cart.notePlaceholder")}
+          aria-label={t("billing.cart.noteFor", { name: item.product.name })}
           className="mt-1 h-6 w-full max-w-[220px] rounded-md border border-transparent bg-transparent px-1.5 text-[10px] font-semibold text-[#9a6b00] placeholder:text-[#9aa7bd] hover:bg-[#fff8e6] focus:border-[var(--brand)] focus:bg-white focus:outline-none"
         />
         {/* Smart Pricing explanation — why this rate (only when a rule beat the default). */}
@@ -286,7 +290,7 @@ function CartRow({
             {item.pricing.originalUnitPrice > item.rate + 0.005 ? (
               <span className="tabular-nums text-[#9aa7bd] line-through">₹{item.pricing.originalUnitPrice.toLocaleString("en-IN")}</span>
             ) : null}
-            {item.pricing.requiresApproval ? <span className="font-bold text-red-600">· needs approval</span> : null}
+            {item.pricing.requiresApproval ? <span className="font-bold text-red-600">{t("billing.cart.needsApproval")}</span> : null}
           </p>
         ) : null}
       </div>
@@ -297,7 +301,7 @@ function CartRow({
           data-testid={`button-dec-${item.product.id}`}
           onClick={() => onUpdateQty(lineKey, item.quantity - 1)}
           className="bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
-          aria-label={`Decrease ${item.product.name}`}
+          aria-label={t("billing.cart.decrease", { name: item.product.name })}
         >
           −
         </button>
@@ -305,7 +309,7 @@ function CartRow({
           data-testid={`qty-${item.product.id}`}
           type="number"
           inputMode="decimal"
-          aria-label={`Quantity for ${item.product.name}`}
+          aria-label={t("billing.cart.quantityFor", { name: item.product.name })}
           value={item.quantity}
           onChange={(e) => onUpdateQty(lineKey, Number(e.target.value) || 0)}
           className="border-x border-[#e6ecf4] bg-white text-center text-[12px] font-extrabold text-[#13274d] focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -314,7 +318,7 @@ function CartRow({
           data-testid={`button-inc-${item.product.id}`}
           onClick={() => onUpdateQty(lineKey, item.quantity + 1)}
           className="bg-white text-sm font-extrabold text-[#425679] hover:bg-[#f7f9fd]"
-          aria-label={`Increase ${item.product.name}`}
+          aria-label={t("billing.cart.increase", { name: item.product.name })}
         >
           +
         </button>
@@ -333,7 +337,7 @@ function CartRow({
         data-testid={`button-remove-${item.product.id}`}
         onClick={() => onRemoveItem(lineKey)}
         className="grid h-[22px] w-[22px] place-items-center rounded text-[#536383] transition-colors hover:bg-red-50 hover:text-red-600"
-        aria-label={`Remove ${item.product.name}`}
+        aria-label={t("billing.cart.remove", { name: item.product.name })}
       >
         <X size={15} />
       </button>

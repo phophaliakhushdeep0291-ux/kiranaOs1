@@ -7,6 +7,7 @@ import { ArrowLeftRight, Banknote, Gift, Landmark, Loader2, QrCode, ShieldCheck,
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildUpiPaymentUri, getPaymentConfigSync } from "@/features/settings/payment-config";
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 interface BillingPaymentPanelProps {
   billType: BillTypeSelection;
@@ -81,6 +82,7 @@ export function BillingPaymentPanel({
   giftCardError,
   onLookupGiftCard,
 }: BillingPaymentPanelProps) {
+  const { t } = useAppLanguage();
   const [showReceivedAmount, setShowReceivedAmount] = useState(false);
   // Cash-tendered → change-due calculator. Panel-local and informational only:
   // it never changes what the bill records (the shop keeps grandTotal), it just
@@ -104,14 +106,14 @@ export function BillingPaymentPanel({
   return (
     <div className="space-y-3">
       {/* Payment method header */}
-      <p className="text-[12px] font-extrabold text-[#13274d]">Payment Method</p>
+      <p className="text-[12px] font-extrabold text-[#13274d]">{t("billing.pay.method")}</p>
 
       {showPaymentMode ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.cash}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#e9fff0] text-[#16a34a]"><Banknote size={17} /></span>}
-            label="Cash"
+            label={t("billing.pay.cash")}
             selected={paymentMode === BillPaymentMode.cash}
             activeClass="border-[#b9f0cb] bg-[#effff5] text-[#16a34a]"
             onClick={() => setPaymentMode(BillPaymentMode.cash)}
@@ -119,7 +121,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.upi}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#f3e8ff] text-[#7c3aed]"><QrCode size={17} /></span>}
-            label="UPI"
+            label={t("billing.pay.upi")}
             selected={paymentMode === BillPaymentMode.upi}
             activeClass="border-[#e6d5ff] bg-[#faf5ff] text-[#7c3aed]"
             onClick={() => setPaymentMode(BillPaymentMode.upi)}
@@ -127,7 +129,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.bank}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eaf3ff] text-[var(--brand)]"><Landmark size={17} /></span>}
-            label="Bank"
+            label={t("billing.pay.bank")}
             selected={paymentMode === BillPaymentMode.bank}
             activeClass="border-[var(--brand-border)] bg-[#f3f7ff] text-[var(--brand)]"
             onClick={() => setPaymentMode(BillPaymentMode.bank)}
@@ -135,7 +137,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${SPLIT_PAYMENT}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#eef4ff] text-[var(--brand)]"><ArrowLeftRight size={17} /></span>}
-            label="Split"
+            label={t("billing.pay.split")}
             selected={paymentMode === SPLIT_PAYMENT}
             activeClass="border-[var(--brand-border)] bg-[#f4f8ff] text-[var(--brand)]"
             onClick={() => setPaymentMode(SPLIT_PAYMENT)}
@@ -143,7 +145,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.credit}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff3e4] text-[#f97316]"><UserRound size={17} /></span>}
-            label="Udhar"
+            label={t("billing.pay.udhar")}
             selected={paymentMode === BillPaymentMode.credit}
             activeClass="border-[#fed7aa] bg-[#fff7ed] text-[#f97316]"
             onClick={() => setPaymentMode(BillPaymentMode.credit)}
@@ -151,7 +153,7 @@ export function BillingPaymentPanel({
           <PayModeBtn
             testId={`button-payment-${BillPaymentMode.gift_card}`}
             icon={<span className="grid h-7 w-7 place-items-center rounded-lg bg-[#fff1f8] text-[#db2777]"><Gift size={17} /></span>}
-            label="Gift card"
+            label={t("billing.pay.giftCard")}
             selected={paymentMode === BillPaymentMode.gift_card}
             activeClass="border-[#fbcfe8] bg-[#fdf2f8] text-[#be185d]"
             onClick={() => setPaymentMode(BillPaymentMode.gift_card)}
