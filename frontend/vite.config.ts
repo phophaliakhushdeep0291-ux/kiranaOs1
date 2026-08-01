@@ -103,7 +103,15 @@ export default defineConfig({
         passes: 4,
         toplevel: true,
         keep_fargs: false,
-        booleans_as_integers: true,
+        // booleans_as_integers MUST stay off. It rewrites `x === true` to `1 == x`
+        // and `x === false` to `0 == x`, turning every strict boolean check into
+        // LOOSE equality — so a stored 1 or "1" passes as true. This app reads
+        // booleans back out of untrusted persisted/synced JSON (billing draft,
+        // held bills, Shop.settingsJson) and guards them with `=== true`; the flag
+        // silently defeated exactly those guards. Worse, the divergence is
+        // invisible to the test suite, which only ever runs unminified source.
+        // It bought ~1.4 kB gzip; correctness is worth more than that.
+        booleans_as_integers: false,
         drop_console: true,
         unsafe_arrows: true,
       },
