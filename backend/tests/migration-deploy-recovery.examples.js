@@ -23,8 +23,15 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  REPLAY_SAFE_MARKER,
+  REPLAY_UNSAFE_MARKER,
+  REPLAY_SAFETY_BASELINE_PREFIX,
+  idempotencyViolations,
+  replaySafetyViolations,
+} from "../scripts/replay-safety.js";
 
-const MARKER = "@replay-safe";
+const MARKER = REPLAY_SAFE_MARKER;
 const migrationsDir = "prisma-postgres/migrations";
 const deployScript = fs.readFileSync("scripts/deploy-postgres-migrations.js", "utf8");
 
@@ -39,35 +46,9 @@ assert.match(deployScript, /P3009/, "deploy script must only auto-recover the P3
 assert.doesNotMatch(deployScript, /RECOVERABLE_MIGRATIONS/, "deploy script must not reuse the old hardcoded RECOVERABLE_MIGRATIONS allowlist");
 
 // ── idempotency validator ──────────────────────────────────────────────────
-
-/** Returns a list of reasons the SQL is NOT safe to replay (empty = idempotent). */
-function idempotencyViolations(sql) {
-  const violations = [];
-  // Strip line comments so prose (and the marker itself) can't match DDL patterns.
-  const code = sql.replace(/--[^\n]*/g, "");
-
-  // Identifiers may be quoted (Prisma-generated) or bare (hand-written), so the
-  // guards match both — a bare-identifier statement must not slip past unchecked.
-  if (/\bADD\s+COLUMN\s+(?!IF\s+NOT\s+EXISTS\b)["\w]/i.test(code)) {
-    violations.push("ADD COLUMN without IF NOT EXISTS");
-  }
-  if (/\bCREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS\b)["\w]/i.test(code)) {
-    violations.push("CREATE TABLE without IF NOT EXISTS");
-  }
-  if (/\bCREATE\s+(?:UNIQUE\s+)?INDEX\s+(?!IF\s+NOT\s+EXISTS\b)["\w]/i.test(code)) {
-    violations.push("CREATE INDEX without IF NOT EXISTS");
-  }
-  // Every ADD CONSTRAINT must be preceded (anywhere) by a DROP CONSTRAINT IF
-  // EXISTS for the same name, so replay drops-then-adds instead of colliding.
-  const addConstraint = /\bADD\s+CONSTRAINT\s+"?(\w+)"?/gi;
-  let m;
-  while ((m = addConstraint.exec(code)) !== null) {
-    const name = m[1];
-    const dropRe = new RegExp(`DROP\\s+CONSTRAINT\\s+IF\\s+EXISTS\\s+"?${name}"?`, "i");
-    if (!dropRe.test(code)) violations.push(`ADD CONSTRAINT "${name}" without a preceding DROP CONSTRAINT IF EXISTS`);
-  }
-  return violations;
-}
+// The validator and the full replay-safety policy live in scripts/replay-safety.js
+// so this test and the `migration:safety` release gate can never disagree about
+// what "replay-safe" means. The self-checks below pin its behaviour.
 
 // Self-check the validator. A validator that silently matches nothing would let
 // every migration "pass", so assert it both flags and clears known-shape SQL —
@@ -94,6 +75,84 @@ assert.deepEqual(
   idempotencyViolations(`-- ${MARKER}: replay drops then adds CONSTRAINT "fk_a"\nALTER TABLE "X" ADD COLUMN "y" TEXT;`),
   ["ADD COLUMN without IF NOT EXISTS"],
   "validator must ignore comment prose when judging idempotency",
+);
+
+// The two shapes that froze the deploy in 000076: a CREATE TRIGGER with no DROP,
+// and a bare INSERT ... SELECT. Postgres has no CREATE TRIGGER IF NOT EXISTS, so
+// drop-then-create is the idempotent form; an unguarded INSERT re-inserts on
+// replay. The validator was blind to both before this change.
+assert.deepEqual(
+  idempotencyViolations(`CREATE TRIGGER sync_x AFTER INSERT ON "X" FOR EACH ROW EXECUTE FUNCTION f('x');`),
+  [`CREATE TRIGGER "sync_x" without a preceding DROP TRIGGER IF EXISTS`],
+  "validator must flag CREATE TRIGGER with no DROP TRIGGER IF EXISTS",
+);
+assert.deepEqual(
+  idempotencyViolations(`DROP TRIGGER IF EXISTS sync_x ON "X";\nCREATE TRIGGER sync_x AFTER INSERT ON "X" FOR EACH ROW EXECUTE FUNCTION f('x');`),
+  [],
+  "validator must accept drop-then-create trigger",
+);
+assert.deepEqual(
+  idempotencyViolations(`INSERT INTO "ChangeLog" ("id") SELECT "id" FROM "Expense";`),
+  ["INSERT without ON CONFLICT or WHERE NOT EXISTS guard (re-inserts rows on replay)"],
+  "validator must flag an unguarded INSERT",
+);
+assert.deepEqual(idempotencyViolations(`INSERT INTO "C" ("id") VALUES ('a') ON CONFLICT DO NOTHING;`), [], "validator must accept INSERT ... ON CONFLICT");
+assert.deepEqual(
+  idempotencyViolations(`INSERT INTO "C" ("id") SELECT "id" FROM "E" WHERE NOT EXISTS (SELECT 1 FROM "C" c WHERE c."id" = "E"."id");`),
+  [],
+  "validator must accept INSERT guarded by WHERE NOT EXISTS",
+);
+
+// ── The forward policy: new migrations must certify themselves replay-safe ──
+// replaySafetyViolations() is exactly what the `migration:safety` release gate
+// runs per migration; it is the rule that would have caught unmarked 000075/076.
+// Pin its behaviour on both sides of the grandfather baseline so the gate cannot
+// silently soften.
+const NEW_PREFIX = String(REPLAY_SAFETY_BASELINE_PREFIX + 1).padStart(6, "0");
+const BASELINE = String(REPLAY_SAFETY_BASELINE_PREFIX).padStart(6, "0");
+assert.deepEqual(
+  replaySafetyViolations(`${BASELINE}_grandfathered`, `ALTER TABLE "X" ADD COLUMN "y" TEXT;`),
+  [],
+  "a migration at or below the baseline is grandfathered even when not idempotent",
+);
+assert.equal(
+  replaySafetyViolations(`${NEW_PREFIX}_unmarked`, `ALTER TABLE "X" ADD COLUMN IF NOT EXISTS "y" TEXT;`).length,
+  1,
+  "a new migration with no marker must be rejected even when its SQL is idempotent",
+);
+assert.deepEqual(
+  replaySafetyViolations(`${NEW_PREFIX}_good`, `-- ${MARKER}\nALTER TABLE "X" ADD COLUMN IF NOT EXISTS "y" TEXT;`),
+  [],
+  "a new marked, idempotent migration passes",
+);
+assert.equal(
+  replaySafetyViolations(`${NEW_PREFIX}_lying`, `-- ${MARKER}\nALTER TABLE "X" ADD COLUMN "y" TEXT;`).length,
+  1,
+  "a migration that claims the marker but is not idempotent must be rejected",
+);
+
+// The escape hatch: a genuinely non-idempotent migration may opt out with a
+// documented reason — but not silently, and not while also claiming replay-safe.
+assert.deepEqual(
+  replaySafetyViolations(
+    `${NEW_PREFIX}_oneway`,
+    `-- ${REPLAY_UNSAFE_MARKER}: one-way backfill, manual recovery in runbook\nINSERT INTO "C" ("id") SELECT "id" FROM "E";`,
+  ),
+  [],
+  "a new migration may opt out with @replay-unsafe + a reason, even with non-idempotent SQL",
+);
+assert.equal(
+  replaySafetyViolations(`${NEW_PREFIX}_noreason`, `-- ${REPLAY_UNSAFE_MARKER}\nINSERT INTO "C" ("id") SELECT "id" FROM "E";`).length,
+  1,
+  "@replay-unsafe without a reason must be rejected",
+);
+assert.equal(
+  replaySafetyViolations(
+    `${NEW_PREFIX}_both`,
+    `-- ${MARKER}\n-- ${REPLAY_UNSAFE_MARKER}: contradictory\nALTER TABLE "X" ADD COLUMN IF NOT EXISTS "y" TEXT;`,
+  ).length,
+  1,
+  "declaring both @replay-safe and @replay-unsafe must be rejected",
 );
 
 // ── B. Every marked migration is idempotent ────────────────────────────────

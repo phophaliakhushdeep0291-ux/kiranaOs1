@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import process from "process";
 import crypto from "crypto";
+import { replaySafetyViolations } from "./replay-safety.js";
 
 const root = process.cwd();
 const migrationRoot = path.join(root, "prisma-postgres", "migrations");
@@ -87,6 +88,11 @@ if (!fs.existsSync(migrationRoot)) {
     if (/ALTER\s+TABLE\s+"\w+"\s+ADD\s+COLUMN\s+"\w+"\s+[^;]*\s+NOT\s+NULL/i.test(sql) && !/DEFAULT/i.test(sql)) {
       fail(`Migration ${dir} adds a NOT NULL column without DEFAULT; this can fail on existing production rows`);
     }
+
+    // Replay-safety: a new migration must be able to self-heal an interrupted
+    // deploy (P3009), and a migration that claims @replay-safe must not lie.
+    // See scripts/replay-safety.js for the full contract.
+    for (const violation of replaySafetyViolations(dir, sql)) fail(violation);
   }
 
   const expected = [...seenPrefixes].sort((a, b) => a - b);
