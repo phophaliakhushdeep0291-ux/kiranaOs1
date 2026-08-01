@@ -204,6 +204,44 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
       stockBaseQty: await getLocationQuantity(db, shopId, reportLocation, product),
     })));
 
+  // Which SIZE needs reordering, not just which product. A product can look
+  // comfortably stocked in total while one pack size has run out — 40 loose packets
+  // and one box left is not "Maggi is fine", and the pooled total cannot say so
+  // because it has already added them together.
+  //
+  // The comparison is done here rather than in the query because it is between two
+  // columns of the same row, which Prisma cannot express in a where clause.
+  const lowStockPacks = (
+    await db.productSellingUnit.findMany({
+      where: {
+        shopId,
+        isActive: true,
+        lowStockThreshold: { gt: 0 },
+        product: { deletedAt: null, packagingMode: "per_pack" },
+      },
+      select: {
+        id: true,
+        name: true,
+        onHandQty: true,
+        lowStockThreshold: true,
+        reorderLevel: true,
+        product: { select: { id: true, name: true } },
+      },
+      orderBy: [{ product: { name: "asc" } }, { name: "asc" }],
+    })
+  )
+    .filter((unit) => Number(unit.onHandQty ?? 0) <= Number(unit.lowStockThreshold))
+    .map((unit) => ({
+      productId: unit.product.id,
+      productName: unit.product.name,
+      sellingUnitId: unit.id,
+      packName: unit.name,
+      onHandQty: Number(unit.onHandQty ?? 0),
+      lowStockThreshold: Number(unit.lowStockThreshold),
+      // How many to buy back up to, when the shopkeeper set one.
+      reorderLevel: unit.reorderLevel == null ? null : Number(unit.reorderLevel),
+    }));
+
   const activePayments = activeBills.flatMap((b) => b.payments);
   const billCash = sumPaymentsByMode(activePayments, "cash");
   const billUpi = sumPaymentsByMode(activePayments, "upi");
@@ -250,6 +288,7 @@ export async function getDailyClosing(shopId, { date, locationId, allLocations =
         lowStockThreshold: p.lowStockThreshold,
         baseUnit: p.baseUnit,
       })),
+    lowStockPacks,
     pendingSyncCount,
     localEstimate: false,
     generatedAt: new Date().toISOString(),

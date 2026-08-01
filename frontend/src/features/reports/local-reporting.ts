@@ -122,6 +122,17 @@ export interface ReportLowStockItem {
   unit?: string | null;
 }
 
+/** One pack size that has fallen below its own alert level. */
+export interface ReportLowStockPack {
+  productId: string;
+  productName: string;
+  sellingUnitId?: string;
+  packName: string;
+  onHandQty: number;
+  threshold: number;
+  reorderLevel?: number | null;
+}
+
 export interface StaffSalesRow {
   staffId: string;
   staffName: string;
@@ -174,6 +185,7 @@ export interface LocalReportSnapshot {
   categoryPerformance: ReportCategoryPerformance[];
   stockMovement: ReportStockMovementSummary;
   lowStock: ReportLowStockItem[];
+  lowStockPacks: ReportLowStockPack[];
   staffSales: StaffSalesRow[];
   discounts: ReportDiscountSummary;
   hourlySales: ReportHourlySalesRow[];
@@ -596,6 +608,41 @@ function calculateLowStock(products: Product[]): ReportLowStockItem[] {
     }));
 }
 
+// Which SIZE needs reordering, not just which product. A product can look
+// comfortably stocked in total while one pack size has run out — 48 loose packets
+// and one box left is not "Maggi is fine", and calculateLowStock above cannot say
+// so because the pooled total has already added the sizes together.
+//
+// Counts are in each pack's own units (boxes, packets), so no base-unit conversion
+// applies — converting them would be the 1000x bug all over again.
+function calculateLowStockPacks(products: Product[]): ReportLowStockPack[] {
+  return products
+    .filter(
+      (product) =>
+        !isDeleted(product as unknown as RecordLike) &&
+        product.packagingMode === "per_pack" &&
+        Array.isArray(product.sellingUnits),
+    )
+    .flatMap((product) =>
+      (product.sellingUnits ?? [])
+        .filter((unit) => (unit.isActive ?? true) && readNumber(unit.lowStockThreshold, 0) > 0)
+        .map((unit) => ({
+          productId: product.id,
+          productName: product.name,
+          sellingUnitId: unit.id,
+          packName: unit.name,
+          onHandQty: readNumber(unit.onHandQty, 0),
+          threshold: readNumber(unit.lowStockThreshold, 0),
+          reorderLevel: unit.reorderLevel ?? null,
+        })),
+    )
+    // A threshold of 0 means "do not track this size", not "alert at zero", so it is
+    // filtered above rather than here.
+    .filter((row) => row.onHandQty <= row.threshold)
+    .sort((a, b) => a.onHandQty - b.onHandQty)
+    .slice(0, 20);
+}
+
 function calculateStaffSales(bills: LocalBill[], range: DateRange): StaffSalesRow[] {
   const rows = new Map<string, StaffSalesRow>();
   for (const bill of bills.filter((row) => isSaleBill(row) && isWithinRange(row, range))) {
@@ -685,6 +732,7 @@ export async function buildLocalReportSnapshot(range: DateRange, drawer?: Drawer
   const thirtyDaySnapshot = aggregate(rows, thirtyDayRange);
   const counters = syncCounters(rows.outbox);
   const lowStock = calculateLowStock(rows.products);
+  const lowStockPacks = calculateLowStockPacks(rows.products);
   const dailyTrend = buildDailyTrend(rows, range);
   const hasLocalData = Boolean(
     rows.bills.length ||
@@ -716,6 +764,7 @@ export async function buildLocalReportSnapshot(range: DateRange, drawer?: Drawer
       lowStockItems: lowStock.length,
     },
     lowStock,
+    lowStockPacks,
     staffSales: calculateStaffSales(rows.bills, range),
     discounts: calculateDiscountSummary(rows.bills, range),
     hourlySales: calculateHourlySales(rows.bills, range),

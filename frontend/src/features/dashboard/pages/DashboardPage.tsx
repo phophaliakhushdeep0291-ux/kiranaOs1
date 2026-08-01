@@ -496,6 +496,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
   const previousPeriodBillsQuery = useListBills({ ...previousPeriodRange, limit: 1000 }, { query: { staleTime: 60_000 } });
 
   const lowStockItems = ownerReport?.lowStock ?? [];
+  const lowStockPacks = ownerReport?.lowStockPacks ?? [];
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -885,7 +886,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
         </section>
 
         <PaymentModeBreakdown rows={paymentBreakdown} total={periodSales} period={period} onPeriodChange={setPeriod} />
-        <LowStockAlerts items={lowStockItems} productsById={productsById} />
+        <LowStockAlerts items={lowStockItems} packs={lowStockPacks} productsById={productsById} />
 
       </div>
 
@@ -1512,7 +1513,7 @@ function PaymentModeBreakdown({ rows, total, period, onPeriodChange }: { rows: P
   );
 }
 
-function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["lowStock"]; productsById: Record<string, Product> }) {
+function LowStockAlerts({ items, packs = [], productsById }: { items: LocalReportSnapshot["lowStock"]; packs?: LocalReportSnapshot["lowStockPacks"]; productsById: Record<string, Product> }) {
   return (
     <section className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col overflow-hidden p-4 2xl:min-h-0 2xl:p-5")}>
       <div className="flex items-center justify-between gap-3">
@@ -1520,7 +1521,29 @@ function LowStockAlerts({ items, productsById }: { items: LocalReportSnapshot["l
         <Link href="/inventory" className="text-[12px] font-black text-[var(--brand)] hover:underline">View all</Link>
       </div>
       <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1 2xl:justify-evenly">
-        {items.length === 0 ? (
+        {/* Pack sizes come first: they name the exact thing to reorder ("8-pack box
+            — 1 left"), where the product row can only say the product is low. */}
+        {packs.slice(0, 5).map((pack, index) => {
+          const product = productsById[pack.productId];
+          return (
+            <Link key={pack.sellingUnitId ?? `${pack.productId}-${index}`} href="/inventory">
+              <div className="flex min-h-[48px] items-center gap-3 rounded-[10px] px-2 py-1 transition-colors hover:bg-[#f8fbff]">
+                <ProductAvatar product={product ?? { id: pack.productId, name: pack.productName } as Product} compact />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-black leading-tight text-[var(--brand-ink)] dark:text-card-foreground">{pack.productName}</p>
+                  <p className={cn("truncate text-xs font-semibold", DASH_MUTED)}>
+                    {pack.packName}: {pack.onHandQty} left
+                    {pack.reorderLevel ? ` · order ${pack.reorderLevel}` : ""}
+                  </p>
+                </div>
+                <span className={cn("shrink-0 rounded-[7px] px-2 py-1 text-[11px] font-black", pack.onHandQty <= 0 ? "bg-[#fff0f2] text-[#ff304f]" : "bg-[#fff4e6] text-[#ff8a00]")}>
+                  {pack.onHandQty <= 0 ? "Out" : "Low"}
+                </span>
+              </div>
+            </Link>
+          );
+        })}
+        {items.length === 0 && packs.length === 0 ? (
           <div className={cn("rounded-[10px] border border-dashed border-[#dce7f5] px-3 py-8 text-center text-sm font-semibold", DASH_MUTED)}>
             All stock healthy
           </div>
