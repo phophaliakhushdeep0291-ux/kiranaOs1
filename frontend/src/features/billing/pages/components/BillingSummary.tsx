@@ -21,6 +21,7 @@ import { applyOffer } from "@/features/offers/api";
 import type { BillTypeSelection, CartItem, PaymentSelection } from "../billing-types";
 import { BillingCart } from "./BillingCart";
 import { BillingPaymentPanel } from "./BillingPaymentPanel";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 interface BillingSummaryProps {
   summaryWidth: number;
@@ -246,6 +247,7 @@ export function BillingSummary({
   onRemoveItem,
   negativeStockWarnings = [],
 }: BillingSummaryProps) {
+  const { t } = useAppLanguage();
   const [showCustomerOptions, setShowCustomerOptions] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [couponExpanded, setCouponExpanded] = useState(false);
@@ -263,14 +265,14 @@ export function BillingSummary({
       if (res.applicable && res.discount > 0) {
         setDiscount(clampAmount(res.discount, 0, subtotal));
         onCouponApplied?.(res.offerId ?? null, res.discount, res.code ?? couponCode.trim().toUpperCase());
-        setCouponMsg({ ok: true, text: `${res.title ?? "Coupon"} applied — saved ₹${res.discount.toLocaleString("en-IN")}` });
+        setCouponMsg({ ok: true, text: t("billing.summary.couponApplied", { title: res.title ?? t("billing.summary.couponFallbackTitle"), amount: res.discount.toLocaleString("en-IN") }) });
       } else {
         onCouponApplied?.(null, 0, "");
-        setCouponMsg({ ok: false, text: res.reason ?? "Coupon not applicable to this bill" });
+        setCouponMsg({ ok: false, text: res.reason ?? t("billing.summary.couponNotApplicable") });
       }
     } catch {
       onCouponApplied?.(null, 0, "");
-      setCouponMsg({ ok: false, text: "Couldn't check coupon — needs connection" });
+      setCouponMsg({ ok: false, text: t("billing.summary.couponOffline") });
     } finally {
       setCouponBusy(false);
     }
@@ -278,23 +280,23 @@ export function BillingSummary({
 
   const selectedCustomerName = (() => {
     if (selectedCustomerId !== "walk_in") {
-      return customers.find((c) => c.id === selectedCustomerId)?.name ?? "Customer";
+      return customers.find((c) => c.id === selectedCustomerId)?.name ?? t("billing.summary.customerFallback");
     }
-    return customerName.trim() || "Walk-in Customer";
+    return customerName.trim() || t("billing.summary.walkInCustomer");
   })();
 
   const needsOptionsVisible =
     billType !== BillInputBillType.normal_sale || selectedCustomerId !== "walk_in";
   const isEstimateBill = billType === BillInputBillType.estimate;
   const paymentAction = String(paymentMode) === "credit"
-    ? "Save as Udhar"
+    ? t("billing.summary.actionSaveUdhar")
     : String(paymentMode) === "upi"
-      ? "Collect by UPI"
+      ? t("billing.summary.actionCollectUpi")
       : String(paymentMode) === "bank" || String(paymentMode) === "bank_transfer"
-        ? "Collect by Bank"
+        ? t("billing.summary.actionCollectBank")
         : String(paymentMode) === "split"
-          ? "Complete Split Payment"
-          : "Collect Cash";
+          ? t("billing.summary.actionCompleteSplit")
+          : t("billing.summary.actionCollectCash");
 
   useEffect(() => {
     const onAction = (event: Event) => {
@@ -319,7 +321,7 @@ export function BillingSummary({
       {/* Resize handle */}
       <div
         data-testid="bill-summary-resize-handle"
-        title="Drag to resize"
+        title={t("billing.summary.dragToResize")}
         onMouseDown={onStartSummaryResize}
         className="absolute left-0 top-0 z-20 hidden h-full w-2 -translate-x-1 cursor-col-resize bg-transparent hover:bg-[var(--brand)]/20 active:bg-[var(--brand)]/30 lg:block"
       />
@@ -336,7 +338,7 @@ export function BillingSummary({
             <div className="ml-[11px] min-w-0 flex-1">
               <p className="truncate text-[13px] font-extrabold text-[#13274d]">
                 {selectedCustomerId === "walk_in" && !customerName
-                  ? "Walk-in Customer"
+                  ? t("billing.summary.walkInCustomer")
                   : selectedCustomerName}
               </p>
               {billType !== BillInputBillType.normal_sale && (
@@ -349,12 +351,12 @@ export function BillingSummary({
               onClick={() => setShowCustomerOptions((v) => !v)}
               className="ml-auto inline-flex min-h-[40px] shrink-0 items-center px-2 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
             >
-              Change
+              {t("billing.summary.change")}
             </button>
           </div>
 
           {/* Bill type + customer inputs — collapsible */}
-          <div className="grid grid-cols-2 gap-2 rounded-[11px] border border-[#e5ebf4] bg-[#f8fbff] p-1.5" aria-label="Choose bill type">
+          <div className="grid grid-cols-2 gap-2 rounded-[11px] border border-[#e5ebf4] bg-[#f8fbff] p-1.5" aria-label={t("billing.summary.chooseBillType")}>
             <button
               type="button"
               data-testid="button-bill-type-pakka"
@@ -370,8 +372,8 @@ export function BillingSummary({
                 <CheckCircle size={16} />
               </span>
               <span className="min-w-0">
-                <span className="block text-[12px] font-black">Pakka Bill</span>
-                <span className="block text-[10px] font-semibold opacity-75">Final sale</span>
+                <span className="block text-[12px] font-black">{t("billing.summary.pakkaBill")}</span>
+                <span className="block text-[10px] font-semibold opacity-75">{t("billing.summary.pakkaBillHint")}</span>
               </span>
             </button>
             <button
@@ -389,8 +391,8 @@ export function BillingSummary({
                 <FileText size={16} />
               </span>
               <span className="min-w-0">
-                <span className="block text-[12px] font-black">Estimate Bill</span>
-                <span className="block text-[10px] font-semibold opacity-75">Not a final bill</span>
+                <span className="block text-[12px] font-black">{t("billing.summary.estimateBill")}</span>
+                <span className="block text-[10px] font-semibold opacity-75">{t("billing.summary.estimateBillHint")}</span>
               </span>
             </button>
           </div>
@@ -398,16 +400,16 @@ export function BillingSummary({
           {(showCustomerOptions || needsOptionsVisible) && (
             <div className="space-y-2 rounded-[10px] border border-[#e3eaf3] bg-[#f7f9fd] p-3">
               <div className="flex items-center gap-3">
-                <span className="shrink-0 text-xs font-semibold text-[#536383]">Bill type</span>
+                <span className="shrink-0 text-xs font-semibold text-[#536383]">{t("billing.summary.billType")}</span>
                 <Select value={billType} onValueChange={(v) => setBillType(v as BillTypeSelection)}>
                   <SelectTrigger data-testid="select-bill-type" className="h-8 flex-1 text-xs font-semibold">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={BillInputBillType.normal_sale}>Pakka Bill</SelectItem>
-                    <SelectItem value={BillInputBillType.udhar_entry}>Udhar</SelectItem>
-                    <SelectItem value={BillInputBillType.gst_invoice}>GST Invoice</SelectItem>
-                    <SelectItem value={BillInputBillType.estimate}>Estimate Bill</SelectItem>
+                    <SelectItem value={BillInputBillType.normal_sale}>{t("billing.summary.pakkaBill")}</SelectItem>
+                    <SelectItem value={BillInputBillType.udhar_entry}>{t("billing.summary.udhar")}</SelectItem>
+                    <SelectItem value={BillInputBillType.gst_invoice}>{t("billing.summary.gstInvoice")}</SelectItem>
+                    <SelectItem value={BillInputBillType.estimate}>{t("billing.summary.estimateBill")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -431,10 +433,10 @@ export function BillingSummary({
                     }}
                   >
                     <SelectTrigger data-testid="select-customer" className="h-9 text-sm">
-                      <SelectValue placeholder="Walk-in customer" />
+                      <SelectValue placeholder={t("billing.summary.walkInOption")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="walk_in">Walk-in customer</SelectItem>
+                      <SelectItem value="walk_in">{t("billing.summary.walkInOption")}</SelectItem>
                       {customers.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name}
@@ -448,7 +450,7 @@ export function BillingSummary({
                       ref={customerNameInputRef}
                       data-testid="input-customer-name"
                       className="h-9 text-sm"
-                      placeholder="Name (udhar)"
+                      placeholder={t("billing.summary.namePlaceholder")}
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                     />
@@ -456,19 +458,19 @@ export function BillingSummary({
                       data-testid="input-customer-mobile"
                       className="h-9 text-sm"
                       inputMode="numeric"
-                      placeholder="Mobile"
+                      placeholder={t("billing.summary.mobilePlaceholder")}
                       value={customerMobile}
                       onChange={(e) => setCustomerMobile(e.target.value.replace(/\D/g, "").slice(0, 15))}
                     />
                   </div>
                   {matchingMobileCustomer && (
                     <p data-testid="text-mobile-customer-match" className="text-xs text-blue-600">
-                      Matches {matchingMobileCustomer.name}
+                      {t("billing.summary.mobileMatches", { name: matchingMobileCustomer.name })}
                     </p>
                   )}
                   {(creditAmount > 0 || billType === BillInputBillType.udhar_entry) &&
                     !hasCreditCustomerIdentity && (
-                      <p className="text-xs text-amber-600">Name + mobile required for udhar billing.</p>
+                      <p className="text-xs text-amber-600">{t("billing.summary.udharNeedsIdentity")}</p>
                     )}
                 </>
               )}
@@ -491,23 +493,31 @@ export function BillingSummary({
             {cart.length > 0 && (
               <div className="flex h-[43px] items-center border-t border-[#edf1f6] px-3.5">
                 <button className="text-[12px] font-extrabold text-[var(--brand)] hover:underline">
-                  + Add more items
+                  {t("billing.summary.addMoreItems")}
                 </button>
                 <span className="ml-auto text-[12px] font-bold text-[#536383]">
-                  {cart.length} Item{cart.length !== 1 ? "s" : ""}
+                  {cart.length === 1
+                    ? t("billing.summary.itemCount", { count: cart.length })
+                    : t("billing.summary.itemCountPlural", { count: cart.length })}
                 </span>
               </div>
             )}
             {negativeStockWarnings.length > 0 && (
               <div className="border-t border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[11px] leading-snug text-amber-800">
-                <p className="font-black text-amber-900">Stock will go negative</p>
+                <p className="font-black text-amber-900">{t("billing.summary.negativeStockTitle")}</p>
                 <p className="mt-0.5 font-semibold">
-                  {negativeStockWarnings[0].productName} will become{" "}
-                  <span className="font-black">{negativeStockWarnings[0].after} {negativeStockWarnings[0].unit}</span>.
-                  {" "}Bill can continue; update stock later.
+                  {t("billing.summary.negativeStockDetail", {
+                    name: negativeStockWarnings[0].productName,
+                    after: negativeStockWarnings[0].after,
+                    unit: negativeStockWarnings[0].unit,
+                  })}
                 </p>
                 {negativeStockWarnings.length > 1 && (
-                  <p className="mt-1 font-bold">+{negativeStockWarnings.length - 1} more item{negativeStockWarnings.length === 2 ? "" : "s"} need stock update.</p>
+                  <p className="mt-1 font-bold">
+                    {negativeStockWarnings.length === 2
+                      ? t("billing.summary.negativeStockMore", { count: negativeStockWarnings.length - 1 })
+                      : t("billing.summary.negativeStockMorePlural", { count: negativeStockWarnings.length - 1 })}
+                  </p>
                 )}
               </div>
             )}
@@ -517,20 +527,20 @@ export function BillingSummary({
           <div className="rounded-[11px] border border-[#e5ebf4] bg-white px-3 pb-3.5 pt-3">
             {/* Subtotal */}
             <div className="flex h-[29px] items-center justify-between text-[12px]">
-              <span className="font-semibold text-[#536383]">Subtotal</span>
+              <span className="font-semibold text-[#536383]">{t("billing.summary.subtotal")}</span>
               <span data-testid="text-subtotal" className="font-black text-[#13274d]">{fmtRs(subtotal)}</span>
             </div>
 
             {lineDiscountTotal > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#536383]">Line discounts <span className="text-[10px] text-[#94a3b8]">(already in subtotal)</span></span>
+                <span className="font-semibold text-[#536383]">{t("billing.summary.lineDiscounts")} <span className="text-[10px] text-[#94a3b8]">{t("billing.summary.lineDiscountsHint")}</span></span>
                 <span data-testid="text-line-discounts" className="font-black text-[#1a8a4e]">−{fmtRs(lineDiscountTotal)}</span>
               </div>
             )}
 
             {loyaltyDiscount > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#536383]">Loyalty rewards <span className="text-[10px] text-[#94a3b8]">({loyaltyPoints.toLocaleString("en-IN")} pts)</span></span>
+                <span className="font-semibold text-[#536383]">{t("billing.summary.loyaltyRewards")} <span className="text-[10px] text-[#94a3b8]">{t("billing.summary.loyaltyPointsHint", { points: loyaltyPoints.toLocaleString("en-IN") })}</span></span>
                 <span className="font-black text-violet-700">−{fmtRs(loyaltyDiscount)}</span>
               </div>
             )}
@@ -539,17 +549,17 @@ export function BillingSummary({
             {gstAmount > 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
                 <span className="font-semibold text-[#536383]">
-                  GST <span className="text-[10.5px] text-[#94a3b8]">({describeTaxSplit(gstAmount, { cgst: gstCgst, sgst: gstSgst, igst: gstIgst, supplyType: gstSupplyType })})</span>
+                  {t("billing.summary.gst")} <span className="text-[10.5px] text-[#94a3b8]">({describeTaxSplit(gstAmount, { cgst: gstCgst, sgst: gstSgst, igst: gstIgst, supplyType: gstSupplyType })})</span>
                 </span>
                 <span data-testid="text-gst" className={gstMode === "exclusive" ? "font-black text-[#13274d]" : "font-bold text-[#64748b]"}>
-                  {gstMode === "exclusive" ? `+${fmtRs(gstAmount)}` : `incl. ${fmtRs(gstAmount)}`}
+                  {gstMode === "exclusive" ? `+${fmtRs(gstAmount)}` : t("billing.summary.gstInclusive", { amount: fmtRs(gstAmount) })}
                 </span>
               </div>
             )}
 
             {/* Discount */}
             <div className="flex h-[29px] items-center justify-between text-[12px]">
-              <span className="font-semibold text-[#536383]">Discount</span>
+              <span className="font-semibold text-[#536383]">{t("billing.summary.discount")}</span>
               <div className="flex items-center gap-2">
                 {safeDiscount > 0 && !editingDiscount && (
                   <span className="font-black text-[#16a34a]">−{fmtRs(safeDiscount)}</span>
@@ -566,14 +576,14 @@ export function BillingSummary({
                     onBlur={() => setEditingDiscount(false)}
                     onKeyDown={(e) => e.key === "Enter" && setEditingDiscount(false)}
                     className="w-16 rounded-[7px] border border-[#dbe8ff] bg-white px-2 py-1 text-right text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                    placeholder="₹ 0"
+                    placeholder={t("billing.summary.discountPlaceholder")}
                   />
                 )}
                 <button
                   onClick={() => setEditingDiscount((v) => !v)}
                   className="inline-flex h-9 items-center rounded-[7px] border border-[#dbe8ff] bg-[#f5f9ff] px-3 text-[11px] font-extrabold text-[var(--brand)] hover:bg-[#eaf2ff]"
                 >
-                  {safeDiscount > 0 && !editingDiscount ? "Edit" : "Apply"}
+                  {safeDiscount > 0 && !editingDiscount ? t("billing.summary.edit") : t("billing.summary.apply")}
                 </button>
               </div>
             </div>
@@ -581,14 +591,14 @@ export function BillingSummary({
             {/* Why the discount — feeds the discounts report. Only shown once a discount exists. */}
             {safeDiscount > 0 && (
               <div className="flex h-[29px] items-center justify-between gap-2 text-[12px]">
-                <span className="shrink-0 font-semibold text-[#8290a8]">Reason</span>
+                <span className="shrink-0 font-semibold text-[#8290a8]">{t("billing.summary.discountReason")}</span>
                 <input
                   data-testid="input-discount-reason"
                   type="text"
                   maxLength={200}
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
-                  placeholder="e.g. regular customer"
+                  placeholder={t("billing.summary.discountReasonPlaceholder")}
                   className="w-full max-w-[200px] rounded-[7px] border border-transparent bg-[#f7f9fd] px-2 py-1 text-right text-[11px] font-semibold text-[#31527e] placeholder:text-[#9aa7bd] focus:border-[#dbe8ff] focus:bg-white focus:outline-none"
                 />
               </div>
@@ -606,7 +616,7 @@ export function BillingSummary({
 
             {/* Grand total */}
             <div className="mt-2 flex items-center justify-between border-t border-[#edf1f6] pt-3">
-              <span className="font-display text-[18px] font-black tracking-tight text-[var(--brand-ink)]">Grand Total</span>
+              <span className="font-display text-[18px] font-black tracking-tight text-[var(--brand-ink)]">{t("billing.summary.grandTotal")}</span>
               <span className="font-display text-[21px] font-black tracking-tight text-[var(--brand-ink)]" data-testid="text-total">
                 {fmtRs(grandTotal)}
               </span>
@@ -616,13 +626,13 @@ export function BillingSummary({
           {/* Coupon box — dashed blue */}
           <button onClick={() => setCouponExpanded((value) => !value)} aria-expanded={couponExpanded} className="flex h-[42px] w-full items-center gap-2.5 rounded-[9px] border border-dashed border-[#b9cdf6] bg-white px-3.5 transition-colors hover:bg-[#f5f9ff]">
             <Tag size={15} className="text-[var(--brand)]" />
-            <span className="text-[12px] font-extrabold text-[var(--brand)]">Apply Coupon Code</span>
+            <span className="text-[12px] font-extrabold text-[var(--brand)]">{t("billing.summary.applyCoupon")}</span>
             <ChevronRight size={15} className={`ml-auto text-[var(--brand)] transition-transform ${couponExpanded ? "rotate-90" : ""}`} />
           </button>
           {couponExpanded && (
             <div className="rounded-[9px] border border-[#dbe8ff] bg-[#f8fbff] p-2.5">
               <div className="flex items-center gap-2">
-                <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder="Enter coupon code" className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[var(--brand)]" />
+                <input autoFocus value={couponCode} onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); onCouponApplied?.(null, 0, ""); setCouponMsg(null); }} onKeyDown={(e) => e.key === "Enter" && void handleApplyCoupon()} placeholder={t("billing.summary.couponPlaceholder")} className="h-9 flex-1 rounded-[7px] border border-[#dbe8ff] bg-white px-3 text-[11px] font-semibold uppercase placeholder:font-medium placeholder:normal-case focus:outline-none focus:ring-2 focus:ring-[var(--brand)]" />
                 <button onClick={() => void handleApplyCoupon()} disabled={couponBusy || !couponCode.trim() || subtotal <= 0} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-[var(--brand)] px-3 text-[11px] font-semibold text-white hover:bg-[#0054e8] disabled:opacity-50">{couponBusy ? <Loader2 size={11} className="animate-spin" /> : <Tag size={11} />} Apply</button>
               </div>
               {couponMsg && <p className={`pt-1.5 text-[10px] font-semibold ${couponMsg.ok ? "text-[#16a34a]" : "text-rose-500"}`}>{couponMsg.text}</p>}
@@ -631,25 +641,25 @@ export function BillingSummary({
 
           <button onClick={() => setLoyaltyExpanded((value) => !value)} aria-expanded={loyaltyExpanded} className="flex min-h-[42px] w-full items-center gap-2.5 rounded-[9px] border border-violet-200 bg-violet-50/60 px-3.5 py-2 transition-colors hover:bg-violet-50">
             <Award size={15} className="text-violet-700" />
-            <span className="text-left text-[12px] font-extrabold text-violet-800">Use loyalty points</span>
-            {loyaltyCustomerSelected && loyaltyActive && !loyaltyLoading ? <span className="ml-auto text-[10px] font-black text-violet-700">{loyaltyBalance.toLocaleString("en-IN")} available</span> : null}
+            <span className="text-left text-[12px] font-extrabold text-violet-800">{t("billing.summary.useLoyalty")}</span>
+            {loyaltyCustomerSelected && loyaltyActive && !loyaltyLoading ? <span className="ml-auto text-[10px] font-black text-violet-700">{t("billing.summary.loyaltyAvailableChip", { points: loyaltyBalance.toLocaleString("en-IN") })}</span> : null}
             <ChevronRight size={15} className={`${loyaltyCustomerSelected && loyaltyActive && !loyaltyLoading ? "" : "ml-auto"} text-violet-700 transition-transform ${loyaltyExpanded ? "rotate-90" : ""}`} />
           </button>
           {loyaltyExpanded && (
             <div className="rounded-[9px] border border-violet-200 bg-violet-50/50 p-3">
-              {!loyaltyOnline ? <p className="text-[11px] font-semibold text-amber-700">Connect to redeem points. The balance and bill are committed together for safety.</p>
-                : !loyaltyCustomerSelected ? <p className="text-[11px] font-semibold text-violet-800">Choose a saved customer above to load their rewards.</p>
-                  : loyaltyLoading ? <p className="flex items-center gap-2 text-[11px] font-semibold text-violet-700"><Loader2 size={12} className="animate-spin" /> Loading rewards…</p>
-                    : !loyaltyActive ? <p className="text-[11px] font-semibold text-slate-600">The loyalty program is not active for this store.</p>
-                      : loyaltyBalance < loyaltyMinimumPoints ? <p className="text-[11px] font-semibold text-slate-600">{loyaltyTier ? `${loyaltyTier} member · ` : ""}{loyaltyBalance.toLocaleString("en-IN")} points available. Minimum redemption is {loyaltyMinimumPoints.toLocaleString("en-IN")}.</p>
+              {!loyaltyOnline ? <p className="text-[11px] font-semibold text-amber-700">{t("billing.summary.loyaltyOffline")}</p>
+                : !loyaltyCustomerSelected ? <p className="text-[11px] font-semibold text-violet-800">{t("billing.summary.loyaltyNeedsCustomer")}</p>
+                  : loyaltyLoading ? <p className="flex items-center gap-2 text-[11px] font-semibold text-violet-700"><Loader2 size={12} className="animate-spin" /> {t("billing.summary.loyaltyLoading")}</p>
+                    : !loyaltyActive ? <p className="text-[11px] font-semibold text-slate-600">{t("billing.summary.loyaltyInactive")}</p>
+                      : loyaltyBalance < loyaltyMinimumPoints ? <p className="text-[11px] font-semibold text-slate-600">{t("billing.summary.loyaltyBelowMinimum", { tier: loyaltyTier ? t("billing.summary.loyaltyTierPrefix", { tier: loyaltyTier }) : "", points: loyaltyBalance.toLocaleString("en-IN"), minimum: loyaltyMinimumPoints.toLocaleString("en-IN") })}</p>
                         : <>
                             <div className="flex items-center gap-2">
-                              <Input type="number" min={loyaltyMinimumPoints} max={loyaltyMaxPoints} value={loyaltyPoints || ""} onChange={(event) => setLoyaltyPoints(Math.min(loyaltyMaxPoints, Math.max(0, Math.floor(Number(event.target.value) || 0))))} placeholder={`Min ${loyaltyMinimumPoints}`} className="h-9 bg-white text-xs" />
-                              <Button type="button" variant="outline" className="h-9 shrink-0 border-violet-200 text-[11px] font-black text-violet-700" disabled={loyaltyMaxPoints < loyaltyMinimumPoints} onClick={() => setLoyaltyPoints(loyaltyMaxPoints)}>Use max</Button>
-                              {loyaltyPoints > 0 ? <Button type="button" variant="ghost" className="h-9 px-2 text-[11px] font-bold text-slate-500" onClick={() => setLoyaltyPoints(0)}>Clear</Button> : null}
+                              <Input type="number" min={loyaltyMinimumPoints} max={loyaltyMaxPoints} value={loyaltyPoints || ""} onChange={(event) => setLoyaltyPoints(Math.min(loyaltyMaxPoints, Math.max(0, Math.floor(Number(event.target.value) || 0))))} placeholder={t("billing.summary.loyaltyMinPlaceholder", { minimum: loyaltyMinimumPoints })} className="h-9 bg-white text-xs" />
+                              <Button type="button" variant="outline" className="h-9 shrink-0 border-violet-200 text-[11px] font-black text-violet-700" disabled={loyaltyMaxPoints < loyaltyMinimumPoints} onClick={() => setLoyaltyPoints(loyaltyMaxPoints)}>{t("billing.summary.loyaltyUseMax")}</Button>
+                              {loyaltyPoints > 0 ? <Button type="button" variant="ghost" className="h-9 px-2 text-[11px] font-bold text-slate-500" onClick={() => setLoyaltyPoints(0)}>{t("billing.summary.loyaltyClear")}</Button> : null}
                             </div>
-                            <p className="mt-2 text-[10px] font-semibold text-violet-700">{loyaltyTier ? `${loyaltyTier} · ` : ""}{loyaltyBalance.toLocaleString("en-IN")} available · save {fmtRs(loyaltyDiscount)}. Owner approval is requested when the bill is saved.</p>
-                            {loyaltyMaxPoints < loyaltyMinimumPoints ? <p className="mt-1 text-[10px] font-semibold text-amber-700">This bill’s remaining value is below the minimum redemption amount.</p> : null}
+                            <p className="mt-2 text-[10px] font-semibold text-violet-700">{t("billing.summary.loyaltySaveNote", { tier: loyaltyTier ? t("billing.summary.loyaltyTierShortPrefix", { tier: loyaltyTier }) : "", points: loyaltyBalance.toLocaleString("en-IN"), amount: fmtRs(loyaltyDiscount) })}</p>
+                            {loyaltyMaxPoints < loyaltyMinimumPoints ? <p className="mt-1 text-[10px] font-semibold text-amber-700">{t("billing.summary.loyaltyBelowRedeemable")}</p> : null}
                           </>}
             </div>
           )}
@@ -694,7 +704,7 @@ export function BillingSummary({
           {lastBillNo && (
             <div className="flex items-center gap-2 text-sm text-emerald-700">
               <CheckCircle size={14} />
-              <span>Last bill: {lastBillNo}</span>
+              <span>{t("billing.summary.lastBill", { billNo: lastBillNo })}</span>
             </div>
           )}
         </div>
@@ -719,11 +729,13 @@ export function BillingSummary({
           {confirmBillPending ? (
             <>
               <Loader2 size={18} className="mr-2 animate-spin" />
-              Saving…
+              {t("billing.summary.saving")}
             </>
           ) : (
             <>
-              {isEstimateBill ? `Save Estimate Bill · ${fmtRs(grandTotal)}` : `${paymentAction} · ${fmtRs(grandTotal)}`}
+              {isEstimateBill
+                ? t("billing.summary.saveEstimateAction", { amount: fmtRs(grandTotal) })
+                : t("billing.summary.paymentAction", { action: paymentAction, amount: fmtRs(grandTotal) })}
               <span className="absolute right-2.5 top-1/2 hidden h-6 min-w-[34px] -translate-y-1/2 items-center justify-center rounded-[7px] bg-[rgba(0,35,140,0.35)] px-1.5 text-[11px] font-black text-white sm:inline-flex">
                 F12
               </span>
@@ -733,11 +745,11 @@ export function BillingSummary({
 
         {/* Secondary actions */}
         <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-          <SecBtn testId="button-save-as-estimate" onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label="Save Estimate" />
-          <SecBtn onClick={onHoldBill} disabled={cart.length === 0} icon={<PauseCircle size={13} />} label="Hold" shortcut="F9" />
-          <SecBtn onClick={onPrintBill} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Printer size={13} />} label="Print" />
+          <SecBtn testId="button-save-as-estimate" onClick={onSaveEstimate} disabled={confirmBillPending || cart.length === 0} icon={<FileText size={13} />} label={t("billing.summary.saveEstimate")} />
+          <SecBtn onClick={onHoldBill} disabled={cart.length === 0} icon={<PauseCircle size={13} />} label={t("billing.summary.hold")} shortcut="F9" />
+          <SecBtn onClick={onPrintBill} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Printer size={13} />} label={t("billing.summary.print")} />
           {/* Free for all plans: opens WhatsApp with a text receipt (wa.me deep link, no paid API). */}
-          <SecBtn onClick={onSharePdf} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Smartphone size={13} />} label="WhatsApp" />
+          <SecBtn onClick={onSharePdf} disabled={cart.length === 0 && !hasLastPrintableBill} icon={<Smartphone size={13} />} label={t("billing.summary.whatsapp")} />
         </div>
 
         {cart.length > 0 && (
@@ -746,18 +758,18 @@ export function BillingSummary({
             onClick={onClearCart}
             className="mt-1 w-full rounded-lg py-1.5 text-xs font-medium text-[#536383] hover:bg-red-50 hover:text-red-600"
           >
-            Clear cart
+            {t("billing.summary.clearCart")}
           </button>
         )}
 
         {/* Keyboard shortcuts — 5 buttons */}
         <div className="mt-2 hidden grid-cols-5 gap-1.5 border-t border-[#edf1f6] pt-2.5 sm:grid">
           {[
-            { key: "F2", label: "Search" },
-            { key: "F4", label: "Discount" },
-            { key: "F6", label: "Customer" },
-            { key: "F9", label: "Hold" },
-            { key: "Ctrl+S", label: "Save" },
+            { key: "F2", label: t("billing.summary.shortcutSearch") },
+            { key: "F4", label: t("billing.summary.shortcutDiscount") },
+            { key: "F6", label: t("billing.summary.shortcutCustomer") },
+            { key: "F9", label: t("billing.summary.shortcutHold") },
+            { key: "Ctrl+S", label: t("billing.summary.shortcutSave") },
           ].map(({ key, label }) => (
             <div key={key} className="flex flex-col items-center justify-center gap-1.5">
               <kbd className="inline-flex h-[22px] min-w-[28px] items-center justify-center rounded-[6px] bg-[var(--brand-soft)] px-1.5 font-mono text-[10px] font-black text-[var(--brand)]">

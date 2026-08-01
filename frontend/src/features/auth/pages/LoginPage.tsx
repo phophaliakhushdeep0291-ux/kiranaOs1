@@ -419,11 +419,15 @@ export default function Login() {
               )}
             </div>
 
-            <div className="-mt-2 flex justify-end">
-              <Link href="/forgot-password">
-                <span className="cursor-pointer text-sm font-semibold text-primary hover:underline">
-                  Forgot password?
-                </span>
+            {/* Inline links still need a 44px touch target (MOBILE_UX_PLAN global
+                contract). The negative top margin absorbs the extra height so the
+                form keeps its original rhythm. */}
+            <div className="-mt-4 flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="inline-flex min-h-[44px] cursor-pointer items-center px-1 text-sm font-semibold text-primary hover:underline"
+              >
+                Forgot password?
               </Link>
             </div>
 
@@ -435,7 +439,7 @@ export default function Login() {
 
             <Button
               type="submit"
-              className="w-full"
+              className="h-11 w-full"
               data-testid="button-login"
               disabled={authPending}
             >
@@ -458,12 +462,14 @@ export default function Login() {
             </div>
           )}
 
-          <p className="mt-5 text-center text-sm text-muted-foreground">
+          <p className="mt-3 text-center text-sm text-muted-foreground">
             New shop?{" "}
-            <Link href="/register">
-              <span className="text-primary font-medium hover:underline cursor-pointer" data-testid="link-register">
-                Register here
-              </span>
+            <Link
+              href="/register"
+              className="inline-flex min-h-[44px] cursor-pointer items-center px-1 align-middle font-medium text-primary hover:underline"
+              data-testid="link-register"
+            >
+              Register here
             </Link>
           </p>
           </>

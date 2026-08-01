@@ -20,6 +20,7 @@ import { Link } from "wouter";
 import { useListBills } from "@/features/bills/queries";
 import type { Bill, Product } from "@/lib/api/client";
 import { productSellingPrice, resolveScanMatch } from "../billing-calculations";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 /* ─── deterministic product placeholder colour ─── */
 const PLACEHOLDER_COLORS = [
@@ -146,10 +147,11 @@ export function BillingSearch({
   onApplyCoupon,
   onChooseCustomer,
 }: BillingSearchProps) {
+  const { t } = useAppLanguage();
   const [showAll, setShowAll] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scannerMessage, setScannerMessage] = useState("Point the camera at a barcode.");
+  const [scannerMessage, setScannerMessage] = useState(t("billing.search.pointCamera"));
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scanFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -167,8 +169,8 @@ export function BillingSearch({
       setScannerOpen(false);
       searchInputRef.current?.focus();
       toast({
-        title: "Camera scanner not supported",
-        description: "Use a USB barcode scanner or type the barcode in search.",
+        title: t("billing.search.scannerNotSupported"),
+        description: t("billing.search.scannerFallback"),
         variant: "destructive",
       });
       return;
@@ -178,10 +180,10 @@ export function BillingSearch({
     async function startScanner() {
       try {
         if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("Camera access is not available in this browser.");
+          throw new Error(t("billing.search.cameraUnavailable"));
         }
 
-        setScannerMessage("Starting camera...");
+        setScannerMessage(t("billing.search.startingCamera"));
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: "environment" } },
           audio: false,
@@ -203,7 +205,7 @@ export function BillingSearch({
           formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code"],
         });
 
-        setScannerMessage("Scanning...");
+        setScannerMessage(t("billing.search.scanning"));
 
         const scan = async () => {
           if (cancelled || !videoRef.current) return;
@@ -217,12 +219,12 @@ export function BillingSearch({
                 onSearchChange(value);
                 setScannerOpen(false);
                 window.setTimeout(() => searchInputRef.current?.focus(), 0);
-                toast({ title: "Barcode scanned", description: value });
+                toast({ title: t("billing.search.barcodeScanned"), description: value });
                 return;
               }
             }
           } catch {
-            setScannerMessage("Still scanning. Hold the barcode steady.");
+            setScannerMessage(t("billing.search.stillScanning"));
           }
 
           scanFrameRef.current = window.requestAnimationFrame(scan);
@@ -230,11 +232,11 @@ export function BillingSearch({
 
         scanFrameRef.current = window.requestAnimationFrame(scan);
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Camera permission was blocked.";
+        const message = error instanceof Error ? error.message : t("billing.search.cameraBlocked");
         setScannerOpen(false);
         searchInputRef.current?.focus();
         toast({
-          title: "Scanner could not start",
+          title: t("billing.search.scannerFailed"),
           description: `${message} You can still type or USB-scan into search.`,
           variant: "destructive",
         });
@@ -294,7 +296,7 @@ export function BillingSearch({
                   ref={searchInputRef}
                   data-testid="input-product-search"
                   className="h-full flex-1 border-0 bg-transparent p-0 text-[14px] font-semibold text-[var(--brand-ink)] placeholder:font-medium placeholder:text-[#6b7a9a] focus-visible:ring-0 focus-visible:ring-offset-0"
-                  placeholder="Search by product name, barcode or SKU"
+                  placeholder={t("billing.search.placeholder")}
                   value={search}
                   onChange={(e) => onSearchChange(e.target.value)}
                   onKeyDown={(e) => {
@@ -317,8 +319,8 @@ export function BillingSearch({
               <div className="mt-2.5 flex items-center gap-2.5">
                 <button
                   type="button"
-                  title="Scan barcode"
-                  aria-label="Scan barcode"
+                  title={t("billing.search.scanBarcode")}
+                  aria-label={t("billing.search.scanBarcode")}
                   onClick={openBarcodeScanner}
                   className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] bg-white text-[#45577a] shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] sm:h-9 sm:w-9"
                 >
@@ -326,8 +328,8 @@ export function BillingSearch({
                 </button>
                 <button
                   type="button"
-                  title="Voice billing"
-                  aria-label="Open voice billing"
+                  title={t("billing.search.voiceBilling")}
+                  aria-label={t("billing.search.openVoiceBilling")}
                   onClick={onToggleVoice}
                   className={`grid h-11 w-11 place-items-center rounded-full border shadow-[0_4px_12px_rgba(15,23,42,0.06)] transition-colors hover:border-[#bcd0ff] hover:text-[var(--brand)] sm:h-9 sm:w-9 ${voiceVisible ? "border-[#bcd0ff] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e4ebf5] bg-white text-[#45577a]"}`}
                 >
@@ -365,7 +367,7 @@ export function BillingSearch({
                     );
                   })}
                   {recentProducts.length > 3 && (
-                    <button onClick={() => setShowAll(true)} title="Show all products" className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#f7f9fd]">
+                    <button onClick={() => setShowAll(true)} title={t("billing.search.showAllProducts")} className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e7edf5] bg-white shadow-[0_5px_12px_rgba(15,23,42,0.05)] transition-colors hover:bg-[#f7f9fd]">
                       <ChevronRight size={13} className="text-[#536383]" />
                     </button>
                   )}
@@ -377,7 +379,7 @@ export function BillingSearch({
           {/* Category chips — rounded-[8px] matching spec */}
           <div className="mt-[18px] flex items-center gap-2.5 overflow-x-auto pb-4 [-ms-overflow-style:none] [scrollbar-width:none]">
             <CategoryChip
-              label="All"
+              label={t("billing.search.allCategories")}
               active={selectedCategory === "all"}
               onClick={() => onSelectedCategoryChange("all")}
             />
@@ -403,14 +405,14 @@ export function BillingSearch({
             <div className="w-full max-w-[460px] overflow-hidden rounded-[14px] border border-white/20 bg-white shadow-[0_24px_70px_rgba(3,12,30,0.32)]">
               <div className="flex items-center justify-between border-b border-[#e6ecf4] px-4 py-3">
                 <div>
-                  <p className="text-[14px] font-black text-[#13274d]">Scan barcode</p>
+                  <p className="text-[14px] font-black text-[#13274d]">{t("billing.search.scanBarcode")}</p>
                   <p className="text-[12px] font-semibold text-[#6d7c98]">{scannerMessage}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setScannerOpen(false)}
                   className="grid h-11 w-11 place-items-center rounded-full border border-[#e4ebf5] text-[#45577a] hover:bg-[#f7f9fd] sm:h-9 sm:w-9"
-                  aria-label="Close scanner"
+                  aria-label={t("billing.search.closeScanner")}
                 >
                   <X size={16} />
                 </button>
@@ -422,7 +424,7 @@ export function BillingSearch({
               </div>
               <div className="flex items-center justify-between gap-3 px-4 py-3">
                 <p className="text-[11px] font-semibold text-[#6d7c98]">
-                  Tip: a USB scanner works by typing the barcode into search.
+                  {t("billing.search.scannerTip")}
                 </p>
                 <button
                   type="button"
@@ -432,7 +434,7 @@ export function BillingSearch({
                   }}
                   className="h-11 rounded-[8px] border border-[#dfe8f5] px-3 text-[12px] font-extrabold text-[var(--brand)] hover:bg-[#f5f9ff] sm:h-9"
                 >
-                  Type instead
+                  {t("billing.search.typeInstead")}
                 </button>
               </div>
             </div>
@@ -443,17 +445,17 @@ export function BillingSearch({
           {productsLoading && filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-[#536383]">
               <Search size={22} className="animate-pulse text-[var(--brand)]/60" />
-              <p className="text-sm">Loading products…</p>
+              <p className="text-sm">{t("billing.search.loadingProducts")}</p>
             </div>
           ) : filteredProducts.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
               <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[#f7f9fd] text-2xl text-[#536383]">?</span>
               <div>
                 <p className="text-sm font-bold text-[#13274d]">
-                  {search ? `No results for "${search}"` : "No products yet"}
+                  {search ? t("billing.search.noResultsFor", { term: search }) : t("billing.search.noProductsYet")}
                 </p>
                 <p className="mt-1 text-xs text-[#536383]">
-                  {search ? "Try a different term or clear search." : "Add products from the Products page."}
+                  {search ? t("billing.search.noMatch") : t("billing.search.addFromProductsPage")}
                 </p>
               </div>
             </div>
@@ -461,7 +463,7 @@ export function BillingSearch({
             <>
               {search && (
                 <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#536383]">
-                  {filteredProducts.length} result{filteredProducts.length !== 1 ? "s" : ""}
+                  {filteredProducts.length === 1 ? t("billing.search.resultCount", { count: filteredProducts.length }) : t("billing.search.resultCountPlural", { count: filteredProducts.length })}
                 </p>
               )}
 
@@ -483,9 +485,9 @@ export function BillingSearch({
                   className="flex h-11 items-center justify-center gap-2 rounded-[8px] border border-[#dfe8f5] bg-white px-7 text-[12px] font-semibold text-[var(--brand)] shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition-colors hover:bg-[#f5f9ff] sm:h-[38px]"
                 >
                   {showAll ? (
-                    <>Show less <ChevronUp size={13} /></>
+                    <>{t("billing.search.showLess")} <ChevronUp size={13} /></>
                   ) : (
-                    <>View all products <ChevronDown size={13} /></>
+                    <>{t("billing.search.viewAllProducts")} <ChevronDown size={13} /></>
                   )}
                 </button>
               </div>
@@ -509,7 +511,7 @@ export function BillingSearch({
       {cartItemCount > 0 && (
         <div className="flex shrink-0 flex-col gap-3 rounded-[13px] border border-[#e6ecf4] bg-white p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:flex-row sm:items-center sm:px-[22px] lg:hidden">
           <div className="min-w-0 flex-1">
-            <p className="mb-2 text-[12px] font-bold text-[#5b6b89]">Order Summary</p>
+            <p className="mb-2 text-[12px] font-bold text-[#5b6b89]">{t("billing.search.orderSummary")}</p>
             <div className="flex flex-wrap items-center gap-3 sm:gap-[30px]">
               {/* Items */}
               <div className="flex items-center gap-2.5">
@@ -518,9 +520,9 @@ export function BillingSearch({
                 </span>
                 <div>
                   <p className="text-[13px] font-black text-[#13274d]">
-                    {cartItemCount} {cartItemCount === 1 ? "Item" : "Items"}
+                    {cartItemCount} {cartItemCount === 1 ? t("billing.search.itemSingular") : t("billing.search.items")}
                   </p>
-                  <p className="text-[10px] text-[#7a89a3]">Products</p>
+                  <p className="text-[10px] text-[#7a89a3]">{t("billing.search.products")}</p>
                 </div>
               </div>
               {/* Subtotal */}
@@ -532,7 +534,7 @@ export function BillingSearch({
                   <p className="text-[13px] font-black text-[#13274d]">
                     ₹{cartSubtotal.toLocaleString("en-IN")}
                   </p>
-                  <p className="text-[10px] text-[#7a89a3]">Subtotal</p>
+                  <p className="text-[10px] text-[#7a89a3]">{t("billing.search.subtotal")}</p>
                 </div>
               </div>
               {/* Tax */}
@@ -545,7 +547,7 @@ export function BillingSearch({
                     <p className="text-[13px] font-black text-[#13274d]">
                       ₹{(Math.round(cartTax * 100) / 100).toLocaleString("en-IN")}
                     </p>
-                    <p className="text-[10px] text-[#7a89a3]">GST</p>
+                    <p className="text-[10px] text-[#7a89a3]">{t("billing.search.gst")}</p>
                   </div>
                 </div>
               )}
@@ -559,7 +561,7 @@ export function BillingSearch({
                     <p className="text-[13px] font-black text-emerald-600">
                       −₹{cartDiscount.toLocaleString("en-IN")}
                     </p>
-                    <p className="text-[10px] text-[#7a89a3]">Discount</p>
+                    <p className="text-[10px] text-[#7a89a3]">{t("billing.search.discount")}</p>
                   </div>
                 </div>
               )}
@@ -570,7 +572,7 @@ export function BillingSearch({
             <p className="font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">
               ₹{cartGrandTotal.toLocaleString("en-IN")}
             </p>
-            <p className="mt-1 text-[12px] font-semibold text-[#536383]">Grand Total</p>
+            <p className="mt-1 text-[12px] font-semibold text-[#536383]">{t("billing.search.grandTotal")}</p>
           </div>
         </div>
       )}
@@ -648,6 +650,7 @@ function CategoryChip({ label, active, onClick }: { label: string; active: boole
 
 /* ─── Recent Bills panel ─── */
 function RecentBillsPanel() {
+  const { t } = useAppLanguage();
   const today = new Date().toISOString().slice(0, 10);
   const { data: result } = useListBills(
     { from: today, to: today, limit: 6 },
@@ -661,10 +664,10 @@ function RecentBillsPanel() {
     const payments = bill.payments as Array<{ mode?: string }> | undefined;
     const billAny = bill as { paymentMode?: string };
     const mode = payments?.[0]?.mode ?? billAny.paymentMode ?? null;
-    if (!mode || mode === "cash") return "Cash";
-    if (mode === "upi") return "UPI";
-    if (mode === "credit") return "Udhar";
-    if (mode === "bank") return "Bank";
+    if (!mode || mode === "cash") return t("billing.pay.cash");
+    if (mode === "upi") return t("billing.pay.upi");
+    if (mode === "credit") return t("billing.search.udhar");
+    if (mode === "bank") return t("billing.pay.bank");
     if (mode === "card") return "Card";
     return mode.charAt(0).toUpperCase() + mode.slice(1);
   }
@@ -680,17 +683,17 @@ function RecentBillsPanel() {
   return (
     <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-[14px] flex items-center justify-between">
-        <h3 className="font-display text-[14px] font-black tracking-tight text-[#13274d]">Recent Bills</h3>
+        <h3 className="font-display text-[14px] font-black tracking-tight text-[#13274d]">{t("billing.search.recentBills")}</h3>
         <Link
           to="/bills"
           className="flex items-center gap-0.5 text-[12px] font-extrabold text-[var(--brand)] hover:underline"
         >
-          View all <ChevronRight size={12} />
+          {t("dashboard.viewAll")} <ChevronRight size={12} />
         </Link>
       </div>
 
       {bills.length === 0 ? (
-        <p className="py-4 text-center text-xs text-[#536383]">No bills today yet</p>
+        <p className="py-4 text-center text-xs text-[#536383]">{t("billing.search.noBillsToday")}</p>
       ) : (
         <div className="space-y-0">
           {bills.map((bill, i) => {
@@ -702,7 +705,7 @@ function RecentBillsPanel() {
               : "";
             const amount = bill.grandTotal ?? bill.totalAmount ?? bill.netAmount ?? 0;
             const customer =
-              bill.customerName && bill.customerName !== "Walk-in" ? bill.customerName : "Walk-in";
+              bill.customerName && bill.customerName !== "Walk-in" ? bill.customerName : t("billing.search.walkIn");
             const pmtLabel = paymentLabel(bill);
 
             return (
@@ -730,36 +733,37 @@ function RecentBillsPanel() {
 
 /* ─── Quick Actions panel ─── */
 function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChooseCustomer }: { onHoldBill: () => void; onApplyDiscount: () => void; onApplyCoupon: () => void; onChooseCustomer: () => void }) {
+  const { t } = useAppLanguage();
   const actions = [
     {
       iconEl: <Zap size={15} />,
       iconBg: "bg-[#e9fff0] text-[#16a34a]",
-      title: "Apply Discount",
-      description: "Give flat or % discount",
+      title: t("billing.search.actionDiscount"),
+      description: t("billing.search.actionDiscountHint"),
       hint: "F4",
       onClick: onApplyDiscount,
     },
     {
       iconEl: <Ticket size={15} />,
       iconBg: "bg-[#f3e8ff] text-[#7c3aed]",
-      title: "Coupons",
-      description: "Apply promo code",
+      title: t("billing.search.actionCoupons"),
+      description: t("billing.search.actionCouponsHint"),
       hint: null as string | null,
       onClick: onApplyCoupon,
     },
     {
       iconEl: <Users size={15} />,
       iconBg: "bg-[#fff3e4] text-[#f97316]",
-      title: "Recent Customers",
-      description: "Select from history",
+      title: t("billing.search.actionCustomers"),
+      description: t("billing.search.actionCustomersHint"),
       hint: null as string | null,
       onClick: onChooseCustomer,
     },
     {
       iconEl: <PauseCircle size={15} />,
       iconBg: "bg-[#eef4ff] text-[var(--brand)]",
-      title: "Hold Current Bill",
-      description: "Save and resume later",
+      title: t("billing.search.actionHold"),
+      description: t("billing.search.actionHoldHint"),
       hint: "F9",
       onClick: onHoldBill,
     },
@@ -767,7 +771,7 @@ function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChoos
 
   return (
     <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-      <h3 className="mb-[14px] font-display text-[14px] font-black tracking-tight text-[#13274d]">Quick Actions</h3>
+      <h3 className="mb-[14px] font-display text-[14px] font-black tracking-tight text-[#13274d]">{t("billing.search.quickActions")}</h3>
       <div className="space-y-0">
         {actions.map((action) => (
           <button
@@ -796,18 +800,19 @@ function QuickActionsPanel({ onHoldBill, onApplyDiscount, onApplyCoupon, onChoos
 
 /* ─── Billing Tips panel ─── */
 function BillingTipsPanel() {
+  const { t } = useAppLanguage();
   const tips = [
-    { action: "Scan barcode or press", key: "F2", detail: "to search fast" },
-    { action: "Use", key: "F4", detail: "to apply discount" },
-    { action: "Use", key: "F6", detail: "to add customer" },
-    { action: "Use", key: "F9", detail: "to hold the bill" },
-    { action: "Press", key: "Ctrl + S", detail: "to save bill" },
+    { action: t("billing.search.tipScan"), key: "F2", detail: t("billing.search.tipScanDetail") },
+    { action: t("billing.search.tipUse"), key: "F4", detail: t("billing.search.tipDiscountDetail") },
+    { action: t("billing.search.tipUse"), key: "F6", detail: t("billing.search.tipCustomerDetail") },
+    { action: t("billing.search.tipUse"), key: "F9", detail: t("billing.search.tipHoldDetail") },
+    { action: t("billing.search.tipPress"), key: "Ctrl + S", detail: t("billing.search.tipSaveDetail") },
   ];
 
   return (
     <div className="h-full overflow-hidden rounded-[13px] border border-[#e6ecf4] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-[14px] flex items-center gap-2">
-        <h3 className="font-display text-[14px] font-black tracking-tight text-[#13274d]">Billing Tips</h3>
+        <h3 className="font-display text-[14px] font-black tracking-tight text-[#13274d]">{t("billing.search.tipsTitle")}</h3>
         <Clock size={13} className="text-[#536383]" />
       </div>
       <div className="space-y-0">
@@ -826,7 +831,7 @@ function BillingTipsPanel() {
       </div>
       <div className="mt-[18px] flex justify-center">
         <button className="flex items-center gap-1.5 text-[12px] font-extrabold text-[var(--brand)] hover:underline">
-          View all shortcuts <ChevronRight size={12} />
+          {t("billing.search.viewAllShortcuts")} <ChevronRight size={12} />
         </button>
       </div>
     </div>

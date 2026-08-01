@@ -39,6 +39,7 @@ import { getLoyaltyAccount, getLoyaltyProgram } from "@/features/loyalty/api";
 import { lookupGiftCard } from "@/features/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/voice/backend-transcription";
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity } from "@/features/hardware/local-hardware-bridge";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
@@ -127,6 +128,7 @@ function saveSettingList<T>(key: string, rows: T[]) {
 }
 
 export default function Billing() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { shop, user } = useAuth();
@@ -189,7 +191,7 @@ export default function Billing() {
   const [voiceCommand, setVoiceCommand] = useState("");
   const [voiceDraft, setVoiceDraft] = useState<VoiceParsedDraft | null>(null);
   const [voiceListening, setVoiceListening] = useState(false);
-  const [voiceMicMessage, setVoiceMicMessage] = useState("Click mic and speak slowly. You can also type the same command.");
+  const [voiceMicMessage, setVoiceMicMessage] = useState(t("billing.page.micDefaultHint"));
   const [voiceVisible, setVoiceVisible] = useState(false);
   const [verifiedRetailPayment, setVerifiedRetailPayment] = useState<{ intentId: string; amountPaise: number; locationId: string } | null>(null);
   const [retailPaymentLoading, setRetailPaymentLoading] = useState(false);
@@ -294,7 +296,7 @@ export default function Billing() {
   const loyaltyDiscount = roundMoney((effectiveLoyaltyPoints * redemptionPaisePerPoint) / 100);
   const totalDiscount = roundMoney(safeDiscount + loyaltyDiscount);
   const rawGrandTotal = roundMoney(Math.max(0, payableBase - totalDiscount));
-  // Nearest-rupee round-off (shop's Taxes → "Round off" setting). grandTotal becomes
+  // Nearest-rupee round-off (shop's Taxes → t("billing.page.roundOff") setting). grandTotal becomes
   // the whole-rupee figure the counter collects, so every downstream tender/split/
   // credit/change-due and the stored total stay consistent with the cash in the drawer.
   const roundOffEnabled = getTaxConfigSync().roundOff;
@@ -329,7 +331,7 @@ export default function Billing() {
 
   async function handleVerifyRetailPayment() {
     if (!isOnline) {
-      toast({ title: "Internet required", description: "Provider verification cannot run offline.", variant: "destructive" });
+      toast({ title: t("billing.page.internetRequired"), description: t("billing.page.providerOffline"), variant: "destructive" });
       return;
     }
     if (upiTenderPaise <= 0) return;
@@ -337,9 +339,9 @@ export default function Billing() {
     try {
       const verified = await verifyRetailPayment(upiTenderPaise);
       setVerifiedRetailPayment(verified);
-      toast({ title: "UPI payment verified", description: "The provider confirmation is locked to this branch and bill amount." });
+      toast({ title: t("billing.page.upiVerified"), description: t("billing.page.upiVerifiedDetail") });
     } catch (error) {
-      toast({ title: "Payment not verified", description: error instanceof Error ? error.message : "Provider verification failed.", variant: "destructive" });
+      toast({ title: t("billing.page.paymentNotVerified"), description: error instanceof Error ? error.message : t("billing.page.providerFailed"), variant: "destructive" });
     } finally {
       setRetailPaymentLoading(false);
     }
@@ -364,7 +366,7 @@ export default function Billing() {
     } catch (error) {
       setGiftCardBalance(null);
       setGiftCardAmount(0);
-      setGiftCardError(error instanceof Error ? error.message : "Gift card could not be verified.");
+      setGiftCardError(error instanceof Error ? error.message : t("billing.page.giftCardUnverified"));
     } finally {
       setGiftCardLoading(false);
     }
@@ -489,7 +491,7 @@ export default function Billing() {
         setHeldBills(kept.slice(0, 10));
         if (archived > 0) {
           saveSettingList(HELD_BILLS_KEY, kept);
-          toast({ title: `${archived} old parked bill${archived === 1 ? "" : "s"} cleared`, description: "Bills parked over a week ago were archived to keep the open-bills bar usable." });
+          toast({ title: archived === 1 ? t("billing.page.parkedBillsCleared", { count: archived }) : t("billing.page.parkedBillsClearedPlural", { count: archived }), description: t("billing.page.parkedBillsClearedDetail") });
         }
       })
       .finally(() => {
@@ -596,14 +598,14 @@ export default function Billing() {
           try {
             writeBillingReceiptWindow(pendingPrint.popup, printableForSavedBill, { autoPrint: true });
           } catch {
-            toast({ title: "Print window closed", description: "Bill was saved. Use Print to print the last bill.", variant: "destructive" });
+            toast({ title: t("billing.page.printWindowClosed"), description: t("billing.page.printWindowClosedDetail"), variant: "destructive" });
           } finally {
             pendingAutoPrintRef.current = null;
           }
         }
         // If this bill was made from a customer QR order, close that order out and link the bill.
         // Best-effort + online-only (the inbox needs the network anyway); on failure the owner can
-        // still "Mark done" by hand, so a caught error must not disturb the save.
+        // still t("billing.page.markDone") by hand, so a caught error must not disturb the save.
         const fulfilledOrderId = sourceOrderIdRef.current;
         if (fulfilledOrderId) {
           sourceOrderIdRef.current = undefined;
@@ -626,10 +628,10 @@ export default function Billing() {
         queryClient.invalidateQueries({ queryKey: ["loyalty-account"] });
         queryClient.invalidateQueries({ queryKey: ["loyalty-accounts"] });
         playCounterBeep("success"); // honours Settings → Advanced → Sound effects
-        toast({ title: `Bill ${billNo} saved`, description: isOnline ? "Bill saved. Cloud backup will run automatically." : "Data safe locally. Cloud backup pending." });
+        toast({ title: t("billing.page.billSaved", { billNo }), description: isOnline ? t("billing.page.billSavedOnline") : t("billing.page.billSavedOffline") });
       },
       onError: (err: unknown) => {
-        const msg = (err as { data?: { message?: string } })?.data?.message ?? "Could not save bill locally";
+        const msg = (err as { data?: { message?: string } })?.data?.message ?? t("billing.page.saveFailedLocally");
         if (pendingAutoPrintRef.current) {
           try {
             writeBillingReceiptErrorWindow(pendingAutoPrintRef.current.popup, msg);
@@ -640,7 +642,7 @@ export default function Billing() {
           }
         }
         playCounterBeep("error");
-        toast({ title: "Billing error", description: msg, variant: "destructive" });
+        toast({ title: t("billing.page.billingError"), description: msg, variant: "destructive" });
       },
     },
   });
@@ -741,16 +743,16 @@ export default function Billing() {
   function parseVoiceDraft(commandOverride?: string) {
     const command = (commandOverride ?? voiceCommand).trim();
     if (!command) {
-      toast({ title: "Voice command empty", description: "Speak or type a command first.", variant: "destructive" });
+      toast({ title: t("billing.page.voiceCommandEmpty"), description: t("billing.page.voiceCommandEmptyDetail"), variant: "destructive" });
       return;
     }
     const draft = parseBillingVoiceCommand(command, allProducts);
     setVoiceDraft(draft);
     if (draft.lines.length === 0) {
-      toast({ title: "No product matched", description: "Add product aliases/Hindi names and try again.", variant: "destructive" });
+      toast({ title: t("billing.page.noProductMatched"), description: t("billing.page.noProductMatchedDetail"), variant: "destructive" });
       return;
     }
-    toast({ title: "Voice draft ready", description: `${draft.lines.length} item${draft.lines.length === 1 ? "" : "s"} matched. Review and add to cart.` });
+    toast({ title: t("billing.page.voiceDraftReady"), description: draft.lines.length === 1 ? t("billing.page.voiceDraftReadyDetail", { count: draft.lines.length }) : t("billing.page.voiceDraftReadyDetailPlural", { count: draft.lines.length }) });
   }
 
   function addVoiceDraftToCart() {
@@ -791,21 +793,21 @@ export default function Billing() {
     }
     setVoiceCommand("");
     setVoiceDraft(null);
-    toast({ title: "Added to cart", description: "Review quantity, rate and profit before confirming bill." });
+    toast({ title: t("billing.page.addedToCart"), description: t("billing.page.addedToCartDetail") });
   }
 
   async function startBackendVoiceListening() {
     const existingText = voiceCommand.trim();
-    setVoiceMicMessage("Requesting microphone access for Artha transcription...");
+    setVoiceMicMessage(t("billing.page.micRequesting"));
     try {
       voiceBackendRecordingRef.current = await startBackendTranscription({
         onStart: () => {
           setVoiceListening(true);
-          setVoiceMicMessage("Recording securely. Speak the bill, then press Stop mic. Auto-stops after 15 seconds.");
+          setVoiceMicMessage(t("billing.page.micRecording"));
         },
         onTranscribing: () => {
           setVoiceListening(false);
-          setVoiceMicMessage("Transcribing Hindi/Hinglish bill details...");
+          setVoiceMicMessage(t("billing.page.micTranscribing"));
         },
         onTranscript: ({ transcript, provider }) => {
           setVoiceCommand(existingText ? `${existingText} ${transcript}` : transcript);
@@ -813,7 +815,7 @@ export default function Billing() {
         },
         onError: (message) => {
           setVoiceMicMessage(message);
-          toast({ title: "Voice transcription", description: message, variant: "destructive" });
+          toast({ title: t("billing.page.voiceTranscription"), description: message, variant: "destructive" });
         },
         onEnd: () => {
           voiceBackendRecordingRef.current = null;
@@ -821,18 +823,18 @@ export default function Billing() {
         },
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Voice recording could not start.";
+      const message = error instanceof Error ? error.message : t("billing.page.voiceRecordingFailed");
       voiceBackendRecordingRef.current = null;
       setVoiceListening(false);
       setVoiceMicMessage(message);
-      toast({ title: "Mic could not start", description: message, variant: "destructive" });
+      toast({ title: t("billing.page.micCouldNotStart"), description: message, variant: "destructive" });
     }
   }
 
   async function startVoiceListening() {
     if (voiceListening) {
       if (voiceBackendRecordingRef.current) {
-        setVoiceMicMessage("Recording stopped. Transcribing securely...");
+        setVoiceMicMessage(t("billing.page.micStopped"));
         voiceBackendRecordingRef.current.stop();
         return;
       }
@@ -850,32 +852,32 @@ export default function Billing() {
 
     const isLocalhost = ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname);
     if (!window.isSecureContext && !isLocalhost) {
-      const message = "Mic works only on localhost or HTTPS. Open the app on localhost/HTTPS and allow microphone.";
+      const message = t("billing.page.micNeedsHttps");
       setVoiceMicMessage(message);
-      toast({ title: "Mic blocked by browser", description: message, variant: "destructive" });
+      toast({ title: t("billing.page.micBlockedByBrowser"), description: message, variant: "destructive" });
       return;
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      const message = "This browser cannot request microphone permission. Use Chrome or Edge on localhost.";
+      const message = t("billing.page.micNoPermissionApi");
       setVoiceMicMessage(message);
-      toast({ title: "Mic not available", description: message, variant: "destructive" });
+      toast({ title: t("billing.page.micNotAvailable"), description: message, variant: "destructive" });
       return;
     }
 
     try {
-      setVoiceMicMessage("Requesting microphone permission...");
+      setVoiceMicMessage(t("billing.page.micRequestingPermission"));
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
     } catch (error) {
       const name = error instanceof DOMException ? error.name : "PermissionError";
       const message = name === "NotAllowedError" || name === "SecurityError"
-        ? "Microphone is blocked. Click the lock icon near localhost, set Microphone to Allow, then refresh this page."
+        ? t("billing.page.micBlockedDetail")
         : name === "NotFoundError"
-          ? "No microphone is selected in Windows/browser input settings."
+          ? t("billing.page.micNotFound")
           : `Microphone permission failed (${name}). Type the command manually or fix browser mic permission.`;
       setVoiceMicMessage(message);
-      toast({ title: "Mic permission needed", description: message, variant: "destructive" });
+      toast({ title: t("billing.page.micPermissionNeeded"), description: message, variant: "destructive" });
       return;
     }
 
@@ -892,7 +894,7 @@ export default function Billing() {
 
     recognition.onstart = () => {
       setVoiceListening(true);
-      setVoiceMicMessage("Mic is live. Speak slowly: Ramesh ke naam 2 kilo chini 45 rupay kilo.");
+      setVoiceMicMessage(t("billing.page.micLive"));
       autoStopTimer = window.setTimeout(() => recognition.stop?.(), 12000);
     };
 
@@ -908,19 +910,19 @@ export default function Billing() {
       gotResult = true;
       heardText = transcript;
       setVoiceCommand(existingText ? `${existingText} ${heardText}` : heardText);
-      setVoiceMicMessage("Voice captured once. Review the text, then press Parse command.");
+      setVoiceMicMessage(t("billing.page.micCapturedOnce"));
     };
 
     recognition.onerror = (event) => {
       const error = event?.error ?? "unknown";
       const message = error === "not-allowed" || error === "service-not-allowed"
-        ? "Mic permission is blocked. Click the lock icon near the URL and allow Microphone."
+        ? t("billing.page.micPermissionBlocked")
         : error === "audio-capture"
-          ? "No microphone was found. Check Windows input device and browser mic permission."
+          ? t("billing.page.micNoDevice")
           : error === "no-speech"
-            ? "No voice was heard. Speak closer to the mic or type the command."
+            ? t("billing.page.micNoSpeech")
             : error === "network"
-              ? "Chrome speech service is not reachable. Type the command and press Parse command."
+              ? t("billing.page.micServiceUnreachable")
               : `Voice capture failed (${error}). Type the command or try mic again.`;
       const useBackendNext = error === "network" || error === "service-not-allowed";
       if (useBackendNext) preferBackendVoiceRef.current = true;
@@ -929,7 +931,7 @@ export default function Billing() {
         : message;
       setVoiceMicMessage(actionableMessage);
       if (error !== "aborted") {
-        toast({ title: "Mic issue", description: actionableMessage, variant: error === "no-speech" ? "default" : "destructive" });
+        toast({ title: t("billing.page.micIssue"), description: actionableMessage, variant: error === "no-speech" ? "default" : "destructive" });
       }
     };
 
@@ -938,9 +940,9 @@ export default function Billing() {
       setVoiceListening(false);
       voiceRecognitionRef.current = null;
       if (gotResult) {
-        setVoiceMicMessage("Voice captured. Press Parse command to review cart draft.");
+        setVoiceMicMessage(t("billing.page.micCaptured"));
       } else {
-        setVoiceMicMessage("No command captured. Check browser mic permission, or type the command manually.");
+        setVoiceMicMessage(t("billing.page.micNothingCaptured"));
       }
     };
 
@@ -949,9 +951,9 @@ export default function Billing() {
     } catch (error) {
       setVoiceListening(false);
       voiceRecognitionRef.current = null;
-      const message = error instanceof Error ? error.message : "Mic could not start. Refresh page or type manually.";
+      const message = error instanceof Error ? error.message : t("billing.page.micRefresh");
       setVoiceMicMessage(message);
-      toast({ title: "Mic could not start", description: message, variant: "destructive" });
+      toast({ title: t("billing.page.micCouldNotStart"), description: message, variant: "destructive" });
     }
   }
 
@@ -961,7 +963,7 @@ export default function Billing() {
       const command = detail?.command?.trim();
       if (!command) return;
       setVoiceCommand(command);
-      setVoiceMicMessage("Voice assistant sent this command. Review the parsed draft before adding to cart.");
+      setVoiceMicMessage(t("billing.page.voiceAssistantSent"));
       window.setTimeout(() => parseVoiceDraft(command), 50);
     };
     window.addEventListener("kirana:voice-billing-command", handler);
@@ -1030,11 +1032,11 @@ export default function Billing() {
   async function readCartLineFromScale(lineKey: string, billingUnit: string) {
     const printer = getPrinterConfigSync();
     if (printer.connection !== "bridge") {
-      toast({ title: "Connect the counter scale", description: "Choose Artha local hardware bridge in Printer & Hardware settings, then verify the scale.", variant: "destructive" });
+      toast({ title: t("billing.page.connectScale"), description: t("billing.page.connectScaleDetail"), variant: "destructive" });
       return;
     }
     if (!isScaleBillingUnit(billingUnit)) {
-      toast({ title: "Scale not available for this unit", description: `Use kg or gram as the loose item's billing unit. Current unit: ${billingUnit}.`, variant: "destructive" });
+      toast({ title: t("billing.page.scaleUnitUnsupported"), description: t("billing.page.scaleUnitUnsupportedDetail", { unit: billingUnit }), variant: "destructive" });
       return;
     }
     setScaleReadingLineKey(lineKey);
@@ -1042,9 +1044,9 @@ export default function Billing() {
       const reading = await readScaleViaHardwareBridge(printer.bridgeUrl);
       const quantity = scaleReadingToBillingQuantity(reading, billingUnit);
       updateQty(lineKey, quantity);
-      toast({ title: "Stable weight applied", description: `${quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 })} ${billingUnit} added from the counter scale.` });
+      toast({ title: t("billing.page.scaleApplied"), description: t("billing.page.scaleAppliedDetail", { quantity: quantity.toLocaleString("en-IN", { maximumFractionDigits: 3 }), unit: billingUnit }) });
     } catch (error) {
-      toast({ title: "Scale reading not applied", description: error instanceof Error ? error.message : "Check the scale and local hardware bridge.", variant: "destructive" });
+      toast({ title: t("billing.page.scaleNotApplied"), description: error instanceof Error ? error.message : t("billing.page.scaleCheckBridge"), variant: "destructive" });
     } finally {
       setScaleReadingLineKey(null);
     }
@@ -1052,33 +1054,33 @@ export default function Billing() {
 
   function validateBeforeConfirm(nextBillType: BillTypeSelection) {
     if (cart.length === 0) {
-      toast({ title: "Cart is empty", description: "Add products or loose items before billing.", variant: "destructive" });
+      toast({ title: t("billing.page.cartEmpty"), description: t("billing.page.cartEmptyDetail"), variant: "destructive" });
       return false;
     }
     if (cart.some((item) => item.quantity <= 0 || item.rate <= 0)) {
-      toast({ title: "Invalid item", description: "Every item must have quantity and rate above zero.", variant: "destructive" });
+      toast({ title: t("billing.page.invalidItem"), description: t("billing.page.invalidItemDetail"), variant: "destructive" });
       return false;
     }
     if (totalDiscount > payableBase) {
-      toast({ title: "Discount too high", description: "Discount cannot exceed bill subtotal.", variant: "destructive" });
+      toast({ title: t("billing.page.discountTooHigh"), description: t("billing.page.discountTooHighDetail"), variant: "destructive" });
       return false;
     }
     if (effectiveLoyaltyPoints > 0 && !isOnline) {
-      toast({ title: "Connect to redeem points", description: "The points balance and bill must be committed together online.", variant: "destructive" });
+      toast({ title: t("billing.page.connectToRedeemPoints"), description: t("billing.page.connectToRedeemPointsDetail"), variant: "destructive" });
       return false;
     }
     if (paymentMode === BillPaymentMode.gift_card) {
       if (!isOnline) {
-        toast({ title: "Connect to redeem gift value", description: "The gift-card balance and bill must commit together online.", variant: "destructive" });
+        toast({ title: t("billing.page.connectToRedeemGift"), description: t("billing.page.connectToRedeemGiftDetail"), variant: "destructive" });
         return false;
       }
       if (!giftCardCode || giftCardBalance === null || effectiveGiftCardAmount <= 0) {
-        toast({ title: "Verify the gift card", description: "Enter the card code, check its live balance, and choose an amount.", variant: "destructive" });
+        toast({ title: t("billing.page.verifyGiftCard"), description: t("billing.page.verifyGiftCardDetail"), variant: "destructive" });
         return false;
       }
     }
     if (effectiveLoyaltyPoints > 0 && effectiveLoyaltyPoints < Number(loyaltyProgram.data?.minimumRedeemPoints || 0)) {
-      toast({ title: "More points required", description: `Minimum redemption is ${loyaltyProgram.data?.minimumRedeemPoints} points.`, variant: "destructive" });
+      toast({ title: t("billing.page.morePointsRequired"), description: t("billing.page.morePointsRequiredDetail", { points: loyaltyProgram.data?.minimumRedeemPoints ?? 0 }), variant: "destructive" });
       return false;
     }
     const needsCustomer = billNeedsCustomer({
@@ -1089,16 +1091,16 @@ export default function Billing() {
       splitUdharAmount,
     });
     if (needsCustomer && !hasCreditCustomerIdentity) {
-      toast({ title: "Customer required for udhar", description: "Select a customer or type customer name + mobile number.", variant: "destructive" });
+      toast({ title: t("billing.page.udharNeedsCustomer"), description: t("billing.page.udharNeedsCustomerDetail"), variant: "destructive" });
       customerNameInputRef.current?.focus();
       return false;
     }
     if (!allowAdvancePayment && paymentMode !== SPLIT_PAYMENT && typeof paidAmount === "number" && paidAmount > grandTotal) {
-      toast({ title: "Paid amount is more than bill", description: "Tick 'extra is advance' only if you really want to accept advance.", variant: "destructive" });
+      toast({ title: t("billing.page.paidMoreThanBill"), description: t("billing.page.paidMoreThanBillDetail"), variant: "destructive" });
       return false;
     }
     if (paymentMode === SPLIT_PAYMENT && splitCash + splitUpi > grandTotal) {
-      toast({ title: "Split payment too high", description: "Cash + UPI cannot exceed bill total.", variant: "destructive" });
+      toast({ title: t("billing.page.splitTooHigh"), description: t("billing.page.splitTooHighDetail"), variant: "destructive" });
       return false;
     }
     return true;
@@ -1134,7 +1136,7 @@ export default function Billing() {
         gstNumber: shop?.gstNumber ?? null,
         cashierName: user?.name ?? null,
       },
-      copyLabel: nextBillType === BillInputBillType.estimate ? "Estimate copy" : "Original customer copy",
+      copyLabel: nextBillType === BillInputBillType.estimate ? t("billing.page.estimateCopy") : t("billing.page.originalCustomerCopy"),
     };
   }
 
@@ -1146,7 +1148,7 @@ export default function Billing() {
   function requiredBillingSensitiveActions(): BillingSensitiveAction[] {
     const actions: BillingSensitiveAction[] = [];
     // Both of these are decided here at the counter, so Settings -> Security
-    // "Sensitive Action Protection" is the only thing that turns them on or off.
+    // t("billing.page.sensitiveActionProtection") is the only thing that turns them on or off.
     const isLargeDiscount = subtotal > 0 && safeDiscount >= Math.max(100, subtotal * 0.1);
     if (isLargeDiscount && isActionProtected("largeDiscount")) actions.push("large_discount");
     const hasBelowMinimumRate = cart.some(lineNeedsOwnerApproval);
@@ -1157,23 +1159,23 @@ export default function Billing() {
 
   function handleConfirm(overrideBillType?: BillTypeSelection, printDecision?: boolean) {
     if (!newBillingFeature.allowed) {
-      toast({ title: "Billing locked", description: newBillingFeature.reason, variant: "destructive" });
+      toast({ title: t("billing.page.billingLocked"), description: newBillingFeature.reason, variant: "destructive" });
       return;
     }
     if (!createBillPermission.allowed) {
-      toast({ title: "Permission denied", description: createBillPermission.reason, variant: "destructive" });
+      toast({ title: t("billing.page.permissionDenied"), description: createBillPermission.reason, variant: "destructive" });
       return;
     }
     if (safeDiscount > 0 && !applyDiscountPermission.allowed) {
-      toast({ title: "Discount not allowed", description: applyDiscountPermission.reason, variant: "destructive" });
+      toast({ title: t("billing.page.discountNotAllowed"), description: applyDiscountPermission.reason, variant: "destructive" });
       return;
     }
     if (appliedOffer && Math.abs(appliedOffer.subtotal - subtotal) > 0.005) {
-      toast({ title: "Reapply coupon", description: "The cart total changed after this coupon was checked. Reapply it before saving.", variant: "destructive" });
+      toast({ title: "Reapply coupon", description: t("billing.page.couponStale"), variant: "destructive" });
       return;
     }
     if (appliedOffer && safeDiscount + 0.005 < appliedOffer.discount) {
-      toast({ title: "Reapply coupon", description: "The bill discount no longer matches the validated coupon.", variant: "destructive" });
+      toast({ title: "Reapply coupon", description: t("billing.page.couponMismatch"), variant: "destructive" });
       return;
     }
     const nextBillType = overrideBillType ?? billType;
@@ -1181,14 +1183,14 @@ export default function Billing() {
 
     if (!validateBeforeConfirm(nextBillType)) return;
     if (upiTenderPaise > 0 && retailPaymentReadiness.data?.confirmationRequired && !retailPaymentVerified) {
-      toast({ title: "Verify UPI payment", description: "This store requires provider confirmation before the bill can be saved.", variant: "destructive" });
+      toast({ title: t("billing.page.verifyUpiPayment"), description: t("billing.page.providerRequired"), variant: "destructive" });
       return;
     }
 
     if (negativeStockWarnings.length > 0) {
       const first = negativeStockWarnings[0];
       toast({
-        title: "Stock will go negative",
+        title: t("billing.page.negativeStockTitle"),
         description: `${first.productName}: ${first.available} ${first.unit} available, ${first.requested} ${first.unit} selling. Stock will become ${first.after} ${first.unit}.`,
       });
     }
@@ -1240,7 +1242,7 @@ export default function Billing() {
           pendingAutoPrintRef.current = { popup, printable };
           writeBillingReceiptPendingWindow(popup, printable);
         } else {
-          toast({ title: "Print blocked", description: "Bill will save. Use Print after saving or allow pop-ups.", variant: "destructive" });
+          toast({ title: "Print blocked", description: t("billing.page.popupsBlockedSave"), variant: "destructive" });
         }
       }
     }
@@ -1314,7 +1316,7 @@ export default function Billing() {
       id: activeBillId,
       sourceOrderId,
       sourceOrderFingerprint,
-      label: `${resolvedCustomerName || "Walk-in"} • ₹${grandTotal.toLocaleString("en-IN")} • ${cart.length} item${cart.length === 1 ? "" : "s"}`,
+      label: `${resolvedCustomerName || t("billing.page.walkIn")} • ₹${grandTotal.toLocaleString("en-IN")} • ${cart.length === 1 ? t("billing.search.resultCount", { count: cart.length }) : t("billing.search.resultCountPlural", { count: cart.length })}`,
       createdAt: new Date().toISOString(),
       cart,
       discount: safeDiscount,
@@ -1371,11 +1373,11 @@ export default function Billing() {
   // Explicit "Hold" button: save the current bill and clear the workspace.
   function holdCurrentBill() {
     if (cart.length === 0) {
-      toast({ title: "Nothing to hold", description: "Add items before holding a bill." });
+      toast({ title: t("billing.page.nothingToHold"), description: t("billing.page.nothingToHoldDetail") });
       return;
     }
     newBill();
-    toast({ title: "Bill held", description: "Switch back to it any time from Open Bills." });
+    toast({ title: t("billing.page.billHeld"), description: t("billing.page.billHeldDetail") });
   }
 
   // Switch to another open bill WITHOUT losing the current one (it's stashed first).
@@ -1397,13 +1399,13 @@ export default function Billing() {
     setClearConfirmOpen(false);
     resetCurrentBill();
     clearBillingDraft();
-    toast({ title: "Cart cleared", description: "Current bill was cleared." });
+    toast({ title: t("billing.page.cartCleared"), description: t("billing.page.cartClearedDetail") });
   }
 
   function printBillSnapshot(snapshot = lastPrintableBill ?? makePrintableBill(billType, effectivePaidAmount, creditAmount)) {
     const popup = window.open("", "_blank", "width=460,height=760");
     if (!popup) {
-      toast({ title: "Print blocked", description: "Allow pop-ups to print or save PDF.", variant: "destructive" });
+      toast({ title: "Print blocked", description: t("billing.page.popupsBlocked"), variant: "destructive" });
       return;
     }
     writeBillingReceiptWindow(popup, snapshot, { autoPrint: true });
@@ -1412,7 +1414,7 @@ export default function Billing() {
   function shareLastBillOnWhatsapp() {
     const snapshot = lastPrintableBill ?? makePrintableBill(billType, effectivePaidAmount, creditAmount);
     const shareInput: BillShareInput = {
-      shopName: snapshot.shop?.name ?? "My Shop",
+      shopName: snapshot.shop?.name ?? t("billing.page.defaultShopName"),
       shopLocation: [snapshot.shop?.city, snapshot.shop?.address].filter(Boolean)[0] as string | undefined,
       billNo: snapshot.billNo,
       dateIso: snapshot.createdAt,
@@ -1431,8 +1433,8 @@ export default function Billing() {
     };
     const { targetedCustomer } = shareBillOnWhatsapp(shareInput);
     toast({
-      title: "Opening WhatsApp…",
-      description: targetedCustomer ? "Ready to send to the customer's number." : "Pick a chat to send this bill.",
+      title: t("billing.page.openingWhatsapp"),
+      description: targetedCustomer ? "Ready to send to the customer's number." : t("billing.page.pickAChat"),
     });
   }
 
@@ -1522,8 +1524,8 @@ export default function Billing() {
         {(heldBills.length > 0 || cart.length > 0) && (
           <OpenBillsBar
             bills={[
-              { id: activeBillId, name: resolvedCustomerName || "Walk-in", itemCount: cart.length, active: true },
-              ...heldBills.map((entry): OpenBillChip => ({ id: entry.id, name: entry.customerName?.trim() || "Walk-in", itemCount: entry.cart?.length ?? 0, active: false, stale: isHeldBillStale(entry), ageLabel: formatHeldBillAge(entry) })),
+              { id: activeBillId, name: resolvedCustomerName || t("billing.page.walkIn"), itemCount: cart.length, active: true },
+              ...heldBills.map((entry): OpenBillChip => ({ id: entry.id, name: entry.customerName?.trim() || t("billing.page.walkIn"), itemCount: entry.cart?.length ?? 0, active: false, stale: isHeldBillStale(entry), ageLabel: formatHeldBillAge(entry) })),
             ]}
             onSwitch={resumeHeldBill}
             onNew={newBill}
@@ -1580,18 +1582,18 @@ export default function Billing() {
           : "hidden lg:static lg:flex lg:min-h-0"}
         role={mobileCheckoutOpen ? "dialog" : undefined}
         aria-modal={mobileCheckoutOpen ? "true" : undefined}
-        aria-label={mobileCheckoutOpen ? "Review and collect payment" : undefined}
+        aria-label={mobileCheckoutOpen ? t("billing.page.reviewCollectPayment") : undefined}
       >
         <div className="flex h-[68px] shrink-0 items-center justify-between border-b border-[#e1e8f2] bg-white px-4 lg:hidden">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#64748b]">Checkout</p>
-            <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">Review &amp; collect ₹{grandTotal.toLocaleString("en-IN")}</h2>
+            <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#64748b]">{t("billing.page.checkout")}</p>
+            <h2 className="font-display text-[19px] font-black text-[var(--brand-ink)]">{t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })}</h2>
           </div>
           <button
             type="button"
             onClick={() => setMobileCheckoutOpen(false)}
             className="inline-flex h-11 items-center justify-center rounded-xl border border-[#dce5f1] px-4 text-[13px] font-black text-[#42526e]"
-            aria-label="Close checkout"
+            aria-label={t("billing.page.closeCheckout")}
           >
             Back
           </button>
@@ -1734,9 +1736,9 @@ export default function Billing() {
       <OwnerPinModal
         open={sensitivePinOpen}
         onCancel={() => setSensitivePinOpen(false)}
-        title="Owner approval required"
+        title={t("billing.page.ownerApprovalRequired")}
         description="Large discounts, loyalty redemption, or selling below minimum price need owner PIN before the bill can be saved. Online loyalty redemption commits the points ledger and bill together."
-        confirmLabel="Approve bill"
+        confirmLabel={t("billing.page.approveBill")}
         reasonRequired
         onConfirm={async ({ ownerPin, reason }) => {
           const actions = requiredBillingSensitiveActions();
@@ -1750,9 +1752,9 @@ export default function Billing() {
 
       <ConfirmDialog
         open={clearConfirmOpen}
-        title="Clear this bill?"
-        description="All items in the current bill will be removed. This cannot be undone."
-        confirmLabel="Clear bill"
+        title={t("billing.page.clearBillTitle")}
+        description={t("billing.page.clearBillBody")}
+        confirmLabel={t("billing.page.clearBillConfirm")}
         destructive
         onConfirm={executeClearCart}
         onCancel={() => setClearConfirmOpen(false)}
@@ -1760,10 +1762,10 @@ export default function Billing() {
 
       <ConfirmDialog
         open={printConfirmOpen}
-        title="Print this bill after saving?"
-        description="The bill will be saved either way. Choose print to open the configured receipt printer, or continue without printing."
-        confirmLabel="Save & print"
-        cancelLabel="Save without printing"
+        title={t("billing.page.printAfterSavingTitle")}
+        description={t("billing.page.printAfterSavingBody")}
+        confirmLabel={t("billing.page.savePrint")}
+        cancelLabel={t("billing.page.saveNoPrint")}
         disabled={confirmBill.isPending}
         onConfirm={() => {
           const nextType = pendingPrintBillType ?? undefined;
