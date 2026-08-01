@@ -154,6 +154,100 @@ function conflictEntitySnapshot(rawSnapshot, entityType) {
   return {};
 }
 
+// Conflict snapshots are whole records captured off a device row or a server DTO, not
+// hand-written patches: they carry client-only sync columns, server-managed columns, and
+// `null` for every empty optional field. Feeding one straight into an update schema fails
+// validation on the nulls alone ("Expected string, received null" for hsn/brand/imageUrl…),
+// which is why every owner choice used to die with a generic error. Project the snapshot
+// onto the fields an owner decision is actually allowed to move instead, so the outcome is
+// deterministic and no unrelated schema strictness can break the resolve path.
+function conflictText(value) {
+  if (value === null) return null; // explicit "this field is empty in the chosen version"
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function conflictRequiredText(value) {
+  const text = conflictText(value);
+  return typeof text === "string" ? text : undefined;
+}
+
+function conflictNumber(value) {
+  const parsed = typeof value === "number"
+    ? value
+    : typeof value === "string" && value.trim() ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function conflictBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (value === 1 || value === 0) return value === 1;
+  return undefined;
+}
+
+function conflictEnum(value, allowed) {
+  const text = conflictRequiredText(value);
+  return text && allowed.includes(text) ? text : undefined;
+}
+
+function compactConflictUpdate(candidate) {
+  return Object.fromEntries(Object.entries(candidate).filter(([, value]) => value !== undefined));
+}
+
+// Stock, cost and packaging are deliberately absent: on-hand quantity, weighted-average
+// cost and selling units move through their own primitives (stock ledger, purchase
+// reconciliation, writeSellingUnits) and must never be restored by spreading a snapshot.
+// The product-level price still flows to the default selling unit via updateProduct.
+function conflictProductUpdate(selected) {
+  return compactConflictUpdate({
+    name: conflictRequiredText(selected.name),
+    category: conflictRequiredText(selected.category),
+    displayUnit: conflictRequiredText(selected.displayUnit),
+    baseUnit: conflictRequiredText(selected.baseUnit),
+    rateUnit: conflictRequiredText(selected.rateUnit),
+    packagingMode: conflictEnum(selected.packagingMode, ["pooled", "per_pack"]),
+    hsn: conflictText(selected.hsn),
+    barcode: conflictText(selected.barcode),
+    sku: conflictText(selected.sku),
+    brand: conflictText(selected.brand),
+    description: conflictText(selected.description),
+    imageUrl: conflictText(selected.imageUrl),
+    minPricePerRateUnit: conflictNumber(selected.minPricePerRateUnit),
+    defaultPricePerRateUnit: conflictNumber(selected.defaultPricePerRateUnit),
+    gstRate: conflictNumber(selected.gstRate),
+    mrp: conflictNumber(selected.mrp),
+    reorderLevel: conflictNumber(selected.reorderLevel),
+    lowStockThreshold: conflictNumber(selected.lowStockThreshold),
+    isLooseItem: conflictBoolean(selected.isLooseItem),
+    batchTrackingEnabled: conflictBoolean(selected.batchTrackingEnabled),
+    aliases: Array.isArray(selected.aliases)
+      ? selected.aliases.filter((alias) => typeof alias === "string" && alias.trim().length > 0)
+      : undefined,
+  });
+}
+
+// udharAmount/totalUdhar stay out: the outstanding balance is ledger-derived, never
+// restorable from a snapshot.
+function conflictCustomerUpdate(selected) {
+  return compactConflictUpdate({
+    name: conflictRequiredText(selected.name),
+    mobile: conflictText(selected.mobile),
+    address: conflictText(selected.address),
+    gstNumber: conflictText(selected.gstNumber),
+    stateCode: conflictText(selected.stateCode),
+    type: conflictEnum(selected.type, ["regular", "udhar"]),
+  });
+}
+
+function conflictSupplierUpdate(selected) {
+  return compactConflictUpdate({
+    name: conflictRequiredText(selected.name),
+    mobile: conflictText(selected.mobile),
+    address: conflictText(selected.address),
+  });
+}
+
 async function applyMutableConflictChoice(shopId, conflict, resolution, mergedPayload) {
   const entityType = String(conflict.entityType ?? "").toLowerCase();
   if (!MUTABLE_CONFLICT_ENTITIES.has(entityType)) {
@@ -176,21 +270,22 @@ async function applyMutableConflictChoice(shopId, conflict, resolution, mergedPa
 
   const id = String(selected.serverId ?? selected.server_id ?? selected.id ?? conflict.entityId ?? "");
   if (!id) throw new AppError("Conflict record identity is unavailable", 409, "SYNC_CONFLICT_ENTITY_ID_MISSING");
+  const projected = entityType.startsWith("product")
+    ? conflictProductUpdate(selected)
+    : entityType.startsWith("customer")
+      ? conflictCustomerUpdate(selected)
+      : conflictSupplierUpdate(selected);
+  if (Object.keys(projected).length === 0) {
+    throw new AppError("The selected conflict version has no restorable fields", 409, "SYNC_CONFLICT_SNAPSHOT_MISSING");
+  }
   if (entityType.startsWith("product")) {
-    const parsed = updateProductSchema.parse(selected);
-    delete parsed.stockBaseQty;
-    delete parsed.costPerRateUnit;
-    delete parsed.baseUpdatedAt;
-    await updateProduct(shopId, id, parsed);
+    await updateProduct(shopId, id, updateProductSchema.parse(projected));
   } else if (entityType.startsWith("customer")) {
-    const candidate = { ...selected };
-    delete candidate.udharAmount;
-    delete candidate.totalUdhar;
-    const parsed = updateCustomerSchema.parse(candidate);
+    const parsed = updateCustomerSchema.parse(projected);
     delete parsed.udharAmount;
     await updateCustomer(shopId, id, parsed);
   } else {
-    await updateSupplier(shopId, id, updateSupplierSchema.parse(selected));
+    await updateSupplier(shopId, id, updateSupplierSchema.parse(projected));
   }
   return selected;
 }

@@ -1299,6 +1299,89 @@ if (ctx.skip) {
       assert.equal((await ctx.db.syncConflict.findUnique({ where: { id: financial.id } })).status, "open");
     });
 
+    test("owner conflict resolution accepts whole-record snapshots as the app actually stores them", async () => {
+      // Real snapshots are captured off an offline device row / server DTO: client-only
+      // sync columns, server-managed columns, and null for every empty optional field.
+      // Resolution used to reject those outright ("expected string, received null" on
+      // hsn/brand/imageUrl), so every Keep local / Keep cloud died with a generic error.
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "gops", stockBaseQty: 20, costPerRateUnit: 10 });
+      const serverSnapshot = {
+        ...(await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } })),
+        createdAt: product.createdAt.toISOString(),
+        updatedAt: product.updatedAt.toISOString(),
+        costPerRateUnitPaise: null,
+        minPricePerRateUnitPaise: null,
+        defaultPricePerRateUnitPaise: null,
+        aliases: [],
+      };
+      const localSnapshot = {
+        ...serverSnapshot,
+        // Offline row: local identity + sync bookkeeping alongside the entity fields.
+        id: "product_local_1",
+        local_id: "product_local_1",
+        server_id: product.id,
+        tenant_id: tenant.shop.id,
+        store_id: "store_1",
+        sync_status: "conflict",
+        version: 3,
+        name: "gops counter",
+        brand: "Local brand",
+        defaultPricePerRateUnit: 26,
+        stockBaseQty: 999, // stock must never ride along on an owner decision
+        costPerRateUnit: 999,
+      };
+      const conflict = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
+        client_conflict_id: "conflict_product_gops_1",
+        entity_type: "product",
+        entity_id: product.id,
+        reason_code: "CLIENT_SYNC_CONFLICT",
+        message: "Server changed an entity that has unsynced local changes",
+        local_snapshot: localSnapshot,
+        server_snapshot: serverSnapshot,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;
+
+      assertSuccess(await ctx.post("/api/sync/resolve-conflict", {
+        conflict_id: conflict.id,
+        resolution: "use_local",
+        expected_version: conflict.version,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const applied = await ctx.db.product.findUniqueOrThrow({ where: { id: product.id } });
+      assert.equal(applied.name, "gops counter");
+      assert.equal(applied.brand, "Local brand");
+      assert.equal(applied.defaultPricePerRateUnit, 26);
+      assert.equal(applied.hsn, null, "an empty optional field stays empty instead of failing validation");
+      assert.equal(applied.stockBaseQty, 20, "stock moves through the stock ledger, never through a conflict snapshot");
+      assert.equal(applied.costPerRateUnit, 10, "weighted-average cost is never restored from a snapshot");
+    });
+
+    test("owner conflict resolution restores a supplier snapshot carrying null contact fields", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const supplier = await ctx.db.supplier.create({
+        data: { shopId: tenant.shop.id, name: "Cloud supplier", mobile: "9876543210", address: null },
+      });
+      const conflict = assertSuccess(await ctx.post("/api/sync/conflicts/report", {
+        client_conflict_id: "conflict_supplier_1",
+        entity_type: "supplier",
+        entity_id: supplier.id,
+        reason_code: "CLIENT_SYNC_CONFLICT",
+        message: "Server changed an entity that has unsynced local changes",
+        local_snapshot: { ...supplier, createdAt: null, updatedAt: null, deletedAt: null, name: "Counter supplier", mobile: null },
+        server_snapshot: { ...supplier, createdAt: null, updatedAt: null, deletedAt: null },
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders })).conflict;
+
+      assertSuccess(await ctx.post("/api/sync/resolve-conflict", {
+        conflict_id: conflict.id,
+        resolution: "use_local",
+        expected_version: conflict.version,
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      const applied = await ctx.db.supplier.findUniqueOrThrow({ where: { id: supplier.id } });
+      assert.equal(applied.name, "Counter supplier");
+      assert.equal(applied.mobile, null, "the chosen version's empty contact clears the stored one");
+    });
+
     test("offline expense creation is exact-once and enters the device sync feed", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const event = {

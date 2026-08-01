@@ -36,14 +36,18 @@ export const createProductSchema = z.object({
   minPricePerRateUnit: moneyAmount().default(0),
   defaultPricePerRateUnit: moneyAmount(),
   gstRate: percentageRate().default(0),
-  hsn: z.string().optional(),
-  barcode: z.string().optional(),
-  sku: z.string().optional(),
-  brand: z.string().optional(),
+  // Nullable columns accept an explicit null: that is how a caller clears an optional
+  // field, and how a whole-record payload (conflict resolution, sync echo) states the
+  // field is empty. Without it every such payload fails with "expected string, received
+  // null" even though the value is exactly what the column holds.
+  hsn: z.string().optional().nullable(),
+  barcode: z.string().optional().nullable(),
+  sku: z.string().optional().nullable(),
+  brand: z.string().optional().nullable(),
   mrp: moneyAmount().default(0),
   reorderLevel: quantityAmount().default(0),
-  description: z.string().max(500).optional(),
-  imageUrl: z.string().optional(),
+  description: z.string().max(500).optional().nullable(),
+  imageUrl: z.string().optional().nullable(),
   isLooseItem: z.boolean().default(false),
   lowStockThreshold: quantityAmount().default(0),
   // "pooled": every packaging draws on one base-unit pool (loose goods — 1 kg and a

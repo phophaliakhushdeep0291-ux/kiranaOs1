@@ -27,7 +27,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { getApiBaseUrl, setApiBaseUrl } from "@/lib/api/http";
+import { ApiClientError, getApiBaseUrl, setApiBaseUrl } from "@/lib/api/http";
 import { probeBackendConnection, readBackendConnectionSnapshot } from "@/features/sync/backend-health";
 import {
   dexieDB,
@@ -1040,6 +1040,32 @@ export default function SyncStatusPage() {
     }
   };
 
+  // A dead-end "could not update" toast leaves the owner with no next step and no way to
+  // report what happened. Every outcome the server can return maps to something the owner
+  // can act on instead.
+  const conflictFailureDescription = (error: unknown) => {
+    if (!(error instanceof ApiClientError)) {
+      return "The decision was not recorded on this device. Please try again.";
+    }
+    const code = typeof error.data.code === "string" ? error.data.code : "";
+    if (code === "SYNC_CONFLICT_COMPENSATING_ENTRY_REQUIRED") {
+      return "Money records cannot be overwritten from here. Use the record's own reversal or correction entry.";
+    }
+    if (code === "SYNC_CONFLICT_VERSION_MISMATCH") {
+      return "This review changed on another device while you were deciding. Refresh and choose again.";
+    }
+    if (code === "SYNC_CONFLICT_SNAPSHOT_MISSING" || code === "SYNC_CONFLICT_ENTITY_ID_MISSING") {
+      return "The selected version is incomplete, so it cannot be restored. Open the record and set it by hand.";
+    }
+    if (error.status === 404) {
+      return "This review is no longer on the server. Refresh to see the current list.";
+    }
+    const message = typeof error.data.message === "string" ? error.data.message : error.message;
+    return message
+      ? `${message} Refresh in case another device resolved it first.`
+      : "The server decision was not recorded. Refresh in case another device resolved it first.";
+  };
+
   const handleMarkConflictResolved = async (
     conflictId: string,
     resolution: ConflictResolution,
@@ -1095,10 +1121,30 @@ export default function SyncStatusPage() {
         title: resolution === "use_local" ? "Local version selected" : resolution === "use_server" ? "Cloud version selected" : resolution === "resolved_by_owner" ? "Review marked resolved" : "Decision postponed",
         description: resolution === "ignored_by_owner" ? "The conflict remains available for later review." : "The owner decision was recorded for all devices.",
       });
-    } catch {
+    } catch (error) {
+      // Another device getting there first is a finished review, not a failure: clear it
+      // locally so the owner is not left re-clicking an item that no longer needs them.
+      if (
+        error instanceof ApiClientError &&
+        error.data.code === "SYNC_CONFLICT_ALREADY_RESOLVED"
+      ) {
+        const row = await dexieDB.sync_conflicts.get(conflictId).catch(() => undefined);
+        const now = new Date().toISOString();
+        if (row) {
+          await dexieDB.sync_conflicts
+            .put({ ...row, resolution: "resolved_elsewhere", sync_status: "synced", resolved_at: now, updated_at: now })
+            .catch(() => undefined);
+        }
+        window.dispatchEvent(new CustomEvent("kirana:sync-queue-updated"));
+        toast({
+          title: "Already reviewed",
+          description: "Another device recorded a decision for this record. Nothing more is needed here.",
+        });
+        return;
+      }
       toast({
         title: "Could not update conflict",
-        description: "The server decision was not recorded. Refresh in case another device resolved it first.",
+        description: conflictFailureDescription(error),
         variant: "destructive",
       });
     } finally {
