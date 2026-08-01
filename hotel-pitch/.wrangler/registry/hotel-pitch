@@ -1,5 +1,0 @@
-{
-  "debugPortAddress": "127.0.0.1:54757",
-  "defaultEntrypointService": "core:user:__vite_proxy_worker__",
-  "userWorkerService": "core:user:hotel-pitch"
-}
