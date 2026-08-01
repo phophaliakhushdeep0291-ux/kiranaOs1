@@ -9,7 +9,7 @@ const Table = React.forwardRef<
   <div className="app-table-scroll relative w-full overflow-auto rounded-[10px] border border-[#e8edf4]">
     <table
       ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
+      className={cn("w-full caption-bottom text-[13px] tabular-nums", className)}
       {...props}
     />
   </div>
@@ -58,7 +58,7 @@ const TableRow = React.forwardRef<
   <tr
     ref={ref}
     className={cn(
-      "border-b transition-colors hover:bg-[#f7faff] data-[state=selected]:bg-muted",
+      "border-b transition-colors hover:bg-[var(--brand-softer)] data-[state=selected]:bg-[var(--brand-soft)]",
       className
     )}
     {...props}
@@ -73,7 +73,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-11 bg-[#f7f9fc] px-3 text-left align-middle text-[11px] font-bold uppercase tracking-wide text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "sticky top-0 z-[2] h-11 bg-[#f8fafc] px-3 text-left align-middle text-[11px] font-bold uppercase tracking-wide text-muted-foreground shadow-[inset_0_-1px_0_var(--surface-line)] [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
       className
     )}
     {...props}

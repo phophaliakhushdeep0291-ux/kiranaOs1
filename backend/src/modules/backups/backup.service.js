@@ -81,6 +81,40 @@ function decryptSnapshot(encrypted, key = encryptionKey()) {
   return gunzipSync(Buffer.concat([decipher.update(buffer.subarray(bodyStart)), decipher.final()]));
 }
 
+function parseSnapshot(plain) {
+  try {
+    // Keep encoded BigInts as tagged JSON objects during validation. Rehydration
+    // into Prisma values belongs to the transactional restore executor; returning
+    // actual BigInts here would make previews/logging non-serializable.
+    return JSON.parse(Buffer.from(plain).toString("utf8"));
+  } catch {
+    throw appError("Backup payload is not valid JSON", 400, "BACKUP_PAYLOAD_INVALID");
+  }
+}
+
+async function loadVerifiedSnapshot(shopId, artifactId) {
+  const row = await db.backupArtifact.findFirst({
+    where: { id: artifactId, shopId, status: "completed", type: "shop_logical" },
+  });
+  if (!row?.objectKey) throw appError("Completed backup artifact not found", 404, "BACKUP_ARTIFACT_NOT_FOUND");
+  const encrypted = await getObject({ key: row.objectKey });
+  const checksum = crypto.createHash("sha256").update(encrypted).digest("hex");
+  if (!row.checksumSha256 || checksum !== row.checksumSha256) {
+    throw appError("Backup checksum mismatch", 409, "BACKUP_CHECKSUM_MISMATCH");
+  }
+  let plain;
+  try {
+    plain = decryptSnapshot(encrypted);
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw appError("Backup authentication or decryption failed", 400, "BACKUP_DECRYPTION_FAILED");
+  }
+  if (plain.length > MAX_UNCOMPRESSED_BYTES) {
+    throw appError("Backup exceeds the 256 MiB logical snapshot limit", 413, "BACKUP_TOO_LARGE");
+  }
+  return { row, encrypted, snapshot: parseSnapshot(plain) };
+}
+
 function countRows(value) {
   if (!value || typeof value !== "object") return 0;
   if (Array.isArray(value)) return value.length + value.reduce((sum, item) => sum + countNestedArrays(item), 0);
@@ -405,23 +439,52 @@ export async function listShopBackups(shopId, { limit = 25 } = {}) {
 }
 
 export async function openShopBackup(shopId, artifactId) {
-  const row = await db.backupArtifact.findFirst({
-    where: { id: artifactId, shopId, status: "completed", type: "shop_logical" },
-  });
-  if (!row?.objectKey) throw appError("Completed backup artifact not found", 404, "BACKUP_ARTIFACT_NOT_FOUND");
   // Verify the exact encrypted envelope before handing it to the HTTP response.
   // Object storage can acknowledge an upload and still suffer later corruption;
   // discovering that only during a disaster-recovery drill is too late.
-  const encrypted = await getObject({ key: row.objectKey });
-  const checksum = crypto.createHash("sha256").update(encrypted).digest("hex");
-  if (!row.checksumSha256 || checksum !== row.checksumSha256) {
-    throw appError("Backup checksum mismatch", 409, "BACKUP_CHECKSUM_MISMATCH");
-  }
+  const { row, encrypted } = await loadVerifiedSnapshot(shopId, artifactId);
   return {
     kind: "stream",
     fileName: `kiranaos-shop-${shopId}-${row.id}.kosb`,
     stream: Readable.from(encrypted),
     contentLength: encrypted.length,
+  };
+}
+
+export async function previewShopBackupRestore(shopId, artifactId) {
+  const { row, snapshot } = await loadVerifiedSnapshot(shopId, artifactId);
+  const manifest = snapshot?.manifest;
+  const data = snapshot?.data;
+  if (!manifest || !data || typeof data !== "object" || Array.isArray(data)) {
+    throw appError("Backup manifest or data is missing", 400, "BACKUP_STRUCTURE_INVALID");
+  }
+  if (manifest.product !== "KiranaOS" || manifest.format !== BACKUP_FORMAT) {
+    throw appError("Backup format is not supported", 409, "BACKUP_FORMAT_UNSUPPORTED");
+  }
+  if (manifest.schemaVersion !== BACKUP_SCHEMA_VERSION || row.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+    throw appError("Backup schema is not compatible with this release", 409, "BACKUP_SCHEMA_INCOMPATIBLE");
+  }
+  if (manifest.shopId !== shopId || data.shop?.id !== shopId) {
+    throw appError("Backup belongs to a different shop", 403, "BACKUP_TENANT_MISMATCH");
+  }
+  const tableCounts = Object.fromEntries(
+    Object.entries(data)
+      .filter(([, value]) => Array.isArray(value))
+      .map(([name, value]) => [name, value.length])
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+  return {
+    artifact_id: row.id,
+    restorable: true,
+    schema_version: manifest.schemaVersion,
+    created_at: manifest.createdAt,
+    record_count: Object.values(tableCounts).reduce((sum, value) => sum + value, 0),
+    table_counts: tableCounts,
+    credentials_preserved: true,
+    warnings: [
+      "Current passwords, owner PINs, sessions, device identities, and integration secrets will be preserved.",
+      "A fresh pre-restore snapshot and final confirmation are required before any records can be replaced.",
+    ],
   };
 }
 
@@ -449,12 +512,8 @@ export async function cleanupExpiredShopBackups({ limit = 100 } = {}) {
 }
 
 export async function verifyBackupArtifactForTest(shopId, artifactId) {
-  const row = await db.backupArtifact.findFirst({ where: { id: artifactId, shopId, status: "completed" } });
-  if (!row?.objectKey) throw appError("Backup artifact not found", 404, "BACKUP_ARTIFACT_NOT_FOUND");
-  const encrypted = await getObject({ key: row.objectKey });
-  const checksum = crypto.createHash("sha256").update(encrypted).digest("hex");
-  if (checksum !== row.checksumSha256) throw appError("Backup checksum mismatch", 409, "BACKUP_CHECKSUM_MISMATCH");
-  return JSON.parse(decryptSnapshot(encrypted).toString("utf8"));
+  const { snapshot } = await loadVerifiedSnapshot(shopId, artifactId);
+  return snapshot;
 }
 
 export const __backupInternals = {
@@ -465,5 +524,6 @@ export const __backupInternals = {
   decryptSnapshot,
   encryptSnapshot,
   encryptionKey,
+  parseSnapshot,
   stringifySnapshot,
 };

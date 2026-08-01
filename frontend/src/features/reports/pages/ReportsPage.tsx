@@ -802,7 +802,7 @@ function MobileReportsOverview({
 
   return (
     <section className="space-y-3 md:hidden" aria-label="Mobile report overview" data-testid="mobile-reports-overview">
-      <article className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[#071841] via-[var(--brand)] to-[#378cff] p-5 text-white shadow-[0_18px_46px_rgba(7,95,255,0.24)]">
+      <article className="relative overflow-hidden rounded-[26px] bg-gradient-to-br from-[var(--brand-ink)] via-[var(--brand)] to-[var(--brand-strong)] p-5 text-white shadow-[0_18px_46px_var(--brand-shadow)]">
         <span className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full border border-white/15 bg-white/[0.06]" aria-hidden="true" />
         <span className="pointer-events-none absolute -bottom-20 -left-16 h-40 w-40 rounded-full bg-[#54c9ff]/20 blur-2xl" aria-hidden="true" />
         <div className="relative">

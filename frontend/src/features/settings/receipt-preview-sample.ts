@@ -32,6 +32,8 @@ export function sampleReceiptSnapshot(
     total: 470,
     paid: 470,
     credit: 0,
+    previousUdhar: cfg.showPreviousUdhar ? 325 : undefined,
+    udharAfterBill: cfg.showPreviousUdhar ? 325 : undefined,
     payments: [{ mode: "cash", amount: 470 }],
     showHsn: cfg.showHsn,
     showMrp: cfg.showMrp,

@@ -1003,7 +1003,7 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
               <HealthRow icon={<MonitorSmartphone size={13} />} label="Device Status" status="ok" value="Active" />
             </div>
             <Link href="/sync-status">
-              <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-[9px] bg-[var(--brand)] py-2.5 text-[12px] font-bold text-white shadow-[0_8px_18px_rgba(7,95,255,0.18)] transition-colors duration-200 hover:bg-[#0054e8]">
+              <button type="button" className="mt-3 flex w-full items-center justify-center gap-2 rounded-[9px] bg-[var(--brand)] py-2.5 text-[12px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors duration-200 hover:bg-[var(--brand-strong)]">
                 <RefreshCw size={13} aria-hidden="true" /> Sync Now
               </button>
             </Link>

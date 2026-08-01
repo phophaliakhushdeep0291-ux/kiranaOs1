@@ -304,6 +304,7 @@ async function loadBillProducts(items: BillInputItem[]) {
 
 function buildStockProjection(items: BillInputItem[], productsById: Map<string, Product>) {
   const runningStock = new Map<string, number>();
+  const runningPackStock = new Map<string, number>();
   const touchedProducts = new Map<string, Product>();
 
   for (const item of items) {
@@ -314,13 +315,32 @@ function buildStockProjection(items: BillInputItem[], productsById: Map<string, 
     const next = roundMoney(previous - billItemBaseQuantity(item, product));
     runningStock.set(product.id, next);
     touchedProducts.set(product.id, product);
+
+    if (product.packagingMode === "per_pack" && item.sellingUnitId) {
+      const sellingUnit = product.sellingUnits?.find((unit) => unit.id === item.sellingUnitId);
+      if (sellingUnit) {
+        const key = `${product.id}:${sellingUnit.id}`;
+        const packBefore = runningPackStock.has(key)
+          ? runningPackStock.get(key)!
+          : readNumber(sellingUnit.onHandQty, 0);
+        runningPackStock.set(key, roundMoney(packBefore - Math.abs(readNumber(item.quantity, 0))));
+      }
+    }
   }
 
   const now = new Date().toISOString();
   return Array.from(touchedProducts.values()).map((product) => {
     const nextStock = runningStock.get(product.id) ?? productStockQty(product);
+    const sellingUnits = product.packagingMode === "per_pack"
+      ? product.sellingUnits?.map((unit) => {
+          if (!unit.id) return unit;
+          const nextPackStock = runningPackStock.get(`${product.id}:${unit.id}`);
+          return nextPackStock === undefined ? unit : { ...unit, onHandQty: nextPackStock };
+        })
+      : product.sellingUnits;
     return {
       ...product,
+      sellingUnits,
       stockBaseQty: nextStock,
       stockQuantity: nextStock,
       stockTrackingEnabled: true,

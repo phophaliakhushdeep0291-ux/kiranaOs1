@@ -9,6 +9,7 @@ import type { Shop } from "@/types/api";
 import { setPaymentConfigCache } from "@/features/settings/payment-config";
 
 export const PREFS_KEY = "kirana:settings-prefs:v1";
+export const PREFS_PENDING_KEY = "kirana:settings-prefs-pending:v1";
 
 /**
  * The whole Settings module persists its preferences inside one synced blob
@@ -63,10 +64,14 @@ export function useSettingsPrefs() {
       const updated = await updateShopOnServer({ settingsJson: JSON.stringify(next) });
       queryClient.setQueryData(getGetShopQueryKey(), updated);
       await offlineDB.setSetting("shop", updated).catch(() => undefined);
-      if (pendingRef.current === next) pendingRef.current = null;
+      if (pendingRef.current === next) {
+        pendingRef.current = null;
+        await offlineDB.setSetting(PREFS_PENDING_KEY, null).catch(() => undefined);
+      }
       return updated;
     } catch {
       pendingRef.current = next;
+      await offlineDB.setSetting(PREFS_PENDING_KEY, next).catch(() => undefined);
       return null;
     }
   }
@@ -106,13 +111,35 @@ export function useSettingsPrefs() {
     } catch { /* ignore malformed */ }
   }, [shop.data?.settingsJson]);
 
+  // A failed settings write must survive reloads and a backend outage. Retry the
+  // exact latest blob on reconnect and periodically while the tab remains open;
+  // an older in-flight success can never clear a newer pending value.
+  useEffect(() => {
+    let active = true;
+    void offlineDB.getSetting<SettingsPrefs>(PREFS_PENDING_KEY).then((saved) => {
+      if (!active || !saved) return;
+      pendingRef.current = saved;
+      void persistPrefsToServer(saved);
+    });
+    const retry = () => {
+      const pending = pendingRef.current;
+      if (pending) void persistPrefsToServer(pending);
+    };
+    window.addEventListener("online", retry);
+    const interval = window.setInterval(retry, 30_000);
+    return () => {
+      active = false;
+      window.removeEventListener("online", retry);
+      window.clearInterval(interval);
+    };
+  }, []);
+
   // Flush any pending server write on unmount so a change made just before
   // navigating away is never lost (and can't be clobbered by a stale re-load).
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);
     if (pendingRef.current) {
       void persistPrefsToServer(pendingRef.current);
-      pendingRef.current = null;
     }
   }, []);
 
@@ -122,6 +149,7 @@ export function useSettingsPrefs() {
     pendingRef.current = next;
     setPrefs(next);
     void offlineDB.setSetting(PREFS_KEY, next); // durable + instant; cheap IndexedDB put
+    void offlineDB.setSetting(PREFS_PENDING_KEY, next);
     if ("printer" in partial && next.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...next.printer });
     if ("bank" in partial) setPaymentConfigCache(next.bank, shop.data?.name);
     if (timer.current) clearTimeout(timer.current);

@@ -8,6 +8,19 @@ export interface ShopCategory {
   parentId: string | null;
   status: CategoryStatus;
   createdAt: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+}
+
+export function mergeCategories(...lists: Array<ShopCategory[] | null | undefined>): ShopCategory[] {
+  const merged = new Map<string, ShopCategory>();
+  for (const list of lists) for (const category of list ?? []) {
+    if (!category?.id || !category.name) continue;
+    const normalized = { ...category, updatedAt: category.updatedAt ?? category.createdAt, deletedAt: category.deletedAt ?? null };
+    const current = merged.get(category.id);
+    if (!current || String(normalized.updatedAt) > String(current.updatedAt ?? current.createdAt)) merged.set(category.id, normalized);
+  }
+  return [...merged.values()];
 }
 
 const KEY = "kirana:categories:v1";

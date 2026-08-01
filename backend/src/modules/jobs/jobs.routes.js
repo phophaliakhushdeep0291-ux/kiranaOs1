@@ -13,6 +13,7 @@ router.get("/workers", ctrl.workerHealth);
 router.get("/backups", ctrl.shopBackups);
 router.post("/backups", requireOwnerPin, ctrl.createShopBackup);
 router.get("/backups/:id/download", requireOwnerPin, ctrl.downloadShopBackup);
+router.post("/backups/:id/restore-preview", requireOwnerPin, ctrl.previewShopBackupRestore);
 router.get("/queues/:queueName", ctrl.queueDetail);
 router.get("/queues/:queueName/failed", ctrl.queueFailed);
 router.post("/:queueName/:jobId/retry", requireOwnerPin, ctrl.retry);

@@ -806,7 +806,7 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
 function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
   return (
     <article className="group flex min-w-0 flex-col rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_8px_26px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
-      <div className="relative grid aspect-[1.2/1] place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-[#f8fbff] via-[#f3f7ff] to-[var(--brand-soft)] sm:aspect-square sm:rounded-2xl">
+      <div className="relative grid aspect-[1.2/1] place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-[var(--brand-softer)] via-white to-[var(--brand-soft)] sm:aspect-square sm:rounded-2xl">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-[76%] w-[76%] object-contain transition duration-300 group-hover:scale-105" />
         ) : (
@@ -848,7 +848,7 @@ function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProdu
 function ProductListRow({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-[#e3ebf7] bg-white p-3">
-      <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#f8fbff] to-[var(--brand-soft)]">
+      <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[var(--brand-softer)] to-[var(--brand-soft)]">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-14 w-14 object-contain" />
         ) : (
@@ -1278,7 +1278,7 @@ function IconBubble({ icon: Icon, tone = "blue" }: { icon: typeof Home; tone?: "
 
 function ProductThumb({ product, size = "h-12 w-12" }: { product?: CustomerCatalogProduct; size?: string }) {
   return (
-    <div className={`grid ${size} shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#f8fbff] to-[var(--brand-soft)]`}>
+    <div className={`grid ${size} shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[var(--brand-softer)] to-[var(--brand-soft)]`}>
       {product?.imageUrl ? (
         <img src={product.imageUrl} alt="" className="h-[82%] w-[82%] object-contain" />
       ) : (

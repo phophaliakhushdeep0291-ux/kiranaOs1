@@ -1,0 +1,27 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+function source(relativePath: string) {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), "utf8");
+}
+
+describe("Customers/Udhar first-load performance contracts", () => {
+  it("defers the financial integrity scan and indexes ledger rows in one pass", () => {
+    const content = source("../features/customers/customer-ledger-data.ts");
+    const loader = content.slice(content.indexOf("export async function loadCustomersWithLedger"));
+
+    expect(content).toContain("requestIdleCallback");
+    expect(content).toContain("ledgerByCustomerId");
+    expect(loader).not.toMatch(/allCustomers\.map[\s\S]*?ledger\.filter/);
+  });
+
+  it("does not block the local customer list on a live server summary", () => {
+    const content = source("../features/customers/pages/CustomersPage.tsx");
+    const hook = content.slice(content.indexOf("function useCustomersLedgerList"), content.indexOf("function money"));
+
+    expect(hook).toContain("loadCachedAuthoritativeSummary()");
+    expect(hook).toContain('queryKey: ["customers-authoritative-summary-refresh"]');
+    expect(hook).not.toMatch(/queryFn:\s*async[\s\S]*?await resolveAuthoritativeUdharSummary/);
+  });
+});

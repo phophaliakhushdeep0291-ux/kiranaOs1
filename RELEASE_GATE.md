@@ -2,7 +2,7 @@
 
 Current decision: **NO-GO — candidate/external/manual evidence incomplete**
 Gate owner: Release owner  
-Last evaluated: 2026-07-31
+Last evaluated: 2026-08-01
 
 No new feature should enter a release branch while the P0 production gate is red. This document records the decision; `PRODUCTION_CHECKLIST.md` contains the full operational checklist.
 
@@ -39,7 +39,7 @@ Any failure is red. Skips require a written exception below; P0 financial, migra
 | Proof | Requirement/QA | Status |
 |---|---|---|
 | Cash, split, udhar and GST/estimate checkout | BILL-001..004 / MQA-BILL-01 | Partially verified. Live 390px cash and ₹20 cash + ₹30 UPI split bills persist, sync and appear once with distinct payment modes; a separate estimate uses the EST series and remains separated in history. Exact inclusive-GST accounting is covered by the RPT-001..002 release fixture. Udhar checkout and receipt-print QA remain open. |
-| Cancel/refund/return exact reversal | BILL-006 | Not verified |
+| Cancel/refund/return exact reversal | BILL-006 | Automated proof verified; live bill-history QA remains open. A mixed cash/UPI/Udhar bill is denied with the wrong PIN, then cancellation restores stock, clears Udhar, nets every financial leg to 0 paise, persists the reason/audit and stays exact-once on retry (backend billing 19/19). Offline cancellation applies the bill, pooled/per-pack stock, inventory, Udhar, audit and outbox changes in one transaction with repeated-action protection (focused frontend 39/39). |
 | Offline bill survives reload and syncs once | SYNC-001..002 / MQA-SYNC-01 | Verified. A live 390px cash bill survived reload, reconciled from PENDING to KOS-2026-000003, appeared once in history, and ended with 0 pending/failed/conflict items and sequence lag 0. Focused frontend sync suites pass 39/39 and backend sync integration passes 40/40. |
 | Two-device duplicate/conflict proof | SYNC-002..003 | Automated proof verified; live two-device QA remains open. Backend coverage proves idempotent same-bill replay, persisted conflict visibility, optimistic audited resolution across devices, and monotonic per-device acknowledgements. |
 | Purchase receipt and supplier/stock reconciliation | INV-002..004 / MQA-PUR-01 | Verified. Backend proofs cover partial due, weighted cost, exact stock/lots, audit uniqueness and strict replay identity. Live 390px create/receive reconciled stock 24 -> 28 and ₹920 = ₹100 paid + ₹820 due. Live settlement/reversal proved ₹900 -> ₹700 -> ₹900, exact-event replay, 390x844 geometry, 44px controls and zero runtime/overflow errors. |
@@ -58,6 +58,8 @@ Reporting-authority addendum (2026-07-31): operational tables and locked daily-c
 Closing/GST addendum (2026-07-31): one API-driven release fixture now ties the immutable invoice and refund lines to the live Daily Closing, persisted snapshot and GST report. Exact paise checks cover cash/UPI/bank/credit, old-udhar cash recovery, cash expense, estimate inclusion in operational sales, estimate exclusion from GST, and intrastate CGST/SGST netting. Focused report integration passes 12/12. This closes the release sample only; BUG-003's exclusive-GST discount policy still requires the documented accountant/product ruling.
 
 Offline bill identity addendum (2026-07-31): live same-content repeat-sale QA exposed a repair heuristic that could merge a new pending bill into an earlier server bill when both were created inside the same five-minute window. The repair now requires matching durable client identity whenever both sides carry one; the content/time heuristic is legacy-only. The regression test preserves both distinct bills and the pending outbox row. Focused frontend sync suites pass 39/39, backend sync integration passes 40/40, and live 390px proof shows consecutive KOS-2026-000005 cash and KOS-2026-000006 split bills both synced and visible with zero horizontal overflow. Conflict resolution also ignores empty wrapper snapshots before selecting plain local/server entity data; mutable customer resolution and immutable financial blocking now pass in the same 40/40 suite.
+
+Cancellation-integrity addendum (2026-08-01): automated BILL-006 evidence now ties authorization, persisted reason/audit, stock, mixed cash/UPI/Udhar and append-only financial effects into one release fixture. The backend billing integration passes 19/19 with exact zero-paise/unit netting and retry idempotency. Offline cancellation no longer waits for a server pull to restore inventory: the optimistic bill, pooled/per-pack stock, inventory reversal, Udhar correction, audit and stable outbox event commit together, and an already-cancelled guard prevents a duplicate local reversal. Focused frontend coverage passes 39/39 and typecheck passes. Live 390px cancellation and post-sync bill-history proof remain open, so the manual row is not green yet.
 
 ## Defect thresholds
 

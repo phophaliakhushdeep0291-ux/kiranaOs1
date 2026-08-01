@@ -32,7 +32,8 @@ export function DataTableCard({ title, description, actions, children, loading =
       </div>
       {loading ? (
         <div className="space-y-2 p-4" role="status" aria-live="polite" aria-busy="true" aria-label="Loading table data">
-          {Array.from({ length: loadingRows }).map((_, index) => <Skeleton key={index} className="h-10 w-full" />)}
+          <Skeleton className="h-10 w-full rounded-lg" />
+          {Array.from({ length: loadingRows }).map((_, index) => <Skeleton key={index} className="h-12 w-full rounded-lg" />)}
         </div>
       ) : error ? (
         <EmptyState

@@ -100,7 +100,7 @@ export default defineConfig({
       ecma: 2020,
       module: true,
       compress: {
-        passes: 4,
+        passes: 10,
         toplevel: true,
         keep_fargs: false,
         // booleans_as_integers MUST stay off. It rewrites `x === true` to `1 == x`
@@ -123,10 +123,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
-        // Merge only very small compatible lazy chunks. This preserves route-level
-        // loading while avoiding dozens of sub-6.6 kB requests and repeated gzip
-        // framing/dictionaries across feature helper modules.
-        experimentalMinChunkSize: 6_600,
+        // Merge compatible helper/leaf chunks below ~120 kB. Route entry points
+        // remain lazy, while fewer tiny transport units remove repeated module
+        // wrappers and gzip dictionaries from the full offline application cache.
+        experimentalMinChunkSize: 120_000,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],

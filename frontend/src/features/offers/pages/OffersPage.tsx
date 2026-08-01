@@ -100,6 +100,11 @@ export default function OffersPage() {
       style={panelOpen && isDesktop ? { paddingRight: panelWidth + 24 } : undefined}
     >
       <div className="space-y-4">
+        {!isOnline && (
+          <div role="status" className="rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] font-semibold text-amber-900">
+            Showing the last offers saved on this device. Coupon redemption and offer changes require a connection so usage limits cannot be oversubscribed across counters.
+          </div>
+        )}
         <div className="grid grid-cols-1 gap-3.5 min-[460px]:grid-cols-2 xl:grid-cols-4">
           <Kpi icon={<Ticket size={16} />} label="Active Offers" value={String(activeCount)} tone="blue" />
           <Kpi icon={<Tag size={16} />} label="Scheduled Offers" value={String(scheduledCount)} tone="violet" />

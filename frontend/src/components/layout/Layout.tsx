@@ -451,12 +451,13 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden border-r border-white/10 bg-sidebar text-sidebar-foreground shadow-[10px_0_40px_rgba(3,18,43,0.20)] will-change-[width] lg:flex lg:h-screen lg:flex-col",
+          "fixed inset-y-0 left-0 z-30 hidden border-r border-white/10 bg-sidebar text-sidebar-foreground shadow-[10px_0_40px_var(--brand-shadow-soft)] will-change-[width] lg:flex lg:h-screen lg:flex-col",
           isResizing ? "transition-none" : "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
         )}
         style={{
           width: "var(--app-sidebar-width)",
-          background: "radial-gradient(circle at 20% 0%, rgba(0,91,255,0.22), transparent 18rem), linear-gradient(180deg,#061b38 0%,#04152d 62%,#031024 100%)",
+          background:
+            "radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--brand) 24%, transparent), transparent 18rem), linear-gradient(180deg, color-mix(in srgb, hsl(var(--sidebar)) 82%, var(--brand)) 0%, hsl(var(--sidebar)) 62%, color-mix(in srgb, hsl(var(--sidebar)) 88%, black) 100%)",
         }}
       >
         {/* resize handle */}
@@ -468,13 +469,13 @@ export function Layout({ children }: { children: ReactNode }) {
         {/* Logo */}
         <div className={cn("flex items-center border-b border-white/10", collapsed ? "flex-col gap-3 p-3" : "gap-3 px-4 py-5")}>
           <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_14px_28px_rgba(0,91,255,0.30)] ring-1 ring-white/20">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_14px_28px_var(--brand-shadow)] ring-1 ring-white/20">
               <ShoppingCart size={20} aria-hidden="true" />
             </div>
             {!collapsed && (
               <div className="min-w-0">
                 <div className="font-display text-[28px] font-black leading-none tracking-tight text-white">
-                  Ar<span className="text-[#2b7cff]">tha</span>
+                  Ar<span className="text-[var(--brand)]">tha</span>
                 </div>
                 <div className="mt-1 truncate text-[11px] font-medium leading-none text-white/68">{btDef.navConfig.tagline}</div>
               </div>
@@ -579,7 +580,7 @@ export function Layout({ children }: { children: ReactNode }) {
             type="button"
             aria-label="Toggle sidebar"
             onClick={() => setCollapsed((c) => !c)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[var(--brand-softer)] hover:text-primary"
           >
             <Menu size={19} aria-hidden="true" />
           </button>
@@ -592,7 +593,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
           {activeStoreLocation && <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="flex h-11 max-w-[210px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-white px-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
+              <button type="button" className="flex h-11 max-w-[210px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-white px-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-[var(--brand-softer)]">
                 <Store size={16} className="shrink-0 text-primary" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[11px] font-black text-[var(--brand-ink)]">{activeStoreLocation.name}</span>
@@ -636,7 +637,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"
-              className="relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f5f9ff] hover:text-primary">
+              className="relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[var(--brand-softer)] hover:text-primary">
               <Bell size={18} aria-hidden="true" />
               {attentionCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
@@ -648,7 +649,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex max-w-[230px] min-w-0 items-center gap-3 rounded-[14px] border border-[#dfe8f5] bg-white px-2.5 py-2 text-sm shadow-sm transition-colors hover:border-primary/40 hover:bg-[#f8fbff]">
+              <button className="flex max-w-[230px] min-w-0 items-center gap-3 rounded-[14px] border border-[#dfe8f5] bg-white px-2.5 py-2 text-sm shadow-sm transition-colors hover:border-primary/40 hover:bg-[var(--brand-softer)]">
                 <div className="hidden min-w-0 max-w-[150px] text-right 2xl:block">
                   <div className="truncate text-[13px] font-extrabold leading-tight text-[var(--brand-ink)]">{storeName}</div>
                   <div className="truncate text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
@@ -738,7 +739,7 @@ function SidebarLink({ item, loc, collapsed, labelOverride }: {
           "group flex min-h-[44px] items-center rounded-[10px] text-[14px] font-semibold transition-all duration-150",
           collapsed ? "justify-center px-0" : "gap-3 px-3",
           active
-            ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]"
+            ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_var(--brand-shadow)]"
             : item.emphasis
               ? "text-white/90 hover:bg-white/10 hover:text-white"
               : "text-white/76 hover:bg-white/8 hover:text-white"
@@ -771,7 +772,7 @@ function SidebarGroup({ item, loc, collapsed, expanded, onToggle, labelOverrides
       <Link href={firstHref}>
         <div title={item.label}
           className={cn("flex h-[44px] items-center justify-center rounded-[10px] transition-all duration-150",
-            groupActive ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_rgba(0,91,255,0.26)]" : "text-white/76 hover:bg-white/8 hover:text-white")}>
+            groupActive ? "bg-[var(--brand)] text-white shadow-[0_10px_22px_var(--brand-shadow)]" : "text-white/76 hover:bg-white/8 hover:text-white")}>
           <item.Icon size={18} aria-hidden="true" />
         </div>
       </Link>

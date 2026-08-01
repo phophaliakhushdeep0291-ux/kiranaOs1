@@ -231,6 +231,39 @@ if (ctx.skip) {
       assert.equal(history.length, 1, "exactly one PurchaseHistory row (supplier due not doubled)");
     });
 
+    test("STOCK_PURCHASE_BATCH commits every invoice line atomically and replays exact-once", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const firstProduct = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, costPerRateUnit: 10 });
+      const secondProduct = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 5, costPerRateUnit: 20 });
+      const lines = [
+        { productId: firstProduct.id, quantity: 2, enteredUnit: firstProduct.baseUnit, billAmount: 30, supplierName: "Batch Supplier", invoiceNumber: "BATCH-1", idempotencyKey: "batch-line-1", clientMovementId: "batch-line-1" },
+        { productId: secondProduct.id, quantity: 3, enteredUnit: secondProduct.baseUnit, billAmount: 75, supplierName: "Batch Supplier", invoiceNumber: "BATCH-1", idempotencyKey: "batch-line-2", clientMovementId: "batch-line-2" },
+      ];
+      const event = { type: "STOCK_PURCHASE_BATCH", payload: { batchId: "batch-1", lines } };
+
+      const first = assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "batch-event-1" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(first.summary.synced, 1, JSON.stringify(first.results));
+      assert.equal(first.results[0].result.movements.length, 2);
+      assertSuccess(await ctx.post("/api/sync/push", { events: [{ ...event, eventId: "batch-event-1-retry" }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+
+      assert.equal((await ctx.db.product.findUnique({ where: { id: firstProduct.id } })).stockBaseQty, 12);
+      assert.equal((await ctx.db.product.findUnique({ where: { id: secondProduct.id } })).stockBaseQty, 8);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, action: "purchase", idempotencyKey: { in: ["batch-line-1", "batch-line-2"] } } }), 2);
+      assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id, invoiceNumber: "BATCH-1" } }), 2);
+
+      const rejected = assertSuccess(await ctx.post("/api/sync/push", { events: [{
+        type: "STOCK_PURCHASE_BATCH",
+        eventId: "batch-event-invalid",
+        payload: { batchId: "batch-invalid", lines: [
+          { ...lines[0], idempotencyKey: "batch-invalid-line-1", clientMovementId: "batch-invalid-line-1", invoiceNumber: "BATCH-INVALID" },
+          { ...lines[1], productId: "missing-product", idempotencyKey: "batch-invalid-line-2", clientMovementId: "batch-invalid-line-2", invoiceNumber: "BATCH-INVALID" },
+        ] },
+      }] }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(rejected.summary.synced, 0);
+      assert.equal(await ctx.db.stockLedger.count({ where: { shopId: tenant.shop.id, idempotencyKey: "batch-invalid-line-1" } }), 0, "valid first line must not survive an invalid later line");
+      assert.equal(await ctx.db.purchaseHistory.count({ where: { shopId: tenant.shop.id, invoiceNumber: "BATCH-INVALID" } }), 0);
+    });
+
     test("STOCK_PURCHASE normalizes legacy partial purchase payloads before validation", async () => {
       const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
       const product = await createProduct(ctx.db, tenant.shop.id, { stockBaseQty: 10, costPerRateUnit: 10 });

@@ -508,7 +508,7 @@ export function ProductFormPanel({
                   <button
                     type="button"
                     onClick={() => setExtraPackOpen((value) => !value)}
-                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[#bcd0ff] bg-white px-2.5 text-[10.5px] font-black text-[var(--brand)] hover:bg-[#f2f7ff]"
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--brand-border)] bg-white px-2.5 text-[10.5px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]"
                   >
                     {extraPackOpen ? <X size={12} /> : <Plus size={12} />}
                     {extraPackOpen ? "Close" : "Add size"}
@@ -633,7 +633,7 @@ export function ProductFormPanel({
                       How many of this pack you have now. It is added to the product's opening
                       stock — every pack size sells from that one stock.
                     </p>
-                    <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[var(--brand)] text-[11.5px] font-black text-white hover:bg-[#0052e8]">Add pack to product</button>
+                    <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[var(--brand)] text-[11.5px] font-black text-white hover:bg-[var(--brand-strong)]">Add pack to product</button>
                   </div>
                 ) : null}
               </div>

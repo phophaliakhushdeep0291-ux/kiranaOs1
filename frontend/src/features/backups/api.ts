@@ -25,6 +25,17 @@ export interface BackupListResponse {
   retention_days: number;
 }
 
+export interface BackupRestorePreview {
+  artifact_id: string;
+  restorable: true;
+  schema_version: string;
+  created_at: string;
+  record_count: number;
+  table_counts: Record<string, number>;
+  credentials_preserved: boolean;
+  warnings: string[];
+}
+
 export function listShopBackups(options: { background?: boolean } = {}) {
   return apiRequest<BackupListResponse>("/jobs/backups", {
     method: "GET",
@@ -45,6 +56,14 @@ export function downloadShopBackup(id: string, ownerPin: string) {
     method: "GET",
     ownerPin,
     responseType: "blob",
+  });
+}
+
+export function previewShopBackupRestore(id: string, ownerPin: string) {
+  return apiRequest<{ preview: BackupRestorePreview }>(`/jobs/backups/${encodeURIComponent(id)}/restore-preview`, {
+    method: "POST",
+    ownerPin,
+    body: "{}",
   });
 }
 

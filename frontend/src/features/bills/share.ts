@@ -159,8 +159,8 @@ export function billRecordToShareInput(
 
 /**
  * Best-effort customer mobile for a bill. Synced server bills don't denormalize the mobile, so
- * fall back to the customer record (looked up by id) from local storage. Uses a lazy import so
- * this module stays dependency-light for unit tests.
+ * fall back to the customer record (looked up by id) from local storage. The lazy import keeps
+ * bill sharing independent of IndexedDB in lightweight rendering and unit-test contexts.
  */
 export async function resolveBillCustomerMobile(bill: AnyRow): Promise<string | undefined> {
   const direct = str(bill.customerMobile ?? bill.customer_mobile);

@@ -54,6 +54,8 @@ export interface BillingDraft {
   activeBillId?: string;
   /** When this bill was loaded from a customer QR order, its id — so finalizing marks it fulfilled. */
   sourceOrderId?: string;
+  /** Canonical product/quantity signature of the online order imported into this draft. */
+  sourceOrderFingerprint?: string;
   cart?: CartItem[];
   discount?: number;
   discountReason?: string;
@@ -91,6 +93,8 @@ export interface PrintableBill {
   total: number;
   paid: number;
   credit: number;
+  /** Customer ledger balance immediately before this bill. */
+  previousUdhar?: number;
   paymentMode: PaymentSelection;
   billType: BillTypeSelection;
   payments?: Array<{ mode: string; amount: number; label?: string | null }>;

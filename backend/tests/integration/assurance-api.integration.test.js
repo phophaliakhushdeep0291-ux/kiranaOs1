@@ -51,7 +51,7 @@ async function makeBill(shopId, overrides = {}) {
       ...moneyShadows(money),
       ...Object.fromEntries(
         Object.entries(rest).filter(([key]) =>
-          ["customerId", "createdByUserId", "deviceId", "sourceDeviceId", "idempotencyKey", "clientBillId", "status", "cancelledAt", "cancelledReason", "createdAt", "discountReason"].includes(key)
+          ["customerId", "createdByUserId", "deviceId", "sourceDeviceId", "idempotencyKey", "clientBillId", "status", "cancelledAt", "cancelledReason", "businessDate", "createdAt", "discountReason"].includes(key)
         )
       ),
       ...(items ? { items: { create: items } } : {}),
@@ -725,12 +725,13 @@ function runSuite() {
         lockedAt, lockedByUserId: main.owner.id, generatedAt: lockedAt, source: "manual",
       },
     });
-    // Genuinely backdated: the bill's own timestamp sits before the lock, but its
-    // offline sync event only reached the server hours after the day was locked.
+    // Genuinely backdated: businessDate preserves the time of sale before the
+    // lock, while createdAt and the sync event show the later server replay.
     const backdatedKey = `offline-acc-${Date.now()}`;
     const backdated = await makeBill(shopId, {
       grandTotal: 700, paidAmount: 700, createdByUserId: staff.staff.id,
-      createdAt: new Date(lockedAt.getTime() - 90 * 60 * 1000),
+      businessDate: new Date(lockedAt.getTime() - 90 * 60 * 1000),
+      createdAt: new Date(lockedAt.getTime() + 4 * 3600 * 1000),
       idempotencyKey: backdatedKey, sourceDeviceId: "device-offline-acc",
       items: [billItem(product, { quantity: 7, ratePerRateUnit: 100, lineTotal: 700 })],
       payments: [{ shopId, mode: "cash", amount: 700, ...moneyShadows({ amount: 700 }) }],

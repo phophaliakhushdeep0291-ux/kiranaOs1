@@ -12,8 +12,10 @@ import {
   createShopBackup,
   downloadShopBackup,
   listShopBackups,
+  previewShopBackupRestore,
   saveBackupBlob,
   type BackupArtifact,
+  type BackupRestorePreview,
 } from "@/features/backups";
 function timeAgo(d: Date | null) {
   if (!d) return "—";
@@ -50,7 +52,8 @@ export default function SyncSettingsPage() {
   const [backupRetentionDays, setBackupRetentionDays] = useState(30);
   const [backupHistoryLoading, setBackupHistoryLoading] = useState(true);
   const [backupAccessDenied, setBackupAccessDenied] = useState(false);
-  const [backupApproval, setBackupApproval] = useState<{ type: "create" | "download"; artifact?: BackupArtifact } | null>(null);
+  const [backupApproval, setBackupApproval] = useState<{ type: "create" | "download" | "restore-preview"; artifact?: BackupArtifact } | null>(null);
+  const [restorePreview, setRestorePreview] = useState<BackupRestorePreview | null>(null);
   const [backupActionLoading, setBackupActionLoading] = useState(false);
   const [backupActionError, setBackupActionError] = useState<string | null>(null);
   const wasSyncing = useRef(false);
@@ -93,10 +96,14 @@ export default function SyncSettingsPage() {
           title: result.backup.status === "completed" ? "Encrypted backup ready" : "Encrypted backup queued",
           description: "The portable snapshot is tenant-scoped, checksummed, and protected with AES-256-GCM.",
         });
-      } else if (backupApproval.artifact) {
+      } else if (backupApproval.type === "download" && backupApproval.artifact) {
         const blob = await downloadShopBackup(backupApproval.artifact.id, ownerPin);
         saveBackupBlob(blob, backupApproval.artifact);
         toast({ title: "Encrypted backup downloaded", description: "Keep the .kosb file and encryption key in separate secure locations." });
+      } else if (backupApproval.type === "restore-preview" && backupApproval.artifact) {
+        const result = await previewShopBackupRestore(backupApproval.artifact.id, ownerPin);
+        setRestorePreview(result.preview);
+        toast({ title: "Backup verified", description: `${result.preview.record_count.toLocaleString("en-IN")} records are structurally compatible with this shop.` });
       }
       setBackupApproval(null);
       await loadBackups();
@@ -257,29 +264,38 @@ export default function SyncSettingsPage() {
                       : `${backupSize(artifact.size_bytes)} · ${artifact.record_count?.toLocaleString("en-IN") ?? "—"} records · expires ${backupTime(artifact.expires_at)}`}
                   </p>
                 </div>
-                {artifact.status === "completed" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 rounded-[8px] text-[12px]"
-                    onClick={() => { setBackupActionError(null); setBackupApproval({ type: "download", artifact }); }}
-                  >
+                {artifact.status === "completed" && <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px]" onClick={() => { setBackupActionError(null); setBackupApproval({ type: "restore-preview", artifact }); }}>
+                    <ShieldCheck size={13} /> Validate restore
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px]" onClick={() => { setBackupActionError(null); setBackupApproval({ type: "download", artifact }); }}>
                     <Download size={13} /> Download
                   </Button>
-                )}
+                </div>}
               </div>
             ))}
+            {restorePreview && (
+              <div className="rounded-[11px] border border-emerald-200 bg-emerald-50 px-4 py-3" role="status">
+                <p className="text-[12px] font-bold text-emerald-900">Restore validation passed</p>
+                <p className="mt-1 text-[11px] leading-5 text-emerald-800">
+                  Schema {restorePreview.schema_version} · {restorePreview.record_count.toLocaleString("en-IN")} records across {Object.keys(restorePreview.table_counts).length} data groups. Current credentials will be preserved.
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-emerald-800">No records were changed. Execution remains disabled until a fresh pre-restore snapshot and rollback check can be guaranteed.</p>
+              </div>
+            )}
           </div>
         </Card>
       </div>
 
       <OwnerPinModal
         open={Boolean(backupApproval)}
-        title={backupApproval?.type === "download" ? "Download encrypted backup" : "Create encrypted shop backup"}
+        title={backupApproval?.type === "download" ? "Download encrypted backup" : backupApproval?.type === "restore-preview" ? "Validate restore safety" : "Create encrypted shop backup"}
         description={backupApproval?.type === "download"
           ? "This exports sensitive shop data in an encrypted .kosb envelope. The download is audited."
-          : "This creates a transactionally consistent, tenant-scoped snapshot. Credential hashes and session secrets are excluded."}
-        confirmLabel={backupApproval?.type === "download" ? "Download backup" : "Create backup"}
+          : backupApproval?.type === "restore-preview"
+            ? "Checks encryption, checksum, tenant ownership, schema compatibility and record structure. This validation does not change shop data."
+            : "This creates a transactionally consistent, tenant-scoped snapshot. Credential hashes and session secrets are excluded."}
+        confirmLabel={backupApproval?.type === "download" ? "Download backup" : backupApproval?.type === "restore-preview" ? "Validate backup" : "Create backup"}
         loading={backupActionLoading}
         error={backupActionError}
         onCancel={() => { if (!backupActionLoading) { setBackupApproval(null); setBackupActionError(null); } }}

@@ -391,23 +391,50 @@ export function readCachedCustomersWithLedger(): CustomerWithLedger[] {
       } as CustomerWithLedger;
     });
 }
+
+let financialHardeningScheduled = false;
+
+/**
+ * Financial hardening scans several IndexedDB tables. Starting it before the
+ * customer reads makes the first paint queue behind a maintenance job. Run it
+ * once when the browser is idle instead; any repair emits the existing data
+ * change event and refreshes the list afterwards.
+ */
+function scheduleFinancialHardening(): void {
+  if (financialHardeningScheduled || typeof window === "undefined") return;
+  financialHardeningScheduled = true;
+  const run = () => void hardenLocalFinancialData().catch(() => undefined);
+  const browserWindow = window as typeof window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+  };
+  if (browserWindow.requestIdleCallback) {
+    browserWindow.requestIdleCallback(run, { timeout: 5_000 });
+  } else {
+    window.setTimeout(run, 750);
+  }
+}
+
 export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
-  // Do not make first customer paint wait for a multi-table integrity scan.
-  // Repairs emit a data-change event and refresh this query when they complete.
-  void hardenLocalFinancialData().catch(() => undefined);
+  scheduleFinancialHardening();
   const cached = readInstantCache<Customer[]>("customers", []);
   const dbCustomers = await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []);
   const customers = uniqueById([...cached, ...dbCustomers].filter((customer) => !isDeleted(customer as unknown as Record<string, unknown>)) as Array<Customer & Record<string, unknown>>);
   const ledger = dedupeLedgerEntries(await offlineDB.getAll<CustomerLedgerEntry>("customer_ledger").catch(() => []));
   const idMappings = await offlineDB.getAll<Record<string, unknown>>("id_mappings").catch(() => []);
   const knownCustomerIds = new Set(customers.flatMap((customer) => [...expandIdsWithMappings(customerIds(customer), idMappings)]));
+  const ledgerByCustomerId = new Map<string, CustomerLedgerEntry[]>();
   const ledgerOnlyGroups = new Map<string, CustomerLedgerEntry[]>();
   for (const entry of ledger) {
     const id = getCustomerId(entry);
-    if (!id || knownCustomerIds.has(id)) continue;
-    const group = ledgerOnlyGroups.get(id) ?? [];
-    group.push(entry);
-    ledgerOnlyGroups.set(id, group);
+    if (!id) continue;
+    const indexed = ledgerByCustomerId.get(id) ?? [];
+    indexed.push(entry);
+    ledgerByCustomerId.set(id, indexed);
+    if (!knownCustomerIds.has(id)) {
+      const group = ledgerOnlyGroups.get(id) ?? [];
+      group.push(entry);
+      ledgerOnlyGroups.set(id, group);
+    }
   }
   const allCustomers = [
     ...customers,
@@ -415,10 +442,7 @@ export async function loadCustomersWithLedger(): Promise<CustomerWithLedger[]> {
   ];
   return allCustomers.map((customer) => {
     const ids = expandIdsWithMappings(customerIds(customer), idMappings);
-    const entries = ledger.filter((entry) => {
-      const id = getCustomerId(entry);
-      return id ? ids.has(id) : false;
-    });
+    const entries = [...ids].flatMap((id) => ledgerByCustomerId.get(id) ?? []);
     const metrics = metricsWithCustomerBalanceFallback(customer, entries);
     const balance = roundMoney(Math.max(0, metrics.balance));
     return {

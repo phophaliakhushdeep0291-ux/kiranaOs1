@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -61,7 +61,7 @@ import {
   toLedgerDriftCandidates,
   type CustomerWithLedger,
 } from "@/features/customers/customer-ledger-data";
-import { resolveAuthoritativeUdharSummary } from "@/features/ledger/authoritative-balances";
+import { loadCachedAuthoritativeSummary, resolveAuthoritativeUdharSummary } from "@/features/ledger/authoritative-balances";
 import { repairLedgerDriftFromServer } from "@/features/ledger/ledger-drift-repair";
 import { isManualAdjustmentEntry } from "@/features/ledger/accounting";
 import type { CustomerInput } from "@/types/api";
@@ -109,8 +109,10 @@ function blankCustomerForm(): CustomerFormState {
 
 function useCustomersLedgerList() {
   const queryClient = useQueryClient();
+  const authoritativeAppliedAtRef = useRef(0);
+  const listKey = ["customers-ledger-list"] as const;
   useEffect(() => {
-    const refresh = () => void queryClient.invalidateQueries({ queryKey: ["customers-ledger-list"] });
+    const refresh = () => void queryClient.invalidateQueries({ queryKey: listKey });
     window.addEventListener("kirana:local-data-changed", refresh);
     window.addEventListener("kirana:sync-queue-updated", refresh);
     return () => {
@@ -118,31 +120,52 @@ function useCustomersLedgerList() {
       window.removeEventListener("kirana:sync-queue-updated", refresh);
     };
   }, [queryClient]);
-  return useQuery({
-    queryKey: ["customers-ledger-list"],
+
+  const localQuery = useQuery({
+    queryKey: listKey,
     initialData: readCachedCustomersWithLedger(),
     queryFn: async () => {
-      const localCustomers = await loadCustomersWithLedger();
-      // The server's ledger summary is authoritative. Offline we reuse the last
-      // one this device saw rather than the raw local ledger, so the balances
-      // don't change the moment the connection does.
-      const { summary, source } = await resolveAuthoritativeUdharSummary();
-      if (!summary) return localCustomers;
-      // A synced customer whose local ledger disagrees with the server means the
-      // device replica is wrong. Overlaying the right number here would hide it
-      // from this page while every other reader stays broken, so repair the
-      // ledger itself and re-read it.
-      if (source === "server") {
-        const repaired = await repairLedgerDriftFromServer(
-          toLedgerDriftCandidates(localCustomers),
-          summary,
-        ).catch(() => false);
-        if (repaired) return applyAuthoritativeUdharSummary(await loadCustomersWithLedger(), summary);
-      }
-      return applyAuthoritativeUdharSummary(localCustomers, summary);
+      // First paint uses only local IndexedDB plus the last safe server summary.
+      // The live server refresh below runs in parallel and never blocks the list.
+      const [localCustomers, cached] = await Promise.all([
+        loadCustomersWithLedger(),
+        loadCachedAuthoritativeSummary(),
+      ]);
+      return cached?.summary ? applyAuthoritativeUdharSummary(localCustomers, cached.summary) : localCustomers;
     },
     staleTime: 1_500,
+    // The synchronous cache is only a first-frame placeholder. Always start
+    // the IndexedDB ledger read on mount instead of treating that cache as a
+    // freshly fetched result for the whole stale window.
+    refetchOnMount: "always",
   });
+
+  const authoritativeQuery = useQuery({
+    queryKey: ["customers-authoritative-summary-refresh"],
+    queryFn: resolveAuthoritativeUdharSummary,
+    staleTime: 10_000,
+  });
+
+  useEffect(() => {
+    const resolved = authoritativeQuery.data;
+    if (!resolved?.summary) return;
+    const current = queryClient.getQueryData<CustomerWithLedger[]>(listKey) ?? [];
+    if (current.length === 0 || authoritativeAppliedAtRef.current === authoritativeQuery.dataUpdatedAt) return;
+    authoritativeAppliedAtRef.current = authoritativeQuery.dataUpdatedAt;
+    queryClient.setQueryData(listKey, applyAuthoritativeUdharSummary(current, resolved.summary));
+    if (resolved.source !== "server") return;
+
+    // Repair a drifted device replica after the correct server numbers are
+    // already visible. A successful repair invalidates the list and re-reads it.
+    void repairLedgerDriftFromServer(toLedgerDriftCandidates(current), resolved.summary)
+      .then((repaired) => {
+        if (repaired) return queryClient.invalidateQueries({ queryKey: listKey });
+        return undefined;
+      })
+      .catch(() => undefined);
+  }, [authoritativeQuery.data, authoritativeQuery.dataUpdatedAt, localQuery.data, queryClient]);
+
+  return localQuery;
 }
 
 function money(value: unknown) {
@@ -406,27 +429,39 @@ export default function CustomersPage() {
   const creditLimit = money(selectedCustomer?.udharLimit);
   const availableCredit = Math.max(0, creditLimit - Math.max(0, money(selectedCustomer?.ledgerBalance)));
   const trustScore = selectedCustomer?.ledgerMetrics.trustScore ?? 0;
-  const allLedger = (overviewQuery.data?.ledger ?? []).filter(isLiveLedgerRow);
-  const receivedInRange = allLedger
-    .filter((row) => inDateRange(ledgerEntryDate(row), rangeFrom, rangeTo))
-    .reduce((sum, row) => sum + udharCollectionAmount(row), 0);
-  const selectedReceivedInRange = paymentRows
-    .filter((payment) => inDateRange(paymentDate(payment), rangeFrom, rangeTo))
-    .reduce((sum, payment) => sum + paymentAmount(payment), 0);
-  const overdueAmount = dedupedCustomers.reduce((sum, customer) => sum + Math.max(0, customer.ledgerMetrics.ageing.thirtyPlus), 0);
+  const allLedger = useMemo(
+    () => (overviewQuery.data?.ledger ?? []).filter(isLiveLedgerRow),
+    [overviewQuery.data?.ledger],
+  );
+  const receivedInRange = useMemo(
+    () => allLedger
+      .filter((row) => inDateRange(ledgerEntryDate(row), rangeFrom, rangeTo))
+      .reduce((sum, row) => sum + udharCollectionAmount(row), 0),
+    [allLedger, rangeFrom, rangeTo],
+  );
+  const selectedReceivedInRange = useMemo(
+    () => paymentRows
+      .filter((payment) => inDateRange(paymentDate(payment), rangeFrom, rangeTo))
+      .reduce((sum, payment) => sum + paymentAmount(payment), 0),
+    [paymentRows, rangeFrom, rangeTo],
+  );
+  const overdueAmount = useMemo(
+    () => dedupedCustomers.reduce((sum, customer) => sum + Math.max(0, customer.ledgerMetrics.ageing.thirtyPlus), 0),
+    [dedupedCustomers],
+  );
   // The insights range is the same one the top-right dropdown drives. Derive a live
   // label + a cycle so the "This Week" chip on Collection Progress is real, not static.
   const rangeDays = Math.max(0, Math.round((new Date(`${rangeTo}T00:00:00`).getTime() - new Date(`${rangeFrom}T00:00:00`).getTime()) / 86_400_000));
   const rangeLabel = rangeDays <= 0 ? "Today" : rangeDays <= 6 ? "Last 7 days" : rangeDays <= 29 ? "Last 30 days" : `Last ${rangeDays + 1} days`;
   const cycleRange = () => applyRange(rangeDays <= 0 ? 6 : rangeDays <= 6 ? 29 : 0);
-  const averageCollectionDays = (() => {
+  const averageCollectionDays = useMemo(() => {
     const values = dedupedCustomers.flatMap((customer) => {
       const bill = customer.ledgerMetrics.lastBillAt ? new Date(customer.ledgerMetrics.lastBillAt).getTime() : NaN;
       const payment = customer.ledgerMetrics.lastPaymentAt ? new Date(customer.ledgerMetrics.lastPaymentAt).getTime() : NaN;
       return Number.isFinite(bill) && Number.isFinite(payment) && payment >= bill ? [(payment - bill) / 86_400_000] : [];
     });
     return values.length > 0 ? Math.max(0, Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)) : 0;
-  })();
+  }, [dedupedCustomers]);
   const metricSparks = useMemo(() => {
     const days = Array.from({ length: 7 }, (_, index) => {
       const date = new Date();
@@ -800,8 +835,8 @@ export default function CustomersPage() {
             <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>All customers</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>With balance</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" onClick={exportCustomers} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />Export</Button>
-          <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[#bfd4f5] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[#174eaa] hover:bg-[#edf5ff] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />Collect payment</Button>
-          <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--brand)] to-[#0057e7] px-3 text-[11px] font-bold shadow-[0_8px_18px_rgba(7,95,255,0.2)] hover:from-[var(--brand-strong)] hover:to-[var(--brand-strong)] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>Add customer</span></Button>
+          <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[var(--brand-border)] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />Collect payment</Button>
+          <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] px-3 text-[11px] font-bold shadow-[0_8px_18px_var(--brand-shadow)] hover:from-[var(--brand-strong)] hover:to-[var(--brand-strong)] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>Add customer</span></Button>
         </div>
       </section>
 
@@ -847,7 +882,7 @@ export default function CustomersPage() {
                   className={cn(
                     "h-9 rounded-[10px] border px-2 text-[11px] font-black transition-colors",
                     filter === key
-                      ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_8px_18px_rgba(0,91,255,0.22)]"
+                      ? "border-[var(--brand)] bg-[var(--brand)] text-white shadow-[0_8px_18px_var(--brand-shadow)]"
                       : "border-[#e6ecf4] bg-white text-[#334466] hover:bg-[var(--brand-softer)]",
                   )}
                 >
@@ -884,7 +919,7 @@ export default function CustomersPage() {
                     className={cn(
                       "mb-2 flex w-full items-center gap-3 rounded-[14px] border p-3 text-left transition-all",
                       active
-                        ? "border-[var(--brand)] bg-[var(--brand-soft)] shadow-[0_10px_22px_rgba(0,91,255,0.10)]"
+                        ? "border-[var(--brand)] bg-[var(--brand-soft)] shadow-[0_10px_22px_var(--brand-shadow-soft)]"
                         : "border-transparent bg-white hover:border-[var(--brand-border)] hover:bg-[#f8fbff]",
                     )}
                   >
@@ -1085,7 +1120,7 @@ export default function CustomersPage() {
 
               <button
                 onClick={() => openPayment(selectedCustomer)}
-                className="flex w-full items-center justify-between rounded-[14px] bg-gradient-to-b from-[var(--brand)] to-[var(--brand-strong)] p-4 text-left text-white shadow-[0_14px_28px_rgba(0,91,255,0.26)] transition-transform hover:-translate-y-0.5"
+                className="flex w-full items-center justify-between rounded-[14px] bg-gradient-to-b from-[var(--brand)] to-[var(--brand-strong)] p-4 text-left text-white shadow-[0_14px_28px_var(--brand-shadow)] transition-transform hover:-translate-y-0.5"
               >
                 <span className="flex items-center gap-3">
                   <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-white/15"><Wallet size={18} /></span>
@@ -1394,7 +1429,7 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
         <div className="flex flex-col gap-4 p-[18px] sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{risk.label}</span><button onClick={() => onEdit(customer)} title="Edit customer" className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
           <div className="flex items-center gap-3">
-            <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_rgba(11,99,246,0.20)] transition-colors hover:bg-[#0057e7]"><BookOpen size={15} />View Ledger</Link>
+            <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />View Ledger</Link>
             <InfoMini label="Last Payment" value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
           </div>
         </div>
@@ -1410,7 +1445,7 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
         {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[var(--brand-ink)]">{fmtMoney(paymentTotal)}</span></p></div>}
         {moneyExceeds(paymentTotal, outstanding) && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
         <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">Payment Note <span className="font-medium text-[#94a3b8]">(Optional)</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder="Payment note / reference" /></div>
-        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[#0057e7] text-[12px] font-bold shadow-[0_8px_18px_rgba(11,99,246,0.20)]"><CheckCircle2 size={16} />{saving ? "Saving..." : "Collect Payment"}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />Send Reminder</Button></div>
+        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] text-[12px] font-bold shadow-[0_8px_18px_var(--brand-shadow)]"><CheckCircle2 size={16} />{saving ? "Saving..." : "Collect Payment"}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />Send Reminder</Button></div>
         <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[var(--brand)]" />After payment, customer balance and ledger update automatically.</p>
       </article>
     </section>

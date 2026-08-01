@@ -13,6 +13,36 @@ describe("bill reconciliation display dedupe", () => {
     expect(rows[0]?.sync_status).toBe("synced");
   });
 
+  it("keeps a local cancellation visible over its older synced active twin", () => {
+    const rows = dedupeBillsForDisplay([
+      {
+        id: "bill_local_cancelled",
+        local_id: "bill_local_cancelled",
+        server_id: "server_bill_cancelled",
+        clientBillId: "bill_local_cancelled",
+        status: "cancelled",
+        sync_status: "conflict",
+        updated_at: "2026-08-01T08:07:36.000Z",
+      },
+      {
+        id: "server_bill_cancelled",
+        local_id: "bill_local_cancelled",
+        server_id: "server_bill_cancelled",
+        clientBillId: "bill_local_cancelled",
+        status: "completed",
+        sync_status: "synced",
+        updated_at: "2026-08-01T08:06:56.000Z",
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      id: "bill_local_cancelled",
+      status: "cancelled",
+      sync_status: "conflict",
+    }));
+  });
+
 
   it("uses isSynced boolean and content signature to hide a LEGACY local duplicate (no durable client identity) when backend returns the same bill without local_id", () => {
     // Legacy fallback path: neither row carries a clientBillId/idempotencyKey, so

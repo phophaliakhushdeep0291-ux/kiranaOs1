@@ -732,12 +732,13 @@ function runSuite() {
       },
     });
 
-    // 15. A bill timestamped BEFORE the lock whose offline sync event only
-    // arrived after it: genuinely backdated into a signed-off day.
+    // 15. The sale happened BEFORE the lock, while its server record and sync
+    // event arrived afterwards: the same timestamp split used by CREATE_BILL.
     const idempotencyKey = `offline-backdated-${Date.now()}`;
     const late = await makeBill(ctx.db, shop.id, {
       grandTotal: 500, paidAmount: 500, createdByUserId: owner.id,
-      createdAt: new Date(lockedAt.getTime() - 3600 * 1000),
+      businessDate: new Date(lockedAt.getTime() - 3600 * 1000),
+      createdAt: new Date(lockedAt.getTime() + 2 * 3600 * 1000),
       idempotencyKey, sourceDeviceId: "device-offline-1",
       items: [billItem(product, { quantity: 5, ratePerRateUnit: 100, lineTotal: 500 })],
       payments: [{ shopId: shop.id, mode: "cash", amount: 500, ...moneyShadows({ amount: 500 }) }],
@@ -752,11 +753,16 @@ function runSuite() {
     });
     const codes = ruleCodes(await evaluate(shop.id, ENTITY_TYPES.BILL, late.id));
     assert.ok(codes.includes("BILL_BACKDATED_INTO_LOCKED_DAY"), codes.join(","));
+    const lateFinding = await findingFor(shop.id, ENTITY_TYPES.BILL, late.id);
+    const lateDetails = JSON.parse(lateFinding.rules.find((rule) => rule.ruleCode === "BILL_BACKDATED_INTO_LOCKED_DAY").detailsJson);
+    assert.equal(lateDetails.billTimestamp, new Date(lockedAt.getTime() - 3600 * 1000).toISOString());
+    assert.equal(lateDetails.recordCreatedAt, new Date(lockedAt.getTime() + 2 * 3600 * 1000).toISOString());
 
     // A sale simply made later in the same day is NOT reported per-bill: that
     // would flood the shop. It is reported once on the closing instead.
     const laterSale = await makeBill(ctx.db, shop.id, {
       grandTotal: 200, paidAmount: 200, createdByUserId: owner.id,
+      businessDate: new Date(lockedAt.getTime() + 3 * 3600 * 1000),
       createdAt: new Date(lockedAt.getTime() + 3 * 3600 * 1000),
       items: [billItem(product, { quantity: 2, ratePerRateUnit: 100, lineTotal: 200 })],
       payments: [{ shopId: shop.id, mode: "cash", amount: 200, ...moneyShadows({ amount: 200 }) }],

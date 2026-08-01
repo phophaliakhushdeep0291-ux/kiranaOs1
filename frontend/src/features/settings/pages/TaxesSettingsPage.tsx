@@ -113,6 +113,11 @@ export default function TaxesSettingsPage() {
   const [ewayDraft, setEwayDraft] = useState<EWayDraft>(EMPTY_EWAY);
   const [ewayError, setEwayError] = useState("");
   const [savingEway, setSavingEway] = useState(false);
+  const [eInvoiceOpen, setEInvoiceOpen] = useState(false);
+  const [eInvoicePinOpen, setEInvoicePinOpen] = useState(false);
+  const [eInvoiceBillId, setEInvoiceBillId] = useState("");
+  const [eInvoiceError, setEInvoiceError] = useState("");
+  const [savingEInvoice, setSavingEInvoice] = useState(false);
   const [hsnPinOpen, setHsnPinOpen] = useState(false);
   const [pendingHsn, setPendingHsn] = useState<{ row: HsnRow; hsn: string; gstRate: number } | null>(null);
   const [savingHsn, setSavingHsn] = useState(false);
@@ -125,7 +130,7 @@ export default function TaxesSettingsPage() {
   const gstQ = useQuery({ queryKey: ["gst-report-month"], queryFn: () => apiRequest<GstReport>("/reports/gst?range=monthly"), enabled: gstReportsFeature.allowed, retry: 1 });
   const readinessQ = useQuery({ queryKey: ["gst-compliance-readiness"], queryFn: () => apiRequest<ComplianceReadiness>("/compliance/readiness"), retry: 1 });
   const hsnSummaryQ = useQuery({ queryKey: ["gst-hsn-summary"], queryFn: () => apiRequest<HsnSummary>("/compliance/hsn-summary"), enabled: gstReportsFeature.allowed, retry: 1 });
-  const recentBillsQ = useQuery({ queryKey: ["gst-compliance-recent-bills"], queryFn: () => apiRequest<BillListResult>("/bills?status=active&page=1&limit=50"), enabled: gstReportsFeature.allowed && ewayOpen, retry: 1 });
+  const recentBillsQ = useQuery({ queryKey: ["gst-compliance-recent-bills"], queryFn: () => apiRequest<BillListResult>("/bills?status=active&page=1&limit=50"), enabled: gstReportsFeature.allowed && (ewayOpen || eInvoiceOpen), retry: 1 });
   const inr = (n?: number) => (n == null ? "—" : `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`);
 
   useEffect(() => {
@@ -180,7 +185,8 @@ export default function TaxesSettingsPage() {
     setSavingEway(true);
     setEwayError("");
     try {
-      await apiRequest(`/compliance/e-way-bills/${ewayDraft.billId}/draft`, {
+      const legalSubmission = readinessQ.data?.provider.legalSubmission === true;
+      await apiRequest(`/compliance/e-way-bills/${ewayDraft.billId}/${legalSubmission ? "submit" : "draft"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...ewayDraft, distanceKm: Number(ewayDraft.distanceKm), ownerPin, billId: undefined }),
@@ -188,13 +194,35 @@ export default function TaxesSettingsPage() {
       setEwayPinOpen(false);
       setEwayDraft(EMPTY_EWAY);
       void readinessQ.refetch();
-      toast({ title: "E-way transport record prepared", description: "Saved as a clearly marked draft. Connect a certified GSP to request a legal e-way bill number." });
+      toast(legalSubmission
+        ? { title: "E-way bill submitted", description: `The request was accepted by ${readinessQ.data?.provider.providerName || "the configured certified GSP"}.` }
+        : { title: "E-way transport record prepared", description: "Saved as a clearly marked draft. Connect a certified GSP to request a legal e-way bill number." });
     } catch (error) {
       setEwayError(error instanceof Error ? error.message : "Could not prepare the transport record.");
     } finally {
       setSavingEway(false);
     }
   };
+  async function submitEInvoice(ownerPin: string) {
+    if (!eInvoiceBillId) return;
+    setSavingEInvoice(true);
+    setEInvoiceError("");
+    try {
+      const legalSubmission = readinessQ.data?.provider.legalSubmission === true;
+      const endpoint = legalSubmission ? "submit" : "sandbox";
+      await apiRequest(`/compliance/e-invoices/${eInvoiceBillId}/${endpoint}`, { method: "POST", body: JSON.stringify({ ownerPin }) });
+      setEInvoicePinOpen(false);
+      setEInvoiceBillId("");
+      void readinessQ.refetch();
+      toast(legalSubmission
+        ? { title: "E-invoice submitted", description: `The certified provider accepted the request for IRN generation.` }
+        : { title: "E-invoice sandbox record created", description: "Validation evidence was saved, but no legal IRN was created." });
+    } catch (error) {
+      setEInvoiceError(error instanceof Error ? error.message : "Could not process the e-invoice.");
+    } finally {
+      setSavingEInvoice(false);
+    }
+  }
   const hsnHasError = editorError.includes("HSN code");
   const rateHasError = editorError.includes("GST rate");
   function editHsn(row: HsnRow) {
@@ -348,7 +376,7 @@ export default function TaxesSettingsPage() {
                     <td className="px-3 py-2.5"><Badge tone={row.rate === "Mixed" ? "amber" : "gray"}>{row.rate}</Badge></td>
                     <td className="px-3 py-2.5 font-mono text-[#344668]"><span className="inline-flex items-center gap-2">{row.hsn}{!row.consistent ? <Badge tone="amber">Review</Badge> : <Badge tone="green">Valid</Badge>}</span></td>
                     <td className="px-3 py-2.5 text-[#64748b]">{row.count} products</td>
-                    <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => editHsn(row)} aria-label={`Edit GST mapping for ${row.cat}`} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-bold text-[var(--brand)] hover:bg-[#eef4ff]"><Pencil size={12} aria-hidden="true" /> Edit</button></td>
+                    <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => editHsn(row)} aria-label={`Edit GST mapping for ${row.cat}`} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={12} aria-hidden="true" /> Edit</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -422,7 +450,9 @@ export default function TaxesSettingsPage() {
                 : readinessQ.data?.provider.configured
                   ? "Sandbox/configuration detected, but legal provider certification is not attested"
                   : "Blocked until a certified GSTN/GSP provider is connected"}
-              pill={<Badge tone={readinessQ.data?.provider.legalSubmission ? "green" : readinessQ.data?.provider.configured ? "blue" : "amber"}>{readinessQ.data?.provider.legalSubmission ? "Connected" : readinessQ.data?.provider.configured ? "Sandbox" : "Not connected"}</Badge>}
+              pill={readinessQ.data?.provider.configured && gstReportsFeature.allowed
+                ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => { setEInvoiceError(""); setEInvoiceOpen(true); }}><Receipt size={13} /> {readinessQ.data.provider.legalSubmission ? "Submit" : "Validate"}</Button>
+                : <Badge tone="amber">Not connected</Badge>}
             />
             <RowToggle label="E-Way Bill" desc="Capture transporter, vehicle, document, distance and delivery details; legal generation requires a certified GSP" pill={gstReportsFeature.allowed ? <Button type="button" size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => setEwayOpen(true)}><Truck size={13} /> Prepare</Button> : <Button asChild size="sm" variant="outline" className="h-8 text-xs"><Link href="/plans">Upgrade to Business</Link></Button>} />
             <RowToggle label="Show GST breakup on bill" pill={<Switch checked={tax.showBreakup} onCheckedChange={(v) => update({ showBreakup: v })} />} />
@@ -453,7 +483,27 @@ export default function TaxesSettingsPage() {
         </DialogContent>
       </Dialog>
 
-      <OwnerPinModal open={ewayPinOpen} title="Approve e-way transport record" description="This protected compliance record is linked to the selected GST invoice and retained for audit." confirmLabel="Prepare draft" loading={savingEway} error={ewayError} onCancel={() => { if (!savingEway) { setEwayPinOpen(false); setEwayOpen(true); } }} onConfirm={({ ownerPin }) => saveEwayDraft(ownerPin)} />
+      <Dialog open={eInvoiceOpen} onOpenChange={setEInvoiceOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{readinessQ.data?.provider.legalSubmission ? "Submit GST e-invoice" : "Validate e-invoice in sandbox"}</DialogTitle>
+            <DialogDescription>{readinessQ.data?.provider.legalSubmission ? `Send one GST invoice to ${readinessQ.data.provider.providerName || "the configured certified GSP"} for legal IRN generation.` : "Validate the invoice payload and retain audit evidence. Sandbox validation does not create a legal IRN."}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="e-invoice-bill">GST invoice</Label>
+            <select id="e-invoice-bill" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={eInvoiceBillId} onChange={(event) => setEInvoiceBillId(event.target.value)}>
+              <option value="">Select recent GST invoice</option>
+              {eligibleBills.map((bill) => <option key={bill.id} value={bill.id}>{bill.billNo} · {bill.customerName || "Walk-in"} · ₹{Number(bill.grandTotal || 0).toLocaleString("en-IN")}</option>)}
+            </select>
+            {eInvoiceError && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{eInvoiceError}</p>}
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => setEInvoiceOpen(false)}>Cancel</Button><Button disabled={!eInvoiceBillId} onClick={() => { setEInvoiceOpen(false); setEInvoicePinOpen(true); }}>Review and approve</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <OwnerPinModal open={ewayPinOpen} title={readinessQ.data?.provider.legalSubmission ? "Approve legal e-way bill submission" : "Approve e-way transport record"} description={readinessQ.data?.provider.legalSubmission ? "This sends the selected invoice and transport details to the configured certified provider using an idempotent request." : "This protected draft is linked to the selected GST invoice and retained for audit."} confirmLabel={readinessQ.data?.provider.legalSubmission ? "Submit e-way bill" : "Prepare draft"} loading={savingEway} error={ewayError} onCancel={() => { if (!savingEway) { setEwayPinOpen(false); setEwayOpen(true); } }} onConfirm={({ ownerPin }) => saveEwayDraft(ownerPin)} />
+
+      <OwnerPinModal open={eInvoicePinOpen} title={readinessQ.data?.provider.legalSubmission ? "Approve legal e-invoice submission" : "Approve sandbox validation"} description={readinessQ.data?.provider.legalSubmission ? "This sends the selected GST invoice to the configured certified provider. A repeated request uses the same idempotency identity." : "This creates validation evidence only and will not claim a legal IRN."} confirmLabel={readinessQ.data?.provider.legalSubmission ? "Submit e-invoice" : "Validate invoice"} loading={savingEInvoice} error={eInvoiceError} onCancel={() => { if (!savingEInvoice) { setEInvoicePinOpen(false); setEInvoiceOpen(true); } }} onConfirm={({ ownerPin }) => submitEInvoice(ownerPin)} />
 
       <OwnerPinModal open={hsnPinOpen} title="Approve HSN category update" description={pendingHsn ? `Apply HSN ${pendingHsn.hsn} and ${pendingHsn.gstRate}% GST to every active product in ${pendingHsn.row.cat}.` : "Approve the product tax classification update."} confirmLabel="Update products" loading={savingHsn} error={editorError || null} onCancel={() => { if (!savingHsn) { setHsnPinOpen(false); setPendingHsn(null); setEditorError(""); } }} onConfirm={({ ownerPin }) => confirmHsnAssignment(ownerPin)} />
 

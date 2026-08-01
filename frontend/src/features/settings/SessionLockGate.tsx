@@ -225,11 +225,17 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
   }
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-[linear-gradient(135deg,#07152f_0%,#0e2c63_100%)] px-4">
+    <div
+      className="fixed inset-0 z-[100] grid place-items-center bg-[linear-gradient(135deg,#07152f_0%,#0e2c63_100%)] px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="counter-lock-title"
+      aria-describedby="counter-lock-description"
+    >
       <div className="w-full max-w-[380px] rounded-[18px] bg-white p-6 shadow-[0_24px_60px_rgba(4,15,40,0.45)]">
-        <span className="grid h-12 w-12 place-items-center rounded-[14px] bg-[var(--brand-soft)] text-[var(--brand)]"><Lock size={22} /></span>
-        <h1 className="mt-4 font-display text-[20px] font-black tracking-tight text-[var(--brand-ink)]">Counter locked</h1>
-        <p className="mt-1 text-[12.5px] leading-5 text-[#64748b]">
+        <span aria-hidden="true" className="grid h-12 w-12 place-items-center rounded-[14px] bg-[var(--brand-soft)] text-[var(--brand)]"><Lock size={22} /></span>
+        <h1 id="counter-lock-title" className="mt-4 font-display text-[20px] font-black tracking-tight text-[var(--brand-ink)]">Counter locked</h1>
+        <p id="counter-lock-description" className="mt-1 text-[12.5px] leading-5 text-[#64748b]">
           {userName ? `${userName}, enter` : "Enter"} the owner PIN to get back to the counter. This lock follows your
           Settings &rarr; Security session rules.
         </p>
@@ -239,6 +245,7 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
             type="password"
             inputMode="numeric"
             autoComplete="off"
+            aria-label="Owner PIN"
             className="h-11 text-center text-[18px] tracking-[0.4em]"
             placeholder="••••"
             value={pin}

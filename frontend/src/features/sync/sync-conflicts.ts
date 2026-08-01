@@ -1,12 +1,7 @@
 import { dexieDB } from "@/lib/offline/db";
 import { getOfflineScope, nowIso } from "@/lib/offline/context";
 import { reportSyncConflict } from "@/features/sync/api";
-
-function snapshotRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
+import { sanitizeSyncDiagnostic, sanitizeSyncRecord } from "@/features/sync/sensitive-data";
 
 function makeConflictId(
   entityType: string,
@@ -30,6 +25,8 @@ export async function storeConflict(input: {
   const scope = getOfflineScope();
   const now = nowIso();
   const id = makeConflictId(input.entityType, input.entityId, input.sourceId);
+  const localSnapshot = sanitizeSyncDiagnostic(input.localSnapshot);
+  const serverSnapshot = sanitizeSyncDiagnostic(input.serverSnapshot);
   await dexieDB.sync_conflicts.put({
     id,
     entity_type: input.entityType,
@@ -44,8 +41,8 @@ export async function storeConflict(input: {
     sync_status: "conflict",
     last_modified_by: null,
     resolution: "unresolved",
-    local_snapshot: input.localSnapshot ?? null,
-    server_snapshot: input.serverSnapshot ?? null,
+    local_snapshot: localSnapshot ?? null,
+    server_snapshot: serverSnapshot ?? null,
     error_message: input.errorMessage ?? "Sync conflict",
   });
 
@@ -59,8 +56,8 @@ export async function storeConflict(input: {
       entity_id: input.entityId,
       reason_code: "CLIENT_SYNC_CONFLICT",
       message: input.errorMessage ?? "Sync conflict",
-      local_snapshot: snapshotRecord(input.localSnapshot),
-      server_snapshot: snapshotRecord(input.serverSnapshot),
+      local_snapshot: sanitizeSyncRecord(localSnapshot),
+      server_snapshot: sanitizeSyncRecord(serverSnapshot),
       server_version: input.sourceId,
     }, { background: true });
     void reporting.then(async ({ conflict }) => {

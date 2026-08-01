@@ -948,7 +948,12 @@ function isDeleted(row: Record<string, unknown>): boolean {
 
 function syncPriority(row: Record<string, unknown>): number {
   const syncStatus = String(row.sync_status ?? "");
-  const status = String(row.status ?? "");
+  const status = String(row.status ?? "").toLowerCase();
+  // A local cancellation already reversed stock and money atomically. Until its
+  // server acknowledgement arrives (or an owner repairs the conflict), showing
+  // an older synced active twin would expose destructive actions again and make
+  // the ledger disagree with the bill screen.
+  if (status === "cancelled") return 5;
   if (isBillSynced(row) || syncStatus === "synced") return 4;
   if (syncStatus === "failed" || syncStatus === "conflict") return 1;
   if (
