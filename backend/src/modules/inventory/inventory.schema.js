@@ -21,6 +21,11 @@ export const purchaseSchema = z.object({
   supplierBillNo: optionalText,
   quantity: quantityAmount({ positive: true }),
   enteredUnit: z.string(),
+  // Which packaging was received. When set, `quantity` counts that pack ("12 boxes
+  // of the 8-pack"), exactly as it does on a bill line, and the base quantity is
+  // derived from the pack's own conversion rather than from enteredUnit. Omitted
+  // for pooled goods, which keep counting in base/rate units.
+  sellingUnitId: z.string().min(1).optional().nullable(),
   billAmount: moneyAmount({ positive: true }),
   purchasePaymentStatus: z.enum(["paid", "partial", "due"]).optional(),
   purchasePaymentMode: z.enum(["cash", "upi", "bank"]).optional(),

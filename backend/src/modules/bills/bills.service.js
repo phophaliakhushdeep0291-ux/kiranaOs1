@@ -347,6 +347,11 @@ export async function confirmBill(shopId, body, actor = {}) {
           product,
           qtyInBase,
           lineProfit,
+          // Which pack this line sold and how many of it. Base-unit accounting stays
+          // authoritative for every existing report; this rides alongside so a
+          // per_pack product can also decrement the specific pack the counter chose.
+          sellingUnit: sellingUnit ?? null,
+          sellingUnitQty: sellingUnit ? item.quantity : 0,
         });
       }
     }
@@ -541,13 +546,14 @@ export async function confirmBill(shopId, body, actor = {}) {
     await consumeRetailPaymentIntents(tx, retailIntents);
 
     // ── 5. Deduct stock + create stock ledger entries ─────────
-    for (const { product, qtyInBase } of stockUpdatesByProduct.values()) {
+    for (const { product, qtyInBase, sellingUnitQtyById } of stockUpdatesByProduct.values()) {
       const stockResult = await decrementLocationInventory(tx, {
         shopId,
         location,
         product,
         quantityBase: qtyInBase,
         allowShortfall: allowStockShortfall,
+        packs: sellingUnitQtyById,
       });
 
       // Record the actual stock removed so the ledger stays internally consistent
@@ -702,7 +708,7 @@ export async function cancelBill(shopId, billId, { reason, idempotentRaceOk = fa
 
       const product = await tx.product.findFirst({ where: { id: item.productId, shopId } });
       if (!product) continue;
-      const stockResult = await incrementLocationInventory(tx, { shopId, location, product, quantityBase: item.quantityInBaseUnit });
+      const stockResult = await incrementLocationInventory(tx, { shopId, location, product, quantityBase: item.quantityInBaseUnit, packs: packsFromBillItem(item) });
 
       await tx.stockLedger.create({
         data: {
@@ -940,10 +946,30 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           lineTotal: -lineTotal,
           lineCost: -lineCost,
           lineProfit: -lineProfit,
+          // Carry the packaging the sale recorded onto the return line. Without it a
+          // return bill cannot say which size came back, and any later reversal or
+          // per-size report would have only base units to work from.
+          sellingUnitId: originalItem?.sellingUnitId ?? null,
+          sellingUnitCode: originalItem?.sellingUnitCode ?? null,
+          sellingUnitLabel: originalItem?.sellingUnitLabel ?? null,
           ...moneyShadows({ ratePerRateUnit: authoritativeRate, costPerRateUnit, lineDiscount: -lineDiscount, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
         });
 
-        if (product) restockPlan.push({ product, qtyInBase: round2(qtyInBase), lineCost, damaged });
+        if (product) {
+          restockPlan.push({
+            product,
+            qtyInBase: round2(qtyInBase),
+            lineCost,
+            damaged,
+            // item.quantity is in the same units as the original line, so for a
+            // packaged sale it is already a pack count — including partial returns
+            // (2 of the 3 boxes sold). Taking it from the request rather than
+            // re-deriving from qtyInBase avoids rounding a pack back into a
+            // fraction of itself.
+            sellingUnitId: originalItem?.sellingUnitId ?? null,
+            sellingUnitQty: originalItem?.sellingUnitId ? Math.abs(Number(item.quantity)) : 0,
+          });
+        }
       }
 
       if (original) {
@@ -1050,7 +1076,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill });
 
       // Restock resellable items; write off damaged ones (no restock, records the cost loss).
-      for (const { product, qtyInBase, lineCost, damaged } of restockPlan) {
+      for (const { product, qtyInBase, lineCost, damaged, sellingUnitId, sellingUnitQty } of restockPlan) {
         if (damaged) {
           await tx.stockLedger.create({
             data: {
@@ -1079,7 +1105,17 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           });
           continue;
         }
-        const stockResult = await incrementLocationInventory(tx, { shopId, location, product, quantityBase: qtyInBase });
+        // Damaged returns took the `continue` above and never reach here, so a
+        // written-off pack is correctly not put back on the shelf count.
+        const stockResult = await incrementLocationInventory(tx, {
+          shopId,
+          location,
+          product,
+          quantityBase: qtyInBase,
+          packs: sellingUnitId && sellingUnitQty > 0
+            ? new Map([[sellingUnitId, { sellingUnit: { id: sellingUnitId }, qty: round2(sellingUnitQty) }]])
+            : null,
+        });
         await tx.stockLedger.create({
           data: {
             shopId,
@@ -1090,6 +1126,8 @@ export async function createSaleReturn(shopId, body, actor = {}) {
             changeBaseQty: qtyInBase,
             oldStockBaseQty: stockResult.oldStock,
             newStockBaseQty: stockResult.newStock,
+            sellingUnitId: sellingUnitId ?? null,
+            sellingUnitQty: sellingUnitId && sellingUnitQty > 0 ? round2(sellingUnitQty) : null,
             billId: returnBill.id,
             clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `return:${product.id}`),
             idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `return:${product.id}`),
@@ -1298,14 +1336,45 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
 }
 
 
-function aggregateStockUpdates(stockUpdates) {
+// Rebuilds the pack breakdown for a reversal from what the sale stored on the bill
+// item. BillItem.quantity is already in the chosen pack's own units (the sale
+// derived qtyInBase from it), so the reversal restores exactly what was taken
+// without recomputing anything from base units — which would round differently for
+// packs whose conversionToBase does not divide evenly.
+export function packsFromBillItem(item) {
+  const packs = new Map();
+  const qty = Number(item?.quantity ?? 0);
+  if (item?.sellingUnitId && qty > 0) {
+    packs.set(item.sellingUnitId, { sellingUnit: { id: item.sellingUnitId }, qty: round2(qty) });
+  }
+  return packs;
+}
+
+// Aggregates by product, because base-unit stock and the ledger are per product and
+// must stay exactly as they were. The per-pack breakdown is accumulated alongside
+// rather than replacing it: one bill can sell the same product in two pack sizes
+// (two 70 g packets and an 8-pack box), which merges into a single base-unit
+// movement but has to decrement two different packs.
+export function aggregateStockUpdates(stockUpdates) {
   const byProduct = new Map();
   for (const update of stockUpdates) {
     const existing = byProduct.get(update.product.id);
+    const target = existing ?? { ...update, sellingUnitQtyById: new Map() };
     if (existing) {
       existing.qtyInBase = round2(existing.qtyInBase + update.qtyInBase);
     } else {
-      byProduct.set(update.product.id, { ...update });
+      byProduct.set(update.product.id, target);
+    }
+    if (update.sellingUnit?.id && update.sellingUnitQty > 0) {
+      const packs = target.sellingUnitQtyById.get(update.sellingUnit.id);
+      if (packs) {
+        packs.qty = round2(packs.qty + update.sellingUnitQty);
+      } else {
+        target.sellingUnitQtyById.set(update.sellingUnit.id, {
+          sellingUnit: update.sellingUnit,
+          qty: round2(update.sellingUnitQty),
+        });
+      }
     }
   }
   return byProduct;

@@ -57,7 +57,37 @@ function insufficientLocationStock(location, product, available, requested) {
   return error;
 }
 
-export async function decrementLocationInventory(client, { shopId, location, product, quantityBase, allowShortfall = false }) {
+/**
+ * Move a per_pack product's per-packaging counts in the same transaction as the
+ * base-unit movement, so the two can never disagree.
+ *
+ * Base units stay authoritative: every report, valuation and ledger row keeps
+ * reading Product.stockBaseQty exactly as before. The pack counts are a breakdown
+ * of that same stock, which is only safe while a single write path maintains both
+ * — hence doing it here, in the shared choke point, rather than at each caller.
+ *
+ * Deliberately never blocks a sale. A pack count is bookkeeping the shopkeeper
+ * maintains by hand; if it disagrees with reality, the base-unit check has already
+ * decided whether the sale may proceed, and refusing here would block a real sale
+ * over a stale count. Packs are allowed to go negative for the same reason base
+ * stock is: a visible deficit is what prompts a recount.
+ *
+ * `packs` is a Map of sellingUnitId -> { sellingUnit, qty }; pooled products pass
+ * nothing and are untouched.
+ */
+async function movePackagingStock(client, { shopId, product, packs, direction }) {
+  if (product?.packagingMode !== "per_pack" || !packs?.size) return;
+  for (const { sellingUnit, qty } of packs.values()) {
+    const amount = round2(qty);
+    if (!(amount > 0)) continue;
+    await client.productSellingUnit.updateMany({
+      where: { id: sellingUnit.id, shopId, productId: product.id },
+      data: { onHandQty: direction === "out" ? { decrement: amount } : { increment: amount } },
+    });
+  }
+}
+
+export async function decrementLocationInventory(client, { shopId, location, product, quantityBase, allowShortfall = false, packs = null }) {
   const quantity = round2(quantityBase);
   const oldLocationStock = await getLocationQuantity(client, shopId, location, product);
   if (!allowShortfall && oldLocationStock < quantity) throw insufficientLocationStock(location, product, oldLocationStock, quantity);
@@ -92,6 +122,10 @@ export async function decrementLocationInventory(client, { shopId, location, pro
     throw new AppError(`Product "${product.name}" is no longer available`, 409, "PRODUCT_NOT_AVAILABLE");
   }
 
+  // Only once the base-unit movement is committed, so a rejected sale never moves
+  // pack counts.
+  await movePackagingStock(client, { shopId, product, packs, direction: "out" });
+
   const freshProduct = await client.product.findFirst({ where: { id: product.id, shopId }, select: { stockBaseQty: true } });
   const newLocationStock = location.isPrimary
     ? await getLocationQuantity(client, shopId, location, { ...product, stockBaseQty: freshProduct?.stockBaseQty ?? product.stockBaseQty - quantity })
@@ -111,7 +145,7 @@ export async function decrementLocationInventory(client, { shopId, location, pro
   };
 }
 
-export async function incrementLocationInventory(client, { shopId, location, product, quantityBase, expectedGlobalStockBaseQty, productData = {} }) {
+export async function incrementLocationInventory(client, { shopId, location, product, quantityBase, expectedGlobalStockBaseQty, productData = {}, packs = null }) {
   const quantity = round2(quantityBase);
   const oldLocationStock = await getLocationQuantity(client, shopId, location, product);
   const changed = await client.product.updateMany({
@@ -122,6 +156,10 @@ export async function incrementLocationInventory(client, { shopId, location, pro
     if (expectedGlobalStockBaseQty !== undefined) throw new AppError("Stock changed while recording purchase. Please retry.", 409, "CONCURRENT_STOCK_MODIFICATION_RETRY");
     throw new AppError(`Product "${product.name}" is no longer available`, 409, "PRODUCT_NOT_AVAILABLE");
   }
+  // Mirror of the decrement path: a cancelled or returned sale must put back the
+  // same packs it took, or the counts drift a little further from reality on every
+  // reversal until they are worthless.
+  await movePackagingStock(client, { shopId, product, packs, direction: "in" });
   if (!location.isPrimary) {
     await client.locationStock.upsert({
       where: { locationId_productId: { locationId: location.id, productId: product.id } },
