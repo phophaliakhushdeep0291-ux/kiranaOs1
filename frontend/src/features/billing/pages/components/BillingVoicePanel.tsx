@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Mic } from "lucide-react";
+import { useAppLanguage } from "@/features/settings/i18n";
 import type { VoiceParsedDraft } from "../billing-types";
 
 interface BillingVoicePanelProps {
@@ -25,11 +26,13 @@ export function BillingVoicePanel({
   onParseVoiceDraft,
   onAddVoiceDraftToCart,
 }: BillingVoicePanelProps) {
+  const { t } = useAppLanguage();
+
   return (
     <div className="rounded-2xl border bg-primary/5 p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="font-semibold"><Mic className="mr-2 inline h-4 w-4" /> Hindi/Hinglish voice billing</div>
-        <Badge variant="outline">Review before cart</Badge>
+        <div className="font-semibold"><Mic className="mr-2 inline h-4 w-4" /> {t("billing.voice.title")}</div>
+        <Badge variant="outline">{t("billing.voice.reviewBadge")}</Badge>
       </div>
       <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_auto_auto] lg:items-start">
         <Textarea

@@ -1,5 +1,6 @@
 import { Plus, ReceiptText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 export interface OpenBillChip {
   id: string;
@@ -23,16 +24,22 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
   onSwitch: (id: string) => void;
   onNew: () => void;
 }) {
+  const { t } = useAppLanguage();
+
   return (
     <div className="app-scrollbar mb-2 flex shrink-0 items-center gap-2 overflow-x-auto rounded-[10px] border border-[#e6ecf4] bg-[#f7f9fd] px-2 py-1.5">
-      <span className="shrink-0 pl-1 pr-0.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">Open bills</span>
+      <span className="shrink-0 pl-1 pr-0.5 text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{t("billing.openBills")}</span>
       {bills.map((bill) => (
         <button
           key={bill.id}
           type="button"
           onClick={() => { if (!bill.active) onSwitch(bill.id); }}
           aria-current={bill.active}
-          title={bill.active ? "Current bill" : `Switch to ${bill.name}${bill.ageLabel ? ` · parked ${bill.ageLabel}` : ""}`}
+          title={bill.active
+            ? t("billing.openBills.current")
+            : bill.ageLabel
+              ? t("billing.openBills.switchToParked", { name: bill.name, age: bill.ageLabel })
+              : t("billing.openBills.switchTo", { name: bill.name })}
           className={cn(
             "flex shrink-0 items-center gap-1.5 rounded-[8px] border px-2.5 py-1 text-[12px] font-bold transition-colors",
             bill.active
@@ -50,10 +57,10 @@ export function OpenBillsBar({ bills, onSwitch, onNew }: {
       <button
         type="button"
         onClick={onNew}
-        title="Start a new bill"
+        title={t("billing.openBills.startNew")}
         className="ml-auto flex shrink-0 items-center gap-1 rounded-[8px] border border-dashed border-[var(--brand)] px-2.5 py-1 text-[12px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)]"
       >
-        <Plus size={14} /> New bill
+        <Plus size={14} /> {t("billing.openBills.new")}
       </button>
     </div>
   );
