@@ -263,9 +263,9 @@ function notifyAuthSessionExpired() {
   window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
 }
 
-function notifyDeviceSessionRevoked(code: string) {
+function notifyDeviceSessionRevoked(code: string, shopId?: string) {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(DEVICE_SESSION_REVOKED_EVENT, { detail: { code } }));
+  window.dispatchEvent(new CustomEvent(DEVICE_SESSION_REVOKED_EVENT, { detail: { code, shopId } }));
 }
 
 async function getSharedRefreshedAuth(refreshToken: string) {
@@ -406,6 +406,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
     }
     return await parseResponse<T>(response);
   } catch (error) {
+    if (error instanceof ApiClientError && error.data.code === "DEVICE_REBOOTSTRAP_REQUIRED") {
+      const session = loadAuthSession();
+      const shopId = session.shop?.id ?? session.user?.shopId;
+      clearAuthStorage();
+      notifyDeviceSessionRevoked("DEVICE_REBOOTSTRAP_REQUIRED", shopId);
+    }
     if (error instanceof ApiClientError && (error.data.code === "DEVICE_SESSION_REVOKED" || error.data.code === "DEVICE_BLOCKED")) {
       clearAuthStorage();
       notifyDeviceSessionRevoked(String(error.data.code));

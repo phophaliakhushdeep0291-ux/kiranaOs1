@@ -124,10 +124,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
-        // Merge compatible helper/leaf chunks below ~220 kB. Route entry points
+        // Merge compatible helper/leaf chunks below ~180 kB. Route entry points
         // remain lazy, while fewer tiny transport units remove repeated module
         // wrappers and gzip dictionaries from the full offline application cache.
-        experimentalMinChunkSize: 220_000,
+        experimentalMinChunkSize: 180_000,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],

@@ -17,6 +17,7 @@ const CUSTOMER_WRITE_TRANSACTION_TABLES = [
 type CustomerLocalRecord = Customer & {
   local_id?: string;
   server_id?: string;
+  base_updated_at?: string;
   deleted_at?: string | null;
   deleteReason?: string | null;
   updated_at?: string;
@@ -100,10 +101,16 @@ export async function createCustomerLocalFirst(data: CustomerInput): Promise<Cus
 }
 
 export async function updateCustomerLocalFirst(id: string, data: CustomerInput): Promise<Customer> {
-  const existing = await offlineDB.getAll<Customer>("customers").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  const existing = await offlineDB.getAll<CustomerLocalRecord>("customers").then((rows) => rows.find((row) => row.id === id)).catch(() => undefined);
+  const baseUpdatedAt = existing?.sync_status === "synced"
+    ? existing.updatedAt ?? existing.updated_at
+    : existing?.base_updated_at ?? existing?.updatedAt ?? existing?.updated_at;
   const candidate = { ...existing, ...data, name: data.name ?? existing?.name ?? "" };
   const validated = parseOrThrow(customerCreationSchema, candidate) as unknown as CustomerInput;
-  const customer = touchLocalEntity(toCustomer(validated, id, existing), "pending_sync") as CustomerLocalRecord;
+  const customer = {
+    ...touchLocalEntity(toCustomer(validated, id, existing), "pending_sync"),
+    ...(baseUpdatedAt ? { base_updated_at: baseUpdatedAt } : {}),
+  } as CustomerLocalRecord;
 
   await commitCustomerWrite({
     customer,
@@ -122,7 +129,7 @@ export async function updateCustomerLocalFirst(id: string, data: CustomerInput):
       entity_type: "customer",
       entity_id: id,
       operation_type: "UPDATE_CUSTOMER",
-      payload: { customerId: id, customer: validated },
+      payload: { customerId: id, customer: validated, ...(baseUpdatedAt ? { baseUpdatedAt } : {}) },
     },
   });
 

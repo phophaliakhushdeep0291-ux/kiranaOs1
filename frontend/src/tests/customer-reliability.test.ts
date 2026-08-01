@@ -174,7 +174,11 @@ describe("customer reliability", () => {
       expect.objectContaining({ action: "customer_edited", entity_id: "customer_ramesh" }),
     ]));
     expect(mockState.committed.sync_outbox).toEqual(expect.arrayContaining([
-      expect.objectContaining({ operation_type: "UPDATE_CUSTOMER", entity_id: "customer_ramesh" }),
+      expect.objectContaining({
+        operation_type: "UPDATE_CUSTOMER",
+        entity_id: "customer_ramesh",
+        payload: expect.objectContaining({ baseUpdatedAt: "2026-06-06T09:00:00.000Z" }),
+      }),
     ]));
   });
 

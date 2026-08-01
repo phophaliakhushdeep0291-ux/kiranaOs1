@@ -1,16 +1,19 @@
 import { offlineDB } from "@/lib/offline/db";
 import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { clearAuthStorage } from "@/lib/storage/auth-storage";
+import { LOCAL_DATA_TABLES } from "@/lib/offline/local-data-tables";
+import { getOfflineScope } from "@/lib/offline/context";
 
-const RESTORED_SCOPE_TABLES = [
-  "products", "customers", "bills", "bill_items", "payments", "customer_ledger",
-  "inventory_movements", "suppliers", "purchase_bills", "staff_users", "settings",
-  "sync_outbox", "sync_cursor", "sync_conflicts", "id_mappings", "local_audit_logs",
-  "subscription_cache", "device_license_cache",
-] as const;
-
-export async function resetDeviceAfterCloudRestore() {
-  await offlineDB.clearScopedData([...RESTORED_SCOPE_TABLES]);
+export async function resetDeviceAfterCloudRestore(shopId?: string) {
+  try {
+    const restoredShopId = shopId ?? getOfflineScope().tenant_id;
+    if (!restoredShopId || restoredShopId === "local_tenant") throw new Error("Restore shop scope is unavailable");
+    await offlineDB.clearScopedData([...LOCAL_DATA_TABLES], { tenant_id: restoredShopId, store_id: restoredShopId });
+  } catch {
+    // A stale outbox must never survive a cloud restore. If the scoped wipe
+    // cannot be proven, clear this device's entire local database fail-closed.
+    await offlineDB.clearAllData();
+  }
   clearInstantMemoryCache();
   clearAuthStorage();
 }

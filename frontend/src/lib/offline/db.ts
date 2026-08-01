@@ -1,6 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type { SyncStatus } from "@/types/domain";
-import { getOfflineScope, nowIso } from "@/lib/offline/context";
+import { getOfflineScope, nowIso, type OfflineScope } from "@/lib/offline/context";
 import { StorageFullError, isQuotaExceededError } from "@/lib/offline/storage-errors";
 
 export interface OfflineRow {
@@ -707,18 +707,29 @@ class OfflineDBFacade {
    * `local_id` key never matched the `id` keyPath, which is why "Delete local
    * offline data" left synced customers/bills/ledger rows behind.
    */
-  async clearScopedData(storeNames: string[]): Promise<void> {
+  async clearScopedData(storeNames: string[], scopeOverride?: Pick<OfflineScope, "tenant_id" | "store_id">): Promise<void> {
     await this.init();
+    const scope = scopeOverride ?? getOfflineScope();
     for (const storeName of storeNames) {
       const table = this.table<Record<string, unknown>>(storeName);
       const keyPath = table.schema.primKey.keyPath;
       if (typeof keyPath !== "string") continue;
-      const rows = await this.getAll<Record<string, unknown>>(storeName).catch(() => []);
+      const rows = isScopedTableName(storeName)
+        ? await table.where("[tenant_id+store_id]").equals([scope.tenant_id, scope.store_id]).toArray()
+          .catch(() => table.filter((row) => row.tenant_id === scope.tenant_id && row.store_id === scope.store_id).toArray())
+        : await table.toArray();
       const keys = rows
         .map((row) => row[keyPath])
         .filter((key): key is string => typeof key === "string" && key.length > 0);
       if (keys.length > 0) await table.bulkDelete(keys);
     }
+  }
+
+  async clearAllData(): Promise<void> {
+    await this.init();
+    await dexieDB.transaction("rw", dexieDB.tables, async () => {
+      await Promise.all(dexieDB.tables.map((table) => table.clear()));
+    });
   }
 
   async enqueueSyncEvent(

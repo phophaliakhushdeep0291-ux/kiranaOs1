@@ -6,7 +6,7 @@ import { AppError } from "../../middleware/error.js";
 import { confirmBillSchema } from "../bills/bills.schema.js";
 import { cancelBill, confirmBill, createSaleReturn, restoreCancelledBill, restoreDeletedBill, softDeleteBill } from "../bills/bills.service.js";
 import { createCustomerSchema, updateCustomerSchema, udharPaymentSchema } from "../customers/customers.schema.js";
-import { createCustomer, recordUdharPayment, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
+import { createCustomer, getCustomer, recordUdharPayment, reverseUdharPayment, softDeleteCustomer, updateCustomer } from "../customers/customers.service.js";
 import { damageSchema, correctionSchema, purchaseSchema } from "../inventory/inventory.schema.js";
 import { correctStock, recordDamage, recordPurchase } from "../inventory/inventory.service.js";
 import { createProductSchema, updateProductSchema } from "../products/products.schema.js";
@@ -536,6 +536,7 @@ const reverseSupplierPaymentPayloadSchema = z.object({
 const updateCustomerPayloadSchema = z.object({
   customerId: z.string().min(1).optional(),
   id: z.string().min(1).optional(),
+  baseUpdatedAt: z.string().datetime().optional(),
   changes: updateCustomerSchema.optional(),
 }).passthrough();
 
@@ -1803,6 +1804,21 @@ async function applyUpdateCustomer(shopId, event, context) {
   const payload = updateCustomerPayloadSchema.parse(getEventPayload(event));
   const customerId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.CUSTOMER, payload.serverCustomerId ?? payload.customerId ?? payload.localCustomerId ?? payload.id, context);
   if (!customerId) throw new AppError("customerId required for UPDATE_CUSTOMER sync event", 400);
+
+  if (payload.baseUpdatedAt) {
+    const current = await getCustomer(shopId, customerId);
+    const baseTimestamp = new Date(payload.baseUpdatedAt).getTime();
+    const currentTimestamp = new Date(current.updatedAt).getTime();
+    if (baseTimestamp !== currentTimestamp) {
+      const conflict = new AppError(
+        "Customer changed on another device. Review both versions before choosing which contact details to keep.",
+        409,
+        "SYNC_CUSTOMER_VERSION_CONFLICT",
+      );
+      conflict.serverSnapshot = current;
+      throw conflict;
+    }
+  }
 
   // Client nests edited fields under `payload.customer` (see CREATE_CUSTOMER). Reading only
   // `payload.changes`/stripped top-level meant edits parsed to {} and never persisted.

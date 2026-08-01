@@ -734,6 +734,35 @@
   .purchase-totals p:last-child { @apply text-[13px] font-black text-[var(--brand-ink)]; }
   .purchase-totals > div:nth-child(3) p:last-child { @apply text-[#16a34a]; }
   .purchase-totals > div:nth-child(4) p:last-child { @apply text-[#ef4444]; }
+  .backup-grid { @apply grid gap-4 lg:grid-cols-[0.8fr_1.2fr]; }
+  .backup-create { @apply h-8 gap-1.5 rounded-[8px] text-[12px] font-bold; }
+  .backup-intro { @apply px-5 pb-4; }
+  .backup-denied { @apply rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12px] font-medium text-amber-900; }
+  .backup-description { @apply text-[11px] leading-5 text-[#34507f]; }
+  .settings-text-action { @apply text-[12px] font-bold text-[var(--brand)] hover:underline; }
+  .backup-history { @apply space-y-2 px-5 pb-4; }
+  .backup-loading { @apply flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]; }
+  .backup-hidden { @apply py-8 text-center text-[12px] text-[#64748b]; }
+  .backup-empty { @apply flex flex-col items-center gap-2 py-7 text-center; }
+  .backup-empty strong { @apply text-[13px] text-[var(--brand-ink)]; }
+  .backup-empty p { @apply text-[11px] text-[#64748b]; }
+  .backup-row { @apply flex flex-col gap-3 rounded-[11px] border border-[#e7edf7] px-3.5 py-3 sm:flex-row sm:items-center; }
+  .backup-row-body { @apply min-w-0 flex-1; }
+  .backup-row-head { @apply flex flex-wrap items-center gap-2; }
+  .backup-row-head strong { @apply text-[12px] text-[var(--brand-ink)]; }
+  .backup-row-meta { @apply mt-1 truncate text-[11px] text-[#64748b]; }
+  .backup-row-actions { @apply flex gap-2; }
+  .backup-row-actions button { @apply h-8 gap-1.5 rounded-[8px] text-[12px]; }
+  .restore-preview { @apply rounded-[11px] border border-emerald-200 bg-emerald-50 px-4 py-3; }
+  .restore-preview > strong { @apply text-[12px] text-emerald-900; }
+  .restore-preview > p { @apply mt-1 text-[11px] leading-5 text-emerald-800; }
+  .restore-preview > div { @apply mt-3 space-y-2; }
+  .restore-preview b { @apply block text-[11px] text-emerald-950; }
+  .restore-submit { @apply w-full; }
+  .restore-blocked { @apply text-[11px] font-semibold text-rose-700; }
+  .sync-queue-row { @apply flex items-center gap-3 rounded-[10px] border border-[#eef2f8] px-3.5 py-2.5; }
+  .sync-queue-row > p { @apply flex-1 text-[12px] font-semibold text-[#344668]; }
+  .sync-queue-row > button { @apply text-[12px] font-bold text-[var(--brand)] hover:underline; }
 
 }
 
