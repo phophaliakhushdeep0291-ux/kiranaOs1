@@ -100,7 +100,7 @@ export default defineConfig({
       ecma: 2020,
       module: true,
       compress: {
-        passes: 10,
+        passes: 4,
         toplevel: true,
         keep_fargs: false,
         // booleans_as_integers MUST stay off. It rewrites `x === true` to `1 == x`

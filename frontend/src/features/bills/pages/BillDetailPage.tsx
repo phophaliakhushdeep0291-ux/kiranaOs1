@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Mail, MessageCircle, Pencil, Plus, Printer, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Mail, MessageCircle, Pencil, Plus, Printer, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -169,6 +169,7 @@ export default function BillDetailPage() {
   const credit = Math.max(0, readNumber(bill?.creditAmount, total - paid));
 
   const billTypeStr = String(bill?.billType ?? "normal_sale");
+  const isCancelled = String(bill?.status ?? "").toLowerCase() === "cancelled";
   const canReturn = Boolean(bill) && bill?.status !== "cancelled" && billTypeStr !== "sales_return";
   const returnLines: ReturnLineInput[] = useMemo(() => visibleItems.map((item) => ({
     billItemId: String(item.id ?? "") || undefined,
@@ -280,8 +281,14 @@ export default function BillDetailPage() {
     );
   }
 
+  const explicitServerId = String(bill.server_id ?? bill.serverId ?? "").trim();
+  const syncState = String(bill.sync_status ?? "").toLowerCase();
+  const cloudRecordId = explicitServerId || (syncState === "synced" ? bill.id : "");
+  const localRecordId = String(bill.local_id ?? bill.localId ?? "").trim();
+  const cancellationReason = String(bill.cancelledReason ?? bill.cancelReason ?? "Owner-authorized cancellation");
+
   return (
-    <div className="p-6 space-y-5">
+    <div className="space-y-4 p-4 pb-28 md:space-y-5 md:p-6 md:pb-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
           <Link href="/bills"><Button variant="outline" size="sm"><ArrowLeft size={15} className="mr-1" />Back</Button></Link>
@@ -290,10 +297,10 @@ export default function BillDetailPage() {
             <p className="text-sm text-muted-foreground">Duplicate copy, audit trail, ledger impact, and sync status.</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />Print duplicate</Button>
-          <Button variant="outline" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />Send on WhatsApp</Button>
-          <Button variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />Send by email</Button>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <Button className="w-full sm:w-auto" variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />Print duplicate</Button>
+          <Button className="w-full sm:w-auto" variant="outline" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />WhatsApp</Button>
+          <Button className="w-full sm:w-auto" variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />Email receipt</Button>
           {isDeleted(bill) ? (
             <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />Restore</Button>
           ) : (
@@ -306,17 +313,28 @@ export default function BillDetailPage() {
               )}
               {canReturn && <Button variant="outline" onClick={() => setReturnOpen(true)}><RotateCcw size={15} className="mr-1" />Return items</Button>}
               {bill.status !== "cancelled" && <Button variant="outline" onClick={() => requestPinAction("cancel")}><ShieldCheck size={15} className="mr-1" />Cancel with PIN</Button>}
-              <Button variant="outline" onClick={() => requestPinAction("delete")}><Trash2 size={15} className="mr-1" />Move to recycle bin</Button>
+              <Button className="w-full sm:w-auto" variant="outline" onClick={() => requestPinAction("delete")}><Trash2 size={15} className="mr-1" />Recycle bin</Button>
             </>
           )}
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-4">
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Total</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{money(total)}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Paid</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-emerald-600">{money(paid)}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Udhar</CardTitle></CardHeader><CardContent className="text-2xl font-bold text-orange-600">{money(credit)}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Status</CardTitle></CardHeader><CardContent className="space-y-2"><Badge>{paymentStatus(bill, visiblePayments)}</Badge><Badge variant="outline">{String(bill.sync_status ?? bill.status ?? "synced").replaceAll("_", " ")}</Badge></CardContent></Card>
+      {isCancelled && (
+        <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-950 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/25 dark:text-emerald-100">
+          <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white"><CheckCircle2 size={18} /></span>
+          <div className="min-w-0">
+            <p className="font-bold">Cancellation confirmed</p>
+            <p className="mt-0.5 text-sm text-emerald-800 dark:text-emerald-200">Stock and customer balance were reversed. {syncState === "synced" ? "Cloud backup is confirmed." : "Cloud backup is still pending."}</p>
+            <p className="mt-1 break-words text-xs text-emerald-700 dark:text-emerald-300">Reason: {cancellationReason}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Total</CardTitle></CardHeader><CardContent className="px-4 pb-4 text-xl font-bold">{money(total)}</CardContent></Card>
+        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Paid</CardTitle></CardHeader><CardContent className="px-4 pb-4 text-xl font-bold text-emerald-600">{money(paid)}</CardContent></Card>
+        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">{isCancelled ? "Reversed Udhar" : "Udhar"}</CardTitle></CardHeader><CardContent className={`px-4 pb-4 text-xl font-bold ${isCancelled ? "text-emerald-600" : "text-orange-600"}`}>{money(credit)}</CardContent></Card>
+        <Card><CardHeader className="p-4 pb-1"><CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Status</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-1.5 px-4 pb-4"><Badge>{paymentStatus(bill, visiblePayments)}</Badge><Badge variant="outline">{String(bill.sync_status ?? bill.status ?? "synced").replaceAll("_", " ")}</Badge></CardContent></Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
@@ -328,7 +346,7 @@ export default function BillDetailPage() {
             <div><div className="text-muted-foreground">Subtotal</div><div>{money(readNumber(bill.subtotal, total + readNumber(bill.discount, 0)))}</div></div>
             <div><div className="text-muted-foreground">Discount</div><div>{money(readNumber(bill.discount, 0))}</div></div>
             <div><div className="text-muted-foreground">Deleted</div><div>{isDeleted(bill) ? "In recycle bin" : "No"}</div></div>
-            <div><div className="text-muted-foreground">Local/server</div><div className="break-all">{String(bill.local_id ?? bill.id)} / {String(bill.server_id ?? "not backed up yet")}</div></div>
+            <div className="sm:col-span-2"><div className="text-muted-foreground">Record identity</div><div className="mt-1 grid gap-1 text-xs sm:grid-cols-2"><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">Device: {localRecordId || "Merged after backup"}</span><span className="break-all rounded-lg bg-muted/60 px-2 py-1.5">Cloud: {cloudRecordId || "Waiting for backup"}</span></div></div>
           </CardContent>
         </Card>
 
@@ -365,7 +383,9 @@ export default function BillDetailPage() {
           <CardHeader><CardTitle>Customer ledger impact</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
             {data.ledger.length === 0 ? <div className="text-muted-foreground">No ledger rows found for this bill.</div> : data.ledger.map((entry, index) => <div key={String(entry.id ?? index)} className="border-b pb-2"><div className="flex justify-between"><span>{String(entry.type ?? "entry").replaceAll("_", " ")}</span><span className="font-semibold">{money(readNumber(entry.amount, 0))}</span></div><div className="text-xs text-muted-foreground">{rowDate(entry) ? new Date(rowDate(entry)).toLocaleString("en-IN") : "No date"}</div></div>)}
-            {credit > 0 && <div className="rounded-md bg-orange-50 p-2 text-orange-700">This bill adds {money(credit)} to customer udhar unless cancelled.</div>}
+            {credit > 0 && (isCancelled
+              ? <div className="rounded-md bg-emerald-50 p-2 text-emerald-700">Cancellation reversed this bill&apos;s {money(credit)} Udhar impact.</div>
+              : <div className="rounded-md bg-orange-50 p-2 text-orange-700">This bill adds {money(credit)} to customer Udhar.</div>)}
           </CardContent>
         </Card>
 

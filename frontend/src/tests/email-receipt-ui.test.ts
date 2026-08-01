@@ -5,7 +5,7 @@ const detail = readFileSync("src/features/bills/pages/BillDetailPage.tsx", "utf8
 
 describe("email receipt UI", () => {
   it("sends a validated email through the tenant-scoped bill endpoint", () => {
-    expect(detail).toContain("Send by email");
+    expect(detail).toContain("Email receipt");
     expect(detail).toContain('type="email"');
     expect(detail).toContain("/email`");
     expect(detail).toContain('method: "POST"');

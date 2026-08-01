@@ -10,11 +10,13 @@ describe("desktop app shell behavior", () => {
     // Shell locks its own height (mobile via 100dvh, desktop via h-screen) and hides its own
     // overflow, so the <main> region is the only scroll container — never the body. This is what
     // lets mobile swipe-scroll work instead of forcing the user to drag the scrollbar.
-    expect(layout).toContain("h-[100dvh] overflow-hidden");
-    expect(layout).toContain("lg:h-screen");
+    expect(layout).toContain("app-shell-root");
+    expect(styles).toContain(".app-shell-root");
+    expect(styles).toContain("height: 100dvh");
     // Sidebar is pinned to the viewport, content is offset by its (variable) width.
-    expect(layout).toContain("fixed inset-y-0 left-0");
-    expect(layout).toContain("lg:ml-[var(--app-sidebar-width)]");
+    expect(layout).toContain("app-desktop-sidebar");
+    expect(styles).toContain("position: fixed");
+    expect(styles).toContain("margin-left: var(--app-sidebar-width)");
     // The main region is the lone scroll container.
     expect(layout).toContain('id="main-content"');
     expect(layout).toContain("flex-1 overflow-auto");
@@ -27,7 +29,7 @@ describe("desktop app shell behavior", () => {
     expect(layout).toContain("requestAnimationFrame");
     expect(layout).toContain("shellRef.current?.style.setProperty");
     expect(layout).toContain("transition-none");
-    expect(layout).toContain("will-change-[width]");
+    expect(styles).toContain("will-change: width");
     expect(layout).toContain("Resize sidebar");
     // Collapse: dedicated collapse/expand controls backed by a persisted flag.
     expect(layout).toContain("setCollapsed");
