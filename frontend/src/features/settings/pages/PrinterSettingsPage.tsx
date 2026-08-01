@@ -190,34 +190,34 @@ export default function PrinterSettingsPage() {
             <div className="space-y-3 px-5 pb-5">
               <Fld label="Connection type">
                 <Select value={cfg.connection} onValueChange={(v) => setP("connection", v as PrinterConnection)}>
-                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>{(Object.entries(PRINTER_CONNECTION_LABELS) as [PrinterConnection, string][]).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}</SelectContent>
                 </Select>
               </Fld>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Fld label="Printer name / label"><Input className="h-10" value={cfg.deviceName} onChange={(e) => setP("deviceName", e.target.value)} /></Fld>
-                <Fld label="Printer model"><Input className="h-10" placeholder="e.g. TVS RP3160" value={cfg.model} onChange={(e) => setP("model", e.target.value)} /></Fld>
+                <Fld label="Printer name / label"><Input className="h-11 sm:h-10" value={cfg.deviceName} onChange={(e) => setP("deviceName", e.target.value)} /></Fld>
+                <Fld label="Printer model"><Input className="h-11 sm:h-10" placeholder="e.g. TVS RP3160" value={cfg.model} onChange={(e) => setP("model", e.target.value)} /></Fld>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Fld label="Paper size">
                   <Select value={cfg.paperSize} onValueChange={(v) => setP("paperSize", v as ReceiptPaperSize)}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
                     <SelectContent><SelectItem value="58mm">58mm thermal</SelectItem><SelectItem value="80mm">80mm thermal</SelectItem><SelectItem value="A4">A4 sheet</SelectItem></SelectContent>
                   </Select>
                 </Fld>
                 <Fld label="Copies per bill">
                   <Select value={String(cfg.copies)} onValueChange={(v) => setP("copies", Number(v))}>
-                    <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>{[1, 2, 3, 4].map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                   </Select>
                 </Fld>
               </div>
-              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="Per-device pairing token" hint="Stored only in this browser, never synced to the cloud."><Input type="password" className="h-10" value={bridgeToken} onChange={(event) => setBridgeToken(event.target.value)} placeholder="Pairing token from the bridge" /></Fld>{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant="outline" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
+              {cfg.connection === "bridge" && <div className="space-y-3 rounded-xl border border-blue-100 bg-blue-50/60 p-3"><Fld label="Local bridge URL" hint="Only localhost addresses are accepted."><Input className="h-11 sm:h-10" value={cfg.bridgeUrl} onChange={(e) => setP("bridgeUrl", e.target.value)} placeholder="http://127.0.0.1:17873" /></Fld><Fld label="Per-device pairing token" hint="Stored only in this browser, never synced to the cloud."><Input type="password" className="h-11 sm:h-10" value={bridgeToken} onChange={(event) => setBridgeToken(event.target.value)} placeholder="Pairing token from the bridge" /></Fld>{bridgeHealth?.ok ? <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void testCashDrawer()} disabled={!bridgeHealth.capabilities?.cashDrawer}>Test drawer</Button><Button type="button" size="sm" variant="outline" className="min-h-11 sm:min-h-8" onClick={() => void readScale()} disabled={!bridgeHealth.capabilities?.scale}>Read scale</Button>{scaleReading ? <Badge tone="blue">Scale {scaleReading}</Badge> : null}</div> : null}</div>}
               <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
-                <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
-                <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
-                <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={testPrint}><Printer size={14} /> Test Print</Button>
-                <Button className="h-9 gap-1.5 rounded-[9px] text-[12px] font-black text-white" style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} onClick={() => void setAsDefault()}><CheckCircle2 size={14} /> Set Default</Button>
+                <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={() => void scanPrinters()}><Search size={14} /> Scan</Button>
+                <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={() => void connectPrinter()} disabled={connecting}><Cable size={14} /> {connecting ? "Saving..." : "Connect"}</Button>
+                <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={testPrint}><Printer size={14} /> Test Print</Button>
+                <Button className="h-11 gap-1.5 rounded-[9px] text-[12px] font-black text-white sm:h-9" style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }} onClick={() => void setAsDefault()}><CheckCircle2 size={14} /> Set Default</Button>
               </div>
               {scanResult ? <div className="rounded-[10px] border border-blue-100 bg-blue-50 px-3 py-2 text-[12px] font-semibold text-blue-800">{scanResult}</div> : null}
             </div>
@@ -241,7 +241,7 @@ export default function PrinterSettingsPage() {
 
         {/* Bill template preview */}
         <Card className="flex flex-col">
-          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Test print</button>} />
+          <CardHead icon={<FileText size={15} />} title="Bill Template Preview" sub={`Live ${cfg.paperSize} receipt`} action={<button onClick={testPrint} className="min-h-11 px-2 text-[12px] font-bold text-[var(--brand)] hover:underline sm:min-h-0 sm:px-0">Test print</button>} />
           <div className="flex-1 px-5 pb-5">
             <div className="app-table-scroll overflow-auto rounded-[12px] border border-[#e3e9f3] bg-[#eef1f6]">
               <iframe title="Receipt preview" srcDoc={previewHtml} className="h-[560px] w-full border-0" />
@@ -265,7 +265,7 @@ export default function PrinterSettingsPage() {
             <RowToggle label="Show total savings" pill={<Switch checked={cfg.showSavings} onCheckedChange={(v) => setP("showSavings", v)} />} />
             <RowToggle label="Show return policy" pill={<Switch checked={cfg.showReturnPolicy} onCheckedChange={(v) => setP("showReturnPolicy", v)} />} last />
             <Fld label="Footer note">
-              <Input className="h-10" value={cfg.footerText} onChange={(e) => setP("footerText", e.target.value)} />
+              <Input className="h-11 sm:h-10" value={cfg.footerText} onChange={(e) => setP("footerText", e.target.value)} />
             </Fld>
             <p className="pt-2 text-[11px] text-[#9aa6bb]">Browser security allows direct printer scanning only for supported Bluetooth devices. For most thermal printers, install or pair the printer in Windows/Android and Artha will print through the system dialog.</p>
           </div>
@@ -273,7 +273,7 @@ export default function PrinterSettingsPage() {
 
         {/* Printer queue / test */}
         <Card>
-          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: "Queue cleared" }); }} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Clear queue</button>} />
+          <CardHead icon={<Printer size={15} />} title="Printer Queue" sub="Print actions from this session" action={<button onClick={() => { setJobs([]); toast({ title: "Queue cleared" }); }} className="min-h-11 px-2 text-[12px] font-bold text-[var(--brand)] hover:underline sm:min-h-0 sm:px-0">Clear queue</button>} />
           <div className="px-5 pb-4">
             {jobs.length === 0 ? (
               <div className="rounded-[12px] border border-dashed border-[#dbe4f0] p-6 text-center text-[12px] font-semibold text-[#64748b]">
@@ -286,12 +286,12 @@ export default function PrinterSettingsPage() {
                   <p className="text-[13px] font-bold text-[var(--brand-ink)]">{j.title}</p>
                   <p className="text-[11px] text-[#64748b]">{j.time}</p>
                 </div>
-                {j.status === "failed" ? <Button size="sm" variant="outline" className="h-8 gap-1 rounded-[8px] text-[12px] font-bold" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button> : <Badge tone={j.status === "pending" ? "blue" : "green"}>{j.status === "saved" ? "Saved" : j.status === "sent" ? "Sent to printer" : j.status === "opened" ? "Dialog opened" : "Sending"}</Badge>}
+                {j.status === "failed" ? <Button size="sm" variant="outline" className="h-11 gap-1 rounded-[8px] text-[12px] font-bold sm:h-8" onClick={testPrint}><RefreshCcw size={12} /> Retry</Button> : <Badge tone={j.status === "pending" ? "blue" : "green"}>{j.status === "saved" ? "Saved" : j.status === "sent" ? "Sent to printer" : j.status === "opened" ? "Dialog opened" : "Sending"}</Badge>}
               </div>
             ))}
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={testPrint}><Printer size={14} /> Print sample</Button>
-              <Button variant="outline" className="h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={downloadReceiptHtml}><Download size={14} /> Download receipt</Button>
+              <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={testPrint}><Printer size={14} /> Print sample</Button>
+              <Button variant="outline" className="h-11 gap-1.5 rounded-[9px] text-[12px] font-bold sm:h-9" onClick={downloadReceiptHtml}><Download size={14} /> Download receipt</Button>
             </div>
           </div>
         </Card>

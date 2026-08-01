@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
-import { Archive, CheckCircle2, Clock, Cloud, CloudOff, Database, Download, Loader2, RefreshCcw, ShieldCheck, Upload } from "lucide-react";
+import { Archive, CheckCircle2, Clock, Cloud, CloudOff, Database, Loader2, RefreshCcw, Upload } from "lucide-react";
 import { SettingsShell } from "@/features/settings/SettingsShell";
-import { Card, CardHead, Badge, Kpi, RowToggle } from "@/features/settings/ui";
+import { Card, CardHead, Badge, Kpi } from "@/features/settings/ui";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { ApiClientError } from "@/lib/api/http";
 import {
@@ -13,10 +14,12 @@ import {
   downloadShopBackup,
   listShopBackups,
   previewShopBackupRestore,
+  restoreShopBackup,
   saveBackupBlob,
   type BackupArtifact,
   type BackupRestorePreview,
 } from "@/features/backups";
+import { resetDeviceAfterCloudRestore } from "@/features/backups/restore-local-reset";
 function timeAgo(d: Date | null) {
   if (!d) return "—";
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -27,14 +30,6 @@ function backupTime(value: string | null) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "Time unavailable";
   return date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
-}
-
-function backupSize(value: string | null) {
-  const bytes = Number(value);
-  if (!Number.isFinite(bytes) || bytes <= 0) return "Size pending";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function backupTone(status: BackupArtifact["status"]): "green" | "amber" | "red" | "gray" {
@@ -49,11 +44,11 @@ export default function SyncSettingsPage() {
   const { isOnline, isBrowserOnline, backendStatus, isSyncing, pendingCount, failedCount, conflictCount, syncNow } = useOfflineStatus();
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [backups, setBackups] = useState<BackupArtifact[]>([]);
-  const [backupRetentionDays, setBackupRetentionDays] = useState(30);
   const [backupHistoryLoading, setBackupHistoryLoading] = useState(true);
   const [backupAccessDenied, setBackupAccessDenied] = useState(false);
-  const [backupApproval, setBackupApproval] = useState<{ type: "create" | "download" | "restore-preview"; artifact?: BackupArtifact } | null>(null);
+  const [backupApproval, setBackupApproval] = useState<{ type: "create" | "download" | "restore-preview" | "restore"; artifact?: BackupArtifact } | null>(null);
   const [restorePreview, setRestorePreview] = useState<BackupRestorePreview | null>(null);
+  const [restoreConfirmation, setRestoreConfirmation] = useState("");
   const [backupActionLoading, setBackupActionLoading] = useState(false);
   const [backupActionError, setBackupActionError] = useState<string | null>(null);
   const wasSyncing = useRef(false);
@@ -68,7 +63,6 @@ export default function SyncSettingsPage() {
     try {
       const result = await listShopBackups({ background });
       setBackups(result.backups);
-      setBackupRetentionDays(result.retention_days);
       setBackupAccessDenied(false);
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 403) setBackupAccessDenied(true);
@@ -92,18 +86,20 @@ export default function SyncSettingsPage() {
       if (backupApproval.type === "create") {
         const result = await createShopBackup(ownerPin);
         setBackups((current) => [result.backup, ...current.filter((row) => row.id !== result.backup.id)]);
-        toast({
-          title: result.backup.status === "completed" ? "Encrypted backup ready" : "Encrypted backup queued",
-          description: "The portable snapshot is tenant-scoped, checksummed, and protected with AES-256-GCM.",
-        });
+        toast({ title: result.backup.status === "completed" ? "Backup ready" : "Backup queued" });
       } else if (backupApproval.type === "download" && backupApproval.artifact) {
         const blob = await downloadShopBackup(backupApproval.artifact.id, ownerPin);
         saveBackupBlob(blob, backupApproval.artifact);
-        toast({ title: "Encrypted backup downloaded", description: "Keep the .kosb file and encryption key in separate secure locations." });
+        toast({ title: "Backup downloaded" });
       } else if (backupApproval.type === "restore-preview" && backupApproval.artifact) {
         const result = await previewShopBackupRestore(backupApproval.artifact.id, ownerPin);
         setRestorePreview(result.preview);
-        toast({ title: "Backup verified", description: `${result.preview.record_count.toLocaleString("en-IN")} records are structurally compatible with this shop.` });
+        toast({ title: "Backup verified" });
+      } else if (backupApproval.type === "restore" && backupApproval.artifact) {
+        await restoreShopBackup(backupApproval.artifact.id, restoreConfirmation, ownerPin);
+        await resetDeviceAfterCloudRestore();
+        window.location.assign("/login?restored=1");
+        return;
       }
       setBackupApproval(null);
       await loadBackups();
@@ -126,14 +122,7 @@ export default function SyncSettingsPage() {
 
   function handleSync() {
     void syncNow({ manual: true });
-    toast({
-      title: isOnline ? "Syncing now..." : isBrowserOnline ? "Cloud backup paused" : "You're offline",
-      description: isOnline
-        ? "Pushing and pulling the latest changes."
-        : isBrowserOnline
-          ? "The app is online, but the backend is not reachable yet."
-          : "Changes will sync when you're back online.",
-    });
+    toast({ title: isOnline ? "Syncing now..." : isBrowserOnline ? "Cloud paused" : "You're offline" });
   }
 
   return (
@@ -197,7 +186,7 @@ export default function SyncSettingsPage() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className="backup-grid">
         {/* Encrypted portable backups */}
         <Card>
           <CardHead
@@ -207,7 +196,7 @@ export default function SyncSettingsPage() {
             action={!backupAccessDenied ? (
               <Button
                 size="sm"
-                className="h-8 gap-1.5 rounded-[8px] text-[12px] font-bold"
+                className="backup-create"
                 disabled={!isOnline || backupActionLoading}
                 onClick={() => { setBackupActionError(null); setBackupApproval({ type: "create" }); }}
               >
@@ -216,71 +205,74 @@ export default function SyncSettingsPage() {
               </Button>
             ) : undefined}
           />
-          <div className="px-5 pb-4">
+          <div className="backup-intro">
             {backupAccessDenied ? (
-              <div className="rounded-[10px] border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12px] font-medium text-amber-900">
+              <div className="backup-denied">
                 Owner or admin access is required to view portable backups.
               </div>
             ) : (
-              <>
-                <RowToggle label="Encryption" desc="Authenticated encryption before upload" pill={<Badge tone="green"><ShieldCheck size={11} /> AES-256-GCM</Badge>} />
-                <RowToggle label="Integrity" desc="Verified before recovery" pill={<Badge tone="blue">SHA-256</Badge>} />
-                <RowToggle label="Retention" desc="Expired objects are deleted; audit metadata remains" pill={<Badge>{backupRetentionDays} days</Badge>} />
-                <RowToggle label="Sensitive credentials" desc="Passwords, PINs, sessions, API keys and webhook secrets" pill={<Badge tone="green">Excluded</Badge>} last />
-                <div className="mt-3 flex items-start gap-2 rounded-[10px] bg-[var(--brand-soft)] px-3 py-2 text-[11px] font-medium leading-relaxed text-[#34507f]">
-                  <ShieldCheck size={14} className="mt-0.5 shrink-0" />
-                  Continuous device sync and portable snapshots are separate protections. A snapshot is created only after owner-PIN approval.
-                </div>
-              </>
+              <p className="backup-description">AES-256-GCM · SHA-256 · Sensitive credentials excluded.</p>
             )}
           </div>
         </Card>
 
         {/* Backup History */}
         <Card>
-          <CardHead icon={<Cloud size={15} />} title="Backup history" sub="Server-confirmed encrypted artifacts" action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Refresh</button> : undefined} />
-          <div className="space-y-2 px-5 pb-4">
+          <CardHead icon={<Cloud size={15} />} title="Backup history" sub="Server-confirmed encrypted artifacts" action={!backupAccessDenied ? <button onClick={() => void loadBackups()} className="settings-text-action">Refresh</button> : undefined} />
+          <div className="backup-history">
             {backupHistoryLoading ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-[12px] text-[#64748b]"><Loader2 size={15} className="animate-spin" /> Loading backup history</div>
+              <div className="backup-loading"><Loader2 size={15} className="animate-spin" /> Loading backup history</div>
             ) : backupAccessDenied ? (
-              <div className="py-8 text-center text-[12px] text-[#64748b]">Backup history is hidden for cashier accounts.</div>
+              <div className="backup-hidden">Backup history is hidden for cashier accounts.</div>
             ) : backups.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-7 text-center">
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]"><Archive size={20} /></span>
-                <p className="text-[13px] font-bold text-[var(--brand-ink)]">No portable snapshot yet</p>
-                <p className="max-w-sm text-[11px] text-[#64748b]">Create one before a major import, migration, device replacement, or support recovery.</p>
+              <div className="backup-empty">
+                <strong>No portable snapshot yet</strong>
+                <p>Create one before major changes.</p>
               </div>
             ) : backups.slice(0, 8).map((artifact) => (
-              <div key={artifact.id} className="flex flex-col gap-3 rounded-[11px] border border-[#e7edf7] px-3.5 py-3 sm:flex-row sm:items-center">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[9px] bg-[var(--brand-soft)] text-[var(--brand)]"><Archive size={16} /></span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[12px] font-bold text-[var(--brand-ink)]">{backupTime(artifact.completed_at ?? artifact.created_at)}</p>
+              <div key={artifact.id} className="backup-row">
+                <div className="backup-row-body">
+                  <div className="backup-row-head">
+                    <strong>{backupTime(artifact.completed_at ?? artifact.created_at)}</strong>
                     <Badge tone={backupTone(artifact.status)}>{artifact.status.replace("_", " ")}</Badge>
                   </div>
-                  <p className="mt-1 truncate text-[11px] text-[#64748b]">
+                  <p className="backup-row-meta">
                     {artifact.status === "failed"
                       ? artifact.error_message || "Backup failed"
-                      : `${backupSize(artifact.size_bytes)} · ${artifact.record_count?.toLocaleString("en-IN") ?? "—"} records · expires ${backupTime(artifact.expires_at)}`}
+                      : `${artifact.record_count?.toLocaleString("en-IN") ?? "—"} records`}
                   </p>
                 </div>
-                {artifact.status === "completed" && <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px]" onClick={() => { setBackupActionError(null); setBackupApproval({ type: "restore-preview", artifact }); }}>
-                    <ShieldCheck size={13} /> Validate restore
+                {artifact.status === "completed" && <div className="backup-row-actions">
+                  <Button size="sm" variant="outline" onClick={() => { setBackupActionError(null); setBackupApproval({ type: "restore-preview", artifact }); }}>
+                    Validate
                   </Button>
-                  <Button size="sm" variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[12px]" onClick={() => { setBackupActionError(null); setBackupApproval({ type: "download", artifact }); }}>
-                    <Download size={13} /> Download
+                  <Button size="sm" variant="outline" onClick={() => { setBackupActionError(null); setBackupApproval({ type: "download", artifact }); }}>
+                    Download
                   </Button>
                 </div>}
               </div>
             ))}
             {restorePreview && (
-              <div className="rounded-[11px] border border-emerald-200 bg-emerald-50 px-4 py-3" role="status">
-                <p className="text-[12px] font-bold text-emerald-900">Restore validation passed</p>
-                <p className="mt-1 text-[11px] leading-5 text-emerald-800">
-                  Schema {restorePreview.schema_version} · {restorePreview.record_count.toLocaleString("en-IN")} records across {Object.keys(restorePreview.table_counts).length} data groups. Current credentials will be preserved.
+              <div className="restore-preview">
+                <strong>Restore verified</strong>
+                <p>
+                  {restorePreview.record_count.toLocaleString("en-IN")} records verified; credentials preserved. A recovery snapshot is created first and every device must sign in again.
                 </p>
-                <p className="mt-1 text-[11px] leading-5 text-emerald-800">No records were changed. Execution remains disabled until a fresh pre-restore snapshot and rollback check can be guaranteed.</p>
+                <div>
+                  <b>Type <code>RESTORE {restorePreview.artifact_id.slice(-6)}</code> to continue.</b>
+                  <Input value={restoreConfirmation} onChange={(event) => setRestoreConfirmation(event.target.value)} placeholder={`RESTORE ${restorePreview.artifact_id.slice(-6)}`} />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="restore-submit"
+                    disabled={pendingCount > 0 || failedCount > 0 || conflictCount > 0 || restoreConfirmation.trim() !== `RESTORE ${restorePreview.artifact_id.slice(-6)}`}
+                    onClick={() => {
+                      const artifact = backups.find((row) => row.id === restorePreview.artifact_id);
+                      if (artifact) { setBackupActionError(null); setBackupApproval({ type: "restore", artifact }); }
+                    }}
+                  >Restore verified snapshot</Button>
+                  {(pendingCount > 0 || failedCount > 0 || conflictCount > 0) && <p className="restore-blocked">Resolve every pending, failed, or conflicting local change before restoring.</p>}
+                </div>
               </div>
             )}
           </div>
@@ -289,13 +281,15 @@ export default function SyncSettingsPage() {
 
       <OwnerPinModal
         open={Boolean(backupApproval)}
-        title={backupApproval?.type === "download" ? "Download encrypted backup" : backupApproval?.type === "restore-preview" ? "Validate restore safety" : "Create encrypted shop backup"}
+        title={backupApproval?.type === "restore" ? "Final restore approval" : backupApproval?.type === "download" ? "Download encrypted backup" : backupApproval?.type === "restore-preview" ? "Validate restore safety" : "Create encrypted shop backup"}
         description={backupApproval?.type === "download"
-          ? "This exports sensitive shop data in an encrypted .kosb envelope. The download is audited."
+          ? "Download the encrypted, audited shop backup."
+          : backupApproval?.type === "restore"
+            ? "Restore verified business data and rebuild every device cache."
           : backupApproval?.type === "restore-preview"
-            ? "Checks encryption, checksum, tenant ownership, schema compatibility and record structure. This validation does not change shop data."
-            : "This creates a transactionally consistent, tenant-scoped snapshot. Credential hashes and session secrets are excluded."}
-        confirmLabel={backupApproval?.type === "download" ? "Download backup" : backupApproval?.type === "restore-preview" ? "Validate backup" : "Create backup"}
+            ? "Verify compatibility without changing data."
+            : "Create an encrypted snapshot without credentials."}
+        confirmLabel={backupApproval?.type === "restore" ? "Restore shop" : backupApproval?.type === "download" ? "Download backup" : backupApproval?.type === "restore-preview" ? "Validate backup" : "Create backup"}
         loading={backupActionLoading}
         error={backupActionError}
         onCancel={() => { if (!backupActionLoading) { setBackupApproval(null); setBackupActionError(null); } }}
@@ -307,11 +301,11 @@ export default function SyncSettingsPage() {
 
 function QueueRow({ label, tone, status, onRetry }: { label: string; tone: "amber" | "red"; status: string; onRetry?: () => void }) {
   return (
-    <div className="flex items-center gap-3 rounded-[10px] border border-[#eef2f8] px-3.5 py-2.5">
+    <div className="sync-queue-row">
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone === "red" ? "bg-rose-500" : "bg-amber-500"}`} />
-      <p className="flex-1 text-[12px] font-semibold text-[#344668]">{label}</p>
+      <p>{label}</p>
       <Badge tone={tone}>{status}</Badge>
-      {onRetry && <button onClick={onRetry} className="text-[12px] font-bold text-[var(--brand)] hover:underline">Retry</button>}
+      {onRetry && <button onClick={onRetry}>Retry</button>}
     </div>
   );
 }

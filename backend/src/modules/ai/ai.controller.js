@@ -1,6 +1,7 @@
 import * as svc from "./ai.service.js";
 import { AppError } from "../../middleware/error.js";
 import { getUploadedAudioFile, removeUploadedAudioFile } from "./ai.upload.js";
+import { extractPurchaseInvoice as extractInvoice } from "./invoice-ocr.service.js";
 
 function sendAiProviderError(err, res) {
   const msg = (err.message ?? "").toLowerCase();
@@ -76,5 +77,15 @@ export async function transcribe(req, res, next) {
     next(err);
   } finally {
     await removeUploadedAudioFile(file);
+  }
+}
+
+export async function extractPurchaseInvoice(req, res, next) {
+  try {
+    const draft = await extractInvoice(req.shopId, req.invoiceImage);
+    res.json({ success: true, data: { draft } });
+  } catch (err) {
+    if (sendAiProviderError(err, res)) return;
+    next(err);
   }
 }

@@ -105,6 +105,7 @@ export async function createDeviceBoundLoginSession({ user, reqMeta, sessionData
     const result = await db.$transaction(async (tx) => {
     await acquireShopRegistrationLock(tx, user.shopId);
     const effective = await getEffectivePlan(user.shopId, tx);
+    const shopState = await tx.shop.findUniqueOrThrow({ where: { id: user.shopId }, select: { dataEpoch: true } });
     const allowedMaxDevices = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
     const existing = await tx.device.findUnique({
       where: { shopId_deviceId: { shopId: user.shopId, deviceId: metadata.deviceId } },
@@ -148,6 +149,7 @@ export async function createDeviceBoundLoginSession({ user, reqMeta, sessionData
             lastActiveAt: now,
             lastLoginAt: now,
             lastSeenAt: now,
+            dataEpoch: shopState.dataEpoch,
             removedAt: null,
             revokedAt: null,
             revokedByUserId: null,
@@ -173,6 +175,7 @@ export async function createDeviceBoundLoginSession({ user, reqMeta, sessionData
             lastActiveAt: now,
             lastLoginAt: now,
             lastSeenAt: now,
+            dataEpoch: shopState.dataEpoch,
           },
         });
 
@@ -563,6 +566,7 @@ export async function activateDevice(shopId, user, input, req = null) {
   const userId = user?.userId ?? user?.id ?? null;
   const existing = await db.device.findUnique({ where: { shopId_deviceId: { shopId, deviceId: input.deviceId } } });
   const now = new Date();
+  const shopState = await db.shop.findUniqueOrThrow({ where: { id: shopId }, select: { dataEpoch: true } });
 
   // Even already-registered devices must respect the current plan's concurrent-device limit.
   // Without this, an old active Device row could keep working after the shop is already over limit.
@@ -577,6 +581,7 @@ export async function activateDevice(shopId, user, input, req = null) {
         platform: input.platform ?? existing.platform,
         fingerprintHash: input.fingerprintHash ?? existing.fingerprintHash,
         lastActiveAt: now,
+        dataEpoch: shopState.dataEpoch,
       },
     });
     await bindLoginSessionToDevice(shopId, user, device.deviceId);
@@ -607,6 +612,7 @@ export async function activateDevice(shopId, user, input, req = null) {
           status: "active",
           activatedAt: existing.activatedAt ?? now,
           lastActiveAt: now,
+          dataEpoch: shopState.dataEpoch,
           removedAt: null,
           revokedAt: null,
           revokedByUserId: null,
@@ -625,6 +631,7 @@ export async function activateDevice(shopId, user, input, req = null) {
           status: "active",
           activatedAt: now,
           lastActiveAt: now,
+          dataEpoch: shopState.dataEpoch,
         },
       });
 
@@ -690,6 +697,7 @@ export async function completeDeviceReplacement({ replacementToken, targetDevice
     if (target.deviceId === metadata.deviceId) return { targetIsIncoming: true };
 
     const effective = await getEffectivePlan(user.shopId, tx);
+    const replacementShopState = await tx.shop.findUniqueOrThrow({ where: { id: user.shopId }, select: { dataEpoch: true } });
     const deviceLimit = getRuntimeDeviceLimit(effective.limits.maxDevices, effective.subscription);
     const registeredDeviceCount = await tx.device.count({
       where: { shopId: user.shopId, status: { in: SLOT_OCCUPYING_STATUSES } },
@@ -739,6 +747,7 @@ export async function completeDeviceReplacement({ replacementToken, targetDevice
             lastActiveAt: now,
             lastLoginAt: now,
             lastSeenAt: now,
+            dataEpoch: replacementShopState.dataEpoch,
             removedAt: null,
             revokedAt: null,
             revokedByUserId: null,
@@ -763,6 +772,7 @@ export async function completeDeviceReplacement({ replacementToken, targetDevice
             lastActiveAt: now,
             lastLoginAt: now,
             lastSeenAt: now,
+            dataEpoch: replacementShopState.dataEpoch,
           },
         });
 

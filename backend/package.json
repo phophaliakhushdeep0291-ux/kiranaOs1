@@ -24,7 +24,7 @@
     "test:compliance": "node tests/compliance-tax.examples.js",
     "test:loyalty": "node tests/loyalty-maturity.examples.js",
     "test:atomic-offers": "node tests/offer-bill-atomicity.examples.js",
-    "test:ai-safety": "node tests/ai-hallucination-guard.examples.js",
+    "test:ai-safety": "node tests/ai-hallucination-guard.examples.js && node tests/invoice-ocr.examples.js && node tests/shop-maintenance-lock.examples.js && node tests/backup-model-policy.examples.js",
     "test:retail-payment": "node tests/retail-payment-integrity.examples.js",
     "test:regression": "node tests/backend-regression.examples.js",
     "test:diagnostics": "node tests/diagnostics-error-store.examples.js",

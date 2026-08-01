@@ -298,9 +298,9 @@ export default function BillDetailPage() {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button className="w-full sm:w-auto" variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />Print duplicate</Button>
-          <Button className="w-full sm:w-auto" variant="outline" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />WhatsApp</Button>
-          <Button className="w-full sm:w-auto" variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />Email receipt</Button>
+          <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={printBill}><Printer size={15} className="mr-1" />Print duplicate</Button>
+          <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => void shareOnWhatsapp()}><MessageCircle size={15} className="mr-1" />WhatsApp</Button>
+          <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => { setEmailError(""); setEmailOpen(true); }}><Mail size={15} className="mr-1" />Email receipt</Button>
           {isDeleted(bill) ? (
             <Button onClick={() => requestPinAction("restore")}><RotateCcw size={15} className="mr-1" />Restore</Button>
           ) : (
@@ -313,7 +313,7 @@ export default function BillDetailPage() {
               )}
               {canReturn && <Button variant="outline" onClick={() => setReturnOpen(true)}><RotateCcw size={15} className="mr-1" />Return items</Button>}
               {bill.status !== "cancelled" && <Button variant="outline" onClick={() => requestPinAction("cancel")}><ShieldCheck size={15} className="mr-1" />Cancel with PIN</Button>}
-              <Button className="w-full sm:w-auto" variant="outline" onClick={() => requestPinAction("delete")}><Trash2 size={15} className="mr-1" />Recycle bin</Button>
+              <Button className="h-11 w-full sm:w-auto" variant="outline" onClick={() => requestPinAction("delete")}><Trash2 size={15} className="mr-1" />Recycle bin</Button>
             </>
           )}
         </div>
@@ -416,7 +416,7 @@ export default function BillDetailPage() {
             <Input id="receipt-email" type="email" inputMode="email" autoComplete="email" value={receiptEmail} onChange={(event) => { setReceiptEmail(event.target.value); setEmailError(""); }} placeholder="customer@example.com" aria-invalid={Boolean(emailError) || undefined} aria-describedby={emailError ? "receipt-email-error" : undefined} />
             {emailError && <p id="receipt-email-error" role="alert" className="text-xs font-semibold text-destructive">{emailError}</p>}
           </div>
-          <DialogFooter><Button variant="outline" disabled={emailSending} onClick={() => setEmailOpen(false)}>Cancel</Button><Button disabled={emailSending || !receiptEmail.trim()} onClick={() => void sendEmailReceipt()}>{emailSending ? "Sending…" : "Send receipt"}</Button></DialogFooter>
+          <DialogFooter><Button className="h-11" variant="outline" disabled={emailSending} onClick={() => setEmailOpen(false)}>Cancel</Button><Button className="h-11" disabled={emailSending || !receiptEmail.trim()} onClick={() => void sendEmailReceipt()}>{emailSending ? "Sending…" : "Send receipt"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -85,6 +85,11 @@ export function removeSensitiveSyncFields(value) {
     return value.map(removeSensitiveSyncFields);
   }
 
+  // Prisma money shadows are BigInt. Conflict/result snapshots are JSON, so
+  // preserve their exact decimal value as a string instead of throwing or
+  // coercing a potentially unsafe integer to Number.
+  if (typeof value === 'bigint') return value.toString();
+
   if (!value || typeof value !== 'object') {
     return value;
   }

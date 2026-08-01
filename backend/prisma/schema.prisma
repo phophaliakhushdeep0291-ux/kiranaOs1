@@ -34,85 +34,101 @@ model Shop {
   gstNumber    String?
   phone        String?
   settingsJson String   @default("{}") // shop preferences: printer, taxes, notifications, security toggles
+  dataEpoch    Int      @default(0) // increments after destructive recovery; stale devices must rebootstrap
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  users                       User[]
-  products                    Product[]
-  customers                   Customer[]
-  bills                       Bill[]
-  payments                    Payment[]
-  retailPaymentIntents        RetailPaymentIntent[]
-  stockLedger                 StockLedger[]
-  udharLedger                 UdharLedger[]
-  suppliers                   Supplier[]
-  purchaseHistory             PurchaseHistory[]
-  purchaseOrders              PurchaseOrder[]
-  purchaseReceipts            PurchaseReceipt[]
-  purchaseReturns             PurchaseReturn[]
-  userLocationAccess          UserLocationAccess[]
-  aiActionLogs                AiActionLog[]
-  auditLogs                   AuditLog[]
-  sessions                    Session[]
-  authTokens                  AuthToken[]
-  offlineSyncEvents           OfflineSyncEvent[]
-  syncConflicts               SyncConflict[]
-  syncIdMappings              SyncIdMapping[]
-  syncCommands                SyncCommand[]
-  changeLogs                  ChangeLog[]
-  financialLedger             FinancialLedger[]
-  billCounter                 BillCounter?
-  subscriptions               Subscription[]
-  paymentTransactions         PaymentTransaction[]
-  devices                     Device[]
-  deviceLicenses              DeviceLicense[]
-  deviceReplacementChallenges DeviceReplacementChallenge[]
-  reportExportJobs            ReportExportJob[]
-  reminderTemplates           ReminderTemplate[]
-  reminderLogs                ReminderLog[]
-  dailyClosingSnapshots       DailyClosingSnapshot[]
-  expenses                    Expense[]
-  offers                      Offer[]
-  customerOrders              CustomerOrder[]
-  pricingRules                PricingRule[]
-  productSellingUnits         ProductSellingUnit[]
-  inventoryLots               InventoryLot[]
-  pricingDecisionEvents       PricingDecisionEvent[]
-  integrationApiKeys          IntegrationApiKey[]
-  webhookEndpoints            WebhookEndpoint[]
-  webhookDeliveries           WebhookDelivery[]
-  storeLocations              StoreLocation[]
-  locationStocks              LocationStock[]
-  stockTransfers              StockTransfer[]
-  transferDocumentCounters    TransferDocumentCounter[]
-  loyaltyPrograms             LoyaltyProgram[]
-  loyaltyAccounts             LoyaltyAccount[]
-  loyaltyTransactions         LoyaltyTransaction[]
-  complianceDocuments         ComplianceDocument[]
-  stockCountSessions          StockCountSession[]
-  giftCards                   GiftCard[]
-  giftCardTransactions        GiftCardTransaction[]
-  backupArtifacts             BackupArtifact[]
-  errorGroups                 ErrorGroup[]
-  errorEvents                 ErrorEvent[]
-  supportRequests             SupportRequest[]
-  deviceHealthSnapshots       DeviceHealthSnapshot[]
-  auditRules                  AuditRule[]
-  auditRuns                   AuditRun[]
-  auditEvaluations            AuditEvaluation[]
-  auditFindings               AuditFinding[]
-  auditFindingRules           AuditFindingRule[]
-  auditEvidenceRequirements   AuditEvidenceRequirement[]
-  auditEvidence               AuditEvidence[]
-  auditFindingStatusHistory   AuditFindingStatusHistory[]
-  auditReviews                AuditReview[]
-  auditCases                  AuditCase[]
-  auditCaseFindings           AuditCaseFinding[]
-  auditBaselines              AuditBaseline[]
-  bankStatementImports        BankStatementImport[]
-  bankStatementTransactions   BankStatementTransaction[]
+  users                         User[]
+  products                      Product[]
+  customers                     Customer[]
+  bills                         Bill[]
+  payments                      Payment[]
+  retailPaymentIntents          RetailPaymentIntent[]
+  stockLedger                   StockLedger[]
+  udharLedger                   UdharLedger[]
+  suppliers                     Supplier[]
+  purchaseHistory               PurchaseHistory[]
+  purchaseOrders                PurchaseOrder[]
+  purchaseReceipts              PurchaseReceipt[]
+  purchaseReturns               PurchaseReturn[]
+  userLocationAccess            UserLocationAccess[]
+  aiActionLogs                  AiActionLog[]
+  auditLogs                     AuditLog[]
+  sessions                      Session[]
+  authTokens                    AuthToken[]
+  offlineSyncEvents             OfflineSyncEvent[]
+  syncConflicts                 SyncConflict[]
+  syncIdMappings                SyncIdMapping[]
+  syncCommands                  SyncCommand[]
+  changeLogs                    ChangeLog[]
+  financialLedger               FinancialLedger[]
+  billCounter                   BillCounter?
+  subscriptions                 Subscription[]
+  paymentTransactions           PaymentTransaction[]
+  devices                       Device[]
+  deviceLicenses                DeviceLicense[]
+  deviceReplacementChallenges   DeviceReplacementChallenge[]
+  reportExportJobs              ReportExportJob[]
+  reminderTemplates             ReminderTemplate[]
+  reminderLogs                  ReminderLog[]
+  dailyClosingSnapshots         DailyClosingSnapshot[]
+  expenses                      Expense[]
+  offers                        Offer[]
+  customerOrders                CustomerOrder[]
+  pricingRules                  PricingRule[]
+  productSellingUnits           ProductSellingUnit[]
+  inventoryLots                 InventoryLot[]
+  pricingDecisionEvents         PricingDecisionEvent[]
+  integrationApiKeys            IntegrationApiKey[]
+  webhookEndpoints              WebhookEndpoint[]
+  webhookDeliveries             WebhookDelivery[]
+  storeLocations                StoreLocation[]
+  locationStocks                LocationStock[]
+  stockTransfers                StockTransfer[]
+  transferDocumentCounters      TransferDocumentCounter[]
+  loyaltyPrograms               LoyaltyProgram[]
+  loyaltyAccounts               LoyaltyAccount[]
+  loyaltyTransactions           LoyaltyTransaction[]
+  complianceDocuments           ComplianceDocument[]
+  stockCountSessions            StockCountSession[]
+  giftCards                     GiftCard[]
+  giftCardTransactions          GiftCardTransaction[]
+  backupArtifacts               BackupArtifact[]
+  errorGroups                   ErrorGroup[]
+  errorEvents                   ErrorEvent[]
+  supportRequests               SupportRequest[]
+  deviceHealthSnapshots         DeviceHealthSnapshot[]
+  auditRules                    AuditRule[]
+  auditRuns                     AuditRun[]
+  auditEvaluations              AuditEvaluation[]
+  auditFindings                 AuditFinding[]
+  auditFindingRules             AuditFindingRule[]
+  auditEvidenceRequirements     AuditEvidenceRequirement[]
+  auditEvidence                 AuditEvidence[]
+  auditFindingStatusHistory     AuditFindingStatusHistory[]
+  auditReviews                  AuditReview[]
+  auditCases                    AuditCase[]
+  auditCaseFindings             AuditCaseFinding[]
+  auditBaselines                AuditBaseline[]
+  bankStatementImports          BankStatementImport[]
+  bankStatementTransactions     BankStatementTransaction[]
   bankReconciliationAllocations BankReconciliationAllocation[]
-  bankReconciliationEvents    BankReconciliationEvent[]
+  bankReconciliationEvents      BankReconciliationEvent[]
+  maintenanceLock               ShopMaintenanceLock?
+}
+
+model ShopMaintenanceLock {
+  shopId         String   @id
+  tokenHash      String
+  reason         String
+  lockedByUserId String?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 // ─────────────────────────────────────────────
@@ -259,32 +275,32 @@ model PricingDecisionEvent {
 // itemsJson is a storefront snapshot: [{ productId, name, unit, price, qty }].
 // ─────────────────────────────────────────────
 model CustomerOrder {
-  id              String    @id @default(cuid())
-  shopId          String
-  locationId      String?
-  customerName    String
-  customerMobile  String
-  customerAddress String?
-  itemsJson       String    @default("[]")
-  itemCount       Int       @default(0)
-  estimatedTotal  Float     @default(0)
-  note            String?
-  fulfillmentType  String    @default("delivery") // delivery | pickup
-  promisedSlot     String?
-  sourceChannel    String    @default("customer_portal") // pos | customer_portal | api | marketplace
-  externalOrderId  String?
-  paymentStatus    String    @default("unpaid") // unpaid | partially_paid | paid | refunded
-  fulfillmentStatus String   @default("unfulfilled") // unfulfilled | preparing | ready | fulfilled | cancelled
-  status           String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
-  billId          String?
-  idempotencyKey  String?
-  acceptedAt      DateTime?
-  readyAt         DateTime?
-  fulfilledAt     DateTime?
-  rejectedAt      DateTime?
-  cancelledAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  shopId            String
+  locationId        String?
+  customerName      String
+  customerMobile    String
+  customerAddress   String?
+  itemsJson         String    @default("[]")
+  itemCount         Int       @default(0)
+  estimatedTotal    Float     @default(0)
+  note              String?
+  fulfillmentType   String    @default("delivery") // delivery | pickup
+  promisedSlot      String?
+  sourceChannel     String    @default("customer_portal") // pos | customer_portal | api | marketplace
+  externalOrderId   String?
+  paymentStatus     String    @default("unpaid") // unpaid | partially_paid | paid | refunded
+  fulfillmentStatus String    @default("unfulfilled") // unfulfilled | preparing | ready | fulfilled | cancelled
+  status            String    @default("new") // new | accepted | ready | fulfilled | rejected | cancelled
+  billId            String?
+  idempotencyKey    String?
+  acceptedAt        DateTime?
+  readyAt           DateTime?
+  fulfilledAt       DateTime?
+  rejectedAt        DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   shop     Shop           @relation(fields: [shopId], references: [id])
   location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
@@ -712,10 +728,10 @@ model RetailPaymentIntent {
 // balances are explicit LocationStock rows. This keeps existing billing and
 // offline stock flows backwards compatible while making transfers real.
 model StoreLocation {
-  id        String   @id @default(cuid())
-  shopId    String
-  code      String
-  name      String
+  id                  String   @id @default(cuid())
+  shopId              String
+  code                String
+  name                String
   address             String?
   city                String?
   gstNumber           String?
@@ -724,10 +740,10 @@ model StoreLocation {
   gstTradeName        String?
   gstRegistrationType String?
   phone               String?
-  isPrimary Boolean  @default(false)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isPrimary           Boolean  @default(false)
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   shop                 Shop                   @relation(fields: [shopId], references: [id], onDelete: Cascade)
   stocks               LocationStock[]
@@ -923,26 +939,26 @@ model StockTransfer {
 }
 
 model StockTransferItem {
-  id                            String @id @default(cuid())
-  transferId                    String
-  productId                     String
-  productName                   String
-  quantityBaseQty               Float
-  baseUnit                      String
-  hsn                           String?
-  gstRate                       Float  @default(0)
-  taxableValue                  Float  @default(0)
-  taxableValuePaise             BigInt?
-  cgst                          Float  @default(0)
-  cgstPaise                     BigInt?
-  sgst                          Float  @default(0)
-  sgstPaise                     BigInt?
-  igst                          Float  @default(0)
-  igstPaise                     BigInt?
-  taxTotal                      Float  @default(0)
-  taxTotalPaise                 BigInt?
-  totalValue                    Float  @default(0)
-  totalValuePaise               BigInt?
+  id                String  @id @default(cuid())
+  transferId        String
+  productId         String
+  productName       String
+  quantityBaseQty   Float
+  baseUnit          String
+  hsn               String?
+  gstRate           Float   @default(0)
+  taxableValue      Float   @default(0)
+  taxableValuePaise BigInt?
+  cgst              Float   @default(0)
+  cgstPaise         BigInt?
+  sgst              Float   @default(0)
+  sgstPaise         BigInt?
+  igst              Float   @default(0)
+  igstPaise         BigInt?
+  taxTotal          Float   @default(0)
+  taxTotalPaise     BigInt?
+  totalValue        Float   @default(0)
+  totalValuePaise   BigInt?
 
   transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   product  Product       @relation(fields: [productId], references: [id])
@@ -1202,13 +1218,13 @@ model Expense {
   shop     Shop           @relation(fields: [shopId], references: [id])
   location StoreLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
 
+  @@unique([shopId, idempotencyKey])
+  @@unique([shopId, sourceDeviceId, clientExpenseId])
   @@index([shopId])
   @@index([shopId, deletedAt])
   @@index([shopId, spentAt])
   @@index([shopId, locationId, spentAt])
   @@index([shopId, updatedAt, id])
-  @@unique([shopId, idempotencyKey])
-  @@unique([shopId, sourceDeviceId, clientExpenseId])
 }
 
 // ─────────────────────────────────────────────
@@ -1350,37 +1366,37 @@ model PurchaseOrderItem {
 }
 
 model PurchaseReceipt {
-  id                    String    @id @default(cuid())
-  shopId                String
-  locationId            String
-  purchaseOrderId       String
-  supplierId            String?
-  receiptNumber         String
-  supplierInvoiceNumber String?
-  supplierInvoiceAmount Float?
+  id                         String    @id @default(cuid())
+  shopId                     String
+  locationId                 String
+  purchaseOrderId            String
+  supplierId                 String?
+  receiptNumber              String
+  supplierInvoiceNumber      String?
+  supplierInvoiceAmount      Float?
   supplierInvoiceAmountPaise BigInt?
-  expectedGoodsAmount   Float     @default(0)
-  expectedGoodsAmountPaise BigInt?
-  priceVarianceAmount   Float     @default(0)
-  priceVarianceAmountPaise BigInt?
-  invoiceVarianceAmount Float?
+  expectedGoodsAmount        Float     @default(0)
+  expectedGoodsAmountPaise   BigInt?
+  priceVarianceAmount        Float     @default(0)
+  priceVarianceAmountPaise   BigInt?
+  invoiceVarianceAmount      Float?
   invoiceVarianceAmountPaise BigInt?
-  matchStatus           String    @default("invoice_pending") // invoice_pending | matched | approved_variance
-  varianceReason        String?
-  varianceApprovedByUserId String?
-  varianceApprovedAt    DateTime?
-  idempotencyKey        String?
-  totalAmount           Float
-  totalAmountPaise      BigInt?
-  paidAmount            Float     @default(0)
-  paidAmountPaise       BigInt?
-  dueAmount             Float     @default(0)
-  dueAmountPaise        BigInt?
-  paymentMode           String?
-  dueDate               DateTime?
-  note                  String?
-  receivedByUserId      String?
-  createdAt             DateTime  @default(now())
+  matchStatus                String    @default("invoice_pending") // invoice_pending | matched | approved_variance
+  varianceReason             String?
+  varianceApprovedByUserId   String?
+  varianceApprovedAt         DateTime?
+  idempotencyKey             String?
+  totalAmount                Float
+  totalAmountPaise           BigInt?
+  paidAmount                 Float     @default(0)
+  paidAmountPaise            BigInt?
+  dueAmount                  Float     @default(0)
+  dueAmountPaise             BigInt?
+  paymentMode                String?
+  dueDate                    DateTime?
+  note                       String?
+  receivedByUserId           String?
+  createdAt                  DateTime  @default(now())
 
   shop          Shop                  @relation(fields: [shopId], references: [id], onDelete: Cascade)
   location      StoreLocation         @relation(fields: [locationId], references: [id], onDelete: Restrict)
@@ -1984,6 +2000,7 @@ model BankReconciliationEvent {
   @@index([shopId, createdAt])
   @@index([bankStatementTransactionId, createdAt])
 }
+
 model SyncIdMapping {
   id            String   @id @default(cuid())
   shopId        String
@@ -2302,6 +2319,7 @@ model Device {
   lastSyncAckAt        DateTime?
   lastIpAddress        String?
   sessionVersion       Int       @default(1)
+  dataEpoch            Int       @default(0)
   removedAt            DateTime?
   revokedAt            DateTime?
   revokedByUserId      String?

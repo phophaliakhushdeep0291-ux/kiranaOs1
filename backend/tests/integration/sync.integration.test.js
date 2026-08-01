@@ -92,6 +92,39 @@ if (ctx.skip) {
       assert.equal(count, 1, "exactly one active customer should exist for the mobile");
     });
 
+    test("concurrent offline customer updates preserve the first write and create a durable conflict", async () => {
+      const { tenant, ownerAuth, deviceHeaders } = await ownerCtx();
+      const customer = await createCustomer(ctx.db, tenant.shop.id, { name: "Shared customer" });
+      const baseUpdatedAt = customer.updatedAt.toISOString();
+
+      const first = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          eventId: "customer-device-a-update",
+          type: "UPDATE_CUSTOMER",
+          payload: { customerId: customer.id, baseUpdatedAt, customer: { name: "Device A name" } },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(first.summary.synced, 1);
+
+      const second = assertSuccess(await ctx.post("/api/sync/push", {
+        events: [{
+          eventId: "customer-device-b-update",
+          type: "UPDATE_CUSTOMER",
+          payload: { customerId: customer.id, baseUpdatedAt, customer: { name: "Device B name" } },
+        }],
+      }, { token: ownerAuth.accessToken, headers: deviceHeaders }));
+      assert.equal(second.summary.conflicts, 1);
+      assert.equal(second.results[0].code, "SYNC_CUSTOMER_VERSION_CONFLICT");
+      assert.equal((await ctx.db.customer.findUnique({ where: { id: customer.id } })).name, "Device A name");
+
+      const conflict = await ctx.db.syncConflict.findFirst({
+        where: { shopId: tenant.shop.id, sourceEventId: "customer-device-b-update" },
+      });
+      assert.ok(conflict, "the competing device update is retained for owner review");
+      assert.match(conflict.localSnapshotJson, /Device B name/);
+      assert.match(conflict.serverSnapshotJson, /Device A name/);
+    });
+
     test("bill creation posts append-only FinancialLedger entries exactly once across retries", async () => {
       // Part 4 consistency: a partial cash + udhar bill must post sale + cash_in + udhar_debit.
       // Re-pushing the same bill under a new event id (retry after lost ack) must NOT double-post:

@@ -23,6 +23,7 @@ import { listDevices, logoutDevice, removeDevice, type DeviceDto } from "@/featu
 import { getOfflineScope } from "@/lib/offline/context";
 import { offlineDB } from "@/lib/offline/db";
 import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
+import { EXPORT_TABLES, LOCAL_DATA_TABLES } from "@/lib/offline/local-data-tables";
 
 function resolveDeviceId(device: DeviceDto) {
   return device.deviceId || device.device_id || device.id;
@@ -64,30 +65,6 @@ const DANGER = [
   { key: "deleteLocal", label: "Delete local offline data", desc: "Clears this device's local copy", safe: false },
   { key: "factoryReset", label: "Factory reset store", desc: "Permanently wipe local data & settings", safe: false },
 ];
-const EXPORT_TABLES = [
-  "products",
-  "customers",
-  "bills",
-  "bill_items",
-  "payments",
-  "customer_ledger",
-  "inventory_movements",
-  "suppliers",
-  "purchase_bills",
-  "staff_users",
-  "settings",
-] as const;
-const LOCAL_DATA_TABLES = [
-  ...EXPORT_TABLES,
-  "sync_outbox",
-  "sync_cursor",
-  "sync_conflicts",
-  "id_mappings",
-  "local_audit_logs",
-  "subscription_cache",
-  "device_license_cache",
-] as const;
-
 function downloadJson(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
   const url = URL.createObjectURL(blob);

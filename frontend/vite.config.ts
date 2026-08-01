@@ -100,9 +100,10 @@ export default defineConfig({
       ecma: 2020,
       module: true,
       compress: {
-        passes: 4,
+        passes: 10,
         toplevel: true,
         keep_fargs: false,
+        pure_getters: "strict",
         // booleans_as_integers MUST stay off. It rewrites `x === true` to `1 == x`
         // and `x === false` to `0 == x`, turning every strict boolean check into
         // LOOSE equality — so a stored 1 or "1" passes as true. This app reads
@@ -123,10 +124,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
-        // Merge compatible helper/leaf chunks below ~120 kB. Route entry points
+        // Merge compatible helper/leaf chunks below ~180 kB. Route entry points
         // remain lazy, while fewer tiny transport units remove repeated module
         // wrappers and gzip dictionaries from the full offline application cache.
-        experimentalMinChunkSize: 120_000,
+        experimentalMinChunkSize: 180_000,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],

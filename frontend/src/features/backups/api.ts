@@ -36,6 +36,13 @@ export interface BackupRestorePreview {
   warnings: string[];
 }
 
+export interface BackupRestoreResult {
+  artifact_id: string;
+  restoredRecords: number;
+  restoredTables: number;
+  recovery_backup: BackupArtifact;
+}
+
 export function listShopBackups(options: { background?: boolean } = {}) {
   return apiRequest<BackupListResponse>("/jobs/backups", {
     method: "GET",
@@ -64,6 +71,12 @@ export function previewShopBackupRestore(id: string, ownerPin: string) {
     method: "POST",
     ownerPin,
     body: "{}",
+  });
+}
+
+export function restoreShopBackup(id: string, confirmation: string, ownerPin: string) {
+  return apiRequest<{ restore: BackupRestoreResult }>(`/jobs/backups/${encodeURIComponent(id)}/restore`, {
+    method: "POST", ownerPin, body: JSON.stringify({ confirmation }), timeoutMs: 240_000,
   });
 }
 

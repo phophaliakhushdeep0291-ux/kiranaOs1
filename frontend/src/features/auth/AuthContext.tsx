@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { AUTH_SESSION_EXPIRED_EVENT, DEVICE_SESSION_REVOKED_EVENT, ApiClientError, getMe, logoutSession, refreshAccessToken, setAuthTokenGetter, type AuthResponse, type Shop, type User } from "@/lib/api/client";
+import { resetDeviceAfterCloudRestore } from "@/features/backups/restore-local-reset";
 import { AUTH_SESSION_STORAGE_KEY, clearAuthStorage, getAuthValue, loadAuthSession, migrateAuthFromLocalStorage, saveAuthSession } from "@/lib/storage/auth-storage";
 import { writeAuditLog } from "@/features/audit-logs/local-actions";
 import { activateDevice, heartbeatDevice, reportDeviceHealth } from "@/features/devices/api";
@@ -207,8 +208,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient, setLocation]);
 
   useEffect(() => {
-    const handleDeviceRevoked = async () => {
+    const handleDeviceRevoked = async (event: Event) => {
       authGenerationRef.current += 1;
+      const detail = (event as CustomEvent<{ code?: string; shopId?: string }>).detail;
+      if (detail?.code === "DEVICE_REBOOTSTRAP_REQUIRED") {
+        await resetDeviceAfterCloudRestore(detail.shopId ?? shop?.id ?? user?.shopId);
+        queryClient.clear();
+        setAccessToken(null);
+        setUser(null);
+        setShop(null);
+        setIsLoading(false);
+        setLocation("/login?restored=1");
+        return;
+      }
       const pendingCount = await offlineDB.getPendingCount().catch(() => 0);
       try { window.sessionStorage.setItem("kirana:revoked-device-pending-count", String(pendingCount)); } catch { /* optional display hint */ }
       clearAuthStorage();
@@ -220,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener(DEVICE_SESSION_REVOKED_EVENT, handleDeviceRevoked);
     return () => window.removeEventListener(DEVICE_SESSION_REVOKED_EVENT, handleDeviceRevoked);
-  }, [setLocation]);
+  }, [queryClient, setLocation, shop?.id, user?.shopId]);
 
   useEffect(() => {
     if (!accessToken || !user) return;

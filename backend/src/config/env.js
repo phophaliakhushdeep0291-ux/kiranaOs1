@@ -14,6 +14,9 @@ const envSchema = z.object({
   // OpenAI — paid fallback
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-4o-mini"),
+  // Dedicated image-capable model and bounded request time for purchase invoice OCR.
+  OPENAI_INVOICE_MODEL: z.string().default("gpt-4o-mini"),
+  INVOICE_OCR_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(45000),
   OPENAI_TRANSCRIBE_MODEL: z.string().default("gpt-4o-mini-transcribe"),
   ALLOWED_ORIGINS: z.string().default("http://localhost:5500"),
   // Comma-separated emails allowed into the internal cross-shop admin dashboard.

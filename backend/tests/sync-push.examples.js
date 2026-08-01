@@ -41,6 +41,7 @@ function run() {
   assert.equal(sanitized.payload.nestedPin, undefined);
   assert.equal(sanitized.payload.nested.ownerPin, undefined);
   assert.equal(sanitized.payload.nested.ok, true);
+  assert.equal(removeSensitiveSyncFields({ amountPaise: 9007199254740993n }).amountPaise, '9007199254740993');
 
   assert.equal(getEventOwnerPin({ payload: { ownerPin: 1234 } }), '1234');
   assert.equal(getEventOwnerPin({ ownerPin: '4321', payload: { ownerPin: '1234' } }), '4321');

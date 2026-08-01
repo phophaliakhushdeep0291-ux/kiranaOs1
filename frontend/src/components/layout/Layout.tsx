@@ -105,6 +105,8 @@ const PAGE_TITLES: Record<string, string> = {
 
 function getPageTitle(loc: string): string {
   if (PAGE_TITLES[loc]) return PAGE_TITLES[loc];
+  const parent = Object.keys(PAGE_TITLES).find((path) => loc.startsWith(`${path}/`));
+  if (parent) return PAGE_TITLES[parent];
   const segment = cleanPath(loc).split("/").filter(Boolean).at(-1);
   return segment
     ? segment.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())

@@ -61,7 +61,10 @@ export async function assertRequestDevice(req) {
   if (deviceId.length < 3 || deviceId.length > 128) {
     throw new AppError("Device id must be between 3 and 128 characters.", 400, "DEVICE_ID_INVALID");
   }
-  const device = await db.device.findUnique({ where: { shopId_deviceId: { shopId: req.shopId, deviceId } } });
+  const device = await db.device.findUnique({
+    where: { shopId_deviceId: { shopId: req.shopId, deviceId } },
+    include: { shop: { select: { dataEpoch: true } } },
+  });
   if (!device) {
     if (env.NODE_ENV === "production") {
       throw new AppError("Registered device not found for this session.", 401, "DEVICE_SESSION_REVOKED");
@@ -89,6 +92,9 @@ export async function assertRequestDevice(req) {
     const err = new AppError("Device is not active", 403);
     err.code = "DEVICE_NOT_ACTIVE";
     throw err;
+  }
+  if (device.dataEpoch !== device.shop.dataEpoch) {
+    throw new AppError("Shop data was restored. Sign in again to rebuild this device from the verified cloud state.", 409, "DEVICE_REBOOTSTRAP_REQUIRED");
   }
   if (req.user?.deviceRecordId && req.user.deviceRecordId !== device.id) {
     throw new AppError("Device context does not match this session.", 401, "DEVICE_SESSION_REVOKED");

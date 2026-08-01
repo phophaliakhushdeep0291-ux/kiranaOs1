@@ -184,6 +184,7 @@ for (const model of [
 ]) assert.ok(backupSource.includes(model), `encrypted tenant backup must include ${model}`);
 // Pinned on purpose: adding a model to the tenant backup must be a deliberate
 // act, so bumping BACKUP_SCHEMA_VERSION is expected to fail here until the new
-// shape has been reviewed. Last reviewed for the StockTransfer eWay fields.
-assert.ok(backupSource.includes('BACKUP_SCHEMA_VERSION = "2026-07-28"'));
+// shape has been reviewed. Last reviewed for complete transactional restore,
+// the preserved credential/control plane, and the shop maintenance lock.
+assert.ok(backupSource.includes('BACKUP_SCHEMA_VERSION = "2026-08-01-complete-v2"'));
 console.log("bank-reconciliation.examples.js OK");

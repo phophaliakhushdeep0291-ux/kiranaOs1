@@ -12,6 +12,7 @@ import {
   listShopBackups,
   openShopBackup,
   previewShopBackupRestore as previewRestore,
+  restoreShopBackup as executeRestore,
 } from "../backups/backup.service.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { pipeline } from "node:stream/promises";
@@ -110,6 +111,15 @@ export async function previewShopBackupRestore(req, res, next) {
       req,
     });
     res.json({ success: true, data: { preview } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function restoreShopBackup(req, res, next) {
+  try {
+    const result = await executeRestore(req.shopId, req.params.id, req.user?.userId, req.body.confirmation);
+    res.json({ success: true, data: { restore: result } });
   } catch (error) {
     next(error);
   }

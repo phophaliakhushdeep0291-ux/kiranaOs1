@@ -30,6 +30,7 @@ import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/produ
 import type { Product, Supplier } from "@/types/api";
 import { PurchaseOrdersPanel } from "@/features/purchases/components/PurchaseOrdersPanel";
 import { resolvePurchaseBarcode } from "@/features/purchases/purchase-barcode";
+import { extractPurchaseInvoice, type PurchaseInvoiceDraft } from "@/features/purchases/invoice-ocr-api";
 
 function money(value: unknown) {
   const num = Number(value);
@@ -990,7 +991,6 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   const [saving, setSaving] = useState(false);
   const [supplierId, setSupplierId] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
-  const [contact, setContact] = useState("");
   const [mobile, setMobile] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [purchaseNo, setPurchaseNo] = useState("");
@@ -1001,13 +1001,19 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   const [notes, setNotes] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
   const [scanValue, setScanValue] = useState("");
+  const [ocrDraft, setOcrDraft] = useState<PurchaseInvoiceDraft | null>(null);
+  const [ocrImage, setOcrImage] = useState("");
+  const [extractingInvoice, setExtractingInvoice] = useState(false);
   const keyRef = useRef(2);
+  const ocrImageRef = useRef("");
 
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
   useEffect(() => {
-    if (selectedSupplier) { setMobile(selectedSupplier.mobile ?? ""); setContact(selectedSupplier.name); }
+    if (selectedSupplier) setMobile(selectedSupplier.mobile ?? "");
   }, [selectedSupplier]);
+
+  useEffect(() => () => { if (ocrImageRef.current) URL.revokeObjectURL(ocrImageRef.current); }, []);
 
   const lineTotal = (line: PurchaseLine) => (Number(line.qty) || 0) * (Number(line.cost) || 0);
   const totalAmount = lines.reduce((sum, line) => sum + lineTotal(line), 0);
@@ -1029,9 +1035,41 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   }
 
   function reset() {
-    setSupplierId(""); setNewSupplierName(""); setContact(""); setMobile("");
+    setSupplierId(""); setNewSupplierName(""); setMobile("");
     setDate(new Date().toISOString().slice(0, 10)); setPurchaseNo(""); setPayMode("upi"); setPayStatus("due");
     setPaidInput(""); setLines([{ key: keyRef.current++, productId: "", qty: "", cost: "" }]); setNotes("");
+    setOcrDraft(null); setOcrImage("");
+    if (ocrImageRef.current) URL.revokeObjectURL(ocrImageRef.current);
+    ocrImageRef.current = "";
+  }
+
+  async function readInvoice(file: File | undefined) {
+    if (!file || extractingInvoice) return;
+    setExtractingInvoice(true);
+    try {
+      const { draft } = await extractPurchaseInvoice(file);
+      if (ocrImageRef.current) URL.revokeObjectURL(ocrImageRef.current);
+      ocrImageRef.current = URL.createObjectURL(file);
+      setOcrImage(ocrImageRef.current);
+      setOcrDraft(draft);
+    } catch (error) {
+      toast({ title: "Could not read invoice", description: error instanceof Error ? error.message : "Try a clearer image.", variant: "destructive" });
+    } finally {
+      setExtractingInvoice(false);
+    }
+  }
+
+  function applyOcrDraft() {
+    if (!ocrDraft) return;
+    setPurchaseNo(ocrDraft.invoiceNumber ?? "");
+    if (ocrDraft.invoiceDate && ocrDraft.headerChecks.invoiceDateValid) setDate(ocrDraft.invoiceDate);
+    if (ocrDraft.supplierMatch === "exact" && ocrDraft.supplierId) setSupplierId(ocrDraft.supplierId);
+    setLines(ocrDraft.lines.length ? ocrDraft.lines.map((line) => ({
+      key: keyRef.current++,
+      productId: line.catalogMatch === "exact" ? line.productId ?? "" : "",
+      qty: line.prefillAllowed && line.quantity != null ? String(line.quantity) : "",
+      cost: line.prefillAllowed && line.unitCost != null ? String(line.unitCost) : "",
+    })) : [{ key: keyRef.current++, productId: "", qty: "", cost: "" }]);
   }
 
   function acceptBarcode() {
@@ -1153,19 +1191,29 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   return (
     <aside
       style={{ width }}
-      className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
+      className={`app-slide-panel purchase-panel ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog" aria-label="Add purchase" aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
-      <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
+      <div className="purchase-panel-head">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Add Purchase</h2>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">Add a new purchase bill</p>
+          <h2 className="purchase-panel-title">Add Purchase</h2>
+          <p className="purchase-panel-subtitle">Add a new purchase bill</p>
         </div>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <div className="purchase-panel-controls">
+          <label title="External AI creates a review-only draft" className={cn("purchase-invoice-upload", extractingInvoice && "pointer-events-none opacity-50")}>
+            <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void readInvoice(event.target.files?.[0])} />
+            {extractingInvoice ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Read invoice
+          </label>
+          <button onClick={onClose} className="purchase-panel-close" aria-label="Close"><X size={18} /></button>
+        </div>
       </div>
 
-      <div className="app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+      <div className="app-scrollbar purchase-panel-body">
+        {ocrDraft && <section className="ocr-review" aria-label="Invoice OCR review">
+          <a href={ocrImage} target="_blank" rel="noreferrer" title="Open original invoice"><img src={ocrImage} alt="Original purchase invoice for comparison" /></a>
+          <div><strong>Review only — nothing posted</strong><span>{ocrDraft.supplierName || "Supplier not read"} · {ocrDraft.invoiceNumber || "No invoice number"} · {ocrDraft.grandTotal == null ? "Total not read" : fmt(ocrDraft.grandTotal)}</span><small>External AI draft · {ocrDraft.warnings.length} checks · {ocrDraft.lines.filter((line) => line.prefillAllowed).length}/{ocrDraft.lines.length} lines verified</small><Button type="button" variant="outline" onClick={applyOcrDraft}>Apply verified fields</Button></div>
+        </section>}
         {/* Supplier information */}
         <section className="space-y-3">
           <h3 className="text-[13px] font-black text-[#13274d]">Supplier Information</h3>
@@ -1181,10 +1229,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
           {supplierId === "new" && (
             <Fld label="New supplier name *"><Input className="h-10" placeholder="Shree Balaji Distributors" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} /></Fld>
           )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Fld label="Contact Person"><Input className="h-10" placeholder="Ramesh Ji" value={contact} onChange={(e) => setContact(e.target.value)} /></Fld>
-            <Fld label="Mobile"><Input className="h-10" placeholder="+91 98290 12345" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Fld>
-          </div>
+          <Fld label="Mobile"><Input className="h-10" placeholder="+91 98290 12345" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Fld>
         </section>
 
         {/* Bill details */}
@@ -1220,13 +1265,13 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
         </section>
 
         {/* Products */}
-        <section className="app-table-scroll space-y-2 overflow-x-auto pb-1">
-          <h3 className="text-[13px] font-black text-[#13274d]">Products</h3>
-          <div className="grid min-w-[420px] grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">
+        <section className="app-table-scroll purchase-lines">
+          <h3>Products</h3>
+          <div className="purchase-lines-head">
             <span>Product</span><span>Qty</span><span>Unit Cost</span><span className="text-right">Total</span><span />
           </div>
           {lines.map((line) => (
-            <div key={line.key} className="grid min-w-[420px] grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5">
+            <div key={line.key} className="purchase-line">
               <Select value={line.productId} onValueChange={(v) => setLine(line.key, { productId: v })}>
                 <SelectTrigger className="h-9 text-[12px]"><SelectValue placeholder="Select product" /></SelectTrigger>
                 <SelectContent>
@@ -1236,20 +1281,20 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
               <Input className="h-9 px-2 text-[12px]" type="number" min="0" placeholder="0" value={line.qty} onChange={(e) => setLine(line.key, { qty: e.target.value })} />
               <Input className="h-9 px-2 text-[12px]" type="number" min="0" step="0.01" placeholder="₹0" value={line.cost} onChange={(e) => setLine(line.key, { cost: e.target.value })} />
               <span className="truncate text-right text-[12px] font-bold text-[var(--brand-ink)]">{fmt(lineTotal(line))}</span>
-              <button onClick={() => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== line.key) : prev))} className="grid h-7 w-7 place-items-center rounded text-rose-400 hover:bg-rose-50" aria-label="Remove line"><Trash2 size={13} /></button>
+              <button onClick={() => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== line.key) : prev))} className="purchase-line-remove" aria-label="Remove line"><Trash2 size={13} /></button>
             </div>
           ))}
-          <div className="flex min-w-[420px] items-center justify-between pt-1">
-            <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])} className="flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Plus size={13} /> Add Product</button>
-            <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[11.5px] font-bold" onClick={() => setScanOpen(true)}><Barcode size={13} /> Scan Barcode</Button>
+          <div className="purchase-lines-actions">
+            <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])}><Plus size={13} /> Add Product</button>
+            <Button variant="outline" onClick={() => setScanOpen(true)}><Barcode size={13} /> Scan Barcode</Button>
           </div>
 
           {/* Totals strip */}
-          <div className="grid grid-cols-2 gap-y-2 rounded-[10px] bg-[#f7f9fd] px-3.5 py-3 sm:grid-cols-4">
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Total Items</p><p className="text-[13px] font-black text-[var(--brand-ink)]">{totalItems.toLocaleString("en-IN")}</p></div>
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Total Amount</p><p className="text-[13px] font-black text-[var(--brand-ink)]">{fmt(totalAmount)}</p></div>
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Paid Amount</p><p className="text-[13px] font-black text-[#16a34a]">{fmt(paidAmount)}</p></div>
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Due Amount</p><p className="text-[13px] font-black text-[#ef4444]">{fmt(dueAmount)}</p></div>
+          <div className="purchase-totals">
+            <div><p>Total Items</p><p>{totalItems.toLocaleString("en-IN")}</p></div>
+            <div><p>Total Amount</p><p>{fmt(totalAmount)}</p></div>
+            <div><p>Paid Amount</p><p>{fmt(paidAmount)}</p></div>
+            <div><p>Due Amount</p><p>{fmt(dueAmount)}</p></div>
           </div>
         </section>
 
