@@ -376,6 +376,47 @@ describe("front office local-first cashier flow", () => {
     ]));
   });
 
+  it("reverses a server-hydrated snake-case Udhar bill locally", async () => {
+    dbState.committed.customers = [{
+      ...rows("customers")[0],
+      udharAmount: undefined,
+      totalUdhar: undefined,
+      udhar_amount: 206,
+      total_udhar: 206,
+    }];
+    dbState.committed.bills = [{
+      id: "server_bill_snake",
+      local_id: "bill_local_snake",
+      server_id: "server_bill_snake",
+      billNumber: "KOS-2026-000099",
+      billType: "normal_sale",
+      status: "completed",
+      sync_status: "synced",
+      customer_id: "customer_ramesh",
+      customer_name: "Ramesh",
+      grand_total: 6,
+      paid_amount: 0,
+      items: [],
+    }];
+
+    await cancelBillWithOwnerPinLocalFirst("server_bill_snake", "1234", "Server bill QA");
+
+    expect(rows("customers")[0]).toEqual(expect.objectContaining({
+      udharAmount: 200,
+      udhar_amount: 200,
+      totalUdhar: 200,
+      total_udhar: 200,
+    }));
+    expect(rows("customer_ledger")).toEqual([
+      expect.objectContaining({
+        id: "ledger_cancel_bill_local_snake",
+        customerId: "customer_ramesh",
+        amount: -6,
+        type: "bill_cancel_correction",
+      }),
+    ]);
+  });
+
   it("allows sale beyond available stock and carries the negative balance until stock is added", async () => {
     const bill = await createBillLocalFirst(billInput({
       items: [{

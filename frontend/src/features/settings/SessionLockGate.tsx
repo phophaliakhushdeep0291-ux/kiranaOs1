@@ -226,47 +226,47 @@ function LockScreen({ userName, biometric, onUnlock, onSignOut }: { userName: st
 
   return (
     <div
-      className="fixed inset-0 z-[100] grid place-items-center bg-[linear-gradient(135deg,#07152f_0%,#0e2c63_100%)] px-4"
+      className="session-lock-screen"
       role="dialog"
       aria-modal="true"
       aria-labelledby="counter-lock-title"
       aria-describedby="counter-lock-description"
     >
-      <div className="w-full max-w-[380px] rounded-[18px] bg-white p-6 shadow-[0_24px_60px_rgba(4,15,40,0.45)]">
-        <span aria-hidden="true" className="grid h-12 w-12 place-items-center rounded-[14px] bg-[var(--brand-soft)] text-[var(--brand)]"><Lock size={22} /></span>
-        <h1 id="counter-lock-title" className="mt-4 font-display text-[20px] font-black tracking-tight text-[var(--brand-ink)]">Counter locked</h1>
-        <p id="counter-lock-description" className="mt-1 text-[12.5px] leading-5 text-[#64748b]">
+      <div className="session-lock-card">
+        <span aria-hidden="true" className="session-lock-icon"><Lock size={22} /></span>
+        <h1 id="counter-lock-title" className="session-lock-title">Counter locked</h1>
+        <p id="counter-lock-description" className="session-lock-description">
           {userName ? `${userName}, enter` : "Enter"} the owner PIN to get back to the counter. This lock follows your
           Settings &rarr; Security session rules.
         </p>
-        <form className="mt-5 space-y-3" onSubmit={(event) => void submit(event)}>
+        <form className="session-lock-form" onSubmit={(event) => void submit(event)}>
           <Input
             ref={inputRef}
             type="password"
             inputMode="numeric"
             autoComplete="off"
             aria-label="Owner PIN"
-            className="h-11 text-center text-[18px] tracking-[0.4em]"
+            className="session-lock-input"
             placeholder="••••"
             value={pin}
             disabled={checking}
             onChange={(event) => { setPin(event.target.value); setError(null); }}
           />
-          {error ? <p role="alert" className="text-[12px] font-semibold text-rose-600">{error}</p> : null}
+          {error ? <p role="alert" className="session-lock-error">{error}</p> : null}
           <Button
             type="submit"
             disabled={checking}
             style={{ background: "linear-gradient(180deg,var(--brand) 0%,var(--brand-strong) 100%)" }}
-            className="h-11 w-full gap-2 rounded-[10px] font-black text-white hover:opacity-95"
+            className="session-lock-primary"
           >
             {checking ? <><Loader2 size={16} className="animate-spin" /> Checking…</> : <><ShieldCheck size={16} /> Unlock counter</>}
           </Button>
           {biometric ? (
-            <Button type="button" variant="outline" disabled={checking} className="h-11 w-full gap-2 rounded-[10px] font-bold" onClick={() => void unlockWithBiometric()}>
+            <Button type="button" variant="outline" disabled={checking} className="session-lock-secondary" onClick={() => void unlockWithBiometric()}>
               <Fingerprint size={16} /> Use fingerprint / face
             </Button>
           ) : null}
-          <Button type="button" variant="ghost" className="h-10 w-full gap-2 text-[12px] font-bold text-[#64748b]" onClick={onSignOut}>
+          <Button type="button" variant="ghost" className="session-lock-signout" onClick={onSignOut}>
             <LogOut size={14} /> Sign out instead
           </Button>
         </form>

@@ -1,5 +1,5 @@
 import { offlineDB } from "@/lib/offline/db";
-import { createLocalId, emitLocalDataChanged, readInstantCache, upsertCachedListItem, writeInstantCache } from "@/lib/offline/instant-cache";
+import { emitLocalDataChanged, readInstantCache, upsertCachedListItem, writeInstantCache } from "@/lib/offline/instant-cache";
 import { buildOutboxOperation, enqueueOutboxOperation } from "@/features/sync/outbox";
 import { makeLocalEntity, parseOrThrow, readNumber, roundMoney } from "@/lib/offline/actions/utils";
 import { ownerPinRequiredActionSchema } from "@/lib/validation";
@@ -15,6 +15,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function billNumberOf(bill: Partial<Bill> & Record<string, unknown>) {
   return String(bill.billNumber ?? bill.billNo ?? bill.id ?? "bill");
+}
+
+function billCustomerIdOf(bill: Partial<Bill> & Record<string, unknown>) {
+  const value = bill.customerId ?? bill.customer_id;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function billCreditAmountOf(bill: Partial<Bill> & Record<string, unknown>) {
+  const explicit = readNumber(bill.creditAmount ?? bill.credit_amount, Number.NaN);
+  if (Number.isFinite(explicit)) return Math.max(0, roundMoney(explicit));
+
+  const total = readNumber(
+    bill.grandTotal ?? bill.grand_total ?? bill.totalAmount ?? bill.total_amount ?? bill.netAmount ?? bill.net_amount,
+    0,
+  );
+  const embeddedPayments = Array.isArray(bill.payments) ? bill.payments.filter(isRecord) : [];
+  const paymentRowsPaid = embeddedPayments.reduce((sum, payment) =>
+    String(payment.mode ?? "").toLowerCase() === "credit"
+      ? sum
+      : sum + Math.max(0, readNumber(payment.amount, 0)), 0);
+  const billLevelPaid = readNumber(
+    bill.paidAmount ?? bill.paid_amount ?? bill.buyerPaidAmount ?? bill.buyer_paid_amount,
+    paymentRowsPaid,
+  );
+  return Math.max(0, roundMoney(total - Math.max(paymentRowsPaid, billLevelPaid)));
+}
+
+function stableCancellationId(prefix: string, bill: Partial<Bill> & Record<string, unknown>, suffix = "") {
+  const identity = String(bill.local_id ?? bill.localId ?? bill.clientBillId ?? bill.client_bill_id ?? bill.id ?? "bill")
+    .replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `${prefix}_${identity}${suffix}`;
 }
 
 async function findBill(id: string): Promise<(Bill & Record<string, unknown>) | undefined> {
@@ -97,7 +128,7 @@ async function buildCancellationStockChanges(bill: Bill & Record<string, unknown
   const runningBaseStock = new Map<string, number>();
   const runningPackStock = new Map<string, number>();
   const movements: Array<Record<string, unknown>> = [];
-  for (const item of items) {
+  for (const [itemIndex, item] of items.entries()) {
     const productId = item.productId ?? item.product_id;
     if (!productId) continue;
     const product = productsById.get(productId);
@@ -123,7 +154,7 @@ async function buildCancellationStockChanges(bill: Bill & Record<string, unknown
     }
 
     movements.push(makeLocalEntity({
-      id: createLocalId("stock_cancel"),
+      id: stableCancellationId("stock_cancel", bill, `_${itemIndex}`),
       productId,
       product_id: productId,
       productName: product.name ?? item.name ?? "Product",
@@ -173,13 +204,14 @@ async function buildCancellationStockChanges(bill: Bill & Record<string, unknown
 }
 
 function buildCancellationLedgerCorrection(bill: Bill & Record<string, unknown>, reason: string | undefined, now: string) {
-  const credit = readNumber(bill.creditAmount, 0);
-  if (credit <= 0 || !bill.customerId) return null;
+  const credit = billCreditAmountOf(bill);
+  const customerId = billCustomerIdOf(bill);
+  if (credit <= 0 || !customerId) return null;
   return makeLocalEntity({
-    id: createLocalId("ledger_cancel"),
-    customerId: bill.customerId ?? null,
-    customer_id: bill.customerId ?? null,
-    customerName: bill.customerName ?? null,
+    id: stableCancellationId("ledger_cancel", bill),
+    customerId,
+    customer_id: customerId,
+    customerName: bill.customerName ?? bill.customer_name ?? null,
     type: "bill_cancel_correction",
     source_type: "bill",
     source_id: bill.id,
@@ -225,15 +257,19 @@ export async function cancelBillWithOwnerPinLocalFirst(id: string, ownerPin: str
   } as Bill & Record<string, unknown>;
   const { products, movements } = await buildCancellationStockChanges(updated, now);
   const ledgerCorrection = buildCancellationLedgerCorrection(updated, reason, now);
-  const customer = ledgerCorrection && typeof updated.customerId === "string"
+  const customerId = billCustomerIdOf(updated);
+  const creditAmount = billCreditAmountOf(updated);
+  const customer = ledgerCorrection && customerId
     ? (await offlineDB.getAll<Customer & Record<string, unknown>>("customers").catch(() => []))
-      .find((row) => row.id === updated.customerId || row.local_id === updated.customerId || row.server_id === updated.customerId)
+      .find((row) => row.id === customerId || row.local_id === customerId || row.server_id === customerId)
     : undefined;
   const updatedCustomer = customer && ledgerCorrection
     ? {
         ...customer,
-        udharAmount: Math.max(0, roundMoney(readNumber(customer.udharAmount ?? customer.totalUdhar, 0) - Math.abs(readNumber(updated.creditAmount, 0)))),
-        totalUdhar: Math.max(0, roundMoney(readNumber(customer.udharAmount ?? customer.totalUdhar, 0) - Math.abs(readNumber(updated.creditAmount, 0)))),
+        udharAmount: Math.max(0, roundMoney(readNumber(customer.udharAmount ?? customer.udhar_amount ?? customer.totalUdhar ?? customer.total_udhar, 0) - creditAmount)),
+        udhar_amount: Math.max(0, roundMoney(readNumber(customer.udharAmount ?? customer.udhar_amount ?? customer.totalUdhar ?? customer.total_udhar, 0) - creditAmount)),
+        totalUdhar: Math.max(0, roundMoney(readNumber(customer.udharAmount ?? customer.udhar_amount ?? customer.totalUdhar ?? customer.total_udhar, 0) - creditAmount)),
+        total_udhar: Math.max(0, roundMoney(readNumber(customer.udharAmount ?? customer.udhar_amount ?? customer.totalUdhar ?? customer.total_udhar, 0) - creditAmount)),
         updatedAt: now,
         updated_at: now,
         sync_status: "pending_sync" as const,
@@ -287,7 +323,7 @@ export async function cancelBillWithOwnerPinLocalFirst(id: string, ownerPin: str
   if (updatedCustomer) upsertCachedListItem<Customer & Record<string, unknown>>(CUSTOMER_CACHE_KEY, updatedCustomer, 1000);
   if (ledgerCorrection) {
     upsertCachedListItem("customer_ledger", ledgerCorrection, 1500);
-    emitLocalDataChanged({ type: "ledger", id: ledgerCorrection.id, customerId: updated.customerId, action: "appended" });
+    emitLocalDataChanged({ type: "ledger", id: ledgerCorrection.id, customerId, action: "appended" });
   }
   emitLocalDataChanged({ type: "bill", id: updated.id, action: "cancelled" });
   return updated;

@@ -76,96 +76,39 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/dashboard": "Today’s sales, cash, stock, and shop health",
   "/bills": "View, search, filter, and manage all bills and invoices",
   "/orders-received": "Review customer QR orders and load them into billing",
-  "/loyalty": "Reward repeat customers with an auditable points ledger",
-  "/gift-cards": "Issue and reconcile secure stored value",
   "/products": "Manage your product catalog, pricing and stock",
-  "/categories": "Organise products into categories",
   "/inventory": "Manage stock, movements, and purchase flow",
-  "/inventory/stock-in": "Add incoming stock to inventory",
-  "/inventory/stock-out": "Report outgoing stock from inventory",
-  "/inventory/adjustments": "Adjust inventory quantities and review corrections",
-  "/inventory/stock-transfers": "Transfer stock between locations",
-  "/inventory/stock-counts": "Count, review, and reconcile branch inventory",
-  "/inventory/batches": "Track expiry, quarantine, recalls, and FEFO stock",
   "/purchase-bills": "Manage purchase bills, suppliers, and purchase dues",
-  "/sales-overview": "Track your sales performance and business growth",
-  "/returns": "Manage returned items from customers or suppliers",
-  "/returns/new": "Manage returned items from customers or suppliers",
   "/customers": "Manage customer credit, record payments, and track full udhar ledger",
   "/reports": "Track performance, trends, and data-driven decisions",
   "/money-statement": "Trace every cash, UPI, bank, and credit movement",
   "/daily-closing": "Cash drawer and daily business summary",
-  "/expenses": "Track shop expenses and outflows",
-  "/offers": "Create coupons and discounts for billing",
   "/settings": "Manage your store, preferences, and system configurations",
-  "/settings/setup": "Get the shop ready before real counter use",
   "/sync-status": "Monitor cloud backup and local-first safety",
 };
 
 const PAGE_TITLES: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/billing": "Billing",
   "/bills": "Billing History",
-  "/orders-received": "Orders Received",
-  "/products": "Products",
-  "/categories": "Categories",
-  "/inventory": "Inventory",
-  "/inventory/stock-in": "Stock In",
-  "/inventory/stock-out": "Stock Out",
-  "/inventory/adjustments": "Adjustments",
-  "/inventory/stock-transfers": "Stock Transfers",
-  "/inventory/stock-counts": "Stock Counts",
   "/inventory/batches": "Batch & Expiry",
   "/loyalty": "Customer Loyalty",
-  "/gift-cards": "Gift Cards",
   "/purchase-bills": "Purchases",
-  "/suppliers": "Suppliers",
-  "/sales-overview": "Sales Overview",
-  "/returns": "Return Items",
   "/returns/new": "Return Items",
   "/customers": "Customers / Udhar",
   "/reports": "Reports & Analytics",
   "/money-statement": "Cash & Payments",
-  "/daily-closing": "Daily Closing",
-  "/expenses": "Expenses",
   "/assurance": "Financial Assurance",
   "/assurance/findings": "Assurance Findings",
-  "/assurance/evidence": "Evidence Requests",
-  "/assurance/review-queue": "Review Queue",
-  "/assurance/cases": "Investigation Cases",
-  "/assurance/runs": "Audit Runs",
-  "/assurance/rules": "Rules & Thresholds",
   "/assurance/report": "Financial Assurance Report",
   "/offers": "Offers & Discounts",
-  "/settings": "Settings",
-  "/settings/setup": "Merchant Setup",
-  "/settings/store-profile": "Store Profile",
-  "/settings/printer": "Printer & Receipt",
-  "/settings/billing": "Billing Preferences",
-  "/settings/staff": "Staff Access",
-  "/settings/devices": "Registered Devices",
-  "/settings/sync": "Backup & Sync",
-  "/settings/taxes": "Taxes",
-  "/settings/security": "Security",
-  "/settings/notifications": "Notifications",
-  "/settings/integrations": "Integrations",
-  "/settings/advanced": "Advanced Settings",
   "/sync-status": "Cloud Backup",
-  "/staff": "Staff",
-  "/devices": "Devices",
-  "/audit-logs": "Audit Logs",
-  "/plans": "Plans",
-  "/subscription": "Subscription",
-  "/import-order": "Import Customer Order",
-  "/recycle-bin": "Recycle Bin",
-  "/smart-tools": "Smart Tools",
-  "/recovery-mode": "Recovery Mode",
 };
 
 function getPageTitle(loc: string): string {
   if (PAGE_TITLES[loc]) return PAGE_TITLES[loc];
-  const match = Object.keys(PAGE_TITLES).find(k => k !== "/dashboard" && loc.startsWith(k + "/"));
-  return match ? PAGE_TITLES[match] : "Artha";
+  const segment = cleanPath(loc).split("/").filter(Boolean).at(-1);
+  return segment
+    ? segment.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : "Artha";
 }
 
 function getPageSubtitle(loc: string): string | undefined {
@@ -445,14 +388,14 @@ export function Layout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div ref={shellRef} className="app-shell isolate h-[100dvh] overflow-hidden bg-background text-foreground lg:h-screen" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
+    <div ref={shellRef} className="app-shell app-shell-root" style={shellStyle} data-sidebar-resizing={isResizing ? "true" : undefined}>
       <a href="#main-content" className="app-skip-link">Skip to main content</a>
 
       {/* ── Desktop sidebar ─────────────────────────────────────────────────── */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 hidden border-r border-white/10 bg-sidebar text-sidebar-foreground shadow-[10px_0_40px_var(--brand-shadow-soft)] will-change-[width] lg:flex lg:h-screen lg:flex-col",
-          isResizing ? "transition-none" : "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          "app-desktop-sidebar",
+          isResizing ? "transition-none" : "app-sidebar-transition"
         )}
         style={{
           width: "var(--app-sidebar-width)",
@@ -462,14 +405,14 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         {/* resize handle */}
         <button type="button" aria-label="Resize sidebar" disabled={collapsed} onPointerDown={handleResize}
-          className={cn("absolute inset-y-0 right-0 z-20 w-3 translate-x-1/2 cursor-col-resize transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", collapsed ? "pointer-events-none opacity-0" : "opacity-0 hover:opacity-100 focus-visible:opacity-100")}>
+          className={cn("app-sidebar-resizer", collapsed ? "is-disabled" : "is-ready")}>
           <span className="mx-auto block h-full w-1 rounded-full bg-sidebar-primary/35" />
         </button>
 
         {/* Logo */}
         <div className={cn("flex items-center border-b border-white/10", collapsed ? "flex-col gap-3 p-3" : "gap-3 px-4 py-5")}>
-          <Link href="/dashboard" className="flex min-w-0 shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-[var(--brand)] text-white shadow-[0_14px_28px_var(--brand-shadow)] ring-1 ring-white/20">
+          <Link href="/dashboard" className="app-sidebar-brand">
+            <div className="app-sidebar-brand-mark">
               <ShoppingCart size={20} aria-hidden="true" />
             </div>
             {!collapsed && (
@@ -514,7 +457,7 @@ export function Layout({ children }: { children: ReactNode }) {
           ) : (
             <>
               {/* Sync status */}
-              <div className="rounded-[14px] border border-white/12 bg-white/[0.055] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+              <div className="app-sidebar-sync-card">
                 <div className="flex items-center gap-2">
                   <span className={cn("h-2 w-2 shrink-0 rounded-full", connectionDotClass, !isOnline && "animate-pulse")} />
                   <span className="text-sm font-semibold text-white">
@@ -523,7 +466,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   {attentionCount > 0 && <span className="ml-auto text-[11px] font-bold text-amber-300">{attentionCount}</span>}
                 </div>
                 <p className="mt-1 text-[11px] text-sidebar-foreground/50">{connectionDetail}</p>
-                <Link href="/sync-status" className="mt-3 flex h-10 items-center justify-center gap-2 rounded-[10px] border border-white/12 bg-white/5 text-[12px] font-bold text-white transition-colors hover:border-[var(--brand)]/70 hover:bg-[var(--brand)]">
+                <Link href="/sync-status" className="app-sidebar-sync-link">
                   <RefreshCw size={13} aria-hidden="true" /> Sync Now
                 </Link>
               </div>
@@ -531,8 +474,8 @@ export function Layout({ children }: { children: ReactNode }) {
               {/* Store + logout */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex w-full items-center gap-3 rounded-[14px] border border-white/10 bg-white/[0.045] px-3 py-3 text-sm transition-colors hover:bg-white/8">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-xs font-bold text-white ring-2 ring-white/15">
+                  <button className="app-sidebar-account">
+                    <div className="app-sidebar-avatar">
                       {initials(storeName)}
                     </div>
                     <div className="min-w-0 flex-1 text-left">
@@ -570,30 +513,30 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* ── Main wrapper ────────────────────────────────────────────────────── */}
       <div
         className={cn(
-          "flex h-[100dvh] min-h-0 min-w-0 flex-1 flex-col overflow-hidden will-change-[margin-left] lg:ml-[var(--app-sidebar-width)] lg:h-screen",
-          isResizing ? "transition-none" : "transition-[margin-left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          "app-main-column",
+          isResizing ? "transition-none" : "app-main-column-transition"
         )}
       >
         {/* Desktop topbar */}
-        <header className="sticky top-0 z-40 hidden min-h-[var(--app-desktop-topbar-height)] min-w-0 items-center gap-3 overflow-hidden border-b border-[#e6ecf4] bg-white/94 px-5 shadow-[0_1px_0_rgba(15,35,80,0.02)] backdrop-blur-xl lg:flex xl:px-6">
+        <header className="app-desktop-topbar">
           <button
             type="button"
             aria-label="Toggle sidebar"
             onClick={() => setCollapsed((c) => !c)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[var(--brand-softer)] hover:text-primary"
+            className="app-topbar-icon-button"
           >
             <Menu size={19} aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)] leading-none">{getPageTitle(loc)}</h1>
+            <h1 className="app-topbar-title">{getPageTitle(loc)}</h1>
             {getPageSubtitle(loc) && (
-              <p className="mt-1.5 hidden truncate text-[12px] font-medium leading-none text-[#64748b] 2xl:block">{getPageSubtitle(loc)}</p>
+              <p className="app-topbar-subtitle">{getPageSubtitle(loc)}</p>
             )}
           </div>
 
           {activeStoreLocation && <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" className="flex h-11 max-w-[210px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-white px-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-[var(--brand-softer)]">
+              <button type="button" className="app-topbar-location">
                 <Store size={16} className="shrink-0 text-primary" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[11px] font-black text-[var(--brand-ink)]">{activeStoreLocation.name}</span>
@@ -620,14 +563,14 @@ export function Layout({ children }: { children: ReactNode }) {
             type="button"
             onClick={() => setPaletteOpen(true)}
             aria-label="Search products, bills, and customers"
-            className="hidden h-11 min-w-[220px] max-w-[320px] flex-[0_1_320px] items-center gap-2 rounded-[12px] border border-[#dfe8f5] bg-[#f8fbff] px-3 text-left text-[#64748b] shadow-sm transition-colors hover:border-primary/40 hover:bg-white xl:flex"
+            className="app-topbar-search"
           >
             <Search size={17} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium">Search products, bills, customers...</span>
-            <span className="rounded-[7px] border border-[#dbe6f5] bg-white px-1.5 py-0.5 font-mono text-[10px] font-black text-[#64748b]">Ctrl K</span>
+            <span className="app-topbar-shortcut">Ctrl K</span>
           </button>}
 
-          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <div className={cn("hidden h-10 max-w-[178px] shrink items-center justify-center gap-1.5 truncate rounded-[10px] border px-3 text-xs font-bold shadow-sm xl:flex", connectionBadgeClass)}>
+          {!pageHasOwnTopbarActions && !loc.startsWith("/returns") && loc !== "/customers" && <div className={cn("app-topbar-connection", connectionBadgeClass)}>
             <span className={cn("h-1.5 w-1.5 rounded-full", connectionDotClass)} />
             <span className="truncate">{connectionLabel}</span>
             {isOnline && !isSyncing && !hasPendingSync && !hasSyncProblems && <span className="opacity-60">Just now</span>}
@@ -637,7 +580,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <Link href="/sync-status">
             <div aria-label="Open sync alerts"
-              className="relative flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dfe8f5] bg-white text-[var(--brand-ink)] shadow-sm transition-colors hover:border-primary/40 hover:bg-[var(--brand-softer)] hover:text-primary">
+              className="app-topbar-icon-button app-topbar-alerts">
               <Bell size={18} aria-hidden="true" />
               {attentionCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white">
@@ -649,12 +592,12 @@ export function Layout({ children }: { children: ReactNode }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex max-w-[230px] min-w-0 items-center gap-3 rounded-[14px] border border-[#dfe8f5] bg-white px-2.5 py-2 text-sm shadow-sm transition-colors hover:border-primary/40 hover:bg-[var(--brand-softer)]">
+              <button className="app-topbar-account">
                 <div className="hidden min-w-0 max-w-[150px] text-right 2xl:block">
                   <div className="truncate text-[13px] font-extrabold leading-tight text-[var(--brand-ink)]">{storeName}</div>
                   <div className="truncate text-[11px] leading-tight text-[#64748b]">{storeLocation}</div>
                 </div>
-                <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[var(--brand)] text-sm font-bold text-white ring-2 ring-[#e7f0ff]">
+                <div className="app-topbar-avatar">
                   {initials(storeName)}
                 </div>
                 <ChevronDown size={13} className="text-muted-foreground" aria-hidden="true" />
