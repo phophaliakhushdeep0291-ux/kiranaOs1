@@ -211,7 +211,7 @@ export default function SyncSettingsPage() {
                 Owner or admin access is required to view portable backups.
               </div>
             ) : (
-              <p className="backup-description">Encrypted · credentials excluded · owner PIN required.</p>
+              <p className="backup-description">AES-256-GCM · SHA-256 · Sensitive credentials excluded.</p>
             )}
           </div>
         </Card>
