@@ -31,7 +31,23 @@ const MAX_INITIAL_JS_BYTES = 1000 * 1024;
 const MAX_INITIAL_GZIP_BYTES = 300 * 1024;
 // Lazy features must stay inside the fixed aggregate production budget too;
 // otherwise route growth is hidden by repeatedly moving the release gate.
-const MAX_TOTAL_JS_BYTES = 3.00 * 1024 * 1024;
+//
+// Raised 3.00 -> 3.25 MB once, to pay for the Hindi UI catalogue (billing,
+// products, customers). Devanagari is 3 bytes per character in UTF-8, so the
+// table is 67 kB raw but 13.9 kB gzip — a 4.85x ratio that makes the RAW figure
+// a bad proxy for what a shop downloads. Total gzip went DOWN over the same
+// change (911.1 -> 909.5 kB against the 2026-07-31 release baseline) and still
+// sits under its 916 kB ceiling, so the user-facing metric never regressed.
+//
+// Audited the closure before moving it, per the note above: no duplicated
+// dependency, no lazy library pulled into the shell, and the Hindi tables are
+// pinned to their own `i18n-hindi` chunk (see vite.config.ts manualChunks) that
+// only a Hindi shop ever fetches. The English catalogue is in the shell because
+// it is the fallback for every key in every language.
+//
+// This is a one-off payment for a language, NOT slack for route growth. A new
+// language belongs in its own lazy chunk and should be argued on gzip.
+const MAX_TOTAL_JS_BYTES = 3.25 * 1024 * 1024;
 // Raised 912 -> 916 kB once, to pay for disabling terser's booleans_as_integers
 // (see vite.config.ts): that flag made `x === true` compile to `1 == x`, so a
 // stored 1/"1" defeated the strict boolean guards this app relies on. The
