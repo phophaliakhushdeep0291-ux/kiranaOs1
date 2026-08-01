@@ -37,6 +37,12 @@ describe("desktop app shell behavior", () => {
     expect(layout).toContain("Expand sidebar");
   });
 
+  it("inherits a stable section title on record-detail routes", () => {
+    expect(layout).toContain('loc.startsWith(`${path}/`)');
+    expect(layout).toContain('"/bills": "Billing History"');
+    expect(layout).toContain('"/customers": "Customers / Udhar"');
+  });
+
   it("keeps mobile bottom navigation in its own row so it cannot cover page actions", () => {
     expect(layout).toContain("pb-[var(--app-mobile-content-bottom-clearance)] lg:pb-0");
     expect(mobileChrome).toContain("mx-3 mb-3 mt-2 shrink-0");

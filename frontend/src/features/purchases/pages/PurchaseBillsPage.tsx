@@ -30,6 +30,7 @@ import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/produ
 import type { Product, Supplier } from "@/types/api";
 import { PurchaseOrdersPanel } from "@/features/purchases/components/PurchaseOrdersPanel";
 import { resolvePurchaseBarcode } from "@/features/purchases/purchase-barcode";
+import { extractPurchaseInvoice, type PurchaseInvoiceDraft } from "@/features/purchases/invoice-ocr-api";
 
 function money(value: unknown) {
   const num = Number(value);
@@ -990,7 +991,6 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   const [saving, setSaving] = useState(false);
   const [supplierId, setSupplierId] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
-  const [contact, setContact] = useState("");
   const [mobile, setMobile] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [purchaseNo, setPurchaseNo] = useState("");
@@ -1001,12 +1001,14 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   const [notes, setNotes] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
   const [scanValue, setScanValue] = useState("");
+  const [ocrDraft, setOcrDraft] = useState<PurchaseInvoiceDraft | null>(null);
+  const [extractingInvoice, setExtractingInvoice] = useState(false);
   const keyRef = useRef(2);
 
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
   useEffect(() => {
-    if (selectedSupplier) { setMobile(selectedSupplier.mobile ?? ""); setContact(selectedSupplier.name); }
+    if (selectedSupplier) setMobile(selectedSupplier.mobile ?? "");
   }, [selectedSupplier]);
 
   const lineTotal = (line: PurchaseLine) => (Number(line.qty) || 0) * (Number(line.cost) || 0);
@@ -1029,9 +1031,36 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   }
 
   function reset() {
-    setSupplierId(""); setNewSupplierName(""); setContact(""); setMobile("");
+    setSupplierId(""); setNewSupplierName(""); setMobile("");
     setDate(new Date().toISOString().slice(0, 10)); setPurchaseNo(""); setPayMode("upi"); setPayStatus("due");
     setPaidInput(""); setLines([{ key: keyRef.current++, productId: "", qty: "", cost: "" }]); setNotes("");
+    setOcrDraft(null);
+  }
+
+  async function readInvoice(file: File | undefined) {
+    if (!file || extractingInvoice) return;
+    setExtractingInvoice(true);
+    try {
+      const { draft } = await extractPurchaseInvoice(file);
+      setOcrDraft(draft);
+    } catch (error) {
+      toast({ title: "Could not read invoice", description: error instanceof Error ? error.message : "Try a clearer image.", variant: "destructive" });
+    } finally {
+      setExtractingInvoice(false);
+    }
+  }
+
+  function applyOcrDraft() {
+    if (!ocrDraft) return;
+    setPurchaseNo(ocrDraft.invoiceNumber ?? "");
+    if (ocrDraft.invoiceDate && ocrDraft.headerChecks.invoiceDateValid) setDate(ocrDraft.invoiceDate);
+    if (ocrDraft.supplierMatch === "exact" && ocrDraft.supplierId) setSupplierId(ocrDraft.supplierId);
+    setLines(ocrDraft.lines.length ? ocrDraft.lines.map((line) => ({
+      key: keyRef.current++,
+      productId: line.catalogMatch === "exact" ? line.productId ?? "" : "",
+      qty: line.prefillAllowed && line.quantity != null ? String(line.quantity) : "",
+      cost: line.prefillAllowed && line.unitCost != null ? String(line.unitCost) : "",
+    })) : [{ key: keyRef.current++, productId: "", qty: "", cost: "" }]);
   }
 
   function acceptBarcode() {
@@ -1153,19 +1182,26 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   return (
     <aside
       style={{ width }}
-      className={`app-slide-panel fixed right-0 top-0 z-[80] flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] ${open ? "translate-x-0" : "translate-x-full"}`}
+      className={`app-slide-panel purchase-panel ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog" aria-label="Add purchase" aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
-      <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
+      <div className="purchase-panel-head">
         <div>
-          <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Add Purchase</h2>
-          <p className="mt-0.5 text-[12px] text-[#6d7c98]">Add a new purchase bill</p>
+          <h2 className="purchase-panel-title">Add Purchase</h2>
+          <p className="purchase-panel-subtitle">Add a new purchase bill</p>
         </div>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]" aria-label="Close"><X size={18} /></button>
+        <div className="purchase-panel-controls">
+          <label title="External AI creates a review-only draft" className={cn("purchase-invoice-upload", extractingInvoice && "pointer-events-none opacity-50")}>
+            <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void readInvoice(event.target.files?.[0])} />
+            {extractingInvoice ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Read invoice
+          </label>
+          <button onClick={onClose} className="purchase-panel-close" aria-label="Close"><X size={18} /></button>
+        </div>
       </div>
 
-      <div className="app-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+      <div className="app-scrollbar purchase-panel-body">
+        {ocrDraft && <Button type="button" variant="outline" className="h-10 w-full border-amber-300 bg-amber-50 text-amber-950" onClick={applyOcrDraft}>Review/apply {ocrDraft.lines.filter((line) => line.prefillAllowed).length} verified fields — nothing posted</Button>}
         {/* Supplier information */}
         <section className="space-y-3">
           <h3 className="text-[13px] font-black text-[#13274d]">Supplier Information</h3>
@@ -1181,10 +1217,7 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
           {supplierId === "new" && (
             <Fld label="New supplier name *"><Input className="h-10" placeholder="Shree Balaji Distributors" value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} /></Fld>
           )}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Fld label="Contact Person"><Input className="h-10" placeholder="Ramesh Ji" value={contact} onChange={(e) => setContact(e.target.value)} /></Fld>
-            <Fld label="Mobile"><Input className="h-10" placeholder="+91 98290 12345" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Fld>
-          </div>
+          <Fld label="Mobile"><Input className="h-10" placeholder="+91 98290 12345" value={mobile} onChange={(e) => setMobile(e.target.value)} /></Fld>
         </section>
 
         {/* Bill details */}
