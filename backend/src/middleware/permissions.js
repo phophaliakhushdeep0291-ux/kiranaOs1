@@ -4,6 +4,7 @@ import { AppError } from "./error.js";
 import { env } from "../config/env.js";
 import { doesBodyTouchProtectedFields, purchaseChangesProtectedPrice } from "../utils/permissionRules.js";
 import { createAuditLog } from "../modules/audit/audit.service.js";
+import { getActiveShopMaintenanceLock } from "../modules/backups/maintenance-lock.service.js";
 
 /**
  * requireShop — ensures every request carries a shopId.
@@ -15,13 +16,25 @@ import { createAuditLog } from "../modules/audit/audit.service.js";
  *
  * Attaches req.shopId for convenience in controllers/services.
  */
-export function requireShop(req, _res, next) {
+export async function requireShop(req, res, next) {
   const shopId = req.user?.shopId;
   if (!shopId) {
     return next(new AppError("Shop context required", 400));
   }
   req.shopId = shopId;
-  next();
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+  // The restore executor must be able to acquire/release the lock itself. All
+  // other tenant mutations—including sync push—fail closed across instances.
+  if (/^\/api\/jobs\/backups\/[^/]+\/restore$/.test(req.originalUrl?.split("?")[0] ?? "")) return next();
+  try {
+    const lock = await getActiveShopMaintenanceLock(shopId);
+    if (!lock) return next();
+    const seconds = Math.max(1, Math.ceil((lock.expiresAt.getTime() - Date.now()) / 1000));
+    res.setHeader("Retry-After", String(seconds));
+    return next(new AppError("Shop is temporarily read-only for verified maintenance", 423, "SHOP_MAINTENANCE_LOCKED"));
+  } catch (error) {
+    return next(error);
+  }
 }
 
 /**

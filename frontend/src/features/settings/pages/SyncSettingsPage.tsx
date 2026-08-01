@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useOfflineStatus } from "@/features/sync";
 import { Archive, CheckCircle2, Clock, Cloud, CloudOff, Database, Download, Loader2, RefreshCcw, ShieldCheck, Upload } from "lucide-react";
@@ -13,10 +14,12 @@ import {
   downloadShopBackup,
   listShopBackups,
   previewShopBackupRestore,
+  restoreShopBackup,
   saveBackupBlob,
   type BackupArtifact,
   type BackupRestorePreview,
 } from "@/features/backups";
+import { resetDeviceAfterCloudRestore } from "@/features/backups/restore-local-reset";
 function timeAgo(d: Date | null) {
   if (!d) return "—";
   return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -52,8 +55,9 @@ export default function SyncSettingsPage() {
   const [backupRetentionDays, setBackupRetentionDays] = useState(30);
   const [backupHistoryLoading, setBackupHistoryLoading] = useState(true);
   const [backupAccessDenied, setBackupAccessDenied] = useState(false);
-  const [backupApproval, setBackupApproval] = useState<{ type: "create" | "download" | "restore-preview"; artifact?: BackupArtifact } | null>(null);
+  const [backupApproval, setBackupApproval] = useState<{ type: "create" | "download" | "restore-preview" | "restore"; artifact?: BackupArtifact } | null>(null);
   const [restorePreview, setRestorePreview] = useState<BackupRestorePreview | null>(null);
+  const [restoreConfirmation, setRestoreConfirmation] = useState("");
   const [backupActionLoading, setBackupActionLoading] = useState(false);
   const [backupActionError, setBackupActionError] = useState<string | null>(null);
   const wasSyncing = useRef(false);
@@ -104,6 +108,12 @@ export default function SyncSettingsPage() {
         const result = await previewShopBackupRestore(backupApproval.artifact.id, ownerPin);
         setRestorePreview(result.preview);
         toast({ title: "Backup verified", description: `${result.preview.record_count.toLocaleString("en-IN")} records are structurally compatible with this shop.` });
+      } else if (backupApproval.type === "restore" && backupApproval.artifact) {
+        const result = await restoreShopBackup(backupApproval.artifact.id, restoreConfirmation, ownerPin);
+        await resetDeviceAfterCloudRestore();
+        toast({ title: "Shop restored", description: `Recovery snapshot ${result.restore.recovery_backup.id.slice(-6)} was created. Sign in again to rebuild this device.` });
+        window.setTimeout(() => window.location.assign("/login?restored=1"), 600);
+        return;
       }
       setBackupApproval(null);
       await loadBackups();
@@ -280,7 +290,22 @@ export default function SyncSettingsPage() {
                 <p className="mt-1 text-[11px] leading-5 text-emerald-800">
                   Schema {restorePreview.schema_version} · {restorePreview.record_count.toLocaleString("en-IN")} records across {Object.keys(restorePreview.table_counts).length} data groups. Current credentials will be preserved.
                 </p>
-                <p className="mt-1 text-[11px] leading-5 text-emerald-800">No records were changed. Execution remains disabled until a fresh pre-restore snapshot and rollback check can be guaranteed.</p>
+                <p className="mt-1 text-[11px] leading-5 text-emerald-800">Execution creates a fresh encrypted recovery snapshot, restores all classified business tables in one transaction, and requires every device to sign in and rebuild its local cache.</p>
+                <div className="mt-3 space-y-2">
+                  <p className="text-[11px] font-bold text-emerald-950">Type <code>RESTORE {restorePreview.artifact_id.slice(-6)}</code> to continue.</p>
+                  <Input value={restoreConfirmation} onChange={(event) => setRestoreConfirmation(event.target.value)} placeholder={`RESTORE ${restorePreview.artifact_id.slice(-6)}`} />
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="w-full"
+                    disabled={pendingCount > 0 || failedCount > 0 || conflictCount > 0 || restoreConfirmation.trim() !== `RESTORE ${restorePreview.artifact_id.slice(-6)}`}
+                    onClick={() => {
+                      const artifact = backups.find((row) => row.id === restorePreview.artifact_id);
+                      if (artifact) { setBackupActionError(null); setBackupApproval({ type: "restore", artifact }); }
+                    }}
+                  >Restore verified snapshot</Button>
+                  {(pendingCount > 0 || failedCount > 0 || conflictCount > 0) && <p className="text-[11px] font-semibold text-rose-700">Resolve every pending, failed, or conflicting local change before restoring.</p>}
+                </div>
               </div>
             )}
           </div>
@@ -289,13 +314,15 @@ export default function SyncSettingsPage() {
 
       <OwnerPinModal
         open={Boolean(backupApproval)}
-        title={backupApproval?.type === "download" ? "Download encrypted backup" : backupApproval?.type === "restore-preview" ? "Validate restore safety" : "Create encrypted shop backup"}
+        title={backupApproval?.type === "restore" ? "Final restore approval" : backupApproval?.type === "download" ? "Download encrypted backup" : backupApproval?.type === "restore-preview" ? "Validate restore safety" : "Create encrypted shop backup"}
         description={backupApproval?.type === "download"
           ? "This exports sensitive shop data in an encrypted .kosb envelope. The download is audited."
+          : backupApproval?.type === "restore"
+            ? "This replaces classified shop business data, creates a recovery snapshot, invalidates stale device caches, and is recorded in the audit log."
           : backupApproval?.type === "restore-preview"
             ? "Checks encryption, checksum, tenant ownership, schema compatibility and record structure. This validation does not change shop data."
             : "This creates a transactionally consistent, tenant-scoped snapshot. Credential hashes and session secrets are excluded."}
-        confirmLabel={backupApproval?.type === "download" ? "Download backup" : backupApproval?.type === "restore-preview" ? "Validate backup" : "Create backup"}
+        confirmLabel={backupApproval?.type === "restore" ? "Restore shop" : backupApproval?.type === "download" ? "Download backup" : backupApproval?.type === "restore-preview" ? "Validate backup" : "Create backup"}
         loading={backupActionLoading}
         error={backupActionError}
         onCancel={() => { if (!backupActionLoading) { setBackupApproval(null); setBackupActionError(null); } }}

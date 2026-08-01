@@ -707,6 +707,34 @@
     @apply h-12 w-full rounded-lg text-[15px] font-semibold;
   }
 
+  .purchase-panel { @apply fixed right-0 top-0 z-[80] flex h-full w-full max-w-[100vw] flex-col border-l border-[#e6ecf4] bg-white shadow-[-12px_0_40px_rgba(15,23,42,0.10)] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:h-[calc(100vh-var(--app-desktop-topbar-height))]; }
+  .purchase-panel-head { @apply flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4; }
+  .purchase-panel-title { @apply font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]; }
+  .purchase-panel-subtitle { @apply mt-0.5 text-[12px] text-[#6d7c98]; }
+  .purchase-panel-controls { @apply flex items-center gap-2; }
+  .purchase-invoice-upload { @apply inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-xs font-medium; }
+  .purchase-panel-close { @apply grid h-8 w-8 place-items-center rounded-lg text-[#536383] hover:bg-[#f1f4f8]; }
+  .purchase-panel-body { @apply min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5; }
+  .ocr-review { @apply flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950; }
+  .ocr-review img { @apply h-24 w-20 rounded-lg border border-amber-200 bg-white object-contain; }
+  .ocr-review > div { @apply flex min-w-0 flex-1 flex-col gap-1; }
+  .ocr-review span, .ocr-review small { @apply block truncate; }
+  .ocr-review small { @apply text-amber-800; }
+  .ocr-review button { @apply mt-auto h-8 w-full border-amber-300 bg-white; }
+  .purchase-lines { @apply space-y-2 overflow-x-auto pb-1; }
+  .purchase-lines > h3 { @apply text-[13px] font-black text-[#13274d]; }
+  .purchase-lines-head { @apply grid min-w-[420px] grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]; }
+  .purchase-line { @apply grid min-w-[420px] grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5; }
+  .purchase-line-remove { @apply grid h-7 w-7 place-items-center rounded text-rose-400 hover:bg-rose-50; }
+  .purchase-lines-actions { @apply flex min-w-[420px] items-center justify-between pt-1; }
+  .purchase-lines-actions > button:first-child { @apply flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline; }
+  .purchase-lines-actions > button:last-child { @apply h-8 gap-1.5 rounded-[8px] text-[11.5px] font-bold; }
+  .purchase-totals { @apply grid grid-cols-2 gap-y-2 rounded-[10px] bg-[#f7f9fd] px-3.5 py-3 sm:grid-cols-4; }
+  .purchase-totals p:first-child { @apply text-[10px] font-semibold text-[#64748b]; }
+  .purchase-totals p:last-child { @apply text-[13px] font-black text-[var(--brand-ink)]; }
+  .purchase-totals > div:nth-child(3) p:last-child { @apply text-[#16a34a]; }
+  .purchase-totals > div:nth-child(4) p:last-child { @apply text-[#ef4444]; }
+
 }
 
 @media (max-width: 640px) {

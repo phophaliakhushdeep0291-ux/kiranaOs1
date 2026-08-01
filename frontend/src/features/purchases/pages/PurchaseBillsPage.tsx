@@ -1002,14 +1002,18 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
   const [scanOpen, setScanOpen] = useState(false);
   const [scanValue, setScanValue] = useState("");
   const [ocrDraft, setOcrDraft] = useState<PurchaseInvoiceDraft | null>(null);
+  const [ocrImage, setOcrImage] = useState("");
   const [extractingInvoice, setExtractingInvoice] = useState(false);
   const keyRef = useRef(2);
+  const ocrImageRef = useRef("");
 
   const selectedSupplier = suppliers.find((s) => s.id === supplierId);
 
   useEffect(() => {
     if (selectedSupplier) setMobile(selectedSupplier.mobile ?? "");
   }, [selectedSupplier]);
+
+  useEffect(() => () => { if (ocrImageRef.current) URL.revokeObjectURL(ocrImageRef.current); }, []);
 
   const lineTotal = (line: PurchaseLine) => (Number(line.qty) || 0) * (Number(line.cost) || 0);
   const totalAmount = lines.reduce((sum, line) => sum + lineTotal(line), 0);
@@ -1034,7 +1038,9 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
     setSupplierId(""); setNewSupplierName(""); setMobile("");
     setDate(new Date().toISOString().slice(0, 10)); setPurchaseNo(""); setPayMode("upi"); setPayStatus("due");
     setPaidInput(""); setLines([{ key: keyRef.current++, productId: "", qty: "", cost: "" }]); setNotes("");
-    setOcrDraft(null);
+    setOcrDraft(null); setOcrImage("");
+    if (ocrImageRef.current) URL.revokeObjectURL(ocrImageRef.current);
+    ocrImageRef.current = "";
   }
 
   async function readInvoice(file: File | undefined) {
@@ -1042,6 +1048,9 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
     setExtractingInvoice(true);
     try {
       const { draft } = await extractPurchaseInvoice(file);
+      if (ocrImageRef.current) URL.revokeObjectURL(ocrImageRef.current);
+      ocrImageRef.current = URL.createObjectURL(file);
+      setOcrImage(ocrImageRef.current);
       setOcrDraft(draft);
     } catch (error) {
       toast({ title: "Could not read invoice", description: error instanceof Error ? error.message : "Try a clearer image.", variant: "destructive" });
@@ -1201,7 +1210,10 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
       </div>
 
       <div className="app-scrollbar purchase-panel-body">
-        {ocrDraft && <Button type="button" variant="outline" className="h-10 w-full border-amber-300 bg-amber-50 text-amber-950" onClick={applyOcrDraft}>Review/apply {ocrDraft.lines.filter((line) => line.prefillAllowed).length} verified fields — nothing posted</Button>}
+        {ocrDraft && <section className="ocr-review" aria-label="Invoice OCR review">
+          <a href={ocrImage} target="_blank" rel="noreferrer" title="Open original invoice"><img src={ocrImage} alt="Original purchase invoice for comparison" /></a>
+          <div><strong>Review only — nothing posted</strong><span>{ocrDraft.supplierName || "Supplier not read"} · {ocrDraft.invoiceNumber || "No invoice number"} · {ocrDraft.grandTotal == null ? "Total not read" : fmt(ocrDraft.grandTotal)}</span><small>External AI draft · {ocrDraft.warnings.length} checks · {ocrDraft.lines.filter((line) => line.prefillAllowed).length}/{ocrDraft.lines.length} lines verified</small><Button type="button" variant="outline" onClick={applyOcrDraft}>Apply verified fields</Button></div>
+        </section>}
         {/* Supplier information */}
         <section className="space-y-3">
           <h3 className="text-[13px] font-black text-[#13274d]">Supplier Information</h3>
@@ -1253,13 +1265,13 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
         </section>
 
         {/* Products */}
-        <section className="app-table-scroll space-y-2 overflow-x-auto pb-1">
-          <h3 className="text-[13px] font-black text-[#13274d]">Products</h3>
-          <div className="grid min-w-[420px] grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">
+        <section className="app-table-scroll purchase-lines">
+          <h3>Products</h3>
+          <div className="purchase-lines-head">
             <span>Product</span><span>Qty</span><span>Unit Cost</span><span className="text-right">Total</span><span />
           </div>
           {lines.map((line) => (
-            <div key={line.key} className="grid min-w-[420px] grid-cols-[1fr_56px_76px_76px_24px] items-center gap-1.5">
+            <div key={line.key} className="purchase-line">
               <Select value={line.productId} onValueChange={(v) => setLine(line.key, { productId: v })}>
                 <SelectTrigger className="h-9 text-[12px]"><SelectValue placeholder="Select product" /></SelectTrigger>
                 <SelectContent>
@@ -1269,20 +1281,20 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
               <Input className="h-9 px-2 text-[12px]" type="number" min="0" placeholder="0" value={line.qty} onChange={(e) => setLine(line.key, { qty: e.target.value })} />
               <Input className="h-9 px-2 text-[12px]" type="number" min="0" step="0.01" placeholder="₹0" value={line.cost} onChange={(e) => setLine(line.key, { cost: e.target.value })} />
               <span className="truncate text-right text-[12px] font-bold text-[var(--brand-ink)]">{fmt(lineTotal(line))}</span>
-              <button onClick={() => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== line.key) : prev))} className="grid h-7 w-7 place-items-center rounded text-rose-400 hover:bg-rose-50" aria-label="Remove line"><Trash2 size={13} /></button>
+              <button onClick={() => setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== line.key) : prev))} className="purchase-line-remove" aria-label="Remove line"><Trash2 size={13} /></button>
             </div>
           ))}
-          <div className="flex min-w-[420px] items-center justify-between pt-1">
-            <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])} className="flex items-center gap-1 text-[12px] font-bold text-[var(--brand)] hover:underline"><Plus size={13} /> Add Product</button>
-            <Button variant="outline" className="h-8 gap-1.5 rounded-[8px] text-[11.5px] font-bold" onClick={() => setScanOpen(true)}><Barcode size={13} /> Scan Barcode</Button>
+          <div className="purchase-lines-actions">
+            <button onClick={() => setLines((prev) => [...prev, { key: keyRef.current++, productId: "", qty: "", cost: "" }])}><Plus size={13} /> Add Product</button>
+            <Button variant="outline" onClick={() => setScanOpen(true)}><Barcode size={13} /> Scan Barcode</Button>
           </div>
 
           {/* Totals strip */}
-          <div className="grid grid-cols-2 gap-y-2 rounded-[10px] bg-[#f7f9fd] px-3.5 py-3 sm:grid-cols-4">
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Total Items</p><p className="text-[13px] font-black text-[var(--brand-ink)]">{totalItems.toLocaleString("en-IN")}</p></div>
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Total Amount</p><p className="text-[13px] font-black text-[var(--brand-ink)]">{fmt(totalAmount)}</p></div>
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Paid Amount</p><p className="text-[13px] font-black text-[#16a34a]">{fmt(paidAmount)}</p></div>
-            <div><p className="text-[10px] font-semibold text-[#64748b]">Due Amount</p><p className="text-[13px] font-black text-[#ef4444]">{fmt(dueAmount)}</p></div>
+          <div className="purchase-totals">
+            <div><p>Total Items</p><p>{totalItems.toLocaleString("en-IN")}</p></div>
+            <div><p>Total Amount</p><p>{fmt(totalAmount)}</p></div>
+            <div><p>Paid Amount</p><p>{fmt(paidAmount)}</p></div>
+            <div><p>Due Amount</p><p>{fmt(dueAmount)}</p></div>
           </div>
         </section>
 

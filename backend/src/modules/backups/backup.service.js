@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { Readable } from "node:stream";
 import { gzipSync, gunzipSync } from "node:zlib";
 import db from "../../db.js";
@@ -12,9 +13,18 @@ import {
 } from "../../lib/objectStorage.js";
 import { JOB_NAMES, QUEUE_NAMES } from "../../workers/queueNames.js";
 import { createAuditLog } from "../audit/audit.service.js";
+import {
+  CREDENTIAL_FIELDS_ALWAYS_PRESERVED,
+  PRESERVED_SHOP_MODELS,
+  RESTORABLE_CHILD_MODELS,
+  RESTORABLE_SHOP_MODELS,
+  childWhereForShop,
+  prismaDelegateName,
+} from "./backup-policy.js";
+import { acquireShopMaintenanceLock, releaseShopMaintenanceLock } from "./maintenance-lock.service.js";
 
 const BACKUP_FORMAT = "kiranaos_aes256gcm_gzip_v1";
-const BACKUP_SCHEMA_VERSION = "2026-07-28";
+const BACKUP_SCHEMA_VERSION = "2026-08-01-complete-v2";
 const BACKUP_HEADER = Buffer.from("KOSB1", "ascii");
 const MAX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
 
@@ -118,7 +128,7 @@ async function loadVerifiedSnapshot(shopId, artifactId) {
 function countRows(value) {
   if (!value || typeof value !== "object") return 0;
   if (Array.isArray(value)) return value.length + value.reduce((sum, item) => sum + countNestedArrays(item), 0);
-  return Object.values(value).reduce((sum, item) => sum + (Array.isArray(item) ? countRows(item) : 0), 0);
+  return Object.values(value).reduce((sum, item) => sum + countRows(item), 0);
 }
 
 function countNestedArrays(value) {
@@ -281,6 +291,37 @@ async function buildShopSnapshot(shopId, client = db) {
   };
 }
 
+async function buildCompleteShopSnapshot(shopId, client = db) {
+  const shop = await client.shop.findUnique({ where: { id: shopId } });
+  if (!shop) throw appError("Shop not found", 404, "SHOP_NOT_FOUND");
+  const tables = {};
+  // Prisma's interactive-transaction client is a proxy. Resolve and await one
+  // dynamic delegate at a time; parallel dynamic getters can alias a delegate
+  // in the isolated integration client and validate a query against the wrong model.
+  for (const modelName of RESTORABLE_SHOP_MODELS) {
+    const delegate = client[prismaDelegateName(modelName)];
+    if (!delegate?.findMany) throw appError(`Backup delegate missing for ${modelName}`, 500, "BACKUP_MODEL_UNAVAILABLE");
+    tables[modelName] = await delegate.findMany({ where: { shopId } });
+  }
+  for (const [modelName, policy] of Object.entries(RESTORABLE_CHILD_MODELS)) {
+    const delegate = client[prismaDelegateName(modelName)];
+    if (!delegate?.findMany) throw appError(`Backup child delegate missing for ${modelName}`, 500, "BACKUP_MODEL_UNAVAILABLE");
+    tables[modelName] = await delegate.findMany({ where: childWhereForShop(policy.where, shopId) });
+  }
+  return {
+    manifest: {
+      product: "KiranaOS", format: BACKUP_FORMAT, schemaVersion: BACKUP_SCHEMA_VERSION,
+      createdAt: new Date().toISOString(), shopId,
+      bigintEncoding: "{ $kiranaosBigInt: decimal-string }",
+      dataLayout: "flat_prisma_tables_v2",
+      restorableModels: [...RESTORABLE_SHOP_MODELS, ...Object.keys(RESTORABLE_CHILD_MODELS)].sort(),
+      preservedModels: [...PRESERVED_SHOP_MODELS].sort(),
+      credentialsExcluded: [...CREDENTIAL_FIELDS_ALWAYS_PRESERVED],
+    },
+    data: { shop, tables },
+  };
+}
+
 function publicArtifact(row) {
   return {
     id: row.id,
@@ -299,6 +340,120 @@ function publicArtifact(row) {
     expires_at: row.expiresAt?.toISOString() ?? null,
     created_at: row.createdAt.toISOString(),
   };
+}
+
+function restoreModelOrder() {
+  const names = [...RESTORABLE_SHOP_MODELS, ...Object.keys(RESTORABLE_CHILD_MODELS)];
+  const included = new Set(names);
+  const dependencies = new Map(names.map((name) => [name, new Set()]));
+  for (const name of names) {
+    const model = Prisma.dmmf.datamodel.models.find((entry) => entry.name === name);
+    if (!model) throw appError(`Restore model metadata missing for ${name}`, 500, "RESTORE_MODEL_UNAVAILABLE");
+    for (const field of model.fields) {
+      if (field.kind === "object" && field.relationFromFields?.length && included.has(field.type) && field.type !== name) {
+        dependencies.get(name).add(field.type);
+      }
+    }
+  }
+  const ordered = [];
+  const remaining = new Set(names);
+  while (remaining.size) {
+    const ready = [...remaining].filter((name) => [...dependencies.get(name)].every((dependency) => !remaining.has(dependency))).sort();
+    if (!ready.length) throw appError(`Restore model dependency cycle: ${[...remaining].sort().join(", ")}`, 500, "RESTORE_MODEL_CYCLE");
+    for (const name of ready) { ordered.push(name); remaining.delete(name); }
+  }
+  return ordered;
+}
+
+function restoreScalarRow(modelName, row, shopId) {
+  const model = Prisma.dmmf.datamodel.models.find((entry) => entry.name === modelName);
+  if (!model || !row || typeof row !== "object" || Array.isArray(row)) throw appError(`Invalid ${modelName} backup row`, 400, "BACKUP_ROW_INVALID");
+  if (model.fields.some((field) => field.kind === "scalar" && field.name === "shopId") && row.shopId !== shopId) {
+    throw appError(`Backup row tenant mismatch in ${modelName}`, 403, "BACKUP_TENANT_MISMATCH");
+  }
+  const result = {};
+  for (const field of model.fields.filter((entry) => entry.kind === "scalar" || entry.kind === "enum")) {
+    if (!(field.name in row)) continue;
+    const value = row[field.name];
+    if (value === null || value === undefined) { result[field.name] = value; continue; }
+    if (field.type === "DateTime") {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) throw appError(`Invalid date in ${modelName}.${field.name}`, 400, "BACKUP_ROW_INVALID");
+      result[field.name] = date;
+    } else if (field.type === "BigInt") {
+      const encoded = value?.$kiranaosBigInt ?? value;
+      try { result[field.name] = BigInt(encoded); } catch { throw appError(`Invalid bigint in ${modelName}.${field.name}`, 400, "BACKUP_ROW_INVALID"); }
+    } else result[field.name] = value;
+  }
+  return result;
+}
+
+function assertCompleteRestoreSnapshot(snapshot, shopId) {
+  const manifest = snapshot?.manifest;
+  const data = snapshot?.data;
+  if (manifest?.product !== "KiranaOS" || manifest?.format !== BACKUP_FORMAT || manifest?.schemaVersion !== BACKUP_SCHEMA_VERSION || manifest?.dataLayout !== "flat_prisma_tables_v2") {
+    throw appError("Backup is not compatible with complete transactional restore", 409, "BACKUP_SCHEMA_INCOMPATIBLE");
+  }
+  if (manifest.shopId !== shopId || data?.shop?.id !== shopId) throw appError("Backup belongs to a different shop", 403, "BACKUP_TENANT_MISMATCH");
+  const required = [...RESTORABLE_SHOP_MODELS, ...Object.keys(RESTORABLE_CHILD_MODELS)].sort();
+  if (!data.tables || JSON.stringify(Object.keys(data.tables).sort()) !== JSON.stringify(required)) {
+    throw appError("Backup table manifest is incomplete", 409, "BACKUP_TABLES_INCOMPLETE");
+  }
+  for (const name of required) if (!Array.isArray(data.tables[name])) throw appError(`Backup table ${name} is invalid`, 400, "BACKUP_TABLE_INVALID");
+  return { manifest, data };
+}
+
+async function createImmediateRecoveryBackup(shopId, userId) {
+  assertBackupStorageSafe();
+  const artifact = await db.backupArtifact.create({ data: {
+    shopId, requestedByUserId: userId, type: "shop_logical", status: "queued",
+    expiresAt: new Date(Date.now() + env.BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000),
+  } });
+  return processShopBackupArtifact(artifact.id, shopId);
+}
+
+async function replaceRestorableShopData(tx, shopId, snapshot) {
+  const { data } = assertCompleteRestoreSnapshot(snapshot, shopId);
+  const order = restoreModelOrder();
+  for (const modelName of [...order].reverse()) {
+    const delegate = tx[prismaDelegateName(modelName)];
+    const childPolicy = RESTORABLE_CHILD_MODELS[modelName];
+    await delegate.deleteMany({ where: childPolicy ? childWhereForShop(childPolicy.where, shopId) : { shopId } });
+  }
+  const shopFields = ["name", "ownerName", "city", "address", "gstNumber", "phone", "settingsJson"];
+  await tx.shop.update({ where: { id: shopId }, data: Object.fromEntries(shopFields.filter((name) => name in data.shop).map((name) => [name, data.shop[name]])) });
+  let restoredRecords = 0;
+  for (const modelName of order) {
+    const rows = data.tables[modelName].map((row) => restoreScalarRow(modelName, row, shopId));
+    if (!rows.length) continue;
+    await tx[prismaDelegateName(modelName)].createMany({ data: rows });
+    restoredRecords += rows.length;
+  }
+  await tx.shop.update({ where: { id: shopId }, data: { dataEpoch: { increment: 1 } } });
+  return { restoredRecords, restoredTables: order.length };
+}
+
+export async function restoreShopBackup(shopId, artifactId, userId, confirmation) {
+  if (String(confirmation || "").trim() !== `RESTORE ${artifactId.slice(-6)}`) {
+    throw appError(`Type RESTORE ${artifactId.slice(-6)} to confirm`, 422, "BACKUP_RESTORE_CONFIRMATION_REQUIRED");
+  }
+  const { snapshot } = await loadVerifiedSnapshot(shopId, artifactId);
+  assertCompleteRestoreSnapshot(snapshot, shopId);
+  const lock = await acquireShopMaintenanceLock(shopId, userId, `restore:${artifactId}`);
+  let recoveryBackup = null;
+  try {
+    recoveryBackup = await createImmediateRecoveryBackup(shopId, userId);
+    const result = await db.$transaction((tx) => replaceRestorableShopData(tx, shopId, snapshot), {
+      isolationLevel: "Serializable", maxWait: 15_000, timeout: 180_000,
+    });
+    await createAuditLog({
+      shopId, userId, action: "SHOP_BACKUP_RESTORED", entityType: "BackupArtifact", entityId: artifactId,
+      metadata: { recoveryArtifactId: recoveryBackup.id, schemaVersion: BACKUP_SCHEMA_VERSION, ...result },
+    }).catch(() => undefined);
+    return { ...result, artifact_id: artifactId, recovery_backup: recoveryBackup };
+  } finally {
+    await releaseShopMaintenanceLock(shopId, lock.token).catch(() => undefined);
+  }
 }
 
 export async function createAndEnqueueShopBackup(shopId, userId) {
@@ -371,7 +526,7 @@ export async function processShopBackupArtifact(artifactId, expectedShopId) {
   }
   try {
     const snapshot = await db.$transaction(
-      (tx) => buildShopSnapshot(artifact.shopId, tx),
+      (tx) => buildCompleteShopSnapshot(artifact.shopId, tx),
       { isolationLevel: "Serializable", maxWait: 10_000, timeout: 120_000 },
     );
     const plain = Buffer.from(stringifySnapshot(snapshot), "utf8");
@@ -467,8 +622,11 @@ export async function previewShopBackupRestore(shopId, artifactId) {
   if (manifest.shopId !== shopId || data.shop?.id !== shopId) {
     throw appError("Backup belongs to a different shop", 403, "BACKUP_TENANT_MISMATCH");
   }
+  if (manifest.dataLayout !== "flat_prisma_tables_v2" || !data.tables || typeof data.tables !== "object") {
+    throw appError("Backup table layout is not restorable", 409, "BACKUP_LAYOUT_INCOMPATIBLE");
+  }
   const tableCounts = Object.fromEntries(
-    Object.entries(data)
+    Object.entries(data.tables)
       .filter(([, value]) => Array.isArray(value))
       .map(([name, value]) => [name, value.length])
       .sort(([left], [right]) => left.localeCompare(right)),
@@ -526,4 +684,8 @@ export const __backupInternals = {
   encryptionKey,
   parseSnapshot,
   stringifySnapshot,
+  assertCompleteRestoreSnapshot,
+  restoreModelOrder,
+  restoreScalarRow,
+  replaceRestorableShopData,
 };

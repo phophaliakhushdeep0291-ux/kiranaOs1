@@ -4,12 +4,15 @@ import { createIntegrationContext, resetDatabase } from "./setup.js";
 import { createProduct, createStaff, createTenant, login } from "./factories.js";
 import { env } from "../../src/config/env.js";
 import {
+  __backupInternals,
   cleanupExpiredShopBackups,
   openShopBackup,
   previewShopBackupRestore,
   processShopBackupArtifact,
+  restoreShopBackup,
   verifyBackupArtifactForTest,
 } from "../../src/modules/backups/backup.service.js";
+import { acquireShopMaintenanceLock, releaseShopMaintenanceLock } from "../../src/modules/backups/maintenance-lock.service.js";
 
 const ctx = await createIntegrationContext();
 
@@ -22,7 +25,7 @@ if (ctx.skip) {
     env.BACKUP_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
   });
 
-  describe("encrypted tenant backups", () => {
+  describe("encrypted tenant backups", { concurrency: false }, () => {
     test("creates a checksummed encrypted shop artifact without credentials or cross-tenant data", async () => {
       const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
       const other = await createTenant(ctx.db, { ownerPin: "5678" });
@@ -110,11 +113,13 @@ if (ctx.skip) {
       const snapshot = await verifyBackupArtifactForTest(tenant.shop.id, artifact.id);
       assert.equal(snapshot.manifest.shopId, tenant.shop.id);
       assert.equal(snapshot.manifest.credentialsExcluded.includes("passwordHash"), true);
-      assert.equal(snapshot.data.products.some((row) => row.id === ownProduct.id), true);
-      assert.equal(snapshot.data.products.some((row) => row.id === otherProduct.id), false);      assert.equal(snapshot.data.bankStatementImports.some((row) => row.id === statementImport.id), true);
-      assert.equal(snapshot.data.bankStatementTransactions.some((row) => row.id === statementTransaction.id), true);
-      assert.equal(snapshot.data.bankReconciliationAllocations.some((row) => row.id === allocation.id), true);
-      assert.equal(snapshot.data.bankReconciliationEvents.some((row) => row.id === reconciliationEvent.id), true);
+      assert.equal(snapshot.manifest.dataLayout, "flat_prisma_tables_v2");
+      assert.equal(snapshot.data.tables.Product.some((row) => row.id === ownProduct.id), true);
+      assert.equal(snapshot.data.tables.Product.some((row) => row.id === otherProduct.id), false);
+      assert.equal(snapshot.data.tables.BankStatementImport.some((row) => row.id === statementImport.id), true);
+      assert.equal(snapshot.data.tables.BankStatementTransaction.some((row) => row.id === statementTransaction.id), true);
+      assert.equal(snapshot.data.tables.BankReconciliationAllocation.some((row) => row.id === allocation.id), true);
+      assert.equal(snapshot.data.tables.BankReconciliationEvent.some((row) => row.id === reconciliationEvent.id), true);
       const serialized = JSON.stringify(snapshot);
       assert.equal(serialized.includes("passwordHash"), true, "manifest documents intentional credential exclusion");
       assert.equal(serialized.includes(tenant.owner.passwordHash), false, "credential hashes are never present in the artifact");
@@ -183,7 +188,7 @@ if (ctx.skip) {
       const before = await ctx.db.product.count({ where: { shopId: tenant.shop.id } });
       const preview = await previewShopBackupRestore(tenant.shop.id, artifact.id);
       assert.equal(preview.restorable, true);
-      assert.equal(preview.table_counts.products, 1);
+      assert.equal(preview.table_counts.Product, 1);
       assert.equal(preview.credentials_preserved, true);
       assert.ok(preview.record_count >= 1);
       assert.equal(await ctx.db.product.count({ where: { shopId: tenant.shop.id } }), before, "preview is read-only");
@@ -193,6 +198,62 @@ if (ctx.skip) {
         () => previewShopBackupRestore(other.shop.id, artifact.id),
         (error) => error?.code === "BACKUP_ARTIFACT_NOT_FOUND" && error?.statusCode === 404,
       );
+    });
+
+    test("transactionally restores business data, preserves credentials, creates recovery backup, and releases maintenance lock", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Before Restore", stockBaseQty: 7 });
+      const device = await ctx.db.device.create({ data: { shopId: tenant.shop.id, userId: tenant.owner.id, deviceId: "restore-stale-device", status: "active", dataEpoch: 0 } });
+      const artifact = await ctx.db.backupArtifact.create({ data: {
+        shopId: tenant.shop.id, requestedByUserId: tenant.owner.id, type: "shop_logical",
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      } });
+      await processShopBackupArtifact(artifact.id, tenant.shop.id);
+      const ownerBefore = await ctx.db.user.findUnique({ where: { id: tenant.owner.id }, select: { passwordHash: true, pinHash: true } });
+      await ctx.db.product.update({ where: { id: product.id }, data: { name: "Changed Later", stockBaseQty: 99 } });
+      await createProduct(ctx.db, tenant.shop.id, { name: "Created Later" });
+
+      const restored = await restoreShopBackup(tenant.shop.id, artifact.id, tenant.owner.id, `RESTORE ${artifact.id.slice(-6)}`);
+      assert.ok(restored.restoredRecords > 0);
+      assert.equal(restored.recovery_backup.status, "completed");
+      assert.notEqual(restored.recovery_backup.id, artifact.id);
+      const products = await ctx.db.product.findMany({ where: { shopId: tenant.shop.id }, orderBy: { name: "asc" } });
+      assert.deepEqual(products.map((row) => row.name), ["Before Restore"]);
+      assert.equal(products[0].stockBaseQty, 7);
+      const ownerAfter = await ctx.db.user.findUnique({ where: { id: tenant.owner.id }, select: { passwordHash: true, pinHash: true } });
+      assert.deepEqual(ownerAfter, ownerBefore, "password and PIN hashes remain installation-controlled");
+      const epochState = await ctx.db.shop.findUnique({ where: { id: tenant.shop.id }, select: { dataEpoch: true } });
+      const staleDevice = await ctx.db.device.findUnique({ where: { id: device.id }, select: { dataEpoch: true } });
+      assert.equal(epochState.dataEpoch, 1);
+      assert.equal(staleDevice.dataEpoch, 0, "preserved devices remain stale until explicit rebootstrap");
+      assert.equal(await ctx.db.shopMaintenanceLock.count({ where: { shopId: tenant.shop.id } }), 0, "lock releases after success");
+    });
+
+    test("rolls back every deletion when a restored row fails and blocks concurrent tenant writes", async () => {
+      const tenant = await createTenant(ctx.db, { ownerPin: "1234" });
+      const product = await createProduct(ctx.db, tenant.shop.id, { name: "Rollback Product", stockBaseQty: 4 });
+      const artifact = await ctx.db.backupArtifact.create({ data: {
+        shopId: tenant.shop.id, requestedByUserId: tenant.owner.id, type: "shop_logical",
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      } });
+      await processShopBackupArtifact(artifact.id, tenant.shop.id);
+      const snapshot = await verifyBackupArtifactForTest(tenant.shop.id, artifact.id);
+      snapshot.data.tables.Product.push({ ...snapshot.data.tables.Product[0] });
+      await assert.rejects(() => ctx.db.$transaction(
+        (tx) => __backupInternals.replaceRestorableShopData(tx, tenant.shop.id, snapshot),
+        { isolationLevel: "Serializable", timeout: 180_000 },
+      ));
+      assert.equal((await ctx.db.product.findUnique({ where: { id: product.id } }))?.name, "Rollback Product", "failed restore transaction leaves original rows intact");
+
+      const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
+      const lock = await acquireShopMaintenanceLock(tenant.shop.id, tenant.owner.id, "restore-test");
+      try {
+        const blocked = await ctx.post("/api/jobs/backups", {}, { token: auth.accessToken, ownerPin: tenant.ownerPin });
+        assert.equal(blocked.status, 423);
+        assert.equal(blocked.body.code, "SHOP_MAINTENANCE_LOCKED");
+      } finally {
+        await releaseShopMaintenanceLock(tenant.shop.id, lock.token);
+      }
     });
 
     test("owner backup routes enforce PIN, role, tenant scope, audit, and protected download", async () => {
@@ -242,7 +303,7 @@ if (ctx.skip) {
       );
       assert.equal(previewed.status, 200, JSON.stringify(previewed.body));
       assert.equal(previewed.body.data.preview.restorable, true);
-      assert.equal(previewed.body.data.preview.table_counts.products, 1);
+      assert.equal(previewed.body.data.preview.table_counts.Product, 1);
 
       const staff = await createStaff(ctx.db, tenant.shop.id);
       const staffAuth = await login(ctx, staff.staffMobile, staff.staffPassword);

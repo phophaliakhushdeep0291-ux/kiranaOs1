@@ -9,8 +9,10 @@ describe("purchase invoice OCR review boundary", () => {
   it("uploads a multipart image into a review-only draft", () => {
     expect(api).toContain('form.append("invoice", file, file.name)');
     expect(api).toContain('"/ai/extract-purchase-invoice"');
-    expect(page).toContain("review-only draft");
-    expect(page).toContain("verified fields — nothing posted");
+    expect(page).toContain("Review only — nothing posted");
+    expect(page).toContain("External AI draft");
+    expect(page).toContain("Original purchase invoice for comparison");
+    expect(page).toContain("URL.revokeObjectURL");
     expect(page).toContain('accept="image/png,image/jpeg,image/webp"');
   });
 
