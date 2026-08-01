@@ -190,6 +190,10 @@ export const productsEn = {
   "products.import.rolledBack": "The migration was rolled back. Review the file and try again.",
   "products.import.nothingPartial": "Nothing was partially imported",
   "products.import.issues": "Issues",
+  "products.import.mybillbookExport": "myBillBook-style export",
+  "products.import.detectedSource": "Detected {source}. Confirm the financial and packet fields.",
+  "products.import.fileTooLargeHint": "Use a CSV smaller than 25 MB. This is enough for well over 10,000 normal product rows.",
+  "products.import.importedCounts": "{created} created, {updated} updated. {backup}",
   "products.import.update": "Update",
   "products.import.notSet": "Not set",
 } as const;
