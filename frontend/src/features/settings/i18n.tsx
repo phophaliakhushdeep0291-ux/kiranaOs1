@@ -65,18 +65,35 @@ function getInitialLanguage(): AppLanguage {
   return raw === "hi" ? "hi" : "en";
 }
 
+// Start the fetch before the first render when the shop is already on Hindi, so a
+// Hindi counter does not watch its billing screen render in English and then swap.
+if (getInitialLanguage() === "hi") void loadHindiDictionary();
+
 export function AppLanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<AppLanguage>(getInitialLanguage);
+  const [hindi, setHindi] = useState<Dictionary | null>(hindiDictionary);
 
   useEffect(() => {
     if (typeof document !== "undefined") document.documentElement.lang = language === "hi" ? "hi" : "en";
     if (typeof window !== "undefined") window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   }, [language]);
 
+  useEffect(() => {
+    if (language !== "hi" || hindi) return;
+    let cancelled = false;
+    void loadHindiDictionary().then((dictionary) => {
+      if (!cancelled && dictionary) setHindi(dictionary);
+    });
+    return () => { cancelled = true; };
+  }, [language, hindi]);
+
   const setLanguage = useCallback((nextLanguage: AppLanguage) => setLanguageState(nextLanguage), []);
+  // English is the complete catalogue and the fallback in every gap: before the
+  // Hindi chunk lands, and if its fetch failed. A screen never renders a raw key.
   const t = useCallback(
-    (key: TranslationKey, vars?: TranslationVars) => interpolate(translations[language][key] ?? translations.en[key], vars),
-    [language],
+    (key: TranslationKey, vars?: TranslationVars) =>
+      interpolate((language === "hi" ? hindi?.[key] : undefined) ?? en[key], vars),
+    [language, hindi],
   );
   const value = useMemo(() => ({ language, setLanguage, t }), [language, setLanguage, t]);
 
@@ -95,5 +112,8 @@ export function useAppLanguage() {
  */
 export type Translate = AppLanguageContextValue["t"];
 
-/** Exposed for the dictionary-completeness test; not for runtime lookups. */
-export const translationDictionaries = translations;
+/** English catalogue, exposed for the dictionary-completeness test. */
+export const englishTranslations = en;
+
+/** Loads and returns the Hindi table. For tests and preloading, not render paths. */
+export { loadHindiDictionary };

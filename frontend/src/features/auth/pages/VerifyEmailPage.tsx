@@ -37,7 +37,7 @@ export default function VerifyEmailPage() {
               ? "This verification link is invalid or expired. Please request a new link from sign in."
               : "Please wait while we confirm your email."}
         </p>
-        <Button asChild className="mt-6 w-full">
+        <Button asChild className="mt-6 h-11 w-full">
           <Link href="/login">Back to sign in</Link>
         </Button>
       </div>

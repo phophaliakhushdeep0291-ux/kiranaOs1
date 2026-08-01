@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
             <div className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
               This reset link is missing a token. Please request a new link.
             </div>
-            <Button asChild className="w-full">
+            <Button asChild className="h-11 w-full">
               <Link href="/forgot-password">Request new link</Link>
             </Button>
           </div>
@@ -68,7 +68,7 @@ export default function ResetPasswordPage() {
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
               Password updated. Please sign in with your new password.
             </div>
-            <Button type="button" className="w-full" onClick={() => setLocation("/login")}>
+            <Button type="button" className="h-11 w-full" onClick={() => setLocation("/login")}>
               Sign in
             </Button>
           </div>
@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
             {serverError && (
               <div className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{serverError}</div>
             )}
-            <Button type="submit" className="w-full" disabled={resetPassword.isPending}>
+            <Button type="submit" className="h-11 w-full" disabled={resetPassword.isPending}>
               {resetPassword.isPending ? "Updating..." : "Update password"}
             </Button>
           </form>

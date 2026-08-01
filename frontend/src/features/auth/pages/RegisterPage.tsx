@@ -220,10 +220,14 @@ export default function Register() {
                 Continue <ArrowRight size={16} className="ml-2" />
               </Button>
             </form>
-            <p className="mt-4 text-center text-sm text-muted-foreground">
+            <p className="mt-2 text-center text-sm text-muted-foreground">
               Already have an account?{" "}
-              <Link href="/login">
-                <span className="cursor-pointer font-bold text-primary hover:underline" data-testid="link-login">Sign in</span>
+              <Link
+                href="/login"
+                className="inline-flex min-h-[44px] cursor-pointer items-center px-1 align-middle font-bold text-primary hover:underline"
+                data-testid="link-login"
+              >
+                Sign in
               </Link>
             </p>
           </div>

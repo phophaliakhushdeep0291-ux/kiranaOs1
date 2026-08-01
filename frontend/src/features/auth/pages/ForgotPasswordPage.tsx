@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
               Check your email for the reset link. The link expires shortly for safety.
             </div>
-            <Button asChild className="w-full">
+            <Button asChild className="h-11 w-full">
               <Link href="/login">Back to sign in</Link>
             </Button>
           </div>
@@ -79,13 +79,16 @@ export default function ForgotPasswordPage() {
                 {serverError}
               </div>
             )}
-            <Button type="submit" className="w-full" disabled={forgotPassword.isPending}>
+            <Button type="submit" className="h-11 w-full" disabled={forgotPassword.isPending}>
               {forgotPassword.isPending ? "Sending..." : "Send reset link"}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
               Remembered it?{" "}
-              <Link href="/login">
-                <span className="cursor-pointer font-semibold text-primary hover:underline">Sign in</span>
+              <Link
+                href="/login"
+                className="inline-flex min-h-[44px] cursor-pointer items-center px-1 align-middle font-semibold text-primary hover:underline"
+              >
+                Sign in
               </Link>
             </p>
           </form>
