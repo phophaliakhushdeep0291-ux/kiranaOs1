@@ -221,6 +221,9 @@ function rowToFormData(values: Record<string, string>): ProductFormData {
   const numberValue = (field: ProductImportField) => parseImportNumber(values[field] ?? "");
   return {
     name: (values.name ?? "").trim(),
+    // Bulk import has no column for per-pack counts, and inventing one pack layout
+    // for every imported row would be worse than the shared pool it already assumes.
+    packagingMode: "pooled",
     category: (values.category ?? "").trim() || "general",
     brand: (values.brand ?? "").trim() || undefined,
     unit: ((values.unit ?? "").trim() || "piece").toLowerCase(),

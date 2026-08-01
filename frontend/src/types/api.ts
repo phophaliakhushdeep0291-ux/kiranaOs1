@@ -60,16 +60,26 @@ export interface ProductSellingUnit {
   minimumPrice?: number | null;
   maximumPrice?: number | null;
   costPrice?: number | null;
+  // Per-packaging stock, counted in this pack's own units. Only maintained when the
+  // product's packagingMode is "per_pack"; pooled products leave these null and use
+  // the single shared Product.stockBaseQty.
+  onHandQty?: number | null;
+  lowStockThreshold?: number | null;
+  reorderLevel?: number | null;
   isDefault: boolean;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
 
+/** How a product's stock is counted across its pack sizes. */
+export type PackagingMode = "pooled" | "per_pack";
+
 export interface Product {
   id: string;
   shopId?: string;
   name: string;
+  packagingMode?: PackagingMode;
   category?: string | null;
   unit?: string | null;
   displayUnit?: string | null;
@@ -122,6 +132,7 @@ export type InventoryItem = Product & { productId?: string; isLowStock?: boolean
 
 export interface ProductInput {
   name: string;
+  packagingMode?: PackagingMode;
   category?: string;
   unit?: string;
   aliases?: string[];

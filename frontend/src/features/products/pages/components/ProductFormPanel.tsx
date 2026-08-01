@@ -107,6 +107,7 @@ export function ProductFormPanel({
     ? selectedUnit
     : sellingUnitName(selectedUnit, packSizeValue, packSizeUnit);
   const sellingUnits = form.watch("sellingUnits") ?? [];
+  const packagingMode = form.watch("packagingMode") ?? "pooled";
   const alternateSellingUnits = sellingUnits.filter((row) => !row.isDefault);
   const err = form.formState.errors;
 
@@ -158,16 +159,22 @@ export function ProductFormPanel({
         minimumPrice: null,
         maximumPrice: null,
         costPrice: null,
+        // In per-pack mode the opening quantity IS this pack's own count and must not
+        // also be folded into the shared pool below, or the same goods would be
+        // counted twice.
+        ...(packagingMode === "per_pack"
+          ? { onHandQty: Number(extraPack.openingQty) || 0, lowStockThreshold: null }
+          : {}),
         isDefault: false,
         isActive: true,
       },
     ], { shouldDirty: true, shouldValidate: true });
 
-    // Opening quantity is a stock-IN expressed in this pack, not a second count for it.
-    // Every pack size draws on one base-unit pool, so "20 x 500 g packets" is 10,000 g
-    // added to that pool. Storing it per pack instead would create a number nothing
-    // decrements on sale, which drifts from the real stock the moment you sell one.
-    const openingQty = Number(extraPack.openingQty);
+    // Pooled only: opening quantity is a stock-IN expressed in this pack, not a second
+    // count for it. Every pack size draws on one base-unit pool, so "20 x 500 g packets"
+    // is 10,000 g added to that pool. Storing it per pack instead would create a number
+    // nothing decrements on sale, which drifts from the real stock the moment you sell one.
+    const openingQty = packagingMode === "per_pack" ? 0 : Number(extraPack.openingQty);
     if (openingQty > 0) {
       const packConversion = sellingUnitConversion(size, extraPack.packSizeUnit);
       const addedInDefaultUnits = packBaseQuantity > 0
@@ -186,6 +193,19 @@ export function ProductFormPanel({
 
     setExtraPack(EMPTY_EXTRA_PACK);
     setExtraPackOpen(false);
+  }
+
+  function updatePackField(unitCode: string, field: "onHandQty" | "lowStockThreshold", raw: string) {
+    const parsed = raw.trim() === "" ? null : Number(raw);
+    form.setValue(
+      "sellingUnits",
+      sellingUnits.map((row) =>
+        row.unitCode === unitCode
+          ? { ...row, [field]: parsed !== null && Number.isFinite(parsed) ? parsed : null }
+          : row,
+      ),
+      { shouldDirty: true, shouldValidate: true },
+    );
   }
 
   function removeAlternatePack(unitCode: string) {
@@ -495,15 +515,74 @@ export function ProductFormPanel({
                   </button>
                 </div>
 
+                {/* How stock is counted across the sizes. Loose goods share one pool
+                    (1 kg and a 5 kg bag come out of the same sack); sealed packs are
+                    counted and reordered separately, which is the only way to answer
+                    "which size do I need to order?". */}
+                <div className="mt-3 rounded-lg border border-[#e3eaf3] bg-white p-2.5">
+                  <p className="text-[10.5px] font-black text-[#13274d]">Stock counting</p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {([
+                      ["pooled", "One shared stock", "All sizes draw on the same stock. Best for loose goods."],
+                      ["per_pack", "Count each size", "Each size has its own quantity and reorder alert."],
+                    ] as const).map(([mode, title, hint]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => form.setValue("packagingMode", mode, { shouldDirty: true, shouldValidate: true })}
+                        aria-pressed={packagingMode === mode}
+                        className={`rounded-lg border p-2 text-left transition ${
+                          packagingMode === mode
+                            ? "border-[var(--brand)] bg-[#f2f7ff]"
+                            : "border-[#e3eaf3] bg-white hover:bg-[#f7f9fc]"
+                        }`}
+                      >
+                        <span className="block text-[10.5px] font-black text-[#13274d]">{title}</span>
+                        <span className="mt-0.5 block text-[9.5px] font-semibold leading-snug text-[#6d7c98]">{hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {alternateSellingUnits.length > 0 ? (
                   <div className="mt-3 space-y-2">
                     {alternateSellingUnits.map((row) => (
-                      <div key={row.id ?? row.unitCode} className="flex items-center justify-between gap-3 rounded-lg border border-[#e3eaf3] bg-white px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-[11.5px] font-black text-[#13274d]">{row.name}</p>
-                          <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">Rs {Number(row.defaultPrice).toLocaleString("en-IN")} · removes {row.conversionToBase} {baseUnitFor(row.packSizeUnit ?? packSizeUnit)}</p>
+                      <div key={row.id ?? row.unitCode} className="rounded-lg border border-[#e3eaf3] bg-white px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-[11.5px] font-black text-[#13274d]">{row.name}</p>
+                            <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">Rs {Number(row.defaultPrice).toLocaleString("en-IN")} · removes {row.conversionToBase} {baseUnitFor(row.packSizeUnit ?? packSizeUnit)}</p>
+                          </div>
+                          <button type="button" onClick={() => removeAlternatePack(row.unitCode)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-rose-600 hover:bg-rose-50" aria-label={`Remove ${row.name}`}><Trash2 size={13} /></button>
                         </div>
-                        <button type="button" onClick={() => removeAlternatePack(row.unitCode)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-rose-600 hover:bg-rose-50" aria-label={`Remove ${row.name}`}><Trash2 size={13} /></button>
+                        {packagingMode === "per_pack" ? (
+                          <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#eef2f7] pt-2">
+                            <Field label="In stock">
+                              <Input
+                                className="h-8"
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={row.onHandQty ?? ""}
+                                onChange={(event) => updatePackField(row.unitCode, "onHandQty", event.target.value)}
+                                placeholder="0"
+                                aria-label={`${row.name} in stock`}
+                              />
+                            </Field>
+                            <Field label="Alert below">
+                              <Input
+                                className="h-8"
+                                type="number"
+                                min="0"
+                                step="1"
+                                value={row.lowStockThreshold ?? ""}
+                                onChange={(event) => updatePackField(row.unitCode, "lowStockThreshold", event.target.value)}
+                                placeholder="0"
+                                aria-label={`${row.name} alert level`}
+                              />
+                            </Field>
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>

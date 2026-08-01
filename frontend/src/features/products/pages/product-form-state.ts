@@ -16,6 +16,11 @@ const sellingUnitFormSchema = z.object({
   minimumPrice: z.number().nullable().optional(),
   maximumPrice: z.number().nullable().optional(),
   costPrice: z.number().nullable().optional(),
+  // Only meaningful when the product is "per_pack": how many of THIS pack are on
+  // the shelf, and the level at which this size alone needs reordering. Pooled
+  // products leave them null and keep using the single shared stock number.
+  onHandQty: z.number().nullable().optional(),
+  lowStockThreshold: z.number().nullable().optional(),
   isDefault: z.boolean(),
   isActive: z.boolean(),
 });
@@ -28,6 +33,10 @@ export const productFormSchema = z.object({
   packSizeValue: z.coerce.number().positive("Pack size must be greater than zero").default(1),
   packSizeUnit: z.string().trim().min(1).default("piece"),
   sellingUnits: z.array(sellingUnitFormSchema).default([]),
+  // "pooled": every pack draws on one shared stock number — loose rice, where 1 kg
+  // and a 5 kg bag come out of the same sack. "per_pack": each pack is counted and
+  // reordered on its own, so the shopkeeper can see WHICH size has run low.
+  packagingMode: z.enum(["pooled", "per_pack"]).default("pooled"),
   barcode: z.string().trim().optional(),
   hsn: z.string().trim().optional(),
   aliasesText: z.string().optional(),
@@ -140,6 +149,7 @@ export function productToForm(product?: Product): ProductFormData {
     packSizeValue: defaultUnit?.packSizeValue ?? 1,
     packSizeUnit: defaultUnit?.packSizeUnit ?? product?.baseUnit ?? (product?.isLooseItem ? unit : "piece"),
     sellingUnits: product?.sellingUnits ?? [],
+    packagingMode: product?.packagingMode === "per_pack" ? "per_pack" : "pooled",
     barcode: product?.barcode ?? product?.sku ?? "",
     hsn: product?.hsn ?? "",
     aliasesText: (product?.aliases ?? []).join(", "),
@@ -201,6 +211,14 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     minimumPrice: minPrice || null,
     maximumPrice: round2(values.mrp) || null,
     costPrice: avgCost || null,
+    // The default pack is edited through the main stock fields, so its per-pack
+    // count comes from those rather than from a second input the form never shows.
+    ...(values.packagingMode === "per_pack"
+      ? {
+          onHandQty: Number(values.stockQuantity) || 0,
+          lowStockThreshold: Number(values.lowStockAlert) || null,
+        }
+      : {}),
     isDefault: true,
     isActive: true,
   };
@@ -245,6 +263,7 @@ export function formToInput(values: ProductFormData, ownerPin?: string, reason?:
     quantitySlabPricing: [],
     customerSpecificPricing: [],
     sellingUnits,
+    packagingMode: values.packagingMode,
     mrp: round2(values.mrp),
     gstRate: Number(values.gstRate || 0),
     reorderLevel: Number(values.reorderLevel || 0),

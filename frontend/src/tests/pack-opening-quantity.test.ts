@@ -37,12 +37,21 @@ describe("opening quantity on an alternate pack", () => {
 });
 
 describe("the field is wired safely", () => {
-  it("adds to the shared opening stock rather than storing a per-pack count", () => {
+  it("adds to the shared opening stock when the packs share one pool", () => {
     expect(source).toContain('form.setValue("stockQuantity"');
-    // The selling unit written into form state must carry no stock of its own.
+  });
+
+  // Per-packaging stock changed the rule this file originally pinned: a per-pack
+  // count is no longer "a number nothing decrements", because sale, cancellation,
+  // sale return and stock-in all maintain it now. The hazard moved rather than went
+  // away — in per_pack mode the opening quantity is that pack's OWN count, so
+  // folding it into the shared pool as well would count the same goods twice.
+  it("does not also fold the opening quantity into the pool when counting per pack", () => {
     const at = source.indexOf("function addAlternatePack");
-    const body = source.slice(at, at + 2600);
-    expect(body).not.toContain("onHandQty");
+    const body = source.slice(at, at + 3200);
+    expect(body).toContain('packagingMode === "per_pack"');
+    // The pooled branch is skipped entirely by zeroing the quantity it works from.
+    expect(body).toContain('const openingQty = packagingMode === "per_pack" ? 0 : Number(extraPack.openingQty)');
   });
 
   it("only applies a positive quantity", () => {

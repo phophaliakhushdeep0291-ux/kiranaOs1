@@ -75,8 +75,24 @@ function insufficientLocationStock(location, product, available, requested) {
  * `packs` is a Map of sellingUnitId -> { sellingUnit, qty }; pooled products pass
  * nothing and are untouched.
  */
-async function movePackagingStock(client, { shopId, product, packs, direction }) {
-  if (product?.packagingMode !== "per_pack" || !packs?.size) return;
+async function movePackagingStock(client, { shopId, product, packs, direction, operation = "This operation" }) {
+  if (product?.packagingMode !== "per_pack") return;
+
+  // Fail loudly rather than drift. Several stock paths (purchase-order receipt,
+  // damage, stock counts, absolute stock edits, supplier returns) still move base
+  // units without knowing which pack, and silently letting them through would move
+  // the pooled total while the per-size counts stood still — the counts would decay
+  // into confident-looking fiction, which is the whole failure this design exists
+  // to avoid. Refusing is recoverable; silent drift is not.
+  //
+  // Pooled products never reach this line, so nothing that works today can break.
+  if (!packs?.size) {
+    throw new AppError(
+      `${operation} does not yet support per-packaging stock for "${product.name}". Record it as a sale, purchase or return, or switch the product to a single shared stock pool.`,
+      400,
+      "PACKAGING_STOCK_PATH_UNSUPPORTED",
+    );
+  }
   for (const { sellingUnit, qty } of packs.values()) {
     const amount = round2(qty);
     if (!(amount > 0)) continue;
@@ -171,6 +187,18 @@ export async function incrementLocationInventory(client, { shopId, location, pro
 }
 
 export async function setLocationInventory(client, { shopId, location, product, newStockBaseQty }) {
+  // Declaring an absolute total is genuinely ambiguous for a per_pack product:
+  // "there are 6720 g of Maggi" says nothing about how many are boxes and how many
+  // are packets, and any split invented here would be a guess written into the
+  // shopkeeper's reorder data. Counting per size needs its own input, so refuse
+  // until it exists rather than silently desynchronise the two numbers.
+  if (product?.packagingMode === "per_pack") {
+    throw new AppError(
+      `"${product.name}" is counted per packaging, so its stock cannot be set as one total. Count each pack size instead.`,
+      400,
+      "PACKAGING_STOCK_PATH_UNSUPPORTED",
+    );
+  }
   const requested = round2(newStockBaseQty);
   const oldLocationStock = await getLocationQuantity(client, shopId, location, product);
   const difference = round2(requested - oldLocationStock);

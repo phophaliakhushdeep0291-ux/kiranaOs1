@@ -1254,6 +1254,8 @@ export async function restoreCancelledBill(shopId, billId, { reason = "Offline b
           product,
           quantityBase: item.quantityInBaseUnit,
           allowShortfall: false,
+          // Exact mirror of the cancellation that put these packs back.
+          packs: packsFromBillItem(item),
         });
       } catch (error) {
         if (["INSUFFICIENT_LOCATION_STOCK", "PRODUCT_NOT_AVAILABLE"].includes(error?.code)) {

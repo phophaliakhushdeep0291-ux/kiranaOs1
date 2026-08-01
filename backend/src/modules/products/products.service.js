@@ -87,24 +87,17 @@ export async function getProduct(shopId, id, { locationId } = {}) {
   return scoped;
 }
 
-// Per-packaging stock is accepted by the schema (groundwork) but nothing consumes it:
-// `packagingMode` is never branched on, and no sale, purchase or return writes
-// ProductSellingUnit.onHandQty. Storing it would leave the counts frozen at whatever was
-// typed while real stock kept moving through the shared pool — two numbers for the same
-// goods, the authoritative-looking one permanently stale. Refuse it until the sale,
-// purchase and return paths actually maintain it.
-function assertPackagingModeIsSupported(data) {
-  if (data?.packagingMode && data.packagingMode !== "pooled") {
-    throw new AppError(
-      "Per-packaging stock is not available yet. Sell the same stock in different pack sizes using 'Other pack sizes', or create a separate product for a pack you need to count and reorder on its own.",
-      400,
-      "PACKAGING_MODE_NOT_SUPPORTED",
-    );
-  }
-}
+// Per-packaging stock was refused outright until the paths that move stock actually
+// maintained ProductSellingUnit.onHandQty — otherwise the counts would sit frozen
+// while real stock moved through the shared pool, which is worse than not having the
+// feature. Sale, cancellation, sale return and stock-in now all maintain them.
+//
+// The paths that still cannot (purchase-order receipt, damage, stock counts,
+// absolute stock edits, supplier returns) are not silently permitted: they refuse
+// with PACKAGING_STOCK_PATH_UNSUPPORTED at the movement choke point in
+// location-context.service.js, so an unwired path fails loudly instead of drifting.
 
 export async function createProduct(shopId, data, { identity = null } = {}) {
-  assertPackagingModeIsSupported(data);
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const productIdentity = normalizeProductIdentity(shopId, identity);
 
@@ -250,7 +243,6 @@ async function applyStockCorrectionInTransaction(tx, shopId, productId, newStock
 }
 
 export async function updateProduct(shopId, id, data) {
-  assertPackagingModeIsSupported(data);
   if (data.batchTrackingEnabled) await requireFeatureAccess(shopId, "batch_expiry");
   const existing = await getProduct(shopId, id); // ensures it exists and belongs to shop
   if (data.name) await assertNoActiveProductNameConflict(shopId, data.name, id);
