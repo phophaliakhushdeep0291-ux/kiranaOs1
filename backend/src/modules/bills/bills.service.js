@@ -946,10 +946,30 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           lineTotal: -lineTotal,
           lineCost: -lineCost,
           lineProfit: -lineProfit,
+          // Carry the packaging the sale recorded onto the return line. Without it a
+          // return bill cannot say which size came back, and any later reversal or
+          // per-size report would have only base units to work from.
+          sellingUnitId: originalItem?.sellingUnitId ?? null,
+          sellingUnitCode: originalItem?.sellingUnitCode ?? null,
+          sellingUnitLabel: originalItem?.sellingUnitLabel ?? null,
           ...moneyShadows({ ratePerRateUnit: authoritativeRate, costPerRateUnit, lineDiscount: -lineDiscount, lineTotal: -lineTotal, lineCost: -lineCost, lineProfit: -lineProfit }),
         });
 
-        if (product) restockPlan.push({ product, qtyInBase: round2(qtyInBase), lineCost, damaged });
+        if (product) {
+          restockPlan.push({
+            product,
+            qtyInBase: round2(qtyInBase),
+            lineCost,
+            damaged,
+            // item.quantity is in the same units as the original line, so for a
+            // packaged sale it is already a pack count — including partial returns
+            // (2 of the 3 boxes sold). Taking it from the request rather than
+            // re-deriving from qtyInBase avoids rounding a pack back into a
+            // fraction of itself.
+            sellingUnitId: originalItem?.sellingUnitId ?? null,
+            sellingUnitQty: originalItem?.sellingUnitId ? Math.abs(Number(item.quantity)) : 0,
+          });
+        }
       }
 
       if (original) {
@@ -1056,7 +1076,7 @@ export async function createSaleReturn(shopId, body, actor = {}) {
       await restoreLotsForSaleReturn(tx, { originalBillId: original?.id ?? null, returnBill });
 
       // Restock resellable items; write off damaged ones (no restock, records the cost loss).
-      for (const { product, qtyInBase, lineCost, damaged } of restockPlan) {
+      for (const { product, qtyInBase, lineCost, damaged, sellingUnitId, sellingUnitQty } of restockPlan) {
         if (damaged) {
           await tx.stockLedger.create({
             data: {
@@ -1085,7 +1105,17 @@ export async function createSaleReturn(shopId, body, actor = {}) {
           });
           continue;
         }
-        const stockResult = await incrementLocationInventory(tx, { shopId, location, product, quantityBase: qtyInBase });
+        // Damaged returns took the `continue` above and never reach here, so a
+        // written-off pack is correctly not put back on the shelf count.
+        const stockResult = await incrementLocationInventory(tx, {
+          shopId,
+          location,
+          product,
+          quantityBase: qtyInBase,
+          packs: sellingUnitId && sellingUnitQty > 0
+            ? new Map([[sellingUnitId, { sellingUnit: { id: sellingUnitId }, qty: round2(sellingUnitQty) }]])
+            : null,
+        });
         await tx.stockLedger.create({
           data: {
             shopId,
@@ -1096,6 +1126,8 @@ export async function createSaleReturn(shopId, body, actor = {}) {
             changeBaseQty: qtyInBase,
             oldStockBaseQty: stockResult.oldStock,
             newStockBaseQty: stockResult.newStock,
+            sellingUnitId: sellingUnitId ?? null,
+            sellingUnitQty: sellingUnitId && sellingUnitQty > 0 ? round2(sellingUnitQty) : null,
             billId: returnBill.id,
             clientMovementId: buildChildIdempotencyKey(billIdentity.clientBillId, `return:${product.id}`),
             idempotencyKey: buildChildIdempotencyKey(billIdentity.idempotencyKey, `return:${product.id}`),
