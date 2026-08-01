@@ -8,6 +8,7 @@ import { patchProductLocalFirst } from "@/features/products/local-actions";
 import { computeBulkPatch, intentHasEffect, type BulkEditIntent, type BulkPriceMode, type BulkStockMode } from "@/features/products/bulk-edit";
 import { useToast } from "@/hooks/use-toast";
 import type { Product } from "@/types/api";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 interface BulkEditDialogProps {
   open: boolean;
@@ -20,6 +21,7 @@ interface BulkEditDialogProps {
 const EMPTY: BulkEditIntent = { priceMode: "none", priceValue: 0, stockMode: "none", stockValue: 0 };
 
 export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin, onDone }: BulkEditDialogProps) {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const [intent, setIntent] = useState<BulkEditIntent>(EMPTY);
   const [ownerPin, setOwnerPin] = useState("");
@@ -43,7 +45,7 @@ export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin,
   async function apply() {
     if (!hasEffect) return;
     if (requiresOwnerPin && !/^\d{4}$/.test(ownerPin)) {
-      toast({ title: "Owner PIN required", description: "Enter the 4-digit owner PIN to change prices in bulk.", variant: "destructive" });
+      toast({ title: t("products.bulk.ownerPinRequired"), description: t("products.bulk.ownerPinHint"), variant: "destructive" });
       return;
     }
     setBusy(true);
@@ -54,7 +56,7 @@ export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin,
         const { patch, noop } = computeBulkPatch(product, intent);
         if (noop) continue;
         try {
-          await patchProductLocalFirst(product.id, patch, ownerPin || undefined, "Bulk edit");
+          await patchProductLocalFirst(product.id, patch, ownerPin || undefined, t("products.bulk.title"));
           changed += 1;
         } catch {
           failed += 1;
@@ -62,7 +64,7 @@ export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin,
       }
       toast({
         title: failed === 0 ? `Updated ${changed} product${changed === 1 ? "" : "s"}` : `Updated ${changed}, ${failed} failed`,
-        description: failed === 0 ? "Changes saved locally and will sync." : "Some products could not be updated — check their minimum price or required fields.",
+        description: failed === 0 ? t("products.bulk.savedLocally") : "Some products could not be updated — check their minimum price or required fields.",
         variant: failed === 0 ? "default" : "destructive",
       });
       onOpenChange(false);
@@ -159,7 +161,7 @@ export function BulkEditDialog({ open, onOpenChange, products, requiresOwnerPin,
         <div className="mt-2 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
           <Button data-testid="bulk-apply" onClick={() => void apply()} disabled={busy || !hasEffect || preview.changing === 0}>
-            {busy ? "Applying…" : `Apply to ${preview.changing || products.length}`}
+            {busy ? t("products.bulk.applying") : `Apply to ${preview.changing || products.length}`}
           </Button>
         </div>
       </DialogContent>

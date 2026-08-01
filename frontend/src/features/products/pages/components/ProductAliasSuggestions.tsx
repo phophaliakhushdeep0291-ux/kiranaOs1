@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { DuplicateProductWarning } from "@/features/products/product-reliability";
 import type { ProductFormData } from "../product-form-state";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 const FALLBACK_ALIAS_CHIPS = ["sugar", "chini", "cheeni", "shakar", "sakar", "चीनी", "शक्कर", "atta", "aata", "आटा", "tel", "oil", "तेल"];
 
@@ -29,6 +30,7 @@ export function ProductAliasSuggestions({
   onAppendAllLocalAliases,
   onAskGroqForAliases,
 }: ProductAliasSuggestionsProps) {
+  const { t } = useAppLanguage();
   const watchedName = form.watch("name");
 
   return (
@@ -43,7 +45,7 @@ export function ProductAliasSuggestions({
             <Lightbulb size={13} className="mr-1" />Add local aliases
           </Button>
           <Button type="button" size="sm" disabled={!watchedName.trim() || aiAliasLoading} onClick={onAskGroqForAliases}>
-            <Lightbulb size={13} className="mr-1" />{aiAliasLoading ? "Asking AI..." : "Ask AI"}
+            <Lightbulb size={13} className="mr-1" />{aiAliasLoading ? t("products.alias.asking") : t("products.alias.ask")}
           </Button>
         </div>
       </div>

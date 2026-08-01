@@ -35,6 +35,7 @@ import {
   Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppLanguage, type TranslationKey } from "@/features/settings/i18n";
 
 interface Props {
   open: boolean;
@@ -54,12 +55,14 @@ const PRIORITY_MAPPING_FIELDS: ProductImportField[] = [
   "isLooseItem",
 ];
 
-const SOURCE_LABELS: Record<ProductImportSource, string> = {
-  kiranaos: "Artha template",
-  vyapar: "Vyapar-style export",
-  mybillbook: "myBillBook-style export",
-  tally: "Tally-compatible export",
-  generic: "Generic CSV",
+// Translation keys, not text: this map is module scope and cannot call the
+// `t()` hook. The label is resolved at the call site, inside the component.
+const SOURCE_LABEL_KEYS: Record<ProductImportSource, TranslationKey> = {
+  kiranaos: "products.import.arthaTemplate",
+  vyapar: "products.import.vyaparExport",
+  mybillbook: "products.import.mybillbookExport",
+  tally: "products.import.tallyExport",
+  generic: "products.import.genericCsv",
 };
 
 function actionStyle(action: string): string {
@@ -79,6 +82,7 @@ function summaryCard(label: string, value: number, tone: string) {
 }
 
 export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { isOnline } = useOfflineStatus();
   const [fileName, setFileName] = useState("");
@@ -115,8 +119,8 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
     if (!file) return;
     if (file.size > 25 * 1024 * 1024) {
       toast({
-        title: "File is too large",
-        description: "Use a CSV smaller than 25 MB. This is enough for well over 10,000 normal product rows.",
+        title: t("products.import.fileTooLarge"),
+        description: t("products.import.fileTooLargeHint"),
         variant: "destructive",
       });
       return;
@@ -139,8 +143,8 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
       setProgress(0);
     } catch (error) {
       toast({
-        title: "Could not read this CSV",
-        description: error instanceof Error ? error.message : "Open the file in Excel and save it as CSV before uploading.",
+        title: t("products.import.readFailed"),
+        description: error instanceof Error ? error.message : t("products.import.saveAsCsv"),
         variant: "destructive",
       });
     }
@@ -189,15 +193,15 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
       setPreviousSession(session);
       setExistingProducts(await offlineDB.getAll<Product>("products"));
       toast({
-        title: "Product migration completed",
-        description: `${session.createdRows} created, ${session.updatedRows} updated. ${isOnline ? "Cloud backup has been queued." : "Cloud backup will continue when this device is online."}`,
+        title: t("products.import.completed"),
+        description: t("products.import.importedCounts", { created: session.createdRows, updated: session.updatedRows, backup: isOnline ? t("products.import.backupQueued") : t("products.import.backupWhenOnline") }),
       });
       onImported?.();
     } catch (error) {
       setProgress(0);
       toast({
-        title: "Nothing was partially imported",
-        description: error instanceof Error ? error.message : "The migration was rolled back. Review the file and try again.",
+        title: t("products.import.nothingPartial"),
+        description: error instanceof Error ? error.message : t("products.import.rolledBack"),
         variant: "destructive",
       });
     } finally {
@@ -258,7 +262,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
               <Upload size={19} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-bold text-[#17223b]">{fileName || "Choose a product CSV"}</span>
+              <span className="block truncate font-bold text-[#17223b]">{fileName || t("products.import.chooseFile")}</span>
               <span className="mt-0.5 block text-[11px] text-[#71809a]">CSV only, up to 25 MB. No data changes until you confirm the dry-run.</span>
             </span>
             <span className="rounded-[6px] border border-[#d8e2ef] px-3 py-1.5 text-[11px] font-bold text-[#40506d]">Browse</span>
@@ -270,7 +274,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-[13px] font-black text-[#17223b]">Column mapping</h3>
-                  <p className="text-[11px] text-[#71809a]">Detected {SOURCE_LABELS[result.source]}. Confirm the financial and packet fields.</p>
+                  <p className="text-[11px] text-[#71809a]">{t("products.import.detectedSource", { source: t(SOURCE_LABEL_KEYS[result.source]) })}</p>
                 </div>
                 <span className="rounded-full bg-[var(--brand-soft)] px-2.5 py-1 text-[10px] font-bold text-[var(--brand)]">{result.rows.length} data rows</span>
               </div>
@@ -324,9 +328,9 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
 
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {summaryCard("New", plan.createCount, "text-emerald-600")}
-                  {summaryCard("Update", plan.updateCount, "text-blue-600")}
+                  {summaryCard(t("products.import.update"), plan.updateCount, "text-blue-600")}
                   {summaryCard("Skip", plan.skipCount, "text-slate-600")}
-                  {summaryCard("Issues", plan.errorCount, "text-rose-600")}
+                  {summaryCard(t("products.import.issues"), plan.errorCount, "text-rose-600")}
                 </div>
 
                 {strategy === "update-existing" && plan.updateCount > 0 && (
@@ -340,11 +344,11 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
                     <thead className="bg-[#f5f7fb] text-[#596982]">
                       <tr>
                         <th className="px-3 py-2 text-left font-bold">Row</th>
-                        <th className="px-3 py-2 text-left font-bold">Product</th>
+                        <th className="px-3 py-2 text-left font-bold">{t("products.col.product")}</th>
                         <th className="px-3 py-2 text-left font-bold">Barcode</th>
                         <th className="px-3 py-2 text-left font-bold">Pack / unit</th>
                         <th className="px-3 py-2 text-right font-bold">Selling</th>
-                        <th className="px-3 py-2 text-left font-bold">Action</th>
+                        <th className="px-3 py-2 text-left font-bold">{t("products.col.action")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -360,7 +364,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
                               <span className="block truncate">{row.name}</span>
                               {row.errors[0] && <span className="mt-0.5 block truncate text-[10px] font-medium text-rose-600" title={row.errors.join("; ")}>{row.errors[0]}</span>}
                             </td>
-                            <td className="px-3 py-2">{row.values.skuBarcode || "Not set"}</td>
+                            <td className="px-3 py-2">{row.values.skuBarcode || t("products.import.notSet")}</td>
                             <td className="px-3 py-2">{pack}</td>
                             <td className="px-3 py-2 text-right font-bold tabular-nums">{row.values.sellingPrice || "-"}</td>
                             <td className="px-3 py-2"><span className={cn("rounded-full px-2 py-1 text-[9px] font-black uppercase", actionStyle(row.action))}>{row.action}</span></td>
@@ -413,7 +417,7 @@ export function ImportProductsDialog({ open, onOpenChange, onImported }: Props) 
               <>
                 <Button variant="outline" onClick={() => onOpenChange(false)} disabled={importing}>Cancel</Button>
                 <Button onClick={() => void confirmImport()} disabled={importing || !plan || plan.importCount === 0 || Boolean(result?.headerError)}>
-                  {importing ? "Saving migration..." : `Import ${plan?.importCount ?? 0} accepted row${(plan?.importCount ?? 0) === 1 ? "" : "s"}`}
+                  {importing ? t("products.import.saving") : `Import ${plan?.importCount ?? 0} accepted row${(plan?.importCount ?? 0) === 1 ? "" : "s"}`}
                 </Button>
               </>
             )}

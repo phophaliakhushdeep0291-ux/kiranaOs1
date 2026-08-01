@@ -16,6 +16,7 @@ import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAlia
 import { fetchGroqAliasSuggestions } from "../product-aliases";
 import { baseUnitFor, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
 import type { ProductFormData } from "../product-form-state";
+import { useAppLanguage } from "@/features/settings/i18n";
 import { generateInternalEan13 } from "@/lib/barcode/ean13";
 
 const GST_RATES = [0, 5, 12, 18, 28];
@@ -81,6 +82,7 @@ export function ProductFormPanel({
   onOpenChange,
   onSubmit,
 }: ProductFormPanelProps) {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { businessType, def } = useBusinessType();
   const workflow = getShopWorkflow(businessType);
@@ -133,8 +135,8 @@ export function ProductFormPanel({
     const price = Number(extraPack.price);
     if (!(size > 0) || !(price > 0)) {
       toast({
-        title: "Pack size and price required",
-        description: "Enter what the pack contains and its selling price.",
+        title: t("products.form.packSizeRequired"),
+        description: t("products.form.packDetailsHint"),
         variant: "destructive",
       });
       return;
@@ -142,7 +144,7 @@ export function ProductFormPanel({
     const code = sellingUnitCode(extraPack.unitType, size, extraPack.packSizeUnit);
     const defaultCode = sellingUnitCode(selectedUnit, packSizeValue, packSizeUnit);
     if (code === defaultCode || sellingUnits.some((row) => row.unitCode === code)) {
-      toast({ title: "Pack already added", description: "Choose a different unit or pack size.", variant: "destructive" });
+      toast({ title: t("products.form.packAlreadyAdded"), description: t("products.form.chooseDifferentPack"), variant: "destructive" });
       return;
     }
     form.setValue("sellingUnits", [
@@ -230,7 +232,7 @@ export function ProductFormPanel({
   async function askAi() {
     const name = form.getValues("name").trim();
     if (!name) {
-      toast({ title: "Product name required", description: "Type the product name first, then ask AI.", variant: "destructive" });
+      toast({ title: t("products.form.nameRequired"), description: t("products.alias.nameFirst"), variant: "destructive" });
       return;
     }
     setAiLoading(true);
@@ -238,7 +240,7 @@ export function ProductFormPanel({
       const s = await fetchGroqAliasSuggestions(name, form.getValues("category"), form.getValues("unit"));
       if (s.length === 0) {
         setAiSuggestions(getLocalProductAliasSuggestions(name, form.getValues("category")));
-        toast({ title: "No AI names returned", description: "Showing local suggestions instead." });
+        toast({ title: t("products.alias.noneReturned"), description: "Showing local suggestions instead." });
       } else {
         setAiSuggestions(s);
         toast({ title: "AI names ready", description: `${s.slice(0, 6).join(", ")}${s.length > 6 ? "…" : ""}` });
@@ -260,7 +262,7 @@ export function ProductFormPanel({
   async function handleFile(file: File | undefined) {
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      setImgError("Image must be under 2MB.");
+      setImgError(t("products.form.imageTooLarge"));
       return;
     }
     try {
@@ -268,12 +270,12 @@ export function ProductFormPanel({
       form.setValue("imageUrl", dataUrl, { shouldDirty: true });
       setImgError(null);
     } catch {
-      setImgError("Could not read image. Try another file.");
+      setImgError(t("products.form.imageReadFailed"));
     }
   }
 
   const CategoryField = (
-    <Field label="Category" required>
+    <Field label={t("products.col.category")} required>
       <Select value={form.watch("category")} onValueChange={(v) => form.setValue("category", v, { shouldDirty: true })}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
@@ -283,7 +285,7 @@ export function ProductFormPanel({
     </Field>
   );
   const UnitField = (
-    <Field label={isLoose ? "Rate / Stock Unit" : "Sold As"} required>
+    <Field label={isLoose ? t("products.form.rateStockUnit") : t("products.form.soldAsTitle")} required>
       <Select value={form.watch("unit")} onValueChange={(v) => form.setValue("unit", v, { shouldDirty: true })}>
         <SelectTrigger className="h-10"><SelectValue placeholder="Select" /></SelectTrigger>
         <SelectContent>
@@ -301,7 +303,7 @@ export function ProductFormPanel({
       style={{ width }}
       className={`app-slide-panel fixed inset-y-0 right-0 top-0 z-[90] flex h-[100dvh] w-full max-w-[100vw] flex-col border-l-0 border-[#e6ecf4] bg-white shadow-none transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:top-[var(--app-desktop-topbar-height)] lg:z-[80] lg:h-[calc(100vh-var(--app-desktop-topbar-height))] lg:border-l lg:shadow-[-12px_0_40px_rgba(15,23,42,0.10)] ${open ? "translate-x-0" : "translate-x-full"}`}
       role="dialog"
-      aria-label={editing ? "Edit product" : "Add new product"}
+      aria-label={editing ? t("products.action.edit") : t("products.action.addNewProduct")}
       aria-hidden={!open}
     >
       <PanelResizeHandle onResizeStart={onResizeStart} />
@@ -309,10 +311,10 @@ export function ProductFormPanel({
       <div className="flex shrink-0 items-start justify-between border-b border-[#eef1f6] px-5 py-4">
         <div>
           <h2 className="font-display text-[17px] font-black tracking-tight text-[var(--brand-ink)]">
-            {editing ? "Edit Product" : "Add New Product"}
+            {editing ? t("products.form.editTitle") : t("products.form.addTitle")}
           </h2>
           <p className="mt-0.5 text-[12px] text-[#6d7c98]">
-            {editing ? "Update the details of this product" : "Fill in the details to add a new product"}
+            {editing ? t("products.form.editSubtitle") : t("products.form.addSubtitle")}
           </p>
         </div>
         <button onClick={() => onOpenChange(false)} className="grid h-8 w-8 place-items-center rounded-lg text-[#536383] transition-colors hover:bg-[#f1f4f8]" aria-label="Close">
@@ -329,12 +331,12 @@ export function ProductFormPanel({
 
           {/* Product type: Packed / Loose */}
           <div className="mb-5 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc] p-1">
-            <TypeButton active={!isLoose} icon={<Package size={16} />} label="Packed Item" onClick={() => form.setValue("isLooseItem", false, { shouldDirty: true })} />
-            <TypeButton active={isLoose} icon={<Scale size={16} />} label="Loose Item" onClick={() => form.setValue("isLooseItem", true, { shouldDirty: true })} />
+            <TypeButton active={!isLoose} icon={<Package size={16} />} label={t("products.form.packedItem")} onClick={() => form.setValue("isLooseItem", false, { shouldDirty: true })} />
+            <TypeButton active={isLoose} icon={<Scale size={16} />} label={t("products.form.looseItem")} onClick={() => form.setValue("isLooseItem", true, { shouldDirty: true })} />
           </div>
 
           {/* Basic Information */}
-          <Section title="Basic Information">
+          <Section title={t("products.form.basicInfo")}>
             <Field label={productEntry.nameLabel} required error={err.name?.message}>
               <Input className="h-10" placeholder={isLoose ? productEntry.looseNamePlaceholder : productEntry.namePlaceholder} {...form.register("name")} />
             </Field>
@@ -376,12 +378,12 @@ export function ProductFormPanel({
                 <div className="mb-3 flex items-start gap-2.5">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#e7f0ff] text-[var(--brand)]"><Package size={16} /></span>
                   <div>
-                    <p className="text-[12px] font-black text-[#13274d]">Pack size used for billing and stock</p>
+                    <p className="text-[12px] font-black text-[#13274d]">{t("products.form.packSizeHint")}</p>
                     <p className="mt-0.5 text-[10.5px] font-semibold leading-relaxed text-[#6d7c98]">Example: a salt packet sold for Rs 28 contains 1 kg. Billing counts packets; inventory counts grams.</p>
                   </div>
                 </div>
 
-                <p className="mb-1.5 text-[11px] font-bold text-[#45577a]">Quick selling unit</p>
+                <p className="mb-1.5 text-[11px] font-bold text-[#45577a]">{t("products.form.quickSellingUnit")}</p>
                 <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
                   {PACK_SELLING_UNITS.map((unit) => (
                     <button
@@ -404,7 +406,7 @@ export function ProductFormPanel({
                       inputMode="decimal"
                       min="0.001"
                       step="0.001"
-                      placeholder="e.g. 500"
+                      placeholder={t("products.form.exactPackPlaceholder")}
                       {...form.register("packSizeValue")}
                     />
                     <Select value={packSizeUnit} onValueChange={(v) => form.setValue("packSizeUnit", v, { shouldDirty: true, shouldValidate: true })}>
@@ -420,20 +422,20 @@ export function ProductFormPanel({
                     <p className="truncate text-[11.5px] font-black text-[#12346b]">Billing unit: {currentSellingUnitName}</p>
                     <p className="mt-0.5 text-[10px] font-semibold text-[#6d7c98]">1 {selectedUnit} removes {packBaseQuantity || 0} {packBaseUnit} from stock</p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-[#e9fff0] px-2 py-1 text-[9.5px] font-black uppercase text-[#159447]">Exact pack</span>
+                  <span className="shrink-0 rounded-full bg-[#e9fff0] px-2 py-1 text-[9.5px] font-black uppercase text-[#159447]">{t("products.form.exactPack")}</span>
                 </div>
               </div>
             ) : null}
 
-            <Field label="HSN (Optional)">
-              <Input className="h-10" placeholder="e.g. 25010010" {...form.register("hsn")} />
+            <Field label={t("products.form.hsn")}>
+              <Input className="h-10" placeholder={t("products.form.hsnPlaceholder")} {...form.register("hsn")} />
             </Field>
           </Section>
 
           {/* Aliases */}
-          <Section title="Aliases & Local Names">
-            <Field label="Alternate names (comma separated)">
-              <Input className="h-10" placeholder="namak, salt, साल्ट" {...form.register("aliasesText")} />
+          <Section title={t("products.form.aliasesTitle")}>
+            <Field label={t("products.form.aliasesLabel")}>
+              <Input className="h-10" placeholder={t("products.form.aliasesPlaceholder")} {...form.register("aliasesText")} />
             </Field>
             {currentAliases.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
@@ -446,7 +448,7 @@ export function ProductFormPanel({
               </div>
             )}
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-[#6d7c98]">{suggestions.length > 0 ? "Suggestions — tap to add" : "Generate name variations"}</p>
+              <p className="text-[11px] font-semibold text-[#6d7c98]">{suggestions.length > 0 ? t("products.alias.suggestions") : t("products.alias.generate")}</p>
               <button
                 type="button"
                 onClick={() => void askAi()}
@@ -469,20 +471,20 @@ export function ProductFormPanel({
           </Section>
 
           {/* Pricing */}
-          <Section title="Pricing">
+          <Section title={t("products.form.pricing")}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="MRP (₹)" required>
+              <Field label={t("products.form.mrp")} required>
                 <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("mrp")} />
               </Field>
-              <Field label="Cost Price (₹)" required>
+              <Field label={t("products.form.costPrice")} required>
                 <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("costPrice")} />
               </Field>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Selling Price (₹)" required error={err.sellingPrice?.message}>
+              <Field label={t("products.form.sellingPrice")} required error={err.sellingPrice?.message}>
                 <Input className="h-10" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...form.register("sellingPrice")} />
               </Field>
-              <Field label="GST Rate">
+              <Field label={t("products.form.gstRate")}>
                 <Select value={String(form.watch("gstRate") ?? 0)} onValueChange={(v) => form.setValue("gstRate", Number(v), { shouldDirty: true })}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -492,9 +494,9 @@ export function ProductFormPanel({
               </Field>
             </div>
             <div className="flex items-center justify-between rounded-[10px] border border-[#e6ecf4] bg-[#f8fafd] px-3 py-2 text-[12px]">
-              <span className="font-semibold text-[#6d7c98]">Avg. cost</span>
+              <span className="font-semibold text-[#6d7c98]">{t("products.form.avgCost")}</span>
               <span className="font-black text-[#13274d]">₹{cost.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              <span className="font-semibold text-[#6d7c98]">Margin</span>
+              <span className="font-semibold text-[#6d7c98]">{t("products.form.margin")}</span>
               <span className={`font-black ${margin < 0 ? "text-rose-600" : "text-emerald-600"}`}>{margin}%</span>
             </div>
 
@@ -502,8 +504,8 @@ export function ProductFormPanel({
               <div className="rounded-[12px] border border-[#e3eaf3] bg-[#fbfcfe] p-3" data-testid="alternate-pack-sizes">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[12px] font-black text-[#13274d]">Other pack sizes</p>
-                    <p className="mt-0.5 text-[10.5px] font-semibold text-[#6d7c98]">Optional: sell the same stock as 500 g, 1 kg, carton, etc.</p>
+                    <p className="text-[12px] font-black text-[#13274d]">{t("products.form.otherPackSizes")}</p>
+                    <p className="mt-0.5 text-[10.5px] font-semibold text-[#6d7c98]">{t("products.form.otherPackSizesHint")}</p>
                   </div>
                   <button
                     type="button"
@@ -511,7 +513,7 @@ export function ProductFormPanel({
                     className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-[var(--brand-border)] bg-white px-2.5 text-[10.5px] font-black text-[var(--brand)] hover:bg-[var(--brand-softer)]"
                   >
                     {extraPackOpen ? <X size={12} /> : <Plus size={12} />}
-                    {extraPackOpen ? "Close" : "Add size"}
+                    {extraPackOpen ? "Close" : t("products.form.addSize")}
                   </button>
                 </div>
 
@@ -520,11 +522,11 @@ export function ProductFormPanel({
                     counted and reordered separately, which is the only way to answer
                     "which size do I need to order?". */}
                 <div className="mt-3 rounded-lg border border-[#e3eaf3] bg-white p-2.5">
-                  <p className="text-[10.5px] font-black text-[#13274d]">Stock counting</p>
+                  <p className="text-[10.5px] font-black text-[#13274d]">{t("products.form.stockCounting")}</p>
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     {([
-                      ["pooled", "One shared stock", "All sizes draw on the same stock. Best for loose goods."],
-                      ["per_pack", "Count each size", "Each size has its own quantity and reorder alert."],
+                      ["pooled", t("products.form.oneSharedStock"), t("products.form.oneSharedStockHint")],
+                      ["per_pack", t("products.form.countEachSize"), t("products.form.countEachSizeHint")],
                     ] as const).map(([mode, title, hint]) => (
                       <button
                         key={mode}
@@ -557,7 +559,7 @@ export function ProductFormPanel({
                         </div>
                         {packagingMode === "per_pack" ? (
                           <div className="mt-2 grid grid-cols-2 gap-2 border-t border-[#eef2f7] pt-2">
-                            <Field label="In stock">
+                            <Field label={t("products.form.inStock")}>
                               <Input
                                 className="h-8"
                                 type="number"
@@ -569,7 +571,7 @@ export function ProductFormPanel({
                                 aria-label={`${row.name} in stock`}
                               />
                             </Field>
-                            <Field label="Alert below">
+                            <Field label={t("products.form.alertBelow")}>
                               <Input
                                 className="h-8"
                                 type="number"
@@ -591,13 +593,13 @@ export function ProductFormPanel({
                 {extraPackOpen ? (
                   <div className="mt-3 space-y-2.5 rounded-[10px] border border-[var(--brand-border)] bg-white p-3">
                     <div className="grid grid-cols-2 gap-2">
-                      <Field label="Sold as" required>
+                      <Field label={t("products.form.soldAs")} required>
                         <Select value={extraPack.unitType} onValueChange={(value) => setExtraPack((current) => ({ ...current, unitType: value }))}>
                           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                           <SelectContent>{PACK_SELLING_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
                         </Select>
                       </Field>
-                      <Field label="Selling price (Rs)" required>
+                      <Field label={t("products.form.sellingPriceRs")} required>
                         <Input className="h-9" type="number" min="0.01" step="0.01" value={extraPack.price} onChange={(event) => setExtraPack((current) => ({ ...current, price: event.target.value }))} placeholder="0.00" />
                       </Field>
                     </div>
@@ -605,7 +607,7 @@ export function ProductFormPanel({
                       <Field label={`One ${extraPack.unitType} contains`} required>
                         <Input className="h-9" type="number" min="0.001" step="0.001" value={extraPack.packSizeValue} onChange={(event) => setExtraPack((current) => ({ ...current, packSizeValue: event.target.value }))} placeholder="500" />
                       </Field>
-                      <Field label="Measure" required>
+                      <Field label={t("products.form.measure")} required>
                         <Select value={extraPack.packSizeUnit} onValueChange={(value) => setExtraPack((current) => ({ ...current, packSizeUnit: value }))}>
                           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                           <SelectContent>{PACK_MEASURE_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
@@ -613,7 +615,7 @@ export function ProductFormPanel({
                       </Field>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <Field label="Opening quantity (Optional)">
+                      <Field label={t("products.form.openingQuantity")}>
                         <Input
                           className="h-9"
                           type="number"
@@ -625,15 +627,15 @@ export function ProductFormPanel({
                           placeholder="0"
                         />
                       </Field>
-                      <Field label="Pack barcode (Optional)">
-                        <Input className="h-9" value={extraPack.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder="Barcode for this size" />
+                      <Field label={t("products.form.packBarcode")}>
+                        <Input className="h-9" value={extraPack.barcode} onChange={(event) => setExtraPack((current) => ({ ...current, barcode: event.target.value }))} placeholder={t("products.form.packBarcodePlaceholder")} />
                       </Field>
                     </div>
                     <p className="text-[10px] font-semibold leading-4 text-[#6d7c98]">
                       How many of this pack you have now. It is added to the product's opening
                       stock — every pack size sells from that one stock.
                     </p>
-                    <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[var(--brand)] text-[11.5px] font-black text-white hover:bg-[var(--brand-strong)]">Add pack to product</button>
+                    <button type="button" onClick={addAlternatePack} className="h-9 w-full rounded-lg bg-[var(--brand)] text-[11.5px] font-black text-white hover:bg-[var(--brand-strong)]">{t("products.form.addPack")}</button>
                   </div>
                 ) : null}
               </div>
@@ -641,7 +643,7 @@ export function ProductFormPanel({
           </Section>
 
           {/* Stock & Inventory */}
-          <Section title="Stock & Inventory">
+          <Section title={t("products.form.stockInventory")}>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Field label={`Opening Stock (${currentSellingUnitName || selectedUnit})`} required>
                 <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("stockQuantity")} />
@@ -649,14 +651,14 @@ export function ProductFormPanel({
               <Field label={`Low Stock Alert (${selectedUnit})`}>
                 <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("lowStockAlert")} />
               </Field>
-              <Field label="Reorder Level">
+              <Field label={t("products.form.reorderLevel")}>
                 <Input className="h-10" type="number" inputMode="decimal" placeholder="0" {...form.register("reorderLevel")} />
               </Field>
             </div>
             <div className={`flex items-start justify-between gap-4 rounded-[12px] border p-3.5 ${productEntry.recommendBatchTracking ? "border-teal-200 bg-teal-50" : "border-[#e3eaf3] bg-[#f8fafc]"}`} data-testid="shop-batch-guidance">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[12px] font-black text-[#13274d]">Batch and expiry tracking</p>
+                  <p className="text-[12px] font-black text-[#13274d]">{t("products.form.batchExpiryTitle")}</p>
                   {productEntry.recommendBatchTracking && <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-teal-700">Recommended</span>}
                 </div>
                 <p className="mt-1 text-[10.5px] font-semibold leading-4 text-[#65748f]">{productEntry.batchRecommendation}</p>
@@ -666,20 +668,20 @@ export function ProductFormPanel({
                 checked={batchTracking}
                 disabled={batchFeature.loading || !batchFeature.allowed}
                 onCheckedChange={(checked) => form.setValue("batchTrackingEnabled", checked, { shouldDirty: true })}
-                aria-label="Enable batch and expiry tracking"
+                aria-label={t("products.form.batchExpiry")}
               />
             </div>
           </Section>
 
           {/* Product Image */}
-          <Section title="Product Image">
+          <Section title={t("products.form.productImage")}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="grid h-[84px] w-[84px] shrink-0 place-items-center overflow-hidden rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc]">
-                {imageUrl ? <img src={imageUrl} alt="Product" className="h-full w-full object-contain" /> : <Upload size={20} className="text-[#9aa6bb]" />}
+                {imageUrl ? <img src={imageUrl} alt={t("products.col.product")} className="h-full w-full object-contain" /> : <Upload size={20} className="text-[#9aa6bb]" />}
               </div>
               <button type="button" onClick={() => fileRef.current?.click()} className="flex h-[84px] flex-1 flex-col items-center justify-center gap-1 rounded-[12px] border border-dashed border-[#cdd9ea] bg-[#fafbfe] text-center transition-colors hover:border-[var(--brand)]/50">
                 <Upload size={18} className="text-[var(--brand)]" />
-                <span className="text-[12px] font-bold text-[var(--brand)]">{imageUrl ? "Replace Image" : "Upload Image"}</span>
+                <span className="text-[12px] font-bold text-[var(--brand)]">{imageUrl ? t("products.form.replaceImage") : t("products.form.uploadImage")}</span>
                 <span className="text-[10px] text-[#9aa6bb]">PNG, JPG up to 2MB</span>
               </button>
               <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => void handleFile(e.target.files?.[0])} />
@@ -692,7 +694,7 @@ export function ProductFormPanel({
           </Section>
 
           {/* Additional Information */}
-          <Section title="Additional Information">
+          <Section title={t("products.form.additionalInfo")}>
             <Field label={productEntry.notesLabel}>
               <textarea
                 {...form.register("description")}
@@ -710,7 +712,7 @@ export function ProductFormPanel({
         <div className="sticky bottom-0 z-10 shrink-0 border-t border-[#eef1f6] bg-white px-5 pb-[calc(0.875rem+env(safe-area-inset-bottom))] pt-3.5 shadow-[0_-12px_30px_rgba(15,35,80,0.06)]">
           {!editing && (
             <label className="mb-3 flex cursor-pointer items-center gap-2 text-[12px] font-semibold text-[#45577a]">
-              <input type="checkbox" aria-label="Keep panel open to add another product" checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[var(--brand)]" />
+              <input type="checkbox" aria-label={t("products.form.keepOpen")} checked={stayOpen} onChange={(e) => onStayOpenChange(e.target.checked)} className="h-4 w-4 rounded border-[#cdd9ea] accent-[var(--brand)]" />
               Keep panel open to add another product
             </label>
           )}
@@ -722,7 +724,7 @@ export function ProductFormPanel({
               style={{ background: "linear-gradient(180deg, var(--brand) 0%, var(--brand-strong) 100%)" }}
               className="h-11 min-w-0 gap-2 rounded-[10px] font-black text-white shadow-[0_10px_22px_rgba(0,77,255,0.28)] hover:opacity-95"
             >
-              {isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : editing ? "Update Product" : "Save Product"}
+              {isPending ? <><Loader2 size={16} className="animate-spin" /> Saving…</> : editing ? t("products.form.update") : t("products.form.save")}
             </Button>
           </div>
         </div>

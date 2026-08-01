@@ -134,6 +134,13 @@ export default defineConfig({
           "vendor-ui": ["lucide-react"],
           "vendor-validation": ["zod"],
           "vendor-date": ["date-fns"],
+          // The Hindi tables are dynamically imported, but left to its own
+          // heuristics Rollup folded them into whichever route chunk happened to
+          // pull them in first — so an English shop opening that page downloaded
+          // ~45 kB of Devanagari it never renders, and a Hindi shop had to fetch
+          // an unrelated route to get its own language. Pinning them to a named
+          // chunk keeps the language payload independent of routing.
+          "i18n-hindi": ["./src/features/settings/translations/hindi"],
         },
       },
     },

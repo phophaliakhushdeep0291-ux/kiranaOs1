@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { sellingUnitConversion } from "@/features/products/pages/product-pricing";
+import { productsEn as productsEnglish } from "@/features/settings/translations/products";
 
 const source = readFileSync("src/features/products/pages/components/ProductFormPanel.tsx", "utf8");
 
@@ -60,7 +61,10 @@ describe("the field is wired safely", () => {
 
   it("tells the shopkeeper the packs share one stock", () => {
     expect(source).toContain("share this one stock");
-    expect(source).toContain("Opening quantity (Optional)");
+    // The field label moved into the i18n catalogue, so assert the key the form
+    // renders and the English text that key still resolves to.
+    expect(source).toContain(`t("products.form.openingQuantity")`);
+    expect(productsEnglish["products.form.openingQuantity"]).toBe("Opening quantity (Optional)");
   });
 
   it("guards against a zero default conversion instead of dividing by it", () => {

@@ -65,6 +65,7 @@ import { loadCachedAuthoritativeSummary, resolveAuthoritativeUdharSummary } from
 import { repairLedgerDriftFromServer } from "@/features/ledger/ledger-drift-repair";
 import { isManualAdjustmentEntry } from "@/features/ledger/accounting";
 import type { CustomerInput } from "@/types/api";
+import { useAppLanguage, type TranslationKey } from "@/features/settings/i18n";
 import { offlineDB } from "@/lib/offline/db";
 import {
   addMoney,
@@ -197,17 +198,19 @@ function chooseBestCustomer(current: CustomerWithLedger, candidate: CustomerWith
   return candidateTime >= currentTime ? candidate : current;
 }
 
-function riskInfo(customer: CustomerWithLedger) {
+// Returns a translation key rather than text: this is module scope and cannot
+// call the `t()` hook. Callers resolve `labelKey` where they render it.
+function riskInfo(customer: CustomerWithLedger): { labelKey: TranslationKey; cls: string; dot: string } {
   const balance = Math.max(0, customer.ledgerBalance);
   const limit = Number(customer.udharLimit ?? 0);
-  if (balance <= 0) return { label: "No Due", cls: "bg-[#eef2f8] text-[#52627e]", dot: "bg-[#94a3b8]" };
+  if (balance <= 0) return { labelKey: "customers.noDue", cls: "bg-[#eef2f8] text-[#52627e]", dot: "bg-[#94a3b8]" };
   // With a limit: risk scales by utilisation. Without one: by absolute exposure.
   const ratio = limit > 0 ? balance / limit : balance / 10_000;
   if (customer.ledgerMetrics.isBadCustomer || ratio > 0.8) {
-    return { label: "High Risk", cls: "bg-rose-50 text-rose-600 ring-rose-100", dot: "bg-rose-500" };
+    return { labelKey: "customers.risk.high", cls: "bg-rose-50 text-rose-600 ring-rose-100", dot: "bg-rose-500" };
   }
-  if (ratio > 0.35) return { label: "Medium Risk", cls: "bg-amber-50 text-amber-700 ring-amber-100", dot: "bg-amber-500" };
-  return { label: "Low Risk", cls: "bg-emerald-50 text-emerald-700 ring-emerald-100", dot: "bg-emerald-500" };
+  if (ratio > 0.35) return { labelKey: "customers.risk.medium", cls: "bg-amber-50 text-amber-700 ring-amber-100", dot: "bg-amber-500" };
+  return { labelKey: "customers.risk.low", cls: "bg-emerald-50 text-emerald-700 ring-emerald-100", dot: "bg-emerald-500" };
 }
 
 function trustBadge(customer: CustomerWithLedger) {
@@ -302,7 +305,7 @@ function isLiveLedgerRow(row: Record<string, unknown>): boolean {
   return !(row.deleted_at ?? row.deletedAt ?? row.merged_into_id ?? row.mergedIntoId);
 }
 
-// "Received" on this page means udhar RECOVERED, so it must come from the customer
+// t("customers.detail.received") on this page means udhar RECOVERED, so it must come from the customer
 // ledger, not the `payments` table — that table also holds bill tender for ordinary
 // cash/UPI sales, and summing it reports shop revenue as khata collections.
 function udharCollectionAmount(row: Record<string, unknown>): number {
@@ -328,6 +331,7 @@ function percentageChange(current: number, previous: number): number {
 }
 
 export default function CustomersPage() {
+  const { t } = useAppLanguage();
   const { toast } = useToast();
   const { pendingCount, failedCount } = useOfflineStatus();
   const { data: customers = [], isLoading, refetch } = useCustomersLedgerList();
@@ -335,7 +339,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [rangeFrom, setRangeFrom] = useState(daysBefore(6));
   const [rangeTo, setRangeTo] = useState(inputDate(new Date()));
-  // Honor a ?filter= deep link (e.g. dashboard "Khata" cards link to /customers?filter=udhar).
+  // Honor a ?filter= deep link (e.g. dashboard t("customers.tab.khata") cards link to /customers?filter=udhar).
   const [filter, setFilter] = useState<"all" | "udhar" | "bad" | "due" | "promise" | "cleared">(() => {
     if (typeof window === "undefined") return "all";
     const f = new URLSearchParams(window.location.search).get("filter");
@@ -549,7 +553,7 @@ export default function CustomersPage() {
         notes: draft.notes ?? existing?.notes ?? "",
       });
       setCustomerOpen(true);
-      toast({ title: existing ? "Customer edit prepared" : "Customer draft prepared", description: "Voice assistant filled the form. Review and save locally." });
+      toast({ title: existing ? t("customers.toast.editPrepared") : t("customers.toast.draftPrepared"), description: t("customers.toast.voiceFilled") });
     };
     window.addEventListener("kirana:voice-customer-draft", handler);
     return () => window.removeEventListener("kirana:voice-customer-draft", handler);
@@ -605,7 +609,7 @@ export default function CustomersPage() {
       });
       setPaymentOpen(true);
       if (!customer) {
-        toast({ title: "Choose customer", description: "Voice filled the payment details. Select the matching customer before saving." });
+        toast({ title: t("customers.action.chooseCustomer"), description: t("customers.toast.voicePayment") });
       }
     };
     window.addEventListener("kirana:voice-payment-draft", handler);
@@ -642,16 +646,16 @@ export default function CustomersPage() {
 
   async function saveCustomer() {
     if (!customerForm.name.trim()) {
-      toast({ title: "Customer name required", variant: "destructive" });
+      toast({ title: t("customers.toast.nameRequired"), variant: "destructive" });
       return;
     }
     if (!customerForm.mobile.trim()) {
-      toast({ title: "Mobile/number required", description: "Use phone, shop number, or local identity number.", variant: "destructive" });
+      toast({ title: t("customers.toast.mobileRequired"), description: t("customers.field.mobileHint"), variant: "destructive" });
       return;
     }
     const gstin = customerForm.gstNumber.trim() ? validateGstin(customerForm.gstNumber) : null;
     if (gstin && !gstin.valid) {
-      toast({ title: "Check customer GSTIN", description: gstin.reason, variant: "destructive" });
+      toast({ title: t("customers.detail.checkGstin"), description: gstin.reason, variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -670,11 +674,11 @@ export default function CustomersPage() {
       };
       if (editing) await updateCustomerLocalFirst(editing.id, data);
       else await createCustomerLocalFirst(data);
-      toast({ title: editing ? "Customer updated" : "Customer added", description: "Data safe locally. Cloud backup will happen during sync." });
+      toast({ title: editing ? t("customers.toast.updated") : t("customers.toast.added"), description: t("customers.toast.dataSafeLocally") });
       setCustomerOpen(false);
       await refetch();
     } catch (error) {
-      toast({ title: "Could not save customer", description: error instanceof Error ? error.message : "Please check details.", variant: "destructive" });
+      toast({ title: t("customers.toast.saveFailed"), description: error instanceof Error ? error.message : t("customers.toast.checkDetails"), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -691,13 +695,13 @@ export default function CustomersPage() {
     setDeleteError(null);
     try {
       await deleteCustomerLocalFirst({ id: deleteTarget.id, ownerPin, reason });
-      toast({ title: "Customer moved to recycle bin", description: "This is a soft delete. Ledger and bills are not hard deleted." });
+      toast({ title: t("customers.toast.recycled"), description: t("customers.toast.softDeleteNote") });
       setDeleteTarget(null);
       await refetch();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Try again.";
       setDeleteError(message);
-      toast({ title: "Could not delete customer", description: message, variant: "destructive" });
+      toast({ title: t("customers.toast.deleteFailed"), description: message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -709,7 +713,7 @@ export default function CustomersPage() {
 
   function shareWhatsApp() {
     const digits = mobileDigits();
-    if (!digits) { toast({ title: "No mobile number", description: "Add a mobile number to send a WhatsApp reminder.", variant: "destructive" }); return; }
+    if (!digits) { toast({ title: "No mobile number", description: t("customers.toast.needMobileForWhatsapp"), variant: "destructive" }); return; }
     const balance = Math.max(0, money(selectedCustomer?.ledgerBalance));
     const text = encodeURIComponent(`Namaste ${selectedCustomer?.name} ji, aapka khata balance ${fmtMoney(balance)} hai. Kripya payment kar dein. Dhanyavaad!`);
     window.open(`https://wa.me/91${digits}?text=${text}`, "_blank", "noopener");
@@ -731,12 +735,12 @@ export default function CustomersPage() {
   function printStatement() {
     if (!selectedCustomer) return;
     const popup = window.open("", "_blank", "width=540,height=740");
-    if (!popup) { toast({ title: "Allow pop-ups", description: "Enable pop-ups to print the statement.", variant: "destructive" }); return; }
+    if (!popup) { toast({ title: t("customers.toast.allowPopups"), description: t("customers.toast.enablePopups"), variant: "destructive" }); return; }
     const rows = (selectedDetail.data?.ledger ?? []).map((row) => {
       const signed = Number(row.signed_amount ?? 0);
       return `<tr><td>${formatShortDate(row.display_date)}</td><td>${String(row.note || row.source_id || row.display_type)}</td><td style="text-align:right">${signed > 0 ? fmtMoney(signed) : "-"}</td><td style="text-align:right">${signed < 0 ? fmtMoney(Math.abs(signed)) : "-"}</td><td style="text-align:right">${fmtMoney(row.running_balance)}</td></tr>`;
     }).join("");
-    popup.document.write(`<!doctype html><html><head><title>Khata Statement — ${selectedCustomer.name}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>Khata Statement — ${selectedCustomer.name}</h1><p>${selectedCustomer.mobile ?? ""}</p><p>As on ${formatShortDate(new Date().toISOString())} · Outstanding: <strong class="due">${fmtMoney(Math.max(0, money(selectedCustomer.ledgerBalance)))}</strong></p><table><thead><tr><th>Date</th><th>Particulars</th><th style="text-align:right">Udhar (₹)</th><th style="text-align:right">Paid (₹)</th><th style="text-align:right">Balance (₹)</th></tr></thead><tbody>${rows || `<tr><td colspan="5">No ledger entries</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
+    popup.document.write(`<!doctype html><html><head><title>Khata Statement — ${selectedCustomer.name}</title><style>body{font-family:Arial;font-size:12px;padding:18px;color:#111827}h1{font-size:17px;margin:0}p{margin:3px 0;color:#555}table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left;font-size:11px}th{background:#f5f8fc;text-transform:uppercase;font-size:10px}strong.due{color:#ef4444}</style></head><body><h1>Khata Statement — ${selectedCustomer.name}</h1><p>${selectedCustomer.mobile ?? ""}</p><p>As on ${formatShortDate(new Date().toISOString())} · Outstanding: <strong class="due">${fmtMoney(Math.max(0, money(selectedCustomer.ledgerBalance)))}</strong></p><table><thead><tr><th>Date</th><th>Particulars</th><th style="text-align:right">{t("customers.ledger.udharAmount")}</th><th style="text-align:right">{t("customers.ledger.paidAmount")}</th><th style="text-align:right">{t("customers.ledger.balanceAmount")}</th></tr></thead><tbody>${rows || `<tr><td colspan="5">{t("customers.ledger.empty")}</td></tr>`}</tbody></table><script>setTimeout(function(){window.print()},300)</script></body></html>`);
     popup.document.close();
   }
 
@@ -745,11 +749,11 @@ export default function CustomersPage() {
     const upiAmount = paymentForm.mode === "split" ? money(paymentForm.upiAmount) : 0;
     const amount = paymentForm.mode === "split" ? addMoney(cashAmount, upiAmount) : money(paymentForm.amount);
     if (!paymentForm.customerId || !Number.isFinite(amount) || amount <= 0) {
-      toast({ title: "Select customer and amount", variant: "destructive" });
+      toast({ title: t("customers.detail.selectCustomerAndAmount"), variant: "destructive" });
       return;
     }
     if (paymentForm.mode === "split" && (!Number.isFinite(cashAmount) || !Number.isFinite(upiAmount) || cashAmount < 0 || upiAmount < 0 || (cashAmount <= 0 && upiAmount <= 0))) {
-      toast({ title: "Enter a valid cash or UPI split", variant: "destructive" });
+      toast({ title: t("customers.toast.invalidSplit"), variant: "destructive" });
       return;
     }
     const customer =
@@ -758,8 +762,8 @@ export default function CustomersPage() {
     const outstanding = Math.max(0, money(customer?.ledgerBalance));
     if (moneyExceeds(amount, outstanding)) {
       toast({
-        title: "Amount exceeds outstanding udhar",
-        description: `${customer?.name ?? "This customer"} owes ${fmtMoney(outstanding)}. Enter that amount or less.`,
+        title: t("customers.toast.amountExceeds"),
+        description: `${customer?.name ?? t("customers.detail.thisCustomer")} owes ${fmtMoney(outstanding)}. Enter that amount or less.`,
         variant: "destructive",
       });
       return;
@@ -770,19 +774,19 @@ export default function CustomersPage() {
       // summary this page overlays), not the device ledger — it can be drifted.
       if (paymentForm.mode === "split") {
         const baseNote = paymentForm.note.trim();
-        if (cashAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: cashAmount, mode: "cash", note: baseNote ? `${baseNote} (split cash)` : "Split payment - cash" }, { expectedOutstanding: outstanding });
-        if (upiAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : "Split payment - UPI" }, { expectedOutstanding: Math.max(0, subtractMoney(outstanding, cashAmount)) });
+        if (cashAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: cashAmount, mode: "cash", note: baseNote ? `${baseNote} (split cash)` : t("customers.detail.splitCash") }, { expectedOutstanding: outstanding });
+        if (upiAmount > 0) await recordPaymentLocalFirst(paymentForm.customerId, { amount: upiAmount, mode: "upi", note: baseNote ? `${baseNote} (split UPI)` : t("customers.detail.splitUpi") }, { expectedOutstanding: Math.max(0, subtractMoney(outstanding, cashAmount)) });
       } else {
         await recordPaymentLocalFirst(paymentForm.customerId, { amount, mode: paymentForm.mode, note: paymentForm.note.trim() || undefined }, { expectedOutstanding: outstanding });
       }
-      toast({ title: "Payment recorded", description: "Ledger updated locally. Sync will upload this safely." });
+      toast({ title: t("customers.toast.paymentRecorded"), description: t("customers.ledger.updatedLocally") });
       setPaymentOpen(false);
       await refetch();
       await overviewQuery.refetch();
       await selectedDetail.refetch();
       setPaymentForm((form) => ({ ...form, amount: "", cashAmount: "", upiAmount: "", note: "" }));
     } catch (error) {
-      toast({ title: "Payment failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+      toast({ title: t("customers.toast.paymentFailed"), description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -795,13 +799,13 @@ export default function CustomersPage() {
 
   function exportCustomers() {
     const rows = [
-      ["Customer", "Mobile", "Address", "Outstanding", "Risk", "Last payment"],
+      [t("customers.field.customer"), t("customers.field.mobile"), t("customers.field.address"), "Outstanding", "Risk", t("customers.detail.lastPaymentLower")],
       ...filteredCustomers.map((customer) => [
         customer.name,
         customer.mobile ?? "",
         customer.address ?? "",
         String(Math.max(0, customer.ledgerBalance)),
-        riskInfo(customer).label,
+        t(riskInfo(customer).labelKey),
         customer.ledgerMetrics.lastPaymentAt ?? "",
       ]),
     ];
@@ -820,8 +824,8 @@ export default function CustomersPage() {
     <div className="app-docked-page space-y-4 bg-transparent lg:space-y-5">
       <section className="rounded-[18px] border border-[#e2e8f2] bg-white p-4 shadow-[0_10px_30px_rgba(15,35,80,0.05)] lg:flex lg:items-center lg:justify-between lg:gap-6 lg:p-5">
         <div className="min-w-0">
-          <div className="hidden items-center gap-3 lg:flex"><span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={19} /></span><div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">Customer credit</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">Track every balance, collection promise and payment from one workspace</p></div></div>
-          <SyncBadge className="hidden lg:mt-3 lg:inline-flex" status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? "Review sync" : pendingCount > 0 ? `${pendingCount} pending` : "Synced · Just now"} />
+          <div className="hidden items-center gap-3 lg:flex"><span className="grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><Users size={19} /></span><div><h2 className="text-[17px] font-black tracking-tight text-[var(--brand-ink)]">{t("customers.title")}</h2><p className="mt-0.5 text-[11px] font-medium text-[#718099]">{t("customers.subtitle")}</p></div></div>
+          <SyncBadge className="hidden lg:mt-3 lg:inline-flex" status={failedCount > 0 ? "failed" : pendingCount > 0 ? "pending" : "synced"} label={failedCount > 0 ? t("customers.detail.reviewSync") : pendingCount > 0 ? `${pendingCount} pending` : t("customers.detail.syncedJustNow")} />
         </div>
         <div className="grid grid-cols-2 items-center gap-2 lg:flex lg:flex-wrap">
           <div className="col-span-2 lg:contents">
@@ -831,22 +835,22 @@ export default function CustomersPage() {
             </DropdownMenu>
           </div>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="outline" className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Filter size={16} />Filters</Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>All customers</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>With balance</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
+            <DropdownMenuTrigger asChild><Button variant="outline" className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Filter size={16} />{t("customers.filters")}</Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => setFilter("all")}>{t("customers.filter.all")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("udhar")}>{t("customers.filter.withBalance")}</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("due")}>Overdue</DropdownMenuItem><DropdownMenuItem onClick={() => setFilter("cleared")}>Cleared</DropdownMenuItem></DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={exportCustomers} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />Export</Button>
-          <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[var(--brand-border)] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />Collect payment</Button>
+          <Button variant="outline" onClick={exportCustomers} className="hidden h-11 gap-2 rounded-[10px] border-[#dfe7f2] px-3.5 text-[11px] font-bold lg:inline-flex"><Download size={16} />{t("customers.export")}</Button>
+          <Button variant="outline" onClick={() => openPayment()} className="h-12 w-full gap-2 rounded-[14px] border-[var(--brand-border)] bg-[var(--brand-softer)] px-3 text-[11px] font-bold text-[var(--brand)] hover:bg-[var(--brand-soft)] lg:h-11 lg:w-auto lg:rounded-[10px]"><Wallet size={16} />{t("customers.collectPayment")}</Button>
           <Button onClick={openCreate} className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[14px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] px-3 text-[11px] font-bold shadow-[0_8px_18px_var(--brand-shadow)] hover:from-[var(--brand-strong)] hover:to-[var(--brand-strong)] lg:h-11 lg:w-auto lg:rounded-[10px] lg:px-[18px]"><Plus size={16} className="shrink-0" /><span>Add customer</span></Button>
         </div>
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:gap-4 2xl:grid-cols-6">
-        <CustomerMetricCard mobileHidden label="Total Customers" value={String(totals.customers)} change={metricChanges.customers} color="var(--brand)" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.customers} />
+        <CustomerMetricCard mobileHidden label={t("customers.stat.total")} value={String(totals.customers)} change={metricChanges.customers} color="var(--brand)" icon={<Users size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.customers} />
         <CustomerMetricCard label="Total Outstanding" value={fmtMoney(totals.totalUdhar)} change={metricChanges.outstanding} color="#20b75a" icon={<Wallet size={18} />} iconClass="bg-[#eaf9ef] text-[#20a951]" spark={metricSparks.outstanding} />
-        <CustomerMetricCard label="Overdue Amount" value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
-        <CustomerMetricCard label="Udhar Collected" value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
-        <CustomerMetricCard label="Customers with Balance" value={String(totals.active)} change={metricChanges.active} color="var(--brand)" icon={<UserCheck size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.active} />
-        <CustomerMetricCard mobileHidden label="Average Collection Time" value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
+        <CustomerMetricCard label={t("customers.stat.overdueAmount")} value={fmtMoney(overdueAmount)} change={metricChanges.overdue} color="#f59b0b" icon={<CalendarDays size={18} />} iconClass="bg-[#fff3e5] text-[#f08b00]" spark={metricSparks.overdue} />
+        <CustomerMetricCard label={t("customers.stat.udharCollected")} value={fmtMoney(receivedInRange)} change={metricChanges.received} color="#7c4df1" icon={<CircleDollarSign size={18} />} iconClass="bg-[#f4efff] text-[#7c4df1]" spark={metricSparks.received} />
+        <CustomerMetricCard label={t("customers.stat.withBalance")} value={String(totals.active)} change={metricChanges.active} color="var(--brand)" icon={<UserCheck size={18} />} iconClass="bg-[var(--brand-soft)] text-[var(--brand)]" spark={metricSparks.active} />
+        <CustomerMetricCard mobileHidden label={t("customers.stat.avgCollection")} value={`${averageCollectionDays} Days`} change={metricChanges.collection} color="#ef3ca4" icon={<Clock3 size={18} />} iconClass="bg-[#fff0fa] text-[#ef3ca4]" spark={metricSparks.collection} />
       </section>
 
       <section className="grid min-w-0 items-start gap-4 xl:grid-cols-[380px_minmax(0,1fr)] 2xl:grid-cols-[380px_minmax(580px,1fr)_380px]">
@@ -864,7 +868,7 @@ export default function CustomersPage() {
               <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6b7a9a]" />
               <Input
                 className="h-11 rounded-[12px] border-[#e3eaf3] bg-[#f8fafd] pl-10 text-[13px] font-medium text-[var(--brand-ink)] placeholder:text-[#6b7a9a] focus-visible:border-[var(--brand)] focus-visible:bg-white focus-visible:ring-0"
-                placeholder="Search customers by name or mobile"
+                placeholder={t("customers.search")}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
@@ -893,7 +897,7 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex items-center justify-between px-4 py-3">
-            <p className="text-[12px] font-bold text-[#64748b]">Sort: <span className="text-[var(--brand-ink)]">Highest balance</span></p>
+            <p className="text-[12px] font-bold text-[#64748b]">Sort: <span className="text-[var(--brand-ink)]">{t("customers.sort.highestBalance")}</span></p>
             <Button onClick={openCreate} variant="outline" className="h-8 rounded-[9px] px-3 text-[12px] font-bold">
               <Plus size={14} className="mr-1" /> Add
             </Button>
@@ -901,12 +905,12 @@ export default function CustomersPage() {
 
           <div className="max-h-[calc(100vh-245px)] overflow-y-auto px-3 pb-3">
             {isLoading ? (
-              <div className="py-10 text-center text-[13px] text-[#64748b]">Loading customers from local database...</div>
+              <div className="py-10 text-center text-[13px] text-[#64748b]">{t("customers.list.loading")}</div>
             ) : filteredCustomers.length === 0 ? (
               <div className="rounded-[14px] border border-dashed border-[#d8e2f1] px-4 py-10 text-center">
                 <Users size={26} className="mx-auto text-[#94a3b8]" />
                 <p className="mt-2 text-[13px] font-bold text-[var(--brand-ink)]">No customers found</p>
-                <p className="mt-1 text-[12px] text-[#64748b]">Add a customer or clear filters.</p>
+                <p className="mt-1 text-[12px] text-[#64748b]">{t("customers.list.emptyHint")}</p>
               </div>
             ) : (
               filteredCustomers.map((customer) => {
@@ -927,13 +931,13 @@ export default function CustomersPage() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-black text-[var(--brand-ink)]">{customer.name}</span>
                       <span className="mt-0.5 block truncate text-[12px] text-[#52627e]">{customer.mobile || "No mobile"}</span>
-                      <span className="mt-1 block text-[11px] text-[#64748b]">{customer.ledgerMetrics.lastBillAt ? "Last bill " + formatShortDate(customer.ledgerMetrics.lastBillAt) : "No recent bill"}</span>
+                      <span className="mt-1 block text-[11px] text-[#64748b]">{customer.ledgerMetrics.lastBillAt ? t("customers.detail.lastBill") + formatShortDate(customer.ledgerMetrics.lastBillAt) : "No recent bill"}</span>
                     </span>
                     <span className="shrink-0 text-right">
                       <span className={cn("block text-[13px] font-black", customer.ledgerBalance > 0 ? "text-rose-600" : "text-[var(--brand-ink)]")}>{fmtMoney(customer.ledgerBalance)}</span>
                       <span className={cn("mt-1 inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[10px] font-black ring-1 ring-inset", risk.cls)}>
                         <span className={cn("h-1.5 w-1.5 rounded-full", risk.dot)} />
-                        {risk.label}
+                        {t(risk.labelKey)}
                       </span>
                     </span>
                   </button>
@@ -948,7 +952,7 @@ export default function CustomersPage() {
             <div className="rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-5 py-16 text-center shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
               <Users size={30} className="mx-auto text-[#94a3b8]" />
               <p className="mt-3 font-display text-[18px] font-black text-[var(--brand-ink)]">Select a customer</p>
-              <p className="mt-1 text-[13px] text-[#64748b]">Ledger, payment history, and trust details will appear here.</p>
+              <p className="mt-1 text-[13px] text-[#64748b]">{t("customers.list.selectPromptHint")}</p>
             </div>
           ) : (
             <>
@@ -973,8 +977,8 @@ export default function CustomersPage() {
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-right">
-                    <InfoMini label="Customer Since" value={formatShortDate(selectedCustomer.createdAt)} />
-                    <InfoMini label="Last Purchase" value={formatShortDate(selectedCustomer.ledgerMetrics.lastBillAt)} />
+                    <InfoMini label={t("customers.profile.since")} value={formatShortDate(selectedCustomer.createdAt)} />
+                    <InfoMini label={t("customers.profile.lastPurchase")} value={formatShortDate(selectedCustomer.ledgerMetrics.lastBillAt)} />
                   </div>
                 </div>
 
@@ -982,27 +986,27 @@ export default function CustomersPage() {
                   <SummaryCell label="Total Outstanding" value={fmtMoney(selectedCustomer.ledgerBalance)} valueClass={selectedCustomer.ledgerBalance > 0 ? "text-rose-600" : "text-emerald-600"} />
                   <SummaryCell label="Credit Limit" value={creditLimit > 0 ? fmtMoney(creditLimit) : "Not set"} />
                   <SummaryCell
-                    label="Available Credit"
+                    label={t("customers.profile.availableCredit")}
                     value={creditLimit > 0
                       ? (money(selectedCustomer.ledgerBalance) > creditLimit ? `Over by ${fmtMoney(money(selectedCustomer.ledgerBalance) - creditLimit)}` : fmtMoney(availableCredit))
-                      : "No limit"}
+                      : t("customers.noLimit")}
                     valueClass={creditLimit > 0 && money(selectedCustomer.ledgerBalance) > creditLimit ? "text-rose-600" : "text-emerald-600"}
                   />
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px]">
                   <div className="rounded-[14px] border border-[#e8eef7] bg-white p-4">
-                    <p className="text-[12px] font-bold text-[#64748b]">Risk Level</p>
+                    <p className="text-[12px] font-bold text-[#64748b]">{t("customers.profile.riskLevel")}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className={cn("inline-flex items-center gap-1 rounded-[9px] px-2.5 py-1.5 text-[12px] font-black ring-1 ring-inset", selectedRisk!.cls)}>
                         <span className={cn("h-1.5 w-1.5 rounded-full", selectedRisk!.dot)} />
-                        {selectedRisk!.label}
+                        {t(selectedRisk!.labelKey)}
                       </span>
                       <span className="text-[12px] text-[#64748b]">{selectedCustomer.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</span>
                     </div>
                   </div>
                   <div className="rounded-[14px] border border-[#e8eef7] bg-white p-4 text-center">
-                    <p className="text-[12px] font-bold text-[#64748b]">Payment Score</p>
+                    <p className="text-[12px] font-bold text-[#64748b]">{t("customers.profile.paymentScore")}</p>
                     {(() => {
                       const scoreColor = trustScore >= 75 ? "#16a34a" : trustScore >= 45 ? "#f59e0b" : "#ef4444";
                       return (
@@ -1022,7 +1026,7 @@ export default function CustomersPage() {
 
               <div className="rounded-[16px] border border-[#e6ecf4] bg-white shadow-[0_12px_34px_rgba(15,35,80,0.055)]">
                 <div className="flex items-center gap-6 overflow-x-auto border-b border-[#edf2f8] px-5">
-                  {([["ledger", "Ledger"], ["transactions", "Transactions"], ["payments", "Payment History"], ["notes", `Notes${selectedCustomer.notes ? " (1)" : ""}`]] as const).map(([key, label]) => (
+                  {([["ledger", t("customers.tab.ledger")], ["transactions", t("customers.tab.transactions")], ["payments", "Payment History"], ["notes", `Notes${selectedCustomer.notes ? " (1)" : ""}`]] as const).map(([key, label]) => (
                     <button key={key} onClick={() => setActiveTab(key)} className={cn("h-12 whitespace-nowrap border-b-2 text-[13px] font-black transition-colors", activeTab === key ? "border-[var(--brand)] text-[var(--brand)]" : "border-transparent text-[#536383] hover:text-[var(--brand-ink)]")}>{label}</button>
                   ))}
                 </div>
@@ -1034,17 +1038,17 @@ export default function CustomersPage() {
                           <tr>
                             <th className="px-3 py-2.5 text-left font-bold">Date</th>
                             <th className="px-3 py-2.5 text-left font-bold">Particulars</th>
-                            <th className="px-3 py-2.5 text-left font-bold">Type</th>
-                            <th className="px-3 py-2.5 text-right font-bold">Debit</th>
-                            <th className="px-3 py-2.5 text-right font-bold">Credit</th>
-                            <th className="px-3 py-2.5 text-right font-bold">Balance</th>
+                            <th className="px-3 py-2.5 text-left font-bold">{t("customers.ledger.type")}</th>
+                            <th className="px-3 py-2.5 text-right font-bold">{t("customers.ledger.debit")}</th>
+                            <th className="px-3 py-2.5 text-right font-bold">{t("customers.ledger.credit")}</th>
+                            <th className="px-3 py-2.5 text-right font-bold">{t("customers.ledger.balance")}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {selectedDetail.isLoading ? (
                             <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">Loading ledger...</td></tr>
                           ) : ledgerRows.length === 0 ? (
-                            <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">No ledger entries yet.</td></tr>
+                            <tr><td colSpan={6} className="px-3 py-10 text-center text-[#64748b]">{t("customers.ledger.emptyYet")}</td></tr>
                           ) : (
                             ledgerRows.slice(0, 7).map((row) => {
                               const signed = Number(row.signed_amount ?? 0);
@@ -1073,7 +1077,7 @@ export default function CustomersPage() {
                 {activeTab === "transactions" && (
                   <div className="p-4">
                     {billRows.length === 0 ? (
-                      <p className="py-8 text-center text-[12.5px] text-[#64748b]">No bills for this customer yet.</p>
+                      <p className="py-8 text-center text-[12.5px] text-[#64748b]">{t("customers.bills.empty")}</p>
                     ) : (
                       billRows.slice(0, 8).map((bill, index) => (
                         <div key={String(bill.id ?? index)} className={cn("flex items-center gap-3 py-2.5", index < Math.min(billRows.length, 8) - 1 && "border-b border-[#eef2f8]")}>
@@ -1110,10 +1114,10 @@ export default function CustomersPage() {
                 {activeTab === "notes" && (
                   <div className="p-4">
                     <div className="rounded-[12px] border border-[#e8eef7] bg-[#fbfdff] p-4 text-[12.5px] leading-6 text-[#344668]">
-                      {selectedCustomer.notes || "No notes yet. Add payment preferences, delivery habits, or credit rules."}
+                      {selectedCustomer.notes || t("customers.notes.empty")}
                       <p className="mt-3 text-[11px] font-semibold text-[#94a3b8]">Updated {formatShortDate(selectedCustomer.updatedAt ?? selectedCustomer.createdAt)}</p>
                     </div>
-                    <Button variant="outline" className="mt-3 h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => openEdit(selectedCustomer)}><Pencil size={13} /> {selectedCustomer.notes ? "Edit note" : "Add note"}</Button>
+                    <Button variant="outline" className="mt-3 h-9 gap-1.5 rounded-[9px] text-[12px] font-bold" onClick={() => openEdit(selectedCustomer)}><Pencil size={13} /> {selectedCustomer.notes ? t("customers.action.editNote") : t("customers.action.addNote")}</Button>
                   </div>
                 )}
               </div>
@@ -1125,7 +1129,7 @@ export default function CustomersPage() {
                 <span className="flex items-center gap-3">
                   <span className="grid h-10 w-10 place-items-center rounded-[10px] bg-white/15"><Wallet size={18} /></span>
                   <span>
-                    <span className="block text-[14px] font-black">Record Payment</span>
+                    <span className="block text-[14px] font-black">{t("customers.action.recordPayment")}</span>
                     <span className="block text-[12px] text-white/75">Receive payment from {selectedCustomer.name}</span>
                   </span>
                 </span>
@@ -1133,22 +1137,22 @@ export default function CustomersPage() {
               </button>
 
               <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                <ActionTile icon={<FileText size={18} />} title="Statement" sub="Download / Print" onClick={printStatement} />
-                <ActionTile icon={<MessageCircle size={18} className="text-emerald-600" />} title="WhatsApp" sub="Share Statement" onClick={shareWhatsApp} />
-                <ActionTile icon={<MessageSquare size={18} />} title="SMS" sub="Send Reminder" onClick={sendSms} />
-                <ActionTile icon={<Phone size={18} />} title="Call" sub="Quick Call" onClick={quickCall} />
+                <ActionTile icon={<FileText size={18} />} title={t("customers.action.statement")} sub={t("customers.action.downloadPrint")} onClick={printStatement} />
+                <ActionTile icon={<MessageCircle size={18} className="text-emerald-600" />} title={t("customers.action.whatsapp")} sub={t("customers.action.shareStatement")} onClick={shareWhatsApp} />
+                <ActionTile icon={<MessageSquare size={18} />} title={t("customers.action.sms")} sub="Send Reminder" onClick={sendSms} />
+                <ActionTile icon={<Phone size={18} />} title={t("customers.action.call")} sub={t("customers.action.quickCall")} onClick={quickCall} />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 text-center shadow-[0_10px_24px_rgba(15,35,80,0.045)] transition-all hover:-translate-y-0.5 hover:border-[var(--brand-border)] hover:bg-[#f8fbff]">
                       <span className="mx-auto grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]"><MoreHorizontal size={18} /></span>
-                      <span className="mt-2 block text-[12px] font-black text-[var(--brand-ink)]">More</span>
-                      <span className="mt-0.5 block text-[10.5px] font-medium text-[#64748b]">More Options</span>
+                      <span className="mt-2 block text-[12px] font-black text-[var(--brand-ink)]">{t("customers.action.more")}</span>
+                      <span className="mt-0.5 block text-[10.5px] font-medium text-[#64748b]">{t("customers.action.moreOptions")}</span>
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
                     <DropdownMenuItem asChild><Link href={`/customers/${selectedCustomer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" /> Open full profile</span></Link></DropdownMenuItem>
                     <DropdownMenuItem onClick={() => openEdit(selectedCustomer)}><Pencil size={14} className="mr-2" /> Edit customer</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(selectedCustomer.mobile ?? ""); toast({ title: "Mobile copied" }); }}><Phone size={14} className="mr-2" /> Copy mobile</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(selectedCustomer.mobile ?? ""); toast({ title: t("customers.toast.mobileCopied") }); }}><Phone size={14} className="mr-2" /> Copy mobile</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-rose-600 focus:text-rose-700" onClick={() => requestDeleteCustomer(selectedCustomer)}><Trash2 size={14} className="mr-2" /> Delete customer</DropdownMenuItem>
                   </DropdownMenuContent>
@@ -1159,7 +1163,7 @@ export default function CustomersPage() {
         </section>
 
         <aside className="space-y-4">
-          <RightCard title="Aging Summary">
+          <RightCard title={t("customers.ageing.altTitle")}>
             {(() => {
               // Real conic stops from the ledger ageing buckets — not decorative.
               const buckets = [
@@ -1190,7 +1194,7 @@ export default function CustomersPage() {
                   </div>
                   <div className="min-w-0 flex-1 space-y-2 text-[12px]">
                     <Legend color="bg-emerald-500" label="0 - 7 Days" value={fmtMoney(ageing?.zeroToSeven ?? 0)} />
-                    <Legend color="bg-amber-500" label="7 - 30 Days" value={fmtMoney(ageing?.sevenToThirty ?? 0)} />
+                    <Legend color="bg-amber-500" label={t("customers.ageing.bucket7to30")} value={fmtMoney(ageing?.sevenToThirty ?? 0)} />
                     <Legend color="bg-rose-500" label="30+ Days" value={fmtMoney(ageing?.thirtyPlus ?? 0)} />
                   </div>
                 </div>
@@ -1218,7 +1222,7 @@ export default function CustomersPage() {
             )}
           </RightCard>
 
-          <RightCard title="Recent Transactions" action="View all" onAction={() => setActiveTab("transactions")}>
+          <RightCard title={t("customers.transactions.recent")} action="View all" onAction={() => setActiveTab("transactions")}>
             {billRows.length === 0 ? (
               <p className="py-5 text-center text-[12px] text-[#64748b]">No recent bills yet.</p>
             ) : (
@@ -1236,9 +1240,9 @@ export default function CustomersPage() {
             )}
           </RightCard>
 
-          <RightCard title="Customer Notes" action="View all" onAction={() => setActiveTab("notes")}>
+          <RightCard title={t("customers.field.notes")} action="View all" onAction={() => setActiveTab("notes")}>
             <div className="rounded-[12px] border border-[#e8eef7] bg-[#fbfdff] p-3 text-[12px] leading-5 text-[#344668]">
-              {selectedCustomer?.notes || "No notes yet. Add payment preferences, delivery habits, or credit rules from Edit."}
+              {selectedCustomer?.notes || t("customers.notes.emptyEdit")}
               <p className="mt-3 text-[11px] font-semibold text-[#94a3b8]">Updated {formatShortDate(selectedCustomer?.updatedAt ?? selectedCustomer?.createdAt)}</p>
             </div>
           </RightCard>
@@ -1254,7 +1258,7 @@ export default function CustomersPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div><Label>Name *</Label><Input className="mt-1" value={customerForm.name} onChange={(event) => setCustomerForm((form) => ({ ...form, name: event.target.value }))} /></div>
             <div><Label>Phone / number *</Label><Input className="mt-1" value={customerForm.mobile} onChange={(event) => setCustomerForm((form) => ({ ...form, mobile: event.target.value }))} /></div>
-            <div className="md:col-span-2"><Label>Billing address</Label><Input className="mt-1" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} placeholder="Used on B2B GST invoices" /></div>
+            <div className="md:col-span-2"><Label>Billing address</Label><Input className="mt-1" value={customerForm.address} onChange={(event) => setCustomerForm((form) => ({ ...form, address: event.target.value }))} placeholder={t("customers.field.gstinHint")} /></div>
             <div className="md:col-span-2 rounded-xl border border-[#dce7f6] bg-[#f8fbff] p-3">
               <div className="mb-3"><p className="text-[12px] font-bold text-[#19345f]">GST details (optional)</p><p className="mt-0.5 text-[11px] text-[#64748b]">Add these for registered B2B buyers. The state is derived from a valid GSTIN and controls IGST versus CGST/SGST.</p></div>
               <div className="grid gap-3 md:grid-cols-[1fr_120px]">
@@ -1266,9 +1270,9 @@ export default function CustomersPage() {
             <div><Label>Udhar limit</Label><Input type="number" className="mt-1" value={customerForm.udharLimit} onChange={(event) => setCustomerForm((form) => ({ ...form, udharLimit: event.target.value }))} /></div>
             <div><Label>Due date</Label><Input type="date" className="mt-1" value={customerForm.dueDate} onChange={(event) => setCustomerForm((form) => ({ ...form, dueDate: event.target.value }))} /></div>
             <div><Label>Promise-to-pay date</Label><Input type="date" className="mt-1" value={customerForm.promiseToPayDate} onChange={(event) => setCustomerForm((form) => ({ ...form, promiseToPayDate: event.target.value }))} /></div>
-            <div className="md:col-span-2"><Label>Notes / pricing rule</Label><Textarea className="mt-1" value={customerForm.notes} onChange={(event) => setCustomerForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Example: gives wholesale price for 10kg+" /></div>
+            <div className="md:col-span-2"><Label>Notes / pricing rule</Label><Textarea className="mt-1" value={customerForm.notes} onChange={(event) => setCustomerForm((form) => ({ ...form, notes: event.target.value }))} placeholder={t("customers.field.pricingExample")} /></div>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setCustomerOpen(false)}>Cancel</Button><Button onClick={() => void saveCustomer()} disabled={saving}>{saving ? "Saving..." : "Save locally"}</Button></div>
+          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setCustomerOpen(false)}>Cancel</Button><Button onClick={() => void saveCustomer()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.saveLocally")}</Button></div>
         </DialogContent>
       </Dialog>
 
@@ -1279,13 +1283,13 @@ export default function CustomersPage() {
             <DialogDescription>Record the amount received and its payment mode. The customer ledger will update locally and sync safely.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div><Label>Customer *</Label><Select value={paymentForm.customerId} onValueChange={(value) => setPaymentForm((form) => ({ ...form, customerId: value }))}><SelectTrigger className="mt-1"><SelectValue placeholder="Select customer" /></SelectTrigger><SelectContent>{dedupedCustomers.map((customer) => <SelectItem key={customer.id} value={customer.id}>{customer.name} - {fmtMoney(customer.ledgerBalance)}</SelectItem>)}</SelectContent></Select></div>
+            <div><Label>Customer *</Label><Select value={paymentForm.customerId} onValueChange={(value) => setPaymentForm((form) => ({ ...form, customerId: value }))}><SelectTrigger className="mt-1"><SelectValue placeholder={t("customers.action.selectCustomer")} /></SelectTrigger><SelectContent>{dedupedCustomers.map((customer) => <SelectItem key={customer.id} value={customer.id}>{customer.name} - {fmtMoney(customer.ledgerBalance)}</SelectItem>)}</SelectContent></Select></div>
             <div><Label>Amount *</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.amount} onChange={(event) => setPaymentForm((form) => ({ ...form, amount: event.target.value }))} /></div>
             <div><Label>Mode</Label><Select value={paymentForm.mode} onValueChange={(value) => setPaymentForm((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="bank">Bank</SelectItem><SelectItem value="split">Split payment</SelectItem></SelectContent></Select></div>
             {paymentForm.mode === "split" && <div className="grid grid-cols-2 gap-3"><div><Label>Cash amount</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.cashAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, cashAmount: event.target.value }))} /></div><div><Label>UPI amount</Label><Input type="number" inputMode="decimal" min="0" step="0.01" className="mt-1" value={paymentForm.upiAmount} onChange={(event) => setPaymentForm((form) => ({ ...form, upiAmount: event.target.value }))} /></div></div>}
             <div><Label>Note</Label><Input className="mt-1" value={paymentForm.note} onChange={(event) => setPaymentForm((form) => ({ ...form, note: event.target.value }))} placeholder="Optional" /></div>
           </div>
-          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button onClick={() => void recordPayment()} disabled={saving}>{saving ? "Saving..." : "Record offline"}</Button></div>
+          <div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button onClick={() => void recordPayment()} disabled={saving}>{saving ? "Saving..." : t("customers.detail.recordOffline")}</Button></div>
         </DialogContent>
       </Dialog>
 
@@ -1293,7 +1297,7 @@ export default function CustomersPage() {
         open={Boolean(deleteTarget)}
         title="Owner PIN required"
         description={`Delete ${deleteTarget?.name ?? "this customer"}? This only moves the customer to recycle bin. Bills, ledger, and payments stay safe.`}
-        confirmLabel="Move to recycle bin"
+        confirmLabel={t("customers.action.moveToRecycleBin")}
         reasonRequired
         loading={saving}
         error={deleteError}
@@ -1340,13 +1344,14 @@ function CustomerMetricCard({ label, value, change, color, icon, iconClass, spar
 }
 
 function CustomerListPanelV3({ customers, selectedId, loading, search, filter, total, onSearch, onFilter, onSelect }: { customers: CustomerWithLedger[]; selectedId: string | null; loading: boolean; search: string; filter: "all" | "udhar" | "bad" | "due" | "promise" | "cleared"; total: number; onSearch: (value: string) => void; onFilter: (value: "all" | "udhar" | "bad" | "due" | "promise" | "cleared") => void; onSelect: (value: string) => void }) {
+  const { t } = useAppLanguage();
   const avatarTones = ["bg-[var(--brand-soft)] text-[var(--brand)]", "bg-[#ecfdf5] text-[#16a34a]", "bg-[#f5f3ff] text-[#7c3aed]", "bg-[#fff7ed] text-[#f97316]", "bg-[#fef2f2] text-[#ef4444]"];
   return (
     <section className="min-h-0 overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
       <header className="flex h-[58px] items-center justify-between px-[18px]"><h2 className="text-[15px] font-extrabold text-[var(--brand-ink)]">Customers</h2><span className="rounded-full bg-[#f2f5f9] px-2.5 py-1 text-[9px] font-black text-[#60708e]">{customers.length} shown</span></header>
       <div className="border-y border-[#e8edf4] p-3.5">
-        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search by name or mobile" className="h-10 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
-        <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", "All Customers"], ["udhar", "With Balance"], ["due", "Overdue"], ["cleared", "Cleared"]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-9 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
+        <div className="relative"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7b89a2]" /><Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("customers.searchShort")} className="h-10 rounded-[10px] border-[#dfe7f2] pl-10 text-[12px]" /></div>
+        <div className="mt-3 grid grid-cols-4 gap-1.5">{([["all", t("customers.filter.allCustomers")], ["udhar", t("customers.filter.withBalanceTitle")], ["due", "Overdue"], ["cleared", "Cleared"]] as const).map(([key, label]) => <button key={key} onClick={() => onFilter(key)} className={cn("h-9 rounded-[8px] border px-1 text-[8.5px] font-bold transition-colors", filter === key ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#e3e9f2] bg-white text-[#405273] hover:bg-[#f8faff]")}>{label}</button>)}</div>
       </div>
       <div className="app-scrollbar max-h-[610px] overflow-y-auto p-3">
         {loading ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">Loading customers...</p> : customers.length === 0 ? <p className="py-10 text-center text-[12px] text-[#7b89a2]">No customers found</p> : customers.map((customer, index) => {
@@ -1354,7 +1359,13 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
           const active = selectedId === customer.id;
           const ageing = customer.ledgerMetrics.ageing;
           const ageLabel = customer.ledgerBalance <= 0 ? "0 Days" : ageing.thirtyPlus > 0 ? "30+ Days" : ageing.sevenToThirty > 0 ? "8-30 Days" : "0-7 Days";
-          const badgeLabel = risk.label === "High Risk" ? "High" : risk.label === "Medium Risk" ? "Medium" : risk.label === "Low Risk" ? "Low" : "Cleared";
+          const badgeLabel = risk.labelKey === "customers.risk.high"
+            ? t("customers.risk.high.short")
+            : risk.labelKey === "customers.risk.medium"
+              ? t("customers.risk.medium.short")
+              : risk.labelKey === "customers.risk.low"
+                ? t("customers.risk.low.short")
+                : t("customers.filter.cleared");
           const lastActivity = latestCustomerUdharActivity(customer);
           return (
             <button
@@ -1387,13 +1398,14 @@ function CustomerListPanelV3({ customers, selectedId, loading, search, filter, t
       </div>
       <footer className="flex min-h-12 items-center justify-between gap-2 border-t border-[#e8edf4] px-3 text-[9px] text-[#60708e]">
         <span>{customers.length === 0 ? `Showing 0 of ${total} customers` : `Showing ${customers.length} of ${total} customers`}</span>
-        <span>{customers.length === 0 ? "No customers" : `${customers.length} loaded`}</span>
+        <span>{customers.length === 0 ? t("customers.noCustomers") : `${customers.length} loaded`}</span>
       </footer>
     </section>
   );
 }
 
 function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, paymentForm, saving, onEdit, onPaymentChange, onCollect, onReminder }: { customer: CustomerWithLedger | null; risk: ReturnType<typeof riskInfo> | null; creditLimit: number; paymentRows: Array<Record<string, unknown>>; paymentForm: PaymentFormState; saving: boolean; onEdit: (customer: CustomerWithLedger) => void; onPaymentChange: React.Dispatch<React.SetStateAction<PaymentFormState>>; onCollect: () => void; onReminder: () => void }) {
+  const { t } = useAppLanguage();
   if (!customer || !risk) {
     return (
       <div className="grid min-h-[430px] place-items-center rounded-[16px] border border-dashed border-[#d8e2f1] bg-white px-6 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -1427,13 +1439,13 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
     <section className="min-w-0 space-y-5">
       <article className="min-h-[128px] overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
         <div className="flex flex-col gap-4 p-[18px] sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{risk.label}</span><button onClick={() => onEdit(customer)} title="Edit customer" className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
+          <div className="flex min-w-0 gap-3.5"><span className="grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full bg-[#e7efff] text-[18px] font-black text-[var(--brand)]">{initials(customer.name)}</span><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-[18px] font-black text-[var(--brand-ink)]">{customer.name}</h2><span className={cn("rounded-[8px] px-2 py-1 text-[10px] font-bold", risk.cls)}>{t(risk.labelKey)}</span><button onClick={() => onEdit(customer)} title="Edit customer" className="grid h-7 w-7 place-items-center rounded-[8px] text-[var(--brand)] hover:bg-[var(--brand-soft)]"><Pencil size={13} /></button></div><div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-[#405273]"><span className="inline-flex items-center gap-1.5"><Phone size={14} className="text-[#64748b]" />{customer.mobile || "No mobile"}</span><span className="inline-flex items-center gap-1.5"><MapPin size={14} className="text-[#64748b]" />{customer.address || "No address"}</span></div></div></div>
           <div className="flex items-center gap-3">
             <Link href={`/customers/${customer.id}`} title="Open full udhar ledger" className="inline-flex shrink-0 items-center gap-1.5 rounded-[10px] bg-[var(--brand)] px-3.5 py-2.5 text-[11px] font-bold text-white shadow-[0_8px_18px_var(--brand-shadow)] transition-colors hover:bg-[var(--brand-strong)]"><BookOpen size={15} />View Ledger</Link>
-            <InfoMini label="Last Payment" value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
+            <InfoMini label={t("customers.profile.lastPayment")} value={formatShortDate(customer.ledgerMetrics.lastPaymentAt)} />
           </div>
         </div>
-        <div className="grid grid-cols-2 border-t border-[#e8edf4] sm:grid-cols-5"><CompactSummaryV3 label="Credit Limit" value={creditLimit > 0 ? fmtMoney(creditLimit) : "Not set"} /><CompactSummaryV3 label="Total Purchases" value={fmtMoney(outstanding + paid)} /><CompactSummaryV3 label="Total Paid" value={fmtMoney(paid)} /><CompactSummaryV3 label="Outstanding" value={fmtMoney(outstanding)} danger /><CompactSummaryV3 label="Overdue Days" value={`${overdueDays} Days`} danger={overdueDays > 0} /></div>
+        <div className="grid grid-cols-2 border-t border-[#e8edf4] sm:grid-cols-5"><CompactSummaryV3 label="Credit Limit" value={creditLimit > 0 ? fmtMoney(creditLimit) : "Not set"} /><CompactSummaryV3 label={t("customers.stat.totalPurchases")} value={fmtMoney(outstanding + paid)} /><CompactSummaryV3 label={t("customers.stat.totalPaid")} value={fmtMoney(paid)} /><CompactSummaryV3 label="Outstanding" value={fmtMoney(outstanding)} danger /><CompactSummaryV3 label="Overdue Days" value={`${overdueDays} Days`} danger={overdueDays > 0} /></div>
       </article>
 
       <article className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
@@ -1444,8 +1456,8 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([['cash','Cash',<Banknote key="cash" size={15} />],['upi','UPI',<CreditCard key="upi" size={15} />],['bank','Bank',<Landmark key="bank" size={15} />],['split','Split',<ArrowLeftRight key="split" size={15} />]] as const).map(([mode,label,icon]) => <button key={mode} onClick={() => onPaymentChange((form) => { const total = money(form.amount); return { ...form, mode, ...(mode === "split" && total > 0 && !form.cashAmount && !form.upiAmount ? { cashAmount: String(total), upiAmount: "0" } : {}) }; })} className={cn("inline-flex h-10 items-center justify-center gap-2 rounded-[10px] border text-[11px] font-bold transition-colors", paymentForm.mode === mode ? "border-[1.5px] border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[#dfe7f2] text-[#405273] hover:bg-[#f8faff]")}>{paymentForm.mode === mode && mode === "split" ? <CheckCircle2 size={15} /> : icon}{label}</button>)}</div>
         {paymentForm.mode === "split" && <div className="mt-3 rounded-[12px] border border-[#e5ebf3] bg-[#fbfcfe] p-3"><div className="grid grid-cols-2 gap-3"><div><Label className="text-[10px] font-bold text-[#52627e]">Cash Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.cashAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, cashAmount: event.target.value, amount: String(addMoney(event.target.value, form.upiAmount)) }))} className="h-10 rounded-[9px] pl-7 text-[12px] font-bold" /></div></div><div><Label className="text-[10px] font-bold text-[#52627e]">UPI Amount</Label><div className="relative mt-1.5"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#52627e]">₹</span><Input type="number" inputMode="decimal" min="0" step="0.01" value={paymentForm.upiAmount} onChange={(event) => onPaymentChange((form) => ({ ...form, upiAmount: event.target.value, amount: String(addMoney(form.cashAmount, event.target.value)) }))} className="h-10 rounded-[9px] px-7 text-[12px] font-bold" /><span className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[6px] border border-[#e6ecf5] bg-[#f8faff] px-1.5 py-0.5 text-[9px] font-black text-[#405273]">UPI</span></div></div></div><p className="mt-2.5 text-center text-[11px] font-bold text-[#52627e]">Total Payment: <span className="text-[var(--brand-ink)]">{fmtMoney(paymentTotal)}</span></p></div>}
         {moneyExceeds(paymentTotal, outstanding) && <p className="mt-2 text-[10px] font-semibold text-rose-600">Payment cannot exceed the outstanding balance of {fmtMoney(outstanding)}.</p>}
-        <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">Payment Note <span className="font-medium text-[#94a3b8]">(Optional)</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder="Payment note / reference" /></div>
-        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] text-[12px] font-bold shadow-[0_8px_18px_var(--brand-shadow)]"><CheckCircle2 size={16} />{saving ? "Saving..." : "Collect Payment"}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />Send Reminder</Button></div>
+        <div className="mt-3"><Label className="text-[10px] font-bold text-[#52627e]">Payment Note <span className="font-medium text-[#94a3b8]">(Optional)</span></Label><Input value={paymentForm.note} onChange={(event) => onPaymentChange((form) => ({ ...form, note: event.target.value }))} className="mt-1.5 h-[42px] rounded-[10px] text-[12px]" placeholder={t("customers.field.paymentNote")} /></div>
+        <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={onCollect} disabled={saving || invalidAmount} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-gradient-to-r from-[var(--brand)] to-[var(--brand-strong)] text-[12px] font-bold shadow-[0_8px_18px_var(--brand-shadow)]"><CheckCircle2 size={16} />{saving ? "Saving..." : t("customers.collectPaymentTitle")}</Button><Button variant="outline" onClick={onReminder} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border-[#d6e2f2] text-[12px] font-bold text-[var(--brand)]"><Bell size={16} />Send Reminder</Button></div>
         <p className="mt-3 flex items-center justify-center gap-2 rounded-[8px] bg-[#f7f9fc] px-3 py-2 text-center text-[10px] text-[#71809a]"><Info size={13} className="text-[var(--brand)]" />After payment, customer balance and ledger update automatically.</p>
       </article>
     </section>
@@ -1453,6 +1465,7 @@ function CustomerPaymentWorkspaceV3({ customer, risk, creditLimit, paymentRows, 
 }
 
 function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, collectionChange, payments, onReminder, rangeLabel = "This Week", onCycleRange, onViewAllPayments }: { customer: CustomerWithLedger | null; risk: ReturnType<typeof riskInfo> | null; ageing?: CustomerWithLedger["ledgerMetrics"]["ageing"]; received: number; pending: number; collectionChange: number; payments: Array<Record<string, unknown>>; onReminder: () => void; rangeLabel?: string; onCycleRange?: () => void; onViewAllPayments?: () => void }) {
+  const { t } = useAppLanguage();
   if (!customer || !risk) {
     return (
       <aside className="space-y-5 xl:col-span-2 2xl:col-span-1">
@@ -1483,10 +1496,10 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
   const recentPayments = [...payments].sort((a, b) => paymentDate(b).localeCompare(paymentDate(a))).slice(0, 4);
   return (
     <aside className="space-y-5 xl:col-span-2 2xl:col-span-1">
-      <RightCardV3 title="Ageing Summary" info><div className="flex items-center gap-4"><div className="grid h-[130px] w-[130px] shrink-0 place-items-center rounded-full" style={{ background: total > 0 ? `conic-gradient(${stops})` : "#e7edf5" }}><div className="grid h-[94px] w-[94px] place-items-center rounded-full bg-white text-center"><div><p className="text-[16px] font-black text-[var(--brand-ink)]">{fmtMoney(total)}</p><p className="text-[10px] text-[#71809a]">Total Due</p></div></div></div><div className="min-w-0 flex-1 space-y-3">{buckets.map((row) => <div key={row.label} className="grid grid-cols-[9px_1fr_auto] items-center gap-2 text-[10px]"><span className="h-[9px] w-[9px] rounded-full" style={{ background: row.color }} /><span className="text-[#52627e]">{row.label}</span><span className="text-right font-black text-[var(--brand-ink)]">{fmtMoney(row.value)} <span className="block text-[8px] font-medium text-[#94a3b8]">{total > 0 ? `${Math.round(row.value / total * 1000) / 10}%` : "0%"}</span></span></div>)}</div></div></RightCardV3>
-      <RightCardV3 title="Collection Progress" action={rangeLabel} onAction={onCycleRange} pill info><div className="flex items-center gap-5"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--brand) 0 ${collection}%, #e9eef6 ${collection}% 100%)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-center"><div><p className="text-[18px] font-black text-[var(--brand-ink)]">{Math.round(collection)}%</p><p className="text-[9px] font-semibold text-[#71809a]">Collected</p></div></div></div><div className="grid min-w-0 flex-1 grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold text-[#71809a]">Collected</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(received)}</p><p className={cn("mt-2 text-[9px] font-semibold", collectionChange < 0 ? "text-rose-600" : "text-emerald-600")}>vs previous period: {collectionChange >= 0 ? "↑" : "↓"} {Math.abs(collectionChange)}%</p></div><div><p className="text-[10px] font-semibold text-[#71809a]">Pending</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(pending)}</p></div></div></div></RightCardV3>
-      <RightCardV3 title="Recent Payments Received" action="View all" onAction={onViewAllPayments}>{recentPayments.length === 0 ? <p className="py-4 text-center text-[11px] text-[#71809a]">No payments recorded yet.</p> : <div className="divide-y divide-[#edf1f6]">{recentPayments.map((payment, index) => { const mode = String(payment.mode ?? "cash").toLowerCase(); const modeLabel = mode === "upi" ? "UPI" : mode === "cash" ? "Cash" : mode.replace(/\b\w/g, (letter) => letter.toUpperCase()); return <div key={String(payment.id ?? index)} className="grid min-h-10 grid-cols-[7px_1fr_auto_auto] items-center gap-2.5 text-[10.5px]"><span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /><span className="text-[#52627e]">{formatShortDate(paymentDate(payment))}</span><span className="font-black text-[var(--brand-ink)]">{fmtMoney(paymentAmount(payment))}</span><span className="min-w-[54px] text-right text-[#52627e]">{modeLabel}</span></div>; })}</div>}</RightCardV3>
-      <RightCardV3 title="Credit Risk"><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk?.label ?? "No customer"}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[var(--brand)]"><Bell size={13} />Send Reminder</Button></div></RightCardV3>
+      <RightCardV3 title={t("customers.ageing.title")} info><div className="flex items-center gap-4"><div className="grid h-[130px] w-[130px] shrink-0 place-items-center rounded-full" style={{ background: total > 0 ? `conic-gradient(${stops})` : "#e7edf5" }}><div className="grid h-[94px] w-[94px] place-items-center rounded-full bg-white text-center"><div><p className="text-[16px] font-black text-[var(--brand-ink)]">{fmtMoney(total)}</p><p className="text-[10px] text-[#71809a]">Total Due</p></div></div></div><div className="min-w-0 flex-1 space-y-3">{buckets.map((row) => <div key={row.label} className="grid grid-cols-[9px_1fr_auto] items-center gap-2 text-[10px]"><span className="h-[9px] w-[9px] rounded-full" style={{ background: row.color }} /><span className="text-[#52627e]">{row.label}</span><span className="text-right font-black text-[var(--brand-ink)]">{fmtMoney(row.value)} <span className="block text-[8px] font-medium text-[#94a3b8]">{total > 0 ? `${Math.round(row.value / total * 1000) / 10}%` : "0%"}</span></span></div>)}</div></div></RightCardV3>
+      <RightCardV3 title={t("customers.collectionProgress")} action={rangeLabel} onAction={onCycleRange} pill info><div className="flex items-center gap-5"><div className="grid h-24 w-24 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(var(--brand) 0 ${collection}%, #e9eef6 ${collection}% 100%)` }}><div className="grid h-[72px] w-[72px] place-items-center rounded-full bg-white text-center"><div><p className="text-[18px] font-black text-[var(--brand-ink)]">{Math.round(collection)}%</p><p className="text-[9px] font-semibold text-[#71809a]">Collected</p></div></div></div><div className="grid min-w-0 flex-1 grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold text-[#71809a]">Collected</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(received)}</p><p className={cn("mt-2 text-[9px] font-semibold", collectionChange < 0 ? "text-rose-600" : "text-emerald-600")}>vs previous period: {collectionChange >= 0 ? "↑" : "↓"} {Math.abs(collectionChange)}%</p></div><div><p className="text-[10px] font-semibold text-[#71809a]">Pending</p><p className="mt-1 text-[14px] font-black text-[var(--brand-ink)]">{fmtMoney(pending)}</p></div></div></div></RightCardV3>
+      <RightCardV3 title={t("customers.payments.recent")} action="View all" onAction={onViewAllPayments}>{recentPayments.length === 0 ? <p className="py-4 text-center text-[11px] text-[#71809a]">No payments recorded yet.</p> : <div className="divide-y divide-[#edf1f6]">{recentPayments.map((payment, index) => { const mode = String(payment.mode ?? "cash").toLowerCase(); const modeLabel = mode === "upi" ? "UPI" : mode === "cash" ? "Cash" : mode.replace(/\b\w/g, (letter) => letter.toUpperCase()); return <div key={String(payment.id ?? index)} className="grid min-h-10 grid-cols-[7px_1fr_auto_auto] items-center gap-2.5 text-[10.5px]"><span className="h-[7px] w-[7px] rounded-full bg-[#22c55e]" /><span className="text-[#52627e]">{formatShortDate(paymentDate(payment))}</span><span className="font-black text-[var(--brand-ink)]">{fmtMoney(paymentAmount(payment))}</span><span className="min-w-[54px] text-right text-[#52627e]">{modeLabel}</span></div>; })}</div>}</RightCardV3>
+      <RightCardV3 title={t("customers.profile.creditRisk")}><div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rose-50 text-rose-600"><AlertTriangle size={15} /></span><div className="min-w-0 flex-1"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[10px] font-bold", risk?.cls ?? "bg-slate-50 text-slate-600")}>{risk ? t(risk.labelKey) : t("customers.noCustomer")}</span><p className="mt-2 text-[10.5px] leading-4 text-[#60708e]">{overdueDays > 0 ? `Payment overdue for ${overdueDays} days. Send a reminder or collect payment.` : customer?.ledgerMetrics.warning ?? "Payment pattern looks trackable."}</p></div><Button variant="outline" onClick={onReminder} disabled={!customer} className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-[9px] border-[#d6e2f2] px-2.5 text-[9px] font-bold text-[var(--brand)]"><Bell size={13} />Send Reminder</Button></div></RightCardV3>
     </aside>
   );
 }
@@ -1494,16 +1507,17 @@ function CustomerInsightsPanelV3({ customer, risk, ageing, received, pending, co
 type CustomerLedgerRow = Record<string, unknown> & { id: string; signed_amount: number; running_balance: number; display_type: string; display_date: string };
 
 function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { customer: CustomerWithLedger | null; rows: CustomerLedgerRow[]; loading: boolean; onPrint: () => void }) {
+  const { t } = useAppLanguage();
   const [entryFilter, setEntryFilter] = useState<"all" | "bill" | "payment">("all");
   const visibleRows = rows.filter((row) => entryFilter === "all" || (entryFilter === "bill" ? row.display_type === "BILL" : row.display_type === "PAYMENT"));
-  const fromDate = rows.length > 0 ? formatShortDate(rows[rows.length - 1]?.display_date) : "All time";
+  const fromDate = rows.length > 0 ? formatShortDate(rows[rows.length - 1]?.display_date) : t("customers.range.allTime");
   const toDate = rows.length > 0 ? formatShortDate(rows[0]?.display_date) : formatShortDate(new Date().toISOString());
   const badgeFor = (type: string) => type === "PAYMENT" ? "bg-[#dcfce7] text-[#16a34a]" : type.includes("OPEN") ? "bg-[#dbeafe] text-[var(--brand)]" : type === "BILL" ? "bg-[#fee2e2] text-[#dc2626]" : "bg-[#f5f3ff] text-[#7c3aed]";
   const labelFor = (type: string) => type === "PAYMENT" ? "Payment" : type === "BILL" ? "Bill" : type.includes("OPEN") ? "Opening Balance" : type.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
   // A synced manual adjustment echoes back typed as debit/payment (mode:"adjustment"),
   // so display_type alone reads "Bill"/"Payment". Detect the adjustment and label it plainly.
   const entryBadge = (row: CustomerLedgerRow) => isManualAdjustmentEntry(row) ? "bg-[#f5f3ff] text-[#7c3aed]" : badgeFor(String(row.display_type ?? "ENTRY").toUpperCase());
-  const entryLabel = (row: CustomerLedgerRow) => isManualAdjustmentEntry(row) ? "Adjustment" : labelFor(String(row.display_type ?? "ENTRY").toUpperCase());
+  const entryLabel = (row: CustomerLedgerRow) => isManualAdjustmentEntry(row) ? t("customers.detail.adjustment") : labelFor(String(row.display_type ?? "ENTRY").toUpperCase());
   return (
     <section className="overflow-hidden rounded-[16px] border border-[#e6ecf5] bg-white shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e8edf4] px-[18px] py-4">
@@ -1551,26 +1565,29 @@ function CustomerLedgerRegisterV3({ customer, rows, loading, onPrint }: { custom
             <tbody className="divide-y divide-[#e8edf4]">
               {loading ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">Loading ledger...</td></tr> : visibleRows.length === 0 ? <tr><td colSpan={10} className="py-12 text-center text-[#71809a]">No ledger entries found.</td></tr> : visibleRows.slice(0, 8).map((row) => {
                 const signed = Number(row.signed_amount ?? 0);
-                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[var(--brand)]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[var(--brand-ink)]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title="Ledger actions" className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
+                return <tr key={row.id} className="h-12 text-[#24385f] transition-colors hover:bg-[#fbfcfe]"><td className="whitespace-nowrap px-3">{formatShortDate(row.display_date)}</td><td className="px-3"><span className={cn("inline-flex rounded-[8px] px-2 py-1 text-[11px] font-bold", entryBadge(row))}>{entryLabel(row)}</span></td><td className="whitespace-nowrap px-3 font-semibold text-[var(--brand)]">{String(row.source_id ?? "—")}</td><td className="max-w-[220px] truncate px-3">{String(row.note || entryLabel(row))}</td><td className="px-3 font-bold text-[#ef4444]">{signed > 0 ? fmtMoney(signed) : "—"}</td><td className="px-3 font-bold text-[#16a34a]">{signed < 0 ? fmtMoney(Math.abs(signed)) : "—"}</td><td className="px-3 font-black text-[var(--brand-ink)]">{fmtMoney(row.running_balance)}</td><td className="px-3">{String(row.mode ?? "System")}</td><td className="px-3"><span className="inline-flex rounded-[8px] bg-[#dcfce7] px-2 py-1 text-[11px] font-bold text-[#15803d]">Posted</span></td><td className="px-3"><DropdownMenu><DropdownMenuTrigger asChild><button title={t("customers.ledger.actions")} className="grid h-8 w-8 place-items-center rounded-[8px] border border-[#e6ecf5] bg-white text-[#60708e] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"><MoreVertical size={15} /></button></DropdownMenuTrigger><DropdownMenuContent align="end" className="w-44"><DropdownMenuItem onClick={() => { void navigator.clipboard?.writeText(String(row.source_id ?? row.id)); }}>Copy reference</DropdownMenuItem><DropdownMenuItem onClick={onPrint} disabled={!customer}><Download size={14} className="mr-2" />Print statement</DropdownMenuItem>{customer && <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href={`/customers/${customer.id}`}><span className="flex items-center"><UserRound size={14} className="mr-2" />Open full ledger</span></Link></DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></td></tr>;
               })}
             </tbody>
           </table>
         </div>
-        <aside className="hidden border-l border-[#e8edf4] bg-[#f8faff] p-4 2xl:block"><h3 className="text-[13px] font-black text-[var(--brand)]">How udhar works:</h3><div className="mt-4 space-y-4 text-[10.5px] leading-4 text-[#52627e]"><HelpLineV3 tone="bg-[#fff7ed] text-[#f97316]" icon={<FileText size={14} />} text="Bills on credit increase customer balance." /><HelpLineV3 tone="bg-[#ecfdf5] text-[#16a34a]" icon={<Wallet size={14} />} text="Payments reduce the outstanding balance." /><HelpLineV3 tone="bg-[var(--brand-soft)] text-[var(--brand)]" icon={<CheckCircle2 size={14} />} text="Every movement is recorded in the udhar ledger." /><HelpLineV3 tone="bg-[#f5f3ff] text-[#7c3aed]" icon={<Download size={14} />} text="Statements can be shared as PDF or WhatsApp." /></div></aside>
+        <aside className="hidden border-l border-[#e8edf4] bg-[#f8faff] p-4 2xl:block"><h3 className="text-[13px] font-black text-[var(--brand)]">How udhar works:</h3><div className="mt-4 space-y-4 text-[10.5px] leading-4 text-[#52627e]"><HelpLineV3 tone="bg-[#fff7ed] text-[#f97316]" icon={<FileText size={14} />} text={t("customers.ledger.creditNote")} /><HelpLineV3 tone="bg-[#ecfdf5] text-[#16a34a]" icon={<Wallet size={14} />} text={t("customers.ledger.paymentNote")} /><HelpLineV3 tone="bg-[var(--brand-soft)] text-[var(--brand)]" icon={<CheckCircle2 size={14} />} text={t("customers.ledger.recordedNote")} /><HelpLineV3 tone="bg-[#f5f3ff] text-[#7c3aed]" icon={<Download size={14} />} text={t("customers.detail.statementShareHint")} /></div></aside>
       </div>
     </section>
   );
 }
 
 function CompactSummaryV3({ label, value, danger = false }: { label: string; value: string; danger?: boolean }) {
+  const { t } = useAppLanguage();
   return <div className="border-b border-r border-[#e8edf4] px-3 py-3.5 last:border-r-0"><p className="text-[9px] font-bold uppercase text-[#75839d]">{label}</p><p className={cn("mt-1.5 text-[12px] font-black text-[var(--brand-ink)]", danger && "text-rose-600")}>{value}</p></div>;
 }
 
 function HelpLineV3({ icon, text, tone }: { icon: React.ReactNode; text: string; tone: string }) {
+  const { t } = useAppLanguage();
   return <div className="flex items-start gap-3"><span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full", tone)}>{icon}</span><span className="pt-0.5">{text}</span></div>;
 }
 
 function InfoMini({ label, value }: { label: string; value: string }) {
+  const { t } = useAppLanguage();
   return (
     <div>
       <p className="text-[11px] font-bold text-[#64748b]">{label}</p>
@@ -1580,6 +1597,7 @@ function InfoMini({ label, value }: { label: string; value: string }) {
 }
 
 function SummaryCell({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  const { t } = useAppLanguage();
   return (
     <div className="border-b border-[#e8eef7] pb-3 last:border-0 md:border-b-0 md:border-r md:pb-0 md:pr-4 md:last:border-r-0">
       <p className="text-[11px] font-bold uppercase tracking-wide text-[#64748b]">{label}</p>
@@ -1589,6 +1607,7 @@ function SummaryCell({ label, value, valueClass }: { label: string; value: strin
 }
 
 function ActionTile({ icon, title, sub, onClick }: { icon: React.ReactNode; title: string; sub: string; onClick?: () => void }) {
+  const { t } = useAppLanguage();
   return (
     <button onClick={onClick} className="rounded-[14px] border border-[#e6ecf4] bg-white p-4 text-center shadow-[0_10px_24px_rgba(15,35,80,0.045)] transition-all hover:-translate-y-0.5 hover:border-[var(--brand-border)] hover:bg-[#f8fbff]">
       <span className="mx-auto grid h-10 w-10 place-items-center rounded-[12px] bg-[var(--brand-soft)] text-[var(--brand)]">{icon}</span>
@@ -1599,6 +1618,7 @@ function ActionTile({ icon, title, sub, onClick }: { icon: React.ReactNode; titl
 }
 
 function RightCard({ title, action, onAction, children }: { title: string; action?: string; onAction?: () => void; children: React.ReactNode }) {
+  const { t } = useAppLanguage();
   return (
     <div className="rounded-[8px] border border-[#e2e9f3] bg-white p-4 shadow-[0_5px_18px_rgba(31,60,110,0.045)]">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -1611,6 +1631,7 @@ function RightCard({ title, action, onAction, children }: { title: string; actio
 }
 
 function RightCardV3({ title, action, onAction, info = false, pill = false, children }: { title: string; action?: string; onAction?: () => void; info?: boolean; pill?: boolean; children: React.ReactNode }) {
+  const { t } = useAppLanguage();
   return (
     <div className="rounded-[16px] border border-[#e6ecf5] bg-white p-[18px] shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -1623,6 +1644,7 @@ function RightCardV3({ title, action, onAction, info = false, pill = false, chil
 }
 
 function Legend({ color, inlineColor, label, value }: { color: string; inlineColor?: string; label: string; value: string }) {
+  const { t } = useAppLanguage();
   return (
     <div className="flex items-center gap-2 text-[9.5px]">
       <span className={cn("h-2 w-2 shrink-0 rounded-full", color)} style={inlineColor ? { backgroundColor: inlineColor } : undefined} />

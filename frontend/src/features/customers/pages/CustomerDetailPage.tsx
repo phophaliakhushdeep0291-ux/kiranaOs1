@@ -23,6 +23,7 @@ import { OwnerPinModal } from "@/components/security/OwnerPinModal";
 import { apiRequest } from "@/lib/api/http";
 import { moneyExceeds, roundMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
+import { useAppLanguage } from "@/features/settings/i18n";
 
 interface PaymentFormState { amount: string; mode: "cash" | "upi" | "bank"; note: string }
 interface ReverseFormState { paymentId: string }
@@ -111,12 +112,13 @@ function printStatement(customerName: string, ledgerRows: Array<{ display_date: 
   const rows = ledgerRows.map((row) => `<tr><td>${formatDateTime(row.display_date)}</td><td>${row.display_type}</td><td>${row.note ?? ""}</td><td style="text-align:right">${formatMoney(row.signed_amount)}</td><td style="text-align:right">${formatMoney(Math.max(0, row.running_balance))}${row.running_balance < 0 ? " *" : ""}</td></tr>`).join("");
   const win = window.open("", "_blank", "width=720,height=840");
   if (!win) return false;
-  win.document.write(`<!doctype html><html><head><title>${customerName} statement</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;font-size:12px}h1{font-size:20px}</style></head><body><h1>${customerName} - Customer Statement</h1><table><thead><tr><th>Date</th><th>Type</th><th>Note</th><th>Amount</th><th>Balance</th></tr></thead><tbody>${rows}</tbody></table><script>window.print()</script></body></html>`);
+  win.document.write(`<!doctype html><html><head><title>${customerName} statement</title><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:8px;font-size:12px}h1{font-size:20px}</style></head><body><h1>${customerName} - Customer Statement</h1><table><thead><tr><th>{t("customers.ledger.date")}</th><th>{t("customers.ledger.type")}</th><th>Note</th><th>Amount</th><th>{t("customers.ledger.balance")}</th></tr></thead><tbody>${rows}</tbody></table><script>window.print()</script></body></html>`);
   win.document.close();
   return true;
 }
 
 export default function CustomerDetailPage() {
+  const { t } = useAppLanguage();
   const params = useParams<{ id: string }>();
   const id = params.id ?? "";
   const { toast } = useToast();
@@ -153,16 +155,16 @@ export default function CustomerDetailPage() {
     onSuccess: (result) => {
       const queued = result.queued || result.status === "queued";
       toast({
-        title: queued ? "WhatsApp reminder queued" : "Reminder was not queued",
+        title: queued ? t("customers.toast.reminderQueued") : t("customers.toast.reminderNotQueued"),
         description: queued
-          ? "The reminder worker will update the delivery log after the provider responds."
-          : result.code || "Review the provider and queue status in Notification settings.",
+          ? t("customers.toast.reminderWorkerNote")
+          : result.code || t("customers.toast.reviewProvider"),
         variant: queued ? "default" : "destructive",
       });
     },
     onError: (error) => toast({
-      title: "Reminder could not be sent",
-      description: error instanceof Error ? error.message : "Review WhatsApp readiness in Notification settings.",
+      title: t("customers.toast.reminderFailed"),
+      description: error instanceof Error ? error.message : t("customers.toast.reviewWhatsapp"),
       variant: "destructive",
     }),
   });
@@ -171,7 +173,7 @@ export default function CustomerDetailPage() {
     if (!customer) return;
     const amount = roundMoney(Number(payment.amount));
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast({ title: "Enter valid amount", variant: "destructive" });
+      toast({ title: t("customers.toast.enterValidAmount"), variant: "destructive" });
       return;
     }
     // Mirror the offline overpayment guard (recordPaymentLocalFirst /
@@ -179,7 +181,7 @@ export default function CustomerDetailPage() {
     const outstanding = Math.max(0, roundMoney(Number(customer.ledgerBalance ?? 0)));
     if (moneyExceeds(amount, outstanding)) {
       toast({
-        title: "Amount exceeds outstanding udhar",
+        title: t("customers.toast.amountExceeds"),
         description: `${customer.name} owes ${formatMoney(outstanding)}. Enter that amount or less.`,
         variant: "destructive",
       });
@@ -194,12 +196,12 @@ export default function CustomerDetailPage() {
         // be drifted and would otherwise reject a legitimate collection.
         { expectedOutstanding: outstanding },
       );
-      toast({ title: "Payment recorded", description: "Ledger updated locally. Billing still works offline." });
+      toast({ title: t("customers.toast.paymentRecorded"), description: t("customers.toast.ledgerOffline") });
       setPaymentOpen(false);
       setPayment({ amount: "", mode: "cash", note: "" });
       await refetch();
     } catch (error) {
-      toast({ title: "Payment failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+      toast({ title: t("customers.toast.paymentFailed"), description: error instanceof Error ? error.message : t("customers.toast.tryAgain"), variant: "destructive" });
     } finally { setSaving(false); }
   }
 
@@ -208,12 +210,12 @@ export default function CustomerDetailPage() {
     setSaving(true);
     try {
       await reversePaymentWithOwnerPinLocalFirst({ paymentId: reverse.paymentId, ownerPin, reason });
-      toast({ title: "Payment reversed", description: "Correction entry added. Original ledger is preserved." });
+      toast({ title: t("customers.toast.paymentReversed"), description: t("customers.toast.correctionAdded") });
       setReverseOpen(false);
       setReverse({ paymentId: "" });
       await refetch();
     } catch (error) {
-      toast({ title: "Reversal failed", description: error instanceof Error ? error.message : "Check owner PIN.", variant: "destructive" });
+      toast({ title: t("customers.toast.reversalFailed"), description: error instanceof Error ? error.message : "Check owner PIN.", variant: "destructive" });
     } finally { setSaving(false); }
   }
 
@@ -221,18 +223,18 @@ export default function CustomerDetailPage() {
     if (!customer) return;
     const amount = roundMoney(Number(adjust.amount));
     if (!Number.isFinite(amount) || amount === 0) {
-      toast({ title: "Enter valid adjustment", description: "Use positive amount to increase udhar, negative to reduce.", variant: "destructive" });
+      toast({ title: t("customers.toast.enterValidAdjustment"), description: t("customers.detail.adjustmentHint"), variant: "destructive" });
       return;
     }
     setSaving(true);
     try {
       await createLedgerAdjustmentLocalFirst({ customerId: customer.id, amount, ownerPin: adjust.ownerPin, note: adjust.note, expectedOutstanding: Math.max(0, roundMoney(Number(customer.ledgerBalance ?? 0))) });
-      toast({ title: "Ledger adjustment saved", description: "Append-only correction added locally." });
+      toast({ title: t("customers.toast.adjustmentSaved"), description: t("customers.toast.correctionLocal") });
       setAdjustOpen(false);
       setAdjust({ amount: "", ownerPin: "", note: "" });
       await refetch();
     } catch (error) {
-      toast({ title: "Adjustment failed", description: error instanceof Error ? error.message : "Check owner PIN.", variant: "destructive" });
+      toast({ title: t("customers.toast.adjustmentFailed"), description: error instanceof Error ? error.message : "Check owner PIN.", variant: "destructive" });
     } finally { setSaving(false); }
   }
 
@@ -244,17 +246,17 @@ export default function CustomerDetailPage() {
       <section className="overflow-hidden rounded-[18px] border border-[#e2e8f2] bg-white shadow-[0_10px_30px_rgba(15,35,80,0.05)]">
         <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between lg:p-5">
           <div className="flex min-w-0 items-center gap-4">
-            <Link href="/customers"><Button size="icon" variant="outline" className="h-10 w-10 shrink-0 rounded-[12px]" aria-label="Back to customers"><ArrowLeft size={17} /></Button></Link>
+            <Link href="/customers"><Button size="icon" variant="outline" className="h-10 w-10 shrink-0 rounded-[12px]" aria-label={t("customers.action.backToCustomers")}><ArrowLeft size={17} /></Button></Link>
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-[var(--brand-soft)] text-sm font-black text-[var(--brand)]">{customer.name.split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase()}</span>
-            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#7b879b]">Customer account</p><h1 className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">{customer.name}</h1><p className="mt-1 truncate text-xs font-medium text-[#66758f]">{customer.mobile || "No phone"} {customer.address ? `• ${customer.address}` : ""}</p></div>
+            <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#7b879b]">Customer account</p><h1 className="mt-1 truncate font-display text-[22px] font-black tracking-tight text-[var(--brand-ink)]">{customer.name}</h1><p className="mt-1 truncate text-xs font-medium text-[#66758f]">{customer.mobile || t("customers.detail.noPhone")} {customer.address ? `• ${customer.address}` : ""}</p></div>
           </div>
           <div className="flex flex-wrap gap-2 lg:justify-end">
-            <FeatureGate featureName="whatsapp_reminders" fallback={<UpgradePrompt compact featureName="whatsapp_reminders" description="Automated WhatsApp reminders require Pro." />}>
-              <Button variant="outline" disabled={reminder.isPending || !customer.mobile || Number(customer.ledgerBalance || 0) <= 0} onClick={() => reminder.mutate(customer.id)} title={!customer.mobile ? "Add a customer mobile number first" : Number(customer.ledgerBalance || 0) <= 0 ? "No pending udhar to remind" : undefined}>{reminder.isPending ? <Loader2 size={15} className="mr-1 animate-spin" /> : <MessageCircle size={15} className="mr-1" />}WhatsApp reminder</Button>
+            <FeatureGate featureName="whatsapp_reminders" fallback={<UpgradePrompt compact featureName="whatsapp_reminders" description={t("customers.toast.whatsappNeedsPro")} />}>
+              <Button variant="outline" disabled={reminder.isPending || !customer.mobile || Number(customer.ledgerBalance || 0) <= 0} onClick={() => reminder.mutate(customer.id)} title={!customer.mobile ? t("customers.toast.needMobileFirst") : Number(customer.ledgerBalance || 0) <= 0 ? t("customers.toast.noPendingRemind") : undefined}>{reminder.isPending ? <Loader2 size={15} className="mr-1 animate-spin" /> : <MessageCircle size={15} className="mr-1" />}WhatsApp reminder</Button>
             </FeatureGate>
-            <Button variant="outline" onClick={() => { const ok = printStatement(customer.name, ledger); if (!ok) toast({ title: "Print blocked", variant: "destructive" }); }}><FileText size={15} className="mr-1" />Statement</Button>
-            <Button variant="outline" onClick={() => setAdjustOpen(true)}><ShieldAlert size={15} className="mr-1" />Adjustment</Button>
-            <Button disabled={customer.ledgerBalance <= 0} onClick={() => setPaymentOpen(true)} title={customer.ledgerBalance <= 0 ? "No pending udhar to collect" : undefined}><CreditCard size={15} className="mr-1" />Record payment</Button>
+            <Button variant="outline" onClick={() => { const ok = printStatement(customer.name, ledger); if (!ok) toast({ title: t("customers.toast.printBlocked"), variant: "destructive" }); }}><FileText size={15} className="mr-1" />{t("customers.action.statement")}</Button>
+            <Button variant="outline" onClick={() => setAdjustOpen(true)}><ShieldAlert size={15} className="mr-1" />{t("customers.detail.adjustment")}</Button>
+            <Button disabled={customer.ledgerBalance <= 0} onClick={() => setPaymentOpen(true)} title={customer.ledgerBalance <= 0 ? t("customers.toast.noPendingCollect") : undefined}><CreditCard size={15} className="mr-1" />Record payment</Button>
           </div>
         </div>
       </section>
@@ -264,7 +266,7 @@ export default function CustomerDetailPage() {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <Card className="border-t-2 border-t-rose-500"><CardHeader className="pb-2"><CardTitle className="text-sm">Current udhar</CardTitle></CardHeader><CardContent className="text-2xl font-black text-destructive">{formatMoney(Math.max(0, customer.ledgerBalance))}</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Trust score</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{customer.ledgerMetrics.trustScore}/100</div><Badge variant={customer.ledgerMetrics.isBadCustomer ? "destructive" : "outline"}>{customer.ledgerMetrics.isBadCustomer ? "Bad customer warning" : "Acceptable"}</Badge></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Trust score</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{customer.ledgerMetrics.trustScore}/100</div><Badge variant={customer.ledgerMetrics.isBadCustomer ? "destructive" : "outline"}>{customer.ledgerMetrics.isBadCustomer ? t("customers.detail.badCustomerWarning") : t("customers.detail.acceptable")}</Badge></CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Udhar limit</CardTitle></CardHeader><CardContent className="text-2xl font-bold">{typeof customer.udharLimit === "number" ? formatMoney(customer.udharLimit) : "—"}</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Due date</CardTitle></CardHeader><CardContent className="font-semibold"><CalendarClock size={15} className="inline mr-1" />{formatShortDate(customer.dueDate)}</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Promise date</CardTitle></CardHeader><CardContent className="font-semibold">{formatShortDate(customer.promiseToPayDate)}</CardContent></Card>
@@ -292,9 +294,9 @@ export default function CustomerDetailPage() {
         <Card>
           <CardHeader><CardTitle>Full ledger / customer statement</CardTitle></CardHeader>
           <CardContent className="space-y-2 max-h-[560px] overflow-auto">
-            {ledger.length === 0 ? <div className="text-center py-8 text-muted-foreground">No ledger entries yet.</div> : ledger.map((entry) => {
+            {ledger.length === 0 ? <div className="text-center py-8 text-muted-foreground">{t("customers.ledger.emptyYet")}</div> : ledger.map((entry) => {
               const type = normaliseLedgerType(entry.type, entry.source_type);
-              const label = isManualAdjustmentEntry(entry) ? "Manual adjustment" : ledgerEntryLabel(type);
+              const label = isManualAdjustmentEntry(entry) ? t("customers.detail.manualAdjustment") : ledgerEntryLabel(type);
               return <div key={entry.id} className="rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div><p className="font-medium">{label}</p><p className="text-xs text-muted-foreground">{formatDateTime(entry.display_date)} {entry.note ? `• ${entry.note}` : ""}</p></div>
@@ -317,19 +319,19 @@ export default function CustomerDetailPage() {
           <Card>
             <CardHeader><CardTitle>Recent payments</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {payments.slice(0, 8).map((row) => <div key={String(row.id)} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><div><p className="font-medium">{formatMoney(readNumber(row.amount))} • {String(row.mode ?? "payment").toUpperCase()}</p><p className="text-xs text-muted-foreground">{formatDateTime(row.paidAt ?? row.paid_at ?? row.createdAt ?? row.created_at)} {row.reversed_at || row.reversedAt ? "• Reversed" : ""}</p></div>{!row.reversed_at && !row.reversedAt && row.derived_from_ledger !== true ? <Button size="sm" variant="outline" onClick={() => { if (!reversePaymentPermission.allowed) { toast({ title: "Permission denied", description: reversePaymentPermission.reason, variant: "destructive" }); return; } setReverse({ paymentId: String(row.id) }); setReverseOpen(true); }}><RotateCcw size={13} className="mr-1" />Reverse</Button> : <Badge variant="secondary">{row.derived_from_ledger === true && !row.reversed_at && !row.reversedAt ? "Ledger" : "Reversed"}</Badge>}</div></div>)}
+              {payments.slice(0, 8).map((row) => <div key={String(row.id)} className="rounded-lg border p-3"><div className="flex justify-between gap-3"><div><p className="font-medium">{formatMoney(readNumber(row.amount))} • {String(row.mode ?? "payment").toUpperCase()}</p><p className="text-xs text-muted-foreground">{formatDateTime(row.paidAt ?? row.paid_at ?? row.createdAt ?? row.created_at)} {row.reversed_at || row.reversedAt ? "• Reversed" : ""}</p></div>{!row.reversed_at && !row.reversedAt && row.derived_from_ledger !== true ? <Button size="sm" variant="outline" onClick={() => { if (!reversePaymentPermission.allowed) { toast({ title: t("customers.toast.permissionDenied"), description: reversePaymentPermission.reason, variant: "destructive" }); return; } setReverse({ paymentId: String(row.id) }); setReverseOpen(true); }}><RotateCcw size={13} className="mr-1" />Reverse</Button> : <Badge variant="secondary">{row.derived_from_ledger === true && !row.reversed_at && !row.reversedAt ? t("customers.tab.ledger") : t("customers.detail.reversed")}</Badge>}</div></div>)}
               {payments.length === 0 ? <p className="text-sm text-muted-foreground">No payments yet.</p> : null}
               {activePayments.length === 0 && payments.length > 0 ? <p className="text-xs text-muted-foreground">All visible payments are corrected/reversed.</p> : null}
             </CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle>Customer-specific pricing</CardTitle></CardHeader>
-            <CardContent className="text-sm text-muted-foreground">{customer.notes || "No special pricing notes saved. Add notes on customer edit screen."}</CardContent>
+            <CardContent className="text-sm text-muted-foreground">{customer.notes || t("customers.notes.noPricing")}</CardContent>
           </Card>
         </div>
       </div>
 
-      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Amount *</Label><Input type="number" inputMode="decimal" min="0" step="0.01" max={Math.max(0, customer.ledgerBalance)} className="mt-1" value={payment.amount} onChange={(event) => setPayment((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Mode</Label><Select value={payment.mode} onValueChange={(value) => setPayment((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="bank">Bank</SelectItem></SelectContent></Select></div><div><Label>Note</Label><Input className="mt-1" value={payment.note} onChange={(event) => setPayment((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void savePayment()}>{saving ? "Saving..." : "Save offline"}</Button></div></DialogContent></Dialog>
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Record payment</DialogTitle></DialogHeader><div className="space-y-4"><div><Label>Amount *</Label><Input type="number" inputMode="decimal" min="0" step="0.01" max={Math.max(0, customer.ledgerBalance)} className="mt-1" value={payment.amount} onChange={(event) => setPayment((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Mode</Label><Select value={payment.mode} onValueChange={(value) => setPayment((form) => ({ ...form, mode: value as PaymentFormState["mode"] }))}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="upi">UPI</SelectItem><SelectItem value="bank">Bank</SelectItem></SelectContent></Select></div><div><Label>Note</Label><Input className="mt-1" value={payment.note} onChange={(event) => setPayment((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void savePayment()}>{saving ? "Saving..." : t("customers.detail.saveOffline")}</Button></div></DialogContent></Dialog>
       <OwnerPinModal
         open={reverseOpen}
         title="Reverse payment"
@@ -340,7 +342,7 @@ export default function CustomerDetailPage() {
         onCancel={() => setReverseOpen(false)}
         onConfirm={({ ownerPin, reason }) => void saveReverse(ownerPin, reason)}
       />
-      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Manual ledger adjustment</DialogTitle></DialogHeader><div className="space-y-4"><p className="text-sm text-muted-foreground">Positive amount increases udhar. Negative amount reduces udhar. This creates an append-only ledger correction.</p><div><Label>Amount *</Label><Input type="number" inputMode="decimal" step="0.01" className="mt-1" value={adjust.amount} onChange={(event) => setAdjust((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Owner PIN *</Label><Input type="password" className="mt-1" value={adjust.ownerPin} onChange={(event) => setAdjust((form) => ({ ...form, ownerPin: event.target.value }))} /></div><div><Label>Reason</Label><Textarea className="mt-1" value={adjust.note} onChange={(event) => setAdjust((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setAdjustOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void saveAdjustment()}>{saving ? "Saving..." : "Save correction"}</Button></div></DialogContent></Dialog>
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Manual ledger adjustment</DialogTitle></DialogHeader><div className="space-y-4"><p className="text-sm text-muted-foreground">Positive amount increases udhar. Negative amount reduces udhar. This creates an append-only ledger correction.</p><div><Label>Amount *</Label><Input type="number" inputMode="decimal" step="0.01" className="mt-1" value={adjust.amount} onChange={(event) => setAdjust((form) => ({ ...form, amount: event.target.value }))} /></div><div><Label>Owner PIN *</Label><Input type="password" className="mt-1" value={adjust.ownerPin} onChange={(event) => setAdjust((form) => ({ ...form, ownerPin: event.target.value }))} /></div><div><Label>Reason</Label><Textarea className="mt-1" value={adjust.note} onChange={(event) => setAdjust((form) => ({ ...form, note: event.target.value }))} /></div></div><div className="flex justify-end gap-2 pt-2"><Button variant="outline" onClick={() => setAdjustOpen(false)}>Cancel</Button><Button disabled={saving} onClick={() => void saveAdjustment()}>{saving ? "Saving..." : t("customers.detail.saveCorrection")}</Button></div></DialogContent></Dialog>
     </div>
   );
 }

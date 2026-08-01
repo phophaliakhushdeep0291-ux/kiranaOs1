@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { customersEn as customersEnglish } from "@/features/settings/translations/customers";
 
 const customersSource = readFileSync("src/features/customers/pages/CustomersPage.tsx", "utf8");
 const reportsSource = readFileSync("src/features/reports/pages/ReportsPage.tsx", "utf8");
@@ -41,7 +42,10 @@ describe("collection metrics separate udhar recovery from sales revenue", () => 
   });
 
   it("labels the metric as udhar collected rather than generic receipts", () => {
-    expect(customersSource).toContain(`label="Udhar Collected"`);
+    // The label now comes from the i18n catalogue, so the honesty check is on
+    // the key the card renders plus the English text that key resolves to.
+    expect(customersSource).toContain(`label={t("customers.stat.udharCollected")}`);
+    expect(customersEnglish["customers.stat.udharCollected"]).toBe("Udhar Collected");
     expect(customersSource).not.toContain(`label="Received This Week"`);
   });
 });
