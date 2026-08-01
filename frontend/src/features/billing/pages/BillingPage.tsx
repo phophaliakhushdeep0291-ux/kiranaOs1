@@ -360,7 +360,7 @@ export default function Billing() {
     setGiftCardError(null);
     try {
       const card = await lookupGiftCard(giftCardCode);
-      if (card.status !== "active") throw new Error(`This gift card is ${card.status}.`);
+      if (card.status !== "active") throw new Error(t("billing.page.giftCardStatus", { status: card.status }));
       setGiftCardBalance(card.balance);
       setGiftCardAmount(roundMoney(Math.min(card.balance, grandTotal)));
     } catch (error) {
@@ -811,7 +811,7 @@ export default function Billing() {
         },
         onTranscript: ({ transcript, provider }) => {
           setVoiceCommand(existingText ? `${existingText} ${transcript}` : transcript);
-          setVoiceMicMessage(`Voice captured with ${provider}. Press Parse command to review the cart draft.`);
+          setVoiceMicMessage(t("billing.page.micCapturedWithProvider", { provider }));
         },
         onError: (message) => {
           setVoiceMicMessage(message);
@@ -875,7 +875,7 @@ export default function Billing() {
         ? t("billing.page.micBlockedDetail")
         : name === "NotFoundError"
           ? t("billing.page.micNotFound")
-          : `Microphone permission failed (${name}). Type the command manually or fix browser mic permission.`;
+          : t("billing.page.micPermissionFailed", { name });
       setVoiceMicMessage(message);
       toast({ title: t("billing.page.micPermissionNeeded"), description: message, variant: "destructive" });
       return;
@@ -923,7 +923,7 @@ export default function Billing() {
             ? t("billing.page.micNoSpeech")
             : error === "network"
               ? t("billing.page.micServiceUnreachable")
-              : `Voice capture failed (${error}). Type the command or try mic again.`;
+              : t("billing.page.voiceCaptureFailed", { error });
       const useBackendNext = error === "network" || error === "service-not-allowed";
       if (useBackendNext) preferBackendVoiceRef.current = true;
       const actionableMessage = useBackendNext
@@ -1724,10 +1724,10 @@ export default function Billing() {
               className="inline-flex h-12 min-w-[150px] items-center justify-center rounded-xl bg-[var(--brand)] px-5 text-[15px] font-black text-white shadow-sm transition-transform active:scale-[0.99] disabled:opacity-50"
             >
               {confirmBill.isPending
-                ? "Saving…"
+                ? t("billing.summary.saving")
                 : billType === BillInputBillType.estimate
-                  ? `Review estimate · ₹${grandTotal.toLocaleString("en-IN")}`
-                  : `Review & pay ₹${grandTotal.toLocaleString("en-IN")}`}
+                  ? t("billing.page.reviewEstimate", { amount: grandTotal.toLocaleString("en-IN") })
+                  : t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })}
             </button>
           </div>
         </div>

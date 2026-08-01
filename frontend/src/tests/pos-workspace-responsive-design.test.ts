@@ -20,14 +20,14 @@ describe("POS workspace responsive design", () => {
   });
 
   it("uses one amount-specific mobile checkout action above navigation", () => {
-    expect(billingPage).toContain("Review & pay ₹${grandTotal.toLocaleString(\"en-IN\")}");
+    expect(billingPage).toContain('t("billing.page.reviewCollect", { amount: grandTotal.toLocaleString("en-IN") })');
     expect(billingPage).toContain("var(--app-mobile-bottom-nav-clearance)");
     expect(billingPage).toContain("pb-[calc(var(--app-mobile-fixed-action-height)+2rem)]");
     expect(styles).toContain("--app-mobile-bottom-nav-clearance");
     expect(styles).toContain("--app-mobile-fixed-action-height");
     expect(styles).toContain("--app-mobile-content-bottom-clearance");
     expect(styles).toContain("--app-mobile-checkout-panel-clearance");
-    expect(billingPage).toContain('aria-label={mobileCheckoutOpen ? "Review and collect payment" : undefined}');
+    expect(billingPage).toContain('aria-label={mobileCheckoutOpen ? t("billing.page.reviewCollectPayment") : undefined}');
     expect(billingPage).toContain("pb-[var(--app-mobile-checkout-panel-clearance)]");
     expect(billingPage).toContain("cart.length > 0 && !mobileCheckoutOpen");
     expect(billingSummary).toContain("relative flex h-full min-h-0");
@@ -69,9 +69,9 @@ describe("POS workspace responsive design", () => {
   });
 
   it("describes the exact payment action and amount at confirmation", () => {
-    expect(billingSummary).toContain("Collect Cash");
-    expect(billingSummary).toContain("Save as Udhar");
-    expect(billingSummary).toContain("${paymentAction} · ${fmtRs(grandTotal)}");
+    expect(billingSummary).toContain("billing.summary.actionCollectCash");
+    expect(billingSummary).toContain("billing.summary.actionSaveUdhar");
+    expect(billingSummary).toContain('t("billing.summary.paymentAction", { action: paymentAction, amount: fmtRs(grandTotal) })');
   });
 
   it("uses a compact accessible route-loading state and mobile header", () => {

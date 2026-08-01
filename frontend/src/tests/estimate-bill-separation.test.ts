@@ -37,8 +37,8 @@ describe("estimate bills work like real bills under their own number series", ()
   });
 
   it("labels estimate billing as a first-class bill type with the same payment options", () => {
-    expect(billingSummary).toContain('Estimate Bill');
-    expect(billingSummary).toContain('Save Estimate Bill');
+    expect(billingSummary).toContain('billing.summary.estimateBill');
+    expect(billingSummary).toContain('billing.summary.saveEstimateAction');
     expect(billingSummary).toContain('data-testid="button-bill-type-pakka"');
     expect(billingSummary).toContain('data-testid="button-bill-type-estimate"');
     // Estimates share the Pakka payment selector (cash/UPI/split/udhar); the old quote-only

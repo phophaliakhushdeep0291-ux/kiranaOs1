@@ -257,7 +257,7 @@ export function BillingSearch({
   }, [scannerOpen, onSearchChange, searchInputRef]);
 
   const openBarcodeScanner = () => {
-    setScannerMessage("Point the camera at a barcode.");
+    setScannerMessage(t("billing.search.pointCamera"));
     setScannerOpen(true);
   };
 
@@ -267,15 +267,15 @@ export function BillingSearch({
       {/* ── Offline / draft banners ── */}
       {!isOnline && (
         <div className="shrink-0 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">
-          Offline — changes save locally and sync when back online.
+          {t("billing.search.offlineBanner")}
         </div>
       )}
       {draftRestored && (
         <div className="shrink-0 rounded-[10px] border border-blue-200 bg-blue-50 px-4 py-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-blue-700">
-            <span>Draft restored ({cartLength} item{cartLength !== 1 ? "s" : ""})</span>
+            <span>{t(cartLength === 1 ? "billing.search.draftRestored" : "billing.search.draftRestoredPlural", { count: cartLength })}</span>
             <button onClick={onHideDraftRestored} className="ml-auto text-blue-500 hover:underline">
-              Dismiss
+              {t("billing.search.dismiss")}
             </button>
           </div>
         </div>
@@ -393,7 +393,7 @@ export function BillingSearch({
             ))}
             {hasMoreCategories && (
               <button onClick={() => setShowAllCategories((value) => !value)} className="h-11 shrink-0 rounded-[8px] border border-[#e6ecf4] bg-white px-5 text-[12.5px] font-semibold text-[#3a4a6b] transition-colors hover:bg-[#f7f9fd] sm:h-9">
-                {showAllCategories ? "Less" : "More"} ▾
+                {showAllCategories ? t("billing.search.categoriesLess") : t("billing.search.categoriesMore")} ▾
               </button>
             )}
           </div>

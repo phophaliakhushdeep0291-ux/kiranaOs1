@@ -49,7 +49,7 @@ describe("premium UX foundations", () => {
     expect(taxes).toContain("saveHsnEditor");
     expect(taxes).toContain("hsnInputRef.current?.focus()");
     expect(billing).not.toContain("window.confirm");
-    expect(billing).toContain('title="Print this bill after saving?"');
+    expect(billing).toContain('title={t("billing.page.printAfterSavingTitle")}');
     expect(billing).toContain("printDecision");
   });
 
