@@ -28,6 +28,13 @@
       "port": 3000
     },
     {
+      "name": "hotel-pitch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "hotel-pitch", "run", "dev"],
+      "autoPort": true,
+      "port": 5174
+    },
+    {
       "name": "gta6-script-director",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "http-server", "C:/Users/phoph/Desktop/gta6-script-director", "-p", "8123", "-c-1"],
