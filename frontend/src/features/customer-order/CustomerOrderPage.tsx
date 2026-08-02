@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { QrCodeView } from "@/lib/qr/QrCodeView";
 import { buildOrderQrPayloads } from "@/lib/qr/cart-codec";
+import { ACTIVITY_EVENTS, sessionAgeMs, trackEvent, useOnlineProductImpression, useOnlineSession } from "@/lib/activity";
 import { SUPPORT_EMAIL } from "@/features/settings/app-info";
 import {
   loadCustomerCatalog,
@@ -192,6 +193,14 @@ export default function CustomerOrderPage() {
     return { count, subtotal, promoDiscount: 0, deliveryCharge: 0, gst: 0, grandTotal: subtotal };
   }, [cartItems]);
 
+  // §13 online session. The catalog carries the real shop id (the URL uses a
+  // short shop code), so tracking only starts once the catalog has loaded.
+  useOnlineSession(
+    state.kind === "ready" ? state.catalog.shop.id : null,
+    { itemCount: totals.count, total: totals.grandTotal, productIds: cartItems.map((item) => item.product.id) },
+    placed !== null,
+  );
+
   const orderQrUrls = useMemo(() => {
     if (submitItems.length === 0) return [];
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -200,8 +209,14 @@ export default function CustomerOrderPage() {
   }, [submitItems, shopCode]);
 
   function setItemQty(id: string, next: number) {
+    const value = Math.max(0, Math.round(next * 1000) / 1000);
+    // Only the 0 → n transition is an "add to cart"; bumping the quantity of
+    // something already in the basket is the same intent, counted once.
+    if (value > 0 && (qty[id] ?? 0) === 0) {
+      const product = products.find((p) => p.id === id);
+      trackEvent(ACTIVITY_EVENTS.ONLINE_CART_ADD, { productId: id, productName: product?.name });
+    }
     setQty((prev) => {
-      const value = Math.max(0, Math.round(next * 1000) / 1000);
       const copy = { ...prev };
       if (value <= 0) delete copy[id];
       else copy[id] = value;
@@ -254,6 +269,11 @@ export default function CustomerOrderPage() {
         idempotencyKey,
       );
       setPlaced(result);
+      trackEvent(
+        ACTIVITY_EVENTS.ONLINE_CHECKOUT_COMPLETED,
+        { orderId: result.orderId, itemCount: submitItems.length, fulfillment },
+        { durationMs: sessionAgeMs() },
+      );
       rememberMyOrder(shopCode, result.orderId);
       setTrackedOrderId(result.orderId);
       setShowTracker(true);
@@ -261,6 +281,9 @@ export default function CustomerOrderPage() {
       setQty({});
       setSubmitAttempt(null);
     } catch (err) {
+      // The storefront takes no money, so a failure here is the checkout itself
+      // failing — which is the drop-off the owner most needs to see.
+      trackEvent(ACTIVITY_EVENTS.ONLINE_PAYMENT_FAILED, { stage: "submit_order", itemCount: submitItems.length });
       setSubmitError(err instanceof Error ? err.message : "Could not place the order.");
     } finally {
       setPlacing(false);
@@ -401,6 +424,7 @@ export default function CustomerOrderPage() {
           disabled={submitItems.length === 0}
           onOpen={() => {
             setSubmitError(null);
+            trackEvent(ACTIVITY_EVENTS.ONLINE_CHECKOUT_STARTED, { itemCount: submitItems.length });
             setSheet("checkout");
           }}
         />
@@ -804,8 +828,10 @@ function PromoCard({ tone, title, body }: { tone: "green" | "blue" | "orange"; t
 }
 
 function ProductCard({ product, qty, onChange }: { product: CustomerCatalogProduct; qty: number; onChange: (next: number) => void }) {
+  // §13 ONLINE_PRODUCT_VIEW — counted when the card is genuinely on screen.
+  const impressionRef = useOnlineProductImpression(product.id, product.name);
   return (
-    <article className="group flex min-w-0 flex-col rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_8px_26px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
+    <article ref={impressionRef} className="group flex min-w-0 flex-col rounded-2xl border border-[#e3ebf7] bg-white p-2.5 shadow-[0_8px_26px_rgba(20,60,120,0.05)] transition hover:-translate-y-0.5 hover:border-[#cbdcf8] hover:shadow-[0_20px_48px_rgba(20,60,120,0.1)] sm:p-3">
       <div className="relative grid aspect-[1.2/1] place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-[var(--brand-softer)] via-white to-[var(--brand-soft)] sm:aspect-square sm:rounded-2xl">
         {product.imageUrl ? (
           <img src={product.imageUrl} alt="" className="h-[76%] w-[76%] object-contain transition duration-300 group-hover:scale-105" />

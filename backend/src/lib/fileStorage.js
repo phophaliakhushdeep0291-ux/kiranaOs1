@@ -3,8 +3,42 @@ import { env } from "../config/env.js";
 import { putObject, getObject, getObjectStream, deleteObject, getSignedDownloadUrl } from "./objectStorage.js";
 
 const EXPORT_ROOT = path.resolve(process.cwd(), "storage", "exports");
-const SAFE_REPORT_TYPES = new Set(["bills_csv", "stock_csv", "udhar_csv", "daily_closing_csv", "sales_summary_csv"]);
+const SAFE_REPORT_TYPES = new Set([
+  "bills_csv",
+  "stock_csv",
+  "udhar_csv",
+  "daily_closing_csv",
+  "sales_summary_csv",
+  // §9 "Generate PDF and Excel reports automatically".
+  "gst_summary_pdf",
+  "customer_outstanding_pdf",
+  "customer_outstanding_xlsx",
+  "bills_xlsx",
+  "stock_xlsx",
+  "sales_summary_xlsx",
+]);
 const CSV_MIME_TYPE = "text/csv; charset=utf-8";
+
+/**
+ * The export format is encoded in the report type's suffix, so a new report only
+ * has to be added to SAFE_REPORT_TYPES to get the right extension and MIME type
+ * through storage, download headers and the job record.
+ */
+const FORMATS = Object.freeze({
+  csv: { extension: "csv", mimeType: CSV_MIME_TYPE, binary: false },
+  pdf: { extension: "pdf", mimeType: "application/pdf", binary: true },
+  xlsx: {
+    extension: "xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    binary: true,
+  },
+});
+
+export function exportFormatFor(reportType) {
+  const type = validateReportType(reportType);
+  const suffix = type.slice(type.lastIndexOf("_") + 1);
+  return FORMATS[suffix] ?? FORMATS.csv;
+}
 
 function assertSafeId(value, label) {
   const raw = String(value || "").trim();
@@ -29,7 +63,7 @@ export function validateReportType(reportType) {
 export function buildExportFileName(reportType, jobId) {
   const type = validateReportType(reportType);
   const safeJobId = assertSafeId(jobId, "jobId");
-  return `${type}-${safeJobId}.csv`;
+  return `${type}-${safeJobId}.${exportFormatFor(type).extension}`;
 }
 
 export function buildExportStorageKey({ shopId, jobId, reportType }) {
@@ -37,7 +71,7 @@ export function buildExportStorageKey({ shopId, jobId, reportType }) {
   const safeJobId = assertSafeId(jobId, "jobId");
   validateReportType(reportType);
   // Server-generated key only. Never use a user-provided filename.
-  return `exports/${safeShopId}/${safeJobId}.csv`;
+  return `exports/${safeShopId}/${safeJobId}.${exportFormatFor(reportType).extension}`;
 }
 
 export function buildExportFilePath({ shopId, jobId, reportType }) {
@@ -45,24 +79,27 @@ export function buildExportFilePath({ shopId, jobId, reportType }) {
   const safeShopId = assertSafeId(shopId, "shopId");
   const safeJobId = assertSafeId(jobId, "jobId");
   const fileName = buildExportFileName(reportType, safeJobId);
+  const format = exportFormatFor(reportType);
   const dir = path.join(EXPORT_ROOT, "exports", safeShopId);
-  const filePath = path.join(dir, `${safeJobId}.csv`);
+  const filePath = path.join(dir, `${safeJobId}.${format.extension}`);
   const resolved = path.resolve(filePath);
   if (!resolved.startsWith(`${EXPORT_ROOT}${path.sep}`)) {
     const error = new Error("Unsafe export file path");
     error.code = "PATH_TRAVERSAL_BLOCKED";
     throw error;
   }
-  return { dir, filePath: resolved, fileName, mimeType: CSV_MIME_TYPE };
+  return { dir, filePath: resolved, fileName, mimeType: format.mimeType };
 }
 
 export async function writeExportFile({ shopId, jobId, reportType, content }) {
   const key = buildExportStorageKey({ shopId, jobId, reportType });
   const fileName = buildExportFileName(reportType, jobId);
+  const format = exportFormatFor(reportType);
   const result = await putObject({
     key,
-    body: String(content ?? ""),
-    contentType: CSV_MIME_TYPE,
+    // Binary formats (PDF/XLSX) must not be stringified — that would corrupt them.
+    body: format.binary ? content : String(content ?? ""),
+    contentType: format.mimeType,
     metadata: { reportType: validateReportType(reportType), jobId: assertSafeId(jobId, "jobId") },
   });
   return {
@@ -72,7 +109,7 @@ export async function writeExportFile({ shopId, jobId, reportType, content }) {
     fileUrl: env.EXPORT_DOWNLOADS_PUBLIC && env.STORAGE_PUBLIC_BASE_URL
       ? `${String(env.STORAGE_PUBLIC_BASE_URL).replace(/\/$/, "")}/${key}`
       : `/api/reports/exports/${jobId}/download`,
-    mimeType: CSV_MIME_TYPE,
+    mimeType: format.mimeType,
     sizeBytes: result.sizeBytes ?? null,
     storageKey: key,
     storageProvider: result.provider,

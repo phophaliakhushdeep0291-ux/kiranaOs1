@@ -5,6 +5,11 @@ export const PRESERVED_SHOP_MODELS = Object.freeze([
   "ShopMaintenanceLock", "User", "AuthToken", "Session", "UserLocationAccess",
   "ReportExportJob", "BackupArtifact", "OfflineSyncEvent", "SyncConflict",
   "SyncCommand", "ChangeLog", "SyncIdMapping", "ErrorGroup", "ErrorEvent",
+  // Behavioural telemetry and its counter read model sit with the other
+  // observability tables, not with business history: a portable restore must not
+  // overwrite what this install actually observed with an older device's record
+  // of it, and stale personalization counters are worse than the live ones.
+  "ActivityEvent", "ActivityAggregate",
   "SupportRequest", "DeviceHealthSnapshot", "Subscription", "PaymentTransaction",
   "PaymentProviderEvent", "IntegrationApiKey", "WebhookEndpoint", "WebhookDelivery",
   "Device", "DeviceReplacementChallenge", "DeviceLicense",

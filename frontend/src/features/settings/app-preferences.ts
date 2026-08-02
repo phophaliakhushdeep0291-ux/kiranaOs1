@@ -140,3 +140,23 @@ export function defaultPaymentMode(): "cash" | "upi" | "split" {
   if (label === "split") return "split";
   return "cash";
 }
+
+/**
+ * Whether the owner has actually chosen a default payment mode, as opposed to
+ * the app falling back to "Cash".
+ *
+ * `defaultPaymentMode()` cannot answer this: an untouched install and one where
+ * the owner deliberately picked Cash both read "cash". §13's learned payment
+ * preference needs the difference — a learned suggestion may fill an unset
+ * default, but must never quietly override a setting someone chose on purpose.
+ */
+export function hasExplicitDefaultPayment(): boolean {
+  hydrate();
+  try {
+    const raw = storage()?.getItem(KEY);
+    if (!raw) return false;
+    return Object.prototype.hasOwnProperty.call(JSON.parse(raw) as object, "defaultPayment");
+  } catch {
+    return false;
+  }
+}

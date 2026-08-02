@@ -46,6 +46,7 @@ import inventoryLotsRoutes from "./modules/inventory-lots/inventoryLots.routes.j
 import purchaseReturnsRoutes from "./modules/purchase-returns/purchaseReturns.routes.js";
 import accountingRoutes from "./modules/finance/accounting.routes.js";
 import diagnosticsRoutes from "./modules/diagnostics/diagnostics.routes.js";
+import activityRoutes from "./modules/activity/activity.routes.js";
 import assuranceRoutes from "./modules/assurance/assurance.routes.js";
 import platformAdminRoutes from "./modules/platform-admin/platformAdmin.routes.js";
 
@@ -257,6 +258,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/sync", syncRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/diagnostics", diagnosticsRoutes);
+app.use("/api/activity", activityRoutes);
 app.use("/api/audit", assuranceRoutes);
 app.use("/api/platform-admin", platformAdminRoutes);
 

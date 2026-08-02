@@ -18,6 +18,7 @@ import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { listExpenses } from "@/features/expenses/api";
 import { buildMoneyStatement, loadMoneyStatementInput, type MoneyStatementDirection, type MoneyStatementMode, type MoneyStatementRow } from "@/features/money-statement/statement-data";
 import { cn } from "@/lib/utils";
+import { useReportView } from "@/lib/activity";
 
 type PeriodPreset = "today" | "week" | "month";
 
@@ -77,6 +78,7 @@ function downloadCsv(rows: MoneyStatementRow[]) {
 }
 
 export default function MoneyStatementPage() {
+  useReportView("money_statement", "Money statement");
   const [preset, setPreset] = useState<PeriodPreset>("today");
   const [range, setRange] = useState(() => presetRange("today"));
   const [mode, setMode] = useState<MoneyStatementMode | "all">(() => {

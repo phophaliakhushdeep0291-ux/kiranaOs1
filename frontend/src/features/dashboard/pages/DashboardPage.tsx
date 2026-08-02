@@ -29,10 +29,11 @@ import { fromBaseQty, productDisplayUnit } from "@/features/products/pages/produ
 import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard, StatsGrid, SyncBadge } from "@/components/shared";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useBusinessType, type BusinessType, type BusinessTypeDefinition, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
+import { useBusinessType, type BusinessType, type BusinessTypeDefinition, type QuickAction, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
 import { getShopWorkflow } from "@/features/settings/shop-workflows";
 import { cn } from "@/lib/utils";
 import type { Bill, Product } from "@/types/api";
+import { orderByUsage, usageScores, usePersonalization } from "@/lib/activity";
 
 const DASH_CARD = "min-w-0 rounded-[12px] border border-[#e2e8f1] bg-white shadow-[0_4px_16px_rgba(32,55,92,0.045),0_1px_2px_rgba(32,55,92,0.025)] ring-1 ring-white transition-[border-color,box-shadow,transform] duration-300 ease-out dark:border-slate-800 dark:bg-card dark:ring-slate-800";
 const DASH_CARD_INTERACTIVE = "hover:-translate-y-0.5 hover:border-[#cbd8e8] hover:shadow-[0_10px_26px_rgba(32,55,92,0.075)] active:translate-y-0";
@@ -123,6 +124,23 @@ const ACTION_ICON_BG: Record<QuickActionColorKey, string> = {
   orange:  "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300",
   teal:    "bg-teal-50 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
 };
+
+/**
+ * §13 "dynamically reordering dashboard widgets based on usage patterns".
+ *
+ * The quick actions are reordered by how much this user actually uses each
+ * destination. Reordering only: the same four actions are always present, so
+ * nothing a shopkeeper relies on can disappear, and an action they have never
+ * opened keeps its configured position rather than being shuffled somewhere
+ * arbitrary. With no history the order is exactly the business type's default.
+ */
+function usePersonalizedQuickActions(actions: readonly QuickAction[]): QuickAction[] {
+  const personalization = usePersonalization();
+  return useMemo(
+    () => orderByUsage(actions, (action) => action.href, usageScores(personalization.data?.dashboardOrder)),
+    [actions, personalization.data],
+  );
+}
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -480,6 +498,7 @@ type PaymentSlice = { label: string; value: number; color: string; dot: string }
 function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowStockCount, seedingDemo, onLoadDemo, openDrilldown }: LayoutProps) {
   const { isOnline, isSyncing, pendingCount, failedCount } = useOfflineStatus();
   const [, navigate] = useLocation();
+  const insightsPersonalization = usePersonalization();
   const [period, setPeriod] = useState<DashboardPeriod>("week");
   const periodRange = useMemo(() => dashboardPeriodRange(period), [period]);
   const previousPeriodRange = useMemo(() => previousDashboardRange(periodRange), [periodRange]);
@@ -674,6 +693,15 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
   const profitDelta = pctChange(dashboard.grossProfit, dashboard.previousGrossProfit);
   const expenseDelta = pctChange(dashboard.expensesToday, dashboard.previousExpenses);
   const avgBillValue = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
+  const quickInsightRows = useMemo(() => {
+    const rows = [
+      { tone: "emerald" as const, icon: <Package size={16} />, label: "Sales by Category", value: ownerReport?.topProducts[0]?.name ? "View breakdown" : "No sales yet", href: "/reports" },
+      { tone: "blue" as const, icon: <PackagePlus size={16} />, label: "Top Selling Product", value: ownerReport?.topProducts[0]?.name ?? "No product yet", href: "/reports" },
+      { tone: "violet" as const, icon: <CreditCard size={16} />, label: "Average Bill Value", value: avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0), href: "/bills" },
+      { tone: "orange" as const, icon: <Users size={16} />, label: "Active Customers", value: String(ownerReport?.topCustomers.length ?? 0), href: "/customers" },
+    ];
+    return orderByUsage(rows, (row) => row.href, usageScores(insightsPersonalization.data?.dashboardOrder));
+  }, [ownerReport, avgBillValue, insightsPersonalization.data]);
   const syncStatusValue = failedCount > 0 ? "Review needed" : pendingCount > 0 ? `${pendingCount} pending` : "Up to date";
   const syncHealthGood = failedCount === 0 && pendingCount === 0;
 
@@ -975,10 +1003,11 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
           <div className={cn(DASH_CARD, "flex h-full min-h-[320px] flex-col p-4 2xl:min-h-0")}>
             <p className={cn(DASH_TITLE, "mb-3")}>Quick Insights</p>
             <div className="grid min-h-0 flex-1 grid-rows-4 gap-2">
-              <InsightRow tone="emerald" icon={<Package size={16} />} label="Sales by Category" value={ownerReport?.topProducts[0]?.name ? "View breakdown" : "No sales yet"} href="/reports" />
-              <InsightRow tone="blue" icon={<PackagePlus size={16} />} label="Top Selling Product" value={ownerReport?.topProducts[0]?.name ?? "No product yet"} href="/reports" />
-              <InsightRow tone="violet" icon={<CreditCard size={16} />} label="Average Bill Value" value={avgBillValue > 0 ? fmtRs(avgBillValue) : fmtRs(0)} href="/bills" />
-              <InsightRow tone="orange" icon={<Users size={16} />} label="Active Customers" value={String(ownerReport?.topCustomers.length ?? 0)} href="/customers" />
+              {/* §13: ordered by which destination this user actually opens.
+                  The same four rows are always present — only their order moves. */}
+              {quickInsightRows.map((row) => (
+                <InsightRow key={row.label} tone={row.tone} icon={row.icon} label={row.label} value={row.value} href={row.href} />
+              ))}
             </div>
           </div>
 
@@ -1704,6 +1733,7 @@ function fmtRs(n: number | undefined | null) {
 function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
   const { t } = useAppLanguage();
   const dbCfg = btDef.dashboard;
+  const quickActions = usePersonalizedQuickActions(dbCfg.quickActions);
   const avgOrder = dashboard.billCount > 0 ? Math.round(dashboard.revenue / dashboard.billCount) : 0;
   const topDishes = ownerReport?.topProducts ?? [];
   const attentionCount = [lowStockCount > 0, hasUnsyncedOperations].filter(Boolean).length;
@@ -1761,7 +1791,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
 
             {/* Quick actions — horizontal in restaurant */}
             <div className="flex flex-row flex-wrap gap-2.5 lg:flex-col lg:justify-end">
-              {dbCfg.quickActions.map((action) => (
+              {quickActions.map((action) => (
                 <Link key={action.href + action.label} href={action.href}>
                   <div className="flex items-center gap-2.5 rounded-xl border bg-card px-4 py-3 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 lg:min-w-[152px]">
                     <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${ACTION_ICON_BG[action.color]}`}>{ACTION_ICON[action.icon]}</div>
@@ -1834,6 +1864,7 @@ function RestaurantLayout({ businessType, btDef, dashboard, ownerReport, isLoadi
 function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
   const { t } = useAppLanguage();
   const dbCfg = btDef.dashboard;
+  const quickActions = usePersonalizedQuickActions(dbCfg.quickActions);
   const lowStockItems = ownerReport?.lowStock ?? [];
 
   return (
@@ -1896,7 +1927,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
           <div className="border-t bg-background/40 p-5 sm:p-6 lg:border-l lg:border-t-0">
             <p className="app-muted-label">Quick actions</p>
             <div className="mt-3 grid grid-cols-1 gap-2.5">
-              {dbCfg.quickActions.map((action) => (
+              {quickActions.map((action) => (
                 <Link key={action.href + action.label} href={action.href}>
                   <div className="flex items-center gap-3 rounded-xl border bg-card p-3.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0">
                     <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${ACTION_ICON_BG[action.color]}`}>{ACTION_ICON[action.icon]}</div>
@@ -1964,6 +1995,7 @@ function TechnicalLayout({ businessType, btDef, dashboard, ownerReport, isLoadin
 function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading, cashInDrawer, lowStockCount, pendingSyncCount, hasUnsyncedOperations, seedingDemo, userName, onLoadDemo, openDrilldown, drilldownKeyHandler }: LayoutProps) {
   const { t } = useAppLanguage();
   const dbCfg = btDef.dashboard;
+  const quickActions = usePersonalizedQuickActions(dbCfg.quickActions);
   const lowStockItems = ownerReport?.lowStock ?? [];
 
   return (
@@ -2018,7 +2050,7 @@ function MedicalLayout({ businessType, btDef, dashboard, ownerReport, isLoading,
           <div className="border-t bg-background/40 p-5 sm:p-6 lg:border-l lg:border-t-0">
             <p className="app-muted-label">Quick actions</p>
             <div className="mt-3 grid grid-cols-1 gap-2.5">
-              {dbCfg.quickActions.map((action) => (
+              {quickActions.map((action) => (
                 <Link key={action.href + action.label} href={action.href}>
                   <div className="flex items-center gap-3 rounded-xl border bg-card p-3.5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0">
                     <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${ACTION_ICON_BG[action.color]}`}>{ACTION_ICON[action.icon]}</div>

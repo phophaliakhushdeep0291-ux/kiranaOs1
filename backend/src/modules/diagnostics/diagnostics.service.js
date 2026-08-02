@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import db from "../../db.js";
 import { sanitizeText, sanitizeTelemetry } from "../../lib/errorTracking.js";
+import { EVENT_TOPICS, publishEvent } from "../../lib/eventBus.js";
 import { putObject } from "../../lib/objectStorage.js";
 
 const MAX_MESSAGE = 4000;
@@ -118,6 +119,22 @@ export async function recordErrorEvent(input = {}, { client = db } = {}) {
         route: clampStr(input.route, 300),
       },
     });
+
+    // §11: mirror the error onto the platform event bus for fleet-wide
+    // streaming. No-op unless an operator enables a provider, and never awaited
+    // for correctness — the DB row above is the source of truth.
+    publishEvent(
+      EVENT_TOPICS.ERROR_RECORDED,
+      shopId,
+      {
+        fingerprint: group.fingerprint,
+        title: clampStr(message, 200),
+        source,
+        errorCode,
+        occurrences: group.count,
+      },
+      { deviceId: input.deviceId ?? null },
+    ).catch(() => {});
 
     return { groupId: group.id, fingerprint: group.fingerprint, count: group.count };
   } catch (error) {

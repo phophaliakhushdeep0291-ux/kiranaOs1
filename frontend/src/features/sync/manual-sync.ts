@@ -1,6 +1,7 @@
 import { hydrateFromBackendSnapshot, type CloudHydrationResult } from "@/features/sync/cloud-hydration";
 import { runSyncCycle } from "@/features/sync/sync-engine";
 import type { SyncRunResult } from "@/features/sync/sync-types";
+import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 
 export interface ManualSyncResult extends SyncRunResult {
   snapshot: CloudHydrationResult;
@@ -24,6 +25,11 @@ export async function runManualSyncCycle(): Promise<ManualSyncResult> {
     skipped: 0,
   };
   let syncError: string | undefined;
+  // SYNC_STARTED is recorded for the user-requested sync only. The background
+  // cycle runs on a timer and records just its terminal outcome; a "started"
+  // row per tick would be pure volume. A person tapping Sync is a real signal —
+  // it usually means they think something is wrong.
+  trackEvent(ACTIVITY_EVENTS.SYNC_STARTED, { trigger: "manual" }, { module: "sync" });
   try {
     sync = await runSyncCycle();
   } catch (error) {

@@ -5,7 +5,7 @@ import { env } from "../../config/env.js";
 import { signToken } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
+import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import { completeDeviceReplacement, createDeviceBoundLoginSession, withDeviceLifecycleTransaction } from "../devices/devices.service.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/authEmail.js";
 import { verifyGoogleIdToken } from "./google.service.js";
@@ -43,7 +43,7 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
     });
   }
 
-  const auth = await issueAuthResponse(result.user, result.shop, reqMeta);
+  const auth = await issueAuthResponse(result.user, result.shop, { ...reqMeta, loginMethod: "registration" });
   return { ...auth, emailVerification };
 }
 
@@ -140,7 +140,7 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
     user = { ...user, ...updatedUser };
   }
 
-  return issueAuthResponse(user, user.shop, reqMeta);
+  return issueAuthResponse(user, user.shop, { ...reqMeta, loginMethod: "google" });
 }
 
 export async function verifyEmail(token) {
@@ -284,6 +284,7 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
 }
 
 export async function logout(refreshToken, user = null) {
+  const startedAt = Date.now();
   const parsed = parseRefreshToken(refreshToken);
   if (!parsed) return { success: true, message: "Logged out" };
 
@@ -328,6 +329,25 @@ export async function logout(refreshToken, user = null) {
       deviceStatus = "logged_out";
     }
     return { revokedSessions: revoked.count, remainingDeviceSessions, deviceStatus };
+  });
+
+  // §2 audit: logged here rather than in the controller so the entry only fires
+  // for a session that was actually revoked (a replayed/expired token returns
+  // early above and must not look like a fresh logout on the timeline).
+  await createAuditLog({
+    shopId: session.shopId,
+    userId: session.userId,
+    deviceId: session.deviceId ?? null,
+    module: AUDIT_MODULES.AUTH,
+    action: "LOGOUT",
+    entityType: "session",
+    entityId: session.id,
+    metadata: {
+      revokedSessions: result.revokedSessions,
+      remainingDeviceSessions: result.remainingDeviceSessions,
+      deviceStatus: result.deviceStatus,
+    },
+    durationMs: Date.now() - startedAt,
   });
 
   return { success: true, message: "Logged out", ...result };
@@ -577,6 +597,9 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
 // ── Helpers ─────────────────────────────────────────────────
 
 async function issueAuthResponse(user, shop, reqMeta = {}) {
+  // §2 requires a duration on every event. Sign-in cost is also a real support
+  // signal — bcrypt plus device-binding is the slowest thing on this path.
+  const startedAt = Date.now();
   const deviceId = normalizeDeviceId(reqMeta.deviceId);
   // Fail closed in production: without a device id the per-plan device cap can't be
   // enforced (a null-device session isn't counted), so a client could bypass the limit
@@ -604,12 +627,47 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
   const { device, session } = bound;
   const accessToken = signDeviceAccessToken(user, session, device);
 
+  // §2 audit: every sign-in lands on the timeline regardless of which door it
+  // came through (password, Google, shop-selection retry) — this is the single
+  // choke point all of them funnel into.
+  await createAuditLog({
+    shopId: user.shopId,
+    userId: user.id,
+    deviceId: device?.deviceId ?? deviceId ?? null,
+    module: AUDIT_MODULES.AUTH,
+    action: "LOGIN",
+    entityType: "user",
+    entityId: user.id,
+    metadata: {
+      role: user.role,
+      method: reqMeta.loginMethod ?? "password",
+      sessionId: session.id,
+    },
+    durationMs: Date.now() - startedAt,
+    req: auditReqShim(reqMeta),
+  });
+
   return {
     accessToken,
     token: accessToken, // Backward compatibility for existing frontend/API clients.
     refreshToken: formatRefreshToken(session.id, refreshSecret),
     shop,
     user: sanitizeUser(user),
+  };
+}
+
+/**
+ * Auth services receive a flattened `reqMeta` rather than the Express request,
+ * so shape it back into the minimal object `createAuditLog` reads for the
+ * spec's IP / user-agent / device columns.
+ */
+function auditReqShim(reqMeta = {}) {
+  return {
+    ip: reqMeta.ipAddress ?? null,
+    headers: {
+      "user-agent": reqMeta.userAgent ?? undefined,
+      "x-device-id": reqMeta.deviceId ?? undefined,
+    },
   };
 }
 

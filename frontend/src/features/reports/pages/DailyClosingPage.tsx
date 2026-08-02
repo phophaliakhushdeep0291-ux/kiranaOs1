@@ -26,6 +26,7 @@ import { shareDailyClosingOnWhatsapp } from "@/features/reports/daily-summary-sh
 import { useAuth } from "@/features/auth/useAuth";
 import { useSettingsPrefs } from "@/features/settings/use-settings-prefs";
 import { cn } from "@/lib/utils";
+import { useReportView } from "@/lib/activity";
 
 function fmt(value: number | undefined) {
   return "₹" + Math.round(value ?? 0).toLocaleString("en-IN");
@@ -64,6 +65,7 @@ function printClosing(report: DailyClosingReport) {
 }
 
 export default function DailyClosingPage() {
+  useReportView("daily_closing", "Daily closing");
   const { shop } = useAuth();
   const { prefs } = useSettingsPrefs();
   // Settings → Notifications → Daily Summary controls which sections the shared summary includes.

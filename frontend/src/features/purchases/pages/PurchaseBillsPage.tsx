@@ -31,6 +31,7 @@ import type { Product, Supplier } from "@/types/api";
 import { PurchaseOrdersPanel } from "@/features/purchases/components/PurchaseOrdersPanel";
 import { resolvePurchaseBarcode } from "@/features/purchases/purchase-barcode";
 import { extractPurchaseInvoice, type PurchaseInvoiceDraft } from "@/features/purchases/invoice-ocr-api";
+import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 
 function money(value: unknown) {
   const num = Number(value);
@@ -1178,6 +1179,11 @@ function AddPurchasePanel({ open, width, onResizeStart, products, suppliers, exi
         };
       });
       await recordPurchaseBatchLocalFirst(purchaseLines);
+      trackEvent(ACTIVITY_EVENTS.PURCHASE_CREATED, {
+        lineCount: validLines.length,
+        productIds: purchaseLines.map((line) => line.productId).filter(Boolean),
+        fullyPaid: dueAmount <= 0,
+      });
       toast({ title: `Purchase ${invoice} saved`, description: `${validLines.length} product${validLines.length === 1 ? "" : "s"} added to stock. ${dueAmount > 0 ? `${fmt(dueAmount)} due to ${supplierName}.` : "Fully paid."}` });
       reset();
       await onSaved();

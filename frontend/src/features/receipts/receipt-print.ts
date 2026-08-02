@@ -1,5 +1,6 @@
 import { getPrinterConfigSync } from "@/features/settings/printer-config";
 import { printHtmlViaHardwareBridge } from "@/features/hardware/local-hardware-bridge";
+import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 
 export interface ReceiptShopInfo {
   name?: string | null;
@@ -574,6 +575,10 @@ export function writeReceiptWindow(popup: Window, snapshot: ReceiptSnapshot, opt
   popup.document.close();
   popup.focus();
   if (options.autoPrint ?? true) {
+    // §13 PRINTER_USED. Recorded on the browser print path; the direct-bridge
+    // path records its own below, so a shop using a thermal printer does not
+    // look like it never prints.
+    trackEvent(ACTIVITY_EVENTS.PRINTER_USED, { path: "browser", paperSize: options.paperSize ?? null, copies: options.copies ?? 1 });
     setTimeout(() => popup.print(), options.printDelayMs ?? 300);
   }
 }
@@ -652,6 +657,7 @@ export function writeConfiguredReceiptWindow(popup: Window, snapshot: ReceiptSna
     cashDrawer: printer.cashDrawer,
   };
   const submitSameJob = () => printHtmlViaHardwareBridge(printer.bridgeUrl, directPrintInput).then(() => {
+    trackEvent(ACTIVITY_EVENTS.PRINTER_USED, { path: "bridge", paperSize: renderOptions.paperSize ?? null, copies: renderOptions.copies ?? 1 });
     options.onDirectPrintSettled?.({ status: "sent" });
     if (!popup.closed) popup.close();
   });

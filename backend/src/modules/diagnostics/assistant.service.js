@@ -1,6 +1,7 @@
 import { detectFocus, generateIncidentReport } from "./incident-report.service.js";
 import { getUdharSummary } from "../udhar/udhar.service.js";
 import { getSalesSummary } from "../reports/reports.service.js";
+import { classifyInsightQuestion, narrateInsight, runInsight } from "../activity/insights.service.js";
 
 // AI Support Assistant (Diagnostics §5). Answers natural-language problems
 // ("why is my stock negative?", "my bills aren't syncing") by READING the shop's
@@ -196,7 +197,23 @@ async function answerData({ shopId, question }) {
  * answerAssistant — the single AI assistant entry point (§5 + §8 + §9). Classifies
  * the question and routes to troubleshooting, a how-to article, or business data.
  */
-export async function answerAssistant({ shopId, deviceId = null, question, useAi = true } = {}) {
+export async function answerAssistant({ shopId, deviceId = null, userId = null, question, useAi = true } = {}) {
+  // §13's learning layer is checked first. Its questions ("what do I sell the
+  // most?", "which products should I reorder?") read as data questions to the
+  // classifier below, but they are answered from activity rather than from the
+  // sales tables, and the specific answer beats the generic one.
+  const insightKey = classifyInsightQuestion(question);
+  if (insightKey) {
+    try {
+      const narrated = narrateInsight(await runInsight(insightKey, { shopId, userId }));
+      if (narrated) {
+        return { intent: "insight", focus: "insight", kind: insightKey, ...narrated, escalate: false, incidentReport: null, aiProvider: null };
+      }
+    } catch {
+      // Fall through to the existing intents rather than failing the question.
+    }
+  }
+
   const intent = classifyIntent(question);
   if (intent === "howto") return { intent, focus: "howto", ...answerHowTo(question) };
   if (intent === "data") {

@@ -16,7 +16,7 @@ import { createSupplier, restoreSupplier, softDeleteSupplier, updateSupplier } f
 import { createExpenseSchema, updateExpenseSchema } from "../expenses/expenses.schema.js";
 import { createExpense, softDeleteExpense, updateExpense } from "../expenses/expenses.service.js";
 import { doesBodyTouchProtectedFields } from "../../utils/permissionRules.js";
-import { createAuditLog } from "../audit/audit.service.js";
+import { AUDIT_MODULES, AUDIT_RESULTS, createAuditLog } from "../audit/audit.service.js";
 import { recordBillLoyalty, reverseBillLoyalty } from "../loyalty/loyalty.service.js";
 import {
   buildSyncResult,
@@ -30,6 +30,8 @@ import {
   SYNC_EVENT_TYPES,
 } from "../../utils/syncRules.js";
 import { decodeCursor, encodeCursor, PULL_DEFAULT_LIMIT, PULL_MAX_LIMIT } from "./sync.schema.js";
+import { explainSyncFailure } from "./sync-explain.js";
+import { EVENT_TOPICS, publishEvent } from "../../lib/eventBus.js";
 import { moneyAmount, quantityAmount } from "../../utils/validationSchemas.js";
 import { addMoney, moneyShadows, round2, toPaise, toPaiseBigInt } from "../../utils/money.js";
 import { toBaseQty } from "../../utils/units.js";
@@ -1099,6 +1101,7 @@ function findLastRecord(entityArrays) {
 export async function pushOfflineActions(shopId, events, user = null) {
   const context = createPushContext(shopId, user);
   const results = [];
+  const startedAt = Date.now();
 
   for (const event of events) {
     results.push(await processOneSyncEvent(shopId, event, user, context));
@@ -1110,6 +1113,15 @@ export async function pushOfflineActions(shopId, events, user = null) {
   const duplicates = results.filter((r) => r.status === "duplicate").length;
   const conflicts  = results.filter((r) => r.status === "conflict").length;
   const retryable  = results.filter((r) => !r.success && r.result?.retryable === true).length;
+
+  await recordSyncRunAudit({
+    shopId,
+    user,
+    startedAt,
+    counts: { received: events.length, applied, failed, synced, duplicates, conflicts, retryable },
+    results,
+    events,
+  });
 
   return {
     received: events.length,
@@ -1127,6 +1139,73 @@ export async function pushOfflineActions(shopId, events, user = null) {
     idMappings: exportContextMappings(context),
     serverTime: new Date().toISOString(),
   };
+}
+
+/**
+ * The explainer reads the event payload only to name the entity that failed, so
+ * strip credentials first — audit metadata is read by support staff.
+ */
+function safeStringifyEvent(event) {
+  if (!event) return null;
+  try {
+    return JSON.stringify(removeSensitiveSyncFields(event));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * §2 audit for a sync run: "Sync started / failed / completed".
+ *
+ * One terminal row per non-empty push batch rather than a started+finished pair.
+ * A batch carries `durationMs`, so the start instant is `createdAt - durationMs`
+ * and nothing is lost — while devices push on a timer across thousands of
+ * stores, so halving the write volume on this hot path matters. Empty batches
+ * (idle polls) are not audited at all.
+ */
+async function recordSyncRunAudit({ shopId, user, startedAt, counts, results, events }) {
+  if (!shopId || counts.received === 0) return;
+
+  // Explain the first failure in plain language so the timeline says what broke,
+  // not just that something did (§3's "explanation, never bare 'Sync Error'").
+  // Results are index-aligned with the events they came from, which is how the
+  // explainer recovers the entity reference ("… (Product 982)").
+  const failedIndex = results.findIndex((r) => r.success !== true);
+  const firstFailure = failedIndex >= 0 ? results[failedIndex] : null;
+  const explained = firstFailure
+    ? explainSyncFailure({
+        type: firstFailure.type,
+        error: firstFailure.error,
+        code: firstFailure.code,
+        requestJson: safeStringifyEvent(events?.[failedIndex]),
+      })
+    : null;
+
+  // §11: stream the sync outcome so fleet-wide failure spikes are visible
+  // without querying every shop's database.
+  publishEvent(
+    counts.failed > 0 ? EVENT_TOPICS.SYNC_FAILED : EVENT_TOPICS.SYNC_COMPLETED,
+    shopId,
+    { ...counts, explanation: explained?.explanation ?? null, code: explained?.code ?? null },
+    { deviceId: user?.deviceId ?? null },
+  ).catch(() => {});
+
+  await createAuditLog({
+    shopId,
+    userId: user?.userId ?? user?.id ?? null,
+    deviceId: user?.deviceId ?? null,
+    module: AUDIT_MODULES.SYNC,
+    action: counts.failed > 0 ? "SYNC_FAILED" : "SYNC_COMPLETED",
+    entityType: "sync_batch",
+    result: counts.failed > 0 ? AUDIT_RESULTS.FAILURE : AUDIT_RESULTS.SUCCESS,
+    durationMs: Date.now() - startedAt,
+    metadata: {
+      ...counts,
+      ...(explained
+        ? { failureExplanation: explained.explanation, failureCode: explained.code, retryable: explained.retryable }
+        : {}),
+    },
+  });
 }
 
 async function processOneSyncEvent(shopId, event, user, context) {
@@ -1293,7 +1372,7 @@ async function applySyncEvent(shopId, event, user, context) {
       await assertOwnerPermission(shopId, user, getEventOwnerPin(event));
       return applyAdjustStock(shopId, event, context);
     case SYNC_EVENT_TYPES.CREATE_CUSTOMER:
-      return applyCreateCustomer(shopId, event);
+      return applyCreateCustomer(shopId, event, user);
     case SYNC_EVENT_TYPES.UPDATE_CUSTOMER:
       return applyUpdateCustomer(shopId, event, context);
     case SYNC_EVENT_TYPES.UDHAR_PAYMENT:
@@ -1879,14 +1958,21 @@ async function applyAdjustStock(shopId, event, context) {
   return { type: event.type, adjustmentType: "correction", ...data };
 }
 
-async function applyCreateCustomer(shopId, event) {
+async function applyCreateCustomer(shopId, event, user = null) {
   const payload = getEventPayload(event);
   const customerBody = payload.customer ?? payload;
   const parsed = createCustomerSchema.parse(stripKnownSyncPayloadKeys(customerBody));
   // Sync replays must converge on an existing customer (same mobile) rather than
   // throw, so a retried/cross-device create maps the local id onto one server
   // customer instead of duplicating or sticking as a permanently failed event.
-  const customer = await createCustomer(shopId, parsed, { reuseExistingMobile: true });
+  const customer = await createCustomer(shopId, parsed, {
+    reuseExistingMobile: true,
+    actor: {
+      userId: user?.userId ?? user?.id ?? null,
+      deviceId: user?.deviceId ?? null,
+      source: "sync",
+    },
+  });
   return {
     type: event.type,
     customerId: customer.id,

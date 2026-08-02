@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/auth/useAuth";
 import { useOfflineStatus } from "@/features/sync/useOfflineStatus";
 import {
+  Activity,
   BarChart3,
   Bell,
   ChevronDown,
@@ -81,6 +82,7 @@ const PAGE_SUBTITLES: Record<string, string> = {
   "/purchase-bills": "Manage purchase bills, suppliers, and purchase dues",
   "/customers": "Manage customer credit, record payments, and track full udhar ledger",
   "/reports": "Track performance, trends, and data-driven decisions",
+  "/activity-insights": "How this shop uses Artha, and what your activity suggests",
   "/money-statement": "Trace every cash, UPI, bank, and credit movement",
   "/daily-closing": "Cash drawer and daily business summary",
   "/settings": "Manage your store, preferences, and system configurations",
@@ -95,6 +97,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/returns/new": "Return Items",
   "/customers": "Customers / Udhar",
   "/reports": "Reports & Analytics",
+  "/activity-insights": "Activity & Insights",
   "/money-statement": "Cash & Payments",
   "/assurance": "Financial Assurance",
   "/assurance/findings": "Assurance Findings",
@@ -176,6 +179,7 @@ const NAV: NavItem[] = [
   },
   { kind: "link", href: "/returns", label: "Returns", Icon: Undo2 },
   { kind: "link", href: "/reports", label: "Reports", Icon: BarChart3 },
+  { kind: "link", href: "/activity-insights", label: "Activity & Insights", Icon: Activity },
   { kind: "link", href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
   {
     kind: "group", id: "assurance", label: "Financial Assurance", Icon: ShieldCheck, overviewHref: "/assurance",
@@ -501,6 +505,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   </>}
                   <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/help">Ask Artha</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
                     <LogOut size={14} className="mr-2" aria-hidden="true" /> Logout

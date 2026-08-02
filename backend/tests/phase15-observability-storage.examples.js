@@ -39,9 +39,12 @@ for (const snippet of [
   "getObjectStream",
   "getSignedDownloadUrl",
   "streamExportFile",
-  "exports/${safeShopId}/${safeJobId}.csv",
+  // The key stays server-generated from validated ids; only the extension is
+  // now format-driven (csv/pdf/xlsx) rather than hardcoded to .csv.
+  "exports/${safeShopId}/${safeJobId}.${exportFormatFor(reportType).extension}",
   "EXPORT_DOWNLOADS_PUBLIC",
 ]) assert(fileStorage.includes(snippet), `fileStorage missing ${snippet}`);
+assert(!fileStorage.includes("${fileName}`"), "storage key must never interpolate a user-supplied filename");
 assert(!fileStorage.includes("res.sendFile(job.filePath)"), "download must not expose raw local file path");
 
 const reportExport = read("src/modules/reports/reportExport.service.js");

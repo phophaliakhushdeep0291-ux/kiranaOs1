@@ -12,6 +12,14 @@ if (ctx.skip) {
   after(async () => ctx.close());
   beforeEach(async () => resetDatabase(ctx.db));
 
+  // Batch and gift-card expiry must be stated relative to the run, never as a
+  // literal date: a hardcoded `expiresOn` silently becomes a past date and the
+  // API then correctly refuses the fixture (BATCH_ALREADY_EXPIRED), so the suite
+  // turns red one morning on a code change that never happened.
+  function isoDaysFromNow(days) {
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
+
   async function ownerContext(overrides = {}) {
     const tenant = await createTenant(ctx.db, { planCode: "pro", gstNumber: "27AAPFU0939F1ZV", ...overrides });
     const auth = await login(ctx, tenant.ownerMobile, tenant.ownerPassword);
@@ -436,7 +444,9 @@ if (ctx.skip) {
         paidAmount: 20,
         paymentMode: "cash",
         updateCost: true,
-        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 4, actualRate: 17, batchNumber: "OIL-EARLY", manufacturedOn: "2026-05-01", expiresOn: "2026-08-01" }],
+        // Both lots must be saleable now, with EARLY expiring first — that ordering
+        // is what the FEFO allocation assertion below actually proves.
+        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 4, actualRate: 17, batchNumber: "OIL-EARLY", manufacturedOn: isoDaysFromNow(-90), expiresOn: isoDaysFromNow(30) }],
       };
       const partial = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, firstReceiptPayload, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.equal(partial.purchaseOrder.status, "partially_received");
@@ -525,7 +535,7 @@ if (ctx.skip) {
 
       const completed = assertSuccess(await ctx.post(`/api/purchase-orders/${order.id}/receive`, {
         idempotencyKey: `po-receipt-${order.id}-2`, supplierInvoiceNumber: "SUP-1001", paidAmount: 114, paymentMode: "bank",
-        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 6, actualRate: 19, batchNumber: "OIL-LATE", manufacturedOn: "2026-06-01", expiresOn: "2026-12-01" }],
+        items: [{ purchaseOrderItemId: orderItemId, quantityBaseQty: 6, actualRate: 19, batchNumber: "OIL-LATE", manufacturedOn: isoDaysFromNow(-60), expiresOn: isoDaysFromNow(150) }],
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);
       assert.equal(completed.purchaseOrder.status, "received");
       assert.equal(completed.purchaseOrder.items[0].receivedBaseQty, 10);
@@ -990,7 +1000,7 @@ if (ctx.skip) {
       const issued = assertSuccess(await ctx.post("/api/gift-cards", {
         amount: 250,
         customerId: customer.id,
-        expiresOn: "2027-12-31",
+        expiresOn: isoDaysFromNow(365),
         note: "Festival store credit",
         ownerPin: tenant.ownerPin,
       }, { token: auth.accessToken, ownerPin: tenant.ownerPin }), 201);

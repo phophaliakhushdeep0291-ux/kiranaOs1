@@ -7,6 +7,7 @@ import { updateShop as updateShopOnServer } from "@/features/settings/api";
 import { DEFAULT_PRINTER_CONFIG, setPrinterConfigCache, type PrinterConfig } from "@/features/settings/printer-config";
 import type { Shop } from "@/types/api";
 import { setPaymentConfigCache } from "@/features/settings/payment-config";
+import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 
 export const PREFS_KEY = "kirana:settings-prefs:v1";
 export const PREFS_PENDING_KEY = "kirana:settings-prefs-pending:v1";
@@ -150,6 +151,11 @@ export function useSettingsPrefs() {
     setPrefs(next);
     void offlineDB.setSetting(PREFS_KEY, next); // durable + instant; cheap IndexedDB put
     void offlineDB.setSetting(PREFS_PENDING_KEY, next);
+    // §13 SETTINGS_CHANGED. Only the top-level section names are recorded — a
+    // settings blob holds bank details and printer endpoints, and the analytics
+    // question is "which settings do people actually change", not what they
+    // changed them to. The audit trail is where before/after values belong.
+    trackEvent(ACTIVITY_EVENTS.SETTINGS_CHANGED, { sections: Object.keys(partial).slice(0, 12) });
     if ("printer" in partial && next.printer) setPrinterConfigCache({ ...DEFAULT_PRINTER_CONFIG, ...next.printer });
     if ("bank" in partial) setPaymentConfigCache(next.bank, shop.data?.name);
     if (timer.current) clearTimeout(timer.current);

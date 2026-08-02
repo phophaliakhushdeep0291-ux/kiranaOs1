@@ -18,7 +18,13 @@ export async function get(req, res, next) {
 
 export async function create(req, res, next) {
   try {
-    const data = await svc.createCustomer(req.shopId, req.body);
+    const data = await svc.createCustomer(req.shopId, req.body, {
+      actor: {
+        userId: req.user?.userId ?? null,
+        deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
+        req,
+      },
+    });
     await publishIntegrationEvent(req.shopId, "customer.updated", { id: data.id, name: data.name, mobile: data.mobile, type: data.type, customerGroup: data.customerGroup, udharAmount: data.udharAmount, operation: "created", updatedAt: data.updatedAt }).catch(() => []);
     res.status(201).json({ success: true, data });
   } catch (err) { next(err); }
@@ -54,6 +60,8 @@ export async function udharPayment(req, res, next) {
     const data = await svc.recordUdharPayment(req.shopId, req.params.id, req.body, {
       deviceId: req.headers?.["x-device-id"] ? String(req.headers["x-device-id"]) : null,
       locationId: requestLocationId(req),
+      userId: req.user?.userId ?? null,
+      req,
     });
     await publishIntegrationEvent(req.shopId, "payment.recorded", { customerId: req.params.id, amount: req.body.amount, paymentMode: req.body.paymentMode ?? null, referenceId: data.id ?? null, recordedAt: new Date().toISOString() }).catch(() => []);
     res.json({ success: true, data });

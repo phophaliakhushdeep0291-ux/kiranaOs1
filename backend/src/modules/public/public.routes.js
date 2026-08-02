@@ -11,5 +11,8 @@ router.get("/shops/:shopId/catalog", ctrl.catalog);
 router.post("/shops/:shopId/orders", ctrl.submitOrder);
 // Customer tracks their own order by its unguessable id (received → preparing → ready / declined).
 router.get("/shops/:shopId/orders/:orderId", ctrl.orderStatus);
+// Online-session activity (§13). Only ONLINE_* event types are accepted and no
+// user is ever attributed — see online-activity.service.js for the full box.
+router.post("/shops/:shopId/activity", ctrl.onlineActivity);
 
 export default router;

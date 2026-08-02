@@ -7,6 +7,7 @@ import { readSyncQueueCounts, repairResolvedSyncStatusNoise, repairRetryableBill
 import { entityTypeFromOperation, tableNameForEntity, type SyncRunResult } from "@/features/sync/sync-types";
 import { probeBackendConnection } from "@/features/sync/backend-health";
 import { ApiClientError, getStoredAccessToken, getStoredRefreshToken } from "@/lib/api/http";
+import { ACTIVITY_EVENTS, trackEvent, type ActivityEventType } from "@/lib/activity";
 
 async function canSubscriptionSync(): Promise<boolean> {
   const snapshot = await getCurrentSubscriptionSnapshot();
@@ -57,9 +58,34 @@ export async function runSyncCycle(): Promise<SyncRunResult> {
 
   await repairResolvedSyncStatusNoise().catch(() => 0);
   await repairRetryableBillValidationConflicts().catch(() => 0);
-  const push = await pushPendingOutboxOperations();
-  const pull = await pullServerChanges();
+
+  // §13 sync activity. A POS pushes on a timer, so emitting a start/finish pair
+  // every cycle would bury every other event under sync noise. Only cycles that
+  // actually moved something — or failed — are recorded, mirroring the backend
+  // audit trail's "one terminal row per non-empty batch" rule.
+  const startedAt = Date.now();
+  let push: Awaited<ReturnType<typeof pushPendingOutboxOperations>>;
+  let pull: Awaited<ReturnType<typeof pullServerChanges>>;
+  try {
+    push = await pushPendingOutboxOperations();
+    pull = await pullServerChanges();
+  } catch (error) {
+    trackSyncEvent(ACTIVITY_EVENTS.SYNC_FAILED, Date.now() - startedAt, {
+      reason: error instanceof ApiClientError ? error.data?.code ?? String(error.status) : "unknown",
+    });
+    throw error;
+  }
+
   await repairResolvedSyncStatusNoise().catch(() => 0);
+  const moved = push.pushed + pull.pulled + push.failed + push.conflicts + pull.conflicts;
+  if (moved > 0) {
+    trackSyncEvent(
+      push.failed > 0 ? ACTIVITY_EVENTS.SYNC_FAILED : ACTIVITY_EVENTS.SYNC_COMPLETED,
+      Date.now() - startedAt,
+      { pushed: push.pushed, pulled: pull.pulled, failed: push.failed, conflicts: push.conflicts + pull.conflicts },
+    );
+  }
+
   return {
     pushed: push.pushed,
     pulled: pull.pulled,
@@ -69,6 +95,10 @@ export async function runSyncCycle(): Promise<SyncRunResult> {
     skipped: push.skipped,
     cursor: pull.cursor,
   };
+}
+
+function trackSyncEvent(eventType: ActivityEventType, durationMs: number, metadata: Record<string, unknown>): void {
+  trackEvent(eventType, metadata, { durationMs, module: "sync" });
 }
 
 export async function retryFailedSyncOperations(

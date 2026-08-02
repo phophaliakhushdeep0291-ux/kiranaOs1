@@ -12,6 +12,7 @@ import { getOfflineScope } from "@/lib/offline/context";
 import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
 import { clearSessionLockState } from "@/features/settings/SessionLockGate";
 import { offlineDB } from "@/lib/offline/db";
+import { ACTIVITY_EVENTS, flushActivity, resetActivitySession, trackEvent } from "@/lib/activity";
 import { AuthContext } from "./auth-context";
 
 function persistAuth(data: AuthResponse) {
@@ -278,6 +279,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setShop(shopData ?? null);
     setIsLoading(false);
     void activateCurrentDeviceSafely();
+    // §13: a new person at the counter starts a new activity session, so their
+    // work is never recorded inside the previous user's session.
+    resetActivitySession();
+    trackEvent(ACTIVITY_EVENTS.USER_LOGIN, { role: userData.role ?? "owner" });
     void writeAuditLog({
       action: "staff_login",
       entityType: "staff",
@@ -296,6 +301,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    // Tracked and flushed BEFORE the token is cleared — ingest needs the tenant
+    // context, so anything still queued after logout would sit undeliverable.
+    trackEvent(ACTIVITY_EVENTS.USER_LOGOUT, {});
+    await flushActivity().catch(() => undefined);
     try {
       await logoutSession();
     } catch {
@@ -309,6 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(null);
     setUser(null);
     setShop(null);
+    resetActivitySession();
     setLocation("/login");
   };
 

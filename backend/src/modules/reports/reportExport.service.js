@@ -3,7 +3,9 @@ import { AppError } from "../../middleware/error.js";
 import { env } from "../../config/env.js";
 import { addJob, isQueueEnabled } from "../../lib/queue.js";
 import { QUEUE_NAMES, JOB_NAMES } from "../../workers/queueNames.js";
-import { writeExportFile, deleteExportFile } from "../../lib/fileStorage.js";
+import { writeExportFile, deleteExportFile, exportFormatFor } from "../../lib/fileStorage.js";
+import { buildPdf } from "../../lib/documents/pdf.js";
+import { buildXlsx } from "../../lib/documents/xlsx.js";
 import { recordExportJob } from "../../lib/metrics.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import {
@@ -11,6 +13,7 @@ import {
   exportStockLedgerData,
   exportUdharData,
   getDailyClosing,
+  getGstReport,
   getSalesSummary,
 } from "./reports.service.js";
 
@@ -20,6 +23,13 @@ export const REPORT_EXPORT_TYPES = Object.freeze([
   "udhar_csv",
   "daily_closing_csv",
   "sales_summary_csv",
+  // §9 "Generate PDF of GST report" / "Export customer outstanding list".
+  "gst_summary_pdf",
+  "customer_outstanding_pdf",
+  "customer_outstanding_xlsx",
+  "bills_xlsx",
+  "stock_xlsx",
+  "sales_summary_xlsx",
 ]);
 
 const SAFE_PARAM_KEYS = new Set([
@@ -307,12 +317,12 @@ export async function processReportExportJob(exportJobId) {
 
   try {
     const params = parseParams(job.paramsJson);
-    const csv = await buildReportCsv(job.shopId, job.reportType, params);
+    const content = await buildReportContent(job.shopId, job.reportType, params);
     const fileMetadata = await writeExportFile({
       shopId: job.shopId,
       jobId: job.id,
       reportType: job.reportType,
-      content: csv,
+      content,
     });
     const completed = await markReportExportCompleted(job.id, fileMetadata);
     await createAuditLog({
@@ -358,6 +368,191 @@ async function buildPagedReportCsv(loadPage) {
   }
 
   return chunks.join("");
+}
+
+/**
+ * Route a report type to its renderer. CSV builders return a string; PDF and
+ * XLSX builders return a Buffer, which `writeExportFile` stores verbatim.
+ */
+async function buildReportContent(shopId, reportType, params) {
+  const format = exportFormatFor(reportType);
+  if (format.extension === "pdf") return buildReportPdf(shopId, reportType, params);
+  if (format.extension === "xlsx") return buildReportXlsx(shopId, reportType, params);
+  return buildReportCsv(shopId, reportType, params);
+}
+
+function formatMoney(value) {
+  return `Rs. ${Number(value ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatPeriod(params) {
+  const from = params.from ?? params.date ?? null;
+  const to = params.to ?? params.date ?? null;
+  if (!from && !to) return "All time";
+  return `${String(from ?? "").slice(0, 10)} to ${String(to ?? "").slice(0, 10)}`;
+}
+
+async function buildReportPdf(shopId, reportType, params) {
+  const shop = await db.shop.findUnique({
+    where: { id: shopId },
+    select: { name: true, gstNumber: true, city: true },
+  });
+  const generatedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
+
+  switch (reportType) {
+    case "gst_summary_pdf": {
+      const gst = await getGstReport(shopId, params);
+      return buildPdf({
+        title: "GST Summary Report",
+        subtitle: shop?.name ? `${shop.name}${shop.city ? `, ${shop.city}` : ""}` : "",
+        meta: [
+          { label: "GSTIN", value: shop?.gstNumber || "Not set" },
+          { label: "Period", value: `${String(gst.from).slice(0, 10)} to ${String(gst.to).slice(0, 10)}` },
+          { label: "Generated", value: generatedAt },
+        ],
+        sections: [
+          {
+            heading: "Tax summary",
+            columns: [
+              { key: "label", label: "Particulars", width: 300 },
+              { key: "value", label: "Amount", align: "right" },
+            ],
+            rows: [
+              { label: "Taxable sales", value: formatMoney(gst.taxableSales) },
+              { label: "CGST", value: formatMoney(gst.cgst) },
+              { label: "SGST", value: formatMoney(gst.sgst) },
+              { label: "IGST", value: formatMoney(gst.igst) },
+              { label: "Total GST collected", value: formatMoney(gst.gstCollected) },
+            ],
+          },
+          {
+            heading: "Bill counts",
+            columns: [
+              { key: "label", label: "Particulars", width: 300 },
+              { key: "value", label: "Count", align: "right" },
+            ],
+            rows: [
+              { label: "Total bills in period", value: String(gst.totalBills) },
+              { label: "Bills carrying GST", value: String(gst.gstBills) },
+            ],
+          },
+        ],
+        footer: "Artha POS — computed from recorded bills; not a filed return",
+      });
+    }
+    case "customer_outstanding_pdf": {
+      const customers = await exportUdharData(shopId);
+      const owing = customers
+        .filter((c) => Number(c.outstandingBalance) > 0)
+        .sort((a, b) => Number(b.outstandingBalance) - Number(a.outstandingBalance));
+      const total = owing.reduce((sum, c) => sum + Number(c.outstandingBalance ?? 0), 0);
+      return buildPdf({
+        title: "Customer Outstanding (Udhar)",
+        subtitle: shop?.name ?? "",
+        meta: [
+          { label: "Customers owing", value: String(owing.length) },
+          { label: "Total outstanding", value: formatMoney(total) },
+          { label: "Generated", value: generatedAt },
+        ],
+        sections: [
+          {
+            columns: [
+              { key: "name", label: "Customer", width: 200 },
+              { key: "mobile", label: "Mobile", width: 110 },
+              { key: "outstanding", label: "Outstanding", align: "right" },
+            ],
+            rows: owing.map((c) => ({
+              name: c.name,
+              mobile: c.mobile ?? "-",
+              outstanding: formatMoney(c.outstandingBalance),
+            })),
+          },
+        ],
+        footer: "Artha POS",
+      });
+    }
+    default:
+      throw appError("Unsupported report export type", 400, "UNSUPPORTED_REPORT_EXPORT_TYPE");
+  }
+}
+
+async function buildReportXlsx(shopId, reportType, params) {
+  switch (reportType) {
+    case "customer_outstanding_xlsx": {
+      const customers = await exportUdharData(shopId);
+      const owing = customers
+        .filter((c) => Number(c.outstandingBalance) > 0)
+        .sort((a, b) => Number(b.outstandingBalance) - Number(a.outstandingBalance));
+      return buildXlsx([
+        {
+          name: "Outstanding",
+          columns: [
+            { key: "name", label: "Customer", width: 28 },
+            { key: "mobile", label: "Mobile", width: 16 },
+            { key: "outstandingBalance", label: "Outstanding", width: 16 },
+          ],
+          // Amounts stay numeric so the sheet can be summed and sorted.
+          rows: owing.map((c) => ({
+            name: c.name,
+            mobile: c.mobile ?? "",
+            outstandingBalance: Number(c.outstandingBalance ?? 0),
+          })),
+        },
+        {
+          name: "Ledger",
+          rows: customers.flatMap((c) =>
+            (c.entries ?? []).map((entry) => ({
+              customerName: c.name,
+              ...entry,
+            })),
+          ),
+        },
+      ]);
+    }
+    case "bills_xlsx": {
+      const rows = await collectPagedRows((cursor) =>
+        exportBillsData(shopId, { ...params, limit: ASYNC_EXPORT_PAGE_SIZE, cursor }));
+      return buildXlsx([{ name: "Bills", rows }]);
+    }
+    case "stock_xlsx": {
+      const rows = await collectPagedRows((cursor) =>
+        exportStockLedgerData(shopId, { ...params, limit: ASYNC_EXPORT_PAGE_SIZE, cursor, allHistory: true }));
+      return buildXlsx([{ name: "Stock ledger", rows }]);
+    }
+    case "sales_summary_xlsx": {
+      const summary = await getSalesSummary(shopId, { ...params, includeProfit: false });
+      const { dailyBreakdown = [], ...totals } = summary;
+      return buildXlsx([
+        {
+          name: "Summary",
+          columns: [{ key: "metric", label: "Metric", width: 26 }, { key: "value", label: "Value", width: 18 }],
+          rows: Object.entries(flattenReportRow(totals)).map(([metric, value]) => ({ metric, value })),
+        },
+        { name: "Daily breakdown", rows: dailyBreakdown },
+      ]);
+    }
+    default:
+      throw appError("Unsupported report export type", 400, "UNSUPPORTED_REPORT_EXPORT_TYPE");
+  }
+}
+
+/**
+ * Same cursor walk as the CSV path, but accumulating row objects instead of
+ * pre-rendered CSV chunks (the sheet writer needs the values, not text).
+ */
+async function collectPagedRows(loadPage) {
+  let cursor = null;
+  const all = [];
+  while (true) {
+    const page = await loadPage(cursor);
+    all.push(...(page?.rows ?? []));
+    if (!page?.truncated) break;
+    if (!page.nextCursor || page.nextCursor === cursor) {
+      throw appError("Export pagination did not advance", 500, "REPORT_EXPORT_CURSOR_STALLED");
+    }
+    cursor = page.nextCursor;
+  }
+  return all;
 }
 
 async function buildReportCsv(shopId, reportType, params) {

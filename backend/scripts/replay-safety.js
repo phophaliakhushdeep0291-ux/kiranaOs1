@@ -68,6 +68,28 @@ export function replayUnsafeReason(sql) {
  * Line comments are stripped first so prose (and the marker itself) can never
  * satisfy a guard.
  */
+/**
+ * Constraint names added inside a dollar-quoted DO block whose EXCEPTION clause
+ * handles `duplicate_object` (SQLSTATE 42710, what Postgres raises when the
+ * constraint name is already taken). Replaying such a block is a no-op, so the
+ * ADD needs no DROP in front of it. The handler must be in the SAME block as the
+ * ADD — a duplicate_object handler elsewhere in the file protects nothing.
+ */
+function constraintsGuardedByDuplicateObjectHandler(code) {
+  const guarded = new Set();
+  // Optional dollar-quote tag: $$ … $$ and $do$ … $do$ are both valid.
+  const doBlock = /\bDO\s+\$(\w*)\$([\s\S]*?)\$\1\$/gi;
+  let block;
+  while ((block = doBlock.exec(code)) !== null) {
+    const body = block[2];
+    if (!/\bEXCEPTION\b[\s\S]*\bduplicate_object\b/i.test(body)) continue;
+    const addConstraint = /\bADD\s+CONSTRAINT\s+"?(\w+)"?/gi;
+    let added;
+    while ((added = addConstraint.exec(body)) !== null) guarded.add(added[1]);
+  }
+  return guarded;
+}
+
 export function idempotencyViolations(sql) {
   const violations = [];
   const code = sql.replace(/--[^\n]*/g, "");
@@ -84,13 +106,23 @@ export function idempotencyViolations(sql) {
 
   let m;
 
-  // Every ADD CONSTRAINT must be preceded (anywhere) by a DROP CONSTRAINT IF
-  // EXISTS for the same name, so replay drops-then-adds instead of colliding.
+  // Postgres has no ADD CONSTRAINT IF NOT EXISTS, so two forms are idempotent:
+  // a preceding DROP CONSTRAINT IF EXISTS (replay drops then re-adds), or an ADD
+  // wrapped in a DO block that swallows duplicate_object. Both are accepted, and
+  // the second is the better one on a live database: dropping a foreign key even
+  // for the moment mid-deploy opens a window where orphan rows can be written.
+  const guardedByHandler = constraintsGuardedByDuplicateObjectHandler(code);
   const addConstraint = /\bADD\s+CONSTRAINT\s+"?(\w+)"?/gi;
   while ((m = addConstraint.exec(code)) !== null) {
     const name = m[1];
+    if (guardedByHandler.has(name)) continue;
     const dropRe = new RegExp(`DROP\\s+CONSTRAINT\\s+IF\\s+EXISTS\\s+"?${name}"?`, "i");
-    if (!dropRe.test(code)) violations.push(`ADD CONSTRAINT "${name}" without a preceding DROP CONSTRAINT IF EXISTS`);
+    if (!dropRe.test(code)) {
+      violations.push(
+        `ADD CONSTRAINT "${name}" without a preceding DROP CONSTRAINT IF EXISTS ` +
+          "or a DO block handling duplicate_object",
+      );
+    }
   }
 
   // Postgres has no CREATE TRIGGER IF NOT EXISTS (before v14, and Prisma does not
