@@ -42,6 +42,7 @@ import { filterRowsForCurrentScope, offlineDB } from "@/lib/offline/db";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Bill } from "@/types/api";
+import { useReportView } from "@/lib/activity";
 
 type SalesPeriod = "today" | "week" | "month" | "custom";
 type LocalBill = Bill & Record<string, unknown>;
@@ -244,6 +245,7 @@ async function loadSalesData(range: DateRange) {
 type SalesData = Awaited<ReturnType<typeof loadSalesData>>;
 
 export default function SalesOverviewPage() {
+  useReportView("sales", "Sales overview");
   const { toast } = useToast();
   const [period, setPeriod] = useState<SalesPeriod>("week");
   const [from, setFrom] = useState(daysAgoInput(6));

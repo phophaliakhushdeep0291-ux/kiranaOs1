@@ -40,6 +40,7 @@ import { lookupGiftCard } from "@/features/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/voice/backend-transcription";
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity } from "@/features/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/settings/i18n";
+import { ACTIVITY_EVENTS, trackEvent, usePersonalization } from "@/lib/activity";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
@@ -142,6 +143,10 @@ export default function Billing() {
   const customerNameInputRef = useRef<HTMLInputElement | null>(null);
   const summaryResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const pendingAutoPrintRef = useRef<{ popup: Window; printable: PrintableBill } | null>(null);
+  // §13 "average billing time": the clock starts on the first line of a bill,
+  // not on page load. A billing screen left open all morning between customers
+  // would otherwise report a 3-hour average bill.
+  const billingStartedAtRef = useRef<number | null>(null);
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -438,14 +443,21 @@ export default function Billing() {
   })), [allProducts]);
 
 
-  const recentProducts = useMemo(
-    () =>
-      recentProductIds
-        .slice(0, 8)
-        .map((id) => productById.get(id))
-        .filter((p): p is Product => p != null),
-    [recentProductIds, productById],
-  );
+  // §13 personalization. The device's own recent list still leads — "what I just
+  // touched" is what the user is reaching for — and the learned ranking fills the
+  // rest, so a freshly set-up counter shows the shop's real sellers instead of an
+  // empty row. Ordering only; nothing is hidden and nothing is pre-selected.
+  const personalization = usePersonalization(Boolean(shop?.id));
+  const recentProducts = useMemo(() => {
+    const ordered: string[] = [...recentProductIds];
+    for (const suggestion of personalization.data?.quickProducts ?? []) {
+      if (!ordered.includes(suggestion.key)) ordered.push(suggestion.key);
+    }
+    return ordered
+      .slice(0, 8)
+      .map((id) => productById.get(id))
+      .filter((p): p is Product => p != null);
+  }, [recentProductIds, productById, personalization.data]);
 
   const filteredProducts = useMemo(() => {
     const q = normalizeSearchText(deferredSearch);
@@ -737,6 +749,10 @@ export default function Billing() {
       return [...previous, { product, quantity, rate: options?.custom ? product.defaultPricePerRateUnit : priced.rate, unit: sellingUnit?.name ?? product.rateUnit ?? product.displayUnit ?? "piece", sellingUnit, isCustom: options?.custom, manualRate: options?.custom, pricing: options?.custom ? undefined : priced.pricing }];
     });
     rememberRecentProduct(product.id);
+    if (billingStartedAtRef.current === null) billingStartedAtRef.current = Date.now();
+    if (!options?.custom) {
+      trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: product.id, productName: product.name });
+    }
     setSearch("");
   }
 
@@ -782,6 +798,11 @@ export default function Billing() {
       return next;
     });
     voiceDraft.lines.forEach((line) => rememberRecentProduct(line.product.id));
+    trackEvent(ACTIVITY_EVENTS.VOICE_COMMAND_USED, { lines: voiceDraft.lines.length, matched: true });
+    for (const line of voiceDraft.lines) {
+      trackEvent(ACTIVITY_EVENTS.PRODUCT_ADDED_TO_BILL, { productId: line.product.id, productName: line.product.name, via: "voice" });
+    }
+    if (billingStartedAtRef.current === null) billingStartedAtRef.current = Date.now();
     if (voiceDraft.customerName) {
       setSelectedCustomerId("walk_in");
       setCustomerName(voiceDraft.customerName);
@@ -1026,6 +1047,13 @@ export default function Billing() {
   }
 
   function removeItem(lineKey: string) {
+    // Read the line before the update rather than inside the updater: React
+    // re-invokes state updaters under StrictMode, and a side effect in there
+    // would count the removal twice.
+    const removed = cart.find((item) => cartItemKey(item) === lineKey);
+    if (removed && !removed.isCustom) {
+      trackEvent(ACTIVITY_EVENTS.PRODUCT_REMOVED_FROM_BILL, { productId: removed.product.id, productName: removed.product.name });
+    }
     setCart((previous) => previous.filter((item) => cartItemKey(item) !== lineKey));
   }
 
@@ -1234,6 +1262,32 @@ export default function Billing() {
     const printable = makePrintableBill(nextBillType, paid, remainingCredit, payments);
     setLastPrintableBill(printable);
     pendingAutoPrintRef.current = null;
+
+    // §13. Emitted here, at the point of no return, rather than in the mutation's
+    // onSuccess: the local-first path completes the sale on the device and syncs
+    // later, so waiting for a server ack would lose every offline bill from the
+    // activity record — which is exactly the shop that needs suggestions most.
+    // The bill itself remains the authoritative record; this is behaviour only.
+    trackEvent(
+      ACTIVITY_EVENTS.BILL_CREATED,
+      {
+        billId: activeBillId,
+        billType: nextBillType,
+        paymentMethod: paymentMode === SPLIT_PAYMENT ? "split" : String(paymentMode),
+        itemCount: cart.length,
+        productIds: cart.filter((item) => !item.isCustom).map((item) => item.product.id),
+        hasCustomer: Boolean(resolvedCustomerId),
+        hasDiscount: safeDiscount > 0,
+      },
+      { durationMs: billingStartedAtRef.current === null ? undefined : Date.now() - billingStartedAtRef.current },
+    );
+    if (paid > 0) {
+      trackEvent(ACTIVITY_EVENTS.PAYMENT_COMPLETED, {
+        billId: activeBillId,
+        paymentMethod: paymentMode === SPLIT_PAYMENT ? "split" : String(paymentMode),
+      });
+    }
+    billingStartedAtRef.current = null;
 
     if (getPrinterConfigSync().autoPrint) {
       if (printDecision !== false) {

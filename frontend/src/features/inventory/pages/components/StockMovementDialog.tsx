@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getProductEmoji } from "@/features/billing/pages/components/BillingSearch";
 import { fromBaseQty, isDeletedProduct, productDisplayUnit, toBaseQty } from "@/features/products/pages/product-pricing";
 import { useRecordPurchase, useRecordSale } from "@/features/inventory/queries";
+import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 
 const OUT_REASONS = ["Counter stock out", "Expiry", "Damage", "Theft / Missing", "Other"];
 
@@ -78,6 +79,15 @@ export function StockMovementDialog({ mode, open, onOpenChange, initialProductId
     const onDone = (label: string) => {
       queryClient.invalidateQueries({ queryKey: getListProductsQueryKey() });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      // §13 INVENTORY_UPDATE — the counter behind "most frequently edited
+      // products". Recorded only on success, so a rejected movement does not
+      // make a product look busy.
+      trackEvent(ACTIVITY_EVENTS.INVENTORY_UPDATE, {
+        productId,
+        productName: selected.name,
+        direction: mode,
+        reason: mode === "out" ? reason : undefined,
+      });
       toast({ title: label });
       close();
     };

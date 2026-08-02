@@ -62,13 +62,46 @@ assert.deepEqual(idempotencyViolations(`CREATE UNIQUE INDEX "i" ON "X"("id");`),
 assert.deepEqual(idempotencyViolations(`CREATE UNIQUE INDEX IF NOT EXISTS "i" ON "X"("id");`), [], "validator must accept guarded CREATE UNIQUE INDEX");
 assert.deepEqual(
   idempotencyViolations(`ALTER TABLE "X" ADD CONSTRAINT "fk_a" FOREIGN KEY ("b") REFERENCES "Y"("id");`),
-  [`ADD CONSTRAINT "fk_a" without a preceding DROP CONSTRAINT IF EXISTS`],
+  [`ADD CONSTRAINT "fk_a" without a preceding DROP CONSTRAINT IF EXISTS or a DO block handling duplicate_object`],
   "validator must flag ADD CONSTRAINT with no DROP CONSTRAINT IF EXISTS",
 );
 assert.deepEqual(
   idempotencyViolations(`ALTER TABLE "X" DROP CONSTRAINT IF EXISTS "fk_a";\nALTER TABLE "X" ADD CONSTRAINT "fk_a" FOREIGN KEY ("b") REFERENCES "Y"("id");`),
   [],
   "validator must accept drop-then-add constraint",
+);
+// The other idempotent form, and the one to prefer on a live database: the ADD
+// runs inside a DO block that swallows duplicate_object, so a replay is a no-op
+// and the foreign key is never dropped mid-deploy. 000080 uses this shape.
+assert.deepEqual(
+  idempotencyViolations(
+    `DO $$\nBEGIN\n  ALTER TABLE "X" ADD CONSTRAINT "fk_a" FOREIGN KEY ("b") REFERENCES "Y"("id");\nEXCEPTION WHEN duplicate_object THEN NULL;\nEND $$;`,
+  ),
+  [],
+  "validator must accept ADD CONSTRAINT guarded by a duplicate_object handler",
+);
+assert.deepEqual(
+  idempotencyViolations(
+    `DO $do$\nBEGIN\n  ALTER TABLE "X" ADD CONSTRAINT "fk_a" FOREIGN KEY ("b") REFERENCES "Y"("id");\nEXCEPTION WHEN duplicate_object THEN NULL;\nEND $do$;`,
+  ),
+  [],
+  "validator must accept a tagged dollar-quoted DO block",
+);
+// The handler must be in the same block as the ADD; one elsewhere protects nothing.
+assert.deepEqual(
+  idempotencyViolations(
+    `DO $$\nBEGIN\n  ALTER TABLE "Z" ADD CONSTRAINT "fk_z" FOREIGN KEY ("b") REFERENCES "Y"("id");\nEXCEPTION WHEN duplicate_object THEN NULL;\nEND $$;\nALTER TABLE "X" ADD CONSTRAINT "fk_a" FOREIGN KEY ("b") REFERENCES "Y"("id");`,
+  ),
+  [`ADD CONSTRAINT "fk_a" without a preceding DROP CONSTRAINT IF EXISTS or a DO block handling duplicate_object`],
+  "validator must not let a DO block guard an ADD CONSTRAINT outside it",
+);
+// A DO block with no duplicate_object handler is not a guard either.
+assert.deepEqual(
+  idempotencyViolations(
+    `DO $$\nBEGIN\n  ALTER TABLE "X" ADD CONSTRAINT "fk_a" FOREIGN KEY ("b") REFERENCES "Y"("id");\nEND $$;`,
+  ),
+  [`ADD CONSTRAINT "fk_a" without a preceding DROP CONSTRAINT IF EXISTS or a DO block handling duplicate_object`],
+  "validator must require the duplicate_object handler, not just a DO block",
 );
 // The marker itself lives in a comment; comment text must never satisfy a guard.
 assert.deepEqual(

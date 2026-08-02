@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/api/http";
+import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 
 interface BillRecord extends Bill, Record<string, unknown> {}
 type AnyRow = Record<string, unknown>;
@@ -242,6 +243,17 @@ export default function BillDetailPage() {
       if (pinAction === "cancel") await cancelBillWithOwnerPinLocalFirst(bill.id, ownerPin, reason);
       if (pinAction === "delete") await softDeleteBillWithOwnerPinLocalFirst(bill.id, ownerPin, reason);
       if (pinAction === "restore") await restoreBillWithOwnerPinLocalFirst(bill.id, ownerPin, reason);
+      if (pinAction === "cancel" || pinAction === "delete") {
+        // The reason is an owner-typed free-text field, so it is recorded as the
+        // shape of the cancellation ("which bills get cancelled, and why") — the
+        // text itself is redacted server-side like every other typed field.
+        trackEvent(ACTIVITY_EVENTS.BILL_CANCELLED, {
+          billId: bill.id,
+          action: pinAction,
+          reason,
+          productIds: visibleItems.map((item) => item.productId).filter(Boolean),
+        });
+      }
       toast({ title: "Saved locally", description: "Data safe locally. Cloud backup will happen automatically when sync is available." });
       setPinAction(null);
       await refetch();

@@ -9,6 +9,7 @@ import { getLandingRoute } from "@/features/settings/landing-page";
 import { SessionLockGate } from "@/features/settings/SessionLockGate";
 import { peekPostLoginRedirect, stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
 import { FeatureGate } from "@/features/subscription/components/FeatureGate";
+import { useScreenTracking } from "@/lib/activity";
 import type { FeatureName } from "@/features/subscription/plans";
 
 const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
@@ -66,6 +67,7 @@ const SubscriptionPage = lazy(() => import("@/features/subscription/pages/Subscr
 const DevicesPage = lazy(() => import("@/features/devices/pages/DevicesPage"));
 const PlatformAdminPage = lazy(() => import("@/features/platform-admin/pages/PlatformAdminPage"));
 const AskArthaPage = lazy(() => import("@/features/support/pages/AskArthaPage"));
+const ActivityInsightsPage = lazy(() => import("@/features/activity/pages/ActivityInsightsPage"));
 const StaffPage = lazy(() => import("@/features/staff/pages/StaffPage"));
 const AuditLogsPage = lazy(() => import("@/features/audit-logs/pages/AuditLogsPage"));
 const AssuranceDashboardPage = lazy(() => import("@/features/assurance/pages/AssuranceDashboardPage"));
@@ -158,6 +160,11 @@ export function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
   const isCustomerOrderPath = /^\/order\/[^/]+/.test(location);
+
+  // §13 screen tracking. The public storefront tracks its own online-session
+  // events, so it is excluded here to keep a shopper's browsing out of the POS
+  // page ranking.
+  useScreenTracking(location, isAuthenticated && !isCustomerOrderPath);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -359,6 +366,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/help">
         <ProtectedRoute component={AskArthaPage} />
+      </Route>
+      <Route path="/activity-insights">
+        <ProtectedRoute component={ActivityInsightsPage} />
       </Route>
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} featureName="staff_login" />

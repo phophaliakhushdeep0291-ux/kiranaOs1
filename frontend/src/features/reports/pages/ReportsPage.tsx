@@ -60,6 +60,7 @@ import { BankReconciliationPanel } from "@/features/reports/components/BankRecon
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Expense, ExpenseSummary } from "@/types/api";
+import { ACTIVITY_EVENTS, trackEvent, useReportView } from "@/lib/activity";
 
 const PANEL = "min-w-0 overflow-hidden rounded-[16px] border border-[#e2e9f3] bg-white shadow-[0_10px_30px_rgba(31,60,110,0.055)]";
 const GRID_STROKE = "#e7edf5";
@@ -187,6 +188,7 @@ async function listExpensesOrEmpty(params: ExpenseDateParams): Promise<Expense[]
 }
 
 export default function ReportsPage() {
+  useReportView("overview", "Business overview");
   const { toast } = useToast();
   const isPhoneLayout = usePhoneReportLayout();
   const [from, setFrom] = useState(daysAgoInput(6));
@@ -359,6 +361,7 @@ export default function ReportsPage() {
       anchor.click();
       URL.revokeObjectURL(url);
       setExportPinOpen(false);
+      trackEvent(ACTIVITY_EVENTS.REPORT_EXPORT, { report: "overview", reportLabel: "Business overview", format: "json" });
       toast({ title: "Report exported", description: "Owner approval was recorded in the audit log." });
     } catch (error) {
       setExportError(error instanceof Error ? error.message : "Owner approval is required.");

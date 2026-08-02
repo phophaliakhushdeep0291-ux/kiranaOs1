@@ -110,10 +110,26 @@ if (regression.status !== 0) {
   process.exit(regression.status || 1);
 }
 
-const result = spawnSync(process.execPath, ["--test", "--test-concurrency=1", ...files], {
-  cwd: process.cwd(),
-  env,
-  stdio: "inherit",
-});
+// One process per file, not one process for all of them. `--test-concurrency=1`
+// only serialises the test functions; every file still shares a single module
+// registry, so they share one Prisma client and its SQLite connection. A file
+// whose async handles are still settling when the next file calls
+// resetDatabase() produced "SQL error or missing database" and then cascaded
+// through every remaining file — the release gate failed for reasons that had
+// nothing to do with the code under test, and the same files pass individually.
+// Isolating them costs a second of startup each and makes the gate deterministic.
+const failed = [];
+for (const file of files) {
+  const run = spawnSync(process.execPath, ["--test", "--test-concurrency=1", file], {
+    cwd: process.cwd(),
+    env,
+    stdio: "inherit",
+  });
+  if (run.status !== 0) failed.push(file);
+}
 
-process.exit(result.status || 0);
+if (failed.length) {
+  console.error(`\nIntegration test files failed (${failed.length}/${files.length}):`);
+  for (const file of failed) console.error(`  - ${file}`);
+  process.exit(1);
+}

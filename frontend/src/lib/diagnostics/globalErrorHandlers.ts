@@ -36,6 +36,32 @@ export function reportClientError(input: ClientErrorReport & { source: string })
   recordErrorBreadcrumb(message, input.source);
   if (!throttleAllows(`${input.source}:${message}`.slice(0, 300))) return;
   void reportErrorToBackend({ ...input, message });
+  // §13's ERROR_OCCURRED. The full error (with stack) still goes to the error
+  // store above; this records only that an error happened here, so "common
+  // system errors" can be read alongside the rest of the user's activity — on
+  // the same throttle, so a render loop cannot flood either pipeline.
+  void trackActivityError(message, input);
+}
+
+/**
+ * Imported lazily so the activity SDK never ends up in the module graph of the
+ * error handlers themselves — a failure in tracking must not be able to break
+ * the code whose job is to report failures.
+ */
+function trackActivityError(message: string, input: ClientErrorReport & { source: string }): void {
+  void import("@/lib/activity")
+    .then(({ ACTIVITY_EVENTS, trackEvent }) => {
+      trackEvent(ACTIVITY_EVENTS.ERROR_OCCURRED, {
+        source: input.source,
+        errorCode: input.errorCode,
+        // The message can contain a customer's name or a product string; the
+        // shape of the failure is what the activity report needs, not its text.
+        fileName: input.fileName,
+        lineNumber: input.lineNumber,
+        length: message.length,
+      });
+    })
+    .catch(() => undefined);
 }
 
 /** Install window-level capture for uncaught errors and unhandled rejections. */

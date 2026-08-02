@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   getGetInventoryQueryKey,
   getGetLowStockQueryKey,
@@ -79,6 +79,7 @@ import {
 } from "@/features/inventory/stock-display";
 import { PageShell, StatCard, StatsGrid } from "@/components/shared";
 import { offlineDB } from "@/lib/offline/db";
+import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 
 const UNITS = [
   "piece", "dozen", "set", "pair", "bundle", "roll", "sheet",
@@ -238,7 +239,18 @@ function purchaseStatus(row: MovementEntry) {
   return "Paid";
 }
 
+/** §13 INVENTORY_VIEW — one event per visit, not per re-render. */
+function useTrackedInventoryView() {
+  const tracked = useRef(false);
+  useEffect(() => {
+    if (tracked.current) return;
+    tracked.current = true;
+    trackEvent(ACTIVITY_EVENTS.INVENTORY_VIEW, {});
+  }, []);
+}
+
 export default function InventoryPage() {
+  useTrackedInventoryView();
   const { toast } = useToast();
   const manageInventory = usePermission("manage_inventory");
   const queryClient = useQueryClient();

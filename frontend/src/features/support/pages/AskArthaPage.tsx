@@ -18,6 +18,7 @@ import {
   submitSupportRequest,
   type AssistantAnswer,
 } from "@/lib/diagnostics";
+import { ACTIVITY_EVENTS, trackEvent } from "@/lib/activity";
 
 /**
  * AskArthaPage — the dedicated home for the AI assistant (Diagnostics §5, §8, §9).
@@ -87,9 +88,20 @@ export default function AskArthaPage() {
     setTurns((prev) => [...prev, { id, question: trimmed, answer: null, error: null }]);
     setQuestion("");
     setAsking(true);
+    const askedAt = Date.now();
     try {
       const answer = await askAssistant(trimmed);
       setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, answer } : t)));
+      // §13 AI usage. The intent and whether the answer resolved is what the AI
+      // metrics need; the question text is redacted server-side.
+      trackEvent(
+        ACTIVITY_EVENTS.AI_ASSISTANT_QUERY,
+        { intent: answer.focus, topic: answer.topic, resolved: answer.resolved, escalated: answer.escalate },
+        { durationMs: Date.now() - askedAt },
+      );
+      if (answer.focus === "howto") {
+        trackEvent(ACTIVITY_EVENTS.HELP_ARTICLE_VIEWED, { topic: answer.topic, resolved: answer.resolved });
+      }
     } catch {
       setTurns((prev) =>
         prev.map((t) =>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,6 +22,7 @@ import type { BillTypeSelection, CartItem, PaymentSelection } from "../billing-t
 import { BillingCart } from "./BillingCart";
 import { BillingPaymentPanel } from "./BillingPaymentPanel";
 import { useAppLanguage } from "@/features/settings/i18n";
+import { ACTIVITY_EVENTS, trackEvent, usePersonalization } from "@/lib/activity";
 
 interface BillingSummaryProps {
   summaryWidth: number;
@@ -248,6 +249,15 @@ export function BillingSummary({
   negativeStockWarnings = [],
 }: BillingSummaryProps) {
   const { t } = useAppLanguage();
+  // §13 "Highlighting frequently selected customers": the people this user picks
+  // most float to the top of the list. Ordering only — every customer is still
+  // in the list, in the same alphabetical order underneath.
+  const personalization = usePersonalization();
+  const orderedCustomers = useMemo(() => {
+    const ranks = new Map((personalization.data?.frequentCustomers ?? []).map((row, index) => [row.key, index]));
+    if (ranks.size === 0) return customers;
+    return [...customers].sort((a, b) => (ranks.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (ranks.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  }, [customers, personalization.data]);
   const [showCustomerOptions, setShowCustomerOptions] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
   const [couponExpanded, setCouponExpanded] = useState(false);
@@ -429,6 +439,7 @@ export function BillingSummary({
                       if (c) {
                         setCustomerName(c.name);
                         setCustomerMobile(c.mobile ?? "");
+                        trackEvent(ACTIVITY_EVENTS.CUSTOMER_SELECTED, { customerId: c.id, customerName: c.name });
                       }
                     }}
                   >
@@ -437,7 +448,7 @@ export function BillingSummary({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="walk_in">{t("billing.summary.walkInOption")}</SelectItem>
-                      {customers.map((c) => (
+                      {orderedCustomers.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.name}
                           {c.mobile ? ` · ${c.mobile}` : ""}

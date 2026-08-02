@@ -21,6 +21,7 @@ import { useListBills } from "@/features/bills/queries";
 import type { Bill, Product } from "@/lib/api/client";
 import { productSellingPrice, resolveScanMatch } from "../billing-calculations";
 import { useAppLanguage } from "@/features/settings/i18n";
+import { ACTIVITY_EVENTS, trackEvent, useSearchTracking } from "@/lib/activity";
 
 /* ─── deterministic product placeholder colour ─── */
 const PLACEHOLDER_COLORS = [
@@ -156,6 +157,14 @@ export function BillingSearch({
   const scanFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const displayedProducts = showAll ? filteredProducts : filteredProducts.slice(0, 10);
+
+  // §13. One search event per settled query, attributed to whatever the user
+  // picked — that pairing is what the search auto-complete learns from.
+  const { notifySelection } = useSearchTracking(search, filteredProducts.length, { screen: "/billing" });
+  const addProduct = (product: Product) => {
+    notifySelection(product.id, product.name);
+    onAddProduct(product);
+  };
   const visibleCategories = showAllCategories ? categories : categories.slice(0, CATEGORY_LIMIT);
   const hasMoreCategories = categories.length > CATEGORY_LIMIT;
 
@@ -216,6 +225,7 @@ export function BillingSearch({
               const value = codes.find((code) => typeof code.rawValue === "string" && code.rawValue.trim())?.rawValue?.trim();
 
               if (value) {
+                trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, { source: "camera" });
                 onSearchChange(value);
                 setScannerOpen(false);
                 window.setTimeout(() => searchInputRef.current?.focus(), 0);
@@ -306,7 +316,10 @@ export function BillingSearch({
                     const match = resolveScanMatch(search, filteredProducts);
                     if (match) {
                       e.preventDefault();
-                      onAddProduct(match);
+                      // A USB scanner types the code and hits Enter, so this is
+                      // the hardware-scan path rather than a typed search.
+                      trackEvent(ACTIVITY_EVENTS.BARCODE_SCANNED, { source: "usb", matched: true, productId: match.id });
+                      addProduct(match);
                       onSearchChange("");
                     }
                   }}
@@ -351,7 +364,7 @@ export function BillingSearch({
                     return (
                       <button
                         key={p.id}
-                        onClick={() => onAddProduct(p)}
+                        onClick={() => addProduct(p)}
                         className="flex min-w-[104px] items-center gap-2 rounded-lg border border-transparent bg-white px-2 py-1.5 shadow-[0_2px_6px_rgba(15,23,42,0.04)] transition-all hover:border-[var(--brand-border)]"
                       >
                         <span className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-[7px] text-lg ${color}`}>
@@ -473,7 +486,7 @@ export function BillingSearch({
                   <ProductCard
                     key={product.id}
                     product={product}
-                    onAdd={() => onAddProduct(product)}
+                    onAdd={() => addProduct(product)}
                   />
                 ))}
               </div>

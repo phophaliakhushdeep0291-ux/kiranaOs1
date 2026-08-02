@@ -137,6 +137,9 @@ export async function assistant(req, res, next) {
     const result = await answerAssistant({
       shopId: req.shopId,
       deviceId: resolveDeviceId(req),
+      // Learning-layer answers ("what do I sell the most?") are personal to the
+      // asker, so the assistant needs to know who is asking.
+      userId: req.user?.userId ?? null,
       question: req.body.question,
     });
     res.json({ success: true, data: result });

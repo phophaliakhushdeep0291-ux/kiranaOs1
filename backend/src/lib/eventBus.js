@@ -32,6 +32,7 @@ export const EVENT_TOPICS = Object.freeze({
   SYNC_COMPLETED: "artha.sync.completed",
   DEVICE_HEALTH: "artha.device.health",
   AUDIT_EVENT: "artha.audit.event",
+  ACTIVITY_EVENT: "artha.activity.event",
 });
 
 const VALID_TOPICS = new Set(Object.values(EVENT_TOPICS));
