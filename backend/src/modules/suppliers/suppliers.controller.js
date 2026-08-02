@@ -7,8 +7,23 @@ export async function list(req, res, next) {
 }
 
 export async function create(req, res, next) {
-  try { res.status(201).json({ success: true, data: await svc.createSupplier(req.shopId, req.body) }); }
-  catch (err) { next(err); }
+  try {
+    const startedAt = Date.now();
+    const supplier = await svc.createSupplier(req.shopId, req.body);
+    // §2 audit "Supplier creation" — matches the delete/restore entries below.
+    await createAuditLog({
+      shopId: req.shopId,
+      userId: req.user?.userId,
+      action: "SUPPLIER_CREATED",
+      entityType: "Supplier",
+      entityId: supplier.id,
+      before: null,
+      after: { id: supplier.id, name: supplier.name, mobile: supplier.mobile ?? null },
+      durationMs: Date.now() - startedAt,
+      req,
+    });
+    res.status(201).json({ success: true, data: supplier });
+  } catch (err) { next(err); }
 }
 
 export async function update(req, res, next) {

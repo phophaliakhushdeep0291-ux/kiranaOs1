@@ -1,7 +1,7 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, round2, toPaise, toPaiseBigInt } from "../../utils/money.js";
-import { createAuditLog } from "../audit/audit.service.js";
+import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import {
   calculateCustomerUdharBalance,
   calculateCustomerUdharBalances,
@@ -69,7 +69,7 @@ export async function getCustomer(shopId, id) {
   return (await attachDerivedUdharBalances(shopId, [c]))[0];
 }
 
-export async function createCustomer(shopId, data, { reuseExistingMobile = false } = {}) {
+export async function createCustomer(shopId, data, { reuseExistingMobile = false, actor = {} } = {}) {
   // If mobile provided, check for existing customer (matching by mobile is the rule).
   // Soft-deleted customers may still carry a historical mobile in old databases;
   // clear that value before creating a new active customer so DB unique constraints
@@ -98,7 +98,8 @@ export async function createCustomer(shopId, data, { reuseExistingMobile = false
   }
 
   const openingUdharAmount = round2(data.udharAmount ?? 0);
-  return db.$transaction(async (tx) => {
+  const startedAt = Date.now();
+  const created = await db.$transaction(async (tx) => {
     const customer = await tx.customer.create({
       data: {
         ...data,
@@ -128,6 +129,25 @@ export async function createCustomer(shopId, data, { reuseExistingMobile = false
     const [withBalance] = await attachDerivedUdharBalances(shopId, [customer], tx);
     return withBalance;
   });
+
+  // §2 audit "Customer creation". `before` is null because the record did not
+  // exist — that asymmetry is what marks a create on the timeline.
+  await createAuditLog({
+    shopId,
+    userId: actor.userId ?? null,
+    deviceId: actor.deviceId ?? null,
+    module: AUDIT_MODULES.CUSTOMERS,
+    action: "CUSTOMER_CREATED",
+    entityType: "customer",
+    entityId: created.id,
+    before: null,
+    after: { name: created.name, mobile: created.mobile, type: created.type },
+    metadata: { openingUdharAmount, source: actor.source ?? "api" },
+    durationMs: Date.now() - startedAt,
+    req: actor.req ?? null,
+  });
+
+  return created;
 }
 
 export async function updateCustomer(shopId, id, data) {
@@ -236,9 +256,10 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
   // Resolve lazy primary-location creation outside the balance transaction so
   // a concurrent uniqueness race cannot abort PostgreSQL's transaction state.
   const operationalLocation = await resolveOperationalLocation(shopId, input.locationId ?? actor.locationId ?? null);
+  const startedAt = Date.now();
 
   try {
-    return await db.$transaction(async (tx) => {
+    const outcome = await db.$transaction(async (tx) => {
       const location = await resolveOperationalLocation(shopId, operationalLocation.id, tx);
       // Serialize balance checks for this customer across application instances.
       // Without the row lock, concurrent payments can both validate the same
@@ -310,7 +331,29 @@ export async function recordUdharPayment(shopId, customerId, input, actor = {}) 
       newBalance: refreshed.balance,
       amountPaid: paymentAmount,
     };
-  });
+    });
+
+    // §2 audit "Payment received". Written after the transaction commits so a
+    // rolled-back payment never appears on the timeline, and skipped for
+    // idempotent replays so a retried sync event is not logged twice.
+    if (!outcome.idempotentReplay) {
+      await createAuditLog({
+        shopId,
+        userId: actor.userId ?? actor.actorUserId ?? null,
+        deviceId: actor.deviceId ?? null,
+        module: AUDIT_MODULES.PAYMENTS,
+        action: "UDHAR_PAYMENT_RECEIVED",
+        entityType: "udhar_ledger",
+        entityId: outcome.ledgerEntryId,
+        before: { customerId, outstanding: round2(outcome.newBalance + paymentAmount) },
+        after: { customerId, outstanding: outcome.newBalance },
+        metadata: { customerName: customer.name, amount: paymentAmount, mode, note: note ?? null },
+        durationMs: Date.now() - startedAt,
+        req: actor.req ?? null,
+      });
+    }
+
+    return outcome;
   } catch (error) {
     if (isUniqueConstraintError(error) && hasLedgerIdentity(identity)) {
       const existingLedger = await findExistingUdharPaymentByIdentity(db, shopId, customerId, identity);

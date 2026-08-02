@@ -82,6 +82,9 @@ const envSchema = z.object({
   ALLOW_MANUAL_SUBSCRIPTION_ACTIVATION: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
   REDIS_URL: z.string().optional(),
   QUEUES_ENABLED: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  // §11 event streaming. "none" keeps the platform byte-identical to before;
+  // "redis" uses Redis Streams; "kafka" is reserved for a future adapter.
+  EVENT_BUS_PROVIDER: z.enum(["none", "redis", "kafka"]).default("none"),
   WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(50).default(3),
   WORKER_INSTANCE_ID: z.string().optional(),
   WORKER_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5000).max(300000).default(30000),

@@ -134,7 +134,17 @@ async function gatherIncidentContext({ shopId, deviceId }) {
     }),
     getSyncDiagnostics(shopId).catch(() => null),
     deviceId ? getLatestHealthForDevice({ shopId, deviceId }).catch(() => null) : latestShopHealth(shopId),
-    db.auditLog.findMany({ where: { shopId }, orderBy: { createdAt: "desc" }, take: 15, select: { action: true, entityType: true, entityId: true, createdAt: true } }),
+    // "Recent User Actions" (§6). Module/result/duration come from §2 — they turn a
+    // bare action list into a diagnosable timeline ("which area, did it work, was it slow").
+    db.auditLog.findMany({
+      where: { shopId },
+      orderBy: { createdAt: "desc" },
+      take: 15,
+      select: {
+        action: true, entityType: true, entityId: true, createdAt: true,
+        module: true, result: true, durationMs: true, deviceId: true, userId: true,
+      },
+    }),
     checkDb(),
   ]);
   return { errorGroups, sync, deviceHealth, auditRows, dbOk };
@@ -214,7 +224,20 @@ export async function generateIncidentReport({ shopId, deviceId = null, problemS
     generatedAt: new Date().toISOString(),
     problemSummary: problemSummary || null,
     focus,
-    recentUserActions: (ctx.auditRows || []).map((a) => ({ action: a.action, entityType: a.entityType, at: a.createdAt })),
+    recentUserActions: (ctx.auditRows || []).map((a) => ({
+      action: a.action,
+      entityType: a.entityType,
+      at: a.createdAt,
+      module: a.module ?? null,
+      result: a.result ?? null,
+      durationMs: a.durationMs ?? null,
+      deviceId: a.deviceId ?? null,
+    })),
+    // A failed action moments before the complaint is usually the complaint.
+    recentFailedActions: (ctx.auditRows || [])
+      .filter((a) => a.result === "failure")
+      .slice(0, 5)
+      .map((a) => ({ action: a.action, module: a.module ?? null, at: a.createdAt })),
     recentErrors: (ctx.errorGroups || []).map((g) => ({ title: g.title, source: g.source, count: g.count, code: g.errorCode, status: g.status, lastSeenAt: g.lastSeenAt })),
     recentSyncEvents: ctx.sync
       ? { counts: ctx.sync.counts, failures: (ctx.sync.recentFailures || []).slice(0, 5), conflicts: (ctx.sync.recentConflicts || []).slice(0, 5), lastSuccessfulSyncAt: ctx.sync.lastSuccessfulSyncAt }

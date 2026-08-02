@@ -1566,12 +1566,16 @@ model AuditLog {
   id           String   @id @default(cuid())
   shopId       String
   userId       String?
+  deviceId     String?
+  module       String? // billing | inventory | auth | sync | devices | settings | ...
   action       String
   entityType   String?
   entityId     String?
   beforeJson   String?
   afterJson    String?
   metadataJson String?
+  result       String? // success | failure
+  durationMs   Int?
   ipAddress    String?
   userAgent    String?
   createdAt    DateTime @default(now())
@@ -1581,6 +1585,8 @@ model AuditLog {
 
   @@index([shopId, createdAt])
   @@index([shopId, action, createdAt])
+  @@index([shopId, module, createdAt])
+  @@index([shopId, result, createdAt])
 }
 
 // ─────────────────────────────────────────────

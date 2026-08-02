@@ -501,6 +501,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   </>}
                   <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/help">Ask Artha</Link></DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
                     <LogOut size={14} className="mr-2" aria-hidden="true" /> Logout

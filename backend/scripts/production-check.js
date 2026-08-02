@@ -1645,7 +1645,9 @@ if (exists("src/lib/objectStorage.js")) {
 
 if (exists("src/lib/fileStorage.js")) {
   const fileStorage = read("src/lib/fileStorage.js");
-  for (const snippet of ["getSignedDownloadUrl", "streamExportFile", "exports/${safeShopId}/${safeJobId}.csv", "EXPORT_DOWNLOADS_PUBLIC", "fileKey"]) {
+  // The storage key stays server-generated from validated ids; the extension is
+  // format-driven (csv/pdf/xlsx) since §9 added PDF and Excel exports.
+  for (const snippet of ["getSignedDownloadUrl", "streamExportFile", "exports/${safeShopId}/${safeJobId}.${exportFormatFor(reportType).extension}", "EXPORT_DOWNLOADS_PUBLIC", "fileKey"]) {
     if (!fileStorage.includes(snippet)) errors.push(`fileStorage.js missing Phase 15 signed/protected download snippet: ${snippet}`);
   }
 }

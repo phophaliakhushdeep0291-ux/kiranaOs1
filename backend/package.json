@@ -20,7 +20,7 @@
     "prisma:migrate": "node node_modules/prisma/build/index.js migrate dev",
     "prisma:deploy": "node node_modules/prisma/build/index.js migrate deploy",
     "db:generate": "node node_modules/prisma/build/index.js generate",
-    "test": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment",
+    "test": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment && npm run test:report-documents && npm run test:event-bus",
     "test:compliance": "node tests/compliance-tax.examples.js",
     "test:loyalty": "node tests/loyalty-maturity.examples.js",
     "test:atomic-offers": "node tests/offer-bill-atomicity.examples.js",
@@ -30,6 +30,8 @@
     "test:diagnostics": "node tests/diagnostics-error-store.examples.js",
     "test:device-health": "node tests/device-health.examples.js",
     "test:sync-diagnostics": "node tests/sync-diagnostics.examples.js",
+    "test:audit-timeline": "node tests/audit-timeline.examples.js",
+    "test:report-documents": "node tests/report-documents.examples.js",
     "test:incident-report": "node tests/incident-report.examples.js",
     "test:frontend-checklist": "node tests/frontend-manual-checklist.examples.js",
     "seed": "node prisma/seed.js",
@@ -79,7 +81,8 @@
     "wac:backfill": "node scripts/wac-cost-backfill.js",
     "wac:backfill:write": "node scripts/run-with-env.js ALLOW_WAC_BACKFILL=true -- node scripts/wac-cost-backfill.js --write",
     "pricing:backfill-units": "node scripts/backfill-product-selling-units.js",
-    "probe:adversarial": "node loadtest/adversarial.js"
+    "probe:adversarial": "node loadtest/adversarial.js",
+    "test:event-bus": "node tests/event-bus.examples.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",

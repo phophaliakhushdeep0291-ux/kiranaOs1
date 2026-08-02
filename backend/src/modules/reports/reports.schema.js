@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { REPORT_EXPORT_TYPES } from "./reportExport.service.js";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional();
 const dateLike = z.string().optional();
@@ -52,8 +53,12 @@ export const topProductsSchema = z.object({
 });
 
 
+// Derived from the service's list so a new export format only has to be
+// registered once (previously this enum silently rejected new report types).
+const reportTypeEnum = z.enum(REPORT_EXPORT_TYPES);
+
 export const exportReportSchema = z.object({
-  reportType: z.enum(["bills_csv", "stock_csv", "udhar_csv", "daily_closing_csv", "sales_summary_csv"]),
+  reportType: reportTypeEnum,
   params: z.object({
     from: z.string().optional(),
     to: z.string().optional(),
@@ -68,7 +73,7 @@ export const exportReportSchema = z.object({
 
 export const exportListSchema = z.object({
   status: z.enum(["queued", "processing", "completed", "failed", "cancelled"]).optional(),
-  reportType: z.enum(["bills_csv", "stock_csv", "udhar_csv", "daily_closing_csv", "sales_summary_csv"]).optional(),
+  reportType: reportTypeEnum.optional(),
   limit: z.coerce.number().min(1).max(100).default(50),
 });
 

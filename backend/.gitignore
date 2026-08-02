@@ -19,6 +19,9 @@ release-artifacts
 # Runtime shop backup snapshots (BACKUP_STORAGE_DIR default) — anchored so
 # src/modules/backups source is never hidden (deployment-readiness asserts this).
 /storage/backups/
+# Generated report exports (CSV/PDF/XLSX) written by the local storage provider.
+# These contain real shop data and are regenerated per job — never commit them.
+/storage/exports/
 *.dump
 
 # Year-sim run outputs — scripts/year-sim/*.mjs regenerate this dir every run

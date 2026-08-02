@@ -65,6 +65,7 @@ const PlansPage = lazy(() => import("@/features/subscription/pages/PlansPage"));
 const SubscriptionPage = lazy(() => import("@/features/subscription/pages/SubscriptionPage"));
 const DevicesPage = lazy(() => import("@/features/devices/pages/DevicesPage"));
 const PlatformAdminPage = lazy(() => import("@/features/platform-admin/pages/PlatformAdminPage"));
+const AskArthaPage = lazy(() => import("@/features/support/pages/AskArthaPage"));
 const StaffPage = lazy(() => import("@/features/staff/pages/StaffPage"));
 const AuditLogsPage = lazy(() => import("@/features/audit-logs/pages/AuditLogsPage"));
 const AssuranceDashboardPage = lazy(() => import("@/features/assurance/pages/AssuranceDashboardPage"));
@@ -355,6 +356,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/platform-admin">
         <ProtectedRoute component={PlatformAdminPage} />
+      </Route>
+      <Route path="/help">
+        <ProtectedRoute component={AskArthaPage} />
       </Route>
       <Route path="/staff">
         <ProtectedRoute component={StaffPage} featureName="staff_login" />

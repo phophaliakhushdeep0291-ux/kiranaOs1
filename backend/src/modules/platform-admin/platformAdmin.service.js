@@ -1,6 +1,7 @@
 import db from "../../db.js";
 import { env } from "../../config/env.js";
 import { getRedisStatus } from "../../lib/redis.js";
+import { getEventBusStatus } from "../../lib/eventBus.js";
 
 // Cross-tenant fleet rollup for the internal admin dashboard (Diagnostics §10).
 // This is the ONLY place that reads across shops, and it is reachable only behind
@@ -128,5 +129,8 @@ export async function getPlatformOverview() {
       enabled: Boolean(env.QUEUES_ENABLED),
       redis: safeRedisStatus(),
     },
+    // §11 event streaming — provider plus publish/drop counters, so an operator
+    // can see at a glance whether fleet events are actually flowing.
+    eventBus: getEventBusStatus(),
   };
 }

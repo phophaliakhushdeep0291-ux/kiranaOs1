@@ -9,7 +9,10 @@ export async function getShop(req, res, next) {
 
 export async function updateShop(req, res, next) {
   try {
-    const shop = await shopService.updateShop(req.shopId, req.body);
+    const shop = await shopService.updateShop(req.shopId, req.body, {
+      userId: req.user?.userId ?? null,
+      req,
+    });
     res.json({ success: true, data: shop });
   } catch (err) { next(err); }
 }

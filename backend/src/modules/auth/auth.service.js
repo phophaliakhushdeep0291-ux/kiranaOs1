@@ -5,7 +5,7 @@ import { env } from "../../config/env.js";
 import { signToken } from "../../middleware/auth.js";
 import { AppError } from "../../middleware/error.js";
 import { canAddStaff, requireFeatureAccess } from "../feature-gates/featureGate.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
+import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import { completeDeviceReplacement, createDeviceBoundLoginSession, withDeviceLifecycleTransaction } from "../devices/devices.service.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/authEmail.js";
 import { verifyGoogleIdToken } from "./google.service.js";
@@ -43,7 +43,7 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
     });
   }
 
-  const auth = await issueAuthResponse(result.user, result.shop, reqMeta);
+  const auth = await issueAuthResponse(result.user, result.shop, { ...reqMeta, loginMethod: "registration" });
   return { ...auth, emailVerification };
 }
 
@@ -140,7 +140,7 @@ export async function googleLogin({ credential, shopId }, reqMeta = {}) {
     user = { ...user, ...updatedUser };
   }
 
-  return issueAuthResponse(user, user.shop, reqMeta);
+  return issueAuthResponse(user, user.shop, { ...reqMeta, loginMethod: "google" });
 }
 
 export async function verifyEmail(token) {
@@ -328,6 +328,24 @@ export async function logout(refreshToken, user = null) {
       deviceStatus = "logged_out";
     }
     return { revokedSessions: revoked.count, remainingDeviceSessions, deviceStatus };
+  });
+
+  // §2 audit: logged here rather than in the controller so the entry only fires
+  // for a session that was actually revoked (a replayed/expired token returns
+  // early above and must not look like a fresh logout on the timeline).
+  await createAuditLog({
+    shopId: session.shopId,
+    userId: session.userId,
+    deviceId: session.deviceId ?? null,
+    module: AUDIT_MODULES.AUTH,
+    action: "LOGOUT",
+    entityType: "session",
+    entityId: session.id,
+    metadata: {
+      revokedSessions: result.revokedSessions,
+      remainingDeviceSessions: result.remainingDeviceSessions,
+      deviceStatus: result.deviceStatus,
+    },
   });
 
   return { success: true, message: "Logged out", ...result };
@@ -604,12 +622,46 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
   const { device, session } = bound;
   const accessToken = signDeviceAccessToken(user, session, device);
 
+  // §2 audit: every sign-in lands on the timeline regardless of which door it
+  // came through (password, Google, shop-selection retry) — this is the single
+  // choke point all of them funnel into.
+  await createAuditLog({
+    shopId: user.shopId,
+    userId: user.id,
+    deviceId: device?.deviceId ?? deviceId ?? null,
+    module: AUDIT_MODULES.AUTH,
+    action: "LOGIN",
+    entityType: "user",
+    entityId: user.id,
+    metadata: {
+      role: user.role,
+      method: reqMeta.loginMethod ?? "password",
+      sessionId: session.id,
+    },
+    req: auditReqShim(reqMeta),
+  });
+
   return {
     accessToken,
     token: accessToken, // Backward compatibility for existing frontend/API clients.
     refreshToken: formatRefreshToken(session.id, refreshSecret),
     shop,
     user: sanitizeUser(user),
+  };
+}
+
+/**
+ * Auth services receive a flattened `reqMeta` rather than the Express request,
+ * so shape it back into the minimal object `createAuditLog` reads for the
+ * spec's IP / user-agent / device columns.
+ */
+function auditReqShim(reqMeta = {}) {
+  return {
+    ip: reqMeta.ipAddress ?? null,
+    headers: {
+      "user-agent": reqMeta.userAgent ?? undefined,
+      "x-device-id": reqMeta.deviceId ?? undefined,
+    },
   };
 }
 
