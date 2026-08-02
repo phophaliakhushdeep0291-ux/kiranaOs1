@@ -3,8 +3,8 @@ import { Activity, BarChart3, Clock, Lightbulb, PackageSearch, ShoppingCart, Tre
 import { PageHeader, PageShell, LoadingSkeleton, ErrorState, EmptyState } from "@/components/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useActivityAnalytics, useActivityInsights, useReportView } from "@/lib/activity";
-import type { InsightResult } from "@/lib/activity";
+import { useActivityAnalytics, useActivityInsights, usePersonalization, useReportView } from "@/lib/activity";
+import type { AbandonedCartEntry, InsightResult } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +26,7 @@ export default function ActivityInsightsPage() {
   const [days, setDays] = useState<number>(30);
   const analytics = useActivityAnalytics(days);
   const insights = useActivityInsights(days);
+  const personalization = usePersonalization();
 
   if (analytics.isLoading || insights.isLoading) {
     return (
@@ -168,6 +169,7 @@ export default function ActivityInsightsPage() {
                 </div>
                 <InsightBlock insight={learned?.checkoutDropOff} title="Where customers stop" />
                 <InsightBlock insight={learned?.onlineViewedNotBought} title="Looked at but never added" />
+                <AbandonedCarts carts={personalization.data?.abandonedCarts ?? []} />
               </>
             )}
           </Section>
@@ -202,6 +204,49 @@ export default function ActivityInsightsPage() {
         </div>
       )}
     </PageShell>
+  );
+}
+
+/**
+ * Abandoned carts (§13).
+ *
+ * The spec asks for reminders, and this stops short of sending them — honestly,
+ * not as an omission. The QR storefront is anonymous: a shopper is identified
+ * only at checkout, so a cart abandoned *before* that has no name, phone or
+ * email attached to it, and activity telemetry redacts contact details anyway.
+ * There is nobody to remind.
+ *
+ * What the owner can act on is the pattern — how often it happens, how much
+ * value walks away, and how big those baskets were. Sending a real reminder
+ * needs identity captured earlier in the storefront flow, which is a product
+ * decision rather than a wiring gap.
+ */
+function AbandonedCarts({ carts }: { carts: AbandonedCartEntry[] }) {
+  if (carts.length === 0) return null;
+  const value = carts.reduce((sum, cart) => sum + (cart.total ?? 0), 0);
+  return (
+    <div className="min-w-0 rounded-xl border border-border p-3">
+      <p className="mb-1.5 text-xs font-bold text-muted-foreground">
+        Abandoned baskets ({carts.length}
+        {value > 0 ? ` · ₹${Math.round(value).toLocaleString("en-IN")} walked away` : ""})
+      </p>
+      <ol className="space-y-1">
+        {carts.slice(0, 6).map((cart) => (
+          <li key={cart.sessionId} className="flex min-w-0 items-baseline justify-between gap-3 text-sm">
+            <span className="truncate font-semibold text-foreground">
+              {cart.itemCount ?? cart.productIds.length} item{(cart.itemCount ?? cart.productIds.length) === 1 ? "" : "s"}
+              {cart.customerName ? ` · ${cart.customerName}` : ""}
+            </span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">
+              {cart.total ? `₹${Math.round(cart.total).toLocaleString("en-IN")}` : "—"}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+        Online shoppers stay anonymous until checkout, so these carts carry no contact details to remind.
+      </p>
+    </div>
   );
 }
 

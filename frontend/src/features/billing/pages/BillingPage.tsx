@@ -27,7 +27,7 @@ import { shareBillOnWhatsapp, derivePaymentModeLabel, type BillShareInput } from
 import { getPrinterConfigSync, loadPrinterConfig } from "@/features/settings/printer-config";
 import { getTaxConfigSync, loadTaxConfig } from "@/features/settings/tax-config";
 import { isActionProtected, loadSecurityPolicy } from "@/features/settings/security-policy";
-import { defaultPaymentMode, keyboardShortcutsEnabled, playCounterBeep } from "@/features/settings/app-preferences";
+import { defaultPaymentMode, hasExplicitDefaultPayment, keyboardShortcutsEnabled, playCounterBeep } from "@/features/settings/app-preferences";
 import { computeGstBreakdown } from "@/lib/gst";
 import { gstStateCode } from "@/lib/gstin";
 import { toInventoryBaseQty } from "@/features/inventory/calculations";
@@ -40,7 +40,15 @@ import { lookupGiftCard } from "@/features/gift-cards/api";
 import { startBackendTranscription, type BackendTranscriptionSession } from "@/features/voice/backend-transcription";
 import { isScaleBillingUnit, readScaleViaHardwareBridge, scaleReadingToBillingQuantity } from "@/features/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/settings/i18n";
-import { ACTIVITY_EVENTS, trackEvent, usePersonalization } from "@/lib/activity";
+import {
+  ACTIVITY_EVENTS,
+  matchSearchSuggestions,
+  preferredFilterFor,
+  suggestNextProducts,
+  trackEvent,
+  trendingProductIds,
+  usePersonalization,
+} from "@/lib/activity";
 
 const RECENT_PRODUCTS_KEY = "kirana-os:billing-recent-products:v1";
 const BILL_SUMMARY_WIDTH_KEY = "kirana-os:bill-summary-width:v1";
@@ -458,6 +466,74 @@ export default function Billing() {
       .map((id) => productById.get(id))
       .filter((p): p is Product => p != null);
   }, [recentProductIds, productById, personalization.data]);
+
+  // "Predicting likely products for upcoming billing actions" and "suggesting
+  // commonly purchased product combinations" are the same row on screen, because
+  // they answer the same question at different moments: an empty cart asks "what
+  // does this user start with at this hour", a filled one asks "what goes with
+  // this". One row means one place to look, not two competing shelves.
+  const cartProductIds = useMemo(
+    () => cart.filter((item) => !item.isCustom).map((item) => item.product.id),
+    [cart],
+  );
+  const nextSuggestion = useMemo(() => {
+    const { reason, productIds } = suggestNextProducts(personalization.data, cartProductIds);
+    const products = productIds.map((id) => productById.get(id)).filter((p): p is Product => p != null);
+    return products.length > 0 ? { reason, products } : { reason: null, products: [] };
+  }, [personalization.data, cartProductIds, productById]);
+
+  // "Highlighting trending products based on online sessions" — a marker on the
+  // cards that are already on screen, not a separate shelf competing for space.
+  const trendingIds = useMemo(() => trendingProductIds(personalization.data), [personalization.data]);
+
+  const searchSuggestions = useMemo(
+    () => matchSearchSuggestions(personalization.data, search),
+    [personalization.data, search],
+  );
+
+  // "Retaining preferred filters": restore the category this user actually works
+  // in, once, on first load. Applied only while the box is untouched — a restored
+  // filter that fought the user's own choice would be worse than none.
+  const filterRestored = useRef(false);
+  useEffect(() => {
+    // Both inputs load asynchronously and in either order, so this waits for the
+    // category list too. Latching on personalization alone silently did nothing
+    // whenever products resolved second — which on a real counter is most times.
+    if (filterRestored.current || !personalization.data || categories.length === 0) return;
+    filterRestored.current = true;
+    const preferred = preferredFilterFor(personalization.data, "/billing");
+    if (!preferred || preferred === "all") return;
+    // Stored lowercased by the aggregator; the product's own casing is what the
+    // filter compares against.
+    const match = categories.find((category) => category.toLowerCase() === preferred.toLowerCase());
+    if (match) setSelectedCategory(match);
+  }, [personalization.data, categories]);
+
+  // "Learning and suggesting preferred payment methods". Deliberately narrow:
+  // it only fills a default nobody has set, only before the bill has been
+  // touched, and only for cash/UPI. Credit and gift-card change what the bill
+  // *means*, and split is usually an artefact of one unusual sale — none of
+  // those may be chosen for the user.
+  const learnedPaymentApplied = useRef(false);
+  const draftHadPaymentMode = useRef(readBillingDraft().paymentMode != null);
+  useEffect(() => {
+    if (learnedPaymentApplied.current || !personalization.data) return;
+    learnedPaymentApplied.current = true;
+    if (draftHadPaymentMode.current || hasExplicitDefaultPayment() || cart.length > 0) return;
+    const learned = personalization.data.preferredPaymentMethod;
+    if (learned !== BillPaymentMode.cash && learned !== BillPaymentMode.upi) return;
+    if (learned === defaultPaymentMode()) return;
+    setPaymentMode(learned);
+  }, [personalization.data, cart.length]);
+
+  function chooseCategory(category: string) {
+    setSelectedCategory(category);
+    // Recorded so the preference above can be learned in the first place; "all"
+    // is the default, so choosing it is a reset rather than a preference.
+    if (category !== "all") {
+      trackEvent(ACTIVITY_EVENTS.FEATURE_USED, { feature: "billing_category_filter", filters: [category] }, { screen: "/billing" });
+    }
+  }
 
   const filteredProducts = useMemo(() => {
     const q = normalizeSearchText(deferredSearch);
@@ -1599,10 +1675,14 @@ export default function Billing() {
           onAddProduct={addToCart}
           categories={categories}
           selectedCategory={selectedCategory}
-          onSelectedCategoryChange={setSelectedCategory}
+          onSelectedCategoryChange={chooseCategory}
           voiceVisible={voiceVisible}
           onToggleVoice={() => setVoiceVisible((v) => !v)}
           recentProducts={recentProducts}
+          suggestedProducts={nextSuggestion.products}
+          suggestionReason={nextSuggestion.reason}
+          searchSuggestions={searchSuggestions}
+          trendingProductIds={trendingIds}
           onHoldBill={holdCurrentBill}
           cartItemCount={cart.length}
           cartSubtotal={subtotal}

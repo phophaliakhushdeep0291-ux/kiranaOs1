@@ -107,6 +107,13 @@ interface BillingSearchProps {
   selectedCategory: string;
   onSelectedCategoryChange: (category: string) => void;
   recentProducts: Product[];
+  /** §13 suggestions for the next line: time-of-day prediction, or basket pairs. */
+  suggestedProducts?: Product[];
+  suggestionReason?: "predicted" | "combo" | null;
+  /** Past searches offered as auto-complete. */
+  searchSuggestions?: string[];
+  /** Products trending in online sessions, marked on their card. */
+  trendingProductIds?: ReadonlySet<string>;
   voiceVisible: boolean;
   onToggleVoice: () => void;
   onHoldBill: () => void;
@@ -136,6 +143,10 @@ export function BillingSearch({
   selectedCategory,
   onSelectedCategoryChange,
   recentProducts,
+  suggestedProducts = [],
+  suggestionReason = null,
+  searchSuggestions = [],
+  trendingProductIds,
   voiceVisible,
   onToggleVoice,
   onHoldBill,
@@ -389,6 +400,51 @@ export function BillingSearch({
             )}
           </div>
 
+          {/* §13 auto-complete: past searches, offered only while typing so the
+              empty counter screen stays quiet. */}
+          {search.trim().length > 0 && searchSuggestions.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-[#8290a8]">Searched before</span>
+              {searchSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => {
+                    onSearchChange(suggestion);
+                    searchInputRef.current?.focus();
+                  }}
+                  className="rounded-full border border-[#e1e8f2] bg-white px-2.5 py-1 text-[11px] font-bold text-[#45577a] transition-colors hover:border-[var(--brand-border)] hover:text-[var(--brand)]"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* §13 next-line suggestions. An empty cart gets this user's usual
+              products for this hour; a filled one gets what pairs with it. */}
+          {!search && suggestedProducts.length > 0 && (
+            <div className="mt-2.5">
+              <p className="mb-1.5 text-[11px] font-semibold text-[#536383]">
+                {suggestionReason === "combo" ? "Often added together" : "You usually bill now"}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                {suggestedProducts.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => addProduct(p)}
+                    className="flex items-center gap-1.5 rounded-full border border-[#dce6f6] bg-[var(--brand-softer)] px-3 py-1.5 text-[11px] font-bold text-[#14284e] transition-colors hover:border-[var(--brand-border)] hover:bg-[var(--brand-soft)]"
+                  >
+                    <span aria-hidden="true">{getProductEmoji(p.name, p.category)}</span>
+                    <span className="max-w-[140px] truncate">{p.name}</span>
+                    <span className="text-[#536383]">+</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Category chips — rounded-[8px] matching spec */}
           <div className="mt-[18px] flex items-center gap-2.5 overflow-x-auto pb-4 [-ms-overflow-style:none] [scrollbar-width:none]">
             <CategoryChip
@@ -487,6 +543,7 @@ export function BillingSearch({
                     key={product.id}
                     product={product}
                     onAdd={() => addProduct(product)}
+                    trending={trendingProductIds?.has(product.id) ?? false}
                   />
                 ))}
               </div>
@@ -594,7 +651,7 @@ export function BillingSearch({
 }
 
 /* ─── Product card — spec: 176px height, absolute price + add button ─── */
-function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }) {
+function ProductCard({ product, onAdd, trending = false }: { product: Product; onAdd: () => void; trending?: boolean }) {
   const sellingUnits = (product.sellingUnits ?? []).filter((unit) => unit.isActive !== false);
   const defaultUnit = sellingUnits.find((unit) => unit.isDefault) ?? sellingUnits[0];
   const price = defaultUnit?.defaultPrice ?? productSellingPrice(product, 1);
@@ -622,6 +679,12 @@ function ProductCard({ product, onAdd }: { product: Product; onAdd: () => void }
         {sellingUnits.length > 1 ? (
           <span className="absolute left-1.5 top-1.5 rounded-md border border-[var(--brand-border)] bg-white/95 px-1.5 py-0.5 text-[8.5px] font-black text-[var(--brand)] shadow-sm">
             {sellingUnits.length} pack sizes
+          </span>
+        ) : trending ? (
+          /* §13: this product is being viewed a lot in online sessions right
+             now. A marker, not a reordering — the grid stays predictable. */
+          <span title="Trending in online orders" className="absolute left-1.5 top-1.5 rounded-md border border-[#f6d9a8] bg-[#fff8ec]/95 px-1.5 py-0.5 text-[8.5px] font-black text-[#b45309] shadow-sm">
+            Trending
           </span>
         ) : null}
       </div>

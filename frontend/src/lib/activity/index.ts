@@ -3,6 +3,7 @@ export * from "./session";
 export * from "./activityClient";
 export * from "./api";
 export * from "./hooks";
+export * from "./personalize";
 export * from "./useScreenTracking";
 export * from "./useSearchTracking";
 export * from "./useReportView";

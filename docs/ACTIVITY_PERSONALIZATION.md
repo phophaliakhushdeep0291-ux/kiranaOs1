@@ -170,7 +170,34 @@ view of the business rather than a staff member's view of their own work.
 | `dashboardOrder` | Reorder widgets by usage | Page + feature scores; unlisted widgets keep their default position, so a new widget never disappears |
 | `predictedProducts` | Predict likely next products | What this user billed in this ±1 hour band over 60 days. Shop trade is time-shaped (milk at 7am, snacks at 6pm) and this stays fully explainable |
 | `onlineTrending` / `onlineCartTrending` | Trending / online-informed suggestions | Shop-wide storefront counters |
-| `abandonedCarts` | Abandoned-cart reminders | The raw material for the nudge — **sending** stays an explicit user action |
+| `abandonedCarts` | Abandoned-cart reminders | Shown on Activity & Insights. **No reminder is sent** — see below |
+
+### Where each one surfaces
+
+| Surface | Consumes |
+|---|---|
+| Billing quick-add row | `quickProducts` (blended with the device's own recent list) |
+| Billing suggestion row | `predictedProducts` when the cart is empty, `productCombos` once it is not — one row, because they answer the same question at different moments |
+| Billing search box | `searchSuggestions`, offered only while typing |
+| Billing product cards | `onlineTrending`, as a marker rather than a reordering |
+| Billing category chips | `preferredFilters["/billing"]`, restored once per load while untouched |
+| Billing payment panel | `preferredPaymentMethod`, cash/UPI only, and only when no default was ever set |
+| Customer picker | `frequentCustomers` |
+| Dashboard quick actions / Quick Insights rows | `dashboardOrder` |
+| Activity & Insights | `abandonedCarts`, plus every insight |
+
+Two limits worth stating plainly:
+
+- **Abandoned-cart reminders are not sent, and cannot be.** The QR storefront
+  is anonymous until checkout, so a cart abandoned before that carries no
+  name, phone or email — and activity telemetry redacts contact details in any
+  case. There is nobody to remind. The panel shows the pattern (how often, how
+  much value, how large the baskets) so the owner can act on merchandising.
+  A real reminder needs identity captured earlier in the storefront flow.
+- **The learned payment method never overrides a chosen setting.** It fills an
+  unset default only, on an untouched bill, and only for cash or UPI — credit
+  and gift-card change what the bill *means*, and split is usually an artefact
+  of one unusual sale.
 
 Replenishment reuses the existing deterministic purchase-order calculator for
 quantities and reasoning; activity decides only the *ordering* (soonest depletion
@@ -320,14 +347,25 @@ that one storefront's events are never delivered to another shop.
 
 ## 12. Deliberate gaps
 
-- **`PDF_GENERATED` and `CUSTOMER_SEARCH` are in the catalogue but not yet raised
-  at every call site.** Receipt printing is instrumented (`PRINTER_USED`, both
-  the browser and thermal-bridge paths); the standalone PDF/share paths and the
-  customer-list search box are not. Both are one `trackEvent` call each when
-  those screens are next touched.
+- **Five catalogue entries are declared but never raised:** `BILL_MODIFIED`,
+  `PRODUCT_VIEW`, `TASK_COMPLETED`, `CUSTOMER_SEARCH`, `PDF_GENERATED`. Receipt
+  printing *is* instrumented (`PRINTER_USED`, on both the browser and
+  thermal-bridge paths); the standalone PDF/share paths, the customer-list search
+  box, bill edits, product detail views and generic task timing are not. Each is
+  a single `trackEvent` call at the relevant call site.
+
+  `TASK_COMPLETED` is the one that changes an answer rather than just adding
+  volume: the task-time counter is currently fed only by `BILL_CREATED`, so
+  "which tasks consume the most time" can only ever report billing. Until other
+  timed flows emit it, read that insight as "how long billing takes", not as a
+  ranking across the app.
 - **`ONLINE_PAYMENT_FAILED` currently means "order submission failed".** The
   storefront takes no money today; when it does, the payment failure belongs on
   the real payment result.
+- **The dashboard reordering is unit-tested but not visually confirmed.** The
+  ordering helper has direct tests, and the same helper is verified live on the
+  billing surfaces; the dashboard panels that consume it sit behind desktop-only
+  breakpoints that the preview environment could not lay out.
 - **No retention job yet.** `ActivityEvent` grows without bound. Aggregates are
   the durable read model and events are rebuildable-from-nothing telemetry, so a
   scheduled prune (say, 180 days) is the natural next step and is not wired.
