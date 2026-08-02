@@ -284,6 +284,7 @@ export async function refreshSession(refreshToken, reqMeta = {}) {
 }
 
 export async function logout(refreshToken, user = null) {
+  const startedAt = Date.now();
   const parsed = parseRefreshToken(refreshToken);
   if (!parsed) return { success: true, message: "Logged out" };
 
@@ -346,6 +347,7 @@ export async function logout(refreshToken, user = null) {
       remainingDeviceSessions: result.remainingDeviceSessions,
       deviceStatus: result.deviceStatus,
     },
+    durationMs: Date.now() - startedAt,
   });
 
   return { success: true, message: "Logged out", ...result };
@@ -595,6 +597,9 @@ export async function changePassword(userId, shopId, { currentPassword, newPassw
 // ── Helpers ─────────────────────────────────────────────────
 
 async function issueAuthResponse(user, shop, reqMeta = {}) {
+  // §2 requires a duration on every event. Sign-in cost is also a real support
+  // signal — bcrypt plus device-binding is the slowest thing on this path.
+  const startedAt = Date.now();
   const deviceId = normalizeDeviceId(reqMeta.deviceId);
   // Fail closed in production: without a device id the per-plan device cap can't be
   // enforced (a null-device session isn't counted), so a client could bypass the limit
@@ -638,6 +643,7 @@ async function issueAuthResponse(user, shop, reqMeta = {}) {
       method: reqMeta.loginMethod ?? "password",
       sessionId: session.id,
     },
+    durationMs: Date.now() - startedAt,
     req: auditReqShim(reqMeta),
   });
 
