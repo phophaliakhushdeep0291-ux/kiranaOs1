@@ -607,7 +607,7 @@ export function BillingSummary({
             {/* Round off — the nearest-rupee adjustment folded into the grand total. */}
             {roundOff !== 0 && (
               <div className="flex h-[29px] items-center justify-between text-[12px]">
-                <span className="font-semibold text-[#536383]">Round off</span>
+                <span className="font-semibold text-[#536383]">{t("billing.summary.roundOff")}</span>
                 <span data-testid="text-round-off" className="font-black text-[#13274d]">
                   {roundOff > 0 ? "+" : "−"}{fmtRs(Math.abs(roundOff))}
                 </span>

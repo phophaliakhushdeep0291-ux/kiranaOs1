@@ -296,7 +296,7 @@ export default function Billing() {
   const loyaltyDiscount = roundMoney((effectiveLoyaltyPoints * redemptionPaisePerPoint) / 100);
   const totalDiscount = roundMoney(safeDiscount + loyaltyDiscount);
   const rawGrandTotal = roundMoney(Math.max(0, payableBase - totalDiscount));
-  // Nearest-rupee round-off (shop's Taxes → t("billing.page.roundOff") setting). grandTotal becomes
+  // Nearest-rupee round-off (shop's Taxes → "Round off" setting). grandTotal becomes
   // the whole-rupee figure the counter collects, so every downstream tender/split/
   // credit/change-due and the stored total stay consistent with the cash in the drawer.
   const roundOffEnabled = getTaxConfigSync().roundOff;
@@ -605,7 +605,7 @@ export default function Billing() {
         }
         // If this bill was made from a customer QR order, close that order out and link the bill.
         // Best-effort + online-only (the inbox needs the network anyway); on failure the owner can
-        // still t("billing.page.markDone") by hand, so a caught error must not disturb the save.
+        // still "Mark done" by hand, so a caught error must not disturb the save.
         const fulfilledOrderId = sourceOrderIdRef.current;
         if (fulfilledOrderId) {
           sourceOrderIdRef.current = undefined;
@@ -1148,7 +1148,7 @@ export default function Billing() {
   function requiredBillingSensitiveActions(): BillingSensitiveAction[] {
     const actions: BillingSensitiveAction[] = [];
     // Both of these are decided here at the counter, so Settings -> Security
-    // t("billing.page.sensitiveActionProtection") is the only thing that turns them on or off.
+    // "Sensitive Action Protection" is the only thing that turns them on or off.
     const isLargeDiscount = subtotal > 0 && safeDiscount >= Math.max(100, subtotal * 0.1);
     if (isLargeDiscount && isActionProtected("largeDiscount")) actions.push("large_discount");
     const hasBelowMinimumRate = cart.some(lineNeedsOwnerApproval);

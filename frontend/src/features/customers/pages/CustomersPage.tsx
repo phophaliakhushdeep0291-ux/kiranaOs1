@@ -305,7 +305,7 @@ function isLiveLedgerRow(row: Record<string, unknown>): boolean {
   return !(row.deleted_at ?? row.deletedAt ?? row.merged_into_id ?? row.mergedIntoId);
 }
 
-// t("customers.detail.received") on this page means udhar RECOVERED, so it must come from the customer
+// "Received" on this page means udhar RECOVERED, so it must come from the customer
 // ledger, not the `payments` table — that table also holds bill tender for ordinary
 // cash/UPI sales, and summing it reports shop revenue as khata collections.
 function udharCollectionAmount(row: Record<string, unknown>): number {
@@ -339,7 +339,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [rangeFrom, setRangeFrom] = useState(daysBefore(6));
   const [rangeTo, setRangeTo] = useState(inputDate(new Date()));
-  // Honor a ?filter= deep link (e.g. dashboard t("customers.tab.khata") cards link to /customers?filter=udhar).
+  // Honor a ?filter= deep link (e.g. dashboard "Khata" cards link to /customers?filter=udhar).
   const [filter, setFilter] = useState<"all" | "udhar" | "bad" | "due" | "promise" | "cleared">(() => {
     if (typeof window === "undefined") return "all";
     const f = new URLSearchParams(window.location.search).get("filter");

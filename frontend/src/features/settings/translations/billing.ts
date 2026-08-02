@@ -365,7 +365,7 @@ export const billingEn = {
   "billing.page.voiceCaptureFailed": "Voice capture failed ({error}). Type the command or try mic again.",
   "billing.page.closeCheckout": "Close checkout",
   "billing.page.reviewCollectPayment": "Review and collect payment",
-  "billing.page.roundOff": "Round off",
+  "billing.summary.roundOff": "Round off",
   "billing.page.markDone": "Mark done",
   "billing.page.originalCustomerCopy": "Original customer copy",
   "billing.page.estimateCopy": "Estimate copy",

@@ -354,7 +354,7 @@ export default function ProductsPage() {
 
   // Standard retail practice: a pack you need to count and reorder on its own is a
   // separate SKU, not a second stock bucket on one product. Retyping every field is what
-  // pushed people toward t("products.form.otherPackSizes") expecting a quantity there, so this copies
+  // pushed people toward "Other pack sizes" expecting a quantity there, so this copies
   // the catalogue details and clears only what must be unique to the new SKU.
   const duplicateProduct = (product: Product) => {
     if (!manageProducts.allowed) {

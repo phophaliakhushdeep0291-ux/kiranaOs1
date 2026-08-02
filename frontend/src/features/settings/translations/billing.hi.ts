@@ -355,7 +355,7 @@ export const billingHi: Record<keyof typeof billingEn, string> = {
   "billing.page.voiceCaptureFailed": "आवाज़ नहीं पकड़ पाई ({error})। कमांड टाइप करें या माइक फिर से आज़माएं।",
   "billing.page.closeCheckout": "पेमेंट बंद करें",
   "billing.page.reviewCollectPayment": "जांचें और पेमेंट लें",
-  "billing.page.roundOff": "राउंड ऑफ",
+  "billing.summary.roundOff": "राउंड ऑफ",
   "billing.page.markDone": "पूरा हुआ",
   "billing.page.originalCustomerCopy": "ग्राहक की असली कॉपी",
   "billing.page.estimateCopy": "कच्चे बिल की कॉपी",
