@@ -20,7 +20,7 @@
     "prisma:migrate": "node node_modules/prisma/build/index.js migrate dev",
     "prisma:deploy": "node node_modules/prisma/build/index.js migrate deploy",
     "db:generate": "node node_modules/prisma/build/index.js generate",
-    "test": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment && npm run test:report-documents && npm run test:event-bus && npm run test:activity",
+    "test": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment && npm run test:report-documents && npm run test:event-bus && npm run test:event-bus-redis && npm run test:activity",
     "test:compliance": "node tests/compliance-tax.examples.js",
     "test:loyalty": "node tests/loyalty-maturity.examples.js",
     "test:atomic-offers": "node tests/offer-bill-atomicity.examples.js",
@@ -83,7 +83,8 @@
     "pricing:backfill-units": "node scripts/backfill-product-selling-units.js",
     "probe:adversarial": "node loadtest/adversarial.js",
     "test:event-bus": "node tests/event-bus.examples.js",
-    "test:activity": "node tests/activity-personalization.examples.js"
+    "test:activity": "node tests/activity-personalization.examples.js",
+    "test:event-bus-redis": "node tests/event-bus-redis.examples.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",

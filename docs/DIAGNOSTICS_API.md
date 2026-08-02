@@ -279,6 +279,8 @@ await publishEvent(EVENT_TOPICS.SYNC_FAILED, shopId, { failed: 3 });
 - **`none`** — counted no-op. The platform behaves exactly as before.
 - **`redis`** — Redis Streams (`XADD` with `MAXLEN ~ 10000`): an append-only log
   with ids, ranges and consumer groups, the closest available Kafka analogue.
+  Needs `REDIS_URL` and nothing else — in particular it does **not** require
+  `QUEUES_ENABLED`, since BullMQ job queues are a separate concern.
 - **`kafka`** — reserved. Returns `KAFKA_PROVIDER_NOT_INSTALLED` rather than
   pulling a broker client into the tree before the platform needs one.
 
@@ -322,4 +324,9 @@ npm run test:incident-report   # incident composition (§6)
 npm run test:audit-timeline    # audit columns, inference, withAudit (§2)
 npm run test:report-documents  # PDF/XLSX validity + format routing (§9)
 npm run test:event-bus         # event envelope + fault tolerance (§11)
+npm run test:event-bus-redis   # real RESP2 socket: the XADD actually sent (§11)
 ```
+
+`test:event-bus-redis` needs no Redis server and no extra dependency —
+`tests/helpers/` contains a minimal RESP2 server, so the real ioredis client
+publishes over a real socket and the exact wire command is asserted.

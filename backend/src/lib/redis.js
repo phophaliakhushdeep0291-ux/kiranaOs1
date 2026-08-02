@@ -24,7 +24,11 @@ export function isRedisEnabled() {
 }
 
 export async function getRedisClient() {
-  if (!isRedisEnabled()) {
+  // Connect whenever a REDIS_URL exists. This deliberately does NOT require
+  // QUEUES_ENABLED: Redis backs more than BullMQ now (the §11 event bus), and
+  // every queue/worker caller already checks its own feature flag before asking
+  // for a client, so the gate here was only ever a second, coarser lock.
+  if (!isRedisConfigured()) {
     return null;
   }
   if (redisClient) return redisClient;
