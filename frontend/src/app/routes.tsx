@@ -67,6 +67,7 @@ const PlansPage = lazy(() => import("@/features/subscription/pages/PlansPage"));
 const SubscriptionPage = lazy(() => import("@/features/subscription/pages/SubscriptionPage"));
 const DevicesPage = lazy(() => import("@/features/devices/pages/DevicesPage"));
 const PlatformAdminPage = lazy(() => import("@/features/platform-admin/pages/PlatformAdminPage"));
+const RemoteSupportConsolePage = lazy(() => import("@/features/remote-support/pages/RemoteSupportConsolePage"));
 const AskArthaPage = lazy(() => import("@/features/support/pages/AskArthaPage"));
 const ActivityInsightsPage = lazy(() => import("@/features/activity/pages/ActivityInsightsPage"));
 const StaffPage = lazy(() => import("@/features/staff/pages/StaffPage"));
@@ -375,6 +376,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/platform-admin">
         <ProtectedRoute component={PlatformAdminPage} />
+      </Route>
+      <Route path="/platform-admin/support">
+        <ProtectedRoute component={RemoteSupportConsolePage} />
       </Route>
       <Route path="/help">
         <ProtectedRoute component={AskArthaPage} />

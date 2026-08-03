@@ -30,6 +30,7 @@ Conventions used throughout:
 | Reporting | `modules/reports` | §9 | CSV / PDF / Excel exports |
 | Support | `modules/diagnostics` | §7 | Report-Issue requests + context bundles |
 | Admin | `modules/platform-admin` | §10 | Cross-shop operator rollups |
+| Remote support | `modules/remote-support` | §10a | Consent-gated remote diagnosis + repair |
 | Events | `lib/eventBus.js` | §11 | Kafka-compatible streaming seam |
 
 ---
@@ -263,6 +264,83 @@ and event-bus status.
 
 ---
 
+## 10a. Remote support — `/api/support` + `/api/platform-admin/support`
+
+Diagnosis without a visit is §1–§10. This is repair without a visit: the operator
+sees one shop and can queue fixes for its devices, without anyone travelling.
+
+**Consent is the whole design.** A platform admin with no live session sees only
+the anonymous rollup in §10. Access begins when the *owner* taps "Get remote help"
+and reads out a 6-digit code, and it ends on a timer, on revoke, or on disconnect.
+
+| Route | Access | Purpose |
+|---|---|---|
+| `POST /api/support/sessions` | owner | Issue a code. Returns the plaintext **once** |
+| `GET /api/support/state` | owner | Who is connected, what they have run |
+| `DELETE /api/support/sessions/:id` | owner | Stop button — also cancels queued commands |
+| `GET /api/support/commands` | any (device) | Drain this device's queue |
+| `POST /api/support/commands/:id/ack` | any (device) | Report the outcome |
+| `GET /api/platform-admin/support/catalog` | admin | The command allowlist |
+| `POST /api/platform-admin/support/redeem` | admin | Code → session |
+| `GET …/support/sessions/:id/diagnostics` | admin + live session | One shop's full picture |
+| `POST /api/platform-admin/support/commands` | admin + live session | Queue a fix |
+| `DELETE …/support/sessions/:id` | admin + live session | Disconnect |
+
+Scopes: `diagnose` (look only) and `repair`. The owner picks which one the code
+grants.
+
+### The command allowlist
+
+`modules/remote-support/commands.catalog.js` is the complete set. Every entry maps
+to a function the app **already runs locally** when the owner taps the equivalent
+button; remote support drives existing code paths and opens no new ones.
+
+| Command | Scope | Runs |
+|---|---|---|
+| `COLLECT_DIAGNOSTICS` | diagnose | `collectDeviceHealth` + `reportDeviceHealth` |
+| `RUN_SYNC_NOW` | repair | `runSyncCycle` |
+| `RETRY_FAILED_SYNC` | repair | `retryFailedSyncOperations` |
+| `PULL_FROM_CLOUD` | repair | `hydrateFromBackendSnapshot` |
+| `CLEAR_LOCAL_CACHE` | repair | `clearInstantMemoryCache` |
+| `REFRESH_APP` | repair | `recoverFromStaleDeploy` |
+
+Enforced **three times** — when queued, when handed to a device, and by the device
+itself, which only has code for these six. A row inserted straight into the table
+is cancelled rather than delivered.
+
+Deliberately absent, and to stay absent: anything reading or writing financial
+records. An operator can make sync work; they cannot touch a bill, a payment or a
+customer's udhar. That is what keeps the audit engine's read-only-toward-financial-
+data guarantee true.
+
+### Guarantees worth knowing
+
+- **The code is never stored in the clear** — only a `JWT_SECRET`-peppered SHA-256.
+  A database dump yields no usable live codes. Losing the code costs one tap.
+- **One live session per shop**, so "is support in my shop right now?" has one answer.
+- **shopId comes from the session row**, never from the operator's request.
+- **Revoke cancels queued work**, so withdrawing consent reaches commands already
+  in flight.
+- **Session expiry bounds the operator's access, not work already authorised.** A
+  queued command survives to its own 6-hour TTL, because the device it targets is
+  very often offline — which is the case this feature exists for.
+- **Every action is audited** under the operator's email: `SUPPORT_SESSION_GRANTED`,
+  `_OPENED`, `_REVOKED`, `_CLOSED`, `SUPPORT_COMMAND_ISSUED`, `_EXECUTED`.
+
+### Delivery
+
+Commands ride the device's existing sync poll — no socket, no new timer. The drain
+sits **above** the subscription gate in `runSyncCycle`, because a shop whose sync is
+switched off is among the likeliest to have called support, and a repair channel
+that dies with the thing being repaired is no channel at all.
+
+`REFRESH_APP` acks *before* reloading; after the reload there is no runtime left to
+report with, and the operator would otherwise re-issue it forever.
+
+UI: owner at `/help` (owner role only), operator at `/platform-admin/support`.
+
+---
+
 ## 11. Event streaming — `lib/eventBus.js` (§11)
 
 A seam, not a broker. Domain code calls `publishEvent(topic, shopId, payload)`
@@ -323,6 +401,7 @@ npm run test:sync-diagnostics  # failure explanations (§3)
 npm run test:incident-report   # incident composition (§6)
 npm run test:audit-timeline    # audit columns, inference, withAudit (§2)
 npm run test:report-documents  # PDF/XLSX validity + format routing (§9)
+npm run test:remote-support    # consent, scope, allowlist, revoke (§10a)
 npm run test:event-bus         # event envelope + fault tolerance (§11)
 npm run test:event-bus-redis   # real RESP2 socket: the XADD actually sent (§11)
 ```

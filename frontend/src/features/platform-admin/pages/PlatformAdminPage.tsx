@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { AlertTriangle, Cpu, Database, LifeBuoy, ShieldAlert, ShieldX, Store } from "lucide-react";
+import { Link } from "wouter";
+import { AlertTriangle, Cpu, Database, Headset, LifeBuoy, ShieldAlert, ShieldX, Store } from "lucide-react";
 import { LoadingSkeleton, PageHeader, PageShell, StatCard, StatsGrid } from "@/components/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiClientError } from "@/lib/api/http";
@@ -120,6 +121,16 @@ export default function PlatformAdminPage() {
   return (
     <PageShell>
       <PageHeader title="Platform admin" description={`Fleet health across all shops · updated ${timeAgo(data.generatedAt)}`} />
+
+      {/* The rollup below is anonymous by design — it names no shop's data. Looking
+          at one shop needs that shop owner's code, which is what the console is for. */}
+      <Link
+        href="/platform-admin/support"
+        className="mb-4 inline-flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-primary/[0.04]"
+      >
+        <Headset className="h-4 w-4 text-primary" aria-hidden="true" />
+        Open remote support console
+      </Link>
 
       <StatsGrid>
         <StatCard label="Shops" value={data.shops.total} description={`${data.shops.online} online · ${data.shops.offline} offline`} icon={<Store className="h-5 w-5" />} tone="blue" />

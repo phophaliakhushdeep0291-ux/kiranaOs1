@@ -12,6 +12,8 @@ import {
 import { PageHeader, PageShell } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useAuth } from "@/features/auth/useAuth";
+import { RemoteHelpCard } from "@/features/remote-support/RemoteHelpCard";
 import { Textarea } from "@/components/ui/textarea";
 import {
   askAssistant,
@@ -73,6 +75,7 @@ function confidenceTone(confidence: number) {
 }
 
 export default function AskArthaPage() {
+  const { user } = useAuth();
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [asking, setAsking] = useState(false);
@@ -138,6 +141,14 @@ export default function AskArthaPage() {
         title="Ask Artha"
         description="Ask about your shop's numbers, how to do something, or what's gone wrong. Answers are read from this shop's own records — not generic advice."
       />
+
+      {/* Granting outsiders access to the shop's data is the owner's call alone, so
+          staff and managers never see the offer. The backend enforces the same rule. */}
+      {user?.role === "owner" ? (
+        <div className="mb-5">
+          <RemoteHelpCard />
+        </div>
+      ) : null}
 
       {turns.length === 0 && (
         <div className="mb-5 grid gap-3 sm:grid-cols-3">

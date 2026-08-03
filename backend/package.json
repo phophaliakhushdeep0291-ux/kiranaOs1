@@ -82,6 +82,7 @@
     "wac:backfill:write": "node scripts/run-with-env.js ALLOW_WAC_BACKFILL=true -- node scripts/wac-cost-backfill.js --write",
     "pricing:backfill-units": "node scripts/backfill-product-selling-units.js",
     "probe:adversarial": "node loadtest/adversarial.js",
+    "test:remote-support": "node tests/remote-support.examples.js && node tests/remote-support-playbooks.examples.js && node tests/remote-support-http.examples.js",
     "test:event-bus": "node tests/event-bus.examples.js",
     "test:activity": "node tests/activity-personalization.examples.js",
     "test:event-bus-redis": "node tests/event-bus-redis.examples.js"

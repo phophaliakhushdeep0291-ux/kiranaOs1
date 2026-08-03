@@ -49,6 +49,7 @@ import diagnosticsRoutes from "./modules/diagnostics/diagnostics.routes.js";
 import activityRoutes from "./modules/activity/activity.routes.js";
 import assuranceRoutes from "./modules/assurance/assurance.routes.js";
 import platformAdminRoutes from "./modules/platform-admin/platformAdmin.routes.js";
+import remoteSupportRoutes from "./modules/remote-support/remoteSupport.routes.js";
 
 const app = express();
 
@@ -260,6 +261,7 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/diagnostics", diagnosticsRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/audit", assuranceRoutes);
+app.use("/api/support", remoteSupportRoutes);
 app.use("/api/platform-admin", platformAdminRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────

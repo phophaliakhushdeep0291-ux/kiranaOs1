@@ -8,6 +8,7 @@ import { entityTypeFromOperation, tableNameForEntity, type SyncRunResult } from 
 import { probeBackendConnection } from "@/features/sync/backend-health";
 import { ApiClientError, getStoredAccessToken, getStoredRefreshToken } from "@/lib/api/http";
 import { ACTIVITY_EVENTS, trackEvent, type ActivityEventType } from "@/lib/activity";
+import { drainDeviceCommands } from "@/features/remote-support/command-runner";
 
 async function canSubscriptionSync(): Promise<boolean> {
   const snapshot = await getCurrentSubscriptionSnapshot();
@@ -38,6 +39,14 @@ export async function runSyncCycle(): Promise<SyncRunResult> {
   if (!connection.browserOnline || !connection.backendReachable) {
     return emptySyncResult();
   }
+
+  // Remote-support commands drain here — above the subscription gate on purpose. A
+  // shop whose sync is switched off is among the likeliest to have called support,
+  // and a repair channel that dies with the thing being repaired is no channel at
+  // all. Fire-and-forget so a slow repair never stalls the till's own sync; the
+  // runner guards its own re-entrancy, since RUN_SYNC_NOW lands back here.
+  void drainDeviceCommands();
+
   const localSubscriptionAllowsSync = await canSubscriptionSync();
   let serverAllowsSync: boolean | null = null;
   let statusCursor: string | number | null | undefined;
