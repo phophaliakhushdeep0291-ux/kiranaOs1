@@ -266,6 +266,14 @@ export function AppRoutes() {
       <Route path="/customers">
         <ProtectedRoute component={Customers} />
       </Route>
+      {/* "Udhar" / "khata" is the credit view of the customer list, not a page of
+          its own. The dashboard "Collect" shortcut, every voice "open udhar"
+          command, and the backend voice intent all navigate here, so the alias
+          is redirected in one place rather than rewritten at each call site —
+          the server can still send "/udhar" at any time. */}
+      <Route path="/udhar">
+        <Redirect to="/customers?filter=udhar" />
+      </Route>
       <Route path="/inventory/stock-in">
         <ProtectedRoute component={StockIn} />
       </Route>
