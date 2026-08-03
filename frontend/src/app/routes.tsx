@@ -51,6 +51,7 @@ const DailyClosingPage = lazy(() => import("@/features/reports/pages/DailyClosin
 const Settings = lazy(() => import("@/features/settings/pages/SettingsPage"));
 const MerchantSetupSettings = lazy(() => import("@/features/settings/pages/MerchantSetupPage"));
 const StoreProfileSettings = lazy(() => import("@/features/settings/pages/StoreProfilePage"));
+const ModulesSettings = lazy(() => import("@/features/settings/pages/ModulesSettingsPage"));
 const PrinterSettings = lazy(() => import("@/features/settings/pages/PrinterSettingsPage"));
 const BillingSettings = lazy(() => import("@/features/settings/pages/BillingSettingsPage"));
 const StaffSettings = lazy(() => import("@/features/settings/pages/StaffSettingsPage"));
@@ -265,6 +266,14 @@ export function AppRoutes() {
       <Route path="/customers">
         <ProtectedRoute component={Customers} />
       </Route>
+      {/* "Udhar" / "khata" is the credit view of the customer list, not a page of
+          its own. The dashboard "Collect" shortcut, every voice "open udhar"
+          command, and the backend voice intent all navigate here, so the alias
+          is redirected in one place rather than rewritten at each call site —
+          the server can still send "/udhar" at any time. */}
+      <Route path="/udhar">
+        <Redirect to="/customers?filter=udhar" />
+      </Route>
       <Route path="/inventory/stock-in">
         <ProtectedRoute component={StockIn} />
       </Route>
@@ -321,6 +330,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/settings/store-profile">
         <ProtectedRoute component={StoreProfileSettings} />
+      </Route>
+      <Route path="/settings/modules">
+        <ProtectedRoute component={ModulesSettings} />
       </Route>
       <Route path="/settings/printer">
         <ProtectedRoute component={PrinterSettings} />

@@ -30,6 +30,8 @@ export interface SettingsPrefs {
   notifications?: Record<string, unknown>;
   integrations?: Record<string, unknown>;
   advanced?: Record<string, unknown>;
+  /** Which app modules the owner keeps visible — see features/settings/modules.ts. */
+  moduleVisibility?: Record<string, boolean>;
   printPreview?: boolean;
   eInvoice?: boolean;
   hsnTracking?: boolean;

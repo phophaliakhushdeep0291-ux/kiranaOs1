@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { env } from "../config/env.js";
-import { getRedisClient, isRedisEnabled } from "./redis.js";
+import { getRedisClient, isRedisConfigured } from "./redis.js";
 
 /**
  * Platform event bus (§11 "Kafka compatibility in the future for event streaming").
@@ -54,7 +54,11 @@ const stats = {
  */
 export function getEventBusProvider() {
   const configured = String(env.EVENT_BUS_PROVIDER ?? "none").toLowerCase();
-  if (configured === "redis" && !isRedisEnabled()) return "none";
+  // Gate on REDIS_URL only. `isRedisEnabled()` additionally requires
+  // QUEUES_ENABLED, which is about BullMQ job queues — an unrelated concern.
+  // Tying the two together meant an operator who set EVENT_BUS_PROVIDER=redis
+  // and REDIS_URL got silent no-ops until they also turned on job queues.
+  if (configured === "redis" && !isRedisConfigured()) return "none";
   return configured;
 }
 
