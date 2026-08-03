@@ -79,8 +79,8 @@ async function movePackagingStock(client, { shopId, product, packs, direction, o
   if (product?.packagingMode !== "per_pack") return;
 
   // Fail loudly rather than drift. Several stock paths (purchase-order receipt,
-  // damage, stock counts, absolute stock edits, supplier returns) still move base
-  // units without knowing which pack, and silently letting them through would move
+  // stock counts, absolute stock edits, supplier returns) still move base units
+  // without knowing which pack, and silently letting them through would move
   // the pooled total while the per-size counts stood still — the counts would decay
   // into confident-looking fiction, which is the whole failure this design exists
   // to avoid. Refusing is recoverable; silent drift is not.

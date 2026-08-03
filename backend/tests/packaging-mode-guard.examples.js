@@ -9,10 +9,10 @@ import { resolveOperationalLocation, setLocationInventory } from "../src/modules
 //      separate SKUs (Shopify, Square, Lightspeed).
 // `per_pack` is a third option — two counts on ONE product — which is only safe
 // while every path that moves stock maintains both. It was refused outright until
-// sale, cancellation, sale return and stock-in all did.
+// sale, cancellation, sale return, stock-in and stock-out (damage) all did.
 //
-// Some paths still cannot: purchase-order receipt, damage, stock counts, absolute
-// stock edits, supplier returns. The property this file now protects is that those
+// Some paths still cannot: purchase-order receipt, stock counts, absolute stock
+// edits, supplier returns. The property this file now protects is that those
 // FAIL LOUDLY instead of moving the pooled total while the per-size counts stand
 // still. A refusal is recoverable; silent drift turns the counts into confident
 // fiction that the shopkeeper then reorders against.

@@ -34,7 +34,7 @@ vi.mock("@/lib/offline/db", () => ({
 import {
   buildDailyClosingReport,
   buildLocalReportSnapshot,
-} from "@/features/reports/local-reporting";
+} from "@/features/core/reports/local-reporting";
 
 const scope = {
   tenant_id: "tenant_reports",

@@ -75,8 +75,8 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache, upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY } from "@/features/ledger/authoritative-balances";
-import { getLocalUdharSummary, recordPaymentLocalFirst } from "@/features/payments/local-actions";
+import { AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY } from "@/features/core/ledger/authoritative-balances";
+import { getLocalUdharSummary, recordPaymentLocalFirst } from "@/features/core/payments/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedReadInstantCache = vi.mocked(readInstantCache);

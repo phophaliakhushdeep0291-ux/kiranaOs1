@@ -6,8 +6,8 @@ import {
   HELD_BILL_STALE_MS,
   isHeldBillStale,
   pruneExpiredHeldBills,
-} from "@/features/billing/pages/open-bills";
-import type { HeldBill } from "@/features/billing/pages/billing-types";
+} from "@/features/core/billing/pages/open-bills";
+import type { HeldBill } from "@/features/core/billing/pages/billing-types";
 
 const NOW = new Date("2026-07-20T12:00:00Z").getTime();
 

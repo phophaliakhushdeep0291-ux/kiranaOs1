@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countSlotOccupyingDevices, deviceStatusOccupiesSlot, normalizeDeviceStatus } from "@/features/devices/device-slot-policy";
+import { countSlotOccupyingDevices, deviceStatusOccupiesSlot, normalizeDeviceStatus } from "@/features/core/devices/device-slot-policy";
 
 describe("device slot policy", () => {
   it("counts active, logged-out, and blocked devices while excluding revoked rows", () => {

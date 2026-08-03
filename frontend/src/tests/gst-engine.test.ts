@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeGstBreakdown, gstGrandTotal } from "@/lib/gst";
-import { buildReceiptHtml, type ReceiptSnapshot } from "@/features/receipts/receipt-print";
+import { buildReceiptHtml, type ReceiptSnapshot } from "@/features/core/receipts/receipt-print";
 import { validateGstin } from "@/lib/gstin";
 
 describe("GST engine", () => {

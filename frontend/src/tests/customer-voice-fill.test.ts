@@ -2,12 +2,12 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   parseCustomerDraft,
   parseLocalVoiceIntent,
-} from "@/features/voice/voice-command-parser";
+} from "@/features/core/voice/voice-command-parser";
 import {
   buildCustomerVoicePreviewFields,
   findCustomerMobileDuplicate,
-} from "@/features/customers/customer-voice-fill";
-import type { CustomerWithLedger } from "@/features/customers/customer-ledger-data";
+} from "@/features/core/customers/customer-voice-fill";
+import type { CustomerWithLedger } from "@/features/core/customers/customer-ledger-data";
 
 const existingCustomer: CustomerWithLedger = {
   id: "customer_ramesh",

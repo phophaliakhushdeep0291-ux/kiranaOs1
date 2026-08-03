@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const billingPage = readFileSync("src/features/billing/pages/BillingPage.tsx", "utf8");
-const billingQueries = readFileSync("src/features/billing/queries.ts", "utf8");
-const offerApi = readFileSync("src/features/offers/api.ts", "utf8");
-const billingTypes = readFileSync("src/features/billing/pages/billing-types.ts", "utf8");
+const billingPage = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
+const billingQueries = readFileSync("src/features/core/billing/queries.ts", "utf8");
+const offerApi = readFileSync("src/features/core/offers/api.ts", "utf8");
+const billingTypes = readFileSync("src/features/core/billing/pages/billing-types.ts", "utf8");
 
 describe("atomic coupon billing client", () => {
   it("sends the server-verifiable offer reference with bill confirmation", () => {

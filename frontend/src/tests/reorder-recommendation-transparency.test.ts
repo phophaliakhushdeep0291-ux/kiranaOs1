@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const panelSource = readFileSync(new URL("../features/purchases/components/PurchaseOrdersPanel.tsx", import.meta.url), "utf8");
-const apiSource = readFileSync(new URL("../features/purchases/purchase-orders-api.ts", import.meta.url), "utf8");
+const panelSource = readFileSync(new URL("../features/core/purchases/components/PurchaseOrdersPanel.tsx", import.meta.url), "utf8");
+const apiSource = readFileSync(new URL("../features/core/purchases/purchase-orders-api.ts", import.meta.url), "utf8");
 
 describe("purchase reorder recommendation transparency", () => {
   it("shows the evidence, confidence and editable recommendation instead of presenting opaque AI output", () => {

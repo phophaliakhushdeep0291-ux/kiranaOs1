@@ -11,7 +11,7 @@ import {
   isServerEnforced,
   sessionTimeoutMs,
   setSecurityPolicyCache,
-} from "@/features/settings/security-policy";
+} from "@/features/core/settings/security-policy";
 import {
   DEFAULT_APP_PREFERENCES,
   applyAppPreferences,
@@ -21,8 +21,8 @@ import {
   getAppPreferences,
   keyboardShortcutsEnabled,
   playCounterBeep,
-} from "@/features/settings/app-preferences";
-import { appVersion, formatBytes } from "@/features/settings/app-info";
+} from "@/features/core/settings/app-preferences";
+import { appVersion, formatBytes } from "@/features/core/settings/app-info";
 
 /**
  * These settings used to persist and do nothing. The assertions below pin the
@@ -87,7 +87,7 @@ describe("app preferences take effect", () => {
   it("drives compact density from one document attribute", () => {
     // The suite runs without a DOM, so assert the contract the stylesheet keys
     // off rather than the rendered element.
-    const source = readFileSync("src/features/settings/app-preferences.ts", "utf8");
+    const source = readFileSync("src/features/core/settings/app-preferences.ts", "utf8");
     const css = readFileSync("src/index.css", "utf8");
     expect(source).toContain('document.documentElement.dataset.density = prefs.compactMode ? "compact" : "comfortable"');
     expect(css).toContain('html[data-density="compact"]');
@@ -143,7 +143,7 @@ describe("diagnostics report real runtime facts", () => {
 
 describe("accent picker repaints the app", () => {
   const css = readFileSync("src/index.css", "utf8");
-  const theme = readFileSync("src/features/settings/theme.tsx", "utf8");
+  const theme = readFileSync("src/features/core/settings/theme.tsx", "utf8");
   const accents = [...theme.matchAll(/^ {2}(\w+): \{ label:/gm)].map((m) => m[1]);
 
   it("finds every swatch the picker offers", () => {
@@ -183,7 +183,7 @@ describe("accent picker repaints the app", () => {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) { if (entry.name !== "node_modules") walk(full); continue; }
         if (!/\.tsx?$/.test(entry.name)) continue;
-        if (full.replaceAll("\\", "/").endsWith("features/settings/theme.tsx")) continue; // the swatches themselves
+        if (full.replaceAll("\\", "/").endsWith("features/core/settings/theme.tsx")) continue; // the swatches themselves
         if (/#(075fff|005dff|2563eb|0047e8|0046d8)/i.test(readFileSync(full, "utf8"))) offenders.push(full);
       }
     };
@@ -194,9 +194,9 @@ describe("accent picker repaints the app", () => {
 
 describe("settings pages no longer ship placeholder content", () => {
   it("does not hardcode devices, security logs or a version string", () => {
-    const security = readFileSync("src/features/settings/pages/SecuritySettingsPage.tsx", "utf8");
-    const advanced = readFileSync("src/features/settings/pages/AdvancedSettingsPage.tsx", "utf8");
-    const general = readFileSync("src/features/settings/pages/SettingsPage.tsx", "utf8");
+    const security = readFileSync("src/features/core/settings/pages/SecuritySettingsPage.tsx", "utf8");
+    const advanced = readFileSync("src/features/core/settings/pages/AdvancedSettingsPage.tsx", "utf8");
+    const general = readFileSync("src/features/core/settings/pages/SettingsPage.tsx", "utf8");
 
     // The old fixtures that showed on a brand-new shop.
     expect(security).not.toContain("POS Terminal 01");
@@ -215,14 +215,14 @@ describe("settings pages no longer ship placeholder content", () => {
   });
 
   it("runs the danger-zone actions instead of only toasting", () => {
-    const advanced = readFileSync("src/features/settings/pages/AdvancedSettingsPage.tsx", "utf8");
+    const advanced = readFileSync("src/features/core/settings/pages/AdvancedSettingsPage.tsx", "utf8");
     expect(advanced).not.toContain("This action needs owner approval from the backend");
     expect(advanced).toContain("logoutDevice");
     expect(advanced).toContain("removeDevice");
   });
 
   it("never locks the counter when the PIN could not be checked", () => {
-    const gate = readFileSync("src/features/settings/SessionLockGate.tsx", "utf8");
+    const gate = readFileSync("src/features/core/settings/SessionLockGate.tsx", "utf8");
     // Offline-first is the product promise: the lock must not strand a shop.
     expect(gate).toContain("const canLock = hasPin === true && navigator.onLine");
     expect(gate).toContain("if (!navigator.onLine || hasPin !== true) return;");

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { evaluatePricing } from "@/features/pricing/engine/engine";
-import { PricingRuleType, type PricingContext, type PricingRule } from "@/features/pricing/engine/types";
-import { contextFromProduct, rulesFromProduct } from "@/features/pricing/engine/product-rules";
-import { productSellingPrice } from "@/features/billing/pages/billing-calculations";
+import { evaluatePricing } from "@/features/core/pricing/engine/engine";
+import { PricingRuleType, type PricingContext, type PricingRule } from "@/features/core/pricing/engine/types";
+import { contextFromProduct, rulesFromProduct } from "@/features/core/pricing/engine/product-rules";
+import { productSellingPrice } from "@/features/core/billing/pages/billing-calculations";
 
 const baseCtx = (over: Partial<PricingContext> = {}): PricingContext => ({
   shopId: "shop_1",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const dashboard = readFileSync("src/features/dashboard/pages/DashboardPage.tsx", "utf8");
+const dashboard = readFileSync("src/features/core/dashboard/pages/DashboardPage.tsx", "utf8");
 
 describe("dashboard plan-gated backend fallbacks", () => {
   it("does not call the backend P&L endpoint unless profit/loss reports are included", () => {

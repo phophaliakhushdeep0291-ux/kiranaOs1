@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeCategories, type ShopCategory } from "@/features/inventory/category-store";
+import { mergeCategories, type ShopCategory } from "@/features/core/inventory/category-store";
 
 function category(overrides: Partial<ShopCategory> = {}): ShopCategory {
   return {

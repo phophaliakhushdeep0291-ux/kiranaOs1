@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { CornerDownLeft, Package, ReceiptText, Search, Users, X } from "lucide-react";
 import { offlineDB } from "@/lib/offline/db";
 import { readInstantCache } from "@/lib/offline/instant-cache";
-import { dedupeBillsForDisplay } from "@/features/sync/bill-reconciliation";
+import { dedupeBillsForDisplay } from "@/features/core/sync/bill-reconciliation";
 import { cn } from "@/lib/utils";
 
 type AnyRow = Record<string, unknown>;

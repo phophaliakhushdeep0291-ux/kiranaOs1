@@ -3,7 +3,7 @@ import {
   dedupeBillsForDisplay,
   isLikelySyncedCopyOfPendingBill,
   isMergedBillTwin,
-} from "@/features/sync/bill-reconciliation";
+} from "@/features/core/sync/bill-reconciliation";
 
 describe("offline bill sync deduplication", () => {
   it("prefers the synced server bill over its pending offline copy", () => {

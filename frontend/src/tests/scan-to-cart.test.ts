@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveScanMatch } from "@/features/billing/pages/billing-calculations";
+import { resolveScanMatch } from "@/features/core/billing/pages/billing-calculations";
 import type { Product } from "@/types/api";
 
 function product(overrides: Record<string, unknown> = {}): Product {

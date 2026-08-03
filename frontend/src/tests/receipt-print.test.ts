@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { BillInputBillType, BillPaymentMode, type Bill, type Product } from "@/lib/api/client";
-import { buildBillingReceiptHtml } from "@/features/billing/pages/billing-print";
-import type { PrintableBill } from "@/features/billing/pages/billing-types";
-import { buildBillPrintHtml, buildPrintableBillSnapshot } from "@/features/bills/print";
+import { buildBillingReceiptHtml } from "@/features/core/billing/pages/billing-print";
+import type { PrintableBill } from "@/features/core/billing/pages/billing-types";
+import { buildBillPrintHtml, buildPrintableBillSnapshot } from "@/features/core/bills/print";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {

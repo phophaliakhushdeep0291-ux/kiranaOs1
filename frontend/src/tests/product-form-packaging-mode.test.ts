@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formToInput, productToForm } from "@/features/products/pages/product-form-state";
+import { formToInput, productToForm } from "@/features/core/products/pages/product-form-state";
 import type { Product } from "@/types/api";
 
 /**

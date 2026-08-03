@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/settings/business-types";
-import { SHOP_WORKFLOWS } from "@/features/settings/shop-workflows";
+import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/core/settings/business-types";
+import { SHOP_WORKFLOWS } from "@/features/core/settings/shop-workflows";
 
-const dashboardPage = readFileSync(join(process.cwd(), "src/features/dashboard/pages/DashboardPage.tsx"), "utf8");
-const productForm = readFileSync(join(process.cwd(), "src/features/products/pages/components/ProductFormPanel.tsx"), "utf8");
+const dashboardPage = readFileSync(join(process.cwd(), "src/features/core/dashboard/pages/DashboardPage.tsx"), "utf8");
+const productForm = readFileSync(join(process.cwd(), "src/features/core/products/pages/components/ProductFormPanel.tsx"), "utf8");
 
 describe("shop-type workflows", () => {
   it("defines four usable daily actions for every registered shop type", () => {

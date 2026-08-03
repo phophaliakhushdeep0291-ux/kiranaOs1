@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const transfers = readFileSync("src/features/inventory/pages/StockTransfersPage.tsx", "utf8");
-const taxes = readFileSync("src/features/settings/pages/TaxesSettingsPage.tsx", "utf8");
+const transfers = readFileSync("src/features/core/inventory/pages/StockTransfersPage.tsx", "utf8");
+const taxes = readFileSync("src/features/core/settings/pages/TaxesSettingsPage.tsx", "utf8");
 
 describe("multi-GSTIN transfer and reporting UI", () => {
   it("collects a registration identity without claiming GST portal verification", () => {

@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/settings/business-types";
-import { SHOP_WORKFLOWS } from "@/features/settings/shop-workflows";
-import { ROUTES as VOICE_ROUTES } from "@/features/voice/voice-command-parser";
+import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/core/settings/business-types";
+import { SHOP_WORKFLOWS } from "@/features/core/settings/shop-workflows";
+import { ROUTES as VOICE_ROUTES } from "@/features/core/voice/voice-command-parser";
 
 /**
  * Every shortcut the app offers must land on a page that exists.

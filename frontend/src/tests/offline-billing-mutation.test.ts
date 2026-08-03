@@ -6,9 +6,9 @@ const { useMutation, createBillLocalFirst } = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-query", () => ({ useMutation }));
-vi.mock("@/features/billing/local-actions", () => ({ createBillLocalFirst }));
+vi.mock("@/features/core/billing/local-actions", () => ({ createBillLocalFirst }));
 
-import { useConfirmBill } from "@/features/billing/queries";
+import { useConfirmBill } from "@/features/core/billing/queries";
 
 describe("offline billing mutation", () => {
   beforeEach(() => {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const hydration = readFileSync("src/features/sync/cloud-hydration.ts", "utf8");
-const bootstrap = readFileSync("src/features/sync/CloudDataBootstrap.tsx", "utf8");
-const engine = readFileSync("src/features/sync/sync-engine.ts", "utf8");
-const manualSync = readFileSync("src/features/sync/manual-sync.ts", "utf8");
-const offlineStatus = readFileSync("src/features/sync/useOfflineStatus.ts", "utf8");
-const syncBanner = readFileSync("src/features/sync/SyncAlertBanner.tsx", "utf8");
+const hydration = readFileSync("src/features/core/sync/cloud-hydration.ts", "utf8");
+const bootstrap = readFileSync("src/features/core/sync/CloudDataBootstrap.tsx", "utf8");
+const engine = readFileSync("src/features/core/sync/sync-engine.ts", "utf8");
+const manualSync = readFileSync("src/features/core/sync/manual-sync.ts", "utf8");
+const offlineStatus = readFileSync("src/features/core/sync/useOfflineStatus.ts", "utf8");
+const syncBanner = readFileSync("src/features/core/sync/SyncAlertBanner.tsx", "utf8");
 
 describe("cloud hydration direct import wiring", () => {
   it("imports backend snapshot data from normal APIs, not only sync pull", () => {

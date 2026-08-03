@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeBulkPatch, intentHasEffect, nextSellingPrice, nextStock, type BulkEditIntent } from "@/features/products/bulk-edit";
+import { computeBulkPatch, intentHasEffect, nextSellingPrice, nextStock, type BulkEditIntent } from "@/features/core/products/bulk-edit";
 import type { Product } from "@/types/api";
 
 function product(overrides: Record<string, unknown> = {}): Product & Record<string, unknown> {

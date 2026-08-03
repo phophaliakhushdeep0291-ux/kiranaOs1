@@ -9,7 +9,7 @@ const store = new Map<string, string>();
   clear: () => { store.clear(); },
 };
 
-import { stashPostLoginRedirect, consumePostLoginRedirect } from "@/features/auth/post-login-redirect";
+import { stashPostLoginRedirect, consumePostLoginRedirect } from "@/features/core/auth/post-login-redirect";
 
 const KEY = "kirana:post-login-redirect:v1";
 

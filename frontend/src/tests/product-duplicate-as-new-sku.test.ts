@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { productToForm, formToInput } from "@/features/products/pages/product-form-state";
+import { productToForm, formToInput } from "@/features/core/products/pages/product-form-state";
 
-const source = readFileSync("src/features/products/pages/ProductsPage.tsx", "utf8");
+const source = readFileSync("src/features/core/products/pages/ProductsPage.tsx", "utf8");
 
 // Standard retail systems solve "a pack I count and reorder separately" with a separate
 // SKU (Shopify, Square, Lightspeed), not a second stock bucket on one product. Duplicate

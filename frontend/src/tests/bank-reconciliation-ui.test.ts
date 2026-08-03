@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const panel = readFileSync("src/features/reports/components/BankReconciliationPanel.tsx", "utf8");
-const api = readFileSync("src/features/reports/bank-reconciliation-api.ts", "utf8");
-const reports = readFileSync("src/features/reports/pages/ReportsPage.tsx", "utf8");
+const panel = readFileSync("src/features/core/reports/components/BankReconciliationPanel.tsx", "utf8");
+const api = readFileSync("src/features/core/reports/bank-reconciliation-api.ts", "utf8");
+const reports = readFileSync("src/features/core/reports/pages/ReportsPage.tsx", "utf8");
 
 describe("bank reconciliation UI safety and usability", () => {
   it("is present in Reports and explicitly refuses silent or offline reconciliation", () => {

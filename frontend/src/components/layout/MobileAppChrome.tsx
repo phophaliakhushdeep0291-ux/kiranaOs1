@@ -17,6 +17,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Shirt,
   ShoppingCart,
   Sparkles,
   Store,
@@ -27,7 +28,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useModuleVisibility } from "@/features/settings/modules";
+import { useModuleVisibility } from "@/features/core/settings/modules";
+import { useActiveVerticalPack } from "@/features/verticals/registry";
 import {
   Drawer,
   DrawerClose,
@@ -186,14 +188,24 @@ export function MobileTopBar({
 
 function MoreNavigation({ location }: { location: string }) {
   const { isHrefEnabled } = useModuleVisibility();
+  const verticalPack = useActiveVerticalPack();
   // Modules switched off in Settings leave the drawer; a section with nothing
-  // left in it drops its heading too rather than sitting there empty.
-  const groups = useMemo(
-    () => MORE_GROUPS
-      .map((group) => ({ ...group, items: group.items.filter((item) => isHrefEnabled(item.href)) }))
-      .filter((group) => group.items.length > 0),
-    [isHrefEnabled],
-  );
+  // left in it drops its heading too rather than sitting there empty. The active
+  // trade's own entries join their named group — another trade's never do.
+  const groups = useMemo(() => {
+    const extras = verticalPack.nav.filter((entry) => entry.mobile && isHrefEnabled(entry.href));
+    return MORE_GROUPS
+      .map((group) => ({
+        ...group,
+        items: [
+          ...group.items,
+          ...extras
+            .filter((entry) => entry.mobile?.group === group.label)
+            .map((entry) => ({ href: entry.href, label: entry.label, helper: entry.mobile!.helper, Icon: entry.Icon })),
+        ].filter((item) => isHrefEnabled(item.href)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [isHrefEnabled, verticalPack]);
 
   return (
     <div className="mobile-more-groups">

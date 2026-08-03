@@ -93,8 +93,11 @@ model Shop {
   errorEvents                 ErrorEvent[]
   supportRequests             SupportRequest[]
   deviceHealthSnapshots       DeviceHealthSnapshot[]
+  supportSessions             SupportSession[]
+  deviceCommands              DeviceCommand[]
   activityEvents              ActivityEvent[]
   activityAggregates          ActivityAggregate[]
+  rentalBookings              RentalBooking[]
   auditRules                  AuditRule[]
   auditRuns                   AuditRun[]
   auditEvaluations            AuditEvaluation[]
@@ -2127,6 +2130,77 @@ model DeviceHealthSnapshot {
 }
 
 // ─────────────────────────────────────────────
+// REMOTE SUPPORT — consent-gated remote diagnosis and repair
+// ─────────────────────────────────────────────
+
+// A time-boxed grant that lets a platform operator look at ONE shop, and (at the
+// "repair" scope) queue allowlisted commands for its devices. Without an active
+// row here an operator sees only the anonymous cross-shop rollup, so remote
+// access is something the owner hands out rather than something we hold.
+//
+// The 6-digit code the owner reads out is stored only as a peppered hash: a dump
+// of this table yields no usable live codes, and redemption still resolves in a
+// single indexed lookup because the hash is deterministic.
+model SupportSession {
+  id              String    @id @default(cuid())
+  shopId          String
+  grantedByUserId String?
+  deviceId        String? // optional: pin the session to the one device that is broken
+  codeHash        String    @unique
+  scope           String    @default("diagnose") // diagnose | repair
+  status          String    @default("pending") // pending | active | ended | revoked | expired
+  operatorEmail   String?
+  reason          String?
+  redeemedAt      DateTime?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  endedAt         DateTime?
+  commandCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop     Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  commands DeviceCommand[]
+
+  @@index([shopId, status, createdAt])
+  @@index([status, expiresAt])
+}
+
+// Server→device work queue. The device already polls on its sync timer, so this
+// rides that loop instead of needing a socket. `type` is validated against a
+// fixed catalog on the way in AND on the way out, so a row written by any means
+// still cannot make a device do something outside the allowlist.
+model DeviceCommand {
+  id             String    @id @default(cuid())
+  shopId         String
+  sessionId      String? // null = automatic playbook dispatch, no human operator
+  playbookId     String? // set when a playbook issued this; drives cooldown + failure streaks
+  deviceId       String
+  type           String
+  paramsJson     String    @default("{}")
+  status         String    @default("queued") // queued | delivered | applied | failed | expired | cancelled
+  issuedByEmail  String?
+  issuedByUserId String?
+  reason         String? // shown verbatim to the owner in the activity trail
+  attempts       Int       @default(0)
+  deliveredAt    DateTime?
+  completedAt    DateTime?
+  resultJson     String?
+  error          String?
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  shop    Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  session SupportSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, deviceId, status, createdAt])
+  @@index([shopId, status, createdAt])
+  @@index([sessionId])
+  @@index([shopId, deviceId, playbookId, createdAt])
+}
+
+// ─────────────────────────────────────────────
 // SAAS PLANS / SUBSCRIPTIONS — Phase 6 foundation
 // ─────────────────────────────────────────────
 model Plan {
@@ -2739,4 +2813,68 @@ model ActivityAggregate {
   @@unique([shopId, userId, kind, key])
   @@index([shopId, kind, score])
   @@index([shopId, userId, kind, lastSeenAt])
+}
+
+// ─────────────────────────────────────────────
+// CLOTH RENTAL — a garment booked out for a run of days.
+// A booking holds stock without moving it; availability for a window is the
+// owned count minus the qty held by active bookings overlapping that window.
+// Dates are day-granular shop-timezone boundaries (see utils/dates.js).
+
+model RentalBooking {
+  id            String @id @default(cuid())
+  shopId        String
+  bookingNumber String
+
+  customerId      String?
+  customerName    String
+  customerPhone   String
+  customerAddress String  @default("")
+  idProofType     String?
+  idProofNumber   String?
+
+  fromDate   DateTime
+  toDate     DateTime
+  returnedAt DateTime?
+  status     String    @default("booked") // booked | picked_up | returned | cancelled
+
+  rentAmount    Float @default(0)
+  depositAmount Float @default(0)
+  advancePaid   Float @default(0)
+  lateFee       Float @default(0)
+  damageCharge  Float @default(0)
+
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop  Shop                @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items RentalBookingItem[]
+
+  @@unique([shopId, bookingNumber])
+  @@index([shopId, deletedAt])
+  @@index([shopId, status, fromDate, toDate])
+  @@index([shopId, status, toDate])
+  @@index([shopId, customerPhone])
+}
+
+model RentalBookingItem {
+  id        String  @id @default(cuid())
+  bookingId String
+  // Deliberately not a foreign key — the line records what physically went out
+  // and must outlive the product row.
+  productId String?
+
+  name       String
+  unit       String @default("piece")
+  qty        Float  @default(1)
+  ratePerDay Float  @default(0)
+  amount     Float  @default(0)
+
+  booking RentalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([productId])
 }

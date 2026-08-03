@@ -8,7 +8,7 @@ function source(relativePath: string) {
 
 describe("Customers/Udhar first-load performance contracts", () => {
   it("defers the financial integrity scan and indexes ledger rows in one pass", () => {
-    const content = source("../features/customers/customer-ledger-data.ts");
+    const content = source("../features/core/customers/customer-ledger-data.ts");
     const loader = content.slice(content.indexOf("export async function loadCustomersWithLedger"));
 
     expect(content).toContain("requestIdleCallback");
@@ -17,7 +17,7 @@ describe("Customers/Udhar first-load performance contracts", () => {
   });
 
   it("does not block the local customer list on a live server summary", () => {
-    const content = source("../features/customers/pages/CustomersPage.tsx");
+    const content = source("../features/core/customers/pages/CustomersPage.tsx");
     const hook = content.slice(content.indexOf("function useCustomersLedgerList"), content.indexOf("function money"));
 
     expect(hook).toContain("loadCachedAuthoritativeSummary()");

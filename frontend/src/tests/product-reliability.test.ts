@@ -63,12 +63,12 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { offlineDB } from "@/lib/offline/db";
 import { emitLocalDataChanged, removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { createProductLocalFirst, deleteProductLocalFirst, updateProductLocalFirst } from "@/features/products/local-actions";
+import { createProductLocalFirst, deleteProductLocalFirst, updateProductLocalFirst } from "@/features/core/products/local-actions";
 import {
   findDuplicateProductWarnings,
   mergeProductAliasSuggestions,
   productMatchesSearch,
-} from "@/features/products/product-reliability";
+} from "@/features/core/products/product-reliability";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedEmitLocalDataChanged = vi.mocked(emitLocalDataChanged);

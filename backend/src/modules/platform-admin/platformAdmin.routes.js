@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth.js";
 import { requirePlatformAdmin } from "../../middleware/platformAdmin.js";
+import { validate } from "../../middleware/validate.js";
+import { dispatchCommandSchema, redeemCodeSchema, settingRepairSchema } from "../remote-support/remoteSupport.schema.js";
+import * as remoteSupport from "../remote-support/remoteSupport.controller.js";
 import * as ctrl from "./platformAdmin.controller.js";
 
 const router = Router();
@@ -13,5 +16,20 @@ router.get("/access", ctrl.access);
 
 // The cross-shop rollup is strictly gated behind the email allowlist.
 router.get("/overview", requirePlatformAdmin, ctrl.overview);
+
+// Remote support. Being a platform admin is necessary but NOT sufficient here:
+// every route below also needs a live session the shop owner consented to, which
+// requireOperatorSession re-checks per request. The rollup above is the most an
+// operator can see without one.
+router.get("/support/catalog", requirePlatformAdmin, remoteSupport.catalog);
+router.post("/support/redeem", requirePlatformAdmin, validate(redeemCodeSchema), remoteSupport.redeem);
+router.get("/support/sessions/:sessionId/diagnostics", requirePlatformAdmin, remoteSupport.shopDiagnostics);
+router.post("/support/commands", requirePlatformAdmin, validate(dispatchCommandSchema), remoteSupport.dispatch);
+
+// Settings repair — the one path that writes the shop's own data. Gated by the
+// same live session AND, inside the service, by the session being repair-scope.
+router.get("/support/sessions/:sessionId/settings", requirePlatformAdmin, remoteSupport.listSettings);
+router.post("/support/settings", requirePlatformAdmin, validate(settingRepairSchema), remoteSupport.repairSetting);
+router.delete("/support/sessions/:sessionId", requirePlatformAdmin, remoteSupport.endSession);
 
 export default router;

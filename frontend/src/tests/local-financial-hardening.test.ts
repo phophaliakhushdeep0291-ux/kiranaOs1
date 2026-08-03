@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { financialEchoSignature, paymentDuplicateSignature } from "@/features/sync/local-data-hardening";
+import { financialEchoSignature, paymentDuplicateSignature } from "@/features/core/sync/local-data-hardening";
 
 describe("local financial hardening", () => {
   it("matches local and server payment echoes even when bill IDs differ", () => {

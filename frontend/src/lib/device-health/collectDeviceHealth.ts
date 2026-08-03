@@ -1,6 +1,6 @@
 import { getDeviceMetadata } from "@/lib/device-identity";
-import { getPrinterConfigSync } from "@/features/settings/printer-config";
-import { checkHardwareBridge } from "@/features/hardware/local-hardware-bridge";
+import { getPrinterConfigSync } from "@/features/core/settings/printer-config";
+import { checkHardwareBridge } from "@/features/core/hardware/local-hardware-bridge";
 import { offlineDB } from "@/lib/offline/db";
 
 // Gathers the runtime health signals for Diagnostics §4. Every probe is

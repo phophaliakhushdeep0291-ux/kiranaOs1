@@ -10,7 +10,7 @@ vi.mock("@/lib/offline/db", () => ({ offlineDB: {
   getSetting: vi.fn(async () => state.cached),
 } }));
 
-import { listOffers } from "@/features/offers/api";
+import { listOffers } from "@/features/core/offers/api";
 
 describe("offers offline cache", () => {
   beforeEach(() => { state.cached = undefined; state.request.mockReset(); });

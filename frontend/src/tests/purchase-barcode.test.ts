@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolvePurchaseBarcode } from "@/features/purchases/purchase-barcode";
+import { resolvePurchaseBarcode } from "@/features/core/purchases/purchase-barcode";
 import type { Product } from "@/types/api";
 
 const product = (overrides: Partial<Product>): Product => ({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adaptBackendCommandIntent } from "@/features/voice/voice-ai-client";
+import { adaptBackendCommandIntent } from "@/features/core/voice/voice-ai-client";
 
 // The backend POST /ai/parse-command returns a shop/billing-oriented schema.
 // adaptBackendCommandIntent must translate the safely-mappable intents into the

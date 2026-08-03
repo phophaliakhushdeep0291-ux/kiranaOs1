@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("sync settings status display", () => {
-  const settingsSource = readFileSync("src/features/settings/pages/SyncSettingsPage.tsx", "utf8");
-  const repairSource = readFileSync("src/features/sync/sync-status-repair.ts", "utf8");
+  const settingsSource = readFileSync("src/features/core/settings/pages/SyncSettingsPage.tsx", "utf8");
+  const repairSource = readFileSync("src/features/core/sync/sync-status-repair.ts", "utf8");
 
   it("does not show Synced while uploads are still pending", () => {
     expect(settingsSource).toContain("hasPending ? \"Pending backup\" : \"Synced\"");

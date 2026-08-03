@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { billingDraftFromHeldBill, heldBillFromBillingDraft, MAX_OPEN_BILLS, newBillId, upsertOpenBill } from "@/features/billing/pages/open-bills";
-import type { BillingDraft, HeldBill } from "@/features/billing/pages/billing-types";
+import { billingDraftFromHeldBill, heldBillFromBillingDraft, MAX_OPEN_BILLS, newBillId, upsertOpenBill } from "@/features/core/billing/pages/open-bills";
+import type { BillingDraft, HeldBill } from "@/features/core/billing/pages/billing-types";
 
 function bill(id: string, items = 1): HeldBill {
   return {

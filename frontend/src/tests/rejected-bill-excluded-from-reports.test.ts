@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aggregateFinancialRows } from "@/features/finance/services/FinancialAggregationService";
+import { aggregateFinancialRows } from "@/features/core/finance/services/FinancialAggregationService";
 
 const date = "2026-06-06";
 

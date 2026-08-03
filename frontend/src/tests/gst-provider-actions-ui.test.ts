@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const taxes = readFileSync("src/features/settings/pages/TaxesSettingsPage.tsx", "utf8");
+const taxes = readFileSync("src/features/core/settings/pages/TaxesSettingsPage.tsx", "utf8");
 
 describe("GST provider actions", () => {
   it("routes e-way requests to legal submission only when provider readiness attests it", () => {

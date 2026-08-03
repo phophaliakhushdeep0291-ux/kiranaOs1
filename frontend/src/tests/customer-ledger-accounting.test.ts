@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLedgerStatement, calculateLedgerBalance, calculateUdharAgeing, dedupeLedgerEntries, isManualAdjustmentEntry, ledgerSignedAmount, type CustomerLedgerEntry } from "@/features/ledger/accounting";
+import { buildLedgerStatement, calculateLedgerBalance, calculateUdharAgeing, dedupeLedgerEntries, isManualAdjustmentEntry, ledgerSignedAmount, type CustomerLedgerEntry } from "@/features/core/ledger/accounting";
 
 function entry(id: string, type: string, amount: number, daysAgo: number): CustomerLedgerEntry {
   const date = new Date(Date.UTC(2026, 5, 5));

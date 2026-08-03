@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("login first-attempt reliability", () => {
   it("guards background auth verification from clearing a fresh login", () => {
-    const source = readFileSync("src/features/auth/AuthContext.tsx", "utf8");
+    const source = readFileSync("src/features/core/auth/AuthContext.tsx", "utf8");
 
     expect(source).toContain("authGenerationRef");
     expect(source).toContain("const generation = authGenerationRef.current");
@@ -21,15 +21,15 @@ describe("login first-attempt reliability", () => {
   });
 
   it("keeps the auth provider separate from the useAuth hook for stable dev refresh", () => {
-    const provider = readFileSync("src/features/auth/AuthContext.tsx", "utf8");
-    const hook = readFileSync("src/features/auth/useAuth.ts", "utf8");
+    const provider = readFileSync("src/features/core/auth/AuthContext.tsx", "utf8");
+    const hook = readFileSync("src/features/core/auth/useAuth.ts", "utf8");
     const routes = readFileSync("src/app/routes.tsx", "utf8");
     const layout = readFileSync("src/components/layout/Layout.tsx", "utf8");
 
     expect(provider).toContain("export function AuthProvider");
     expect(provider).not.toContain("export function useAuth");
     expect(hook).toContain("export function useAuth");
-    expect(routes).toContain("@/features/auth/useAuth");
-    expect(layout).toContain("@/features/auth/useAuth");
+    expect(routes).toContain("@/features/core/auth/useAuth");
+    expect(layout).toContain("@/features/core/auth/useAuth");
   });
 });

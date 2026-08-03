@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SubscriptionCacheRow } from "@/lib/offline/db";
-import type { PlanCode, SubscriptionState } from "@/features/subscription/plans";
+import type { PlanCode, SubscriptionState } from "@/features/core/subscription/plans";
 
 const mockState = vi.hoisted(() => ({
   subscriptionRows: [] as SubscriptionCacheRow[],
 }));
 
-vi.mock("@/features/devices/license", () => ({
+vi.mock("@/features/core/devices/license", () => ({
   getLicenseEvaluation: vi.fn(async () => null),
 }));
 
@@ -42,8 +42,8 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   emitLocalDataChanged: vi.fn(),
 }));
 
-import { decideFeature, getCurrentSubscriptionSnapshot, type SubscriptionSnapshot } from "@/features/subscription/access";
-import { getPlan, PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER } from "@/features/subscription/plans";
+import { decideFeature, getCurrentSubscriptionSnapshot, type SubscriptionSnapshot } from "@/features/core/subscription/access";
+import { getPlan, PLAN_DEFINITIONS, PUBLIC_PLAN_ORDER } from "@/features/core/subscription/plans";
 
 function snapshot(planCode: PlanCode, overrides: Partial<SubscriptionSnapshot> = {}): SubscriptionSnapshot {
   const plan = getPlan(planCode);

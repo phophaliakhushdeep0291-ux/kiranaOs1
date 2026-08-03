@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildOrderWhatsappText, buildOrderWhatsappUrl } from "@/features/orders/notify";
-import type { CustomerOrder } from "@/features/orders/api";
+import { buildOrderWhatsappText, buildOrderWhatsappUrl } from "@/features/core/orders/notify";
+import type { CustomerOrder } from "@/features/core/orders/api";
 
 const order: CustomerOrder = {
   id: "ord_1",

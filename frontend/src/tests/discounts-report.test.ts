@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateDiscountSummary } from "@/features/reports/local-reporting";
+import { calculateDiscountSummary } from "@/features/core/reports/local-reporting";
 
 const RANGE = { from: "2026-07-01", to: "2026-07-31" };
 

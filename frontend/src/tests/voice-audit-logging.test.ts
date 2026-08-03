@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { writeAuditLog } from "@/features/audit-logs/local-actions";
-import { executeVoiceAction } from "@/features/voice/voice-actions";
-import { buildVoiceCommandAuditPayload, recordVoiceCommandAudit } from "@/features/voice/voice-audit";
-import type { VoiceIntent } from "@/features/voice/voice-types";
+import { writeAuditLog } from "@/features/core/audit-logs/local-actions";
+import { executeVoiceAction } from "@/features/core/voice/voice-actions";
+import { buildVoiceCommandAuditPayload, recordVoiceCommandAudit } from "@/features/core/voice/voice-audit";
+import type { VoiceIntent } from "@/features/core/voice/voice-types";
 
-vi.mock("@/features/audit-logs/local-actions", () => ({
+vi.mock("@/features/core/audit-logs/local-actions", () => ({
   writeAuditLog: vi.fn(async (input: unknown) => ({ id: "audit_voice_1", input })),
 }));
 

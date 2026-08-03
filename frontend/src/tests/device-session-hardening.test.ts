@@ -3,13 +3,13 @@ import { describe, expect, it } from "vitest";
 
 const identity = readFileSync("src/lib/device-identity.ts", "utf8");
 const http = readFileSync("src/lib/api/http.ts", "utf8");
-const authApi = readFileSync("src/features/auth/api.ts", "utf8");
-const authContext = readFileSync("src/features/auth/AuthContext.tsx", "utf8");
-const loginPage = readFileSync("src/features/auth/pages/LoginPage.tsx", "utf8");
-const devicesPage = readFileSync("src/features/devices/pages/DevicesPage.tsx", "utf8");
-const removedPage = readFileSync("src/features/devices/pages/DeviceRemovedPage.tsx", "utf8");
+const authApi = readFileSync("src/features/core/auth/api.ts", "utf8");
+const authContext = readFileSync("src/features/core/auth/AuthContext.tsx", "utf8");
+const loginPage = readFileSync("src/features/core/auth/pages/LoginPage.tsx", "utf8");
+const devicesPage = readFileSync("src/features/core/devices/pages/DevicesPage.tsx", "utf8");
+const removedPage = readFileSync("src/features/core/devices/pages/DeviceRemovedPage.tsx", "utf8");
 const routes = readFileSync("src/app/routes.tsx", "utf8");
-const license = readFileSync("src/features/devices/license.ts", "utf8");
+const license = readFileSync("src/features/core/devices/license.ts", "utf8");
 
 describe("device-bound frontend sessions", () => {
   it("keeps one durable identity and hydrates it before network requests", () => {

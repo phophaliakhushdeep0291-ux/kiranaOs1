@@ -26,15 +26,15 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   readInstantCache: vi.fn(() => []),
   createLocalId: (prefix: string) => `${prefix}_id`,
 }));
-vi.mock("@/features/billing/local-actions", () => ({ createBillLocalFirst: h.createBillLocalFirst }));
-vi.mock("@/features/bills/local-actions", () => ({ cancelBillWithOwnerPinLocalFirst: h.cancelBillWithOwnerPinLocalFirst }));
+vi.mock("@/features/core/billing/local-actions", () => ({ createBillLocalFirst: h.createBillLocalFirst }));
+vi.mock("@/features/core/bills/local-actions", () => ({ cancelBillWithOwnerPinLocalFirst: h.cancelBillWithOwnerPinLocalFirst }));
 
 import {
   addItemsToFinalizedBillLocalFirst,
   billInputFromBill,
   computeBillInputTotal,
   editFinalizedBillLocalFirst,
-} from "@/features/bills/edit-actions";
+} from "@/features/core/bills/edit-actions";
 
 function activeBill(overrides: Record<string, unknown> = {}) {
   return {

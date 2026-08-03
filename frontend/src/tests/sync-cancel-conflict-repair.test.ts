@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { retryableBillCancellationValidationConflict } from "@/features/sync/sync-status-repair";
+import { retryableBillCancellationValidationConflict } from "@/features/core/sync/sync-status-repair";
 import type { PendingSyncEvent } from "@/types/domain";
 
 /**
@@ -93,7 +93,7 @@ describe("stuck offline bill cancellations are re-queued", () => {
 });
 
 describe("the repair sweep runs the cancellation repair", () => {
-  const repairSource = readFileSync("src/features/sync/sync-status-repair.ts", "utf8");
+  const repairSource = readFileSync("src/features/core/sync/sync-status-repair.ts", "utf8");
 
   it("re-queues matched events as PENDING with the error cleared", () => {
     expect(repairSource).toContain("repairRetryableBillCancellationConflicts");

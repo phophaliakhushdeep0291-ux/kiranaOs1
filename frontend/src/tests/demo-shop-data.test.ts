@@ -17,7 +17,7 @@ vi.mock("@/lib/offline/db", () => ({
   },
 }));
 
-import { clearDemoShopData, hasDemoData, seedDemoShopData } from "@/features/demo/demo-shop-data";
+import { clearDemoShopData, hasDemoData, seedDemoShopData } from "@/features/core/demo/demo-shop-data";
 
 beforeEach(() => {
   store.tables = {

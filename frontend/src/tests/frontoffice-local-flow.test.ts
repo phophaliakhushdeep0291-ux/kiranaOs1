@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BillInputBillType, BillPaymentMode, type BillInput, type Product } from "@/types/api";
-import type { CustomerLedgerEntry } from "@/features/ledger/accounting";
-import type { SupplierDueRow } from "@/features/finance/services/FinancialAggregationService";
+import type { CustomerLedgerEntry } from "@/features/core/ledger/accounting";
+import type { SupplierDueRow } from "@/features/core/finance/services/FinancialAggregationService";
 
 const dbState = vi.hoisted(() => ({
   committed: {} as Record<string, Array<Record<string, unknown>>>,
@@ -79,12 +79,12 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   }),
 }));
 
-import { createBillLocalFirst } from "@/features/billing/local-actions";
-import { cancelBillWithOwnerPinLocalFirst, restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
-import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
-import { recordPurchaseBatchLocalFirst, recordPurchaseLocalFirst } from "@/features/inventory/local-actions";
-import { markPurchasePaidLocal, recordPurchasePaymentLocal, reverseSupplierPaymentLocal, updatePurchaseLocal } from "@/features/purchases/local-actions";
-import { calculateLedgerBalance } from "@/features/ledger/accounting";
+import { createBillLocalFirst } from "@/features/core/billing/local-actions";
+import { cancelBillWithOwnerPinLocalFirst, restoreBillWithOwnerPinLocalFirst, softDeleteBillWithOwnerPinLocalFirst } from "@/features/core/bills/local-actions";
+import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/core/payments/local-actions";
+import { recordPurchaseBatchLocalFirst, recordPurchaseLocalFirst } from "@/features/core/inventory/local-actions";
+import { markPurchasePaidLocal, recordPurchasePaymentLocal, reverseSupplierPaymentLocal, updatePurchaseLocal } from "@/features/core/purchases/local-actions";
+import { calculateLedgerBalance } from "@/features/core/ledger/accounting";
 
 function seedFrontOffice() {
   const product: Product & Record<string, unknown> = {

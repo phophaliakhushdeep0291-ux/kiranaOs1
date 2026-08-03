@@ -2,7 +2,7 @@ import type { AuthResponse } from "@/types/api";
 import { clearAuthStorage, getAuthValue, loadAuthSession, saveAuthSession } from "@/lib/storage/auth-storage";
 import { getDeviceMetadata, hydrateDeviceIdentity } from "@/lib/device-identity";
 import { withCrossTabLock } from "@/lib/browser/multiTabCoordinator";
-import { getActiveLocationId } from "@/features/stores/location-context";
+import { getActiveLocationId } from "@/features/core/stores/location-context";
 import { recordApiBreadcrumb } from "@/lib/diagnostics/telemetryBuffer";
 
 export interface ApiErrorData {

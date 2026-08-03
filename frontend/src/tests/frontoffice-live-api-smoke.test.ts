@@ -1,15 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { setApiBaseUrl, setAuthTokenGetter, apiRequest, ApiClientError } from "@/lib/api/http";
 import { saveAuthSession, clearAuthStorage } from "@/lib/storage/auth-storage";
-import { register, login, setOwnerPin } from "@/features/auth/api";
-import { activateDevice } from "@/features/devices/api";
-import { createProduct, listProducts } from "@/features/products/api";
-import { createCustomer, getCustomerKhata } from "@/features/customers/api";
-import { createBill, listBills } from "@/features/billing/api";
-import { recordUdharPayment } from "@/features/payments/api";
-import { getUdharSummary } from "@/features/ledger/api";
-import { recordPurchase, getInventory, getStockLedger } from "@/features/inventory/api";
-import { getPaymentSummary } from "@/features/reports/api";
+import { register, login, setOwnerPin } from "@/features/core/auth/api";
+import { activateDevice } from "@/features/core/devices/api";
+import { createProduct, listProducts } from "@/features/core/products/api";
+import { createCustomer, getCustomerKhata } from "@/features/core/customers/api";
+import { createBill, listBills } from "@/features/core/billing/api";
+import { recordUdharPayment } from "@/features/core/payments/api";
+import { getUdharSummary } from "@/features/core/ledger/api";
+import { recordPurchase, getInventory, getStockLedger } from "@/features/core/inventory/api";
+import { getPaymentSummary } from "@/features/core/reports/api";
 import { BillInputBillType, BillPaymentMode, type AuthResponse, type Customer, type Product } from "@/types/api";
 
 const runLiveSmoke = process.env.RUN_FRONTEND_LIVE_API_SMOKE === "true";

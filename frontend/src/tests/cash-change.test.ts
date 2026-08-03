@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeChangeDue, suggestCashTenders } from "@/features/billing/pages/billing-calculations";
+import { computeChangeDue, suggestCashTenders } from "@/features/core/billing/pages/billing-calculations";
 
 describe("computeChangeDue", () => {
   it("returns the surplus when the customer tenders more than the bill", () => {

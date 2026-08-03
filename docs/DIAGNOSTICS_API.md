@@ -30,6 +30,9 @@ Conventions used throughout:
 | Reporting | `modules/reports` | §9 | CSV / PDF / Excel exports |
 | Support | `modules/diagnostics` | §7 | Report-Issue requests + context bundles |
 | Admin | `modules/platform-admin` | §10 | Cross-shop operator rollups |
+| Remote support | `modules/remote-support` | §10a | Consent-gated remote diagnosis + repair |
+| Auto-fix | `modules/remote-support/playbooks.*` | §10b | Known problem → known fix, dispatched unattended |
+| Settings repair | `modules/remote-support/settings*.js` | §10c | Fix a setting no screen can reach |
 | Events | `lib/eventBus.js` | §11 | Kafka-compatible streaming seam |
 
 ---
@@ -263,6 +266,215 @@ and event-bus status.
 
 ---
 
+## 10a. Remote support — `/api/support` + `/api/platform-admin/support`
+
+Diagnosis without a visit is §1–§10. This is repair without a visit: the operator
+sees one shop and can queue fixes for its devices, without anyone travelling.
+
+**Consent is the whole design.** A platform admin with no live session sees only
+the anonymous rollup in §10. Access begins when the *owner* taps "Get remote help"
+and reads out a 6-digit code, and it ends on a timer, on revoke, or on disconnect.
+
+| Route | Access | Purpose |
+|---|---|---|
+| `POST /api/support/sessions` | owner | Issue a code. Returns the plaintext **once** |
+| `GET /api/support/state` | owner | Who is connected, what they have run |
+| `DELETE /api/support/sessions/:id` | owner | Stop button — also cancels queued commands |
+| `GET /api/support/commands` | any (device) | Drain this device's queue |
+| `POST /api/support/commands/:id/ack` | any (device) | Report the outcome |
+| `GET /api/platform-admin/support/catalog` | admin | The command allowlist |
+| `POST /api/platform-admin/support/redeem` | admin | Code → session |
+| `GET …/support/sessions/:id/diagnostics` | admin + live session | One shop's full picture |
+| `POST /api/platform-admin/support/commands` | admin + live session | Queue a fix |
+| `DELETE …/support/sessions/:id` | admin + live session | Disconnect |
+
+Scopes: `diagnose` (look only) and `repair`. The owner picks which one the code
+grants.
+
+### The command allowlist
+
+`modules/remote-support/commands.catalog.js` is the complete set. Every entry maps
+to a function the app **already runs locally** when the owner taps the equivalent
+button; remote support drives existing code paths and opens no new ones.
+
+| Command | Scope | Runs |
+|---|---|---|
+| `COLLECT_DIAGNOSTICS` | diagnose | `collectDeviceHealth` + `reportDeviceHealth` |
+| `RUN_SYNC_NOW` | repair | `runSyncCycle` |
+| `RETRY_FAILED_SYNC` | repair | `retryFailedSyncOperations` |
+| `PULL_FROM_CLOUD` | repair | `hydrateFromBackendSnapshot` |
+| `CLEAR_LOCAL_CACHE` | repair | `clearInstantMemoryCache` |
+| `REFRESH_APP` | repair | `recoverFromStaleDeploy` |
+
+Enforced **three times** — when queued, when handed to a device, and by the device
+itself, which only has code for these six. A row inserted straight into the table
+is cancelled rather than delivered.
+
+Deliberately absent, and to stay absent: anything reading or writing financial
+records. An operator can make sync work; they cannot touch a bill, a payment or a
+customer's udhar. That is what keeps the audit engine's read-only-toward-financial-
+data guarantee true.
+
+### Guarantees worth knowing
+
+- **The code is never stored in the clear** — only a `JWT_SECRET`-peppered SHA-256.
+  A database dump yields no usable live codes. Losing the code costs one tap.
+- **One live session per shop**, so "is support in my shop right now?" has one answer.
+- **shopId comes from the session row**, never from the operator's request.
+- **Revoke cancels queued work**, so withdrawing consent reaches commands already
+  in flight.
+- **Session expiry bounds the operator's access, not work already authorised.** A
+  queued command survives to its own 6-hour TTL, because the device it targets is
+  very often offline — which is the case this feature exists for.
+- **Every action is audited** under the operator's email: `SUPPORT_SESSION_GRANTED`,
+  `_OPENED`, `_REVOKED`, `_CLOSED`, `SUPPORT_COMMAND_ISSUED`, `_EXECUTED`.
+
+### Delivery
+
+Commands ride the device's existing sync poll — no socket, no new timer. The drain
+sits **above** the subscription gate in `runSyncCycle`, because a shop whose sync is
+switched off is among the likeliest to have called support, and a repair channel
+that dies with the thing being repaired is no channel at all.
+
+`REFRESH_APP` acks *before* reloading; after the reload there is no runtime left to
+report with, and the operator would otherwise re-issue it forever.
+
+UI: owner at `/help` (owner role only), operator at `/platform-admin/support`.
+
+---
+
+## 10b. Auto-dispatch playbooks — `modules/remote-support/playbooks.*`
+
+§10a is a channel: it can carry a repair to a device but has no opinion about
+which repair. This is the opinion — known problem → known fix, so support stops
+re-diagnosing the same five problems by hand.
+
+A playbook is a pure `match(signals)` over data the server already collects, plus
+the one catalog command that fixes it.
+
+### The catalog
+
+| Playbook | Fires on | Command | Tier |
+|---|---|---|---|
+| `retry-stuck-sync` | ≥1 **retryable** sync failure | `RETRY_FAILED_SYNC` | auto |
+| `device-not-syncing` | online, but no sync in 2h with work waiting | `RUN_SYNC_NOW` | auto |
+| `refresh-stale-diagnostics` | health snapshot >12h old, or none ever | `COLLECT_DIAGNOSTICS` | auto |
+| `stale-deploy-chunk-error` | chunk-load / dynamic-import error | `REFRESH_APP` | suggest |
+| `stale-app-version` | behind the shop's other devices | `REFRESH_APP` | suggest |
+| `local-database-degraded` | `dbStatus` error/degraded | `PULL_FROM_CLOUD` | suggest |
+
+### Tiers — the line that matters
+
+- **`auto`** — idempotent, non-disruptive, identical to a button the owner could
+  safely tap mid-sale. Dispatched with no human involved.
+- **`suggest`** — correct, but disruptive or heavy. Shown to an operator; never
+  fired automatically.
+
+The split is **not** "how confident are we", it is "what does the shopkeeper lose
+if we are wrong". A needless retry costs nothing. A needless reload can drop a
+half-built bill in front of a waiting customer — which is why every `REFRESH_APP`
+and `PULL_FROM_CLOUD` playbook is suggest-tier, and a test asserts that no future
+playbook can quietly make a disruptive command automatic.
+
+### Restraint (most of the engine)
+
+Deciding to run a fix is three lines; the rest stops it becoming an outage source.
+
+| Guard | Effect |
+|---|---|
+| Owner opt-out | `settingsJson.autoFix.enabled` (default on) — checked per dispatch, so switching it off takes effect on the next evaluation |
+| Per-playbook cooldown | 15 min – 12 h; no re-fire inside it |
+| Evaluation throttle | 5 min per device, so a polling fleet does not re-run the signal queries every cycle |
+| Circuit breaker | 3 consecutive failed/expired attempts → stop and leave the problem visible |
+| Device scope | Unknown or foreign device → nothing queued |
+
+Cooldown and the breaker are both read from the `DeviceCommand` rows themselves
+(`playbookId` + `createdAt` + `status`), so the history *is* the state — there is
+no counter that can drift from what actually ran.
+
+### Consent
+
+Auto-dispatch is the one path with no owner-granted session, and it is defensible
+only because of what it is limited to: **no human sees the shop's data**, and the
+command is one the app already runs on its own behalf. It is self-healing, not
+remote access. Every dispatch is audited as `SUPPORT_AUTOFIX_DISPATCHED` with its
+evidence, appears in the owner's "what has been done" list flagged
+`automatic: true`, and the owner can switch the whole thing off.
+
+### Where it runs
+
+On `GET /api/support/commands` — **before** claiming, and awaited. A fix decided on
+this poll ships on this same poll, and the device being there is the freshest signal
+we will ever get that it is online.
+
+Operators see the same matches (both tiers, with evidence) in the
+`sessions/:id/diagnostics` response, following whichever device they have selected.
+
+```bash
+npm run test:remote-support   # includes matching, cooldown, breaker, opt-out (§10b)
+```
+
+---
+
+## 10c. Settings repair — `POST /api/platform-admin/support/settings`
+
+Every other remote-support action is idempotent and local to a device. This one
+**writes the shop's own data**, so it is deliberately the narrowest thing in the
+module.
+
+The bar for a setting appearing here is not "an operator might want it". It is:
+
+> the shop can reach a state where this is wrong **and no screen can fix it**.
+
+A setting with a working settings page does not qualify — the owner can already
+change it, and every key added here is one more thing a support account can alter
+about someone's business.
+
+### The catalog
+
+| Key | Input | Why it cannot be fixed in the app |
+|---|---|---|
+| `location.gstNumber` | GSTIN | Bills read the GSTIN from `StoreLocation`, but the only UI input writes `Shop.gstNumber` and nothing propagates. A location saved before the shop had a GSTIN blocks **every** GST invoice, and no screen writes this field. |
+| `shop.gstNumber` | GSTIN | The shop-profile GSTIN, kept separate on purpose: repairing one is not the same decision as repairing the other. |
+| `settings.moduleVisibility` | none (reset) | Hiding the section that contains the module settings screen removes the route back — the control that would undo it is the one you just hid. |
+
+`location.gstNumber` **derives** `gstStateCode` from the GSTIN rather than accepting
+it: a state code that disagrees with the number produces wrong CGST/SGST vs IGST
+splits, which is a silent tax error rather than a visible failure.
+
+The module-visibility entry is a **reset, not a setter**. It deletes the key so the
+app falls back to "everything visible". That needs no knowledge of the visibility
+map's internal shape, so it cannot rot as that shape evolves — and it can only
+reveal sections, never hide them.
+
+### Gates
+
+| Gate | Effect |
+|---|---|
+| Live session | `requireOperatorSession` re-checks per request; a revoked session cannot write |
+| **Repair scope** | A `diagnose` session is refused — "let them look only" means it here most of all |
+| Catalog key | `z.enum(SETTING_KEYS)` at the edge, `getSettingRepair` in the service. There is no path-based setter, so `shop.plan` and `__proto__` simply do not exist |
+| Per-entry validation | GSTINs are checksum-verified; a reset refuses a value; a value-taking key refuses an empty one rather than blanking the field |
+| Tenant | `shopId` comes from the session row — passing another shop's `locationId` returns `SETTING_TARGET_MISSING` |
+
+### Afterwards
+
+The change is audited as `SUPPORT_SETTING_REPAIRED` in module `settings`, with
+**before and after** — the only record that can answer "what was this set to before
+support touched it?". Devices seen in the last 15 minutes are then nudged with
+`RUN_SYNC_NOW` (best-effort, capped at 5) so the shop is unblocked now rather than
+at its next scheduled pull.
+
+Because a settings repair is an audit row and not a `DeviceCommand`, it is surfaced
+separately to the owner as `settingRepairs` on `GET /api/support/state` — otherwise
+the one change class that touches their data would be the one they could not see.
+
+```bash
+npm run test:remote-support   # allowlist, checksum, scope, tenant, audit (§10c)
+```
+
+---
+
 ## 11. Event streaming — `lib/eventBus.js` (§11)
 
 A seam, not a broker. Domain code calls `publishEvent(topic, shopId, payload)`
@@ -312,6 +524,10 @@ failures are counted and exposed on the admin overview.
 Every dependency degrades rather than failing: absent credentials remove
 enrichment, never core function.
 
+Auto-fix (§10b) is **not** env-configured — it is a per-shop owner setting at
+`settingsJson.autoFix.enabled`, defaulting to on, changed via
+`PATCH /api/support/auto-fix`. It belongs to the shopkeeper, not the operator.
+
 ---
 
 ## 13. Tests
@@ -323,6 +539,8 @@ npm run test:sync-diagnostics  # failure explanations (§3)
 npm run test:incident-report   # incident composition (§6)
 npm run test:audit-timeline    # audit columns, inference, withAudit (§2)
 npm run test:report-documents  # PDF/XLSX validity + format routing (§9)
+npm run test:remote-support    # consent, scope, allowlist, revoke (§10a);
+                               # matching, tiers, cooldown, breaker, opt-out (§10b)
 npm run test:event-bus         # event envelope + fault tolerance (§11)
 npm run test:event-bus-redis   # real RESP2 socket: the XADD actually sent (§11)
 ```

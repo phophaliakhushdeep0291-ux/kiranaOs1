@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const dialogSource = readFileSync(new URL("../components/ui/dialog.tsx", import.meta.url), "utf8");
 const cssSource = readFileSync(new URL("../index.css", import.meta.url), "utf8");
-const purchaseSource = readFileSync(new URL("../features/purchases/components/PurchaseOrdersPanel.tsx", import.meta.url), "utf8");
-const inventorySource = readFileSync(new URL("../features/inventory/pages/InventoryPage.tsx", import.meta.url), "utf8");
+const purchaseSource = readFileSync(new URL("../features/core/purchases/components/PurchaseOrdersPanel.tsx", import.meta.url), "utf8");
+const inventorySource = readFileSync(new URL("../features/core/inventory/pages/InventoryPage.tsx", import.meta.url), "utf8");
 
 describe("phone-first operational dialogs", () => {
   it("promotes only explicitly long workflows to full-screen phone tasks", () => {

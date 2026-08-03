@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { evaluatePricing } from "@/features/pricing/engine/engine";
-import type { PricingContext, PricingRule } from "@/features/pricing/engine/types";
+import { evaluatePricing } from "@/features/core/pricing/engine/engine";
+import type { PricingContext, PricingRule } from "@/features/core/pricing/engine/types";
 
 // Reads the SAME canonical fixtures the backend runs
 // (backend/tests/pricing-engine.examples.js). Frontend + backend engines are

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeCustomers } from "@/features/customers/queries";
+import { mergeCustomers } from "@/features/core/customers/queries";
 import type { Customer } from "@/types/api";
 
 function customer(id: string, name: string, extra: Record<string, unknown> = {}): Customer {

@@ -2,6 +2,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { createAuditLog } from "../audit/audit.service.js";
 import { evaluatePricing, RULE_TYPE_PRIORITY } from "./pricing-engine.js";
+import { sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
 import { moneyShadows } from "../../utils/money.js";
 import { assertLocationCapability } from "../stores/location-access.service.js";
 
@@ -98,6 +99,14 @@ export async function evaluate(shopId, body = {}) {
   }
 
   const unitCode = sellingUnit?.unitCode || body.unitCode || product.rateUnit || product.displayUnit || "piece";
+  // The product MRP belongs to the default pack, so an alternate pack without its
+  // own MRP has to have it scaled to its size before it can act as a ceiling.
+  const defaultSellingUnit = sellingUnit?.isDefault === false
+    ? await db.productSellingUnit.findFirst({
+      where: { shopId, productId: product.id, isActive: true },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    })
+    : sellingUnit;
   const rows = await db.pricingRule.findMany({
     where: {
       shopId,
@@ -125,7 +134,7 @@ export async function evaluate(shopId, body = {}) {
     productCost: Number(sellingUnit?.costPrice ?? product.costPerRateUnit ?? 0),
     defaultPrice: Number(sellingUnit?.defaultPrice ?? product.defaultPricePerRateUnit ?? 0),
     minimumSellingPrice: Number(sellingUnit?.minimumPrice ?? product.minPricePerRateUnit ?? 0),
-    maximumRetailPrice: Number(sellingUnit?.maximumPrice ?? product.mrp ?? 0),
+    maximumRetailPrice: sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnit),
     source: body.source || "BILLING",
   };
   const settings = await getPricingSettings(shopId);

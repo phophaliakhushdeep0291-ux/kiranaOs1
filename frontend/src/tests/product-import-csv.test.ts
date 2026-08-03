@@ -9,7 +9,7 @@ import {
   parseCsv,
   parseProductsCsv,
   planProductImport,
-} from "@/features/products/import/product-import-csv";
+} from "@/features/core/products/import/product-import-csv";
 import type { Product } from "@/types/api";
 
 const HEADER = PRODUCT_IMPORT_COLUMNS.map((c) => c.header).join(",");

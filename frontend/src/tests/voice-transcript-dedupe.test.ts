@@ -4,8 +4,8 @@ import {
   createOneShotRecognition,
   shouldAcceptFinalTranscript,
   voiceTranscriptKey,
-} from "@/features/voice/voice-recognition";
-import type { SpeechRecognitionEventLike, SpeechRecognitionLike } from "@/features/voice/voice-types";
+} from "@/features/core/voice/voice-recognition";
+import type { SpeechRecognitionEventLike, SpeechRecognitionLike } from "@/features/core/voice/voice-types";
 
 function result(transcript: string, isFinal = true) {
   return { isFinal, 0: { transcript } };

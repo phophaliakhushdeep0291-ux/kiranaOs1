@@ -7,7 +7,7 @@ import {
   inventoryUnitLabel,
   mergeInventoryRows,
   normalizeInventoryItem,
-} from "@/features/inventory/stock-display";
+} from "@/features/core/inventory/stock-display";
 import type { InventoryItem, ProductSellingUnit } from "@/types/api";
 
 const oneKgPacket: ProductSellingUnit = {

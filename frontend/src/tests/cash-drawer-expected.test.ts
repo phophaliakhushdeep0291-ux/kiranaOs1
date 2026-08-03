@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { aggregateFinancialRows } from "@/features/finance/services/FinancialAggregationService";
+import { aggregateFinancialRows } from "@/features/core/finance/services/FinancialAggregationService";
 import {
   buildCashMovement,
   buildOpeningFloat,
   openingFloatFor,
   summarizeCashMovements,
   upsertOpeningFloat,
-} from "@/features/reports/cash-drawer";
+} from "@/features/core/reports/cash-drawer";
 
 const date = "2026-07-31";
 

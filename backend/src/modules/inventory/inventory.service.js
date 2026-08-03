@@ -186,9 +186,22 @@ function assertCompatibleInventoryReplay(existing, expected) {
   }
 }
 
-async function replayQuantityInBase(client, shopId, productId, quantity, enteredUnit) {
+async function replayQuantityInBase(client, shopId, productId, quantity, enteredUnit, sellingUnitId = null) {
   const product = await client.product.findFirst({ where: { id: productId, shopId } });
-  return product ? toBaseQty(quantity, enteredUnit, product.baseUnit) : undefined;
+  if (!product) return undefined;
+  // A movement counted in a pack ("12 boxes") derived its base quantity from that
+  // pack's conversion, so the replay check has to do the same. Deriving it from
+  // enteredUnit instead makes every retry of a per-pack movement look like a
+  // different movement and fail with IDEMPOTENCY_KEY_REUSED — which is exactly
+  // what an offline outbox does on its second attempt.
+  if (sellingUnitId) {
+    const sellingUnit = await client.productSellingUnit.findFirst({
+      where: { id: sellingUnitId, shopId, productId },
+      select: { conversionToBase: true },
+    });
+    if (sellingUnit) return round2(quantity * Number(sellingUnit.conversionToBase));
+  }
+  return toBaseQty(quantity, enteredUnit, product.baseUnit);
 }
 
 async function assertCompatiblePurchaseReplay(client, shopId, existing, data, locationId) {
@@ -202,7 +215,8 @@ async function assertCompatiblePurchaseReplay(client, shopId, existing, data, lo
       shopId,
       data.productId,
       data.quantity,
-      data.enteredUnit
+      data.enteredUnit,
+      data.sellingUnitId ?? null
     ),
     purchaseBillAmount: data.billAmount,
     purchasePaidAmount: purchasePayment.purchasePaidAmount,
@@ -217,7 +231,8 @@ async function assertCompatibleDamageReplay(client, shopId, existing, data, loca
     shopId,
     data.productId,
     data.quantity,
-    data.enteredUnit
+    data.enteredUnit,
+    data.sellingUnitId ?? null
   );
   assertCompatibleInventoryReplay(existing, {
     action: "damage",
@@ -404,14 +419,36 @@ export async function recordDamage(shopId, data, identity = {}) {
       });
       if (!product) throw new AppError("Product not found", 404);
 
-      const qtyInBase = toBaseQty(quantity, enteredUnit, product.baseUnit);
+      // Which packaging left the shelf ("2 of the 8-pack"). Mirrors recordPurchase:
+      // `quantity` counts that pack and the base quantity comes from its own
+      // conversion. Without it a per_pack product could not be stocked out at all —
+      // movePackagingStock refuses to move base units it cannot attribute to a size.
+      const removedSellingUnit = data.sellingUnitId
+        ? await tx.productSellingUnit.findFirst({ where: { id: data.sellingUnitId, shopId, productId: product.id } })
+        : null;
+      if (data.sellingUnitId && !removedSellingUnit) {
+        throw new AppError("That packaging does not belong to this product", 400, "SELLING_UNIT_PRODUCT_MISMATCH");
+      }
+
+      const qtyInBase = removedSellingUnit
+        ? round2(quantity * Number(removedSellingUnit.conversionToBase))
+        : toBaseQty(quantity, enteredUnit, product.baseUnit);
       const factor = Number(data.conversionToBase ?? data.conversion_to_base ?? 0) > 0
         ? Number(data.conversionToBase ?? data.conversion_to_base)
         : rateUnitToBase(product.rateUnit, product.baseUnit);
       const qtyInRateUnit = qtyInBase / factor;
       const damageLossValue = multiplyMoney(product.costPerRateUnit, qtyInRateUnit);
 
-      const stockResult = await decrementLocationInventory(tx, { shopId, location, product, quantityBase: qtyInBase, allowShortfall: false });
+      const stockResult = await decrementLocationInventory(tx, {
+        shopId,
+        location,
+        product,
+        quantityBase: qtyInBase,
+        allowShortfall: false,
+        packs: removedSellingUnit
+          ? new Map([[removedSellingUnit.id, { sellingUnit: removedSellingUnit, qty: round2(quantity) }]])
+          : null,
+      });
 
       await tx.stockLedger.create({
         data: {
@@ -421,6 +458,8 @@ export async function recordDamage(shopId, data, identity = {}) {
           changeBaseQty: -qtyInBase,
           oldStockBaseQty: stockResult.oldStock,
           newStockBaseQty: stockResult.newStock,
+          sellingUnitId: removedSellingUnit?.id ?? null,
+          sellingUnitQty: removedSellingUnit ? round2(quantity) : null,
           damageLossValue,
           ...moneyShadows({ damageLossValue }),
           note: note ?? "Damage/loss",

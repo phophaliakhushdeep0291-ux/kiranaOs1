@@ -305,7 +305,7 @@ vi.mock("@/lib/offline/db", () => {
   };
 });
 
-vi.mock("@/features/sync/api", () => ({
+vi.mock("@/features/core/sync/api", () => ({
   syncPush: syncPushMock,
   syncPull: syncPullMock,
   acknowledgeSyncSequence: vi.fn(async () => ({ acknowledgement: { accepted: true } })),
@@ -313,7 +313,7 @@ vi.mock("@/features/sync/api", () => ({
   requestSyncRetry: requestSyncRetryMock,
 }));
 
-vi.mock("@/features/subscription/access", () => ({
+vi.mock("@/features/core/subscription/access", () => ({
   getCurrentSubscriptionSnapshot: vi.fn(async () => ({ cloudSyncAllowed: true })),
 }));
 
@@ -323,12 +323,12 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   pruneRecentRows: vi.fn((rows: unknown[]) => rows),
 }));
 
-import { syncPush } from "@/features/sync/api";
+import { syncPush } from "@/features/core/sync/api";
 import {
   pushPendingOutboxOperations,
   retryFailedSyncOperations,
-} from "@/features/sync/engine";
-import { readSyncSnapshot } from "@/features/sync/pages/SyncStatusPage";
+} from "@/features/core/sync/engine";
+import { readSyncSnapshot } from "@/features/core/sync/pages/SyncStatusPage";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 

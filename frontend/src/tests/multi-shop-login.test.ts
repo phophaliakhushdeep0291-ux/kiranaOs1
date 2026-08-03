@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("multi-shop login", () => {
   it("turns SHOP_SELECTION_REQUIRED into an interactive shop chooser", () => {
-    const source = readFileSync("src/features/auth/pages/LoginPage.tsx", "utf8");
+    const source = readFileSync("src/features/core/auth/pages/LoginPage.tsx", "utf8");
 
     expect(source).toContain('getErrorCode(err)');
     expect(source).toContain('errorCode === "SHOP_SELECTION_REQUIRED" || shops.length > 0');

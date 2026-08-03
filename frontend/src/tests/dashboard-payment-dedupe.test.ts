@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getLocalDashboardSnapshot } from "@/features/reports/queries";
+import { getLocalDashboardSnapshot } from "@/features/core/reports/queries";
 import { writeInstantMemoryCache } from "@/lib/offline/instant-cache";
 
 describe("dashboard payment dedupe", () => {

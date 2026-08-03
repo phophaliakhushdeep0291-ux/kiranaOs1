@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const panel = readFileSync("src/features/reports/components/AccountingControlPanel.tsx", "utf8");
-const api = readFileSync("src/features/reports/api.ts", "utf8");
-const reports = readFileSync("src/features/reports/pages/ReportsPage.tsx", "utf8");
+const panel = readFileSync("src/features/core/reports/components/AccountingControlPanel.tsx", "utf8");
+const api = readFileSync("src/features/core/reports/api.ts", "utf8");
+const reports = readFileSync("src/features/core/reports/pages/ReportsPage.tsx", "utf8");
 
 describe("accounting control transparency", () => {
   it("never presents an offline estimate as reconciled evidence", () => {

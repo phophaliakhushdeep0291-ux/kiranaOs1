@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const reports = readFileSync("src/features/reports/pages/ReportsPage.tsx", "utf8");
+const reports = readFileSync("src/features/core/reports/pages/ReportsPage.tsx", "utf8");
 
 describe("premium mobile reports hierarchy", () => {
   it("uses a dedicated phone summary while retaining the desktop KPI grid", () => {

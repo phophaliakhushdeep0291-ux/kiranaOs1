@@ -36,6 +36,7 @@ import jobRoutes from "./modules/jobs/jobs.routes.js";
 import reminderRoutes from "./modules/reminders/reminders.routes.js";
 import expenseRoutes from "./modules/expenses/expenses.routes.js";
 import offerRoutes from "./modules/offers/offers.routes.js";
+import rentalRoutes from "./modules/rentals/rentals.routes.js";
 import integrationRoutes from "./modules/integrations/integrations.routes.js";
 import storeRoutes from "./modules/stores/stores.routes.js";
 import complianceRoutes from "./modules/compliance/compliance.routes.js";
@@ -49,6 +50,7 @@ import diagnosticsRoutes from "./modules/diagnostics/diagnostics.routes.js";
 import activityRoutes from "./modules/activity/activity.routes.js";
 import assuranceRoutes from "./modules/assurance/assurance.routes.js";
 import platformAdminRoutes from "./modules/platform-admin/platformAdmin.routes.js";
+import remoteSupportRoutes from "./modules/remote-support/remoteSupport.routes.js";
 
 const app = express();
 
@@ -245,6 +247,7 @@ app.use("/api/udhar", udharRoutes);
 app.use("/api/suppliers", supplierRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/offers", offerRoutes);
+app.use("/api/rentals", rentalRoutes);
 app.use("/api/integrations", integrationRoutes);
 app.use("/api/stores", storeRoutes);
 app.use("/api/compliance", complianceRoutes);
@@ -260,6 +263,7 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/diagnostics", diagnosticsRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api/audit", assuranceRoutes);
+app.use("/api/support", remoteSupportRoutes);
 app.use("/api/platform-admin", platformAdminRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────

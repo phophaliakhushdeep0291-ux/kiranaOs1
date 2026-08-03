@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 describe("purchase bill actions", () => {
   it("shows paid, edit, and delete actions on the purchase ledger", () => {
-    const source = readFileSync("src/features/purchases/pages/PurchaseBillsPage.tsx", "utf8");
+    const source = readFileSync("src/features/core/purchases/pages/PurchaseBillsPage.tsx", "utf8");
 
     // Purchases pay in partial amounts (recordPurchasePaymentLocal), not only mark-fully-paid.
     expect(source).toContain("recordPurchasePaymentLocal");
@@ -22,7 +22,7 @@ describe("purchase bill actions", () => {
   });
 
   it("updates matching purchase history and inventory movement copies together", () => {
-    const source = readFileSync("src/features/purchases/local-actions.ts", "utf8");
+    const source = readFileSync("src/features/core/purchases/local-actions.ts", "utf8");
 
     expect(source).toContain("\"purchase_bills\"");
     expect(source).toContain("\"inventory_movements\"");

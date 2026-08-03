@@ -5,7 +5,7 @@ const read = (relative: string) => readFileSync(new URL(relative, import.meta.ur
 
 describe("subscription UI stability", () => {
   it("keeps the last scoped snapshot during background refreshes", () => {
-    const access = read("../features/subscription/access.ts");
+    const access = read("../features/core/subscription/access.ts");
     expect(access).toContain("subscriptionSnapshotMemoryScope");
     expect(access).toContain("readSubscriptionSnapshotShared");
     expect(access).toContain("if (!subscriptionSnapshotMemory) setLoading(true)");
@@ -13,8 +13,8 @@ describe("subscription UI stability", () => {
   });
 
   it("routes current-plan management to a working management screen", () => {
-    const plans = read("../features/subscription/pages/PlansPage.tsx");
-    const subscription = read("../features/subscription/pages/SubscriptionPage.tsx");
+    const plans = read("../features/core/subscription/pages/PlansPage.tsx");
+    const subscription = read("../features/core/subscription/pages/SubscriptionPage.tsx");
     expect(plans).toContain('isCurrent ? navigate("/subscription") : setTargetPlan(plan.code)');
     expect(subscription).toContain("<CancelSubscriptionDialog");
     expect(subscription).toContain("open={cancelOpen}");

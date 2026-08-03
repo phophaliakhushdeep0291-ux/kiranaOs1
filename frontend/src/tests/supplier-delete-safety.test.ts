@@ -25,18 +25,18 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   upsertCachedListItem: vi.fn(),
 }));
 
-vi.mock("@/features/audit-logs/local-actions", () => ({
+vi.mock("@/features/core/audit-logs/local-actions", () => ({
   buildAuditLogRow: vi.fn((input: Record<string, unknown>) => ({ id: "audit_1", ...input })),
   buildAuditLogOutboxInput: vi.fn((row: Record<string, unknown>) => ({ entity_type: "audit_log", entity_id: row.id, operation_type: "AUDIT_LOG_APPEND", payload: { row } })),
 }));
 
-vi.mock("@/features/sync/outbox", () => ({
+vi.mock("@/features/core/sync/outbox", () => ({
   buildOutboxOperation: vi.fn((input: Record<string, unknown>) => ({ clientEventId: `op_${String(input.entity_id)}`, ...input })),
 }));
 
 import { offlineDB } from "@/lib/offline/db";
 import { removeCachedListItem } from "@/lib/offline/instant-cache";
-import { deleteSupplierLocalFirst } from "@/features/suppliers/local-actions";
+import { deleteSupplierLocalFirst } from "@/features/core/suppliers/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedRemoveCachedListItem = vi.mocked(removeCachedListItem);

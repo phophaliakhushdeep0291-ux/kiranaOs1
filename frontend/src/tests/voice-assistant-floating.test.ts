@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync("src/features/voice/VoiceAssistant.tsx", "utf8");
+const source = readFileSync("src/features/core/voice/VoiceAssistant.tsx", "utf8");
 
 describe("floating voice assistant", () => {
   it("can be moved and keeps its saved screen position", () => {

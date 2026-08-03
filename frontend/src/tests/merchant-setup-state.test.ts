@@ -4,7 +4,7 @@ import {
   createMerchantSetupState,
   normaliseMerchantSetupState,
   type MerchantSetupFacts,
-} from "@/features/settings/merchant-setup-state";
+} from "@/features/core/settings/merchant-setup-state";
 
 const EMPTY_FACTS: MerchantSetupFacts = {
   storeProfileReady: false,

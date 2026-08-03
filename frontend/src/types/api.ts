@@ -861,3 +861,99 @@ export interface SyncConflictReportRequest {
 export interface SyncConflictReportResponse extends Record<string, unknown> {
   conflict: SyncConflictRecord;
 }
+
+/* ── Cloth rental ─────────────────────────────────────────────────────────── */
+
+export type RentalStatus = "booked" | "picked_up" | "returned" | "cancelled";
+export type RentalIdProofType = "aadhaar" | "pan" | "driving_licence" | "voter_id" | "other";
+
+export interface RentalBookingItem {
+  id?: string;
+  productId?: string | null;
+  name: string;
+  unit: string;
+  qty: number;
+  ratePerDay: number;
+  amount: number;
+}
+
+export interface RentalBooking {
+  id: string;
+  bookingNumber: string;
+  customerId?: string | null;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  idProofType?: RentalIdProofType | null;
+  idProofNumber?: string | null;
+  fromDate: string;
+  toDate: string;
+  /** Day-only forms (YYYY-MM-DD) of fromDate/toDate, already in the shop's timezone. */
+  fromDateKey: string;
+  toDateKey: string;
+  returnedAt?: string | null;
+  status: RentalStatus;
+  rentAmount: number;
+  depositAmount: number;
+  advancePaid: number;
+  lateFee: number;
+  damageCharge: number;
+  /** Rent + late fee + damage − advance, computed server-side. */
+  balanceDue: number;
+  /** Still out and past its due day. */
+  isOverdue: boolean;
+  notes?: string | null;
+  items: RentalBookingItem[];
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RentalBookingInput {
+  customerId?: string | null;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  idProofType?: RentalIdProofType | null;
+  idProofNumber?: string | null;
+  /** YYYY-MM-DD */
+  fromDate: string;
+  /** YYYY-MM-DD */
+  toDate: string;
+  items: Array<Omit<RentalBookingItem, "id">>;
+  rentAmount?: number;
+  depositAmount?: number;
+  advancePaid?: number;
+  notes?: string | null;
+}
+
+export interface RentalAvailabilityItem {
+  productId: string;
+  name: string;
+  category: string | null;
+  unit: string;
+  imageUrl: string | null;
+  pricePerDay: number;
+  /** Whole pieces the shop owns. */
+  owned: number;
+  /** Held by other bookings across the requested window. */
+  booked: number;
+  available: number;
+}
+
+export interface RentalAvailability {
+  from: string;
+  to: string;
+  items: RentalAvailabilityItem[];
+}
+
+export interface RentalSummary {
+  today: string;
+  outNow: number;
+  dueToday: number;
+  overdue: number;
+  upcoming: number;
+  activeToday: number;
+  depositHeld: number;
+  pendingCollection: number;
+}

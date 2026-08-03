@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const page = readFileSync("src/features/recovery/pages/RecoveryModePage.tsx", "utf8");
+const page = readFileSync("src/features/core/recovery/pages/RecoveryModePage.tsx", "utf8");
 
 describe("recovery access contract", () => {
   it("does not paywall local data recovery or sync repair", () => {

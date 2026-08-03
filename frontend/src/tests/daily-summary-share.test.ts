@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildDailyClosingShareText, buildDailyClosingShareUrl } from "@/features/reports/daily-summary-share";
-import type { DailyClosingReport } from "@/features/reports/local-reporting";
+import { buildDailyClosingShareText, buildDailyClosingShareUrl } from "@/features/core/reports/daily-summary-share";
+import type { DailyClosingReport } from "@/features/core/reports/local-reporting";
 
 function makeReport(overrides: Partial<DailyClosingReport> = {}): DailyClosingReport {
   return {

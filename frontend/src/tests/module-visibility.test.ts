@@ -13,16 +13,18 @@ import {
   saveModuleVisibility,
   subscribeToModuleVisibility,
   type ModuleId,
-} from "@/features/settings/modules";
+} from "@/features/core/settings/modules";
+import { saveBusinessType } from "@/features/core/settings/business-types";
+import { verticalForPath } from "@/features/verticals/registry";
 
 const read = (relative: string) => readFileSync(join(process.cwd(), relative), "utf8");
 
 const routes = read("src/app/routes.tsx");
 const layout = read("src/components/layout/Layout.tsx");
 const mobileChrome = read("src/components/layout/MobileAppChrome.tsx");
-const settingsShell = read("src/features/settings/SettingsShell.tsx");
-const dashboard = read("src/features/dashboard/pages/DashboardPage.tsx");
-const modulesPage = read("src/features/settings/pages/ModulesSettingsPage.tsx");
+const settingsShell = read("src/features/core/settings/SettingsShell.tsx");
+const dashboard = read("src/features/core/dashboard/pages/DashboardPage.tsx");
+const modulesPage = read("src/features/core/settings/pages/ModulesSettingsPage.tsx");
 
 // Hiding any of these would strand the shopkeeper: billing is the till, the
 // dashboard is the way back, sync-status is how data safety is checked, and
@@ -44,8 +46,13 @@ describe("module registry", () => {
   });
 
   it("points every routed module at a route that actually exists", () => {
+    // A vertical's routes are mounted from its pack rather than written out in
+    // routes.tsx, so a module owned by one counts as routed when the pack
+    // claims the path — see vertical-boundaries.test.ts for that side of it.
     for (const module of MODULE_DEFS.filter((entry) => entry.paths.length > 0)) {
-      const routed = module.paths.some((path) => routes.includes(`<Route path="${path}"`));
+      const routed = module.paths.some(
+        (path) => routes.includes(`<Route path="${path}"`) || verticalForPath(path) !== null,
+      );
       expect(routed, `${module.id} owns no registered route`).toBe(true);
     }
   });
@@ -101,11 +108,38 @@ describe("stored visibility", () => {
 });
 
 describe("the live visibility store", () => {
-  afterEach(() => saveModuleVisibility({}));
+  afterEach(() => {
+    saveModuleVisibility({});
+    saveBusinessType("kirana");
+  });
 
-  it("starts with every module on", () => {
+  it("starts with every module on, except the trade-specific ones", () => {
     expect(getModuleVisibility()).toEqual({});
-    expect(MODULE_DEFS.every((module) => isModuleEnabled(module.id))).toBe(true);
+    // A module without defaultForBusinessTypes is on for every shop; one with it
+    // waits for a matching business type (or an explicit switch) — see below.
+    const general = MODULE_DEFS.filter((module) => !module.defaultForBusinessTypes);
+    expect(general.every((module) => isModuleEnabled(module.id))).toBe(true);
+    expect(general.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a trade-specific module off by default for a shop of another trade", () => {
+    // The test environment's stored business type is the "kirana" default, and a
+    // grocery store has no use for a garment rental desk.
+    saveBusinessType("kirana");
+    expect(isModuleEnabled("rentals")).toBe(false);
+
+    saveBusinessType("clothing");
+    expect(isModuleEnabled("rentals")).toBe(true);
+  });
+
+  it("lets an explicit choice beat the business-type default in both directions", () => {
+    saveBusinessType("kirana");
+    patchModuleVisibility({ rentals: true });
+    expect(isModuleEnabled("rentals")).toBe(true);
+
+    saveBusinessType("clothing");
+    patchModuleVisibility({ rentals: false });
+    expect(isModuleEnabled("rentals")).toBe(false);
   });
 
   it("keeps every change when several switches are flipped in the same tick", () => {
@@ -152,7 +186,7 @@ describe("module visibility wiring", () => {
   it("filters both mobile navigation surfaces", () => {
     expect(mobileChrome).toContain("useModuleVisibility");
     expect(mobileChrome).toContain("TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href))");
-    expect(mobileChrome).toContain("group.items.filter((item) => isHrefEnabled(item.href))");
+    expect(mobileChrome).toContain(".filter((item) => isHrefEnabled(item.href))");
     // A five-column stylesheet default cannot describe a filtered tab bar.
     expect(mobileChrome).toContain("gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))`");
   });

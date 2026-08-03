@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ean13CheckDigit, ean13Modules, ean13Svg, generateInternalEan13, normalizeEan13 } from "@/lib/barcode/ean13";
-import { buildLabelSheetHtml } from "@/features/products/label-print";
+import { buildLabelSheetHtml } from "@/features/core/products/label-print";
 
 describe("ean13 encoder", () => {
   it("computes the standard check digit", () => {

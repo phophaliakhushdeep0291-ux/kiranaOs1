@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync("src/features/reports/pages/DailyClosingPage.tsx", "utf8");
+const source = readFileSync("src/features/core/reports/pages/DailyClosingPage.tsx", "utf8");
 
 describe("daily closing cash split UI", () => {
   it("does not double count old udhar in the cash vs UPI split", () => {

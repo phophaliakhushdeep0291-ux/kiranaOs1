@@ -37,14 +37,14 @@ vi.mock("@/lib/offline/db", () => ({
   },
 }));
 
-vi.mock("@/features/sync/cloud-hydration", () => ({
+vi.mock("@/features/core/sync/cloud-hydration", () => ({
   resyncUdharLedgerFromServer: vi.fn(async () => {
     cacheState.resyncCalls += 1;
     return 4;
   }),
 }));
 
-vi.mock("@/features/sync/sync-reconcile", () => ({
+vi.mock("@/features/core/sync/sync-reconcile", () => ({
   refreshBusinessCaches: vi.fn(async () => {
     cacheState.refreshCalls += 1;
   }),
@@ -54,14 +54,14 @@ import {
   AUTHORITATIVE_UDHAR_SUMMARY_CACHE_KEY,
   cacheAuthoritativeSummary,
   readCachedAuthoritativeSummary,
-} from "@/features/ledger/authoritative-balances";
+} from "@/features/core/ledger/authoritative-balances";
 import {
   detectLedgerDrift,
   repairLedgerDriftFromServer,
   resetLedgerDriftRepairThrottle,
-} from "@/features/ledger/ledger-drift-repair";
-import { getLocalUdharSummary } from "@/features/payments/local-actions";
-import { metricsWithCustomerBalanceFallback } from "@/features/customers/customer-ledger-data";
+} from "@/features/core/ledger/ledger-drift-repair";
+import { getLocalUdharSummary } from "@/features/core/payments/local-actions";
+import { metricsWithCustomerBalanceFallback } from "@/features/core/customers/customer-ledger-data";
 
 const SERVER_SUMMARY = {
   totalOutstanding: 300,

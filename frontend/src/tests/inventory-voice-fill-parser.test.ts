@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseInventoryDraft,
   parseLocalVoiceIntent,
-} from "@/features/voice/voice-command-parser";
+} from "@/features/core/voice/voice-command-parser";
 
 describe("inventory voice fill parser", () => {
   it("parses purchase commands", () => {

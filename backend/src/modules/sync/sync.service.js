@@ -1858,6 +1858,56 @@ async function applyRestoreProduct(shopId, event, context) {
   };
 }
 
+/**
+ * A stock movement the shopkeeper counted in ONE packaging ("2 of the 8-pack").
+ *
+ * The outbox states such a movement twice: `quantity` in base units, which every
+ * pooled movement already uses, plus the pack it was counted in and how many of it
+ * moved. Only the second form can be attributed to a size, and a per_pack product
+ * refuses any base-unit movement it cannot attribute — so without this the shop
+ * could bill a pack but never stock it in or out.
+ *
+ * The pack is resolved against THIS shop's product: a device may only know a local
+ * id, so the unit code (stable across devices) is the reliable key. Returns null
+ * for pooled movements, which keep counting in base units exactly as before.
+ */
+async function resolveSyncPackMovement(client, shopId, productId, payload) {
+  const packQty = Number(payload?.sellingUnitQty ?? payload?.selling_unit_qty ?? 0);
+  if (!productId || !(packQty > 0)) return null;
+
+  const sellingUnitId = pickString(payload?.sellingUnitId, payload?.selling_unit_id);
+  const unitCode = pickString(payload?.sellingUnitCode, payload?.selling_unit_code);
+  if (!sellingUnitId && !unitCode) return null;
+
+  const sellingUnit = (sellingUnitId
+    ? await client.productSellingUnit.findFirst({ where: { id: sellingUnitId, shopId, productId } })
+    : null)
+    ?? (unitCode
+      ? await client.productSellingUnit.findFirst({ where: { shopId, productId, unitCode } })
+      : null);
+  if (!sellingUnit) return null;
+
+  return { sellingUnitId: sellingUnit.id, sellingUnit, quantity: round2(packQty) };
+}
+
+/**
+ * Rewrite a parsed stock payload in place onto its packaging, for handlers that
+ * pass the payload straight to the inventory service (purchase). A pooled payload
+ * is left exactly as it arrived; a per-pack one is restated as "N of this pack" so
+ * the service derives base units from the pack's own conversion — and, crucially,
+ * so a local device id never reaches the database as a foreign key.
+ */
+async function applySyncPackMovement(client, shopId, payload) {
+  const pack = await resolveSyncPackMovement(client, shopId, payload.productId, payload);
+  if (!pack) {
+    payload.sellingUnitId = null;
+    return null;
+  }
+  payload.sellingUnitId = pack.sellingUnitId;
+  payload.quantity = pack.quantity;
+  return pack;
+}
+
 // Stable per-event identity so a replayed ADJUST_STOCK (committed but not marked SYNCED,
 // then re-claimed) is recognised by inventory.service and never double-applies. The client
 // id (idempotencyKey/clientMovementId) is preferred; otherwise we derive a deterministic key
@@ -1929,13 +1979,17 @@ async function applyAdjustStock(shopId, event, context) {
       throw new AppError("quantity and enteredUnit required for damage stock sync event", 400);
     }
 
+    // Carried through so a per_pack product's write-off lands on the size the
+    // shopkeeper actually removed instead of being refused as unattributable.
+    const pack = await resolveSyncPackMovement(db, shopId, payload.productId, payload);
     const parsed = damageSchema.parse({
       idempotencyKey: identity.idempotencyKey,
       clientMovementId: identity.clientMovementId,
       locationId: payload.locationId,
       productId: payload.productId,
-      quantity: payload.quantity,
+      quantity: pack?.quantity ?? payload.quantity,
       enteredUnit: payload.enteredUnit,
+      sellingUnitId: pack?.sellingUnitId ?? null,
       note: payload.note,
     });
     const data = await recordDamage(shopId, parsed, identity);
@@ -2269,6 +2323,7 @@ async function applyStockPurchase(shopId, event, context) {
   const payload = stockPurchasePayloadSchema.parse({ ...rawPayload, idempotencyKey: identity.idempotencyKey ?? rawPayload.idempotencyKey });
   payload.productId = await resolveEntityReference(shopId, SYNC_ENTITY_TYPES.PRODUCT, payload.serverProductId ?? payload.productId ?? payload.localProductId, context);
   if (!payload.productId) throw new AppError("productId required for STOCK_PURCHASE sync event", 400);
+  await applySyncPackMovement(db, shopId, payload);
   const data = await recordPurchase(shopId, payload, identity);
   return {
     type: event.type,
@@ -2302,6 +2357,7 @@ async function applyStockPurchaseBatch(shopId, event, context) {
       context,
     );
     if (!parsed.productId) throw new AppError("productId required for STOCK_PURCHASE_BATCH line", 400);
+    await applySyncPackMovement(db, shopId, parsed);
     prepared.push({ parsed, identity });
   }
 
@@ -2804,7 +2860,12 @@ async function applyStockSale(shopId, event, context) {
         payload.locationId ?? payload.location_id ?? null,
         tx,
       );
-      const qtyInBase = toBaseQty(payload.quantity, payload.enteredUnit, product.baseUnit);
+      // A manual stock-out counted in one packaging moves that pack's own count;
+      // a per_pack product cannot accept a base-unit movement it cannot attribute.
+      const pack = await resolveSyncPackMovement(tx, shopId, product.id, payload);
+      const qtyInBase = pack
+        ? round2(pack.quantity * Number(pack.sellingUnit.conversionToBase))
+        : toBaseQty(payload.quantity, payload.enteredUnit, product.baseUnit);
       const stock = await decrementLocationInventory(tx, {
         shopId,
         location,
@@ -2813,6 +2874,7 @@ async function applyStockSale(shopId, event, context) {
         // Offline sales must remain mergeable. A branch shortfall is recorded and
         // surfaced for reconciliation instead of silently consuming another branch.
         allowShortfall: true,
+        packs: pack ? new Map([[pack.sellingUnitId, { sellingUnit: pack.sellingUnit, qty: pack.quantity }]]) : null,
       });
       const ledger = await tx.stockLedger.create({
         data: {
@@ -2824,6 +2886,8 @@ async function applyStockSale(shopId, event, context) {
           changeBaseQty: -qtyInBase,
           oldStockBaseQty: stock.oldStock,
           newStockBaseQty: stock.newStock,
+          sellingUnitId: pack?.sellingUnitId ?? null,
+          sellingUnitQty: pack ? pack.quantity : null,
           idempotencyKey,
           clientMovementId,
           sourceDeviceId,

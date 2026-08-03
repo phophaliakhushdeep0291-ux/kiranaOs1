@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLocalVoiceIntent, parseProductDraft } from "@/features/voice/voice-command-parser";
+import { parseLocalVoiceIntent, parseProductDraft } from "@/features/core/voice/voice-command-parser";
 
 describe("product voice fill parser", () => {
   it("parses product name commands", () => {
