@@ -14,7 +14,18 @@ import type { FeatureName } from "@/features/core/subscription/plans";
  * mobile drawer entries. A kirana shop cannot reach a clothing route by typing
  * the URL, because for that shop the route was never registered.
  */
-export type VerticalId = "kirana" | "clothing" | "pharmacy" | "restaurant" | "general";
+export type VerticalId =
+  | "kirana"
+  | "clothing"
+  | "footwear"
+  | "auto-parts"
+  | "electronics"
+  | "pharmacy"
+  | "stationery"
+  | "furniture"
+  | "cosmetics"
+  | "restaurant"
+  | "other";
 
 /**
  * Every screen a pack can mount.

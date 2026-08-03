@@ -92,6 +92,8 @@ describe("vertical boundaries", () => {
     const all = Object.keys(BUSINESS_TYPE_DEFS) as BusinessType[];
     expect(all.filter((businessType) => !claims.has(businessType))).toEqual([]);
     expect([...claims].filter(([, packs]) => packs.length > 1)).toEqual([]);
+    expect(VERTICAL_PACKS.every((pack) => pack.businessTypes.length === 1)).toBe(true);
+    expect(VERTICAL_PACKS.map((pack) => pack.id)).not.toContain("general");
 
     // A new business type must not silently inherit another trade's screens.
     for (const businessType of all) {
