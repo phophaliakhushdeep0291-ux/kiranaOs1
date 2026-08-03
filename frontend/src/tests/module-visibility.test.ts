@@ -14,6 +14,7 @@ import {
   subscribeToModuleVisibility,
   type ModuleId,
 } from "@/features/settings/modules";
+import { saveBusinessType } from "@/features/settings/business-types";
 
 const read = (relative: string) => readFileSync(join(process.cwd(), relative), "utf8");
 
@@ -101,11 +102,38 @@ describe("stored visibility", () => {
 });
 
 describe("the live visibility store", () => {
-  afterEach(() => saveModuleVisibility({}));
+  afterEach(() => {
+    saveModuleVisibility({});
+    saveBusinessType("kirana");
+  });
 
-  it("starts with every module on", () => {
+  it("starts with every module on, except the trade-specific ones", () => {
     expect(getModuleVisibility()).toEqual({});
-    expect(MODULE_DEFS.every((module) => isModuleEnabled(module.id))).toBe(true);
+    // A module without defaultForBusinessTypes is on for every shop; one with it
+    // waits for a matching business type (or an explicit switch) — see below.
+    const general = MODULE_DEFS.filter((module) => !module.defaultForBusinessTypes);
+    expect(general.every((module) => isModuleEnabled(module.id))).toBe(true);
+    expect(general.length).toBeGreaterThan(0);
+  });
+
+  it("keeps a trade-specific module off by default for a shop of another trade", () => {
+    // The test environment's stored business type is the "kirana" default, and a
+    // grocery store has no use for a garment rental desk.
+    saveBusinessType("kirana");
+    expect(isModuleEnabled("rentals")).toBe(false);
+
+    saveBusinessType("clothing");
+    expect(isModuleEnabled("rentals")).toBe(true);
+  });
+
+  it("lets an explicit choice beat the business-type default in both directions", () => {
+    saveBusinessType("kirana");
+    patchModuleVisibility({ rentals: true });
+    expect(isModuleEnabled("rentals")).toBe(true);
+
+    saveBusinessType("clothing");
+    patchModuleVisibility({ rentals: false });
+    expect(isModuleEnabled("rentals")).toBe(false);
   });
 
   it("keeps every change when several switches are flipped in the same tick", () => {

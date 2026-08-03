@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from "react";
+import { getStoredBusinessType, useBusinessType, type BusinessType } from "./business-types";
 
 /**
  * App modules ("services") the owner can switch off to declutter the app.
@@ -14,6 +15,7 @@ import { useCallback, useSyncExternalStore } from "react";
 export type ModuleId =
   | "sales_history"
   | "returns"
+  | "rentals"
   | "customers"
   | "products"
   | "inventory"
@@ -43,6 +45,13 @@ export interface ModuleDefinition {
   description: string;
   /** Route prefixes this module owns. Empty for helpers that have no page. */
   paths: string[];
+  /**
+   * Business types this module is on for until the owner says otherwise. Omit for
+   * the modules every shop wants; list them for a trade-specific one so a kirana
+   * store is not shown a feature it will never use — it stays one switch away in
+   * Settings → Modules, and an explicit choice always beats this default.
+   */
+  defaultForBusinessTypes?: BusinessType[];
 }
 
 export const MODULE_DEFS: ModuleDefinition[] = [
@@ -60,6 +69,15 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     label: "Returns & refunds",
     description: "Take items back and settle refunds",
     paths: ["/returns"],
+  },
+  {
+    id: "rentals",
+    group: "Sell",
+    label: "Rentals",
+    description: "Rent garments out for a run of days and keep them off the catalogue meanwhile",
+    paths: ["/rentals"],
+    // Renting stock out is a clothing-shop trade; other verticals can switch it on.
+    defaultForBusinessTypes: ["clothing"],
   },
   {
     id: "customers",
@@ -291,9 +309,24 @@ export function subscribeToModuleVisibility(notify: () => void) {
   return () => { listeners.delete(notify); };
 }
 
-/** Non-reactive read, for code paths outside React. Unset means on. */
+const DEFS_BY_ID = new Map(MODULE_DEFS.map((module) => [module.id, module]));
+
+/**
+ * Whether a module is on when the owner has never touched its switch: on for
+ * everyone, unless the definition limits it to particular trades.
+ */
+function defaultEnabled(id: ModuleId, businessType: BusinessType): boolean {
+  const only = DEFS_BY_ID.get(id)?.defaultForBusinessTypes;
+  return !only || only.includes(businessType);
+}
+
+function resolveEnabled(value: ModuleVisibility, id: ModuleId, businessType: BusinessType): boolean {
+  return value[id] ?? defaultEnabled(id, businessType);
+}
+
+/** Non-reactive read, for code paths outside React. */
 export function isModuleEnabled(id: ModuleId): boolean {
-  return visibility[id] !== false;
+  return resolveEnabled(visibility, id, getStoredBusinessType());
 }
 
 /** Non-reactive route check. Routes no module owns are always enabled. */
@@ -304,13 +337,16 @@ export function isPathEnabled(path: string): boolean {
 
 export function useModuleVisibility() {
   const value = useSyncExternalStore(subscribeToModuleVisibility, getModuleVisibility, getModuleVisibility);
-  const isEnabled = useCallback((id: ModuleId) => value[id] !== false, [value]);
+  // Subscribed rather than read once: a trade-specific module's default flips the
+  // moment the owner changes the shop's business type, with no reload.
+  const { businessType } = useBusinessType();
+  const isEnabled = useCallback((id: ModuleId) => resolveEnabled(value, id, businessType), [value, businessType]);
   const isHrefEnabled = useCallback(
     (href: string) => {
       const id = moduleForPath(href);
-      return id === null || value[id] !== false;
+      return id === null || resolveEnabled(value, id, businessType);
     },
-    [value],
+    [value, businessType],
   );
   const setVisibility = useCallback((next: ModuleVisibility) => saveModuleVisibility(next), []);
   const patchVisibility = useCallback((partial: ModuleVisibility) => patchModuleVisibility(partial), []);

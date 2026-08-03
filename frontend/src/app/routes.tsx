@@ -43,6 +43,7 @@ const PurchaseBillsPage = lazy(() => import("@/features/purchases/pages/Purchase
 const Suppliers = lazy(() => import("@/features/suppliers/pages/SuppliersPage"));
 const Expenses = lazy(() => import("@/features/expenses/pages/ExpensesPage"));
 const Offers = lazy(() => import("@/features/offers/pages/OffersPage"));
+const Rentals = lazy(() => import("@/features/rentals/pages/RentalsPage"));
 const Loyalty = lazy(() => import("@/features/loyalty/pages/LoyaltyPage"));
 const GiftCards = lazy(() => import("@/features/gift-cards/GiftCardsPage"));
 const Reports = lazy(() => import("@/features/reports/pages/ReportsPage"));
@@ -307,6 +308,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/offers">
         <ProtectedRoute component={Offers} featureName="dynamic_customer_pricing" />
+      </Route>
+      <Route path="/rentals">
+        <ProtectedRoute component={Rentals} />
       </Route>
       <Route path="/loyalty">
         <ProtectedRoute component={Loyalty} featureName="loyalty_program" />

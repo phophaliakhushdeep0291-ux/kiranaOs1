@@ -26,11 +26,14 @@ const ALWAYS_ON = ["Billing", "Dashboard", "Cloud Backup", "Settings"];
 export default function ModulesSettingsPage() {
   const { toast } = useToast();
   const { patch } = useSettingsPrefs();
-  const { visibility, isEnabled, setVisibility, patchVisibility } = useModuleVisibility();
+  const { isEnabled, setVisibility, patchVisibility } = useModuleVisibility();
 
+  // Counts what is actually missing from the menus, which includes a module that
+  // is off because this trade does not get it by default — not only the ones the
+  // owner switched off by hand.
   const hiddenCount = useMemo(
-    () => MODULE_DEFS.filter((module) => visibility[module.id] === false).length,
-    [visibility],
+    () => MODULE_DEFS.filter((module) => !isEnabled(module.id)).length,
+    [isEnabled],
   );
 
   /** Merges against the live store, never this render's snapshot, so flipping
@@ -48,8 +51,14 @@ export default function ModulesSettingsPage() {
   }
 
   function showEverything() {
-    setVisibility({});
-    void patch({ moduleVisibility: {} });
+    // Clearing to {} would leave a trade-specific module off for shops it is not
+    // default-on for, so those get an explicit yes rather than falling back.
+    const everything: ModuleVisibility = {};
+    for (const module of MODULE_DEFS) {
+      if (module.defaultForBusinessTypes) everything[module.id] = true;
+    }
+    setVisibility(everything);
+    void patch({ moduleVisibility: everything });
     toast({ title: "All modules are back on", description: "Every section is visible again in the menus." });
   }
 

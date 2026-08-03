@@ -2,6 +2,7 @@ import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { listProducts } from "../products/products.service.js";
 import { priceCatalogProducts } from "../pricing/pricing.service.js";
+import { getFullyBookedProductIds } from "../rentals/rentals.service.js";
 import { resolveOperationalLocation } from "../stores/location-context.service.js";
 import { toBaseQty } from "../../utils/units.js";
 
@@ -56,8 +57,13 @@ export async function getPublicCatalog(shopId, requestedLocationId = null) {
     }),
   ]);
   const priced = await priceCatalogProducts(shopId, products, location.id);
+  // An outfit promised to someone for today is not on the rack, so customers must
+  // not see it at all — same as a sold-out product. It reappears by itself the day
+  // the booking window ends or the moment it is marked returned.
+  const bookedOut = await getFullyBookedProductIds(shopId, priced);
   const safe = priced
     .filter((p) => p.status !== "inactive" && p.isActive !== false && Number(p.stockBaseQty ?? 0) > 0)
+    .filter((p) => !bookedOut.has(p.id))
     .map(toCustomerSafeProduct);
 
   return {
@@ -186,11 +192,15 @@ export async function createPublicOrder(shopId, body = {}, options = {}) {
   const quantitiesByProductId = Object.fromEntries(normalizedItems);
   const products = await priceCatalogProducts(shopId, await listProducts(shopId, { locationId: location.id }), location.id, quantitiesByProductId);
   const byId = new Map(products.map((p) => [p.id, p]));
+  // A customer's phone may still be showing a catalogue cached before the outfit
+  // was booked out, so the order path re-checks rather than trusting what they saw.
+  const bookedOut = await getFullyBookedProductIds(shopId, products);
   const lines = [];
   for (const [productId, qty] of normalizedItems) {
     const product = byId.get(productId);
     if (!product || qty <= 0) continue;
     if (product.status === "inactive" || product.isActive === false || Number(product.stockBaseQty ?? 0) <= 0) continue;
+    if (bookedOut.has(productId)) continue;
     const requestedBaseQty = toBaseQty(qty, product.rateUnit || product.baseUnit, product.baseUnit);
     if (requestedBaseQty > Number(product.stockBaseQty ?? 0) + 0.000001) {
       throw new AppError(`${product.name} has only ${product.stockBaseQty} ${product.baseUnit} available at this store.`, 409, "ORDER_QUANTITY_UNAVAILABLE");

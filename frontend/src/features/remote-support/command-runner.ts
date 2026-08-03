@@ -1,4 +1,14 @@
 import { ackDeviceCommand, pollDeviceCommands, type PendingDeviceCommand, type SupportCommandType } from "./api";
+// Static on purpose. Every one of these is already in the entry closure — AuthContext
+// reports device health, diagnosticsClient collects context, the shell registers the
+// service worker — so importing them dynamically moved no bytes and only made Rollup
+// warn that it could not honour the request. Dynamism has to be real to be worth
+// writing; the two genuinely lazy imports are left below with their reasons.
+import { reportDeviceHealth } from "@/features/devices/api";
+import { collectDeviceHealth } from "@/lib/device-health/collectDeviceHealth";
+import { collectDeviceContext } from "@/lib/diagnostics/collectDeviceContext";
+import { clearInstantMemoryCache } from "@/lib/offline/instant-cache";
+import { recoverFromStaleDeploy } from "@/lib/pwa/registerServiceWorker";
 
 /**
  * Runs the commands a support operator queued for this device.
@@ -8,8 +18,9 @@ import { ackDeviceCommand, pollDeviceCommands, type PendingDeviceCommand, type S
  * paths; it does not open new ones, and there is deliberately no generic
  * "evaluate this" escape hatch — a command the catalog does not name cannot run.
  *
- * The heavy modules are imported dynamically so a device that never receives a
- * command never pays for the sync engine or the hydration code in its bundle.
+ * Two executors import dynamically and mean it: cloud-hydration is genuinely lazy,
+ * and sync-engine MUST stay dynamic because sync-engine imports this module — a
+ * static import would close the cycle.
  */
 
 export interface CommandOutcome {
@@ -22,11 +33,6 @@ type CommandExecutor = (command: PendingDeviceCommand) => Promise<Record<string,
 
 const EXECUTORS: Record<SupportCommandType, CommandExecutor> = {
   async COLLECT_DIAGNOSTICS() {
-    const [{ collectDeviceHealth }, { reportDeviceHealth }, { collectDeviceContext }] = await Promise.all([
-      import("@/lib/device-health/collectDeviceHealth"),
-      import("@/features/devices/api"),
-      import("@/lib/diagnostics/collectDeviceContext"),
-    ]);
     const health = await collectDeviceHealth();
     await reportDeviceHealth(health);
     const context = collectDeviceContext();
@@ -52,7 +58,6 @@ const EXECUTORS: Record<SupportCommandType, CommandExecutor> = {
   },
 
   async CLEAR_LOCAL_CACHE() {
-    const { clearInstantMemoryCache } = await import("@/lib/offline/instant-cache");
     clearInstantMemoryCache();
     // Saved data is untouched — this only drops the in-memory read cache, which is
     // what the owner is told in the command's plain-language summary.
@@ -60,7 +65,6 @@ const EXECUTORS: Record<SupportCommandType, CommandExecutor> = {
   },
 
   async REFRESH_APP() {
-    const { recoverFromStaleDeploy } = await import("@/lib/pwa/registerServiceWorker");
     // recoverFromStaleDeploy() ends in window.location.reload(), so this promise
     // may never settle. The ack is already written before we get here (see
     // runDeviceCommand), otherwise the reload would erase the only record that the
