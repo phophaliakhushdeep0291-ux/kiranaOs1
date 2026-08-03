@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
+import { isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import {
   Drawer,
   DrawerClose,
@@ -189,6 +190,7 @@ export function MobileTopBar({
 function MoreNavigation({ location }: { location: string }) {
   const { isHrefEnabled } = useModuleVisibility();
   const verticalPack = useActiveVerticalPack();
+  const businessProfile = useShopBusinessProfile();
   // Modules switched off in Settings leave the drawer; a section with nothing
   // left in it drops its heading too rather than sitting there empty. The active
   // trade's own entries join their named group — another trade's never do.
@@ -202,10 +204,12 @@ function MoreNavigation({ location }: { location: string }) {
           ...extras
             .filter((entry) => entry.mobile?.group === group.label)
             .map((entry) => ({ href: entry.href, label: entry.label, helper: entry.mobile!.helper, Icon: entry.Icon })),
-        ].filter((item) => isHrefEnabled(item.href)),
+        ]
+          .filter((item) => isHrefEnabled(item.href))
+          .filter((item) => isPathInBusinessProfile(item.href, businessProfile.data?.navigation)),
       }))
       .filter((group) => group.items.length > 0);
-  }, [isHrefEnabled, verticalPack]);
+  }, [businessProfile.data?.navigation, isHrefEnabled, verticalPack]);
 
   return (
     <div className="mobile-more-groups">
@@ -250,7 +254,12 @@ export function MobileBottomNav({
 }: MobileBottomNavProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const { isHrefEnabled } = useModuleVisibility();
-  const tabs = useMemo(() => TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href)), [isHrefEnabled]);
+  const businessProfile = useShopBusinessProfile();
+  const tabs = useMemo(
+    () => TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href))
+      .filter((tab) => isPathInBusinessProfile(tab.href, businessProfile.data?.navigation)),
+    [businessProfile.data?.navigation, isHrefEnabled],
+  );
 
   return (
     <nav data-app-mobile-bottom-nav="true" aria-label="Primary navigation" className="mobile-tabbar mx-3 mb-3 mt-2 shrink-0 lg:hidden">

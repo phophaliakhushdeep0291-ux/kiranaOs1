@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils";
 import { SettingsShell } from "../SettingsShell";
 import { Badge, Card, CardHead } from "../ui";
 import { useSettingsPrefs } from "../use-settings-prefs";
+import { SHOP_BOOTSTRAP_QUERY_KEY } from "../business-profile-bootstrap";
+import { updateShopSetupStatus } from "../api";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   MERCHANT_SETUP_KEY,
   buildMerchantSetupProgress,
@@ -85,6 +88,7 @@ function ReadyPill({ step }: { step: MerchantSetupStep }) {
 export default function MerchantSetupPage() {
   const [, navigate] = useLocation();
   const { prefs, shop, hydrated } = useSettingsPrefs();
+  const queryClient = useQueryClient();
   const [facts, setFacts] = useState<MerchantSetupFacts>(EMPTY_FACTS);
   const [state, setState] = useState<MerchantSetupState>(() => normaliseMerchantSetupState(null));
   const [loading, setLoading] = useState(true);
@@ -117,6 +121,13 @@ export default function MerchantSetupPage() {
   }, [refresh]);
 
   const progress = useMemo(() => buildMerchantSetupProgress(facts, state), [facts, state]);
+
+  useEffect(() => {
+    if (!progress.requiredComplete) return;
+    void updateShopSetupStatus("complete")
+      .then((bootstrap) => queryClient.setQueryData(SHOP_BOOTSTRAP_QUERY_KEY, bootstrap))
+      .catch(() => undefined);
+  }, [progress.requiredComplete, queryClient]);
 
   const saveState = useCallback(async (updater: (current: MerchantSetupState) => MerchantSetupState) => {
     const next = updater(state);

@@ -40,6 +40,11 @@ export function settingsForBusinessType(businessType, existing = {}) {
   const key = normalizeBusinessType(businessType);
   if (!key) throw new AppError("Select a supported business type", 422, "INVALID_BUSINESS_TYPE");
   const selected = BUSINESS_PROFILES[key];
+  const existingType = businessTypeFromSettings(existing);
+  const allowedCapabilities = key === "other" ? CAPABILITIES : selected.capabilities;
+  const capabilities = existingType === key && Array.isArray(existing.businessProfile?.capabilities)
+    ? existing.businessProfile.capabilities.filter((capability) => allowedCapabilities.includes(capability))
+    : [...selected.capabilities];
   return {
     ...existing,
     storeProfile: { ...(existing.storeProfile ?? {}), businessTypeKey: key },
@@ -47,7 +52,7 @@ export function settingsForBusinessType(businessType, existing = {}) {
       businessType: key,
       engine: selected.engine,
       profileVersion: 1,
-      capabilities: [...selected.capabilities],
+      capabilities,
       setupStatus: existing.businessProfile?.setupStatus ?? "pending",
     },
   };

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, type ComponentType } from "react";
+import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from "react";
 import { Redirect, Route, Switch, useLocation } from "wouter";
 import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
@@ -12,6 +12,8 @@ import { FeatureGate } from "@/features/core/subscription/components/FeatureGate
 import { useActiveVerticalPack, type VerticalPageId } from "@/features/verticals/registry";
 import { useScreenTracking } from "@/lib/activity";
 import type { FeatureName } from "@/features/core/subscription/plans";
+import { isPathInBusinessProfile, profileHasCapability, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
+import { PermissionDenied } from "@/components/shared/PermissionDenied";
 
 const Login = lazy(() => import("@/features/core/auth/pages/LoginPage"));
 const Register = lazy(() => import("@/features/core/auth/pages/RegisterPage"));
@@ -131,7 +133,22 @@ function LazyPage({ component: Component, featureName }: { component: ComponentT
   );
 }
 
-function ProtectedRoute({ component: Component, featureName }: { component: ComponentType; featureName?: FeatureName }) {
+function BusinessProfileRouteGate({ capability, children }: { capability?: string; children: ReactNode }) {
+  const [location] = useLocation();
+  const profile = useShopBusinessProfile();
+  if (profile.isLoading) return <LoadingScreen />;
+  // Preserve offline-first access when bootstrap itself is temporarily unavailable.
+  if (!profile.data) return <>{children}</>;
+  if (!isPathInBusinessProfile(location, profile.data.navigation)) {
+    return <PermissionDenied title="Not part of this business profile" message="This page is hidden because it is not enabled for the active shop profile." />;
+  }
+  if (capability && !profileHasCapability(profile.data.capabilities, capability)) {
+    return <PermissionDenied title="Feature not available" message="This capability is not enabled for the active shop profile." />;
+  }
+  return <>{children}</>;
+}
+
+function ProtectedRoute({ component: Component, featureName, capability }: { component: ComponentType; featureName?: FeatureName; capability?: string }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) return <LoadingScreen />;
@@ -149,7 +166,9 @@ function ProtectedRoute({ component: Component, featureName }: { component: Comp
       <Suspense fallback={<LoadingScreen />}>
         <AppLayout>
           <ErrorBoundary>
-            <LazyPage component={Component} featureName={featureName} />
+            <BusinessProfileRouteGate capability={capability}>
+              <LazyPage component={Component} featureName={featureName} />
+            </BusinessProfileRouteGate>
           </ErrorBoundary>
         </AppLayout>
       </Suspense>
@@ -303,7 +322,7 @@ export function AppRoutes() {
         <ProtectedRoute component={StockCounts} featureName="stock_adjustment" />
       </Route>
       <Route path="/inventory/batches">
-        <ProtectedRoute component={InventoryLots} featureName="batch_expiry" />
+        <ProtectedRoute component={InventoryLots} featureName="batch_expiry" capability="BATCH_TRACKING" />
       </Route>
       <Route path="/inventory">
         <ProtectedRoute component={Inventory} />

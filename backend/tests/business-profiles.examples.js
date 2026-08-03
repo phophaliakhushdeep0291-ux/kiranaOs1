@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   BUSINESS_PROFILES,
   BUSINESS_TYPES,
+  CAPABILITIES,
   bootstrapForShop,
   settingsForBusinessType,
 } from "../src/modules/shops/businessProfiles.js";
@@ -37,4 +38,20 @@ test("restaurant and pharmacy use specialised engines", () => {
   assert.ok(BUSINESS_PROFILES.restaurant.capabilities.includes("KOT"));
   assert.equal(BUSINESS_PROFILES.pharmacy.engine, "BATCH_RETAIL");
   assert.ok(BUSINESS_PROFILES.pharmacy.capabilities.includes("EXPIRY_TRACKING"));
+});
+
+test("configured capabilities are bounded by the known catalog and preset", () => {
+  const settings = settingsForBusinessType("clothing");
+  settings.businessProfile.capabilities.push("BATCH_TRACKING", "NOT_A_REAL_CAPABILITY");
+  const bootstrap = bootstrapForShop({ id: "shop_2", name: "Fashion", settingsJson: JSON.stringify(settings) }, "owner");
+  assert.ok(CAPABILITIES.includes("BATCH_TRACKING"));
+  assert.equal(bootstrap.capabilities.includes("BATCH_TRACKING"), false);
+  assert.equal(bootstrap.capabilities.includes("NOT_A_REAL_CAPABILITY"), false);
+});
+
+test("custom shops preserve known owner-selected capabilities", () => {
+  const settings = settingsForBusinessType("other");
+  settings.businessProfile.capabilities = ["BASIC_INVENTORY", "PRODUCT_VARIANTS", "NOT_A_REAL_CAPABILITY"];
+  const next = settingsForBusinessType("other", settings);
+  assert.deepEqual(next.businessProfile.capabilities, ["BASIC_INVENTORY", "PRODUCT_VARIANTS"]);
 });

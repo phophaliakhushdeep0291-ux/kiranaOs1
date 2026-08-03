@@ -44,6 +44,7 @@ import { SubscriptionStatusBanner } from "@/features/core/subscription/component
 import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
 import { useBusinessType } from "@/features/core/settings/business-types";
 import { useBusinessTypeServerSync } from "@/features/core/settings/business-type-sync";
+import { isPathInBusinessProfile, useShopBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { useModuleVisibility } from "@/features/core/settings/modules";
 import { useModuleVisibilityServerSync } from "@/features/core/settings/module-visibility-sync";
 import { useActiveVerticalPack } from "@/features/verticals/registry";
@@ -238,6 +239,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();
   useBusinessTypeServerSync();
+  const businessProfile = useShopBusinessProfile();
   const { isEnabled: isModuleOn, isHrefEnabled } = useModuleVisibility();
   const verticalPack = useActiveVerticalPack();
   useModuleVisibilityServerSync();
@@ -344,7 +346,9 @@ export function Layout({ children }: { children: ReactNode }) {
   // read, so another vertical's screens never appear here to begin with.
   const nav = useMemo(() => {
     const items: NavItem[] = [];
-    const pending = new Set(verticalPack.nav.filter((entry) => isHrefEnabled(entry.href)));
+    const profileNavigation = businessProfile.data?.navigation;
+    const pathEnabled = (href: string) => isHrefEnabled(href) && isPathInBusinessProfile(href, profileNavigation);
+    const pending = new Set(verticalPack.nav.filter((entry) => pathEnabled(entry.href)));
     const spliceAfter = (href: string) => {
       for (const entry of pending) {
         if (entry.insertAfter !== href) continue;
@@ -355,17 +359,19 @@ export function Layout({ children }: { children: ReactNode }) {
 
     for (const item of NAV) {
       if (item.kind === "link") {
-        if (isHrefEnabled(item.href)) items.push(item);
+        if (pathEnabled(item.href)) items.push(item);
         spliceAfter(item.href);
         continue;
       }
       const children = item.children.filter((child) => isHrefEnabled(child.href));
       if (children.length === 0) continue;
+      const profileChildren = children.filter((child) => isPathInBusinessProfile(child.href, profileNavigation));
+      if (profileChildren.length === 0) continue;
       items.push({
         ...item,
-        children,
-        triggerPaths: item.triggerPaths.filter((path) => isHrefEnabled(path)),
-        overviewHref: item.overviewHref && isHrefEnabled(item.overviewHref) ? item.overviewHref : undefined,
+        children: profileChildren,
+        triggerPaths: item.triggerPaths.filter((path) => pathEnabled(path)),
+        overviewHref: item.overviewHref && pathEnabled(item.overviewHref) ? item.overviewHref : undefined,
       });
     }
 
@@ -378,7 +384,7 @@ export function Layout({ children }: { children: ReactNode }) {
       items.splice(tail === -1 ? items.length : tail, 0, ...extras);
     }
     return items;
-  }, [isHrefEnabled, verticalPack]);
+  }, [businessProfile.data?.navigation, isHrefEnabled, verticalPack]);
 
   // auto-expand groups when child route is active
   useEffect(() => {
