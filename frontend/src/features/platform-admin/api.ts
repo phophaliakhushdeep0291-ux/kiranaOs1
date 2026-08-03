@@ -105,6 +105,55 @@ export function dispatchSupportCommand(payload: {
   });
 }
 
+// ── Settings repair ──────────────────────────────────────────────────
+// The one remote path that writes the shop's own data. Repair-scope only, and
+// every key is a named catalog entry rather than a settings path.
+
+export interface RepairableSetting {
+  key: string;
+  label: string;
+  description: string;
+  input: "gstin" | "none";
+  needsLocation: boolean;
+  currentValue: string | null;
+  context: Record<string, unknown> | null;
+  unavailable: boolean;
+}
+
+export interface SettingRepairRecord {
+  id: string;
+  key: string;
+  label: string;
+  operatorEmail: string | null;
+  reason: string | null;
+  before: string | null;
+  after: string | null;
+  createdAt: string;
+}
+
+export function getRepairableSettings(sessionId: string, locationId?: string) {
+  const query = locationId ? `?locationId=${encodeURIComponent(locationId)}` : "";
+  return apiRequest<{ settings: RepairableSetting[]; history: SettingRepairRecord[]; canRepair: boolean }>(
+    `/platform-admin/support/sessions/${encodeURIComponent(sessionId)}/settings${query}`,
+  );
+}
+
+export function repairSetting(payload: {
+  sessionId: string;
+  key: string;
+  value?: string | null;
+  locationId?: string;
+  reason?: string;
+}) {
+  return apiRequest<{
+    key: string;
+    label: string;
+    before: Record<string, unknown>;
+    after: Record<string, unknown>;
+    nudgedDevices: string[];
+  }>("/platform-admin/support/settings", { method: "POST", body: JSON.stringify(payload) });
+}
+
 export function endSupportSession(sessionId: string) {
   return apiRequest<SupportSessionDto>(`/platform-admin/support/sessions/${encodeURIComponent(sessionId)}`, {
     method: "DELETE",

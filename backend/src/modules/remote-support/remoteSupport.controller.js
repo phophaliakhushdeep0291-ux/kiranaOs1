@@ -1,5 +1,7 @@
 import * as svc from "./remoteSupport.service.js";
 import * as playbooks from "./playbooks.service.js";
+import * as settingsRepair from "./settingsRepair.service.js";
+import { describeSettingRepairs } from "./settings.catalog.js";
 import { COMMAND_CATALOG, COMMAND_SCOPES } from "./commands.catalog.js";
 import { PLAYBOOKS } from "./playbooks.catalog.js";
 import { createAuditLog } from "../audit/audit.service.js";
@@ -60,11 +62,15 @@ export async function createSession(req, res, next) {
 
 export async function getState(req, res, next) {
   try {
-    const [state, autoFix] = await Promise.all([
+    // Settings repairs are not DeviceCommand rows, so they would otherwise be
+    // invisible on the owner's screen — the one change class that alters their
+    // data would be the one they could not see.
+    const [state, autoFix, settingRepairs] = await Promise.all([
       svc.getShopSupportState({ shopId: req.shopId }),
       playbooks.getAutoFixSettings(req.shopId),
+      settingsRepair.listSettingRepairs({ shopId: req.shopId, limit: 10 }),
     ]);
-    res.json({ success: true, data: { ...state, autoFix } });
+    res.json({ success: true, data: { ...state, autoFix, settingRepairs } });
   } catch (err) {
     next(err);
   }
@@ -185,6 +191,7 @@ export function catalog(_req, res) {
       commands: Object.values(COMMAND_CATALOG),
       scopes: Object.values(COMMAND_SCOPES),
       playbooks: PLAYBOOKS.map(({ id, title, command, tier }) => ({ id, title, command, tier })),
+      settingRepairs: describeSettingRepairs(),
     },
   });
 }
@@ -319,6 +326,48 @@ export async function dispatch(req, res, next) {
     });
 
     res.status(201).json({ success: true, data: command });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listSettings(req, res, next) {
+  try {
+    const session = await svc.requireOperatorSession({
+      sessionId: req.params.sessionId,
+      operatorEmail: req.platformAdminEmail,
+    });
+    const locationId = typeof req.query.locationId === "string" ? req.query.locationId.trim() : null;
+
+    const [settings, history] = await Promise.all([
+      settingsRepair.readRepairableSettings({ shopId: session.shopId, locationId: locationId || null }),
+      settingsRepair.listSettingRepairs({ shopId: session.shopId }),
+    ]);
+
+    res.json({ success: true, data: { settings, history, canRepair: session.scope === "repair" } });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function repairSetting(req, res, next) {
+  try {
+    const session = await svc.requireOperatorSession({
+      sessionId: req.body.sessionId,
+      operatorEmail: req.platformAdminEmail,
+    });
+
+    const result = await settingsRepair.applySettingRepair({
+      session,
+      key: req.body.key,
+      value: req.body.value ?? null,
+      locationId: req.body.locationId ?? null,
+      reason: req.body.reason ?? null,
+      userId: req.user?.userId ?? null,
+      req,
+    });
+
+    res.json({ success: true, message: `${result.label} updated.`, data: result });
   } catch (err) {
     next(err);
   }

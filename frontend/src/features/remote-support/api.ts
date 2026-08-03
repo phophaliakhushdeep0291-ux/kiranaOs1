@@ -56,11 +56,24 @@ export interface AutoFixSettings {
   enabled: boolean;
 }
 
+/** A setting support changed on the shop's behalf, with what it used to be. */
+export interface SettingRepairDto {
+  id: string;
+  key: string;
+  label: string;
+  operatorEmail: string | null;
+  reason: string | null;
+  before: string | null;
+  after: string | null;
+  createdAt: string;
+}
+
 export interface SupportStateDto {
   activeSession: SupportSessionDto | null;
   recentCommands: SupportCommandDto[];
   recentSessions: SupportSessionDto[];
   autoFix: AutoFixSettings;
+  settingRepairs: SettingRepairDto[];
 }
 
 /** A playbook match: the problem the server sees and the fix it maps to. */

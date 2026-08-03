@@ -168,11 +168,28 @@ describe("auto-fix visibility", () => {
     expect(card).toContain("Fixed automatically");
   });
 
+  it("shows the owner which settings support changed, not only device fixes", () => {
+    // Settings repairs are audit rows, not DeviceCommands — without their own list
+    // the one change class that touches shop DATA would be invisible to the owner.
+    expect(card).toContain("settingRepairs");
+    expect(card).toContain("Settings support corrected");
+  });
+
   it("shows the operator the evidence behind each suggestion, not just a verdict", () => {
     const console_ = fs.readFileSync("src/features/remote-support/pages/RemoteSupportConsolePage.tsx", "utf8");
     expect(console_).toContain("suggestion.evidence");
     expect(console_).toContain("Suggested fixes");
     // Suggestions are per-device, so they must follow the selected device.
     expect(console_).toContain("refresh(sessionId, targetDevice)");
+  });
+
+  it("disables settings repair on a read-only session", () => {
+    const console_ = fs.readFileSync("src/features/remote-support/pages/RemoteSupportConsolePage.tsx", "utf8");
+    expect(console_).toContain("Settings repair");
+    // The Apply button must be gated on canRepair, not only on the server saying no
+    // after the operator has already typed a GSTIN into someone's tax settings.
+    // Matched whitespace-insensitively so a formatter run cannot fail this.
+    const applySettingBlock = console_.slice(console_.indexOf("void applySetting(setting)") - 600);
+    expect(applySettingBlock.replace(/\s+/g, " ")).toContain("busy || !canRepair ||");
   });
 });

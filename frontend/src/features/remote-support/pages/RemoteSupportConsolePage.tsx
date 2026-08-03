@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Activity, Loader2, MonitorSmartphone, ShieldX, Sparkles, Wrench } from "lucide-react";
+import { Activity, Loader2, MonitorSmartphone, ShieldX, SlidersHorizontal, Sparkles, Wrench } from "lucide-react";
 import { PageHeader, PageShell } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,10 +9,13 @@ import { ApiClientError } from "@/lib/api/http";
 import {
   dispatchSupportCommand,
   endSupportSession,
+  getRepairableSettings,
   getSupportCatalog,
   getSupportDiagnostics,
   redeemSupportCode,
+  repairSetting,
   type OperatorDiagnostics,
+  type RepairableSetting,
   type SupportCommandDefinition,
 } from "@/features/platform-admin/api";
 import type { SupportCommandType } from "@/features/remote-support/api";
@@ -60,6 +63,9 @@ export default function RemoteSupportConsolePage() {
   const [busy, setBusy] = useState(false);
   const [denied, setDenied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<RepairableSetting[]>([]);
+  const [settingDrafts, setSettingDrafts] = useState<Record<string, string>>({});
+  const [settingNotice, setSettingNotice] = useState<string | null>(null);
 
   useEffect(() => {
     getSupportCatalog()
@@ -124,6 +130,47 @@ export default function RemoteSupportConsolePage() {
       await refresh(sessionId, targetDevice);
     } catch (err) {
       setError(err instanceof ApiClientError ? err.message : "Could not queue that command.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const refreshSettings = useCallback(async (id: string) => {
+    try {
+      const result = await getRepairableSettings(id);
+      setSettings(result.settings);
+    } catch {
+      // Non-fatal: the rest of the console is still useful without this card.
+      setSettings([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    void refreshSettings(sessionId);
+  }, [sessionId, refreshSettings]);
+
+  async function applySetting(setting: RepairableSetting) {
+    if (!sessionId) return;
+    setBusy(true);
+    setError(null);
+    setSettingNotice(null);
+    try {
+      const result = await repairSetting({
+        sessionId,
+        key: setting.key,
+        value: setting.input === "none" ? null : (settingDrafts[setting.key] ?? "").trim(),
+        reason: reason.trim() || undefined,
+      });
+      setSettingDrafts((current) => ({ ...current, [setting.key]: "" }));
+      setSettingNotice(
+        `${result.label} updated.` +
+          (result.nudgedDevices.length ? ` ${result.nudgedDevices.length} device(s) told to sync.` : ""),
+      );
+      await refreshSettings(sessionId);
+      await refresh(sessionId, targetDevice);
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Could not apply that setting.");
     } finally {
       setBusy(false);
     }
@@ -349,6 +396,70 @@ export default function RemoteSupportConsolePage() {
               </div>
             </CardContent>
           </Card>
+
+          {settings.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <SlidersHorizontal size={17} aria-hidden="true" className="text-primary" />
+                  Settings repair
+                </CardTitle>
+                <CardDescription>
+                  {canRepair
+                    ? "Settings the app itself has no screen to fix. This writes the shop's own data — the before value is recorded and the owner can see it."
+                    : "Read-only session. A repair session is needed to change a setting."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {settingNotice ? (
+                  <p className="text-sm text-emerald-600 dark:text-emerald-400">{settingNotice}</p>
+                ) : null}
+
+                {settings.map((setting) => (
+                  <div key={setting.key} className="rounded-lg border p-3">
+                    <p className="text-sm font-medium text-foreground">{setting.label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{setting.description}</p>
+
+                    <p className="mt-2 text-xs">
+                      <span className="text-muted-foreground">Currently: </span>
+                      <span className={setting.currentValue ? "font-mono text-foreground" : "italic text-destructive"}>
+                        {setting.currentValue ?? "not set"}
+                      </span>
+                      {typeof setting.context?.locationName === "string" ? (
+                        <span className="text-muted-foreground"> · {setting.context.locationName}</span>
+                      ) : null}
+                    </p>
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {setting.input === "none" ? null : (
+                        <Input
+                          value={settingDrafts[setting.key] ?? ""}
+                          onChange={(event) =>
+                            setSettingDrafts((current) => ({ ...current, [setting.key]: event.target.value }))
+                          }
+                          placeholder={setting.input === "gstin" ? "15-character GSTIN" : "New value"}
+                          className="h-9 max-w-xs font-mono uppercase"
+                          maxLength={40}
+                        />
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          busy ||
+                          !canRepair ||
+                          (setting.input !== "none" && !(settingDrafts[setting.key] ?? "").trim())
+                        }
+                        onClick={() => void applySetting(setting)}
+                      >
+                        {setting.input === "none" ? "Restore all" : "Apply"}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>

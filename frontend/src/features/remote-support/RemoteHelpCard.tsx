@@ -159,6 +159,7 @@ export function RemoteHelpCard() {
   }
 
   const recentCommands = state?.recentCommands ?? [];
+  const settingRepairs = state?.settingRepairs ?? [];
 
   return (
     <Card>
@@ -245,6 +246,26 @@ export function RemoteHelpCard() {
             </span>
           </span>
         </label>
+
+        {/* Settings changes are not device commands, so they need their own list —
+            otherwise the one thing support can change about the shop's DATA would
+            be the one thing the owner could not see. */}
+        {settingRepairs.length > 0 ? (
+          <div>
+            <p className="mb-1 text-sm font-semibold text-foreground">Settings support corrected</p>
+            <ul className="divide-y">
+              {settingRepairs.map((repair) => (
+                <li key={repair.id} className="py-2 first:pt-0 last:pb-0">
+                  <p className="text-sm text-foreground">{repair.label}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {repair.operatorEmail ?? "support"}
+                    {repair.reason ? ` — ${repair.reason}` : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {recentCommands.length > 0 ? (
           <div>

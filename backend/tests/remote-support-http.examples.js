@@ -62,6 +62,9 @@ async function main() {
     },
   });
   await db.device.create({ data: { shopId: shop.id, deviceId: DEVICE_ID, deviceName: "Counter", status: "active" } });
+  // The stranded state the GSTIN repair exists for: a primary location with no
+  // GST number, which blocks every GST invoice and which no screen can fill in.
+  await db.storeLocation.create({ data: { shopId: shop.id, code: "MAIN", name: "Main", isPrimary: true } });
 
   server = http.createServer(app);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -181,9 +184,54 @@ async function main() {
   assert.ok(actions.includes("SUPPORT_COMMAND_ISSUED"), "issuing a command is audited");
   assert.ok(actions.includes("SUPPORT_COMMAND_EXECUTED"), "executing a command is audited");
 
-  // 12) The owner's stop button really stops it.
+  // 12) Settings repair over the wire — the one path that writes shop data.
+  const settingsView = await call("GET", `/platform-admin/support/sessions/${sessionId}/settings`, {
+    token: ownerToken,
+  });
+  assert.equal(settingsView.status, 200, "the operator can list repairable settings");
+  assert.ok(
+    settingsView.body.data.settings.some((setting) => setting.key === "location.gstNumber"),
+    "the GSTIN repair is offered",
+  );
+
+  // A key outside the catalog never reaches the service — zod rejects it first.
+  const forgedKey = await call("POST", "/platform-admin/support/settings", {
+    token: ownerToken,
+    body: { sessionId, key: "shop.plan", value: "enterprise" },
+  });
+  assert.equal(forgedKey.status, 400, "only catalog keys pass validation");
+
+  // A staff account cannot repair a setting even with a valid session id.
+  const staffRepair = await call("POST", "/platform-admin/support/settings", {
+    token: staffToken,
+    body: { sessionId, key: "location.gstNumber", value: "27AAPFU0939F1ZV" },
+  });
+  assert.equal(staffRepair.status, 403, "the platform-admin gate still applies");
+
+  const repaired = await call("POST", "/platform-admin/support/settings", {
+    token: ownerToken,
+    body: { sessionId, key: "location.gstNumber", value: "27AAPFU0939F1ZV", reason: "GST invoices blocked" },
+  });
+  assert.equal(repaired.status, 200, `the setting is repaired (got ${JSON.stringify(repaired.body)})`);
+  assert.equal(repaired.body.data.after.gstNumber, "27AAPFU0939F1ZV");
+  assert.equal(repaired.body.data.after.gstStateCode, "27", "the derived state code travels with it");
+
+  // The owner sees the data change on their own screen, not just the device fixes.
+  const stateAfterRepair = await call("GET", "/support/state", { token: ownerToken });
+  assert.equal(stateAfterRepair.body.data.settingRepairs.length, 1, "the repair is listed for the owner");
+  assert.equal(stateAfterRepair.body.data.settingRepairs[0].label, "GSTIN on a store location");
+
+  // 13) The owner's stop button really stops it.
   const revoked = await call("DELETE", `/support/sessions/${sessionId}`, { token: ownerToken });
   assert.equal(revoked.status, 200, "the owner can end remote access");
+
+  // A revoked session cannot write a setting either — the gate is re-checked per
+  // request, not captured when the session opened.
+  const repairAfterRevoke = await call("POST", "/platform-admin/support/settings", {
+    token: ownerToken,
+    body: { sessionId, key: "shop.gstNumber", value: "27AAPFU0939F1ZV" },
+  });
+  assert.equal(repairAfterRevoke.status, 403, "settings repair dies with the session");
 
   const afterRevoke = await call("GET", `/platform-admin/support/sessions/${sessionId}/diagnostics`, {
     token: ownerToken,
@@ -204,6 +252,7 @@ main()
       await db.deviceCommand.deleteMany({ where: { shopId: shop?.id } });
       await db.supportSession.deleteMany({ where: { shopId: shop?.id } });
       await db.device.deleteMany({ where: { shopId: shop?.id } });
+      await db.storeLocation.deleteMany({ where: { shopId: shop?.id } });
       await db.auditLog.deleteMany({ where: { shopId: shop?.id } });
       await db.user.deleteMany({ where: { shopId: shop?.id } });
       await db.shop.deleteMany({ where: { id: shop?.id } });

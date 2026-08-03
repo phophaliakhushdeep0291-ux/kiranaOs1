@@ -32,6 +32,7 @@ Conventions used throughout:
 | Admin | `modules/platform-admin` | §10 | Cross-shop operator rollups |
 | Remote support | `modules/remote-support` | §10a | Consent-gated remote diagnosis + repair |
 | Auto-fix | `modules/remote-support/playbooks.*` | §10b | Known problem → known fix, dispatched unattended |
+| Settings repair | `modules/remote-support/settings*.js` | §10c | Fix a setting no screen can reach |
 | Events | `lib/eventBus.js` | §11 | Kafka-compatible streaming seam |
 
 ---
@@ -411,6 +412,65 @@ Operators see the same matches (both tiers, with evidence) in the
 
 ```bash
 npm run test:remote-support   # includes matching, cooldown, breaker, opt-out (§10b)
+```
+
+---
+
+## 10c. Settings repair — `POST /api/platform-admin/support/settings`
+
+Every other remote-support action is idempotent and local to a device. This one
+**writes the shop's own data**, so it is deliberately the narrowest thing in the
+module.
+
+The bar for a setting appearing here is not "an operator might want it". It is:
+
+> the shop can reach a state where this is wrong **and no screen can fix it**.
+
+A setting with a working settings page does not qualify — the owner can already
+change it, and every key added here is one more thing a support account can alter
+about someone's business.
+
+### The catalog
+
+| Key | Input | Why it cannot be fixed in the app |
+|---|---|---|
+| `location.gstNumber` | GSTIN | Bills read the GSTIN from `StoreLocation`, but the only UI input writes `Shop.gstNumber` and nothing propagates. A location saved before the shop had a GSTIN blocks **every** GST invoice, and no screen writes this field. |
+| `shop.gstNumber` | GSTIN | The shop-profile GSTIN, kept separate on purpose: repairing one is not the same decision as repairing the other. |
+| `settings.moduleVisibility` | none (reset) | Hiding the section that contains the module settings screen removes the route back — the control that would undo it is the one you just hid. |
+
+`location.gstNumber` **derives** `gstStateCode` from the GSTIN rather than accepting
+it: a state code that disagrees with the number produces wrong CGST/SGST vs IGST
+splits, which is a silent tax error rather than a visible failure.
+
+The module-visibility entry is a **reset, not a setter**. It deletes the key so the
+app falls back to "everything visible". That needs no knowledge of the visibility
+map's internal shape, so it cannot rot as that shape evolves — and it can only
+reveal sections, never hide them.
+
+### Gates
+
+| Gate | Effect |
+|---|---|
+| Live session | `requireOperatorSession` re-checks per request; a revoked session cannot write |
+| **Repair scope** | A `diagnose` session is refused — "let them look only" means it here most of all |
+| Catalog key | `z.enum(SETTING_KEYS)` at the edge, `getSettingRepair` in the service. There is no path-based setter, so `shop.plan` and `__proto__` simply do not exist |
+| Per-entry validation | GSTINs are checksum-verified; a reset refuses a value; a value-taking key refuses an empty one rather than blanking the field |
+| Tenant | `shopId` comes from the session row — passing another shop's `locationId` returns `SETTING_TARGET_MISSING` |
+
+### Afterwards
+
+The change is audited as `SUPPORT_SETTING_REPAIRED` in module `settings`, with
+**before and after** — the only record that can answer "what was this set to before
+support touched it?". Devices seen in the last 15 minutes are then nudged with
+`RUN_SYNC_NOW` (best-effort, capped at 5) so the shop is unblocked now rather than
+at its next scheduled pull.
+
+Because a settings repair is an audit row and not a `DeviceCommand`, it is surfaced
+separately to the owner as `settingRepairs` on `GET /api/support/state` — otherwise
+the one change class that touches their data would be the one they could not see.
+
+```bash
+npm run test:remote-support   # allowlist, checksum, scope, tenant, audit (§10c)
 ```
 
 ---
