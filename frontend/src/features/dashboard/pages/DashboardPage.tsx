@@ -30,6 +30,7 @@ import { DataTableCard, EmptyState, MoneyBadge, PageHeader, PageShell, StatCard,
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useBusinessType, type BusinessType, type BusinessTypeDefinition, type QuickAction, type QuickActionIconKey, type QuickActionColorKey } from "@/features/settings/business-types";
+import { useModuleVisibility } from "@/features/settings/modules";
 import { getShopWorkflow } from "@/features/settings/shop-workflows";
 import { cn } from "@/lib/utils";
 import type { Bill, Product } from "@/types/api";
@@ -129,16 +130,24 @@ const ACTION_ICON_BG: Record<QuickActionColorKey, string> = {
  * §13 "dynamically reordering dashboard widgets based on usage patterns".
  *
  * The quick actions are reordered by how much this user actually uses each
- * destination. Reordering only: the same four actions are always present, so
- * nothing a shopkeeper relies on can disappear, and an action they have never
- * opened keeps its configured position rather than being shuffled somewhere
- * arbitrary. With no history the order is exactly the business type's default.
+ * destination. Reordering only: usage never removes an action, so nothing a
+ * shopkeeper relies on can disappear behind their back, and an action they have
+ * never opened keeps its configured position rather than being shuffled
+ * somewhere arbitrary. With no history the order is exactly the business type's
+ * default. The one thing that does drop an action is the owner deliberately
+ * switching that module off in Settings — billing is never in a module, so at
+ * least one shortcut always remains.
  */
 function usePersonalizedQuickActions(actions: readonly QuickAction[]): QuickAction[] {
   const personalization = usePersonalization();
+  const { isHrefEnabled } = useModuleVisibility();
   return useMemo(
-    () => orderByUsage(actions, (action) => action.href, usageScores(personalization.data?.dashboardOrder)),
-    [actions, personalization.data],
+    () => orderByUsage(
+      actions.filter((action) => isHrefEnabled(action.href)),
+      (action) => action.href,
+      usageScores(personalization.data?.dashboardOrder),
+    ),
+    [actions, personalization.data, isHrefEnabled],
   );
 }
 
@@ -1436,7 +1445,12 @@ function KpiCard({ label, value, delta, deltaLabel, deltaPositiveIsBad, icon, ic
 
 function ShopWorkflowPanel({ businessType, compact = false }: { businessType: BusinessType; compact?: boolean }) {
   const workflow = getShopWorkflow(businessType);
+  const { isHrefEnabled } = useModuleVisibility();
+  // Same rule as the sidebar: a shortcut into a module the owner switched off
+  // has no business sitting on the dashboard.
+  const actions = workflow.actions.filter((action) => isHrefEnabled(action.href));
   const tones = ["primary", "amber", "teal", "violet"] as const;
+  if (actions.length === 0) return null;
   return (
     <section className={cn("overflow-hidden rounded-[18px] border border-[#dfe8f5] bg-[linear-gradient(135deg,#f8fbff_0%,#ffffff_64%)] shadow-[0_10px_28px_rgba(26,57,112,0.055)]", !compact && "mb-6")} data-testid="shop-workflow-panel">
       <div className="flex flex-col gap-3 border-b border-[#e8eef6] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
@@ -1450,7 +1464,7 @@ function ShopWorkflowPanel({ businessType, compact = false }: { businessType: Bu
         </Link>
       </div>
       <div className="grid gap-2.5 p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-4">
-        {workflow.actions.map((action, index) => (
+        {actions.map((action, index) => (
           <Link key={`${action.href}-${action.label}`} href={action.href} className="group flex min-h-[86px] items-center gap-3 rounded-[14px] border border-[#e4ebf4] bg-white p-3.5 shadow-[0_5px_14px_rgba(26,57,112,0.04)] transition hover:-translate-y-0.5 hover:border-[var(--brand-border)] hover:shadow-[0_10px_22px_rgba(26,57,112,0.08)]">
             <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-[11px]", ACTION_ICON_BG[tones[index]])}>{ACTION_ICON[action.icon]}</span>
             <span className="min-w-0 flex-1">

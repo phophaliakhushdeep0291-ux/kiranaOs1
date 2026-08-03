@@ -51,6 +51,7 @@ const DailyClosingPage = lazy(() => import("@/features/reports/pages/DailyClosin
 const Settings = lazy(() => import("@/features/settings/pages/SettingsPage"));
 const MerchantSetupSettings = lazy(() => import("@/features/settings/pages/MerchantSetupPage"));
 const StoreProfileSettings = lazy(() => import("@/features/settings/pages/StoreProfilePage"));
+const ModulesSettings = lazy(() => import("@/features/settings/pages/ModulesSettingsPage"));
 const PrinterSettings = lazy(() => import("@/features/settings/pages/PrinterSettingsPage"));
 const BillingSettings = lazy(() => import("@/features/settings/pages/BillingSettingsPage"));
 const StaffSettings = lazy(() => import("@/features/settings/pages/StaffSettingsPage"));
@@ -321,6 +322,9 @@ export function AppRoutes() {
       </Route>
       <Route path="/settings/store-profile">
         <ProtectedRoute component={StoreProfileSettings} />
+      </Route>
+      <Route path="/settings/modules">
+        <ProtectedRoute component={ModulesSettings} />
       </Route>
       <Route path="/settings/printer">
         <ProtectedRoute component={PrinterSettings} />

@@ -43,6 +43,8 @@ import { SubscriptionStatusBanner } from "@/features/subscription/components/Sub
 import { useSubscriptionSnapshot } from "@/features/subscription/access";
 import { useBusinessType } from "@/features/settings/business-types";
 import { useBusinessTypeServerSync } from "@/features/settings/business-type-sync";
+import { useModuleVisibility } from "@/features/settings/modules";
+import { useModuleVisibilityServerSync } from "@/features/settings/module-visibility-sync";
 import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
 import { ReportIssueButton } from "@/features/support";
 import { DemoModeBanner } from "@/features/demo/DemoModeBanner";
@@ -234,6 +236,8 @@ export function Layout({ children }: { children: ReactNode }) {
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();
   useBusinessTypeServerSync();
+  const { isEnabled: isModuleOn, isHrefEnabled } = useModuleVisibility();
+  useModuleVisibilityServerSync();
   const queryClient = useQueryClient();
   const locationsQuery = useQuery({
     queryKey: ["store-locations", "active-context"],
@@ -329,14 +333,36 @@ export function Layout({ children }: { children: ReactNode }) {
   const desktopW = collapsed ? COLLAPSED_WIDTH : sidebarWidth;
   const shellStyle = useMemo(() => ({ "--app-sidebar-width": `${desktopW}px` }) as CSSProperties, [desktopW]);
 
+  // Modules the owner switched off in Settings drop out of the sidebar entirely.
+  // A group survives on its remaining children, so hiding "Stock & inventory"
+  // still leaves Products and Categories reachable under the same heading.
+  const nav = useMemo(() => {
+    const items: NavItem[] = [];
+    for (const item of NAV) {
+      if (item.kind === "link") {
+        if (isHrefEnabled(item.href)) items.push(item);
+        continue;
+      }
+      const children = item.children.filter((child) => isHrefEnabled(child.href));
+      if (children.length === 0) continue;
+      items.push({
+        ...item,
+        children,
+        triggerPaths: item.triggerPaths.filter((path) => isHrefEnabled(path)),
+        overviewHref: item.overviewHref && isHrefEnabled(item.overviewHref) ? item.overviewHref : undefined,
+      });
+    }
+    return items;
+  }, [isHrefEnabled]);
+
   // auto-expand groups when child route is active
   useEffect(() => {
-    NAV.forEach(item => {
+    nav.forEach(item => {
       if (item.kind !== "group") return;
       const hit = item.triggerPaths.some(p => isActive(loc, p)) || item.children.some(c => isActive(loc, c.href));
       if (hit) setExpandedGroups(prev => { const n = new Set(prev); n.add(item.id); return n; });
     });
-  }, [loc]);
+  }, [loc, nav]);
 
   useEffect(() => {
     if (loc !== "/customers") return;
@@ -440,7 +466,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* Nav */}
         <nav aria-label="Main navigation" className={cn("app-scrollbar flex-1 overflow-y-auto py-4", collapsed ? "space-y-1 px-2" : "space-y-1 px-3")}>
-          {NAV.map(item =>
+          {nav.map(item =>
             item.kind === "link"
               ? <SidebarLink key={item.href} item={item} loc={loc} collapsed={collapsed} labelOverride={labelOverrides[item.href]} />
               : <SidebarGroup key={item.id} item={item} loc={loc} collapsed={collapsed} expanded={expandedGroups.has(item.id)} onToggle={() => toggleGroup(item.id)} labelOverrides={labelOverrides} />
@@ -505,7 +531,7 @@ export function Layout({ children }: { children: ReactNode }) {
                   </>}
                   <DropdownMenuItem asChild><Link href="/settings">Settings</Link></DropdownMenuItem>
                   <DropdownMenuItem asChild><Link href="/sync-status">Sync Status</Link></DropdownMenuItem>
-                  <DropdownMenuItem asChild><Link href="/help">Ask Artha</Link></DropdownMenuItem>
+                  {isModuleOn("ask_artha") && <DropdownMenuItem asChild><Link href="/help">Ask Artha</Link></DropdownMenuItem>}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
                     <LogOut size={14} className="mr-2" aria-hidden="true" /> Logout
@@ -664,8 +690,8 @@ export function Layout({ children }: { children: ReactNode }) {
         />
       </div>
       <div className="hidden lg:contents">
-        {cleanPath(loc) !== "/billing" && <VoiceAssistant />}
-        <ReportIssueButton />
+        {isModuleOn("voice_assistant") && cleanPath(loc) !== "/billing" && <VoiceAssistant />}
+        {isModuleOn("report_issue") && <ReportIssueButton />}
       </div>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>

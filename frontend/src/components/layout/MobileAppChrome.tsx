@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
   BadgeIndianRupee,
@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useModuleVisibility } from "@/features/settings/modules";
 import {
   Drawer,
   DrawerClose,
@@ -184,9 +185,19 @@ export function MobileTopBar({
 }
 
 function MoreNavigation({ location }: { location: string }) {
+  const { isHrefEnabled } = useModuleVisibility();
+  // Modules switched off in Settings leave the drawer; a section with nothing
+  // left in it drops its heading too rather than sitting there empty.
+  const groups = useMemo(
+    () => MORE_GROUPS
+      .map((group) => ({ ...group, items: group.items.filter((item) => isHrefEnabled(item.href)) }))
+      .filter((group) => group.items.length > 0),
+    [isHrefEnabled],
+  );
+
   return (
     <div className="mobile-more-groups">
-      {MORE_GROUPS.map((group) => (
+      {groups.map((group) => (
         <section key={group.label} aria-labelledby={`mobile-more-${group.label.replace(/\W+/g, "-").toLowerCase()}`}>
           <h3 id={`mobile-more-${group.label.replace(/\W+/g, "-").toLowerCase()}`} className="mobile-more-group-title">{group.label}</h3>
           <div className="mobile-more-grid">
@@ -226,11 +237,15 @@ export function MobileBottomNav({
   onLogout,
 }: MobileBottomNavProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const { isHrefEnabled } = useModuleVisibility();
+  const tabs = useMemo(() => TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href)), [isHrefEnabled]);
 
   return (
     <nav data-app-mobile-bottom-nav="true" aria-label="Primary navigation" className="mobile-tabbar mx-3 mb-3 mt-2 shrink-0 lg:hidden">
-      <div className="mobile-tabbar-grid">
-        {TOP_LEVEL_TABS.map(({ href, label, Icon, matches }) => {
+      {/* The tab count changes with the owner's module choices, so the columns
+          are driven from it instead of the stylesheet's default of five. */}
+      <div className="mobile-tabbar-grid" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
+        {tabs.map(({ href, label, Icon, matches }) => {
           const active = pathMatches(location, matches);
           return (
             <Link key={href} href={href} className={cn("mobile-tab", active && "mobile-tab-active")} aria-current={active ? "page" : undefined}>
