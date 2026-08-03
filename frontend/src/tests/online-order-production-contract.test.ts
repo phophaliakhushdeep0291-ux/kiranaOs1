@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const storefront = readFileSync("src/features/customer-order/CustomerOrderPage.tsx", "utf8");
-const merchantQueue = readFileSync("src/features/orders/pages/OrdersReceivedPage.tsx", "utf8");
+const storefront = readFileSync("src/features/core/customer-order/CustomerOrderPage.tsx", "utf8");
+const merchantQueue = readFileSync("src/features/core/orders/pages/OrdersReceivedPage.tsx", "utf8");
 
 describe("online ordering production contract", () => {
   it("keeps the customer journey transparent and fulfillment-aware", () => {

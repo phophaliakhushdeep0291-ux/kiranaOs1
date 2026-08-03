@@ -44,16 +44,16 @@ export type {
 } from "@/types/api";
 export { BillInputBillType, BillPaymentMode, CustomerInputType, UdharPaymentInputMode } from "@/types/api";
 
-export { getMe, logoutSession, refreshAccessToken, setOwnerPin } from "@/features/auth/api";
-export { syncPush } from "@/features/sync/api";
+export { getMe, logoutSession, refreshAccessToken, setOwnerPin } from "@/features/core/auth/api";
+export { syncPush } from "@/features/core/sync/api";
 
 // Temporary compatibility exports while pages migrate to feature-local query modules.
-export * from "@/features/auth/queries";
-export * from "@/features/products/queries";
-export * from "@/features/customers/queries";
-export * from "@/features/billing/queries";
-export * from "@/features/bills/queries";
-export * from "@/features/inventory/queries";
-export * from "@/features/reports/queries";
-export * from "@/features/suppliers/queries";
-export * from "@/features/settings/queries";
+export * from "@/features/core/auth/queries";
+export * from "@/features/core/products/queries";
+export * from "@/features/core/customers/queries";
+export * from "@/features/core/billing/queries";
+export * from "@/features/core/bills/queries";
+export * from "@/features/core/inventory/queries";
+export * from "@/features/core/reports/queries";
+export * from "@/features/core/suppliers/queries";
+export * from "@/features/core/settings/queries";

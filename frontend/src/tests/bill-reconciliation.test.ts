@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/sync/bill-reconciliation";
+import { dedupeBillsForDisplay, dedupePaymentsForDisplay } from "@/features/core/sync/bill-reconciliation";
 
 describe("bill reconciliation display dedupe", () => {
   it("prefers the synced server bill over the local pending bill", () => {

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router as WouterRouter } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/features/auth/AuthContext";
+import { AuthProvider } from "@/features/core/auth/AuthContext";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { ApiClientError } from "@/lib/api/http";
@@ -10,17 +10,17 @@ import { initializeOfflineStorage } from "@/lib/offline/migrations";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { activateWaitingServiceWorker } from "@/lib/pwa/registerServiceWorker";
-import { AppLanguageProvider } from "@/features/settings/i18n";
-import { AppThemeProvider } from "@/features/settings/theme";
+import { AppLanguageProvider } from "@/features/core/settings/i18n";
+import { AppThemeProvider } from "@/features/core/settings/theme";
 import { useRealtimeRefreshBridge } from "@/lib/realtime/useRealtimeRefreshBridge";
-import { CloudDataBootstrap } from "@/features/sync/CloudDataBootstrap";
+import { CloudDataBootstrap } from "@/features/core/sync/CloudDataBootstrap";
 import { useMultiDeviceSync } from "@/lib/realtime/useMultiDeviceSync";
 import { startBackgroundLeadershipHeartbeat } from "@/lib/browser/multiTabCoordinator";
-import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
-import { autoCleanupEnabled, getAppPreferences } from "@/features/settings/app-preferences";
-import { loadSecurityPolicy } from "@/features/settings/security-policy";
+import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
+import { autoCleanupEnabled, getAppPreferences } from "@/features/core/settings/app-preferences";
+import { loadSecurityPolicy } from "@/features/core/settings/security-policy";
 import { offlineDB } from "@/lib/offline/db";
-import { requestPersistentOfflineStorage } from "@/features/sync/offline-readiness";
+import { requestPersistentOfflineStorage } from "@/features/core/sync/offline-readiness";
 
 function shouldRetryQuery(failureCount: number, error: unknown) {
   if (error instanceof ApiClientError) {

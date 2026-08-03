@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeAiIntent, parseLocalVoiceIntent, parsePaymentDraft } from "@/features/voice/voice-command-parser";
+import { normalizeAiIntent, parseLocalVoiceIntent, parsePaymentDraft } from "@/features/core/voice/voice-command-parser";
 
 describe("upgraded global voice assistant local intents", () => {
   it.each([

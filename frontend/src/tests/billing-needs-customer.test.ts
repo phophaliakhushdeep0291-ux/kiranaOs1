@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { billNeedsCustomer } from "@/features/billing/pages/billing-calculations";
+import { billNeedsCustomer } from "@/features/core/billing/pages/billing-calculations";
 
 const base = {
   isUdharEntry: false,

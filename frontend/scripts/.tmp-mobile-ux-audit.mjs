@@ -306,7 +306,7 @@ async function main() {
     }))()`);
     const productsDebugAfterCreate = await client.evaluate(`(async () => {
       const { offlineDB } = await import('/src/lib/offline/db.ts');
-      const { getActiveLocationId } = await import('/src/features/stores/location-context.ts');
+      const { getActiveLocationId } = await import('/src/features/core/stores/location-context.ts');
       const { readInstantCache } = await import('/src/lib/offline/instant-cache.ts');
       const locationId = getActiveLocationId();
       const rows = await offlineDB.getAll('products');
@@ -325,7 +325,7 @@ async function main() {
     await waitForPage(client, "Boolean(document.querySelector('[data-testid=\"input-product-search\"]'))");
     const productsDebugOnBilling = await client.evaluate(`(async () => {
       const { offlineDB } = await import('/src/lib/offline/db.ts');
-      const { getActiveLocationId } = await import('/src/features/stores/location-context.ts');
+      const { getActiveLocationId } = await import('/src/features/core/stores/location-context.ts');
       const { readInstantCache } = await import('/src/lib/offline/instant-cache.ts');
       const locationId = getActiveLocationId();
       const rows = await offlineDB.getAll('products');

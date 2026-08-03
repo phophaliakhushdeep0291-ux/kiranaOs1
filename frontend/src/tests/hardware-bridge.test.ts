@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isScaleBillingUnit, normalizeHardwareBridgeUrl, scaleReadingToBillingQuantity } from "@/features/hardware/local-hardware-bridge";
+import { isScaleBillingUnit, normalizeHardwareBridgeUrl, scaleReadingToBillingQuantity } from "@/features/core/hardware/local-hardware-bridge";
 
 describe("local hardware bridge security boundary", () => {
   it("accepts only loopback HTTP(S) endpoints", () => {

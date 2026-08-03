@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveLinePrice, normalizeApiRule } from "@/features/pricing/resolve-line-price";
-import { productSellingPrice } from "@/features/billing/pages/billing-calculations";
+import { resolveLinePrice, normalizeApiRule } from "@/features/core/pricing/resolve-line-price";
+import { productSellingPrice } from "@/features/core/billing/pages/billing-calculations";
 
 const product = {
   id: "p_surf", name: "Surf Excel", rateUnit: "packet", displayUnit: "packet",

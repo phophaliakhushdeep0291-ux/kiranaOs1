@@ -30,7 +30,7 @@ describe("cloud data bootstrap wiring", () => {
   });
 
   it("runs sync and refreshes active queries after login", () => {
-    const bootstrap = read("src/features/sync/CloudDataBootstrap.tsx");
+    const bootstrap = read("src/features/core/sync/CloudDataBootstrap.tsx");
     expect(bootstrap).toContain("runSyncCycle");
     expect(bootstrap).toContain("kirana:cloud-bootstrap-complete");
     expect(bootstrap).toContain("kirana:local-data-changed");

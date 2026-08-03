@@ -105,7 +105,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { offlineDB } from "@/lib/offline/db";
 import { upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
+import { reversePaymentWithOwnerPinLocalFirst } from "@/features/core/payments/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedUpsertCachedListItem = vi.mocked(upsertCachedListItem);

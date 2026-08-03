@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { sampleReceiptSnapshot } from "@/features/settings/receipt-preview-sample";
-import { buildReceiptHtml } from "@/features/receipts/receipt-print";
-import { DEFAULT_PRINTER_CONFIG, type PrinterConfig } from "@/features/settings/printer-config";
+import { sampleReceiptSnapshot } from "@/features/core/settings/receipt-preview-sample";
+import { buildReceiptHtml } from "@/features/core/receipts/receipt-print";
+import { DEFAULT_PRINTER_CONFIG, type PrinterConfig } from "@/features/core/settings/printer-config";
 
 const SHOP = { name: "Test Kirana", address: "1 Main Rd", city: "Indore", phone: "9876500000", gstNumber: "22AAAAA0000A1Z5" };
 

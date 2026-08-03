@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { customersEn as customersEnglish } from "@/features/settings/translations/customers";
+import { customersEn as customersEnglish } from "@/features/core/settings/translations/customers";
 
-const customersSource = readFileSync("src/features/customers/pages/CustomersPage.tsx", "utf8");
-const reportsSource = readFileSync("src/features/reports/pages/ReportsPage.tsx", "utf8");
+const customersSource = readFileSync("src/features/core/customers/pages/CustomersPage.tsx", "utf8");
+const reportsSource = readFileSync("src/features/core/reports/pages/ReportsPage.tsx", "utf8");
 
 describe("udhar collection records the tender the shopkeeper actually took", () => {
   // Regression: the collection panel defaulted to Split and seeded a hardcoded

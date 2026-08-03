@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cartItemKey, type CartItem } from "@/features/billing/pages/billing-types";
-import { formToInput, type ProductFormData } from "@/features/products/pages/product-form-state";
+import { cartItemKey, type CartItem } from "@/features/core/billing/pages/billing-types";
+import { formToInput, type ProductFormData } from "@/features/core/products/pages/product-form-state";
 import type { Product, ProductSellingUnit } from "@/types/api";
 
 function packedForm(overrides: Partial<ProductFormData> = {}): ProductFormData {

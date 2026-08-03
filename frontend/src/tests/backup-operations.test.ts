@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const apiSource = readFileSync("src/features/backups/api.ts", "utf8");
-const settingsSource = readFileSync("src/features/settings/pages/SyncSettingsPage.tsx", "utf8");
+const apiSource = readFileSync("src/features/core/backups/api.ts", "utf8");
+const settingsSource = readFileSync("src/features/core/settings/pages/SyncSettingsPage.tsx", "utf8");
 const httpSource = readFileSync("src/lib/api/http.ts", "utf8");
 
 describe("encrypted shop backup operations", () => {

@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 
 describe("purchase invoice OCR review boundary", () => {
-  const page = fs.readFileSync(path.resolve("src/features/purchases/pages/PurchaseBillsPage.tsx"), "utf8");
-  const api = fs.readFileSync(path.resolve("src/features/purchases/invoice-ocr-api.ts"), "utf8");
+  const page = fs.readFileSync(path.resolve("src/features/core/purchases/pages/PurchaseBillsPage.tsx"), "utf8");
+  const api = fs.readFileSync(path.resolve("src/features/core/purchases/invoice-ocr-api.ts"), "utf8");
 
   it("uploads a multipart image into a review-only draft", () => {
     expect(api).toContain('form.append("invoice", file, file.name)');

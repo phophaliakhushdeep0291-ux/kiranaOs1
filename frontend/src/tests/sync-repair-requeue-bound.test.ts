@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_REPAIR_REQUEUES } from "@/features/sync/sync-status-repair";
+import { MAX_REPAIR_REQUEUES } from "@/features/core/sync/sync-status-repair";
 
 /**
  * The sweep↔push loop that reached retry_count 108 on a production device.

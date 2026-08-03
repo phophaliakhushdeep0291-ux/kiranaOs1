@@ -51,7 +51,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
-import { updateSettingsLocalFirst } from "@/features/settings/local-actions";
+import { updateSettingsLocalFirst } from "@/features/core/settings/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 

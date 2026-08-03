@@ -3,9 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 describe("transactional backup restore UI", () => {
-  const page = fs.readFileSync(path.resolve("src/features/settings/pages/SyncSettingsPage.tsx"), "utf8");
-  const api = fs.readFileSync(path.resolve("src/features/backups/api.ts"), "utf8");
-  const reset = fs.readFileSync(path.resolve("src/features/backups/restore-local-reset.ts"), "utf8");
+  const page = fs.readFileSync(path.resolve("src/features/core/settings/pages/SyncSettingsPage.tsx"), "utf8");
+  const api = fs.readFileSync(path.resolve("src/features/core/backups/api.ts"), "utf8");
+  const reset = fs.readFileSync(path.resolve("src/features/core/backups/restore-local-reset.ts"), "utf8");
   const http = fs.readFileSync(path.resolve("src/lib/api/http.ts"), "utf8");
   const database = fs.readFileSync(path.resolve("src/lib/offline/db.ts"), "utf8");
 

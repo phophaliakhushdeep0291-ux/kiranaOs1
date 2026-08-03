@@ -144,7 +144,7 @@ async function main() {
       localStorage.setItem('kirana-os:device-id:v1', deviceId);
       localStorage.setItem('kiranaos.auth.session.v1', JSON.stringify({ accessToken: auth.accessToken ?? auth.token, refreshToken: auth.refreshToken, user: auth.user, shop: auth.shop }));
       sessionStorage.setItem('kiranaos.security.sessionStarted.v1', String(Date.now()));
-      await import('/src/features/demo/demo-shop-data.ts').then((module) => module.seedDemoShopData());
+      await import('/src/features/core/demo/demo-shop-data.ts').then((module) => module.seedDemoShopData());
       return { shopId: auth.shop?.id };
     })()`);
     await navigate(client, `${FRONTEND_URL}/reports`);

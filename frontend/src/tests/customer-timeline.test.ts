@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildCustomerTimeline } from "@/features/customers/customer-ledger-data";
-import type { CustomerDetailData } from "@/features/customers/customer-ledger-data";
+import { buildCustomerTimeline } from "@/features/core/customers/customer-ledger-data";
+import type { CustomerDetailData } from "@/features/core/customers/customer-ledger-data";
 
 type TimelineInput = Pick<CustomerDetailData, "bills" | "payments" | "ledger">;
 

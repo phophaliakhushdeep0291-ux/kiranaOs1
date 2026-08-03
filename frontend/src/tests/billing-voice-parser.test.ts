@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@/lib/api/client";
-import { normalizeVoiceUnit, parseBillingVoiceCommand, parseVoiceLine, parseVoiceNumber, voiceProductAliases } from "@/features/billing/pages/billing-voice-parser";
+import { normalizeVoiceUnit, parseBillingVoiceCommand, parseVoiceLine, parseVoiceNumber, voiceProductAliases } from "@/features/core/billing/pages/billing-voice-parser";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {

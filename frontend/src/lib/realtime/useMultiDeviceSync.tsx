@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/features/auth/useAuth";
-import { runSyncCycle } from "@/features/sync/engine";
-import { hydrateFromBackendSnapshot } from "@/features/sync/cloud-hydration";
-import { probeBackendConnection } from "@/features/sync/backend-health";
+import { useAuth } from "@/features/core/auth/useAuth";
+import { runSyncCycle } from "@/features/core/sync/engine";
+import { hydrateFromBackendSnapshot } from "@/features/core/sync/cloud-hydration";
+import { probeBackendConnection } from "@/features/core/sync/backend-health";
 import {
   shouldPassSharedThrottle,
   shouldRunScheduledNetworkWork,

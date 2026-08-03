@@ -164,7 +164,7 @@ async function main() {
     })()`);
     await waitForPage(client, "Boolean(document.querySelector('#main-content') || document.body.innerText.includes('Open profile'))", 30_000);
     await client.evaluate(`(async () => {
-      const demo = await import('/src/features/demo/demo-shop-data.ts');
+      const demo = await import('/src/features/core/demo/demo-shop-data.ts');
       await demo.seedDemoShopData();
       const { offlineDB } = await import('/src/lib/offline/db.ts');
       const product = {

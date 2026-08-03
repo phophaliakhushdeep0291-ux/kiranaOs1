@@ -10,8 +10,8 @@ import {
 } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/features/auth/useAuth";
-import { useOfflineStatus } from "@/features/sync/useOfflineStatus";
+import { useAuth } from "@/features/core/auth/useAuth";
+import { useOfflineStatus } from "@/features/core/sync/useOfflineStatus";
 import {
   Activity,
   BarChart3,
@@ -39,21 +39,22 @@ import {
   Wallet,
   WifiOff,
 } from "lucide-react";
-import { PlanBadge } from "@/features/subscription/components/PlanBadge";
-import { SubscriptionStatusBanner } from "@/features/subscription/components/SubscriptionStatusBanner";
-import { useSubscriptionSnapshot } from "@/features/subscription/access";
-import { useBusinessType } from "@/features/settings/business-types";
-import { useBusinessTypeServerSync } from "@/features/settings/business-type-sync";
-import { useModuleVisibility } from "@/features/settings/modules";
-import { useModuleVisibilityServerSync } from "@/features/settings/module-visibility-sync";
-import { VoiceAssistant } from "@/features/voice/VoiceAssistant";
-import { ReportIssueButton } from "@/features/support";
-import { DemoModeBanner } from "@/features/demo/DemoModeBanner";
-import { SyncAlertBanner } from "@/features/sync/SyncAlertBanner";
+import { PlanBadge } from "@/features/core/subscription/components/PlanBadge";
+import { SubscriptionStatusBanner } from "@/features/core/subscription/components/SubscriptionStatusBanner";
+import { useSubscriptionSnapshot } from "@/features/core/subscription/access";
+import { useBusinessType } from "@/features/core/settings/business-types";
+import { useBusinessTypeServerSync } from "@/features/core/settings/business-type-sync";
+import { useModuleVisibility } from "@/features/core/settings/modules";
+import { useModuleVisibilityServerSync } from "@/features/core/settings/module-visibility-sync";
+import { useActiveVerticalPack } from "@/features/verticals/registry";
+import { VoiceAssistant } from "@/features/core/voice/VoiceAssistant";
+import { ReportIssueButton } from "@/features/core/support";
+import { DemoModeBanner } from "@/features/core/demo/DemoModeBanner";
+import { SyncAlertBanner } from "@/features/core/sync/SyncAlertBanner";
 import { CommandPalette } from "./CommandPalette";
 import { MobileBottomNav, MobileTopBar } from "./MobileAppChrome";
 import { apiRequest, getApiBaseUrl } from "@/lib/api/http";
-import { getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/stores/location-context";
+import { getActiveLocationId, LOCATION_CHANGED_EVENT, setActiveLocationId as persistActiveLocationId } from "@/features/core/stores/location-context";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -181,7 +182,6 @@ const NAV: NavItem[] = [
     ],
   },
   { kind: "link", href: "/returns", label: "Returns", Icon: Undo2 },
-  { kind: "link", href: "/rentals", label: "Rentals", Icon: Shirt },
   { kind: "link", href: "/reports", label: "Reports", Icon: BarChart3 },
   { kind: "link", href: "/activity-insights", label: "Activity & Insights", Icon: Activity },
   { kind: "link", href: "/money-statement", label: "Cash & Payments", Icon: Landmark },
@@ -239,6 +239,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const { def: btDef } = useBusinessType();
   useBusinessTypeServerSync();
   const { isEnabled: isModuleOn, isHrefEnabled } = useModuleVisibility();
+  const verticalPack = useActiveVerticalPack();
   useModuleVisibilityServerSync();
   const queryClient = useQueryClient();
   const locationsQuery = useQuery({
@@ -338,11 +339,24 @@ export function Layout({ children }: { children: ReactNode }) {
   // Modules the owner switched off in Settings drop out of the sidebar entirely.
   // A group survives on its remaining children, so hiding "Stock & inventory"
   // still leaves Products and Categories reachable under the same heading.
+  //
+  // The shop's own trade adds its entries on top: only the active pack's nav is
+  // read, so another vertical's screens never appear here to begin with.
   const nav = useMemo(() => {
     const items: NavItem[] = [];
+    const pending = new Set(verticalPack.nav.filter((entry) => isHrefEnabled(entry.href)));
+    const spliceAfter = (href: string) => {
+      for (const entry of pending) {
+        if (entry.insertAfter !== href) continue;
+        items.push({ kind: "link", href: entry.href, label: entry.label, Icon: entry.Icon });
+        pending.delete(entry);
+      }
+    };
+
     for (const item of NAV) {
       if (item.kind === "link") {
         if (isHrefEnabled(item.href)) items.push(item);
+        spliceAfter(item.href);
         continue;
       }
       const children = item.children.filter((child) => isHrefEnabled(child.href));
@@ -354,8 +368,17 @@ export function Layout({ children }: { children: ReactNode }) {
         overviewHref: item.overviewHref && isHrefEnabled(item.overviewHref) ? item.overviewHref : undefined,
       });
     }
+
+    // Entries with no `insertAfter`, or whose anchor is switched off, still have
+    // to land somewhere — above Settings, so Settings stays the last item.
+    if (pending.size > 0) {
+      const tail = items.findIndex((item) => item.kind === "link" && item.href === "/settings");
+      const extras: NavItem[] = [...pending].map((entry) =>
+        ({ kind: "link", href: entry.href, label: entry.label, Icon: entry.Icon }));
+      items.splice(tail === -1 ? items.length : tail, 0, ...extras);
+    }
     return items;
-  }, [isHrefEnabled]);
+  }, [isHrefEnabled, verticalPack]);
 
   // auto-expand groups when child route is active
   useEffect(() => {

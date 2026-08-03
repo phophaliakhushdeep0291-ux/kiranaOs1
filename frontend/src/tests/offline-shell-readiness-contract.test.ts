@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
 const vite = readFileSync(new URL("../../vite.config.ts", import.meta.url), "utf8");
-const readiness = readFileSync(new URL("../features/sync/offline-readiness.ts", import.meta.url), "utf8");
+const readiness = readFileSync(new URL("../features/core/sync/offline-readiness.ts", import.meta.url), "utf8");
 
 describe("offline shell and readiness contract", () => {
   it("pre-caches every critical counter route and its dependency closure", () => {

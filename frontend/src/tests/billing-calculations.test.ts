@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "@/lib/api/client";
-import { calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/billing/pages/billing-calculations";
-import type { CartItem } from "@/features/billing/pages/billing-types";
+import { calculateCartSubtotal, calculateDiscount, calculateGrandTotal, cartItemProfit, clampAmount, lineNeedsOwnerApproval, normalizeSearchText, productCostPrice, productMinSellingPrice, productSearchText, productSellingPrice, roundMoney } from "@/features/core/billing/pages/billing-calculations";
+import type { CartItem } from "@/features/core/billing/pages/billing-types";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {

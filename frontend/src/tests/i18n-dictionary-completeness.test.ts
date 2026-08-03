@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { englishTranslations, loadHindiDictionary } from "@/features/settings/i18n";
+import { englishTranslations, loadHindiDictionary } from "@/features/core/settings/i18n";
 
 /**
  * The Hindi table is typed as `Record<keyof typeof <domain>En, string>`, so a

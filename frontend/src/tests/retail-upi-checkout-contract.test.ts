@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 describe("retail UPI provider checkout contract", () => {
-  const clientSource = fs.readFileSync(path.resolve(process.cwd(), "src/features/billing/retail-payment.ts"), "utf8");
+  const clientSource = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/billing/retail-payment.ts"), "utf8");
   const serverSource = fs.readFileSync(path.resolve(process.cwd(), "../backend/src/modules/payment-provider/retailPayment.validation.js"), "utf8");
 
   it("shows only UPI instruments in the provider checkout", () => {

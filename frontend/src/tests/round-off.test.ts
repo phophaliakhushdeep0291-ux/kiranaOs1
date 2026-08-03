@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyRoundOff, roundToRupee } from "@/lib/money";
-import { applyRoundOff as applyRoundOffFromBilling } from "@/features/billing/pages/billing-calculations";
+import { applyRoundOff as applyRoundOffFromBilling } from "@/features/core/billing/pages/billing-calculations";
 import { billCreationSchema } from "@/lib/validation";
 import { validationError } from "@/lib/offline/actions/utils";
 

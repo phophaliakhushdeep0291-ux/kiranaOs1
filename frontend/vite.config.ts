@@ -40,15 +40,15 @@ function stampServiceWorkerBuild() {
       }>;
       const criticalEntries = [
         "index.html",
-        "src/features/dashboard/pages/DashboardPage.tsx",
-        "src/features/billing/pages/BillingPage.tsx",
-        "src/features/products/pages/ProductsPage.tsx",
-        "src/features/customers/pages/CustomersPage.tsx",
-        "src/features/inventory/pages/InventoryPage.tsx",
-        "src/features/bills/pages/BillsPage.tsx",
-        "src/features/purchases/pages/PurchaseBillsPage.tsx",
-        "src/features/reports/pages/ReportsPage.tsx",
-        "src/features/sync/pages/SyncStatusPage.tsx",
+        "src/features/core/dashboard/pages/DashboardPage.tsx",
+        "src/features/core/billing/pages/BillingPage.tsx",
+        "src/features/core/products/pages/ProductsPage.tsx",
+        "src/features/core/customers/pages/CustomersPage.tsx",
+        "src/features/core/inventory/pages/InventoryPage.tsx",
+        "src/features/core/bills/pages/BillsPage.tsx",
+        "src/features/core/purchases/pages/PurchaseBillsPage.tsx",
+        "src/features/core/reports/pages/ReportsPage.tsx",
+        "src/features/core/sync/pages/SyncStatusPage.tsx",
       ];
       const coreAssets = new Set<string>();
       const visited = new Set<string>();
@@ -140,7 +140,7 @@ export default defineConfig({
           // ~45 kB of Devanagari it never renders, and a Hindi shop had to fetch
           // an unrelated route to get its own language. Pinning them to a named
           // chunk keeps the language payload independent of routing.
-          "i18n-hindi": ["./src/features/settings/translations/hindi"],
+          "i18n-hindi": ["./src/features/core/settings/translations/hindi"],
         },
       },
     },

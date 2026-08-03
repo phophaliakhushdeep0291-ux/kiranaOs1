@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 
 const layout = readFileSync("src/components/layout/Layout.tsx", "utf8");
 const palette = readFileSync("src/components/layout/CommandPalette.tsx", "utf8");
-const voiceActions = readFileSync("src/features/voice/voice-actions.ts", "utf8");
-const productsPage = readFileSync("src/features/products/pages/ProductsPage.tsx", "utf8");
-const billsPage = readFileSync("src/features/bills/pages/BillsPage.tsx", "utf8");
-const customersPage = readFileSync("src/features/customers/pages/CustomersPage.tsx", "utf8");
+const voiceActions = readFileSync("src/features/core/voice/voice-actions.ts", "utf8");
+const productsPage = readFileSync("src/features/core/products/pages/ProductsPage.tsx", "utf8");
+const billsPage = readFileSync("src/features/core/bills/pages/BillsPage.tsx", "utf8");
+const customersPage = readFileSync("src/features/core/customers/pages/CustomersPage.tsx", "utf8");
 
 describe("command palette and voice page bridge", () => {
   it("wires header search to an offline-first command palette", () => {

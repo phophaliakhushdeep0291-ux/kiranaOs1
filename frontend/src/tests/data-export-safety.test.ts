@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/features/audit-logs/local-actions", () => ({
+vi.mock("@/features/core/audit-logs/local-actions", () => ({
   writeAuditLog: vi.fn(async () => ({ id: "audit_1", pendingSync: true })),
 }));
 
-import { writeAuditLog } from "@/features/audit-logs/local-actions";
-import { recordDataExportLocalFirst } from "@/features/reports/local-actions";
+import { writeAuditLog } from "@/features/core/audit-logs/local-actions";
+import { recordDataExportLocalFirst } from "@/features/core/reports/local-actions";
 
 const mockedWriteAuditLog = vi.mocked(writeAuditLog);
 

@@ -17,7 +17,7 @@ vi.mock("@/lib/api/http", () => {
 
 import { apiRequest, ApiClientError } from "@/lib/api/http";
 import { requestAiAudioTranscription } from "@/lib/ai/ai-client";
-import { backendTranscriptionErrorMessage, chooseRecorderMimeType, startBackendTranscription } from "@/features/voice/backend-transcription";
+import { backendTranscriptionErrorMessage, chooseRecorderMimeType, startBackendTranscription } from "@/features/core/voice/backend-transcription";
 
 describe("AI audio transcription client", () => {
   beforeEach(() => vi.mocked(apiRequest).mockReset());

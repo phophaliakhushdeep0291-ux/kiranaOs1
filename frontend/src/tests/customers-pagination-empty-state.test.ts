@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const customersPage = readFileSync("src/features/customers/pages/CustomersPage.tsx", "utf8");
+const customersPage = readFileSync("src/features/core/customers/pages/CustomersPage.tsx", "utf8");
 
 describe("customers list count footer", () => {
   it("shows an honest empty count instead of fake pagination controls", () => {

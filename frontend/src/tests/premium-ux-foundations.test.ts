@@ -11,9 +11,9 @@ const selectInput = read("../components/forms/SelectInput.tsx");
 const form = read("../components/ui/form.tsx");
 const toast = read("../components/ui/toast.tsx");
 const confirmDialog = read("../components/shared/ConfirmDialog.tsx");
-const taxes = read("../features/settings/pages/TaxesSettingsPage.tsx");
-const billing = read("../features/billing/pages/BillingPage.tsx");
-const settingsUi = read("../features/settings/ui.tsx");
+const taxes = read("../features/core/settings/pages/TaxesSettingsPage.tsx");
+const billing = read("../features/core/billing/pages/BillingPage.tsx");
+const settingsUi = read("../features/core/settings/ui.tsx");
 const styles = read("../index.css");
 
 describe("premium UX foundations", () => {

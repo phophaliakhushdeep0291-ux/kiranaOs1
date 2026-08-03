@@ -74,7 +74,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { offlineDB } from "@/lib/offline/db";
 import { writeInstantMemoryCache } from "@/lib/offline/instant-cache";
-import { createBillLocalFirst } from "@/features/billing/local-actions";
+import { createBillLocalFirst } from "@/features/core/billing/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedWriteInstantMemoryCache = vi.mocked(writeInstantMemoryCache);

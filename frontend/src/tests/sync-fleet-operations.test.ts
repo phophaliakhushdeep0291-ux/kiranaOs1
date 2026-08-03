@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const api = readFileSync("src/features/sync/api.ts", "utf8");
-const pull = readFileSync("src/features/sync/sync-pull.ts", "utf8");
-const page = readFileSync("src/features/sync/pages/SyncStatusPage.tsx", "utf8");
+const api = readFileSync("src/features/core/sync/api.ts", "utf8");
+const pull = readFileSync("src/features/core/sync/sync-pull.ts", "utf8");
+const page = readFileSync("src/features/core/sync/pages/SyncStatusPage.tsx", "utf8");
 
 describe("sync fleet operations", () => {
   it("acknowledges only after the applied sequence is durable locally", () => {

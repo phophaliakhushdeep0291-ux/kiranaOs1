@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { partitionProductRules } from "@/features/pricing/use-pricing-rules";
-import type { ApiPricingRule } from "@/features/pricing/api";
+import { partitionProductRules } from "@/features/core/pricing/use-pricing-rules";
+import type { ApiPricingRule } from "@/features/core/pricing/api";
 
 const rules: ApiPricingRule[] = [
   { id: "s2", ruleType: "PRODUCT_QUANTITY_PRICE", productId: "p1", minQuantity: 10, fixedUnitPrice: 26 },

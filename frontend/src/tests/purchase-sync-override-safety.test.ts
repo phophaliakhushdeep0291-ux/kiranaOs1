@@ -4,8 +4,8 @@ import {
   buildPurchaseOverrideMatcher,
   rowMatchesPurchaseOverride,
   withLocalPurchaseOverride,
-} from "@/features/purchases/sync-guards";
-import { buildBackendSyncOperation } from "@/features/sync/sync-operation-normalizer";
+} from "@/features/core/purchases/sync-guards";
+import { buildBackendSyncOperation } from "@/features/core/sync/sync-operation-normalizer";
 
 describe("purchase sync override safety", () => {
   it("keeps previous purchase keys so edited rows block stale cloud re-imports", () => {
@@ -48,11 +48,11 @@ describe("purchase sync override safety", () => {
   });
 
   it("guards both direct hydration and normal sync pull", () => {
-    const hydration = readFileSync("src/features/sync/cloud-hydration.ts", "utf8");
-    const reconcile = readFileSync("src/features/sync/sync-reconcile.ts", "utf8");
-    const outbox = readFileSync("src/features/sync/outbox.ts", "utf8");
-    const normalizer = readFileSync("src/features/sync/sync-operation-normalizer.ts", "utf8");
-    const syncTypes = readFileSync("src/features/sync/sync-types.ts", "utf8");
+    const hydration = readFileSync("src/features/core/sync/cloud-hydration.ts", "utf8");
+    const reconcile = readFileSync("src/features/core/sync/sync-reconcile.ts", "utf8");
+    const outbox = readFileSync("src/features/core/sync/outbox.ts", "utf8");
+    const normalizer = readFileSync("src/features/core/sync/sync-operation-normalizer.ts", "utf8");
+    const syncTypes = readFileSync("src/features/core/sync/sync-types.ts", "utf8");
 
     expect(hydration).toContain("rowMatchesPurchaseOverride");
     expect(hydration).toContain("safeRows");

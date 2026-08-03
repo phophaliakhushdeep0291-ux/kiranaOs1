@@ -49,7 +49,7 @@ const syncPushMock = vi.hoisted(() =>
   vi.fn(async () => ({ success: true, results: [] })),
 );
 
-vi.mock("@/features/sync/api", () => ({
+vi.mock("@/features/core/sync/api", () => ({
   syncPush: syncPushMock,
   syncPull: vi.fn(async () => ({ changes: [] })),
   acknowledgeSyncSequence: vi.fn(async () => ({ acknowledgement: { accepted: true } })),
@@ -57,7 +57,7 @@ vi.mock("@/features/sync/api", () => ({
   requestSyncRetry: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/features/subscription/access", () => ({
+vi.mock("@/features/core/subscription/access", () => ({
   getCurrentSubscriptionSnapshot: vi.fn(async () => ({
     cloudSyncAllowed: true,
   })),
@@ -69,10 +69,10 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   pruneRecentRows: vi.fn((rows: unknown[]) => rows),
 }));
 
-import { buildLocalReportSnapshot } from "@/features/reports/local-reporting";
-import { pushPendingOutboxOperations } from "@/features/sync/engine";
+import { buildLocalReportSnapshot } from "@/features/core/reports/local-reporting";
+import { pushPendingOutboxOperations } from "@/features/core/sync/engine";
 import { offlineDB, filterRowsForCurrentScope } from "@/lib/offline/db";
-import { syncPush } from "@/features/sync/api";
+import { syncPush } from "@/features/core/sync/api";
 
 describe("tenant/store isolation", () => {
   beforeEach(() => {

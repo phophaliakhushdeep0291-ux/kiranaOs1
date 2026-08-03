@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 describe("direct hardware print safety contract", () => {
-  const receiptSource = fs.readFileSync(path.resolve(process.cwd(), "src/features/receipts/receipt-print.ts"), "utf8");
+  const receiptSource = fs.readFileSync(path.resolve(process.cwd(), "src/features/core/receipts/receipt-print.ts"), "utf8");
   const bridgeSource = fs.readFileSync(path.resolve(process.cwd(), "../hardware-bridge/src/server.mjs"), "utf8");
 
   it("sends one rendered receipt while the bridge owns physical copy iteration", () => {

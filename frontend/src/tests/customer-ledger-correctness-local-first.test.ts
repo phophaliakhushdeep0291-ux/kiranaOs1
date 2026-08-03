@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BillInputBillType, BillPaymentMode, type BillInput } from "@/types/api";
-import { calculateLedgerBalance, normaliseLedgerType } from "@/features/ledger/accounting";
+import { calculateLedgerBalance, normaliseLedgerType } from "@/features/core/ledger/accounting";
 
 const dbState = vi.hoisted(() => ({
   scope: {
@@ -97,11 +97,11 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 }));
 
 import { offlineDB } from "@/lib/offline/db";
-import { createBillLocalFirst } from "@/features/billing/local-actions";
-import { cancelBillWithOwnerPinLocalFirst } from "@/features/bills/local-actions";
-import { createLedgerAdjustmentLocalFirst, readCustomerLedgerEntries } from "@/features/ledger/local-actions";
-import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/payments/local-actions";
-import { applyAuthoritativeUdharSummary, reconcileCustomerWithAuthoritativeSummary, loadCustomerDetail, loadCustomersWithLedger } from "@/features/customers/customer-ledger-data";
+import { createBillLocalFirst } from "@/features/core/billing/local-actions";
+import { cancelBillWithOwnerPinLocalFirst } from "@/features/core/bills/local-actions";
+import { createLedgerAdjustmentLocalFirst, readCustomerLedgerEntries } from "@/features/core/ledger/local-actions";
+import { recordPaymentLocalFirst, reversePaymentWithOwnerPinLocalFirst } from "@/features/core/payments/local-actions";
+import { applyAuthoritativeUdharSummary, reconcileCustomerWithAuthoritativeSummary, loadCustomerDetail, loadCustomersWithLedger } from "@/features/core/customers/customer-ledger-data";
 
 function resetTables() {
   dbState.idCounter = 0;

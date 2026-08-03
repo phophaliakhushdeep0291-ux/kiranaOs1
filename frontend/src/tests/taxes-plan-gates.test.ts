@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const taxes = readFileSync("src/features/settings/pages/TaxesSettingsPage.tsx", "utf8");
+const taxes = readFileSync("src/features/core/settings/pages/TaxesSettingsPage.tsx", "utf8");
 
 describe("taxes plan gates", () => {
   it("does not call Business-only GST endpoints for lower plans", () => {

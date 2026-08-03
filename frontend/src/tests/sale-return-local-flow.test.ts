@@ -55,7 +55,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   }),
 }));
 
-import { createSaleReturnLocalFirst } from "@/features/returns/local-actions";
+import { createSaleReturnLocalFirst } from "@/features/core/returns/local-actions";
 
 function rows(table: string) {
   return (dbState.committed[table] ?? []) as Array<Record<string, unknown>>;

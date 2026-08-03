@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDrawerCount, upsertDrawerCount, type DrawerCount } from "@/features/reports/drawer-counts";
+import { buildDrawerCount, upsertDrawerCount, type DrawerCount } from "@/features/core/reports/drawer-counts";
 
 function entry(date: string, variance = 0): DrawerCount {
   return { date, expectedCash: 100, countedCash: 100 + variance, variance, countedAt: `${date}T21:00:00Z` };

@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs";
 
 const coordinator = readFileSync("src/lib/browser/multiTabCoordinator.ts", "utf8");
 const http = readFileSync("src/lib/api/http.ts", "utf8");
-const bootstrap = readFileSync("src/features/sync/CloudDataBootstrap.tsx", "utf8");
-const offlineStatus = readFileSync("src/features/sync/useOfflineStatus.ts", "utf8");
+const bootstrap = readFileSync("src/features/core/sync/CloudDataBootstrap.tsx", "utf8");
+const offlineStatus = readFileSync("src/features/core/sync/useOfflineStatus.ts", "utf8");
 const realtimeBridge = readFileSync("src/lib/realtime/useRealtimeRefreshBridge.ts", "utf8");
-const syncApi = readFileSync("src/features/sync/api.ts", "utf8");
-const syncEngine = readFileSync("src/features/sync/sync-engine.ts", "utf8");
-const syncPull = readFileSync("src/features/sync/sync-pull.ts", "utf8");
-const authContext = readFileSync("src/features/auth/AuthContext.tsx", "utf8");
+const syncApi = readFileSync("src/features/core/sync/api.ts", "utf8");
+const syncEngine = readFileSync("src/features/core/sync/sync-engine.ts", "utf8");
+const syncPull = readFileSync("src/features/core/sync/sync-pull.ts", "utf8");
+const authContext = readFileSync("src/features/core/auth/AuthContext.tsx", "utf8");
 const offlineDb = readFileSync("src/lib/offline/db.ts", "utf8");
 
 describe("multi-session request isolation", () => {

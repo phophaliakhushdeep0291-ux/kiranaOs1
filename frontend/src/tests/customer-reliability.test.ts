@@ -74,9 +74,9 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { offlineDB } from "@/lib/offline/db";
 import { removeCachedListItem, upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/customers/local-actions";
-import { findDuplicateCustomerWarnings } from "@/features/customers/customer-reliability";
-import { restoreEntityFromRecycleBinLocalFirst } from "@/features/recycle-bin/local-actions";
+import { createCustomerLocalFirst, deleteCustomerLocalFirst, updateCustomerLocalFirst } from "@/features/core/customers/local-actions";
+import { findDuplicateCustomerWarnings } from "@/features/core/customers/customer-reliability";
+import { restoreEntityFromRecycleBinLocalFirst } from "@/features/core/recycle-bin/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedRemoveCachedListItem = vi.mocked(removeCachedListItem);

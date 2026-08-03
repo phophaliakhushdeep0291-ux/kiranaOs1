@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const billsPage = readFileSync("src/features/bills/pages/BillsPage.tsx", "utf8");
-const billDetailPage = readFileSync("src/features/bills/pages/BillDetailPage.tsx", "utf8");
-const billingPage = readFileSync("src/features/billing/pages/BillingPage.tsx", "utf8");
-const billingSummary = readFileSync("src/features/billing/pages/components/BillingSummary.tsx", "utf8");
-const paymentPanel = readFileSync("src/features/billing/pages/components/BillingPaymentPanel.tsx", "utf8");
+const billsPage = readFileSync("src/features/core/bills/pages/BillsPage.tsx", "utf8");
+const billDetailPage = readFileSync("src/features/core/bills/pages/BillDetailPage.tsx", "utf8");
+const billingPage = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
+const billingSummary = readFileSync("src/features/core/billing/pages/components/BillingSummary.tsx", "utf8");
+const paymentPanel = readFileSync("src/features/core/billing/pages/components/BillingPaymentPanel.tsx", "utf8");
 
 // Estimates (kacha bills) work the same as real bills — stock, payments, udhar, reports —
 // and differ ONLY by their EST- number series plus estimate-specific views/filters.

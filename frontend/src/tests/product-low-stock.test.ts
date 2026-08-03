@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fromBaseQty, isLowStock, toBaseQty } from "@/features/products/pages/product-pricing";
+import { fromBaseQty, isLowStock, toBaseQty } from "@/features/core/products/pages/product-pricing";
 import type { Product } from "@/types/api";
 
 function product(overrides: Partial<Product>): Product {

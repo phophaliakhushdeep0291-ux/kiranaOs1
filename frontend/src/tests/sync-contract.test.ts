@@ -309,7 +309,7 @@ vi.mock("@/lib/offline/db", () => {
   };
 });
 
-vi.mock("@/features/sync/api", () => ({
+vi.mock("@/features/core/sync/api", () => ({
   syncPush: syncPushMock,
   syncPull: syncPullMock,
   acknowledgeSyncSequence: acknowledgeSyncSequenceMock,
@@ -318,7 +318,7 @@ vi.mock("@/features/sync/api", () => ({
   reportSyncConflict: reportSyncConflictMock,
 }));
 
-vi.mock("@/features/subscription/access", () => ({
+vi.mock("@/features/core/subscription/access", () => ({
   getCurrentSubscriptionSnapshot: vi.fn(async () => ({ cloudSyncAllowed: true })),
 }));
 
@@ -328,17 +328,17 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   pruneRecentRows: vi.fn((rows: unknown[]) => rows),
 }));
 
-import { syncPush } from "@/features/sync/api";
+import { syncPush } from "@/features/core/sync/api";
 import {
   pullServerChanges,
   pushPendingOutboxOperations,
   retryFailedSyncOperations,
-} from "@/features/sync/engine";
+} from "@/features/core/sync/engine";
 import {
   applyIdMappingsFromResponse,
   collectUnmappedLocalIds,
   replaceLocalEntityId,
-} from "@/features/sync/sync-id-mapping";
+} from "@/features/core/sync/sync-id-mapping";
 
 const mockedSyncPush = vi.mocked(syncPushMock);
 

@@ -209,7 +209,7 @@ async function main() {
         }),
       });
       if (!productResponse.ok) throw new Error('Product seed failed: ' + await productResponse.text());
-      await import('/src/features/demo/demo-shop-data.ts').then((module) => module.seedDemoShopData());
+      await import('/src/features/core/demo/demo-shop-data.ts').then((module) => module.seedDemoShopData());
       return true;
     })()`);
 

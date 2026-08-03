@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 
-const billingPage = readFileSync(new URL("../features/billing/pages/BillingPage.tsx", import.meta.url), "utf8");
-const billingSearch = readFileSync(new URL("../features/billing/pages/components/BillingSearch.tsx", import.meta.url), "utf8");
+const billingPage = readFileSync(new URL("../features/core/billing/pages/BillingPage.tsx", import.meta.url), "utf8");
+const billingSearch = readFileSync(new URL("../features/core/billing/pages/components/BillingSearch.tsx", import.meta.url), "utf8");
 const layout = readFileSync(new URL("../components/layout/Layout.tsx", import.meta.url), "utf8");
 const mobileChrome = readFileSync(new URL("../components/layout/MobileAppChrome.tsx", import.meta.url), "utf8");
-const dashboard = readFileSync(new URL("../features/dashboard/pages/DashboardPage.tsx", import.meta.url), "utf8");
-const products = readFileSync(new URL("../features/products/pages/ProductsPage.tsx", import.meta.url), "utf8");
-const productFormPanel = readFileSync(new URL("../features/products/pages/components/ProductFormPanel.tsx", import.meta.url), "utf8");
-const productQueries = readFileSync(new URL("../features/products/queries.ts", import.meta.url), "utf8");
-const billingSummary = readFileSync(new URL("../features/billing/pages/components/BillingSummary.tsx", import.meta.url), "utf8");
+const dashboard = readFileSync(new URL("../features/core/dashboard/pages/DashboardPage.tsx", import.meta.url), "utf8");
+const products = readFileSync(new URL("../features/core/products/pages/ProductsPage.tsx", import.meta.url), "utf8");
+const productFormPanel = readFileSync(new URL("../features/core/products/pages/components/ProductFormPanel.tsx", import.meta.url), "utf8");
+const productQueries = readFileSync(new URL("../features/core/products/queries.ts", import.meta.url), "utf8");
+const billingSummary = readFileSync(new URL("../features/core/billing/pages/components/BillingSummary.tsx", import.meta.url), "utf8");
 const pageLoading = readFileSync(new URL("../components/shared/PageLoading.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 
@@ -35,7 +35,7 @@ describe("POS workspace responsive design", () => {
   });
 
   it("uses the local-first product catalogue inside billing", () => {
-    expect(billingPage).toContain('import { useListProducts } from "@/features/products/queries";');
+    expect(billingPage).toContain('import { useListProducts } from "@/features/core/products/queries";');
     expect(billingPage).toContain('window.addEventListener("kirana:local-data-changed", loadLocalProducts)');
     expect(billingPage).toContain("products.data === undefined ? localProductRows : products.data");
     expect(productQueries).toContain("mergeProducts(fresh, localRows)");

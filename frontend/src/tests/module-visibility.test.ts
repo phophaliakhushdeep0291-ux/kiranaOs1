@@ -13,17 +13,18 @@ import {
   saveModuleVisibility,
   subscribeToModuleVisibility,
   type ModuleId,
-} from "@/features/settings/modules";
-import { saveBusinessType } from "@/features/settings/business-types";
+} from "@/features/core/settings/modules";
+import { saveBusinessType } from "@/features/core/settings/business-types";
+import { verticalForPath } from "@/features/verticals/registry";
 
 const read = (relative: string) => readFileSync(join(process.cwd(), relative), "utf8");
 
 const routes = read("src/app/routes.tsx");
 const layout = read("src/components/layout/Layout.tsx");
 const mobileChrome = read("src/components/layout/MobileAppChrome.tsx");
-const settingsShell = read("src/features/settings/SettingsShell.tsx");
-const dashboard = read("src/features/dashboard/pages/DashboardPage.tsx");
-const modulesPage = read("src/features/settings/pages/ModulesSettingsPage.tsx");
+const settingsShell = read("src/features/core/settings/SettingsShell.tsx");
+const dashboard = read("src/features/core/dashboard/pages/DashboardPage.tsx");
+const modulesPage = read("src/features/core/settings/pages/ModulesSettingsPage.tsx");
 
 // Hiding any of these would strand the shopkeeper: billing is the till, the
 // dashboard is the way back, sync-status is how data safety is checked, and
@@ -45,8 +46,13 @@ describe("module registry", () => {
   });
 
   it("points every routed module at a route that actually exists", () => {
+    // A vertical's routes are mounted from its pack rather than written out in
+    // routes.tsx, so a module owned by one counts as routed when the pack
+    // claims the path — see vertical-boundaries.test.ts for that side of it.
     for (const module of MODULE_DEFS.filter((entry) => entry.paths.length > 0)) {
-      const routed = module.paths.some((path) => routes.includes(`<Route path="${path}"`));
+      const routed = module.paths.some(
+        (path) => routes.includes(`<Route path="${path}"`) || verticalForPath(path) !== null,
+      );
       expect(routed, `${module.id} owns no registered route`).toBe(true);
     }
   });
@@ -180,7 +186,7 @@ describe("module visibility wiring", () => {
   it("filters both mobile navigation surfaces", () => {
     expect(mobileChrome).toContain("useModuleVisibility");
     expect(mobileChrome).toContain("TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href))");
-    expect(mobileChrome).toContain("group.items.filter((item) => isHrefEnabled(item.href))");
+    expect(mobileChrome).toContain(".filter((item) => isHrefEnabled(item.href))");
     // A five-column stylesheet default cannot describe a filtered tab bar.
     expect(mobileChrome).toContain("gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))`");
   });

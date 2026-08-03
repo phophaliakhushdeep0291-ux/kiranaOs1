@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const actions = readFileSync("src/features/expenses/local-actions.ts", "utf8");
-const page = readFileSync("src/features/expenses/pages/ExpensesPage.tsx", "utf8");
+const actions = readFileSync("src/features/core/expenses/local-actions.ts", "utf8");
+const page = readFileSync("src/features/core/expenses/pages/ExpensesPage.tsx", "utf8");
 const db = readFileSync("src/lib/offline/db.ts", "utf8");
-const pull = readFileSync("src/features/sync/sync-pull.ts", "utf8");
+const pull = readFileSync("src/features/core/sync/sync-pull.ts", "utf8");
 
 describe("offline expense contract", () => {
   it("commits the expense and stable outbox event atomically", () => {

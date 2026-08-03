@@ -162,7 +162,7 @@ describe("frontend security hardening", () => {
 
   it("serializes stale-session refresh and clears auth after final failure", () => {
     const http = readFileSync("src/lib/api/http.ts", "utf8");
-    const authContext = readFileSync("src/features/auth/AuthContext.tsx", "utf8");
+    const authContext = readFileSync("src/features/core/auth/AuthContext.tsx", "utf8");
 
     expect(http).toContain("let refreshPromise");
     expect(http).toContain("getSharedRefreshedAuth");

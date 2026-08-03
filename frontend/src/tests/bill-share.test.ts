@@ -5,7 +5,7 @@ import {
   buildWhatsappShareUrl,
   derivePaymentModeLabel,
   normalizeWhatsappNumber,
-} from "@/features/bills/share";
+} from "@/features/core/bills/share";
 
 describe("normalizeWhatsappNumber", () => {
   it("prefixes 91 to a bare 10-digit Indian mobile", () => {

@@ -72,6 +72,9 @@ export const damageSchema = z.object({
   productId: z.string(),
   quantity: quantityAmount({ positive: true }),
   enteredUnit: z.string(),
+  // Which packaging left the shelf, same contract as purchaseSchema: when set,
+  // `quantity` counts that pack and its own conversion gives the base quantity.
+  sellingUnitId: z.string().min(1).optional().nullable(),
   note: z.string().optional(),
 });
 

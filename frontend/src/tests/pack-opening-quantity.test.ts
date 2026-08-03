@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { sellingUnitConversion } from "@/features/products/pages/product-pricing";
-import { productsEn as productsEnglish } from "@/features/settings/translations/products";
+import { sellingUnitConversion } from "@/features/core/products/pages/product-pricing";
+import { productsEn as productsEnglish } from "@/features/core/settings/translations/products";
 
-const source = readFileSync("src/features/products/pages/components/ProductFormPanel.tsx", "utf8");
+const source = readFileSync("src/features/core/products/pages/components/ProductFormPanel.tsx", "utf8");
 
 // "Other pack sizes" now takes an opening quantity. It is a stock-IN expressed in that
 // pack, NOT a separate count for it: every pack size draws on one base-unit pool, so the

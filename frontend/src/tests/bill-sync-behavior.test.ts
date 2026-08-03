@@ -258,7 +258,7 @@ vi.mock("@/lib/offline/db", () => {
   };
 });
 
-vi.mock("@/features/sync/api", () => ({
+vi.mock("@/features/core/sync/api", () => ({
   syncPush: vi.fn(),
   syncPull: vi.fn(async () => ({ changes: [], cursor: "cursor_after_pull" })),
   acknowledgeSyncSequence: vi.fn(async () => ({ acknowledgement: { accepted: true } })),
@@ -266,22 +266,22 @@ vi.mock("@/features/sync/api", () => ({
   requestSyncRetry: vi.fn(),
 }));
 
-vi.mock("@/features/subscription/access", () => ({
+vi.mock("@/features/core/subscription/access", () => ({
   getCurrentSubscriptionSnapshot: vi.fn(async () => ({ cloudSyncAllowed: true })),
 }));
 
 import { offlineDB } from "@/lib/offline/db";
-import { createBillLocalFirst } from "@/features/billing/local-actions";
-import { syncPush } from "@/features/sync/api";
-import { pushPendingOutboxOperations } from "@/features/sync/engine";
+import { createBillLocalFirst } from "@/features/core/billing/local-actions";
+import { syncPush } from "@/features/core/sync/api";
+import { pushPendingOutboxOperations } from "@/features/core/sync/engine";
 import {
   dedupeBillsForDisplay,
   dedupePaymentsForDisplay,
   isMergedBillTwin,
   reconcileSyncedBillFromPush,
-} from "@/features/sync/bill-reconciliation";
-import { hardenLocalFinancialData } from "@/features/sync/local-data-hardening";
-import { mergeServerChange } from "@/features/sync/sync-reconcile";
+} from "@/features/core/sync/bill-reconciliation";
+import { hardenLocalFinancialData } from "@/features/core/sync/local-data-hardening";
+import { mergeServerChange } from "@/features/core/sync/sync-reconcile";
 
 const mockedSyncPush = vi.mocked(syncPush);
 

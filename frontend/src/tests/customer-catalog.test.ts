@@ -5,7 +5,7 @@ import {
   CatalogUnavailableError,
   type CustomerCatalog,
   type CatalogStorage,
-} from "@/features/customer-order/catalog";
+} from "@/features/core/customer-order/catalog";
 
 function makeCatalog(name = "Ramesh Kirana"): CustomerCatalog {
   const location = { id: "loc1", code: "MAIN", name: "Main Store", address: "Market road", city: "Pune", phone: null, isPrimary: true };

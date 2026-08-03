@@ -9,12 +9,12 @@ vi.mock("@/lib/ai/ai-client", () => ({
 }));
 
 import { requestAiProductAliases } from "@/lib/ai/ai-client";
-import { fetchProductAliasSuggestions } from "@/features/products/pages/product-aliases";
+import { fetchProductAliasSuggestions } from "@/features/core/products/pages/product-aliases";
 import {
   FALLBACK_PRODUCT_ALIAS_CHIPS,
   getLocalProductAliasSuggestions,
   mergeProductAliasSuggestions,
-} from "@/features/products/product-reliability";
+} from "@/features/core/products/product-reliability";
 
 const mockedRequestAiProductAliases = vi.mocked(requestAiProductAliases);
 

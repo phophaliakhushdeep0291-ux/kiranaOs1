@@ -6,7 +6,7 @@ import {
   parseLocalVoiceIntent,
   parseProductDraft,
   parseQuantityUnit,
-} from "@/features/voice/voice-command-parser";
+} from "@/features/core/voice/voice-command-parser";
 
 describe("voice command parser", () => {
   it("parses product drafts from local voice commands", () => {

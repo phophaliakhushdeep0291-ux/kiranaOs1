@@ -11,12 +11,12 @@ const runSyncCycle = vi.fn(async () => ({ pushed: 1, pulled: 2, failed: 0, confl
 const recoverFromStaleDeploy = vi.fn(async () => undefined);
 const clearInstantMemoryCache = vi.fn();
 
-vi.mock("@/features/remote-support/api", () => ({
+vi.mock("@/features/core/remote-support/api", () => ({
   pollDeviceCommands: (...args: unknown[]) => poll(...args),
   ackDeviceCommand: (...args: unknown[]) => ack(...args),
 }));
 
-vi.mock("@/features/sync/sync-engine", () => ({
+vi.mock("@/features/core/sync/sync-engine", () => ({
   runSyncCycle: (...args: unknown[]) => runSyncCycle(...args),
   retryFailedSyncOperations: vi.fn(async () => ({ retried: 3 })),
 }));
@@ -29,7 +29,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
   clearInstantMemoryCache: (...args: unknown[]) => clearInstantMemoryCache(...args),
 }));
 
-const { drainDeviceCommands, runDeviceCommand } = await import("@/features/remote-support/command-runner");
+const { drainDeviceCommands, runDeviceCommand } = await import("@/features/core/remote-support/command-runner");
 
 function command(overrides: Record<string, unknown> = {}) {
   return {
@@ -136,7 +136,7 @@ describe("remote support command runner", () => {
 
 describe("remote support wiring", () => {
   it("drains above the subscription gate, so a blocked shop is still repairable", () => {
-    const engine = fs.readFileSync("src/features/sync/sync-engine.ts", "utf8");
+    const engine = fs.readFileSync("src/features/core/sync/sync-engine.ts", "utf8");
     const drainAt = engine.indexOf("void drainDeviceCommands()");
     // The call site inside runSyncCycle, not the helper's definition further up.
     const gateAt = engine.indexOf("await canSubscriptionSync()");
@@ -147,14 +147,14 @@ describe("remote support wiring", () => {
   });
 
   it("offers remote help to the owner only", () => {
-    const page = fs.readFileSync("src/features/support/pages/AskArthaPage.tsx", "utf8");
+    const page = fs.readFileSync("src/features/core/support/pages/AskArthaPage.tsx", "utf8");
     expect(page).toContain("RemoteHelpCard");
     expect(page).toContain('user?.role === "owner"');
   });
 });
 
 describe("auto-fix visibility", () => {
-  const card = fs.readFileSync("src/features/remote-support/RemoteHelpCard.tsx", "utf8");
+  const card = fs.readFileSync("src/features/core/remote-support/RemoteHelpCard.tsx", "utf8");
 
   it("gives the owner a standing switch, since nobody is watching when these run", () => {
     expect(card).toContain("setAutoFixEnabled");
@@ -176,7 +176,7 @@ describe("auto-fix visibility", () => {
   });
 
   it("shows the operator the evidence behind each suggestion, not just a verdict", () => {
-    const console_ = fs.readFileSync("src/features/remote-support/pages/RemoteSupportConsolePage.tsx", "utf8");
+    const console_ = fs.readFileSync("src/features/core/remote-support/pages/RemoteSupportConsolePage.tsx", "utf8");
     expect(console_).toContain("suggestion.evidence");
     expect(console_).toContain("Suggested fixes");
     // Suggestions are per-device, so they must follow the selected device.
@@ -184,7 +184,7 @@ describe("auto-fix visibility", () => {
   });
 
   it("disables settings repair on a read-only session", () => {
-    const console_ = fs.readFileSync("src/features/remote-support/pages/RemoteSupportConsolePage.tsx", "utf8");
+    const console_ = fs.readFileSync("src/features/core/remote-support/pages/RemoteSupportConsolePage.tsx", "utf8");
     expect(console_).toContain("Settings repair");
     // The Apply button must be gated on canRepair, not only on the server saying no
     // after the operator has already typed a GSTIN into someone's tax settings.

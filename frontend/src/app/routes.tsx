@@ -4,88 +4,98 @@ import NotFound from "@/components/shared/NotFound";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { PageLoading } from "@/components/shared/PageLoading";
 import { RouteTransition } from "@/components/shared/RouteTransition";
-import { useAuth } from "@/features/auth/useAuth";
-import { getLandingRoute } from "@/features/settings/landing-page";
-import { SessionLockGate } from "@/features/settings/SessionLockGate";
-import { peekPostLoginRedirect, stashPostLoginRedirect } from "@/features/auth/post-login-redirect";
-import { FeatureGate } from "@/features/subscription/components/FeatureGate";
+import { useAuth } from "@/features/core/auth/useAuth";
+import { getLandingRoute } from "@/features/core/settings/landing-page";
+import { SessionLockGate } from "@/features/core/settings/SessionLockGate";
+import { peekPostLoginRedirect, stashPostLoginRedirect } from "@/features/core/auth/post-login-redirect";
+import { FeatureGate } from "@/features/core/subscription/components/FeatureGate";
+import { useActiveVerticalPack, type VerticalPageId } from "@/features/verticals/registry";
 import { useScreenTracking } from "@/lib/activity";
-import type { FeatureName } from "@/features/subscription/plans";
+import type { FeatureName } from "@/features/core/subscription/plans";
 
-const Login = lazy(() => import("@/features/auth/pages/LoginPage"));
-const Register = lazy(() => import("@/features/auth/pages/RegisterPage"));
-const ForgotPassword = lazy(() => import("@/features/auth/pages/ForgotPasswordPage"));
-const ResetPassword = lazy(() => import("@/features/auth/pages/ResetPasswordPage"));
-const VerifyEmail = lazy(() => import("@/features/auth/pages/VerifyEmailPage"));
-const DeviceRemoved = lazy(() => import("@/features/devices/pages/DeviceRemovedPage"));
-const CustomerOrder = lazy(() => import("@/features/customer-order/CustomerOrderPage"));
-const ImportOrder = lazy(() => import("@/features/customer-order/ImportOrderPage"));
-const Dashboard = lazy(() => import("@/features/dashboard/pages/DashboardPage"));
-const Billing = lazy(() => import("@/features/billing/pages/BillingPage"));
-const BillsPage = lazy(() => import("@/features/bills/pages/BillsPage"));
-const BillDetailPage = lazy(() => import("@/features/bills/pages/BillDetailPage"));
-const OrdersReceivedPage = lazy(() => import("@/features/orders/pages/OrdersReceivedPage"));
-const SalesOverviewPage = lazy(() => import("@/features/sales/pages/SalesOverviewPage"));
-const NewReturnPage = lazy(() => import("@/features/returns/pages/NewReturnPage"));
-const Products = lazy(() => import("@/features/products/pages/ProductsPage"));
-const ProductPricing = lazy(() => import("@/features/pricing/pages/ProductPricingPage"));
-const Customers = lazy(() => import("@/features/customers/pages/CustomersPage"));
-const CustomerDetailPage = lazy(() => import("@/features/customers/pages/CustomerDetailPage"));
-const Inventory = lazy(() => import("@/features/inventory/pages/InventoryPage"));
-const StockIn = lazy(() => import("@/features/inventory/pages/StockInPage"));
-const StockOut = lazy(() => import("@/features/inventory/pages/StockOutPage"));
-const Adjustments = lazy(() => import("@/features/inventory/pages/AdjustmentsPage"));
-const StockTransfers = lazy(() => import("@/features/inventory/pages/StockTransfersPage"));
-const StockCounts = lazy(() => import("@/features/inventory/pages/StockCountsPage"));
-const InventoryLots = lazy(() => import("@/features/inventory/pages/InventoryLotsPage"));
-const Categories = lazy(() => import("@/features/inventory/pages/CategoriesPage"));
-const PurchaseBillsPage = lazy(() => import("@/features/purchases/pages/PurchaseBillsPage"));
-const Suppliers = lazy(() => import("@/features/suppliers/pages/SuppliersPage"));
-const Expenses = lazy(() => import("@/features/expenses/pages/ExpensesPage"));
-const Offers = lazy(() => import("@/features/offers/pages/OffersPage"));
-const Rentals = lazy(() => import("@/features/rentals/pages/RentalsPage"));
-const Loyalty = lazy(() => import("@/features/loyalty/pages/LoyaltyPage"));
-const GiftCards = lazy(() => import("@/features/gift-cards/GiftCardsPage"));
-const Reports = lazy(() => import("@/features/reports/pages/ReportsPage"));
-const MoneyStatementPage = lazy(() => import("@/features/money-statement/pages/MoneyStatementPage"));
-const DailyClosingPage = lazy(() => import("@/features/reports/pages/DailyClosingPage"));
-const Settings = lazy(() => import("@/features/settings/pages/SettingsPage"));
-const MerchantSetupSettings = lazy(() => import("@/features/settings/pages/MerchantSetupPage"));
-const StoreProfileSettings = lazy(() => import("@/features/settings/pages/StoreProfilePage"));
-const ModulesSettings = lazy(() => import("@/features/settings/pages/ModulesSettingsPage"));
-const PrinterSettings = lazy(() => import("@/features/settings/pages/PrinterSettingsPage"));
-const BillingSettings = lazy(() => import("@/features/settings/pages/BillingSettingsPage"));
-const StaffSettings = lazy(() => import("@/features/settings/pages/StaffSettingsPage"));
-const DevicesSettings = lazy(() => import("@/features/settings/pages/DevicesSettingsPage"));
-const SyncSettings = lazy(() => import("@/features/settings/pages/SyncSettingsPage"));
-const TaxesSettings = lazy(() => import("@/features/settings/pages/TaxesSettingsPage"));
-const SecuritySettings = lazy(() => import("@/features/settings/pages/SecuritySettingsPage"));
-const NotificationsSettings = lazy(() => import("@/features/settings/pages/NotificationsSettingsPage"));
-const IntegrationsSettings = lazy(() => import("@/features/settings/pages/IntegrationsSettingsPage"));
-const AdvancedSettings = lazy(() => import("@/features/settings/pages/AdvancedSettingsPage"));
-const SyncStatusPage = lazy(() => import("@/features/sync/pages/SyncStatusPage"));
-const PlansPage = lazy(() => import("@/features/subscription/pages/PlansPage"));
-const SubscriptionPage = lazy(() => import("@/features/subscription/pages/SubscriptionPage"));
-const DevicesPage = lazy(() => import("@/features/devices/pages/DevicesPage"));
-const PlatformAdminPage = lazy(() => import("@/features/platform-admin/pages/PlatformAdminPage"));
-const RemoteSupportConsolePage = lazy(() => import("@/features/remote-support/pages/RemoteSupportConsolePage"));
-const AskArthaPage = lazy(() => import("@/features/support/pages/AskArthaPage"));
-const ActivityInsightsPage = lazy(() => import("@/features/activity/pages/ActivityInsightsPage"));
-const StaffPage = lazy(() => import("@/features/staff/pages/StaffPage"));
-const AuditLogsPage = lazy(() => import("@/features/audit-logs/pages/AuditLogsPage"));
-const AssuranceDashboardPage = lazy(() => import("@/features/assurance/pages/AssuranceDashboardPage"));
-const AssuranceFindingsPage = lazy(() => import("@/features/assurance/pages/FindingsPage"));
-const AssuranceFindingDetailPage = lazy(() => import("@/features/assurance/pages/FindingDetailPage"));
-const AssuranceEvidencePage = lazy(() => import("@/features/assurance/pages/EvidenceRequestsPage"));
-const AssuranceRunsPage = lazy(() => import("@/features/assurance/pages/AuditRunsPage"));
-const AssuranceRulesPage = lazy(() => import("@/features/assurance/pages/AuditRulesPage"));
-const AssuranceReviewQueuePage = lazy(() => import("@/features/assurance/pages/ReviewQueuePage"));
-const AssuranceReportPage = lazy(() => import("@/features/assurance/pages/AssuranceReportPage"));
-const AssuranceCasesPage = lazy(() => import("@/features/assurance/pages/CasesPage"));
-const RecycleBinPage = lazy(() => import("@/features/recycle-bin/pages/RecycleBinPage"));
-const SmartToolsPage = lazy(() => import("@/features/innovation/pages/SmartToolsPage"));
-const RecoveryModePage = lazy(() => import("@/features/recovery/pages/RecoveryModePage"));
+const Login = lazy(() => import("@/features/core/auth/pages/LoginPage"));
+const Register = lazy(() => import("@/features/core/auth/pages/RegisterPage"));
+const ForgotPassword = lazy(() => import("@/features/core/auth/pages/ForgotPasswordPage"));
+const ResetPassword = lazy(() => import("@/features/core/auth/pages/ResetPasswordPage"));
+const VerifyEmail = lazy(() => import("@/features/core/auth/pages/VerifyEmailPage"));
+const DeviceRemoved = lazy(() => import("@/features/core/devices/pages/DeviceRemovedPage"));
+const CustomerOrder = lazy(() => import("@/features/core/customer-order/CustomerOrderPage"));
+const ImportOrder = lazy(() => import("@/features/core/customer-order/ImportOrderPage"));
+const Dashboard = lazy(() => import("@/features/core/dashboard/pages/DashboardPage"));
+const Billing = lazy(() => import("@/features/core/billing/pages/BillingPage"));
+const BillsPage = lazy(() => import("@/features/core/bills/pages/BillsPage"));
+const BillDetailPage = lazy(() => import("@/features/core/bills/pages/BillDetailPage"));
+const OrdersReceivedPage = lazy(() => import("@/features/core/orders/pages/OrdersReceivedPage"));
+const SalesOverviewPage = lazy(() => import("@/features/core/sales/pages/SalesOverviewPage"));
+const NewReturnPage = lazy(() => import("@/features/core/returns/pages/NewReturnPage"));
+const Products = lazy(() => import("@/features/core/products/pages/ProductsPage"));
+const ProductPricing = lazy(() => import("@/features/core/pricing/pages/ProductPricingPage"));
+const Customers = lazy(() => import("@/features/core/customers/pages/CustomersPage"));
+const CustomerDetailPage = lazy(() => import("@/features/core/customers/pages/CustomerDetailPage"));
+const Inventory = lazy(() => import("@/features/core/inventory/pages/InventoryPage"));
+const StockIn = lazy(() => import("@/features/core/inventory/pages/StockInPage"));
+const StockOut = lazy(() => import("@/features/core/inventory/pages/StockOutPage"));
+const Adjustments = lazy(() => import("@/features/core/inventory/pages/AdjustmentsPage"));
+const StockTransfers = lazy(() => import("@/features/core/inventory/pages/StockTransfersPage"));
+const StockCounts = lazy(() => import("@/features/core/inventory/pages/StockCountsPage"));
+const InventoryLots = lazy(() => import("@/features/core/inventory/pages/InventoryLotsPage"));
+const Categories = lazy(() => import("@/features/core/inventory/pages/CategoriesPage"));
+const PurchaseBillsPage = lazy(() => import("@/features/core/purchases/pages/PurchaseBillsPage"));
+const Suppliers = lazy(() => import("@/features/core/suppliers/pages/SuppliersPage"));
+const Expenses = lazy(() => import("@/features/core/expenses/pages/ExpensesPage"));
+const Offers = lazy(() => import("@/features/core/offers/pages/OffersPage"));
+const Loyalty = lazy(() => import("@/features/core/loyalty/pages/LoyaltyPage"));
+const GiftCards = lazy(() => import("@/features/core/gift-cards/GiftCardsPage"));
+const Reports = lazy(() => import("@/features/core/reports/pages/ReportsPage"));
+const MoneyStatementPage = lazy(() => import("@/features/core/money-statement/pages/MoneyStatementPage"));
+const DailyClosingPage = lazy(() => import("@/features/core/reports/pages/DailyClosingPage"));
+const Settings = lazy(() => import("@/features/core/settings/pages/SettingsPage"));
+const MerchantSetupSettings = lazy(() => import("@/features/core/settings/pages/MerchantSetupPage"));
+const StoreProfileSettings = lazy(() => import("@/features/core/settings/pages/StoreProfilePage"));
+const ModulesSettings = lazy(() => import("@/features/core/settings/pages/ModulesSettingsPage"));
+const PrinterSettings = lazy(() => import("@/features/core/settings/pages/PrinterSettingsPage"));
+const BillingSettings = lazy(() => import("@/features/core/settings/pages/BillingSettingsPage"));
+const StaffSettings = lazy(() => import("@/features/core/settings/pages/StaffSettingsPage"));
+const DevicesSettings = lazy(() => import("@/features/core/settings/pages/DevicesSettingsPage"));
+const SyncSettings = lazy(() => import("@/features/core/settings/pages/SyncSettingsPage"));
+const TaxesSettings = lazy(() => import("@/features/core/settings/pages/TaxesSettingsPage"));
+const SecuritySettings = lazy(() => import("@/features/core/settings/pages/SecuritySettingsPage"));
+const NotificationsSettings = lazy(() => import("@/features/core/settings/pages/NotificationsSettingsPage"));
+const IntegrationsSettings = lazy(() => import("@/features/core/settings/pages/IntegrationsSettingsPage"));
+const AdvancedSettings = lazy(() => import("@/features/core/settings/pages/AdvancedSettingsPage"));
+const SyncStatusPage = lazy(() => import("@/features/core/sync/pages/SyncStatusPage"));
+const PlansPage = lazy(() => import("@/features/core/subscription/pages/PlansPage"));
+const SubscriptionPage = lazy(() => import("@/features/core/subscription/pages/SubscriptionPage"));
+const DevicesPage = lazy(() => import("@/features/core/devices/pages/DevicesPage"));
+const PlatformAdminPage = lazy(() => import("@/features/core/platform-admin/pages/PlatformAdminPage"));
+const RemoteSupportConsolePage = lazy(() => import("@/features/core/remote-support/pages/RemoteSupportConsolePage"));
+const AskArthaPage = lazy(() => import("@/features/core/support/pages/AskArthaPage"));
+const ActivityInsightsPage = lazy(() => import("@/features/core/activity/pages/ActivityInsightsPage"));
+const StaffPage = lazy(() => import("@/features/core/staff/pages/StaffPage"));
+const AuditLogsPage = lazy(() => import("@/features/core/audit-logs/pages/AuditLogsPage"));
+const AssuranceDashboardPage = lazy(() => import("@/features/core/assurance/pages/AssuranceDashboardPage"));
+const AssuranceFindingsPage = lazy(() => import("@/features/core/assurance/pages/FindingsPage"));
+const AssuranceFindingDetailPage = lazy(() => import("@/features/core/assurance/pages/FindingDetailPage"));
+const AssuranceEvidencePage = lazy(() => import("@/features/core/assurance/pages/EvidenceRequestsPage"));
+const AssuranceRunsPage = lazy(() => import("@/features/core/assurance/pages/AuditRunsPage"));
+const AssuranceRulesPage = lazy(() => import("@/features/core/assurance/pages/AuditRulesPage"));
+const AssuranceReviewQueuePage = lazy(() => import("@/features/core/assurance/pages/ReviewQueuePage"));
+const AssuranceReportPage = lazy(() => import("@/features/core/assurance/pages/AssuranceReportPage"));
+const AssuranceCasesPage = lazy(() => import("@/features/core/assurance/pages/CasesPage"));
+const RecycleBinPage = lazy(() => import("@/features/core/recycle-bin/pages/RecycleBinPage"));
+const SmartToolsPage = lazy(() => import("@/features/core/innovation/pages/SmartToolsPage"));
+const RecoveryModePage = lazy(() => import("@/features/core/recovery/pages/RecoveryModePage"));
 const AppLayout = lazy(() => import("@/components/layout").then((module) => ({ default: module.Layout })));
+
+/**
+ * The trade-specific screens, declared here alongside every other route import
+ * so each one merges with its lazy siblings instead of being folded into the
+ * startup shell (see `VerticalPageId`). Which of them a shop can actually reach
+ * is decided by its pack, not by this map.
+ */
+const VERTICAL_PAGES: Record<VerticalPageId, ComponentType> = {
+  "clothing/rentals": lazy(() => import("@/features/verticals/clothing/rentals/pages/RentalsPage")),
+};
 
 const ROUTE_LOADING_LABELS: Record<string, string> = {
   dashboard: "Preparing today’s dashboard…",
@@ -162,6 +172,7 @@ function PublicRoute({ component: Component }: { component: ComponentType }) {
 export function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
+  const verticalPack = useActiveVerticalPack();
   const isCustomerOrderPath = /^\/order\/[^/]+/.test(location);
 
   // §13 screen tracking. The public storefront tracks its own online-session
@@ -176,8 +187,8 @@ export function AppRoutes() {
     // Dynamic imports are cached by the module loader, so the eventual route
     // transition can render immediately without adding pressure to first paint.
     const warmCoreRoutes = () => {
-      if (location !== "/dashboard") void import("@/features/dashboard/pages/DashboardPage");
-      if (location !== "/billing") void import("@/features/billing/pages/BillingPage");
+      if (location !== "/dashboard") void import("@/features/core/dashboard/pages/DashboardPage");
+      if (location !== "/billing") void import("@/features/core/billing/pages/BillingPage");
     };
     const browserWindow = window as typeof window & {
       requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
@@ -309,9 +320,6 @@ export function AppRoutes() {
       <Route path="/offers">
         <ProtectedRoute component={Offers} featureName="dynamic_customer_pricing" />
       </Route>
-      <Route path="/rentals">
-        <ProtectedRoute component={Rentals} />
-      </Route>
       <Route path="/loyalty">
         <ProtectedRoute component={Loyalty} featureName="loyalty_program" />
       </Route>
@@ -435,6 +443,15 @@ export function AppRoutes() {
       <Route path="/sync-status">
         <ProtectedRoute component={SyncStatusPage} />
       </Route>
+      {/* This shop's trade-specific screens, and only this shop's. Another
+          vertical's route is not registered here at all, so typing its URL
+          falls through to NotFound rather than rendering a page the shop has
+          no business seeing. */}
+      {verticalPack.routes.map((route) => (
+        <Route key={route.path} path={route.path}>
+          <ProtectedRoute component={VERTICAL_PAGES[route.page]} featureName={route.featureName} />
+        </Route>
+      ))}
       <Route component={NotFound} />
     </Switch>
   );

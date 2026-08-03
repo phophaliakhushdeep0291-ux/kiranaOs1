@@ -13,6 +13,7 @@ import {
   incrementLocationInventory,
   resolveOperationalLocation,
 } from "../stores/location-context.service.js";
+import { sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
 import { reapplyBillLoyaltyInTransaction, recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
@@ -323,7 +324,12 @@ export async function confirmBill(shopId, body, actor = {}) {
           ? baseQtyToRateQty(qtyInBase, product.rateUnit, product.baseUnit)
         : item.quantity;
 
-      const maximumPrice = Number(sellingUnit?.maximumPrice ?? product?.mrp ?? 0);
+      // Each packaging is measured against ITS OWN ceiling: the pack's MRP when it
+      // has one, otherwise the product MRP scaled to this pack's size. Comparing a
+      // 5 kg bag against the 500 g packet's MRP rejected every legitimate price.
+      const maximumPrice = product
+        ? sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnitByProduct.get(product.id))
+        : 0;
       if (maximumPrice > 0 && item.ratePerRateUnit > maximumPrice + 0.005) {
         const error = new AppError(`Price for "${product?.name ?? item.name}" exceeds the configured maximum of Rs ${maximumPrice}`, 400);
         error.code = "PRICE_ABOVE_CONFIGURED_MAXIMUM";

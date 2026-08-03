@@ -71,7 +71,7 @@ vi.mock("@/lib/offline/instant-cache", () => ({
 
 import { offlineDB } from "@/lib/offline/db";
 import { upsertCachedListItem } from "@/lib/offline/instant-cache";
-import { recordDamageLocalFirst, recordPurchaseLocalFirst, recordSaleLocalFirst, stockCorrectionLocalFirst } from "@/features/inventory/local-actions";
+import { recordDamageLocalFirst, recordPurchaseLocalFirst, recordSaleLocalFirst, stockCorrectionLocalFirst } from "@/features/core/inventory/local-actions";
 
 const mockedOfflineDB = vi.mocked(offlineDB);
 const mockedUpsertCachedListItem = vi.mocked(upsertCachedListItem);
@@ -238,7 +238,7 @@ describe("stock adjustment transaction safety", () => {
   });
 });
 
-import { buildUnitMismatchWarning, calculateInventoryPriceSuggestions } from "@/features/inventory/calculations";
+import { buildUnitMismatchWarning, calculateInventoryPriceSuggestions } from "@/features/core/inventory/calculations";
 
 describe("inventory reliability business rules", () => {
   beforeEach(() => {

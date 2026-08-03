@@ -4,7 +4,7 @@ import {
   billingDraftFromHeldBill,
   heldBillFromBillingDraft,
   importedCartFingerprint,
-} from "@/features/billing/pages/open-bills";
+} from "@/features/core/billing/pages/open-bills";
 import type { Product } from "@/lib/api/client";
 
 const products = [

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { computeGstBreakdown } from "@/lib/gst";
-import { describeTaxSplit } from "@/features/billing/pages/components/BillingSummary";
+import { describeTaxSplit } from "@/features/core/billing/pages/components/BillingSummary";
 
-const summarySource = readFileSync("src/features/billing/pages/components/BillingSummary.tsx", "utf8");
-const pageSource = readFileSync("src/features/billing/pages/BillingPage.tsx", "utf8");
+const summarySource = readFileSync("src/features/core/billing/pages/components/BillingSummary.tsx", "utf8");
+const pageSource = readFileSync("src/features/core/billing/pages/BillingPage.tsx", "utf8");
 
 describe("tax split shown on the billing screen", () => {
   // Regression: the summary printed fmtRs(gstAmount / 2) twice. On an inclusive 5% bill of

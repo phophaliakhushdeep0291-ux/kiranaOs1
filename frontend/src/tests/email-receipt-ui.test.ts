@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const detail = readFileSync("src/features/bills/pages/BillDetailPage.tsx", "utf8");
+const detail = readFileSync("src/features/core/bills/pages/BillDetailPage.tsx", "utf8");
 
 describe("email receipt UI", () => {
   it("sends a validated email through the tenant-scoped bill endpoint", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { computeBillSavings } from "@/features/billing/pages/billing-calculations";
-import type { CartItem } from "@/features/billing/pages/billing-types";
+import { computeBillSavings } from "@/features/core/billing/pages/billing-calculations";
+import type { CartItem } from "@/features/core/billing/pages/billing-types";
 
 function line(overrides: Partial<CartItem> & { mrp?: number | null }): CartItem {
   const { mrp, ...rest } = overrides;

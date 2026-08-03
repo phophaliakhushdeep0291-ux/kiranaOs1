@@ -12,7 +12,7 @@ import {
   requestSubscriptionUpgrade,
   validateSubscriptionCoupon,
   verifySubscriptionPayment,
-} from "@/features/subscription/api";
+} from "@/features/core/subscription/api";
 
 describe("subscription api contract", () => {
   beforeEach(() => {

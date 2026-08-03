@@ -3,7 +3,7 @@ import {
   isSensitiveSyncKey,
   sanitizeSyncDiagnostic,
   sanitizeSyncRecord,
-} from "@/features/sync/sensitive-data";
+} from "@/features/core/sync/sensitive-data";
 
 describe("sync diagnostic secret redaction", () => {
   it("removes credentials recursively but keeps proof that a PIN was provided", () => {

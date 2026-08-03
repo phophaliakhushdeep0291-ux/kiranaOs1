@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { backendOperationTypeFor } from "@/features/sync/sync-operation-normalizer";
+import { backendOperationTypeFor } from "@/features/core/sync/sync-operation-normalizer";
 import type { PendingSyncEvent } from "@/lib/offline/db";
 
 function event(operationType: string): PendingSyncEvent {

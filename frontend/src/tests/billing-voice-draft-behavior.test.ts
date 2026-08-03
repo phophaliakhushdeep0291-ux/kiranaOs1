@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { BillInputBillType, BillPaymentMode, type Product } from "@/lib/api/client";
-import { parseBillingVoiceCommand } from "@/features/billing/pages/billing-voice-parser";
-import { SPLIT_PAYMENT } from "@/features/billing/pages/billing-types";
-import { parseLocalVoiceIntent } from "@/features/voice/voice-command-parser";
+import { parseBillingVoiceCommand } from "@/features/core/billing/pages/billing-voice-parser";
+import { SPLIT_PAYMENT } from "@/features/core/billing/pages/billing-types";
+import { parseLocalVoiceIntent } from "@/features/core/voice/voice-command-parser";
 
 function product(overrides: Partial<Product> = {}): Product {
   return {
