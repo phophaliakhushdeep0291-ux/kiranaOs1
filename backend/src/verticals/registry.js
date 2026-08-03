@@ -1,4 +1,4 @@
-import { AppError } from "../middleware/error.js";
+import { AppError } from "../shared/errors/index.js";
 import { BUSINESS_TYPES, CAPABILITIES } from "./profile.js";
 import kirana from "./kirana/profile.js";
 import clothing from "./clothing/profile.js";

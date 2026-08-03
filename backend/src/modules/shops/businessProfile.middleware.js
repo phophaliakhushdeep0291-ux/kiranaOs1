@@ -1,5 +1,5 @@
-import db from "../../db.js";
-import { AppError } from "../../middleware/error.js";
+import { database as db } from "../../infrastructure/database/index.js";
+import { AppError } from "../../shared/errors/index.js";
 import { businessTypeFromSettings, hasCapability, parseShopSettings } from "./businessProfiles.js";
 
 async function loadShop(req) {

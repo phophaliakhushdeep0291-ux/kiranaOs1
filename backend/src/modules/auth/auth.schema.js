@@ -60,7 +60,9 @@ export const registerSchema = z.object({
   ownerPin:  z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits").optional(),
   gstNumber: optionalTrimmedString,
   phone:     optionalTrimmedString,
-  businessType: z.enum(["kirana", "clothing", "footwear", "auto_parts", "electronics", "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other"]),
+  // Current clients always send this. The default keeps older installed/offline
+  // clients compatible during rollout; their historical behavior was kirana.
+  businessType: z.enum(["kirana", "clothing", "footwear", "auto_parts", "electronics", "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other"]).default("kirana"),
   device:    deviceMetadataSchema.optional(),
 });
 

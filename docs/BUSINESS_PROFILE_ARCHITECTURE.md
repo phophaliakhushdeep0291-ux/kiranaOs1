@@ -31,6 +31,14 @@ folders would add deployment risk without changing boundaries. New code follows
 the ownership rules below; existing modules can be migrated domain-by-domain
 only when their tests and public imports move in the same change.
 
+The requested `core`, `domains`, `infrastructure` and `shared` directories are
+now the public architecture. Their `index.js` files expose the current production
+implementations through stable namespaces. Legacy `modules/*` paths remain as
+compatibility implementation paths while imports are migrated incrementally.
+Because the backend is native ESM JavaScript today, the executable entry files
+remain `app.js` and `server.js`; converting extensions alone would not make the
+codebase TypeScript and would break the current Node runtime.
+
 ## Where code belongs
 
 ### Shared core
@@ -57,6 +65,11 @@ Only behavior unique to one trade:
 
 A vertical may import shared code. Shared code may not import a vertical, and one
 vertical may not import another vertical.
+
+`verticals/variants` is the family entry point for clothing and footwear, while
+`verticals/books` maps the books/stationery family to the stationery profile.
+The individual shop-type profile directories remain explicit so each registered
+business type still has exactly one profile.
 
 ## Adding a business type
 

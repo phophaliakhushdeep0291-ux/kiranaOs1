@@ -1,5 +1,5 @@
-import db from "../../db.js";
-import { AppError } from "../../middleware/error.js";
+import { database as db } from "../../infrastructure/database/index.js";
+import { AppError } from "../../shared/errors/index.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import { BUSINESS_PROFILES, bootstrapForShop, businessTypeFromSettings, parseShopSettings, settingsForBusinessType } from "./businessProfiles.js";
 
