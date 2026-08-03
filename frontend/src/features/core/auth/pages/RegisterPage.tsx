@@ -115,7 +115,7 @@ export default function Register() {
 
   const onSubmit = (values: FormData) => {
     setServerError(null);
-    registerMutation.mutate({ data: values });
+    registerMutation.mutate({ data: { ...values, businessType: selectedType } });
   };
 
   const def = BUSINESS_TYPE_DEFS[hoveredType ?? selectedType];

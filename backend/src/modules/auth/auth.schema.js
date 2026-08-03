@@ -60,6 +60,7 @@ export const registerSchema = z.object({
   ownerPin:  z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits").optional(),
   gstNumber: optionalTrimmedString,
   phone:     optionalTrimmedString,
+  businessType: z.enum(["kirana", "clothing", "footwear", "auto_parts", "electronics", "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other"]),
   device:    deviceMetadataSchema.optional(),
 });
 

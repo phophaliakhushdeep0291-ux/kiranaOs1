@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getGetShopQueryKey, useUpdateShop } from "@/lib/api/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/features/core/auth/useAuth";
 import { useSubscriptionSnapshot } from "@/features/core/subscription";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { Card, CardHead, Fld, Badge } from "@/features/core/settings/ui";
 import { useSettingsPrefs } from "@/features/core/settings/use-settings-prefs";
 import { OwnerOrderingCard } from "@/features/core/customer-order/OwnerOrderingCard";
 import { OwnerPinModal } from "@/components/security/OwnerPinModal";
+import { getShopBootstrap } from "@/features/core/settings/api";
 import {
   BUSINESS_TYPE_DEFS,
   businessTypeFromLabel,
@@ -74,6 +75,8 @@ export default function StoreProfilePage() {
   const { snapshot } = useSubscriptionSnapshot();
   const queryClient = useQueryClient();
   const { prefs, patch, shop, hydrated } = useSettingsPrefs();
+  const bootstrapQuery = useQuery({ queryKey: ["shop-bootstrap"], queryFn: getShopBootstrap, enabled: Boolean(shop?.id), staleTime: 30_000 });
+  const businessTypeLocked = bootstrapQuery.data?.businessTypeLocked ?? false;
 
   const sp = (prefs.storeProfile ?? {}) as Record<string, string>;
   const hours = (prefs.hours ?? {}) as Record<string, DayHours>;
@@ -319,11 +322,12 @@ export default function StoreProfilePage() {
             <Fld label="Email"><Input className="h-10" value={biz.email} onChange={(e) => setBiz({ ...biz, email: e.target.value })} /></Fld>
             <Fld label="GSTIN"><Input className="h-10" value={biz.gstNumber} onChange={(e) => setBiz({ ...biz, gstNumber: e.target.value })} /></Fld>
             <Fld label="PAN Number"><Input className="h-10" value={biz.pan} onChange={(e) => setBiz({ ...biz, pan: e.target.value })} /></Fld>
-            <Fld label="Business Type" hint="Adapts navigation, dashboard, categories & units to your trade">
-              <Select value={biz.businessTypeKey} onValueChange={(v) => setBiz({ ...biz, businessTypeKey: v as BusinessType })}>
+            <Fld label="Business Type" hint={businessTypeLocked ? "Locked because products or bills exist" : "Adapts navigation, dashboard, categories & units to your trade"}>
+              <Select disabled={businessTypeLocked} value={biz.businessTypeKey} onValueChange={(v) => setBiz({ ...biz, businessTypeKey: v as BusinessType })}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>{BUSINESS_TYPE_OPTIONS.map(([key, def]) => <SelectItem key={key} value={key}>{def.emoji} {def.label}</SelectItem>)}</SelectContent>
               </Select>
+              {businessTypeLocked ? <Button type="button" variant="outline" className="mt-2 h-9 w-full text-xs font-bold" onClick={() => toast({ title: "Business type change needs review", description: "Existing products and bills must be checked for compatibility. Create a new shop profile for an incompatible change." })}>Request Business Type Change</Button> : null}
             </Fld>
           </div>
         </Card>

@@ -7,6 +7,13 @@ export async function getShop(req, res, next) {
   } catch (err) { next(err); }
 }
 
+export async function getBootstrap(req, res, next) {
+  try {
+    const data = await shopService.getBootstrap(req.shopId, req.user?.role ?? null);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+}
+
 export async function updateShop(req, res, next) {
   try {
     const shop = await shopService.updateShop(req.shopId, req.body, {

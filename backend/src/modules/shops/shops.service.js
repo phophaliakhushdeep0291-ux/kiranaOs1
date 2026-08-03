@@ -1,11 +1,21 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
+import { bootstrapForShop, businessTypeFromSettings, parseShopSettings, settingsForBusinessType } from "./businessProfiles.js";
 
 export async function getShop(shopId) {
   const shop = await db.shop.findUnique({ where: { id: shopId } });
   if (!shop) throw new AppError("Shop not found", 404);
   return shop;
+}
+
+export async function getBootstrap(shopId, role) {
+  const shop = await getShop(shopId);
+  const [productCount, billCount] = await Promise.all([
+    db.product.count({ where: { shopId } }),
+    db.bill.count({ where: { shopId } }),
+  ]);
+  return { ...bootstrapForShop(shop, role), businessTypeLocked: productCount + billCount > 0 };
 }
 
 export async function updateShop(shopId, data, actor = {}) {
@@ -14,6 +24,24 @@ export async function updateShop(shopId, data, actor = {}) {
   // "Previous value" / "New value" pair. This PATCH is also the settings blob's
   // write path, so it is the shop's "Settings changed" event.
   const previous = await db.shop.findUnique({ where: { id: shopId } });
+  if (data.settingsJson && previous) {
+    const beforeSettings = parseShopSettings(previous.settingsJson);
+    const nextSettings = parseShopSettings(data.settingsJson);
+    const beforeType = businessTypeFromSettings(beforeSettings);
+    const nextType = businessTypeFromSettings(nextSettings);
+    if (beforeType !== nextType) {
+      const [productCount, billCount] = await Promise.all([
+        db.product.count({ where: { shopId } }),
+        db.bill.count({ where: { shopId } }),
+      ]);
+      if (productCount + billCount > 0) {
+        const error = new AppError("Business type cannot be changed after products or bills exist. Create a new shop profile or request a reviewed migration.", 409, "BUSINESS_TYPE_CHANGE_REQUIRES_MIGRATION");
+        error.publicData = { currentBusinessType: beforeType, requestedBusinessType: nextType, productCount, billCount };
+        throw error;
+      }
+      data = { ...data, settingsJson: JSON.stringify(settingsForBusinessType(nextType, nextSettings)) };
+    }
+  }
   const shop = await db.shop.update({ where: { id: shopId }, data });
 
   const changedKeys = Object.keys(data ?? {}).filter(

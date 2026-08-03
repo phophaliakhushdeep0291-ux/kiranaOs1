@@ -18,6 +18,7 @@ router.use(requireAuth, requireShop, requireDeviceActivated());
 const PIN_PROTECTED_SHOP_FIELDS = ["name", "ownerName", "city", "address", "gstNumber", "phone"];
 
 router.get("/", ctrl.getShop);
+router.get("/bootstrap", ctrl.getBootstrap);
 router.patch("/", requireOwnerPinForFields(PIN_PROTECTED_SHOP_FIELDS), validate(updateShopSchema), ctrl.updateShop);
 
 export default router;

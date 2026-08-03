@@ -5,6 +5,20 @@ export function getShop() {
   return apiRequest<Shop>("/shops");
 }
 
+export interface ShopBootstrap {
+  shop: { id: string; name: string; businessType: string; profileVersion: number };
+  role: string | null;
+  engine: string;
+  capabilities: string[];
+  navigation: string[];
+  setupStatus: "pending" | "complete" | string;
+  businessTypeLocked: boolean;
+}
+
+export function getShopBootstrap() {
+  return apiRequest<ShopBootstrap>("/shops/bootstrap", { background: true });
+}
+
 export function updateShop(data: Partial<Shop> & { ownerPin?: string }) {
   return apiRequest<Shop>("/shops", {
     method: "PATCH",
