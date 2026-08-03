@@ -31,6 +31,7 @@ Conventions used throughout:
 | Support | `modules/diagnostics` | §7 | Report-Issue requests + context bundles |
 | Admin | `modules/platform-admin` | §10 | Cross-shop operator rollups |
 | Remote support | `modules/remote-support` | §10a | Consent-gated remote diagnosis + repair |
+| Auto-fix | `modules/remote-support/playbooks.*` | §10b | Known problem → known fix, dispatched unattended |
 | Events | `lib/eventBus.js` | §11 | Kafka-compatible streaming seam |
 
 ---
@@ -341,6 +342,79 @@ UI: owner at `/help` (owner role only), operator at `/platform-admin/support`.
 
 ---
 
+## 10b. Auto-dispatch playbooks — `modules/remote-support/playbooks.*`
+
+§10a is a channel: it can carry a repair to a device but has no opinion about
+which repair. This is the opinion — known problem → known fix, so support stops
+re-diagnosing the same five problems by hand.
+
+A playbook is a pure `match(signals)` over data the server already collects, plus
+the one catalog command that fixes it.
+
+### The catalog
+
+| Playbook | Fires on | Command | Tier |
+|---|---|---|---|
+| `retry-stuck-sync` | ≥1 **retryable** sync failure | `RETRY_FAILED_SYNC` | auto |
+| `device-not-syncing` | online, but no sync in 2h with work waiting | `RUN_SYNC_NOW` | auto |
+| `refresh-stale-diagnostics` | health snapshot >12h old, or none ever | `COLLECT_DIAGNOSTICS` | auto |
+| `stale-deploy-chunk-error` | chunk-load / dynamic-import error | `REFRESH_APP` | suggest |
+| `stale-app-version` | behind the shop's other devices | `REFRESH_APP` | suggest |
+| `local-database-degraded` | `dbStatus` error/degraded | `PULL_FROM_CLOUD` | suggest |
+
+### Tiers — the line that matters
+
+- **`auto`** — idempotent, non-disruptive, identical to a button the owner could
+  safely tap mid-sale. Dispatched with no human involved.
+- **`suggest`** — correct, but disruptive or heavy. Shown to an operator; never
+  fired automatically.
+
+The split is **not** "how confident are we", it is "what does the shopkeeper lose
+if we are wrong". A needless retry costs nothing. A needless reload can drop a
+half-built bill in front of a waiting customer — which is why every `REFRESH_APP`
+and `PULL_FROM_CLOUD` playbook is suggest-tier, and a test asserts that no future
+playbook can quietly make a disruptive command automatic.
+
+### Restraint (most of the engine)
+
+Deciding to run a fix is three lines; the rest stops it becoming an outage source.
+
+| Guard | Effect |
+|---|---|
+| Owner opt-out | `settingsJson.autoFix.enabled` (default on) — checked per dispatch, so switching it off takes effect on the next evaluation |
+| Per-playbook cooldown | 15 min – 12 h; no re-fire inside it |
+| Evaluation throttle | 5 min per device, so a polling fleet does not re-run the signal queries every cycle |
+| Circuit breaker | 3 consecutive failed/expired attempts → stop and leave the problem visible |
+| Device scope | Unknown or foreign device → nothing queued |
+
+Cooldown and the breaker are both read from the `DeviceCommand` rows themselves
+(`playbookId` + `createdAt` + `status`), so the history *is* the state — there is
+no counter that can drift from what actually ran.
+
+### Consent
+
+Auto-dispatch is the one path with no owner-granted session, and it is defensible
+only because of what it is limited to: **no human sees the shop's data**, and the
+command is one the app already runs on its own behalf. It is self-healing, not
+remote access. Every dispatch is audited as `SUPPORT_AUTOFIX_DISPATCHED` with its
+evidence, appears in the owner's "what has been done" list flagged
+`automatic: true`, and the owner can switch the whole thing off.
+
+### Where it runs
+
+On `GET /api/support/commands` — **before** claiming, and awaited. A fix decided on
+this poll ships on this same poll, and the device being there is the freshest signal
+we will ever get that it is online.
+
+Operators see the same matches (both tiers, with evidence) in the
+`sessions/:id/diagnostics` response, following whichever device they have selected.
+
+```bash
+npm run test:remote-support   # includes matching, cooldown, breaker, opt-out (§10b)
+```
+
+---
+
 ## 11. Event streaming — `lib/eventBus.js` (§11)
 
 A seam, not a broker. Domain code calls `publishEvent(topic, shopId, payload)`
@@ -390,6 +464,10 @@ failures are counted and exposed on the admin overview.
 Every dependency degrades rather than failing: absent credentials remove
 enrichment, never core function.
 
+Auto-fix (§10b) is **not** env-configured — it is a per-shop owner setting at
+`settingsJson.autoFix.enabled`, defaulting to on, changed via
+`PATCH /api/support/auto-fix`. It belongs to the shopkeeper, not the operator.
+
 ---
 
 ## 13. Tests
@@ -401,7 +479,8 @@ npm run test:sync-diagnostics  # failure explanations (§3)
 npm run test:incident-report   # incident composition (§6)
 npm run test:audit-timeline    # audit columns, inference, withAudit (§2)
 npm run test:report-documents  # PDF/XLSX validity + format routing (§9)
-npm run test:remote-support    # consent, scope, allowlist, revoke (§10a)
+npm run test:remote-support    # consent, scope, allowlist, revoke (§10a);
+                               # matching, tiers, cooldown, breaker, opt-out (§10b)
 npm run test:event-bus         # event envelope + fault tolerance (§11)
 npm run test:event-bus-redis   # real RESP2 socket: the XADD actually sent (§11)
 ```
