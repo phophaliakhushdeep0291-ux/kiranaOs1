@@ -196,6 +196,12 @@ function buildBillItems(billId: string, items: BillInputItem[], gstMode: GstMode
       bill_id: billId,
       productId: item.productId ?? null,
       product_id: item.productId ?? null,
+      // Carried on the offline row so a batch chosen at the counter still reaches
+      // the server when the bill syncs later; without it the queued bill would
+      // silently fall back to FEFO and could bill against a different MRP than
+      // the one the operator saw.
+      inventoryLotId: item.inventoryLotId ?? null,
+      inventory_lot_id: item.inventoryLotId ?? null,
       sellingUnitId: item.sellingUnitId ?? null,
       selling_unit_id: item.sellingUnitId ?? null,
       sellingUnitCode: item.sellingUnitCode ?? null,

@@ -1,4 +1,5 @@
 import { BillInputBillType, BillPaymentMode, type Product, type ProductSellingUnit } from "@/lib/api/client";
+import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 
 export interface CartItem {
   product: Product;
@@ -14,15 +15,27 @@ export interface CartItem {
   note?: string;
   /** Smart Adaptive Pricing — why this rate was chosen (for the cart chip). */
   pricing?: LinePricingMeta;
+  /**
+   * The batch this line dispenses from, when the operator picked one. Left unset
+   * the till takes the nearest expiry (FEFO), which is the default and the right
+   * answer almost always. Setting it fixes both the stock that leaves the shelf
+   * and the MRP the line is capped at.
+   */
+  batch?: SellableBatch;
 }
 
 /**
  * A product can be sold in more than one configured pack (for example 500 g
  * and 1 kg). Product id alone is therefore not a cart-line identity.
+ *
+ * Nor is product+pack: two batches of the same medicine can carry different
+ * printed MRPs, so merging them onto one line would bill both at one rate under
+ * one ceiling. A chosen batch is part of the line's identity.
  */
 export function cartItemKey(item: CartItem): string {
   const unitKey = item.sellingUnit?.id ?? item.sellingUnit?.unitCode ?? item.unit ?? "default";
-  return `${item.product.id}::${unitKey}::${item.isCustom ? "custom" : "catalog"}`;
+  const batchKey = item.batch?.id ?? "fefo";
+  return `${item.product.id}::${unitKey}::${batchKey}::${item.isCustom ? "custom" : "catalog"}`;
 }
 
 export interface LinePricingMeta {
