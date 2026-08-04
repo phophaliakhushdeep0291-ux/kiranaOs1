@@ -141,22 +141,19 @@ export default defineConfig({
           // an unrelated route to get its own language. Pinning them to a named
           // chunk keeps the language payload independent of routing.
           "i18n-hindi": ["./src/features/core/settings/translations/hindi"],
-          // One chunk per trade, for the same reason as the language table above
-          // and a sharper one besides.
+          // Do NOT add a per-vertical entry here in the object form. Naming a
+          // trade's page assigns that module AND everything it imports, so the
+          // shared UI kit lands in the trade's chunk and every core page then has
+          // to import it — the opposite of isolation. It also costs
+          // PurchaseBillsPage its own manifest record, which fails the offline
+          // precache stamp below and breaks the build outright.
           //
-          // The routes were already gated — a kirana shop never mounts /rentals —
-          // but gating decides what RUNS, not what SHIPS. Left to its heuristics,
-          // experimentalMinChunkSize folded the rentals page in with shared code,
-          // and the merged chunk was then a static import of Dashboard, Billing,
-          // Products, Customers, Inventory, Bills, Purchases and Reports. Every
-          // one of those is in the service worker's precache list, so a kirana
-          // shop downloaded the whole cloth-rental UI to open its dashboard, and
-          // kept it in the offline cache it can never use it from.
-          //
-          // Pinning the pack makes the boundary physical instead of advisory: a
-          // trade's screens can no longer be merged into anything a different
-          // trade loads. Add a line here for each vertical that grows real code.
-          "vertical-clothing": ["./src/features/verticals/clothing/rentals/pages/RentalsPage.tsx"],
+          // Splitting verticals properly needs the function form (which assigns
+          // one module at a time) AND a different answer for
+          // experimentalMinChunkSize, since that is what merges a trade's screens
+          // into shared chunks in the first place. Measured attempts are recorded
+          // in scripts/check-bundle-size.mjs; it is a real piece of work, not a
+          // one-line entry.
         },
       },
     },

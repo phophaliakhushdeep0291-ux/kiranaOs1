@@ -113,7 +113,7 @@ export async function createProduct(shopId, data, { identity = null } = {}) {
 
   await assertNoActiveProductNameConflict(shopId, data.name);
 
-  const { aliases, sellingUnits, baseUpdatedAt: _baseUpdatedAt, ...rawRest } = data;
+  const { aliases, variantAxes, sellingUnits, baseUpdatedAt: _baseUpdatedAt, ...rawRest } = data;
   const normalizedUnits = normalizeSellingUnits(rawRest, sellingUnits);
   const rest = applyDefaultSellingUnitToProduct(rawRest, normalizedUnits);
   try {
@@ -128,6 +128,10 @@ export async function createProduct(shopId, data, { identity = null } = {}) {
           }),
           shopId,
           aliasesJson: JSON.stringify(aliases ?? []),
+          variantAxesJson: JSON.stringify(variantAxes ?? []),
+          // After ...rest on purpose: a variant grid overrides whatever packaging
+          // mode was asked for, because pooled variants share one stock number.
+          packagingMode: packagingModeForAxes(variantAxes, rest.packagingMode),
           clientProductId: productIdentity.clientProductId,
           idempotencyKey: productIdentity.idempotencyKey,
           sourceDeviceId: productIdentity.sourceDeviceId,
@@ -253,7 +257,7 @@ export async function updateProduct(shopId, id, data) {
   // concurrent sale cannot be silently overwritten. See docs/STABILIZATION_AUDIT.md
   // P0-3. Bulk edit legitimately sets stock here, so the field is honoured — it is
   // just no longer applied blindly.
-  const { aliases, sellingUnits, baseUpdatedAt, stockBaseQty: requestedStockBaseQty, ...rawRest } = data;
+  const { aliases, variantAxes, sellingUnits, baseUpdatedAt, stockBaseQty: requestedStockBaseQty, ...rawRest } = data;
   const reconciledUnits = sellingUnits === undefined
     ? undefined
     : carryPriceEditIntoUntouchedDefaultUnit(sellingUnits, rawRest, existing);
@@ -281,6 +285,13 @@ export async function updateProduct(shopId, id, data) {
     }),
   };
   if (aliases !== undefined) updateData.aliasesJson = JSON.stringify(aliases);
+  if (variantAxes !== undefined) {
+    updateData.variantAxesJson = JSON.stringify(variantAxes);
+    // Turning a product into a variant grid must take its packaging mode with it,
+    // or the sizes silently share one stock pool. Clearing the grid leaves the
+    // mode alone: the per-pack rows are still there and still hold their counts.
+    updateData.packagingMode = packagingModeForAxes(variantAxes, rest.packagingMode ?? existing.packagingMode);
+  }
 
   const updated = await db.$transaction(async (tx) => {
     await tx.product.update({
@@ -462,8 +473,32 @@ export function deserializeProduct(p) {
   return {
     ...p,
     aliases: JSON.parse(p.aliasesJson ?? "[]"),
+    variantAxes: parseVariantAxes(p.variantAxesJson),
     sellingUnits: Array.isArray(p.sellingUnits) ? p.sellingUnits : undefined,
   };
+}
+
+/**
+ * A grid the client can render even if the stored JSON is damaged. A product
+ * whose axes fail to parse is an ordinary product, not a 500 on the catalogue.
+ */
+function parseVariantAxes(json) {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A product with a variant grid holds stock per row, never pooled — see the
+ * variantAxesJson comment in schema.prisma. Declaring axes is therefore enough
+ * to choose the packaging mode; the shopkeeper never has to know the term.
+ */
+function packagingModeForAxes(axes, fallback) {
+  return Array.isArray(axes) && axes.length > 0 ? "per_pack" : fallback;
 }
 
 function compactText(value) {
@@ -538,6 +573,10 @@ function normalizeSellingUnits(product, units) {
       onHandQty: unit.onHandQty == null ? null : Number(unit.onHandQty),
       lowStockThreshold: unit.lowStockThreshold == null ? null : Number(unit.lowStockThreshold),
       reorderLevel: unit.reorderLevel == null ? null : Number(unit.reorderLevel),
+      // Same reason as the stock fields above: unnamed keys are dropped, so
+      // leaving these out would silently discard which size and colour the row is.
+      variantValue1: compactText(unit.variantValue1),
+      variantValue2: compactText(unit.variantValue2),
       isDefault,
       isActive: unit.isActive !== false,
     };
@@ -676,6 +715,8 @@ async function writeSellingUnits(tx, shopId, productId, units) {
       onHandQty: unit.onHandQty,
       lowStockThreshold: unit.lowStockThreshold,
       reorderLevel: unit.reorderLevel,
+      variantValue1: unit.variantValue1,
+      variantValue2: unit.variantValue2,
       isDefault: unit.isDefault,
       isActive: unit.isActive,
     };
