@@ -1,5 +1,5 @@
 import * as svc from "./rentals.service.js";
-import { createAuditLog } from "../audit/audit.service.js";
+import { createAuditLog } from "../../../modules/audit/audit.service.js";
 
 export async function list(req, res, next) {
   try {

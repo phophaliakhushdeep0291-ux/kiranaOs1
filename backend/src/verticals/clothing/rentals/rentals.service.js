@@ -1,8 +1,9 @@
-import db from "../../db.js";
-import { AppError } from "../../middleware/error.js";
-import { round2 } from "../../utils/money.js";
-import { dateRangeForDateOnly, formatDateInTimeZone } from "../../utils/dates.js";
-import { listProducts } from "../products/products.service.js";
+import db from "../../../db.js";
+import { AppError } from "../../../middleware/error.js";
+import { round2 } from "../../../utils/money.js";
+import { dateRangeForDateOnly, formatDateInTimeZone } from "../../../utils/dates.js";
+import { listProducts } from "../../../modules/products/products.service.js";
+import { registerCatalogAvailabilityFilter } from "../../../shared/catalog-availability.js";
 
 /**
  * Cloth rental bookings.
@@ -151,6 +152,13 @@ export async function getFullyBookedProductIds(shopId, products, { day = null } 
   if (holds.size === 0) return new Set();
   return blockedProductIds(products, holds);
 }
+
+// How the shared catalogue learns about rentals without importing them. Loading
+// this service is what registers the filter, and the only way to reach it is
+// through the clothing pack's routes — so a shop without rentals never runs it.
+registerCatalogAvailabilityFilter((shopId, products, options) =>
+  getFullyBookedProductIds(shopId, products, options),
+);
 
 /* ── bookings ─────────────────────────────────────────────────────────────── */
 

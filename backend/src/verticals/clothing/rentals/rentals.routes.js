@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { requireAuth } from "../../middleware/auth.js";
-import { requireDeviceActivated } from "../devices/device.middleware.js";
-import { requireShop } from "../../middleware/permissions.js";
-import { validate } from "../../middleware/validate.js";
+import { requireAuth } from "../../../middleware/auth.js";
+import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
+import { requireShop } from "../../../middleware/permissions.js";
+import { validate } from "../../../middleware/validate.js";
 import { cancelRentalSchema, createRentalSchema, returnRentalSchema, updateRentalSchema } from "./rentals.schema.js";
 import * as ctrl from "./rentals.controller.js";
 

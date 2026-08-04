@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { requireAuth } from "../../middleware/auth.js";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { requireDeviceActivated } from "../devices/device.middleware.js";
 import { requireOwnerPinForFields, requireShop } from "../../middleware/permissions.js";
 import { validate } from "../../middleware/validate.js";
-import { updateShopSchema } from "./shops.schema.js";
+import { businessTypeCompatibilitySchema, setupStatusSchema, updateShopSchema } from "./shops.schema.js";
 import * as ctrl from "./shops.controller.js";
 
 const router = Router();
@@ -18,6 +18,9 @@ router.use(requireAuth, requireShop, requireDeviceActivated());
 const PIN_PROTECTED_SHOP_FIELDS = ["name", "ownerName", "city", "address", "gstNumber", "phone"];
 
 router.get("/", ctrl.getShop);
+router.get("/bootstrap", ctrl.getBootstrap);
+router.post("/business-type-change/compatibility", requireRole("owner"), validate(businessTypeCompatibilitySchema), ctrl.businessTypeCompatibility);
+router.patch("/setup-status", requireRole("owner", "admin"), validate(setupStatusSchema), ctrl.updateSetupStatus);
 router.patch("/", requireOwnerPinForFields(PIN_PROTECTED_SHOP_FIELDS), validate(updateShopSchema), ctrl.updateShop);
 
 export default router;

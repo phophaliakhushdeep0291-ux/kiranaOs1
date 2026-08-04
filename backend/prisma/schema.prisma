@@ -220,6 +220,12 @@ model ProductSellingUnit {
   onHandQty         Float?
   lowStockThreshold Float?
   reorderLevel      Float?
+  // Where this row sits on the parent's declared axes — "L" and "Blue". Null on
+  // ordinary packaging rows ("500 g packet", "8-pack"), which have no axes.
+  // Typed columns rather than a JSON blob because these are grouped and filtered
+  // on ("what is left in L?"), which a blob cannot answer without a table scan.
+  variantValue1     String?
+  variantValue2     String?
   isDefault         Boolean  @default(false)
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
@@ -462,6 +468,22 @@ model Product {
   //                the shelf and are reordered separately.
   // Defaults to "pooled" so existing products keep their current behaviour.
   packagingMode                String    @default("pooled")
+  // The variant grid, in axis order:
+  //   [{"name":"Size","values":["S","M","L"]},{"name":"Colour","values":["Blue","White"]}]
+  // Empty array = an ordinary product, which is what every kirana item stays.
+  // A variant is a ProductSellingUnit row — it already owns a barcode, a price
+  // and its own onHandQty — tagged with its position on these axes. That is why
+  // there is no separate variant table: billing, scanning and stock need no new
+  // join, and a garment shop stops hand-typing one Product per size × colour.
+  //
+  // AXIS ORDER IS LOAD-BEARING: a child row's variantValue1 is its value on
+  // axes[0]. Reordering this array silently remaps every existing row, so once
+  // variants exist treat it as append-only.
+  //
+  // A product with axes must be "per_pack": each size/colour holds its own
+  // stock, and on "pooled" they would all read one shared number and report
+  // availability that is simply untrue. Enforced in products.service.js.
+  variantAxesJson              String    @default("[]")
   batchTrackingEnabled         Boolean   @default(false)
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)

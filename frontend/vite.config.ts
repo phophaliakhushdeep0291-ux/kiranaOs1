@@ -141,6 +141,19 @@ export default defineConfig({
           // an unrelated route to get its own language. Pinning them to a named
           // chunk keeps the language payload independent of routing.
           "i18n-hindi": ["./src/features/core/settings/translations/hindi"],
+          // Do NOT add a per-vertical entry here in the object form. Naming a
+          // trade's page assigns that module AND everything it imports, so the
+          // shared UI kit lands in the trade's chunk and every core page then has
+          // to import it — the opposite of isolation. It also costs
+          // PurchaseBillsPage its own manifest record, which fails the offline
+          // precache stamp below and breaks the build outright.
+          //
+          // Splitting verticals properly needs the function form (which assigns
+          // one module at a time) AND a different answer for
+          // experimentalMinChunkSize, since that is what merges a trade's screens
+          // into shared chunks in the first place. Measured attempts are recorded
+          // in scripts/check-bundle-size.mjs; it is a real piece of work, not a
+          // one-line entry.
         },
       },
     },

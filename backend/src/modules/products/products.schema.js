@@ -1,6 +1,18 @@
 import { z } from "zod";
 import { moneyAmount, percentageRate, quantityAmount } from "../../utils/validationSchemas.js";
 
+/**
+ * One axis of a variant grid: "Size" over S/M/L/XL.
+ *
+ * Two axes at most. Size × colour is what garment and footwear retail actually
+ * needs, and a third would multiply the grid past the point a shopkeeper can
+ * count stock for. Adding one later is another additive migration.
+ */
+const variantAxisSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  values: z.array(z.string().trim().min(1).max(60)).min(1).max(50),
+});
+
 const sellingUnitSchema = z.object({
   id: z.string().min(1).optional(),
   name: z.string().trim().min(1).max(80),
@@ -20,6 +32,11 @@ const sellingUnitSchema = z.object({
   onHandQty: quantityAmount().optional().nullable(),
   lowStockThreshold: quantityAmount().optional().nullable(),
   reorderLevel: quantityAmount().optional().nullable(),
+  // Where this row sits on the parent's axes — "L", "Blue". Null on ordinary
+  // packaging rows. Nullable as well as optional: a whole-record payload states
+  // an empty column as null, and .optional() alone rejects that.
+  variantValue1: z.string().trim().max(60).optional().nullable(),
+  variantValue2: z.string().trim().max(60).optional().nullable(),
   isDefault: z.boolean().default(false),
   isActive: z.boolean().default(true),
 });
@@ -55,7 +72,15 @@ export const createProductSchema = z.object({
   // count and is reordered on its own (70 g packet vs 8-pack).
   packagingMode: z.enum(["pooled", "per_pack"]).default("pooled"),
   batchTrackingEnabled: z.boolean().default(false),
-  sellingUnits: z.array(sellingUnitSchema).max(30).optional(),
+  // The variant grid this product declares, in axis order. Empty for ordinary
+  // products. A product with axes is forced to "per_pack" in the service: each
+  // size/colour holds its own stock, and pooled they would share one number.
+  variantAxes: z.array(variantAxisSchema).max(2).default([]),
+  // Raised from 30 for variant grids — 6 sizes × 6 colours is 36 rows and used
+  // to be rejected outright. This array rides the sync payload, so the cap is a
+  // real limit on push size, not decoration; 100 covers any grid a counter can
+  // physically stock.
+  sellingUnits: z.array(sellingUnitSchema).max(100).optional(),
   // Optimistic-concurrency guard: the server updatedAt the client based this edit on.
   baseUpdatedAt: z.string().optional(),
 });

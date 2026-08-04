@@ -81,7 +81,7 @@ export default function Register() {
         // and demo products were invisible on the server-backed Products list. New shops now
         // start clean with normal empty-states. seedDemoShopData() remains available to wire to
         // an explicit opt-in "Load sample data" button if desired.
-        setLocation("/dashboard");
+        setLocation("/settings/setup");
       },
       onError: (err: unknown) => {
         const data = (err as { data?: { message?: string; error?: string; details?: Record<string, string[]> } })?.data;
@@ -115,7 +115,7 @@ export default function Register() {
 
   const onSubmit = (values: FormData) => {
     setServerError(null);
-    registerMutation.mutate({ data: values });
+    registerMutation.mutate({ data: { ...values, businessType: selectedType } });
   };
 
   const def = BUSINESS_TYPE_DEFS[hoveredType ?? selectedType];

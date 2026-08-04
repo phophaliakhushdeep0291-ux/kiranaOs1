@@ -212,6 +212,10 @@ model ProductSellingUnit {
   onHandQty         Float?
   lowStockThreshold Float?
   reorderLevel      Float?
+  // Where this row sits on the parent's declared axes — "L" and "Blue". Null on
+  // ordinary packaging rows, which have no axes.
+  variantValue1     String?
+  variantValue2     String?
   isDefault         Boolean  @default(false)
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
@@ -452,6 +456,12 @@ model Product {
   //                pre-packed SKUs (70 g packet vs 8-pack), reordered separately.
   // Defaults to "pooled" so existing products keep their current behaviour.
   packagingMode                String    @default("pooled")
+  // The variant grid, in axis order. See the SQLite twin for the full rationale.
+  //   [{"name":"Size","values":["S","M","L"]},{"name":"Colour","values":["Blue"]}]
+  // Empty array = an ordinary product. Axis order is load-bearing (a child row's
+  // variantValue1 is its value on axes[0]), and a product with axes must be
+  // "per_pack" or every size would share one stock number.
+  variantAxesJson              String    @default("[]")
   batchTrackingEnabled         Boolean   @default(false)
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)

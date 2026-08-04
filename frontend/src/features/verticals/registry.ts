@@ -1,6 +1,4 @@
 import { useMemo } from "react";
-// The store, not `business-types` — the router imports this file, so pulling the
-// per-trade copy in here would put all eleven trades' labels in the startup shell.
 import {
   getStoredBusinessType,
   useBusinessTypeKey,
@@ -9,42 +7,51 @@ import {
 import type { VerticalId, VerticalPack } from "./types";
 import { kiranaPack } from "./kirana/pack";
 import { clothingPack } from "./clothing/pack";
+import { footwearPack } from "./footwear/pack";
+import { autoPartsPack } from "./auto-parts/pack";
+import { electronicsPack } from "./electronics/pack";
 import { pharmacyPack } from "./pharmacy/pack";
+import { stationeryPack } from "./stationery-books/pack";
+import { furniturePack } from "./furniture-home/pack";
+import { cosmeticsPack } from "./beauty-cosmetics/pack";
 import { restaurantPack } from "./restaurant/pack";
-import { generalPack } from "./general/pack";
+import { customPack } from "./custom/pack";
 
 export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId } from "./types";
 
-/**
- * Every pack in the app. Importing them all here is cheap: a manifest is a few
- * strings and an icon, and the pages behind `routes` stay lazy, so an inactive
- * trade's screens are never downloaded.
- */
+/** Every shop type owns exactly one explicit pack, even before it has exclusive screens. */
 export const VERTICAL_PACKS: readonly VerticalPack[] = [
   kiranaPack,
   clothingPack,
+  footwearPack,
+  autoPartsPack,
+  electronicsPack,
   pharmacyPack,
+  stationeryPack,
+  furniturePack,
+  cosmeticsPack,
   restaurantPack,
-  generalPack,
+  customPack,
 ];
 
 const PACK_BY_BUSINESS_TYPE = new Map<BusinessType, VerticalPack>();
 for (const pack of VERTICAL_PACKS) {
-  for (const businessType of pack.businessTypes) PACK_BY_BUSINESS_TYPE.set(businessType, pack);
+  for (const businessType of pack.businessTypes) {
+    if (PACK_BY_BUSINESS_TYPE.has(businessType)) throw new Error(`Duplicate vertical pack for ${businessType}`);
+    PACK_BY_BUSINESS_TYPE.set(businessType, pack);
+  }
 }
 
 export function packForBusinessType(businessType: BusinessType): VerticalPack {
-  // `general` catches a business type no pack claimed, so a shop is never left
-  // without a pack — the registry test is what keeps that from going unnoticed.
-  return PACK_BY_BUSINESS_TYPE.get(businessType) ?? generalPack;
+  const pack = PACK_BY_BUSINESS_TYPE.get(businessType);
+  if (!pack) throw new Error(`No vertical pack registered for ${businessType}`);
+  return pack;
 }
 
-/** Non-reactive read, for code paths outside React. */
 export function getActiveVerticalPack(): VerticalPack {
   return packForBusinessType(getStoredBusinessType());
 }
 
-/** Re-renders the moment the owner changes the shop's business type. */
 export function useActiveVerticalPack(): VerticalPack {
   const businessType = useBusinessTypeKey();
   return useMemo(() => packForBusinessType(businessType), [businessType]);
@@ -54,7 +61,6 @@ function cleanPath(path: string) {
   return (path.split(/[?#]/)[0] || "/").replace(/\/+$/, "") || "/";
 }
 
-/** Which pack owns a route, longest prefix first. Null for the shared core routes. */
 export function verticalForPath(path: string): VerticalId | null {
   const target = cleanPath(path);
   let best: { id: VerticalId; length: number } | null = null;
@@ -73,11 +79,6 @@ function pathAllowedFor(path: string, active: VerticalId): boolean {
   return owner === null || owner === active;
 }
 
-/**
- * Whether a path is reachable by the shop in front of us: true for every core
- * route, true for the active trade's own routes, false for another trade's.
- * Non-reactive; `useIsVerticalPathActive` is the hook form.
- */
 export function isVerticalPathActive(path: string): boolean {
   return pathAllowedFor(path, getActiveVerticalPack().id);
 }

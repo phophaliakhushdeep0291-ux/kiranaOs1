@@ -9,6 +9,7 @@ import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
 import { completeDeviceReplacement, createDeviceBoundLoginSession, withDeviceLifecycleTransaction } from "../devices/devices.service.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/authEmail.js";
 import { verifyGoogleIdToken } from "./google.service.js";
+import { settingsForBusinessType } from "../shops/businessProfiles.js";
 
 const REFRESH_TOKEN_BYTES = 48;
 const REFRESH_TOKEN_TTL_DAYS = 30;
@@ -16,7 +17,7 @@ const AUTH_TOKEN_BYTES = 32;
 const EMAIL_VERIFICATION_TTL_HOURS = 24;
 const PASSWORD_RESET_TTL_MINUTES = 30;
 
-export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone }, reqMeta = {}) {
+export async function registerShop({ shopName, ownerName, city, address, mobile, email, password, ownerPin, gstNumber, phone, businessType }, reqMeta = {}) {
   // Mobile numbers are unique per shop, not globally. The same owner/staff mobile
   // may legitimately exist in multiple shop tenants; login handles that safely.
   const passwordHash = await bcrypt.hash(password, 10);
@@ -25,7 +26,15 @@ export async function registerShop({ shopName, ownerName, city, address, mobile,
 
   const result = await db.$transaction(async (tx) => {
     const shop = await tx.shop.create({
-      data: { name: shopName, ownerName, city, address, gstNumber, phone },
+      data: {
+        name: shopName,
+        ownerName,
+        city,
+        address,
+        gstNumber,
+        phone,
+        settingsJson: JSON.stringify(settingsForBusinessType(businessType)),
+      },
     });
     const user = await tx.user.create({
       data: { shopId: shop.id, name: ownerName, mobile, email: normalizedEmail, passwordHash, pinHash, role: "owner" },
