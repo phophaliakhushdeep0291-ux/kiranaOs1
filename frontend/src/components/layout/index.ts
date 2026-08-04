@@ -1,5 +1,6 @@
 import { setModulePathGate } from "@/features/core/settings/modules";
-import { isVerticalPathActive } from "@/features/verticals/registry";
+import { setCapabilityResolver } from "@/features/core/settings/capabilities";
+import { capabilitiesForBusinessType, isVerticalPathActive } from "@/features/verticals/registry";
 
 // Core owns the owner-facing module switches; the vertical registry owns which
 // trade a route belongs to. They are married here rather than in `providers.tsx`
@@ -12,5 +13,8 @@ import { isVerticalPathActive } from "@/features/verticals/registry";
 // every shop. The layout is itself lazy, and it loads before anything that reads
 // the gate (sidebar, mobile drawer, dashboard shortcuts, Settings → Modules).
 setModulePathGate(isVerticalPathActive);
+// Same inversion for capabilities: core screens ask "does this shop sell
+// loose?", the vertical packs hold the answer, and the two meet here.
+setCapabilityResolver(capabilitiesForBusinessType);
 
 export { Layout } from "./Layout";

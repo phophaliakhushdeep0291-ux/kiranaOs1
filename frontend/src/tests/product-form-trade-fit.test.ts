@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { BUSINESS_TYPE_DEFS } from "@/features/core/settings/business-types";
+import { BUSINESS_TYPE_DEFS, type BusinessType } from "@/features/core/settings/business-types";
 import { isScaleUnit } from "@/features/core/products/pages/product-pricing";
 import { packMeasureUnitsFor } from "@/features/core/products/pages/components/ProductFormPanel";
 import { packForBusinessType } from "@/features/verticals/registry";
@@ -19,25 +19,47 @@ describe("product form fits the trade", () => {
     for (const unit of ["piece", "meter", "pair", "dozen", "set", "plate"]) expect(isScaleUnit(unit)).toBe(false);
   });
 
-  it("offers a clothing shop no weight or volume pack measure", () => {
-    const clothing = BUSINESS_TYPE_DEFS.clothing.primaryUnits;
-    const sellsLoose = packForBusinessType("clothing").capabilities.includes("LOOSE_ITEMS");
+  it("gives every trade pack measures it would actually use", () => {
+    const measures = (type: BusinessType) => packMeasureUnitsFor(BUSINESS_TYPE_DEFS[type].primaryUnits);
 
-    expect(sellsLoose).toBe(false);
-    expect(packMeasureUnitsFor(clothing, sellsLoose)).toEqual(["piece"]);
+    // A garment, a shoe, a handset and a sofa are all counted, never weighed.
+    for (const type of ["clothing", "footwear", "electronics", "furniture", "other"] as const) {
+      expect(measures(type), `${type} should count in pieces only`).toEqual(["piece"]);
+    }
+
+    // A grocer weighs and pours, but does not pack by the tablet.
+    expect(measures("kirana")).toEqual(["piece", "gram", "kg", "ml", "litre"]);
+    // A chemist packs by the tablet, and never by the kilo.
+    expect(measures("pharmacy")).toEqual(["piece", "tablet", "gram", "ml"]);
+    // A stationer sells loose, but by the piece — it must not be offered kilos.
+    expect(measures("stationery")).toEqual(["piece"]);
   });
 
-  it("keeps the kirana and pharmacy measures a counter actually needs", () => {
-    const kirana = packMeasureUnitsFor(BUSINESS_TYPE_DEFS.kirana.primaryUnits, true);
-    expect(kirana).toContain("kg");
-    expect(kirana).toContain("ml");
-    // A grocer does not pack goods by the tablet.
-    expect(kirana).not.toContain("tablet");
+  it("settles what every one of the eleven trades is asked", () => {
+    const posture = Object.fromEntries(
+      (Object.keys(BUSINESS_TYPE_DEFS) as BusinessType[]).map((type) => {
+        const capabilities = packForBusinessType(type).capabilities;
+        return [type, [
+          capabilities.includes("LOOSE_ITEMS") ? "loose" : "-",
+          capabilities.includes("BATCH_TRACKING") ? "batch" : "-",
+        ].join("/")];
+      }),
+    );
 
-    // A chemist does, and gets there without any loose-selling capability.
-    const pharmacy = packMeasureUnitsFor(BUSINESS_TYPE_DEFS.pharmacy.primaryUnits, false);
-    expect(pharmacy).toContain("tablet");
-    expect(pharmacy).not.toContain("kg");
+    // Read this as the answer to "what does this shop's product form ask for?".
+    expect(posture).toEqual({
+      kirana: "loose/batch",
+      stationery: "loose/-",
+      pharmacy: "-/batch",
+      cosmetics: "-/batch",
+      clothing: "-/-",
+      footwear: "-/-",
+      auto_parts: "-/-",
+      electronics: "-/-",
+      furniture: "-/-",
+      restaurant: "-/-",
+      other: "-/-",
+    });
   });
 
   it("asks only a loose-selling trade to choose packed or loose", () => {
@@ -45,6 +67,18 @@ describe("product form fits the trade", () => {
     // Existing loose stock stays editable after a trade switches away from it.
     expect(source).toContain("const showLooseChoice = sellsLoose || isLoose;");
     expect(source).toContain("{showLooseChoice ? (");
+  });
+
+  it("offers batch and expiry only where stock is dated", () => {
+    const dated = (["kirana", "pharmacy", "cosmetics"] as const)
+      .every((type) => packForBusinessType(type).capabilities.includes("BATCH_TRACKING"));
+    const undated = (["clothing", "footwear", "auto_parts", "electronics", "furniture", "restaurant"] as const)
+      .some((type) => packForBusinessType(type).capabilities.includes("BATCH_TRACKING"));
+
+    expect(dated).toBe(true);
+    expect(undated).toBe(false);
+    expect(source).toContain('hasCapability("BATCH_TRACKING") || !!batchTracking');
+    expect(source).toContain("{showBatchTracking ? (");
   });
 
   it("does not dump every unit into the picker regardless of trade", () => {

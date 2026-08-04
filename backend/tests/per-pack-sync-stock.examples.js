@@ -152,14 +152,20 @@ async function main() {
 
     console.log("per-pack-sync-stock.examples.js OK");
   } finally {
+    // Pushing sync events leaves its own trail (SyncIdMapping -> OfflineSyncEvent),
+    // and a shop that still has ANY child row cannot be deleted — a test that
+    // leaves rows behind slowly fills the shared dev database.
     for (const remove of [
+      () => db.syncIdMapping.deleteMany({ where: { shopId: shop.id } }),
+      () => db.offlineSyncEvent.deleteMany({ where: { shopId: shop.id } }),
       () => db.stockLedger.deleteMany({ where: { shopId: shop.id } }),
       () => db.purchaseHistory.deleteMany({ where: { shopId: shop.id } }),
       () => db.locationStock.deleteMany({ where: { shopId: shop.id } }),
       () => db.productSellingUnit.deleteMany({ where: { shopId: shop.id } }),
       () => db.product.deleteMany({ where: { shopId: shop.id } }),
       () => db.auditLog.deleteMany({ where: { shopId: shop.id } }),
-      () => (db.syncEvent ? db.syncEvent.deleteMany({ where: { shopId: shop.id } }) : Promise.resolve()),
+      () => db.session.deleteMany({ where: { shopId: shop.id } }),
+      () => db.device.deleteMany({ where: { shopId: shop.id } }),
       () => db.storeLocation.deleteMany({ where: { shopId: shop.id } }),
       () => db.user.deleteMany({ where: { shopId: shop.id } }),
       () => db.shop.delete({ where: { id: shop.id } }),

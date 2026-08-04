@@ -58,21 +58,14 @@ export function useActiveVerticalPack(): VerticalPack {
 }
 
 /**
- * Whether this shop's trade can do something. Non-reactive; prefer the hook in
- * components so the answer updates when the owner changes the business type.
+ * What the trade behind a business type can do.
  *
- * Branch on this, never on the business type itself: "does this shop sell
- * loose?" is a question about the trade's behaviour, and the list of trades
- * that answer yes changes (kirana and stationery today) without the calling
- * screen needing to care.
+ * Installed into core at startup (see `components/layout/index.ts`) so core
+ * screens can ask "does this shop sell loose?" without importing a pack —
+ * `useShopCapability` in `core/settings/capabilities` is what they call.
  */
-export function shopHasCapability(capability: Capability): boolean {
-  return getActiveVerticalPack().capabilities.includes(capability);
-}
-
-export function useShopCapabilities(): (capability: Capability) => boolean {
-  const pack = useActiveVerticalPack();
-  return useMemo(() => (capability: Capability) => pack.capabilities.includes(capability), [pack]);
+export function capabilitiesForBusinessType(businessType: BusinessType): readonly Capability[] {
+  return packForBusinessType(businessType).capabilities;
 }
 
 function cleanPath(path: string) {
