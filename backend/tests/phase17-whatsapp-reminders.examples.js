@@ -311,13 +311,13 @@ for (const snippet of ["accepted", "X-Hub-Signature-256", "X-Twilio-Signature", 
   assert(deliveryDocs.includes(snippet), `WhatsApp delivery documentation missing ${snippet}`);
 }
 
-const notificationUi = read("../frontend/src/features/settings/pages/NotificationsSettingsPage.tsx");
+const notificationUi = read("../frontend/src/features/core/settings/pages/NotificationsSettingsPage.tsx");
 for (const snippet of ["/reminders/status", "/reminders/templates", "/reminders/logs?limit=20", "Actual Delivery History", "No local sample is being substituted", "Accepted", "Delivered", "Read", "verified provider callback"]) {
   assert(notificationUi.includes(snippet), "notification UI missing real server flow: " + snippet);
 }
 assert(!notificationUi.includes("const HISTORY"), "notification UI must never render fabricated delivery history");
 assert(!notificationUi.includes("Notification Channels"), "unimplemented SMS/email/push channels must not be presented as connected");
-const customerDetailUi = read("../frontend/src/features/customers/pages/CustomerDetailPage.tsx");
+const customerDetailUi = read("../frontend/src/features/core/customers/pages/CustomerDetailPage.tsx");
 assert(customerDetailUi.includes('"/reminders/send"'), "customer reminder button must call the real send endpoint");
 assert(!customerDetailUi.includes("Reminder ready"), "customer reminder button must not use a placeholder toast");
 

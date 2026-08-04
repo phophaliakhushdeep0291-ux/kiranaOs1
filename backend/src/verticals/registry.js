@@ -6,18 +6,40 @@ import footwear from "./footwear/profile.js";
 import autoParts from "./auto-parts/profile.js";
 import electronics from "./electronics/profile.js";
 import pharmacy from "./pharmacy/profile.js";
-import stationery from "./stationery/profile.js";
-import furniture from "./furniture/profile.js";
-import cosmetics from "./cosmetics/profile.js";
+import stationery from "./stationery-books/profile.js";
+import furniture from "./furniture-home/profile.js";
+import cosmetics from "./beauty-cosmetics/profile.js";
 import restaurant from "./restaurant/profile.js";
-import other from "./other/profile.js";
+import custom from "./custom/profile.js";
 
 export { BUSINESS_TYPES, CAPABILITIES } from "./profile.js";
 
 export const BUSINESS_PROFILE_LIST = Object.freeze([
   kirana, clothing, footwear, autoParts, electronics, pharmacy,
-  stationery, furniture, cosmetics, restaurant, other,
+  stationery, furniture, cosmetics, restaurant, custom,
 ]);
+
+/**
+ * Where each business type's code lives.
+ *
+ * The directory names read as trade names; the `businessType` keys are written
+ * into every shop's settingsJson and cannot move without a data migration. Four
+ * of them therefore differ, and this map is the only place that knows it —
+ * anything resolving a path from a type reads it from here rather than guessing.
+ */
+export const BUSINESS_TYPE_DIRECTORIES = Object.freeze({
+  kirana: "kirana",
+  clothing: "clothing",
+  footwear: "footwear",
+  auto_parts: "auto-parts",
+  electronics: "electronics",
+  pharmacy: "pharmacy",
+  stationery: "stationery-books",
+  furniture: "furniture-home",
+  cosmetics: "beauty-cosmetics",
+  restaurant: "restaurant",
+  other: "custom",
+});
 
 export const BUSINESS_PROFILES = Object.freeze(Object.fromEntries(
   BUSINESS_PROFILE_LIST.map((profile) => [profile.businessType, profile]),

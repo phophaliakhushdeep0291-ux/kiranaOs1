@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { BUSINESS_PROFILE_LIST, BUSINESS_TYPES } from "../src/verticals/registry.js";
+import { BUSINESS_PROFILE_LIST, BUSINESS_TYPES, BUSINESS_TYPE_DIRECTORIES } from "../src/verticals/registry.js";
 import { NAVIGATION_KEYS, SHARED_NAVIGATION } from "../src/verticals/profile.js";
 import { ENGINE_CATALOG } from "../src/engines/catalog.js";
 
@@ -12,23 +12,36 @@ const root = dirname(fileURLToPath(new URL("../src/verticals/registry.js", impor
 test("every backend business type owns an explicit vertical profile file", () => {
   assert.equal(BUSINESS_PROFILE_LIST.length, BUSINESS_TYPES.length);
   for (const profile of BUSINESS_PROFILE_LIST) {
-    const directory = profile.businessType === "auto_parts" ? "auto-parts" : profile.businessType;
+    const directory = BUSINESS_TYPE_DIRECTORIES[profile.businessType];
+    assert.ok(directory, `${profile.businessType} has no directory mapping`);
     assert.equal(existsSync(join(root, directory, "profile.js")), true, `${profile.businessType} profile missing`);
   }
 });
+
+test("the directory map covers every business type and points somewhere real", () => {
+  // Four types have a directory that is not their key, so a stale map is not a
+  // typo — it is a module that fails to resolve at boot.
+  assert.deepEqual(Object.keys(BUSINESS_TYPE_DIRECTORIES).sort(), [...BUSINESS_TYPES].sort());
+  for (const [businessType, directory] of Object.entries(BUSINESS_TYPE_DIRECTORIES)) {
+    assert.equal(existsSync(join(root, directory)), true, `${businessType} -> ${directory} does not exist`);
+  }
+});
+
+/** Directory names, alternated for a regex — derived so a rename cannot leave this stale. */
+const DIRECTORY_ALTERNATION = Object.values(BUSINESS_TYPE_DIRECTORIES).join("|");
 
 test("shop modules use the registry facade instead of individual vertical imports", () => {
   const facade = readFileSync(join(root, "..", "modules", "shops", "businessProfiles.js"), "utf8");
   assert.match(facade, /export \* from "\.\.\/\.\.\/verticals\/registry\.js"/);
   const middleware = readFileSync(join(root, "..", "modules", "shops", "businessProfile.middleware.js"), "utf8");
-  assert.doesNotMatch(middleware, /verticals\/(kirana|clothing|footwear|auto-parts|electronics|pharmacy|stationery|furniture|cosmetics|restaurant|other)/);
+  assert.doesNotMatch(middleware, new RegExp(`verticals/(${DIRECTORY_ALTERNATION})`));
 });
 
 test("vertical profiles do not import sibling verticals", () => {
   for (const profile of BUSINESS_PROFILE_LIST) {
-    const directory = profile.businessType === "auto_parts" ? "auto-parts" : profile.businessType;
+    const directory = BUSINESS_TYPE_DIRECTORIES[profile.businessType];
     const source = readFileSync(join(root, directory, "profile.js"), "utf8");
-    assert.doesNotMatch(source, /from "\.\.\/(kirana|clothing|footwear|auto-parts|electronics|pharmacy|stationery|furniture|cosmetics|restaurant|other)\//);
+    assert.doesNotMatch(source, new RegExp(`from "\\.\\./(${DIRECTORY_ALTERNATION})/`));
   }
 });
 
@@ -117,9 +130,7 @@ test("no vertical imports another vertical", () => {
 });
 
 test("verticals holds one directory per business type and nothing else", () => {
-  const expected = BUSINESS_PROFILE_LIST.map((profile) =>
-    profile.businessType === "auto_parts" ? "auto-parts" : profile.businessType,
-  ).sort();
+  const expected = BUSINESS_PROFILE_LIST.map((profile) => BUSINESS_TYPE_DIRECTORIES[profile.businessType]).sort();
 
   // A directory that is not a shop type — a family alias, a leftover — makes the
   // listing lie about what verticals exist.

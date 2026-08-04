@@ -14,6 +14,12 @@ import type { FeatureName } from "@/features/core/subscription/plans";
  * mobile drawer entries. A kirana shop cannot reach a clothing route by typing
  * the URL, because for that shop the route was never registered.
  */
+/**
+ * One id per trade, matching the pack's directory name here and its twin under
+ * backend/src/verticals/. This is internal routing identity only — the value
+ * persisted on a shop is `BusinessType`, and four of the two differ by name
+ * (stationery, furniture, cosmetics, other). Never store a VerticalId.
+ */
 export type VerticalId =
   | "kirana"
   | "clothing"
@@ -21,11 +27,11 @@ export type VerticalId =
   | "auto-parts"
   | "electronics"
   | "pharmacy"
-  | "stationery"
-  | "furniture"
-  | "cosmetics"
+  | "stationery-books"
+  | "furniture-home"
+  | "beauty-cosmetics"
   | "restaurant"
-  | "other";
+  | "custom";
 
 /**
  * Every screen a pack can mount.

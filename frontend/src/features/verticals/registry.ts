@@ -11,11 +11,11 @@ import { footwearPack } from "./footwear/pack";
 import { autoPartsPack } from "./auto-parts/pack";
 import { electronicsPack } from "./electronics/pack";
 import { pharmacyPack } from "./pharmacy/pack";
-import { stationeryPack } from "./stationery/pack";
-import { furniturePack } from "./furniture/pack";
-import { cosmeticsPack } from "./cosmetics/pack";
+import { stationeryPack } from "./stationery-books/pack";
+import { furniturePack } from "./furniture-home/pack";
+import { cosmeticsPack } from "./beauty-cosmetics/pack";
 import { restaurantPack } from "./restaurant/pack";
-import { otherPack } from "./other/pack";
+import { customPack } from "./custom/pack";
 
 export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId } from "./types";
 
@@ -31,7 +31,7 @@ export const VERTICAL_PACKS: readonly VerticalPack[] = [
   furniturePack,
   cosmeticsPack,
   restaurantPack,
-  otherPack,
+  customPack,
 ];
 
 const PACK_BY_BUSINESS_TYPE = new Map<BusinessType, VerticalPack>();

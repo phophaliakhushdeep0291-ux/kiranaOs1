@@ -60,10 +60,21 @@ Most capabilities are currently declarative: they describe the intended shape of
 a trade and drive presets, but only `BATCH_TRACKING` is enforced at a route so
 far. Adding a capability to this list does not by itself gate anything.
 
-## Business type keys are persisted
+## Directory names and business type keys differ
 
-The strings in `BUSINESS_TYPES` are written into every shop's
-`settingsJson.businessProfile.businessType`, and the directory names here mirror
-`frontend/src/features/verticals/<key>/`. Renaming either is a data migration
-plus a cross-stack rename, not a tidy-up. `auto_parts` is the one key whose
-directory differs (`auto-parts/`).
+Directories read as trade names. The `businessType` keys in `BUSINESS_TYPES` are
+written into every shop's `settingsJson.businessProfile.businessType`, so they
+cannot be renamed without a data migration — five of them therefore differ:
+
+| directory          | stored businessType |
+| ------------------ | ------------------- |
+| `auto-parts`       | `auto_parts`        |
+| `stationery-books` | `stationery`        |
+| `furniture-home`   | `furniture`         |
+| `beauty-cosmetics` | `cosmetics`         |
+| `custom`           | `other`             |
+
+`BUSINESS_TYPE_DIRECTORIES` in `registry.js` is the only place that knows this.
+Resolve a path from a type through that map; never assume the two are equal.
+The directories mirror `frontend/src/features/verticals/`, whose pack ids follow
+the directory name — so a rename is a two-tree change.

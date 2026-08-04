@@ -42,7 +42,7 @@ assert.equal(createApiKeySchema.safeParse({ name: "Expired", scopes: ["catalog:r
 
 const service = read("src/modules/integrations/integrations.service.js");
 const routes = read("src/modules/integrations/integrations.routes.js");
-const frontend = read("../frontend/src/features/settings/pages/IntegrationsSettingsPage.tsx");
+const frontend = read("../frontend/src/features/core/settings/pages/IntegrationsSettingsPage.tsx");
 const sqliteSchema = read("prisma/schema.prisma");
 const postgresSchema = read("prisma-postgres/schema.prisma");
 const metrics = read("src/lib/metrics.js");

@@ -87,6 +87,7 @@
     "test:activity": "node tests/activity-personalization.examples.js",
     "test:rentals": "node tests/rental-availability.examples.js",
     "test:verticals": "node tests/business-vertical-architecture.examples.js",
+    "test:variants": "node tests/product-variants.examples.js && node tests/per-pack-stock.examples.js",
     "test:event-bus-redis": "node tests/event-bus-redis.examples.js"
   },
   "dependencies": {

@@ -102,6 +102,25 @@ describe("vertical boundaries", () => {
     }
   });
 
+  it("names each pack after its folder, not after the type a shop stores", () => {
+    // The two diverge for five trades, and the stored value is the one that is
+    // persisted — a pack id leaking into settingsJson would be unrecoverable
+    // without a migration. Pinning the mapping keeps the divergence deliberate.
+    const idForBusinessType: Record<string, string> = {
+      auto_parts: "auto-parts",
+      stationery: "stationery-books",
+      furniture: "furniture-home",
+      cosmetics: "beauty-cosmetics",
+      other: "custom",
+    };
+
+    for (const pack of VERTICAL_PACKS) {
+      for (const businessType of pack.businessTypes) {
+        expect(pack.id).toBe(idForBusinessType[businessType] ?? businessType);
+      }
+    }
+  });
+
   it("routes a pack serves are covered by the paths it declares", () => {
     for (const pack of VERTICAL_PACKS) {
       for (const route of pack.routes) {
