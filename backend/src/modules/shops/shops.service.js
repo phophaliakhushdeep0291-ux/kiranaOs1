@@ -1,7 +1,7 @@
 import { database as db } from "../../infrastructure/database/index.js";
 import { AppError } from "../../shared/errors/index.js";
 import { AUDIT_MODULES, createAuditLog } from "../audit/audit.service.js";
-import { BUSINESS_PROFILES, bootstrapForShop, businessTypeFromSettings, parseShopSettings, settingsForBusinessType } from "./businessProfiles.js";
+import { BUSINESS_PROFILES, bootstrapForShop, businessTypeFromSettings, parseShopSettings, requestedBusinessTypeFromSettings, settingsForBusinessType } from "./businessProfiles.js";
 
 export async function getShop(shopId) {
   const shop = await db.shop.findUnique({ where: { id: shopId } });
@@ -28,7 +28,10 @@ export async function updateShop(shopId, data, actor = {}) {
     const beforeSettings = parseShopSettings(previous.settingsJson);
     const nextSettings = parseShopSettings(data.settingsJson);
     const beforeType = businessTypeFromSettings(beforeSettings);
-    const nextType = businessTypeFromSettings(nextSettings);
+    // The stored shop is read server-owned-first; the incoming payload is read
+    // as a request, so the owner's new choice is not overruled by the old value
+    // it travelled next to. See `requestedBusinessTypeFromSettings`.
+    const nextType = requestedBusinessTypeFromSettings(nextSettings);
     const capabilitiesChanged = JSON.stringify(beforeSettings.businessProfile?.capabilities ?? null)
       !== JSON.stringify(nextSettings.businessProfile?.capabilities ?? null);
     if (capabilitiesChanged && actor.role !== "owner") {

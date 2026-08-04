@@ -97,6 +97,8 @@ const AppLayout = lazy(() => import("@/components/layout").then((module) => ({ d
  */
 const VERTICAL_PAGES: Record<VerticalPageId, ComponentType> = {
   "clothing/rentals": lazy(() => import("@/features/verticals/clothing/rentals/pages/RentalsPage")),
+  "restaurant/tables": lazy(() => import("@/features/verticals/restaurant/pages/TablesPage")),
+  "restaurant/kitchen": lazy(() => import("@/features/verticals/restaurant/pages/KitchenPage")),
 };
 
 const ROUTE_LOADING_LABELS: Record<string, string> = {

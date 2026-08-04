@@ -51,7 +51,10 @@ export type VerticalId =
  * `Record<VerticalPageId, ComponentType>` in the router makes the compiler
  * reject a page named here and never wired up.
  */
-export type VerticalPageId = "clothing/rentals";
+export type VerticalPageId =
+  | "clothing/rentals"
+  | "restaurant/tables"
+  | "restaurant/kitchen";
 
 export interface VerticalRoute {
   /** Wouter pattern, e.g. "/rentals" or "/tables/:id". */

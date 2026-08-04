@@ -95,6 +95,25 @@ export function businessTypeFromSettings(settings) {
     ?? "kirana";
 }
 
+/**
+ * The trade an incoming settings payload is *asking* for.
+ *
+ * `businessProfile` is server-owned and rebuilt on every write, so a client
+ * echoing the blob back always carries the previous type in it. Reading that
+ * first (as `businessTypeFromSettings` does, correctly, for a stored shop) made
+ * a type change silently self-cancel: the owner picked a new trade, the store
+ * profile carried it, and the server rebuilt the profile from the old value —
+ * answering 200 while writing the shop back exactly as it was.
+ *
+ * `storeProfile.businessTypeKey` is the one field the owner's screen actually
+ * sets, so it is the request. The server-owned value stays the fallback for
+ * payloads that never mention a trade at all.
+ */
+export function requestedBusinessTypeFromSettings(settings) {
+  return normalizeBusinessType(settings?.storeProfile?.businessTypeKey)
+    ?? businessTypeFromSettings(settings);
+}
+
 export function bootstrapForShop(shop, role) {
   const settings = parseShopSettings(shop.settingsJson);
   const businessType = businessTypeFromSettings(settings);
