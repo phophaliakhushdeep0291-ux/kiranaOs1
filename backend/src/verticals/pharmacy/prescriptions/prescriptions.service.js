@@ -42,8 +42,19 @@ export function todayKey() {
   return formatDateInTimeZone(new Date());
 }
 
-function normalizePhone(value) {
-  return String(value ?? "").replace(/[^\d]/g, "").slice(-15);
+/**
+ * A mobile number reduced to the form the app identifies a person by: the last
+ * ten digits, as `assurance/rules/customer-credit.rules.js` also does.
+ *
+ * The point of the register is that a patient can be found in it, and a counter
+ * types the same number as "9876543210" one day and "+91 98765-43210" the next.
+ * Keeping the country code would file those as two different people. Anything
+ * shorter than ten digits is kept exactly as typed rather than discarded — the
+ * field is optional, and a half-remembered number still beats nothing.
+ */
+export function normalizePhone(value) {
+  const digits = String(value ?? "").replace(/[^\d]/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
 function trimOrNull(value) {

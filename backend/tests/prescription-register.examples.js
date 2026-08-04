@@ -2,6 +2,7 @@ import assert from "assert";
 import {
   STALE_AFTER_DAYS,
   nextRegisterNumber,
+  normalizePhone,
   serializePrescription,
   todayKey,
 } from "../src/verticals/pharmacy/prescriptions/prescriptions.service.js";
@@ -52,6 +53,21 @@ assert.equal(await nextRegisterNumber(afterDeletes, "shop_1"), "RX-000901", "a g
 // Six-digit padding is load-bearing: the highest is found by sorting text, and
 // an unpadded "RX-1000000" would sort below "RX-999999".
 assert.equal((await nextRegisterNumber(emptyRegister, "shop_1")).replace("RX-", "").length, 6, "numbers stay six digits");
+
+/* ── Finding a patient again ───────────────────────────────────────────────── */
+
+// The register only works if the patient can be found in it, and a counter types
+// the same number differently on different days. All of these are one person.
+for (const typed of ["9876543210", "+91 98765-43210", "+919876543210", "098765 43210", "(91) 9876543210"]) {
+  assert.equal(normalizePhone(typed), "9876543210", `"${typed}" is the same patient`);
+}
+
+// Shorter than a mobile number is kept exactly as typed — the field is optional,
+// and a half-remembered number still beats discarding what was written down.
+assert.equal(normalizePhone("98765"), "98765", "a partial number is not mangled");
+assert.equal(normalizePhone(""), "");
+assert.equal(normalizePhone(null), "");
+assert.equal(normalizePhone(undefined), "");
 
 /* ── Age and staleness ─────────────────────────────────────────────────────── */
 

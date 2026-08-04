@@ -17,6 +17,7 @@ import { sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
 import { reapplyBillLoyaltyInTransaction, recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
+import { evaluateSaleGuards } from "../../shared/sale-guards.js";
 import { allocateLotsForBill, batchMrpCeilings, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
 import { sendTransactionalEmail } from "../../lib/authEmail.js";
@@ -247,6 +248,20 @@ export async function confirmBill(shopId, body, actor = {}) {
       where: { id: { in: productIds }, shopId, deletedAt: null },
     });
     const productMap = Object.fromEntries(dbProducts.map((p) => [p.id, p]));
+
+    // A trade may refuse this sale on its own terms — a pharmacy will not let a
+    // Schedule H medicine leave without a doctor's slip. Billing never names a
+    // trade; verticals register guards and this asks the registry. No guards
+    // registered is one array-length check.
+    const { refusal: saleRefusal, onConfirmed: saleGuardHooks } = await evaluateSaleGuards({
+      shopId, tx, body, items, productMap, isEstimate,
+    });
+    if (saleRefusal) {
+      const error = new AppError(saleRefusal.message, saleRefusal.status ?? 409, saleRefusal.code);
+      if (saleRefusal.publicData) error.publicData = saleRefusal.publicData;
+      throw error;
+    }
+
     const locationStockByProduct = new Map(await Promise.all(dbProducts.map(async (product) => [
       product.id,
       await getLocationQuantity(tx, shopId, location, product),
@@ -630,6 +645,11 @@ export async function confirmBill(shopId, body, actor = {}) {
     });
     await redeemOfferInTransaction(tx, shopId, validatedOffer, { isEstimate });
     await allocateLotsForBill(tx, { shopId, locationId: location.id, bill, chosenLotByProduct });
+
+    // Whatever a guard needs to record about the sale it permitted — the pharmacy
+    // closes its register entry against this bill here.
+    for (const hook of saleGuardHooks) await hook({ tx, bill, billNo });
+
     await recordBillLoyaltyRedemption(tx, {
       shopId,
       billId: bill.id,

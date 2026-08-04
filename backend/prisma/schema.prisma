@@ -104,6 +104,7 @@ model Shop {
   activityAggregates            ActivityAggregate[]
   rentalBookings                RentalBooking[]
   prescriptions                 Prescription[]
+  productUnits                  ProductUnit[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -486,6 +487,13 @@ model Product {
   // availability that is simply untrue. Enforced in products.service.js.
   variantAxesJson              String    @default("[]")
   batchTrackingEnabled         Boolean   @default(false)
+  // Which drug schedule this medicine falls under: h | h1 | x | otc, or null for
+  // anything that is not a scheduled drug (including every non-pharmacy product).
+  //
+  // Null is what makes this safe to add: enforcement is driven by the data, so a
+  // catalogue nobody has classified behaves exactly as it does today. Marking a
+  // product IS the act of opting it into the prescription requirement.
+  drugSchedule                 String?
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)
   sourceDeviceId               String? // device that created the product offline
@@ -3047,4 +3055,85 @@ model PrescriptionItem {
 
   @@index([prescriptionId])
   @@index([productId])
+}
+
+// ── Electronics: serialised units ────────────────────────────────────────────
+// Stock here is not fungible. The shop does not sell "a Galaxy A16", it sells
+// THAT handset, and a return, a warranty claim or a police enquiry has to find
+// the same physical unit again months later. Every other trade in the app counts
+// stock as a number; this one has to name each piece of it.
+//
+// A unit is deliberately NOT a replacement for Product.stockBaseQty — the
+// product still carries the count that billing and reports read. This table
+// answers "which one, and where did it go", which a count cannot.
+//
+// Not synced to devices: a unit is written once when the box is opened and read
+// by lookup, so it is online-first like rentals and the prescription register.
+
+model ProductUnit {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Deliberately NOT a foreign key, and the name is copied. The unit is the
+  // record of a physical thing that left the shop; it has to outlive the
+  // catalogue row being renamed or purged, exactly like a bill line.
+  productId   String
+  productName String
+
+  // What is stamped on the box. A phone carries an IMEI (two, on a dual-SIM
+  // handset) and usually a serial as well; a laptop or a mixer has only a
+  // serial. At least one is required — a unit nobody can identify is just stock.
+  imei         String?
+  imei2        String?
+  serialNumber String?
+
+  // in_stock → sold → returned. rma is "away with the service centre", and
+  // lost/scrapped are terminal write-offs.
+  status String @default("in_stock")
+  // new | open_box | refurbished. Open-box is a real shelf category here: a
+  // returned handset cannot go back to the pile as new.
+  condition String @default("new")
+
+  // Where it came from.
+  purchaseBillId String?
+  supplierId     String?
+  costPrice      Float    @default(0)
+  receivedAt     DateTime @default(now())
+
+  // Where it went. billId is not a foreign key for the same reason as above —
+  // the unit's history must survive the bill being cancelled or purged.
+  billId       String?
+  billNumber   String?
+  customerId   String?
+  customerName String?
+  customerPhone String @default("")
+  soldAt       DateTime?
+  sellingPrice Float     @default(0)
+
+  // Warranty is stored as an absolute end date rather than only a duration:
+  // the shop's policy can change next year, and this unit's cover cannot.
+  warrantyMonths Int       @default(0)
+  warrantyUntil  DateTime?
+
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  // Two units in one shop may never share an identifier. NULLs are distinct in
+  // both SQLite and PostgreSQL, so a laptop with no IMEI does not collide with
+  // every other laptop that has none.
+  @@unique([shopId, imei])
+  @@unique([shopId, serialNumber])
+  // The counter's lookup — someone puts a handset on the counter and asks.
+  @@index([shopId, imei2])
+  @@index([shopId, status])
+  @@index([shopId, productId, status])
+  @@index([shopId, billId])
+  @@index([shopId, customerPhone])
+  // "What cover is about to run out?"
+  @@index([shopId, warrantyUntil])
 }

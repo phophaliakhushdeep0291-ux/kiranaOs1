@@ -1,4 +1,6 @@
 import { Router } from "express";
+// Side-effect import: registers the Schedule H sale guard with shared billing.
+import "./prescriptions.guard.js";
 import { requireAuth } from "../../../middleware/auth.js";
 import { requireDeviceActivated } from "../../../modules/devices/device.middleware.js";
 import { requireShop } from "../../../middleware/permissions.js";

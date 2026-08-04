@@ -72,6 +72,11 @@ export const createProductSchema = z.object({
   // count and is reordered on its own (70 g packet vs 8-pack).
   packagingMode: z.enum(["pooled", "per_pack"]).default("pooled"),
   batchTrackingEnabled: z.boolean().default(false),
+  // Which drug schedule this medicine falls under. Null/absent means "not a
+  // scheduled drug", which is every product until someone classifies it — so
+  // adding this changes nothing for an existing catalogue. Marking a product h,
+  // h1 or x is what makes billing demand a prescription for it.
+  drugSchedule: z.enum(["h", "h1", "x", "otc"]).nullish(),
   // The variant grid this product declares, in axis order. Empty for ordinary
   // products. A product with axes is forced to "per_pack" in the service: each
   // size/colour holds its own stock, and pooled they would share one number.

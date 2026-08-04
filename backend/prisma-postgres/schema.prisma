@@ -99,6 +99,7 @@ model Shop {
   activityAggregates          ActivityAggregate[]
   rentalBookings              RentalBooking[]
   prescriptions               Prescription[]
+  productUnits                ProductUnit[]
   auditRules                  AuditRule[]
   auditRuns                   AuditRun[]
   auditEvaluations            AuditEvaluation[]
@@ -464,6 +465,13 @@ model Product {
   // "per_pack" or every size would share one stock number.
   variantAxesJson              String    @default("[]")
   batchTrackingEnabled         Boolean   @default(false)
+  // Which drug schedule this medicine falls under: h | h1 | x | otc, or null for
+  // anything that is not a scheduled drug (including every non-pharmacy product).
+  //
+  // Null is what makes this safe to add: enforcement is driven by the data, so a
+  // catalogue nobody has classified behaves exactly as it does today. Marking a
+  // product IS the act of opting it into the prescription requirement.
+  drugSchedule                 String?
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)
   sourceDeviceId               String? // device that created the product offline
@@ -2969,4 +2977,62 @@ model PrescriptionItem {
 
   @@index([prescriptionId])
   @@index([productId])
+}
+
+// Serialised electronics stock: the shop sells THAT handset, and a return or
+// warranty claim has to find the same physical unit again. Online-first —
+// written when the box is opened, read by lookup, not mirrored to devices.
+
+model ProductUnit {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Not a foreign key, and the name is copied — the unit records a physical
+  // thing that left the shop and must outlive the catalogue row.
+  productId   String
+  productName String
+
+  // At least one identifier is required; a unit nobody can identify is just stock.
+  imei         String?
+  imei2        String?
+  serialNumber String?
+
+  status    String @default("in_stock") // in_stock | sold | returned | rma | lost | scrapped
+  condition String @default("new") // new | open_box | refurbished
+
+  purchaseBillId String?
+  supplierId     String?
+  costPrice      Float    @default(0)
+  receivedAt     DateTime @default(now())
+
+  billId        String?
+  billNumber    String?
+  customerId    String?
+  customerName  String?
+  customerPhone String    @default("")
+  soldAt        DateTime?
+  sellingPrice  Float     @default(0)
+
+  // An absolute end date, not only a duration: shop policy can change, this
+  // unit's cover cannot.
+  warrantyMonths Int       @default(0)
+  warrantyUntil  DateTime?
+
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  // NULLs are distinct, so units without an IMEI do not collide with each other.
+  @@unique([shopId, imei])
+  @@unique([shopId, serialNumber])
+  @@index([shopId, imei2])
+  @@index([shopId, status])
+  @@index([shopId, productId, status])
+  @@index([shopId, billId])
+  @@index([shopId, customerPhone])
+  @@index([shopId, warrantyUntil])
 }

@@ -119,6 +119,9 @@ export interface Product {
   isLooseItem?: boolean;
   lowStockThreshold?: number;
   batchTrackingEnabled?: boolean;
+  /** h | h1 | x | otc, or null for anything that is not a scheduled drug.
+   *  Setting h/h1/x is what makes billing demand a prescription for it. */
+  drugSchedule?: "h" | "h1" | "x" | "otc" | null;
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;
@@ -172,6 +175,9 @@ export interface ProductInput {
   isLooseItem?: boolean;
   lowStockThreshold?: number;
   batchTrackingEnabled?: boolean;
+  /** h | h1 | x | otc, or null for anything that is not a scheduled drug.
+   *  Setting h/h1/x is what makes billing demand a prescription for it. */
+  drugSchedule?: "h" | "h1" | "x" | "otc" | null;
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;
