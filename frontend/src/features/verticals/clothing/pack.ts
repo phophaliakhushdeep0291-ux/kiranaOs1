@@ -28,4 +28,8 @@ export const clothingPack: VerticalPack = {
       mobile: { group: "Sell", helper: "Book outfits out by date" },
     },
   ],
+  capabilities: [
+    "BASIC_INVENTORY", "PRODUCT_VARIANTS", "EXCHANGES", "ALTERATIONS", "PRODUCT_BUNDLES",
+    "QUOTATIONS"
+  ],
 };

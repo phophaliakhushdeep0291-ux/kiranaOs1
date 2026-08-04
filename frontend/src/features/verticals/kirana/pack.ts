@@ -22,4 +22,8 @@ export const kiranaPack: VerticalPack = {
   paths: [],
   routes: [],
   nav: [],
+  capabilities: [
+    "BASIC_INVENTORY", "LOOSE_ITEMS", "PACK_CONVERSION", "NEGATIVE_STOCK", "UDHAR",
+    "SPLIT_PAYMENTS", "DAILY_CLOSING", "BATCH_TRACKING", "EXPIRY_TRACKING"
+  ],
 };

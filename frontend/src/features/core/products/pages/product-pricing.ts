@@ -12,6 +12,19 @@ export const UNITS = [
 
 export const CATEGORIES = ["all", "general", "grocery", "dairy", "beverages", "snacks", "household", "personal_care", "stationery", "other"];
 
+/**
+ * Units you need a weighing scale for.
+ *
+ * These are the units of loose selling — you weigh out sugar, you do not weigh
+ * out a shirt. Offering them to a trade that has no `LOOSE_ITEMS` capability is
+ * what put kg/gram/litre/ml on the clothing product form.
+ */
+export const SCALE_UNITS = ["kg", "gram", "g", "litre", "liter", "ml"] as const;
+
+export function isScaleUnit(unit: string): boolean {
+  return (SCALE_UNITS as readonly string[]).includes(unit.trim().toLowerCase());
+}
+
 const UNIT_TO_BASE_UNIT: Record<string, string> = {
   kg: "gram", gram: "gram", g: "gram",
   litre: "ml", liter: "ml", ml: "ml",

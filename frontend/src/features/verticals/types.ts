@@ -50,6 +50,43 @@ export type VerticalId =
  */
 export type VerticalPageId = "clothing/rentals";
 
+/**
+ * What a trade can do, mirroring `CAPABILITIES` in
+ * `backend/src/verticals/profile.js`. `vertical-capabilities.test.ts` fails the
+ * build if the two lists drift apart.
+ *
+ * Capabilities, not business types, are what the UI should branch on: a shop
+ * asking "do I sell loose?" must not have to know which trades those are, and
+ * batch tracking is wanted by pharmacy, kirana and cosmetics alike.
+ */
+export type Capability =
+  // Baseline
+  | "BASIC_INVENTORY" | "LOOSE_ITEMS" | "PACK_CONVERSION" | "NEGATIVE_STOCK"
+  | "UDHAR" | "SPLIT_PAYMENTS" | "DAILY_CLOSING"
+  // Variants
+  | "PRODUCT_VARIANTS" | "SIZE_SYSTEMS" | "PAIR_STOCK" | "EXCHANGES" | "ALTERATIONS"
+  // Batch / expiry
+  | "BATCH_TRACKING" | "EXPIRY_TRACKING" | "SUPPLIER_RETURNS"
+  // Serialised goods
+  | "SERIAL_TRACKING" | "IMEI_TRACKING" | "WARRANTY_TRACKING" | "REPAIR_TICKETS"
+  | "OPEN_BOX_STOCK"
+  // Parts & fitment
+  | "VEHICLE_FITMENT" | "ALTERNATIVE_PARTS" | "RACK_LOCATIONS" | "WHOLESALE_PRICING"
+  // Pharmacy
+  | "PRESCRIPTION_TRACKING" | "MEDICINE_SUBSTITUTES"
+  // Books & institutional
+  | "ISBN_CATALOG" | "ACADEMIC_BOOK_LISTS" | "PRODUCT_BUNDLES" | "INSTITUTIONAL_ORDERS"
+  // Order-driven retail
+  | "QUOTATIONS" | "SALES_ORDERS" | "CUSTOM_ORDERS" | "ADVANCE_PAYMENTS"
+  | "STOCK_RESERVATION" | "DELIVERY_ORDERS" | "INSTALLATION_TRACKING"
+  // Beauty
+  | "TESTER_STOCK" | "LOYALTY"
+  // Restaurant
+  | "TABLE_MANAGEMENT" | "KOT" | "KITCHEN_DISPLAY" | "MENU_MODIFIERS"
+  | "RECIPE_INVENTORY" | "SPLIT_BILLING" | "TAKEAWAY"
+  // Configurable
+  | "CUSTOM_FIELDS";
+
 export interface VerticalRoute {
   /** Wouter pattern, e.g. "/rentals" or "/tables/:id". */
   path: string;
@@ -81,4 +118,11 @@ export interface VerticalPack {
   paths: string[];
   routes: VerticalRoute[];
   nav: VerticalNavEntry[];
+  /**
+   * What this trade can do. Declared on the client rather than only read from
+   * the server bootstrap because the POS has to answer "does this shop sell
+   * loose?" on first paint and while offline — and because the backend derives
+   * these from the business type too, so there is nothing per-shop to fetch.
+   */
+  capabilities: readonly Capability[];
 }

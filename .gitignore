@@ -26,3 +26,14 @@ dev.db
 
 # Generated UI verification screenshots (runtime assets live under frontend/public).
 /frontend/*.png
+
+# Standalone side project kept alongside the POS, with its own node_modules. It
+# is not part of the app build, and leaving it untracked put a few thousand
+# files in every `git status`.
+/hotel-demo/
+
+# Release-certification output. These are run artifacts pinned to one commit —
+# `ci27/` and `ci29/` were committed by accident and are two failed runs from
+# 2026-07-13 that nothing reads.
+release-certification-*.json
+release-certification-*.md

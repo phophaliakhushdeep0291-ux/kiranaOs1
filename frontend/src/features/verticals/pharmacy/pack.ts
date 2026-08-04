@@ -3,10 +3,10 @@ import type { VerticalPack } from "../types";
 /**
  * Pharmacy & medical.
  *
- * Deliberately empty. Batch and expiry tracking stays in `core/inventory`:
- * `shop-workflows` recommends it for cosmetics as well as pharmacy, and dated
- * food and dairy make it useful to a kirana shop too. It is gated by the
- * `batch_expiry` plan feature, not by trade.
+ * No exclusive screens yet. Batch and expiry tracking stays in `core/inventory`
+ * and is reached through the `BATCH_TRACKING`/`EXPIRY_TRACKING` capabilities,
+ * which kirana and cosmetics also carry — dated stock is not a chemist's
+ * private problem, so the code cannot live in this folder.
  *
  * What belongs here is what only a chemist needs — prescription capture,
  * schedule-H register, salt/generic substitution.
@@ -18,4 +18,8 @@ export const pharmacyPack: VerticalPack = {
   paths: [],
   routes: [],
   nav: [],
+  capabilities: [
+    "BASIC_INVENTORY", "BATCH_TRACKING", "EXPIRY_TRACKING", "PRESCRIPTION_TRACKING",
+    "MEDICINE_SUBSTITUTES", "SUPPLIER_RETURNS",
+  ],
 };

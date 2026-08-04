@@ -4,7 +4,7 @@ import {
   useBusinessTypeKey,
   type BusinessType,
 } from "@/features/core/settings/business-type-store";
-import type { VerticalId, VerticalPack } from "./types";
+import type { Capability, VerticalId, VerticalPack } from "./types";
 import { kiranaPack } from "./kirana/pack";
 import { clothingPack } from "./clothing/pack";
 import { footwearPack } from "./footwear/pack";
@@ -17,7 +17,7 @@ import { cosmeticsPack } from "./beauty-cosmetics/pack";
 import { restaurantPack } from "./restaurant/pack";
 import { customPack } from "./custom/pack";
 
-export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId } from "./types";
+export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId, Capability } from "./types";
 
 /** Every shop type owns exactly one explicit pack, even before it has exclusive screens. */
 export const VERTICAL_PACKS: readonly VerticalPack[] = [
@@ -55,6 +55,24 @@ export function getActiveVerticalPack(): VerticalPack {
 export function useActiveVerticalPack(): VerticalPack {
   const businessType = useBusinessTypeKey();
   return useMemo(() => packForBusinessType(businessType), [businessType]);
+}
+
+/**
+ * Whether this shop's trade can do something. Non-reactive; prefer the hook in
+ * components so the answer updates when the owner changes the business type.
+ *
+ * Branch on this, never on the business type itself: "does this shop sell
+ * loose?" is a question about the trade's behaviour, and the list of trades
+ * that answer yes changes (kirana and stationery today) without the calling
+ * screen needing to care.
+ */
+export function shopHasCapability(capability: Capability): boolean {
+  return getActiveVerticalPack().capabilities.includes(capability);
+}
+
+export function useShopCapabilities(): (capability: Capability) => boolean {
+  const pack = useActiveVerticalPack();
+  return useMemo(() => (capability: Capability) => pack.capabilities.includes(capability), [pack]);
 }
 
 function cleanPath(path: string) {

@@ -14,13 +14,25 @@ import { getShopWorkflow } from "@/features/core/settings/shop-workflows";
 import { useFeature } from "@/features/core/subscription";
 import { getLocalProductAliasSuggestions, splitProductAliases, uniqueProductAliases } from "@/features/core/products/product-reliability";
 import { fetchGroqAliasSuggestions } from "../product-aliases";
-import { baseUnitFor, round2, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
+import { baseUnitFor, isScaleUnit, round2, sellingUnitCode, sellingUnitConversion, sellingUnitName, UNITS } from "../product-pricing";
+import { useShopCapabilities } from "@/features/verticals/registry";
 import type { ProductFormData } from "../product-form-state";
 import { useAppLanguage } from "@/features/core/settings/i18n";
 import { generateInternalEan13 } from "@/lib/barcode/ean13";
 
 const GST_RATES = [0, 5, 12, 18, 28];
 const PACK_MEASURE_UNITS = ["piece", "tablet", "gram", "kg", "ml", "litre"];
+/**
+ * What a pack can be measured in, for this trade. "piece" always works —
+ * a pack of three shirts holds three pieces. Weight and volume need loose
+ * selling, and anything else has to be a unit the trade actually uses, which
+ * keeps `tablet` in a pharmacy and out of a garment shop.
+ */
+export function packMeasureUnitsFor(primaryUnits: string[], sellsLoose: boolean) {
+  return PACK_MEASURE_UNITS.filter(
+    (unit) => unit === "piece" || primaryUnits.includes(unit) || (sellsLoose && isScaleUnit(unit)),
+  );
+}
 const PACK_SELLING_UNITS = ["piece", "packet", "pouch", "bottle", "box", "carton"];
 
 const EMPTY_EXTRA_PACK = {
@@ -90,6 +102,7 @@ export function ProductFormPanel({
   const { t } = useAppLanguage();
   const { toast } = useToast();
   const { businessType, def } = useBusinessType();
+  const hasCapability = useShopCapabilities();
   const workflow = getShopWorkflow(businessType);
   const productEntry = workflow.productEntry;
   const batchFeature = useFeature("batch_expiry");
@@ -105,6 +118,18 @@ export function ProductFormPanel({
   const batchTracking = form.watch("batchTrackingEnabled");
   const isLoose = !!form.watch("isLooseItem");
   const selectedUnit = form.watch("unit");
+  const sellsLoose = hasCapability("LOOSE_ITEMS");
+  const packMeasureUnits = packMeasureUnitsFor(def.primaryUnits, sellsLoose);
+  // An existing loose product keeps its controls even where the trade has since
+  // stopped selling loose, so nothing already saved becomes uneditable.
+  const showLooseChoice = sellsLoose || isLoose;
+  // Weight and volume units belong to loose selling. Everything else stays on
+  // offer, so a trade can still reach for "box" or "pair" when it needs to.
+  const otherUnits = Array.from(new Set(UNITS)).filter(
+    (unit) =>
+      !def.primaryUnits.includes(unit) &&
+      (showLooseChoice || !isScaleUnit(unit) || unit === selectedUnit),
+  );
   const packSizeValue = Number(form.watch("packSizeValue") || 0);
   const packSizeUnit = form.watch("packSizeUnit");
   const showPackContent = !isLoose;
@@ -342,7 +367,7 @@ export function ProductFormPanel({
         <SelectContent>
           {Array.from(new Set(def.primaryUnits)).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
           <div className="my-1 h-px bg-border" />
-          {Array.from(new Set(UNITS)).filter((u) => !def.primaryUnits.includes(u)).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+          {otherUnits.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
         </SelectContent>
       </Select>
     </Field>
@@ -380,11 +405,17 @@ export function ProductFormPanel({
             <p className="mt-1 text-[11.5px] font-semibold leading-5 text-[#52627e]">{productEntry.helper}</p>
           </div>
 
-          {/* Product type: Packed / Loose */}
-          <div className="mb-5 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc] p-1">
-            <TypeButton active={!isLoose} icon={<Package size={16} />} label={t("products.form.packedItem")} onClick={() => form.setValue("isLooseItem", false, { shouldDirty: true })} />
-            <TypeButton active={isLoose} icon={<Scale size={16} />} label={t("products.form.looseItem")} onClick={() => form.setValue("isLooseItem", true, { shouldDirty: true })} />
-          </div>
+          {/* Product type: Packed / Loose. Only a trade that actually sells by
+              weight or measure is asked to choose — a clothing shop has no
+              answer to "packed or loose?" and should not be made to give one.
+              Still shown when an existing product is already loose, so a shop
+              that changed its business type can still edit what it has. */}
+          {showLooseChoice ? (
+            <div className="mb-5 grid grid-cols-2 gap-2 rounded-[12px] border border-[#e6ecf4] bg-[#f7f9fc] p-1">
+              <TypeButton active={!isLoose} icon={<Package size={16} />} label={t("products.form.packedItem")} onClick={() => form.setValue("isLooseItem", false, { shouldDirty: true })} />
+              <TypeButton active={isLoose} icon={<Scale size={16} />} label={t("products.form.looseItem")} onClick={() => form.setValue("isLooseItem", true, { shouldDirty: true })} />
+            </div>
+          ) : null}
 
           {/* Basic Information */}
           <Section title={t("products.form.basicInfo")}>
@@ -463,7 +494,7 @@ export function ProductFormPanel({
                     <Select value={packSizeUnit} onValueChange={(v) => form.setValue("packSizeUnit", v, { shouldDirty: true, shouldValidate: true })}>
                       <SelectTrigger data-testid="select-pack-measure" className="h-10 bg-white"><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {PACK_MEASURE_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                        {packMeasureUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -696,7 +727,7 @@ export function ProductFormPanel({
                       <Field label={t("products.form.measure")} required>
                         <Select value={extraPack.packSizeUnit} onValueChange={(value) => setExtraPack((current) => ({ ...current, packSizeUnit: value }))}>
                           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                          <SelectContent>{PACK_MEASURE_UNITS.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
+                          <SelectContent>{packMeasureUnits.map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
                         </Select>
                       </Field>
                     </div>
