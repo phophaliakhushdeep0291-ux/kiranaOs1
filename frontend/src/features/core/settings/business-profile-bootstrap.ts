@@ -23,21 +23,42 @@ export function useShopBusinessProfile() {
   return query;
 }
 
+/**
+ * Route path -> the navigation keys that unlock it. First match wins, so keep the
+ * narrower pattern above the broader one (/inventory/batches before /inventory).
+ *
+ * A key the server sends but nothing lists here is inert, and a path listed here
+ * whose keys no profile carries is unreachable — see the shared-spine test in
+ * vertical-boundaries.test.ts, which pins the core routes to SHARED_NAVIGATION.
+ */
 const PATH_NAVIGATION_KEYS: Array<[RegExp, string[]]> = [
   [/^\/dashboard(?:\/|$)/, ["dashboard"]],
   [/^\/billing(?:\/|$)/, ["billing", "pos"]],
   [/^\/products(?:\/|$)|^\/categories(?:\/|$)/, ["products", "menu", "medicines"]],
   [/^\/inventory\/batches(?:\/|$)/, ["batches", "expiry", "inventory"]],
   [/^\/inventory(?:\/|$)/, ["inventory"]],
-  [/^\/customers(?:\/|$)|^\/udhar(?:\/|$)/, ["customers"]],
-  [/^\/purchase-bills(?:\/|$)|^\/suppliers(?:\/|$)/, ["purchases"]],
+  [/^\/udhar(?:\/|$)/, ["udhar", "customers"]],
+  [/^\/customers(?:\/|$)/, ["customers"]],
+  [/^\/suppliers(?:\/|$)/, ["suppliers", "purchases"]],
+  [/^\/purchase-bills(?:\/|$)/, ["purchases"]],
   [/^\/bills(?:\/|$)|^\/sales-overview(?:\/|$)|^\/orders-received(?:\/|$)/, ["sales", "orders"]],
   [/^\/returns(?:\/|$)/, ["returns", "exchanges"]],
   [/^\/reports(?:\/|$)/, ["reports"]],
-  [/^\/money-statement(?:\/|$)|^\/daily-closing(?:\/|$)/, ["cash-payments"]],
+  [/^\/daily-closing(?:\/|$)/, ["daily-closing", "cash-payments"]],
+  [/^\/money-statement(?:\/|$)/, ["cash-payments"]],
   [/^\/expenses(?:\/|$)/, ["expenses"]],
   [/^\/rentals(?:\/|$)/, ["rentals"]],
 ];
+
+/**
+ * The spine every shop gets regardless of trade, mirroring SHARED_NAVIGATION in
+ * backend/src/verticals/profile.js. Kept here so the client can assert the core
+ * routes stay reachable without importing server code.
+ */
+export const SHARED_NAVIGATION = [
+  "dashboard", "customers", "purchases", "suppliers", "sales", "returns",
+  "reports", "cash-payments", "expenses", "staff", "settings",
+] as const;
 
 /** Unknown/shared-core routes remain visible; only profile-mapped trade routes are filtered. */
 export function isPathInBusinessProfile(path: string, navigation?: string[]) {

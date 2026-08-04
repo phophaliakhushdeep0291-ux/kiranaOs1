@@ -141,6 +141,22 @@ export default defineConfig({
           // an unrelated route to get its own language. Pinning them to a named
           // chunk keeps the language payload independent of routing.
           "i18n-hindi": ["./src/features/core/settings/translations/hindi"],
+          // One chunk per trade, for the same reason as the language table above
+          // and a sharper one besides.
+          //
+          // The routes were already gated — a kirana shop never mounts /rentals —
+          // but gating decides what RUNS, not what SHIPS. Left to its heuristics,
+          // experimentalMinChunkSize folded the rentals page in with shared code,
+          // and the merged chunk was then a static import of Dashboard, Billing,
+          // Products, Customers, Inventory, Bills, Purchases and Reports. Every
+          // one of those is in the service worker's precache list, so a kirana
+          // shop downloaded the whole cloth-rental UI to open its dashboard, and
+          // kept it in the offline cache it can never use it from.
+          //
+          // Pinning the pack makes the boundary physical instead of advisory: a
+          // trade's screens can no longer be merged into anything a different
+          // trade loads. Add a line here for each vertical that grows real code.
+          "vertical-clothing": ["./src/features/verticals/clothing/rentals/pages/RentalsPage.tsx"],
         },
       },
     },

@@ -6,7 +6,7 @@ import {
   getRentalHolds,
   ownedQtyOf,
   resolveWindow,
-} from "../src/modules/rentals/rentals.service.js";
+} from "../src/verticals/clothing/rentals/rentals.service.js";
 import { formatDateInTimeZone } from "../src/utils/dates.js";
 
 // Cloth rental availability. The whole feature rests on one rule — a garment is
@@ -149,15 +149,28 @@ const products = [
 
 /* ── The storefront actually applies it ────────────────────────────────────── */
 
+// The catalogue is shared code, so it must not import clothing to ask about
+// rentals. It asks the availability registry, and the rental service registers
+// itself into that registry — check both halves, because an unregistered filter
+// would leave the storefront silently showing garments that are already out.
 const publicService = fs.readFileSync(new URL("../src/modules/public/public.service.js", import.meta.url), "utf8");
+const rentalService = fs.readFileSync(new URL("../src/verticals/clothing/rentals/rentals.service.js", import.meta.url), "utf8");
 assert.ok(
-  publicService.includes("getFullyBookedProductIds"),
-  "the public catalog must consult rental holds",
+  publicService.includes("unavailableProductIds"),
+  "the public catalog must consult the availability registry",
+);
+assert.ok(
+  !/verticals\//.test(publicService),
+  "the public catalog must not import a vertical directly",
+);
+assert.ok(
+  rentalService.includes("registerCatalogAvailabilityFilter"),
+  "the rental service must register itself as an availability filter",
 );
 // Both doors: the catalogue a customer browses, and the order they submit from a
 // phone that may still be showing a catalogue cached before the outfit went out.
 assert.equal(
-  (publicService.match(/getFullyBookedProductIds\(/g) || []).length,
+  (publicService.match(/unavailableProductIds\(/g) || []).length,
   2,
   "both the catalog read and the order submission must check rental holds",
 );
@@ -172,7 +185,7 @@ assert.ok(
 
 /* ── Routing order ─────────────────────────────────────────────────────────── */
 
-const routes = fs.readFileSync(new URL("../src/modules/rentals/rentals.routes.js", import.meta.url), "utf8");
+const routes = fs.readFileSync(new URL("../src/verticals/clothing/rentals/rentals.routes.js", import.meta.url), "utf8");
 assert.ok(
   routes.indexOf('router.get("/availability"') < routes.indexOf('router.get("/:id"'),
   '"/availability" must be registered before "/:id" or it is read as a booking id',

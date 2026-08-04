@@ -22,10 +22,13 @@ test("requested source layers have importable entry-point files", () => {
   }
 });
 
+// One directory per shop type, and nothing else. Family aliases ("books" for
+// stationery, "variants" for clothing+footwear) used to live here too; they were
+// unimported re-export shims whose only effect was to make this directory listing
+// lie about what a vertical is.
 test("requested vertical families have explicit entry points", () => {
-  for (const vertical of ["kirana", "variants", "auto-parts", "electronics", "pharmacy", "books", "furniture", "cosmetics", "restaurant"]) {
-    const entry = vertical === "variants" || vertical === "books" ? "index.js" : "profile.js";
-    assert.equal(existsSync(join(src, "verticals", vertical, entry)), true, `verticals/${vertical}/${entry} missing`);
+  for (const vertical of ["kirana", "clothing", "footwear", "auto-parts", "electronics", "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other"]) {
+    assert.equal(existsSync(join(src, "verticals", vertical, "profile.js")), true, `verticals/${vertical}/profile.js missing`);
   }
 });
 

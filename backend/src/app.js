@@ -33,7 +33,7 @@ import { jobRoutes } from "./infrastructure/jobs/index.js";
 import { reminderRoutes } from "./infrastructure/notifications/index.js";
 import { expenseRoutes } from "./core/expenses/index.js";
 import offerRoutes from "./modules/offers/offers.routes.js";
-import rentalRoutes from "./modules/rentals/rentals.routes.js";
+import rentalRoutes from "./verticals/clothing/rentals/rentals.routes.js";
 import integrationRoutes from "./modules/integrations/integrations.routes.js";
 import { taxRoutes as complianceRoutes } from "./core/taxes/index.js";
 import loyaltyRoutes from "./modules/loyalty/loyalty.routes.js";

@@ -1,8 +1,10 @@
 import { defineBusinessProfile } from "../profile.js";
+import capabilities from "./capabilities.js";
+import navigation from "./navigation.js";
 
 export default defineBusinessProfile({
   businessType: "kirana",
   engine: "RETAIL",
-  capabilities: ["BASIC_INVENTORY", "LOOSE_ITEMS", "UDHAR", "BATCH_TRACKING", "EXPIRY_TRACKING"],
-  navigation: ["dashboard", "billing", "inventory", "customers", "purchases", "sales", "returns", "reports", "cash-payments", "expenses"],
+  capabilities,
+  navigation,
 });

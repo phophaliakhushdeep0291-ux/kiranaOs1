@@ -66,10 +66,15 @@ Only behavior unique to one trade:
 A vertical may import shared code. Shared code may not import a vertical, and one
 vertical may not import another vertical.
 
-`verticals/variants` is the family entry point for clothing and footwear, while
-`verticals/books` maps the books/stationery family to the stationery profile.
-The individual shop-type profile directories remain explicit so each registered
-business type still has exactly one profile.
+`backend/src/verticals` holds exactly one directory per registered business type
+and nothing else, so the directory listing is an honest answer to "what shop types
+are there?". Trade-exclusive server code lives inside its own vertical — the cloth
+rental service is at `verticals/clothing/rentals/`, not in the shared module pile.
+
+Shared code that needs something only one trade knows takes it through a
+registration seam rather than an import: `shared/catalog-availability.js` lets the
+clothing pack hide garments booked out for the day from the public catalogue,
+without the catalogue ever naming clothing.
 
 ## Adding a business type
 

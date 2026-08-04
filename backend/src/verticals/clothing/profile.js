@@ -1,8 +1,10 @@
 import { defineBusinessProfile } from "../profile.js";
+import capabilities from "./capabilities.js";
+import navigation from "./navigation.js";
 
 export default defineBusinessProfile({
   businessType: "clothing",
   engine: "VARIANT_RETAIL",
-  capabilities: ["BASIC_INVENTORY", "PRODUCT_VARIANTS", "QUOTATIONS"],
-  navigation: ["dashboard", "billing", "products", "variants", "inventory", "customers", "purchases", "exchanges", "rentals", "sales", "reports"],
+  capabilities,
+  navigation,
 });

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BUSINESS_TYPE_DEFS, saveBusinessType, type BusinessType } from "@/features/core/settings/business-types";
+import { SHARED_NAVIGATION, isPathInBusinessProfile } from "@/features/core/settings/business-profile-bootstrap";
 import { isModuleAvailable, isPathEnabled, setModulePathGate } from "@/features/core/settings/modules";
 import {
   VERTICAL_PACKS,
@@ -153,5 +154,45 @@ describe("vertical gate", () => {
         expect(isPathEnabled(path), `${path} unreachable for ${businessType}`).toBe(true);
       }
     }
+  });
+});
+
+/**
+ * The second gate on the same doors.
+ *
+ * `isPathEnabled` above is the client's own vertical gate. The server sends a
+ * *separate* list — `bootstrapForShop().navigation` — and `isPathInBusinessProfile`
+ * hard-blocks anything missing from it with "Not part of this business profile".
+ * Both gates have to agree, and for a while they did not: the server list was
+ * hand-written per vertical and every one of the eleven had dropped something,
+ * so a kirana shop passed the test above and still hit a wall on /products.
+ *
+ * The server now composes SHARED_NAVIGATION onto every profile. That makes the
+ * spine alone sufficient for the core routes, which is what this pins.
+ */
+describe("server navigation gate", () => {
+  const CORE_ROUTES = [
+    "/dashboard", "/customers", "/udhar", "/purchase-bills", "/suppliers",
+    "/bills", "/sales-overview", "/returns", "/reports", "/money-statement",
+    "/daily-closing", "/expenses",
+  ];
+
+  it("lets the shared spine alone reach every core route", () => {
+    const spine = [...SHARED_NAVIGATION];
+    for (const path of CORE_ROUTES) {
+      expect(isPathInBusinessProfile(path, spine), `${path} blocked by the shared spine`).toBe(true);
+    }
+  });
+
+  it("still hides a trade route the profile does not carry", () => {
+    // Without this the gate would be permissive rather than correct — every
+    // vertical would see every other vertical's screens.
+    expect(isPathInBusinessProfile("/rentals", [...SHARED_NAVIGATION])).toBe(false);
+    expect(isPathInBusinessProfile("/rentals", [...SHARED_NAVIGATION, "rentals"])).toBe(true);
+  });
+
+  it("treats an absent navigation list as offline-permissive", () => {
+    // Bootstrap can be unavailable offline; the gate must not lock the app then.
+    expect(isPathInBusinessProfile("/products", undefined)).toBe(true);
   });
 });
