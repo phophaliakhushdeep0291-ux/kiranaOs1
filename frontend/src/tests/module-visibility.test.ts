@@ -186,7 +186,13 @@ describe("module visibility wiring", () => {
   it("filters both mobile navigation surfaces", () => {
     expect(mobileChrome).toContain("useModuleVisibility");
     expect(mobileChrome).toContain("TOP_LEVEL_TABS.filter((tab) => isHrefEnabled(tab.href))");
-    expect(mobileChrome).toContain(".filter((item) => isHrefEnabled(item.href))");
+    expect(mobileChrome).toContain("const reachable = (path: string) => isHrefEnabled(path) && isPathInBusinessProfile(path, navigation);");
+    // Drawer rows: a plain row on its own href, an expandable section on the
+    // children it has left — so switching a module off cannot strand a section
+    // that still lists the screens it owns.
+    expect(mobileChrome).toContain("if (!item.children) return reachable(item.href) ? [item] : [];");
+    expect(mobileChrome).toContain("const children = item.children.filter((child) => reachable(child.href));");
+    expect(mobileChrome).toContain("return children.length > 0 ? [{ ...item, children }] : [];");
     // A five-column stylesheet default cannot describe a filtered tab bar.
     expect(mobileChrome).toContain("gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))`");
   });

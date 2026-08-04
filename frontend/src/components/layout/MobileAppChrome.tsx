@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
+  Activity,
   BadgeIndianRupee,
   BarChart3,
   Bell,
   Boxes,
+  ChevronDown,
   ChevronRight,
   ClipboardList,
   FileText,
@@ -80,13 +82,23 @@ interface NavigationItem {
   label: string;
   helper: string;
   Icon: NavIcon;
+  /**
+   * A section that owns several screens. The row becomes a disclosure instead
+   * of a link, so the drawer stays a short index of sections while everything
+   * underneath is still one tap away — the phone's answer to the sidebar's
+   * expandable groups, which used to be the only way in for these pages.
+   * A section with an overview page of its own lists it as the first child.
+   */
+  children?: Array<{ href: string; label: string }>;
 }
 
 const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
   {
     label: "Sell",
     items: [
-      { href: "/bills", label: "Bills & receipts", helper: "Find, share, return", Icon: FileText },
+      // Named as the page names itself, so someone hunting for "billing
+      // history" finds it here rather than concluding the phone hasn't got it.
+      { href: "/bills", label: "Billing history", helper: "Find, share, return", Icon: FileText },
       { href: "/orders-received", label: "Customer orders", helper: "Review QR orders", Icon: ClipboardList },
       { href: "/returns", label: "Returns", helper: "Refund or exchange", Icon: ReceiptIndianRupee },
       { href: "/sales-overview", label: "Sales overview", helper: "Sales and collections", Icon: BarChart3 },
@@ -97,6 +109,20 @@ const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
     items: [
       { href: "/products", label: "Products", helper: "Catalog and prices", Icon: Package },
       { href: "/categories", label: "Categories", helper: "Organize products", Icon: Package },
+      {
+        href: "/inventory",
+        label: "Stock movements",
+        helper: "Stock in, out, counts, batches",
+        Icon: Boxes,
+        children: [
+          { href: "/inventory/stock-in", label: "Stock in" },
+          { href: "/inventory/stock-out", label: "Stock out" },
+          { href: "/inventory/adjustments", label: "Adjustments" },
+          { href: "/inventory/stock-transfers", label: "Stock transfers" },
+          { href: "/inventory/stock-counts", label: "Stock counts" },
+          { href: "/inventory/batches", label: "Batch & expiry" },
+        ],
+      },
       { href: "/purchase-bills", label: "Purchases", helper: "Receive supplier stock", Icon: Truck },
       { href: "/suppliers", label: "Suppliers", helper: "Dues and payments", Icon: Truck },
     ],
@@ -117,6 +143,23 @@ const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = [
     label: "Manage",
     items: [
       { href: "/staff", label: "Staff", helper: "Access and permissions", Icon: Users },
+      {
+        href: "/assurance",
+        label: "Financial assurance",
+        helper: "Findings, evidence, audit runs",
+        Icon: ShieldCheck,
+        children: [
+          { href: "/assurance", label: "Dashboard" },
+          { href: "/assurance/findings", label: "Findings" },
+          { href: "/assurance/review-queue", label: "Review queue" },
+          { href: "/assurance/evidence", label: "Evidence requests" },
+          { href: "/assurance/cases", label: "Investigation cases" },
+          { href: "/assurance/runs", label: "Audit runs" },
+          { href: "/assurance/rules", label: "Rules & thresholds" },
+          { href: "/assurance/report", label: "Assurance report" },
+        ],
+      },
+      { href: "/activity-insights", label: "Activity & insights", helper: "How this shop uses Artha", Icon: Activity },
       { href: "/audit-logs", label: "Audit trail", helper: "Review important actions", Icon: ShieldCheck },
       { href: "/sync-status", label: "Backup & sync", helper: "Offline queue and health", Icon: WifiOff },
       { href: "/help", label: "Ask Artha", helper: "Answers from your own data", Icon: Sparkles },
@@ -187,6 +230,62 @@ export function MobileTopBar({
   );
 }
 
+/**
+ * Which child a route is currently on, longest href first so a detail page like
+ * /assurance/findings/42 lights up "Findings" rather than the section overview
+ * it also sits under. Null when the section holds nothing for this route.
+ */
+function activeChildHref(location: string, children: Array<{ href: string }>) {
+  return children.reduce<string | null>(
+    (best, child) =>
+      pathMatches(location, [child.href]) && (!best || child.href.length > best.length) ? child.href : best,
+    null,
+  );
+}
+
+function MoreSection({ item, location }: { item: NavigationItem & { children: NonNullable<NavigationItem["children"]> }; location: string }) {
+  const { href, label, helper, Icon, children } = item;
+  const openChild = activeChildHref(location, children);
+  // Null until the row is touched, so the section follows the route on open and
+  // obeys the owner from then on — no effect needed to keep the two in step.
+  const [override, setOverride] = useState<boolean | null>(null);
+  const expanded = override ?? openChild !== null;
+
+  return (
+    <div className="mobile-more-section" key={href}>
+      <button
+        type="button"
+        onClick={() => setOverride(!expanded)}
+        className={cn("mobile-more-item w-full text-left", openChild && "mobile-more-item-active")}
+        aria-expanded={expanded}
+      >
+        <span className="mobile-more-icon"><Icon size={20} strokeWidth={2} aria-hidden="true" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="mobile-more-label">{label}</span>
+          <span className="mobile-more-helper">{helper}</span>
+        </span>
+        <ChevronDown size={17} className={cn("mobile-more-chevron", expanded && "mobile-more-chevron-open")} aria-hidden="true" />
+      </button>
+      {expanded ? (
+        <div className="mobile-more-subitems">
+          {children.map((child) => (
+            <DrawerClose key={child.href} asChild>
+              <Link
+                href={child.href}
+                className={cn("mobile-more-subitem", child.href === openChild && "mobile-more-subitem-active")}
+                aria-current={child.href === openChild ? "page" : undefined}
+              >
+                <span className="mobile-more-subdot" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate">{child.label}</span>
+              </Link>
+            </DrawerClose>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MoreNavigation({ location }: { location: string }) {
   const { isHrefEnabled } = useModuleVisibility();
   const verticalPack = useActiveVerticalPack();
@@ -195,18 +294,25 @@ function MoreNavigation({ location }: { location: string }) {
   // left in it drops its heading too rather than sitting there empty. The active
   // trade's own entries join their named group — another trade's never do.
   const groups = useMemo(() => {
+    const navigation = businessProfile.data?.navigation;
+    const reachable = (path: string) => isHrefEnabled(path) && isPathInBusinessProfile(path, navigation);
     const extras = verticalPack.nav.filter((entry) => entry.mobile && isHrefEnabled(entry.href));
     return MORE_GROUPS
       .map((group) => ({
         ...group,
-        items: [
+        items: ([
           ...group.items,
           ...extras
             .filter((entry) => entry.mobile?.group === group.label)
             .map((entry) => ({ href: entry.href, label: entry.label, helper: entry.mobile!.helper, Icon: entry.Icon })),
-        ]
-          .filter((item) => isHrefEnabled(item.href))
-          .filter((item) => isPathInBusinessProfile(item.href, businessProfile.data?.navigation)),
+        ] as NavigationItem[])
+          // A section is judged by its screens, not its own href: it survives on
+          // whichever children are still switched on, and goes when none are.
+          .flatMap<NavigationItem>((item) => {
+            if (!item.children) return reachable(item.href) ? [item] : [];
+            const children = item.children.filter((child) => reachable(child.href));
+            return children.length > 0 ? [{ ...item, children }] : [];
+          }),
       }))
       .filter((group) => group.items.length > 0);
   }, [businessProfile.data?.navigation, isHrefEnabled, verticalPack]);
@@ -217,7 +323,9 @@ function MoreNavigation({ location }: { location: string }) {
         <section key={group.label} aria-labelledby={`mobile-more-${group.label.replace(/\W+/g, "-").toLowerCase()}`}>
           <h3 id={`mobile-more-${group.label.replace(/\W+/g, "-").toLowerCase()}`} className="mobile-more-group-title">{group.label}</h3>
           <div className="mobile-more-grid">
-            {group.items.map(({ href, label, helper, Icon }) => {
+            {group.items.map((item) => {
+              if (item.children) return <MoreSection key={item.href} item={{ ...item, children: item.children }} location={location} />;
+              const { href, label, helper, Icon } = item;
               const active = pathMatches(location, [href]);
               return (
                 <DrawerClose key={href} asChild>

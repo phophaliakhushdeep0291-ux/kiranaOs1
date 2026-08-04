@@ -2102,6 +2102,62 @@ html[data-density="compact"] {
   .mobile-more-chevron {
     flex: 0 0 auto;
     color: #a0acbd;
+    transition: transform 160ms ease;
+  }
+
+  .mobile-more-chevron-open {
+    transform: rotate(180deg);
+  }
+
+  /* A section carries the divider for its whole block, so the row that opens it
+     is flush with the screens it reveals rather than boxed off from them. */
+  .mobile-more-section {
+    border-bottom: 1px solid #edf1f6;
+  }
+
+  .mobile-more-section:last-child {
+    border-bottom: 0;
+  }
+
+  .mobile-more-section .mobile-more-item {
+    border-bottom: 0;
+  }
+
+  .mobile-more-subitems {
+    display: grid;
+    gap: 2px;
+    padding: 0 12px 12px 66px;
+  }
+
+  .mobile-more-subitem {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 10px;
+    border-radius: 12px;
+    padding: 0 12px;
+    color: var(--mobile-muted);
+    font-size: 12.5px;
+    font-weight: 700;
+    transition: background-color 140ms ease;
+  }
+
+  .mobile-more-subitem:active,
+  .mobile-more-subitem-active {
+    color: var(--brand);
+    background: var(--mobile-brand-soft);
+  }
+
+  .mobile-more-subdot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 6px;
+    border-radius: 999px;
+    background: #cbd5e6;
+  }
+
+  .mobile-more-subitem-active .mobile-more-subdot {
+    background: var(--brand);
   }
 
   .mobile-logout-button {

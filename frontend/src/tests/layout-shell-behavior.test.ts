@@ -5,6 +5,19 @@ const layout = readFileSync("src/components/layout/Layout.tsx", "utf8");
 const mobileChrome = readFileSync("src/components/layout/MobileAppChrome.tsx", "utf8");
 const styles = readFileSync("src/index.css", "utf8");
 
+/** Every `href:` inside one navigation literal, found by balancing its brackets. */
+function navHrefs(source: string, declaration: string) {
+  const open = source.indexOf(declaration);
+  if (open === -1) throw new Error(`Navigation literal not found: ${declaration}`);
+  let depth = 0;
+  let end = open + declaration.length - 1;
+  for (let i = end; i < source.length; i += 1) {
+    if (source[i] === "[") depth += 1;
+    else if (source[i] === "]" && (depth -= 1) === 0) { end = i; break; }
+  }
+  return [...source.slice(open, end).matchAll(/href:\s*"([^"]+)"/g)].map((match) => match[1]);
+}
+
 describe("desktop app shell behavior", () => {
   it("keeps the sidebar fixed while the page content scrolls", () => {
     // Shell locks its own height (mobile via 100dvh, desktop via h-screen) and hides its own
@@ -50,6 +63,22 @@ describe("desktop app shell behavior", () => {
     expect(styles).toContain("min-height: 56px");
     expect(styles).toContain("calc(8px + env(safe-area-inset-bottom))");
     expect(layout).toContain("overscroll-contain");
+  });
+
+  it("puts every sidebar destination within reach of a phone", () => {
+    // The sidebar is desktop-only, so any screen listed there and nowhere else
+    // is simply unreachable on a phone — which is how Billing History, the six
+    // stock-movement screens, Activity & Insights and the whole assurance
+    // section went missing. The drawer is the phone's sidebar: it has to carry
+    // the same destinations, whether as a row or inside an expandable section.
+    const desktop = navHrefs(layout, "const NAV: NavItem[] = [");
+    const mobile = [
+      ...navHrefs(mobileChrome, "const MORE_GROUPS: Array<{ label: string; items: NavigationItem[] }> = ["),
+      ...navHrefs(mobileChrome, "const TOP_LEVEL_TABS: Array<{ href: string; label: string; Icon: NavIcon; matches: string[] }> = ["),
+    ];
+
+    expect(desktop.length).toBeGreaterThan(20);
+    expect(desktop.filter((href) => !mobile.includes(href))).toEqual([]);
   });
 
   it("uses one task-oriented mobile shell with stable top-level destinations", () => {

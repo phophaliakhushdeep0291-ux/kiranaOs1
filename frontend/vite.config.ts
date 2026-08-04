@@ -124,10 +124,32 @@ export default defineConfig({
     chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
-        // Merge compatible helper/leaf chunks below ~180 kB. Route entry points
+        // Merge compatible helper/leaf chunks below ~70 kB. Route entry points
         // remain lazy, while fewer tiny transport units remove repeated module
         // wrappers and gzip dictionaries from the full offline application cache.
-        experimentalMinChunkSize: 180_000,
+        //
+        // This threshold is a direct trade between the two budgets in
+        // scripts/check-bundle-size.mjs, and it is NOT free to raise. Rollup merges
+        // a small chunk into whatever chunk already pulls it — including the ENTRY —
+        // so a threshold above a route's own size lets that route be swallowed by
+        // the startup shell. At 180 kB the multi-vertical build had dragged whole
+        // rarely-opened pages (customer self-order 72 kB, orders received 55 kB,
+        // assurance case screens ~45 kB) into first paint: startup 1108.6 kB, over
+        // the 1000 kB budget, while every shop paid for screens most never open.
+        //
+        // Measured across the same build (initial / total gzip):
+        //   180 kB -> 1108.6 kB / 937.1 kB   startup budget FAILS
+        //   120 kB -> 1021.0 kB / 939.0 kB   startup budget FAILS
+        //    70 kB ->  930.3 kB / 943.1 kB   both pass, most balanced headroom
+        //    60 kB ->  891.8 kB / 948.0 kB   passes, but 2 kB from the total ceiling
+        //     0 kB ->  805.2 kB / 1002.2 kB  total budget FAILS
+        //
+        // Pinning routes with manualChunks instead does NOT work: a manual chunk has
+        // no dynamic-entry facade, so each page loses its Vite manifest record and
+        // the service worker can no longer precache it for offline use (the
+        // "Critical offline entry is missing" guard below fires), and the entry
+        // static-imports them all — startup measured 2043.4 kB.
+        experimentalMinChunkSize: 70_000,
         manualChunks: {
           "vendor-react": ["react", "react-dom", "wouter"],
           "vendor-data": ["dexie", "@tanstack/react-query"],
