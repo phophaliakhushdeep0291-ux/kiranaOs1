@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { BUSINESS_TYPE_DIRECTORIES } from "../src/verticals/registry.js";
 
 const src = dirname(fileURLToPath(new URL("../src/app.js", import.meta.url)));
 
@@ -26,8 +27,12 @@ test("requested source layers have importable entry-point files", () => {
 // stationery, "variants" for clothing+footwear) used to live here too; they were
 // unimported re-export shims whose only effect was to make this directory listing
 // lie about what a vertical is.
+//
+// Read from the registry rather than spelled out: five directories are named for
+// the trade and not for the key a shop stores, so a hardcoded list here goes
+// stale on the next rename instead of failing honestly.
 test("requested vertical families have explicit entry points", () => {
-  for (const vertical of ["kirana", "clothing", "footwear", "auto-parts", "electronics", "pharmacy", "stationery", "furniture", "cosmetics", "restaurant", "other"]) {
+  for (const vertical of Object.values(BUSINESS_TYPE_DIRECTORIES)) {
     assert.equal(existsSync(join(src, "verticals", vertical, "profile.js")), true, `verticals/${vertical}/profile.js missing`);
   }
 });
