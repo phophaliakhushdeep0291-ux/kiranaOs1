@@ -17,7 +17,7 @@ import { sellingUnitMaxPrice } from "../products/selling-unit-pricing.js";
 import { consumeRetailPaymentIntents, resolveRetailPaymentIntents } from "../payment-provider/retailPayment.service.js";
 import { reapplyBillLoyaltyInTransaction, recordBillLoyaltyInTransaction, recordBillLoyaltyRedemption, reserveBillLoyaltyRedemption, reverseBillLoyaltyInTransaction } from "../loyalty/loyalty.service.js";
 import { issueReturnCreditInTransaction, reapplyGiftCardRedemptions, recordGiftCardRedemptions, reserveGiftCardPayments, reverseGiftCardRedemptions } from "../gift-cards/giftCards.service.js";
-import { allocateLotsForBill, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
+import { allocateLotsForBill, batchMrpCeilings, reapplyBillLotAllocations, restoreBillLotAllocations, restoreLotsForSaleReturn } from "../inventory-lots/inventoryLots.service.js";
 import { reapplyBillOfferRedemption, redeemOfferInTransaction, reverseBillOfferRedemption, validateOfferForBill } from "../offers/offers.service.js";
 import { sendTransactionalEmail } from "../../lib/authEmail.js";
 
@@ -262,6 +262,50 @@ export async function confirmBill(shopId, body, actor = {}) {
       if (!current || unit.isDefault) defaultSellingUnitByProduct.set(unit.productId, unit);
     }
 
+    // Which packaging a line sells in, and therefore how much base stock it moves.
+    // Shared with the item loop below so the batch ceiling is resolved against the
+    // same quantity that will actually be allocated — a pack line converts by
+    // conversionToBase, a loose line by its entered unit, and reading one with the
+    // other's rule walks the wrong batches.
+    const resolveSellingUnit = (item, product) => (product
+      ? (item.sellingUnitId ? sellingUnitById.get(item.sellingUnitId) : null)
+        ?? (item.sellingUnitCode ? sellingUnitByCode.get(`${product.id}:${item.sellingUnitCode}`) : null)
+        ?? defaultSellingUnitByProduct.get(product.id)
+        ?? null
+      : null);
+    const baseQtyForItem = (item, product) => {
+      const unit = resolveSellingUnit(item, product);
+      if (unit) return round2(item.quantity * unit.conversionToBase);
+      return product ? toBaseQty(item.quantity, item.enteredUnit, product.baseUnit) : item.quantity;
+    };
+
+    // The price ceiling has to come from the batch actually being dispensed, not
+    // from the product record: a manufacturer revises the printed MRP between
+    // batches, so the strip in hand and Product.mrp routinely disagree. Resolved
+    // here, before pricing, and from the same FEFO order allocateLotsForBill will
+    // walk below — otherwise the ceiling could belong to a different batch than
+    // the one that leaves the shelf. Empty for every shop without batch tracking.
+    const batchTrackedIds = new Set(dbProducts.filter((product) => product.batchTrackingEnabled).map((product) => product.id));
+    const chosenLotByProduct = new Map();
+    for (const item of items) {
+      if (item.productId && item.inventoryLotId && batchTrackedIds.has(item.productId)) {
+        chosenLotByProduct.set(item.productId, item.inventoryLotId);
+      }
+    }
+    const batchCeilingByProduct = batchTrackedIds.size > 0
+      ? await batchMrpCeilings(tx, {
+        shopId,
+        locationId: location.id,
+        requests: [...batchTrackedIds].map((productId) => ({
+          productId,
+          inventoryLotId: chosenLotByProduct.get(productId) ?? null,
+          quantityBaseQty: round2(items
+            .filter((item) => item.productId === productId)
+            .reduce((sum, item) => sum + Math.abs(Number(baseQtyForItem(item, productMap[productId]) || 0)), 0)),
+        })),
+      })
+      : new Map();
+
     // ── 2. Build bill items + validate stock ──────────────────
     let subtotal = 0;
     let totalGst = 0;
@@ -276,12 +320,7 @@ export async function confirmBill(shopId, body, actor = {}) {
         throw new AppError(`Product not found: ${item.productId}`, 404);
       }
 
-      const sellingUnit = product
-        ? (item.sellingUnitId ? sellingUnitById.get(item.sellingUnitId) : null)
-          ?? (item.sellingUnitCode ? sellingUnitByCode.get(`${product.id}:${item.sellingUnitCode}`) : null)
-          ?? defaultSellingUnitByProduct.get(product.id)
-          ?? null
-        : null;
+      const sellingUnit = resolveSellingUnit(item, product);
       if (sellingUnit && sellingUnit.productId !== product?.id) {
         throw new AppError("Selling unit does not belong to the selected product", 400);
       }
@@ -327,11 +366,19 @@ export async function confirmBill(shopId, body, actor = {}) {
       // Each packaging is measured against ITS OWN ceiling: the pack's MRP when it
       // has one, otherwise the product MRP scaled to this pack's size. Comparing a
       // 5 kg bag against the 500 g packet's MRP rejected every legitimate price.
+      // A batch-tracked line is capped by the price printed on the batch being
+      // dispensed instead, which is the only lawful ceiling for a medicine.
+      const batchMrp = product ? batchCeilingByProduct.get(product.id) : 0;
       const maximumPrice = product
-        ? sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnitByProduct.get(product.id))
+        ? sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnitByProduct.get(product.id), batchMrp)
         : 0;
       if (maximumPrice > 0 && item.ratePerRateUnit > maximumPrice + 0.005) {
-        const error = new AppError(`Price for "${product?.name ?? item.name}" exceeds the configured maximum of Rs ${maximumPrice}`, 400);
+        const error = new AppError(
+          batchMrp > 0
+            ? `Price for "${product?.name ?? item.name}" exceeds the MRP printed on the batch being dispensed (Rs ${maximumPrice})`
+            : `Price for "${product?.name ?? item.name}" exceeds the configured maximum of Rs ${maximumPrice}`,
+          400,
+        );
         error.code = "PRICE_ABOVE_CONFIGURED_MAXIMUM";
         throw error;
       }
@@ -582,7 +629,7 @@ export async function confirmBill(shopId, body, actor = {}) {
       include: { items: true, payments: true, loyaltyTransactions: true },
     });
     await redeemOfferInTransaction(tx, shopId, validatedOffer, { isEstimate });
-    await allocateLotsForBill(tx, { shopId, locationId: location.id, bill });
+    await allocateLotsForBill(tx, { shopId, locationId: location.id, bill, chosenLotByProduct });
     await recordBillLoyaltyRedemption(tx, {
       shopId,
       billId: bill.id,

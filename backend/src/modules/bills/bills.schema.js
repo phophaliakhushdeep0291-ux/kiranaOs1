@@ -3,6 +3,10 @@ import { moneyAmount, percentageRate, quantityAmount } from "../../utils/validat
 
 const billItemSchema = z.object({
   productId: z.string().optional(),
+  // The batch the counter picked for a batch-tracked product. Omitted means FEFO
+  // chooses, which is the default and the only behaviour before batch pricing.
+  // When set it fixes both the price ceiling and the stock that gets dispensed.
+  inventoryLotId: z.string().optional(),
   sellingUnitId: z.string().optional(),
   sellingUnitCode: z.string().optional(),
   sellingUnitLabel: z.string().optional(),

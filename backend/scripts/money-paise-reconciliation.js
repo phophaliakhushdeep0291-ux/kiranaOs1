@@ -28,6 +28,9 @@ const MONEY_COLUMN_MAP = Object.freeze([
   { table: "UdharLedger", float: "amount", paise: "amountPaise" },
   { table: "PurchaseHistory", float: "pricePerRateUnit", paise: "pricePerRateUnitPaise" },
   { table: "PurchaseHistory", float: "totalCost", paise: "totalCostPaise" },
+  // Nullable: a lot without its own printed MRP leaves both columns null, which
+  // the missing-check ignores (it only fires when the float is set).
+  { table: "InventoryLot", float: "mrp", paise: "mrpPaise" },
   { table: "PurchaseHistory", float: "billAmount", paise: "billAmountPaise" },
 ]);
 

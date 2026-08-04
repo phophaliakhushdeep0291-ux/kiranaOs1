@@ -41,7 +41,7 @@ export async function changeLotStatus(shopId, lotId, status, note) {
   return db.inventoryLot.update({ where: { id: lot.id }, data: { status: status === "active" && lot.availableBaseQty <= 0 ? "depleted" : status, note: note || lot.note } });
 }
 
-export async function recordReceiptLot(tx, { shopId, locationId, product, receiptItemId, quantityBaseQty, actualRate, batchNumber, manufacturedOn, expiresOn, note }) {
+export async function recordReceiptLot(tx, { shopId, locationId, product, receiptItemId, quantityBaseQty, actualRate, batchNumber, manufacturedOn, expiresOn, mrp, note }) {
   if (!product.batchTrackingEnabled && !batchNumber && !expiresOn) return null;
   await requireFeatureAccess(shopId, "batch_expiry");
   if (!product.batchTrackingEnabled) throw new AppError(`${product.name} does not have batch tracking enabled`, 409, "BATCH_TRACKING_NOT_ENABLED");
@@ -51,24 +51,110 @@ export async function recordReceiptLot(tx, { shopId, locationId, product, receip
   const today = new Date(); today.setUTCHours(0, 0, 0, 0);
   if (expiry < today) throw new AppError("Expired stock cannot be received into saleable inventory", 422, "BATCH_ALREADY_EXPIRED");
   if (manufactured && manufactured >= expiry) throw new AppError("Expiry date must be after manufacturing date", 422, "INVENTORY_LOT_DATE_INVALID");
+  const batchMrp = mrp === undefined || mrp === null || mrp === "" ? null : round2(Number(mrp));
+  if (batchMrp !== null && !(batchMrp > 0)) throw new AppError("Batch MRP must be greater than zero", 422, "BATCH_MRP_INVALID");
   const quantity = round2(quantityBaseQty);
   const existing = await tx.inventoryLot.findFirst({ where: { shopId, locationId, productId: product.id, batchNumber, expiresOn: expiry } });
   if (existing) {
+    // A repeat receipt of the same batch may carry a corrected printed price; an
+    // omitted one must not wipe the price already recorded for that batch.
+    const mrpUpdate = batchMrp === null ? {} : { mrp: batchMrp, ...moneyShadows({ mrp: batchMrp }) };
     return tx.inventoryLot.update({
       where: { id: existing.id },
-      data: { receivedBaseQty: { increment: quantity }, availableBaseQty: { increment: quantity }, status: existing.status === "depleted" ? "active" : existing.status, note: note || existing.note },
+      data: { receivedBaseQty: { increment: quantity }, availableBaseQty: { increment: quantity }, status: existing.status === "depleted" ? "active" : existing.status, note: note || existing.note, ...mrpUpdate },
     });
   }
   return tx.inventoryLot.create({
-    data: { shopId, locationId, productId: product.id, purchaseReceiptItemId: receiptItemId, batchNumber, manufacturedOn: manufactured, expiresOn: expiry, receivedBaseQty: quantity, availableBaseQty: quantity, costPerRateUnit: actualRate, ...moneyShadows({ costPerRateUnit: actualRate }), note: note || null },
+    data: {
+      shopId, locationId, productId: product.id, purchaseReceiptItemId: receiptItemId, batchNumber,
+      manufacturedOn: manufactured, expiresOn: expiry, receivedBaseQty: quantity, availableBaseQty: quantity,
+      costPerRateUnit: actualRate, ...moneyShadows({ costPerRateUnit: actualRate }),
+      ...(batchMrp === null ? {} : { mrp: batchMrp, ...moneyShadows({ mrp: batchMrp }) }),
+      note: note || null,
+    },
   });
 }
 
-export async function allocateLotsForBill(tx, { shopId, locationId, bill }) {
+/**
+ * The batches a counter may dispense from right now, newest expiry last.
+ *
+ * FEFO order, so the batch the till would pick on its own is the first row — a
+ * picker that lists them in any other order invites the operator to fight the
+ * default for no reason.
+ */
+export async function listSellableBatches(shopId, { locationId, productId }) {
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+  return db.inventoryLot.findMany({
+    where: { shopId, locationId, productId, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today } },
+    select: { id: true, batchNumber: true, expiresOn: true, availableBaseQty: true, mrp: true },
+    orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
+    take: 50,
+  });
+}
+
+/**
+ * The MRP each batch-tracked product must be billed under, keyed by productId.
+ *
+ * Resolved BEFORE pricing and from the same FEFO order the allocation will use,
+ * so the ceiling belongs to the stock actually handed over rather than to the
+ * product record. Two shapes:
+ *
+ *   - the operator named a batch  → that batch's printed MRP, full stop;
+ *   - nobody named one           → the LOWEST MRP among the batches FEFO would
+ *     consume for this quantity, because a line billed at one rate cannot exceed
+ *     the cheapest strip it spans.
+ *
+ * A batch with no printed price of its own contributes no ceiling — those fall
+ * back to Product.mrp, which is exactly the pre-batch behaviour.
+ */
+export async function batchMrpCeilings(tx, { shopId, locationId, requests }) {
+  const ceilings = new Map();
+  const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+
+  for (const request of requests) {
+    const lots = await tx.inventoryLot.findMany({
+      where: { shopId, locationId, productId: request.productId, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today } },
+      orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
+    });
+
+    if (request.inventoryLotId) {
+      const chosen = lots.find((lot) => lot.id === request.inventoryLotId);
+      if (!chosen) throw new AppError("The selected batch is no longer saleable at this branch", 409, "BATCH_NOT_SELLABLE");
+      if (Number(chosen.availableBaseQty) + 0.000001 < request.quantityBaseQty) {
+        const error = new AppError(`Batch ${chosen.batchNumber} has only ${chosen.availableBaseQty} left`, 409, "BATCH_STOCK_INSUFFICIENT");
+        error.publicData = { productId: request.productId, inventoryLotId: chosen.id, availableBaseQty: Number(chosen.availableBaseQty) };
+        throw error;
+      }
+      if (chosen.mrp > 0) ceilings.set(request.productId, round2(Number(chosen.mrp)));
+      continue;
+    }
+
+    let remaining = request.quantityBaseQty;
+    let lowest = 0;
+    for (const lot of lots) {
+      if (remaining <= 0.000001) break;
+      if (lot.mrp > 0) lowest = lowest > 0 ? Math.min(lowest, Number(lot.mrp)) : Number(lot.mrp);
+      remaining = round2(remaining - Math.min(remaining, Number(lot.availableBaseQty)));
+    }
+    if (lowest > 0) ceilings.set(request.productId, round2(lowest));
+  }
+
+  return ceilings;
+}
+
+/**
+ * `chosenLotByProduct` carries the operator's batch pick, keyed by productId. It
+ * arrives alongside the bill rather than on it because BillItem stores no lot
+ * column — what got dispensed is recorded in BillItemLotAllocation once this
+ * runs, and the pick itself only needs to survive as far as here. The same map
+ * produced the price ceiling in bills.service, so honouring it is what keeps the
+ * billed price and the dispensed strip talking about the same batch.
+ */
+export async function allocateLotsForBill(tx, { shopId, locationId, bill, chosenLotByProduct = new Map() }) {
   const byProduct = new Map();
   for (const item of bill.items ?? []) {
     if (!item.productId) continue;
-    const row = byProduct.get(item.productId) ?? { quantity: 0, billItemId: item.id };
+    const row = byProduct.get(item.productId) ?? { quantity: 0, billItemId: item.id, inventoryLotId: chosenLotByProduct.get(item.productId) ?? null };
     row.quantity = round2(row.quantity + Math.abs(Number(item.quantityInBaseUnit || 0)));
     byProduct.set(item.productId, row);
   }
@@ -76,11 +162,17 @@ export async function allocateLotsForBill(tx, { shopId, locationId, bill }) {
   const today = new Date(); today.setUTCHours(0, 0, 0, 0);
   for (const product of tracked) {
     const requested = byProduct.get(product.id);
-    const lots = await tx.inventoryLot.findMany({ where: { shopId, locationId, productId: product.id, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today } }, orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }] });
+    const allLots = await tx.inventoryLot.findMany({ where: { shopId, locationId, productId: product.id, status: "active", availableBaseQty: { gt: 0 }, expiresOn: { gte: today } }, orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }] });
+    // A named batch must cover the whole line on its own. Topping the remainder
+    // up from the next batch would silently span two printed MRPs while the line
+    // carries the chosen batch's ceiling.
+    const lots = requested.inventoryLotId ? allLots.filter((lot) => lot.id === requested.inventoryLotId) : allLots;
+    if (requested.inventoryLotId && lots.length === 0) throw new AppError("The selected batch is no longer saleable at this branch", 409, "BATCH_NOT_SELLABLE");
     const available = round2(lots.reduce((sum, lot) => sum + Number(lot.availableBaseQty), 0));
     if (available + 0.000001 < requested.quantity) {
-      const error = new AppError(`${product.name} has only ${available} ${product.baseUnit} in saleable, unexpired batches`, 409, "BATCH_STOCK_INSUFFICIENT");
-      error.publicData = { productId: product.id, requestedBaseQty: requested.quantity, availableBaseQty: available };
+      const where = requested.inventoryLotId ? `batch ${lots[0].batchNumber}` : "saleable, unexpired batches";
+      const error = new AppError(`${product.name} has only ${available} ${product.baseUnit} in ${where}`, 409, "BATCH_STOCK_INSUFFICIENT");
+      error.publicData = { productId: product.id, requestedBaseQty: requested.quantity, availableBaseQty: available, inventoryLotId: requested.inventoryLotId ?? null };
       throw error;
     }
     let remaining = requested.quantity;
