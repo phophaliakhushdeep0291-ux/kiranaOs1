@@ -244,7 +244,7 @@ function activeChildHref(location: string, children: Array<{ href: string }>) {
 }
 
 function MoreSection({ item, location }: { item: NavigationItem & { children: NonNullable<NavigationItem["children"]> }; location: string }) {
-  const { href, label, helper, Icon, children } = item;
+  const { label, helper, Icon, children } = item;
   const openChild = activeChildHref(location, children);
   // Null until the row is touched, so the section follows the route on open and
   // obeys the owner from then on — no effect needed to keep the two in step.
@@ -252,7 +252,7 @@ function MoreSection({ item, location }: { item: NavigationItem & { children: No
   const expanded = override ?? openChild !== null;
 
   return (
-    <div className="mobile-more-section" key={href}>
+    <div className="mobile-more-section">
       <button
         type="button"
         onClick={() => setOverride(!expanded)}
