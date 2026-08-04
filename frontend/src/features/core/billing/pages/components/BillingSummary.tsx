@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type CSSProperties, type Dispatch, type MouseEvent as ReactMouseEvent, type RefObject, type SetStateAction } from "react";
+import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BillInputBillType, type Customer } from "@/lib/api/client";
-import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import {
   CheckCircle,
   Award,
