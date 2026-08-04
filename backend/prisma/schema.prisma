@@ -103,6 +103,7 @@ model Shop {
   activityEvents                ActivityEvent[]
   activityAggregates            ActivityAggregate[]
   rentalBookings                RentalBooking[]
+  prescriptions                 Prescription[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -2946,5 +2947,104 @@ model RentalBookingItem {
   booking RentalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([bookingId])
+  @@index([productId])
+}
+
+// ── Pharmacy prescription register ───────────────────────────────────────────
+// The statutory register a chemist has to produce on inspection: who prescribed
+// it, for whom, what was actually handed over, and against which bill. Schedule
+// H/H1/X drugs may not be sold without it, so this is the one record a pharmacy
+// cannot run without — and the only one no other trade in the app needs.
+//
+// Not synced to devices. A register entry is written once at the counter that
+// dispensed it and read back rarely, so it is online-first like rentals rather
+// than another table in every device's offline mirror.
+
+model Prescription {
+  id             String @id @default(cuid())
+  shopId         String
+  registerNumber String
+
+  // The prescriber. Name plus registration number is what an inspector checks,
+  // so the number is recorded separately rather than buried in a notes field.
+  doctorName   String
+  doctorRegNo  String?
+  doctorClinic String?
+
+  // The patient is captured on the prescription itself, not only through a
+  // Customer row: most are one-off walk-ins the shop never bills again, and the
+  // register must keep saying who THIS medicine went to even if a linked
+  // customer record is later edited or was never saved at all.
+  customerId     String?
+  patientName    String
+  patientPhone   String  @default("")
+  // Free text, not a number: paediatric entries are written "6 months".
+  patientAge     String?
+  patientGender  String? // male | female | other
+  patientAddress String  @default("")
+
+  // h | h1 | x | otc | other — which schedule the strictest drug on this slip
+  // falls under, since that decides how long the entry must be retained.
+  scheduleType String    @default("h")
+  prescribedOn DateTime // the date written on the doctor's slip
+  dispensedAt  DateTime? // when the shop actually handed the medicine over
+  status       String    @default("pending") // pending | dispensed | cancelled
+
+  // The bill the medicines went out on, when there is one. Deliberately not a
+  // foreign key: the register entry is the legal record and has to survive the
+  // bill being cancelled or purged. billNumber is copied for the same reason.
+  billId     String?
+  billNumber String?
+
+  // A repeat prescription may be dispensed more than once. Counting refills is
+  // what stops the same slip being used indefinitely.
+  refillsAllowed Int @default(0)
+  refillsUsed    Int @default(0)
+
+  imageUrl        String? // photo of the paper slip (data URL or hosted URL)
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop  Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items PrescriptionItem[]
+
+  @@unique([shopId, registerNumber])
+  @@index([shopId, deletedAt])
+  // The register as an inspector reads it: by date, newest first.
+  @@index([shopId, prescribedOn])
+  // "What is still waiting to be dispensed?" and the schedule-wise register.
+  @@index([shopId, status, prescribedOn])
+  @@index([shopId, scheduleType, prescribedOn])
+  // Counter lookups: the patient in front of you, or a doctor's slips.
+  @@index([shopId, patientPhone])
+  @@index([shopId, billId])
+}
+
+model PrescriptionItem {
+  id             String @id @default(cuid())
+  prescriptionId String
+  // Deliberately NOT a foreign key. The line is the record of what was
+  // physically dispensed, so it has to survive the medicine being purged from
+  // the catalogue.
+  productId String?
+
+  // Copied at dispense time so renaming or deleting a product never rewrites
+  // what an old register entry says went out of the door.
+  name        String
+  strength    String? // "500 mg", "5 ml"
+  dosage      String? // as written: "1-0-1 for 5 days"
+  qty         Float   @default(1)
+  unit        String  @default("strip")
+  batchNumber String? // the lot actually handed over, for a recall trace
+  // Set when a generic went out against a brand written on the slip. The
+  // register has to show the substitution, not hide it.
+  substitutedFor String?
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
   @@index([productId])
 }

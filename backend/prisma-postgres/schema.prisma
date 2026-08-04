@@ -98,6 +98,7 @@ model Shop {
   activityEvents              ActivityEvent[]
   activityAggregates          ActivityAggregate[]
   rentalBookings              RentalBooking[]
+  prescriptions               Prescription[]
   auditRules                  AuditRule[]
   auditRuns                   AuditRun[]
   auditEvaluations            AuditEvaluation[]
@@ -2892,5 +2893,80 @@ model RentalBookingItem {
   booking RentalBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([bookingId])
+  @@index([productId])
+}
+
+// The statutory register a chemist produces on inspection: who prescribed it,
+// for whom, what was actually dispensed, and against which bill. Online-first —
+// written once at the counter, so it is not mirrored to devices.
+
+model Prescription {
+  id             String @id @default(cuid())
+  shopId         String
+  registerNumber String
+
+  doctorName   String
+  doctorRegNo  String?
+  doctorClinic String?
+
+  // The patient is captured here, not only through a Customer row: most are
+  // one-off walk-ins, and the register must outlive any linked customer edit.
+  customerId     String?
+  patientName    String
+  patientPhone   String  @default("")
+  patientAge     String? // free text — paediatric entries read "6 months"
+  patientGender  String? // male | female | other
+  patientAddress String  @default("")
+
+  scheduleType String    @default("h") // h | h1 | x | otc | other
+  prescribedOn DateTime
+  dispensedAt  DateTime?
+  status       String    @default("pending") // pending | dispensed | cancelled
+
+  // Not foreign keys — the register entry is the legal record and survives the
+  // bill being cancelled or purged.
+  billId     String?
+  billNumber String?
+
+  refillsAllowed Int @default(0)
+  refillsUsed    Int @default(0)
+
+  imageUrl        String?
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop  Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items PrescriptionItem[]
+
+  @@unique([shopId, registerNumber])
+  @@index([shopId, deletedAt])
+  @@index([shopId, prescribedOn])
+  @@index([shopId, status, prescribedOn])
+  @@index([shopId, scheduleType, prescribedOn])
+  @@index([shopId, patientPhone])
+  @@index([shopId, billId])
+}
+
+model PrescriptionItem {
+  id             String @id @default(cuid())
+  prescriptionId String
+  // Deliberately not a foreign key — the line records what was physically
+  // dispensed and must outlive the product row.
+  productId String?
+
+  name           String
+  strength       String?
+  dosage         String?
+  qty            Float   @default(1)
+  unit           String  @default("strip")
+  batchNumber    String?
+  substitutedFor String?
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
   @@index([productId])
 }

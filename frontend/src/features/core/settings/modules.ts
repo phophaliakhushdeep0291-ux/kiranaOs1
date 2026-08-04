@@ -16,6 +16,7 @@ export type ModuleId =
   | "sales_history"
   | "returns"
   | "rentals"
+  | "prescriptions"
   | "customers"
   | "products"
   | "inventory"
@@ -78,6 +79,16 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     paths: ["/rentals"],
     // Renting stock out is a clothing-shop trade; other verticals can switch it on.
     defaultForBusinessTypes: ["clothing"],
+  },
+  {
+    id: "prescriptions",
+    group: "Sell",
+    label: "Prescription register",
+    description: "Record who prescribed a medicine, for whom, and what was dispensed",
+    paths: ["/prescriptions"],
+    // The register a chemist has to produce on inspection; other verticals can
+    // switch it on if they dispense against prescriptions too.
+    defaultForBusinessTypes: ["pharmacy"],
   },
   {
     id: "customers",

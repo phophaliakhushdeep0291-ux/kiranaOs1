@@ -962,3 +962,100 @@ export interface RentalSummary {
   depositHeld: number;
   pendingCollection: number;
 }
+
+/* ── Pharmacy prescription register ───────────────────────────────────────── */
+
+export type PrescriptionStatus = "pending" | "dispensed" | "cancelled";
+/** Which schedule the strictest drug on the slip falls under. h/h1/x are the regulated ones. */
+export type PrescriptionScheduleType = "h" | "h1" | "x" | "otc" | "other";
+export type PrescriptionGender = "male" | "female" | "other";
+
+export interface PrescriptionItem {
+  id?: string;
+  productId?: string | null;
+  name: string;
+  strength?: string | null;
+  /** As written on the slip: "1-0-1 for 5 days". */
+  dosage?: string | null;
+  qty: number;
+  unit: string;
+  batchNumber?: string | null;
+  /** Set when a generic went out against a brand written on the slip. */
+  substitutedFor?: string | null;
+}
+
+export interface Prescription {
+  id: string;
+  registerNumber: string;
+  doctorName: string;
+  doctorRegNo?: string | null;
+  doctorClinic?: string | null;
+  customerId?: string | null;
+  patientName: string;
+  patientPhone: string;
+  patientAge?: string | null;
+  patientGender?: PrescriptionGender | null;
+  patientAddress: string;
+  scheduleType: PrescriptionScheduleType;
+  prescribedOn: string;
+  /** Day-only forms (YYYY-MM-DD), already in the shop's timezone. */
+  prescribedOnKey: string;
+  dispensedAt?: string | null;
+  dispensedAtKey?: string | null;
+  status: PrescriptionStatus;
+  billId?: string | null;
+  billNumber?: string | null;
+  refillsAllowed: number;
+  refillsUsed: number;
+  /** Repeats still available, computed server-side. */
+  refillsLeft: number;
+  /** Whole days since the date on the slip. */
+  ageDays: number;
+  /** Still waiting to be dispensed and older than the freshness window. Advisory only. */
+  isStale: boolean;
+  /** Pending, or dispensed with repeats left. */
+  canDispense: boolean;
+  /** Schedule H, H1 or X — the ones the retention and inspection rules bite on. */
+  isRegulated: boolean;
+  imageUrl?: string | null;
+  notes?: string | null;
+  items: PrescriptionItem[];
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PrescriptionInput {
+  doctorName: string;
+  doctorRegNo?: string | null;
+  doctorClinic?: string | null;
+  customerId?: string | null;
+  patientName: string;
+  patientPhone?: string | null;
+  patientAge?: string | null;
+  patientGender?: PrescriptionGender | null;
+  patientAddress?: string | null;
+  scheduleType?: PrescriptionScheduleType;
+  /** YYYY-MM-DD */
+  prescribedOn: string;
+  items: Array<Omit<PrescriptionItem, "id">>;
+  billId?: string | null;
+  billNumber?: string | null;
+  refillsAllowed?: number;
+  imageUrl?: string | null;
+  notes?: string | null;
+  /** Record and hand over in one step, for the usual counter case. */
+  dispenseNow?: boolean;
+}
+
+export interface PrescriptionSummary {
+  today: string;
+  pending: number;
+  dispensedToday: number;
+  thisMonth: number;
+  /** Schedule H/H1/X entries this month — what an inspection actually counts. */
+  regulatedThisMonth: number;
+  refillable: number;
+  stale: number;
+  staleAfterDays: number;
+}

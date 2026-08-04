@@ -53,6 +53,7 @@ export type VerticalId =
  */
 export type VerticalPageId =
   | "clothing/rentals"
+  | "pharmacy/prescriptions"
   | "restaurant/tables"
   | "restaurant/kitchen";
 
