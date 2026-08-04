@@ -10,7 +10,13 @@ export const PRESERVED_SHOP_MODELS = Object.freeze([
   // overwrite what this install actually observed with an older device's record
   // of it, and stale personalization counters are worse than the live ones.
   "ActivityEvent", "ActivityAggregate",
-  "SupportRequest", "DeviceHealthSnapshot", "Subscription", "PaymentTransaction",
+  "SupportRequest",
+  // Remote support is a live, time-boxed consent grant and the command queue it
+  // authorises. Both belong to this install, not to business history: restoring
+  // an older backup must not resurrect a session the owner already revoked, nor
+  // re-queue repair commands a device has already run or refused.
+  "SupportSession", "DeviceCommand",
+  "DeviceHealthSnapshot", "Subscription", "PaymentTransaction",
   "PaymentProviderEvent", "IntegrationApiKey", "WebhookEndpoint", "WebhookDelivery",
   "Device", "DeviceReplacementChallenge", "DeviceLicense",
 ]);
@@ -29,6 +35,9 @@ export const RESTORABLE_SHOP_MODELS = Object.freeze([
   "AuditEvaluation", "AuditFinding", "AuditFindingRule", "AuditEvidenceRequirement",
   "AuditEvidence", "AuditFindingStatusHistory", "AuditReview", "AuditCase",
   "AuditCaseFinding", "AuditBaseline",
+  // A booking is business history — who took which garment, for which days, and
+  // what money is still owed on it. It restores with the rest of the ledger.
+  "RentalBooking",
 ]);
 
 export const RESTORABLE_CHILD_MODELS = Object.freeze({
@@ -39,6 +48,10 @@ export const RESTORABLE_CHILD_MODELS = Object.freeze({
   PurchaseReceiptItem: { relation: "receipt", where: { receipt: { shopId: "__SHOP_ID__" } } },
   PurchaseReturnItem: { relation: "purchaseReturn", where: { purchaseReturn: { shopId: "__SHOP_ID__" } } },
   BillItemLotAllocation: { relation: "billItem", where: { billItem: { bill: { shopId: "__SHOP_ID__" } } } },
+  // Carries no shopId of its own, so the tenant scan cannot see it. Without this
+  // rule a restored booking would come back with no line items — no record of
+  // what actually went out of the door.
+  RentalBookingItem: { relation: "booking", where: { booking: { shopId: "__SHOP_ID__" } } },
 });
 
 export const CREDENTIAL_FIELDS_ALWAYS_PRESERVED = Object.freeze([

@@ -827,7 +827,12 @@ if (exists("prisma/schema.prisma") && exists("prisma-postgres/schema.prisma")) {
   for (const model of syncIndexModels) {
     // Prisma schema must contain @@index([shopId, updatedAt, id]) inside the model block.
     // We check the raw schema text because parsePrismaModelFields only parses scalar fields.
-    const modelBlock = new RegExp(`model ${model}\\s*\\{[^}]+\\}`, "s");
+    //
+    // Match to the closing brace in the FIRST column, not to the first `}` anywhere:
+    // a model may legitimately contain one earlier — Product documents its variant
+    // JSON shape in a comment — and stopping there cut the block off above its
+    // @@index lines, reporting an index that was present all along as missing.
+    const modelBlock = new RegExp(`model ${model}\\s*\\{[\\s\\S]*?\\n\\}`);
 
     const sqliteBlock = sqliteSchema.match(modelBlock)?.[0] ?? "";
     if (!sqliteBlock.includes("[shopId, updatedAt, id]")) {
@@ -2122,7 +2127,11 @@ if (exists("src/lib/workerHeartbeat.js") && exists("src/lib/queue.js") && exists
   const metrics = exists("src/lib/metrics.js") ? read("src/lib/metrics.js") : "";
   const aiDocs = exists("docs/AI_SAFETY.md") ? read("docs/AI_SAFETY.md") : "";
   const aiTest = exists("tests/ai-hallucination-guard.examples.js") ? read("tests/ai-hallucination-guard.examples.js") : "";
-  const frontendAdapterPath = path.resolve(root, "..", "frontend", "src", "features", "voice", "voice-ai-client.ts");
+  // Moved under features/core when the tree split into core/ and verticals/. Reading the old
+  // path yielded "" and reported all three fail-closed guards as missing while they were in
+  // place — a guard that cannot find its subject must say so, not fail as if it had checked.
+  const frontendAdapterPath = path.resolve(root, "..", "frontend", "src", "features", "core", "voice", "voice-ai-client.ts");
+  if (!fs.existsSync(frontendAdapterPath)) errors.push(`Frontend AI adapter not found at ${frontendAdapterPath}`);
   const frontendAdapter = fs.existsSync(frontendAdapterPath) ? fs.readFileSync(frontendAdapterPath, "utf8") : "";
 
   if (!packageJson.scripts?.["test:ai-safety"]?.includes("ai-hallucination-guard.examples.js")) {

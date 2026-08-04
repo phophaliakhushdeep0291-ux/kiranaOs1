@@ -33,6 +33,7 @@ import { computeGstBreakdown } from "@/lib/gst";
 import { gstStateCode } from "@/lib/gstin";
 import { toInventoryBaseQty } from "@/features/core/inventory/calculations";
 import { parseBillingVoiceCommand } from "./billing-voice-parser";
+import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { SPLIT_PAYMENT, cartItemKey, type AppliedOffer, type BillingDraft, type BillingSensitiveAction, type BillTypeSelection, type CartItem, type HeldBill, type LinePricingMeta, type PaymentSelection, type PrintableBill, type SpeechRecognitionConstructor, type SpeechRecognitionLike, type VoiceParsedDraft } from "./billing-types";
 import { getRetailPaymentReadiness, verifyRetailPayment } from "../retail-payment";
 import { getActiveLocationId } from "@/features/core/stores/location-context";
@@ -1102,6 +1103,19 @@ export default function Billing() {
     }));
   }
 
+  /**
+   * Pin this line to a batch, or hand it back to FEFO.
+   *
+   * The chosen batch is part of the line's identity (cartItemKey), so this
+   * rewrites the key. Matching on the OLD key first is therefore required —
+   * after the change the line no longer answers to the key that was clicked.
+   */
+  function updateLineBatch(lineKey: string, batch?: SellableBatch) {
+    setCart((previous) => previous.map((item) => (
+      cartItemKey(item) === lineKey ? { ...item, batch } : item
+    )));
+  }
+
   function updateUnit(lineKey: string, unitCode: string) {
     setCart((previous) => {
       const current = previous.find((item) => cartItemKey(item) === lineKey);
@@ -1415,6 +1429,7 @@ export default function Billing() {
         advanceAmount,
         items: cart.map((item) => ({
           productId: item.isCustom ? undefined : item.product.id,
+          inventoryLotId: item.batch?.id,
           sellingUnitId: item.sellingUnit?.id,
           sellingUnitCode: item.sellingUnit?.unitCode,
           sellingUnitLabel: item.sellingUnit?.name ?? item.unit,
@@ -1825,6 +1840,7 @@ export default function Billing() {
         onUpdateUnit={updateUnit}
         onUpdateLineDiscount={updateLineDiscount}
         onUpdateLineNote={updateLineNote}
+        onUpdateLineBatch={updateLineBatch}
         onReadScale={(lineKey, billingUnit) => void readCartLineFromScale(lineKey, billingUnit)}
         scaleReadingLineKey={scaleReadingLineKey}
         onRemoveItem={removeItem}

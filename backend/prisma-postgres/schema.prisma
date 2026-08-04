@@ -1502,6 +1502,12 @@ model InventoryLot {
   availableBaseQty      Float
   costPerRateUnit       Float
   costPerRateUnitPaise  BigInt?
+  // The MRP printed on THIS batch's pack, same basis as Product.mrp (the default
+  // pack). Null means the batch carries no price of its own and the product MRP
+  // applies. Medicine MRP is revised between batches, so the strip in hand and the
+  // product record routinely disagree — billing must cap against the strip.
+  mrp                   Float?
+  mrpPaise              BigInt?
   status                String    @default("active")
   note                  String?
   createdAt             DateTime  @default(now())

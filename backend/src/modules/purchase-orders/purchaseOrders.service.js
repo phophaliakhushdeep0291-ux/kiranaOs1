@@ -429,6 +429,7 @@ export async function receivePurchaseOrder(shopId, id, data, userId) {
           batchNumber: input.batchNumber,
           manufacturedOn: input.manufacturedOn,
           expiresOn: input.expiresOn,
+          mrp: input.mrp,
           note: data.note,
         });
         const updated = await tx.purchaseOrderItem.updateMany({

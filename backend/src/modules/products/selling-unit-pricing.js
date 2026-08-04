@@ -1,7 +1,7 @@
 import { round2 } from "../../utils/money.js";
 
 /**
- * The price ceiling for ONE packaging.
+ * An MRP scaled from the default pack onto the pack actually being sold.
  *
  * A product's `mrp` describes its DEFAULT pack — "₹55" on a product whose default
  * pack is a 500 g packet means ₹55 per 500 g packet. Reading that raw number as the
@@ -9,26 +9,48 @@ import { round2 } from "../../utils/money.js";
  * a 5 kg bag at ₹450 was rejected with "exceeds the configured maximum of Rs 55",
  * so adding a second packaging quietly broke billing for it.
  *
- * Order of preference:
- *   1. the pack's own maximumPrice — what the shopkeeper typed for THIS size,
- *   2. the product MRP scaled by how much bigger this pack is than the default,
- *   3. 0, meaning nothing caps the price (same as a product with no MRP today).
- *
  * Scaling only works when both packs measure in the same base unit, which they
  * always do — conversionToBase is by definition in the product's base unit.
  */
-export function sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnit) {
-  const ownMax = Number(sellingUnit?.maximumPrice ?? 0);
-  if (ownMax > 0) return round2(ownMax);
-
-  const productMrp = Number(product?.mrp ?? 0);
-  if (!(productMrp > 0)) return 0;
-  if (!sellingUnit || sellingUnit.isDefault) return round2(productMrp);
+function mrpForPack(mrp, sellingUnit, defaultSellingUnit) {
+  if (!(mrp > 0)) return 0;
+  if (!sellingUnit || sellingUnit.isDefault) return round2(mrp);
 
   const defaultConversion = Number(defaultSellingUnit?.conversionToBase ?? 0);
   const unitConversion = Number(sellingUnit.conversionToBase ?? 0);
-  if (!(defaultConversion > 0) || !(unitConversion > 0)) return round2(productMrp);
-  if (defaultConversion === unitConversion) return round2(productMrp);
+  if (!(defaultConversion > 0) || !(unitConversion > 0)) return round2(mrp);
+  if (defaultConversion === unitConversion) return round2(mrp);
 
-  return round2((productMrp / defaultConversion) * unitConversion);
+  return round2((mrp / defaultConversion) * unitConversion);
+}
+
+/**
+ * The price ceiling for ONE packaging.
+ *
+ * Without a batch MRP, the order of preference is unchanged:
+ *   1. the pack's own maximumPrice — what the shopkeeper typed for THIS size,
+ *   2. the product MRP scaled to this pack,
+ *   3. 0, meaning nothing caps the price (same as a product with no MRP).
+ *
+ * `batchMrp` is the price printed on the specific batch being dispensed, and it
+ * is a LEGAL ceiling rather than a preference: a pharmacy cannot sell a strip
+ * above the MRP printed on it, whatever the product record or the shop's own
+ * configured maximum says. So when a batch price is present the answer is the
+ * lower of the two ceilings, not the first one found. Both directions matter —
+ * a batch whose MRP was revised UP must not be capped at the old product price
+ * either, which is why this replaces rather than merely tightens.
+ *
+ * Batch MRP is stored on the same basis as Product.mrp (the default pack), so it
+ * goes through the identical scaling — one rule, not two.
+ */
+export function sellingUnitMaxPrice(sellingUnit, product, defaultSellingUnit, batchMrp) {
+  const ownMax = round2(Number(sellingUnit?.maximumPrice ?? 0));
+  const batchCeiling = mrpForPack(Number(batchMrp ?? 0), sellingUnit, defaultSellingUnit);
+
+  if (batchCeiling > 0) {
+    return ownMax > 0 ? round2(Math.min(ownMax, batchCeiling)) : batchCeiling;
+  }
+  if (ownMax > 0) return ownMax;
+
+  return mrpForPack(Number(product?.mrp ?? 0), sellingUnit, defaultSellingUnit);
 }

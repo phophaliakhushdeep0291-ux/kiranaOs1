@@ -10,8 +10,11 @@ import { isCustomerOrderingEnabled, toCustomerSafeProduct } from "../src/modules
 // shop's legal identity fields still must be.
 const shopsRoutes = fs.readFileSync(new URL("../src/modules/shops/shops.routes.js", import.meta.url), "utf8");
 // Inspect the PATCH route line itself (not comments, which legitimately mention the old guard).
-const patchLine = shopsRoutes.split("\n").find((line) => line.includes("router.patch"));
-assert.ok(patchLine, "shops.routes must define a PATCH route");
+// Match the shop root route specifically: /setup-status is a second PATCH that is role-gated
+// rather than PIN-gated, and it sits above this one — matching on "router.patch" alone read
+// that line instead and failed on a guard it was never meant to check.
+const patchLine = shopsRoutes.split("\n").find((line) => /router\.patch\(\s*["']\/["']/.test(line));
+assert.ok(patchLine, "shops.routes must define a PATCH route for the shop root");
 assert.ok(
   patchLine.includes("requireOwnerPinForFields(PIN_PROTECTED_SHOP_FIELDS)"),
   "shop PATCH must PIN-gate only sensitive fields, not the whole request",

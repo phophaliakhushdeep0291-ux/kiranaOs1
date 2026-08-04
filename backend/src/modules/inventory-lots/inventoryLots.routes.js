@@ -12,6 +12,9 @@ import { requireCapability } from "../shops/businessProfile.middleware.js";
 const router = Router();
 router.use(requireAuth, requireShop, requireDeviceActivated(), requireFeature("batch_expiry"), requireCapability("BATCH_TRACKING"));
 router.get("/", requireLocationAccess("view"), validateQuery(lotQuerySchema), controller.list);
+// The counter's batch picker. Read-only and view-scoped: a cashier who can bill
+// has to be able to see which batch they are about to dispense.
+router.get("/sellable/:productId", requireLocationAccess("view"), controller.sellable);
 router.patch("/products/:productId/tracking", requireRole("owner", "admin"), requireOwnerPin, validate(trackingSchema), controller.tracking);
 router.post("/:id/status", requireRole("owner", "admin"), requireOwnerPin, validate(lotStatusSchema), controller.status);
 export default router;

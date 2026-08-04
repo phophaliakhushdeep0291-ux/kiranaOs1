@@ -49,6 +49,9 @@ export const receivePurchaseOrderSchema = z.object({
     batchNumber: z.string().trim().min(1).max(100).optional(),
     manufacturedOn: date,
     expiresOn: date,
+    // The MRP printed on this batch's pack. Optional: a batch received without
+    // one keeps resolving to the product's MRP, unchanged.
+    mrp: moneyAmount({ positive: true }).optional(),
   })).min(1).max(100),
 }).superRefine((value, context) => {
   if (value.supplierInvoiceAmount !== undefined && !value.supplierInvoiceNumber) {

@@ -61,7 +61,12 @@ export function useBusinessTypeServerSync() {
       .then((updated) => {
         queryClient.setQueryData(getGetShopQueryKey(), updated);
       })
-      .catch(() => {
+      .catch((error: { status?: number }) => {
+        // A 4xx is the server's settled answer — most often the 409 raised once a
+        // shop has products or bills, which only the owner's reviewed migration
+        // can clear. Retrying that on every mount would just replay a rejection.
+        const status = error?.status;
+        if (typeof status === "number" && status >= 400 && status < 500) return;
         reconciledShopId = null; // offline — retry on next mount / shop refetch
       });
   }, [shopId, raw, queryClient]);

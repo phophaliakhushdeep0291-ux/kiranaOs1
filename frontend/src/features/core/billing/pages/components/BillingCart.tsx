@@ -3,6 +3,8 @@ import { BadgePercent, Loader2, Pencil, Scale, ShoppingCart, X } from "lucide-re
 import { cn } from "@/lib/utils";
 import { cartItemGross, cartItemLineDiscount, cartItemNet, productMinSellingPrice, roundMoney } from "../billing-calculations";
 import { cartItemKey, type CartItem } from "../billing-types";
+import { BatchPicker } from "./BatchPicker";
+import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import { getProductEmoji, productPlaceholderColor } from "./BillingSearch";
 import { isScaleBillingUnit } from "@/features/core/hardware/local-hardware-bridge";
 import { useAppLanguage } from "@/features/core/settings/i18n";
@@ -14,12 +16,13 @@ interface BillingCartProps {
   onUpdateUnit: (lineKey: string, unit: string) => void;
   onUpdateLineDiscount: (lineKey: string, amount: number) => void;
   onUpdateLineNote: (lineKey: string, note: string) => void;
+  onUpdateLineBatch: (lineKey: string, batch?: SellableBatch) => void;
   onReadScale: (lineKey: string, billingUnit: string) => void;
   scaleReadingLineKey: string | null;
   onRemoveItem: (lineKey: string) => void;
 }
 
-export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onUpdateLineDiscount, onUpdateLineNote, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
+export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onUpdateLineDiscount, onUpdateLineNote, onUpdateLineBatch, onReadScale, scaleReadingLineKey, onRemoveItem }: BillingCartProps) {
   const { t } = useAppLanguage();
 
   if (cart.length === 0) {
@@ -47,6 +50,7 @@ export function BillingCart({ cart, onUpdateQty, onUpdateRate, onUpdateUnit, onU
           onUpdateUnit={onUpdateUnit}
           onUpdateLineDiscount={onUpdateLineDiscount}
           onUpdateLineNote={onUpdateLineNote}
+          onUpdateLineBatch={onUpdateLineBatch}
           onReadScale={onReadScale}
           scaleReading={scaleReadingLineKey === cartItemKey(item)}
           onRemoveItem={onRemoveItem}
@@ -63,6 +67,7 @@ function CartRow({
   onUpdateUnit,
   onUpdateLineDiscount,
   onUpdateLineNote,
+  onUpdateLineBatch,
   onReadScale,
   scaleReading,
   onRemoveItem,
@@ -73,6 +78,7 @@ function CartRow({
   onUpdateUnit: (id: string, unitCode: string) => void;
   onUpdateLineDiscount: (id: string, amount: number) => void;
   onUpdateLineNote: (id: string, note: string) => void;
+  onUpdateLineBatch: (id: string, batch?: SellableBatch) => void;
   onReadScale: (id: string, billingUnit: string) => void;
   scaleReading: boolean;
   onRemoveItem: (id: string) => void;
@@ -283,6 +289,16 @@ function CartRow({
           aria-label={t("billing.cart.noteFor", { name: item.product.name })}
           className="mt-1 h-6 w-full max-w-[220px] rounded-md border border-transparent bg-transparent px-1.5 text-[10px] font-semibold text-[#9a6b00] placeholder:text-[#9aa7bd] hover:bg-[#fff8e6] focus:border-[var(--brand)] focus:bg-white focus:outline-none"
         />
+        {/* Batch-tracked goods only. A custom line has no product to draw batches from. */}
+        {item.product.batchTrackingEnabled && !item.isCustom ? (
+          <BatchPicker
+            productId={item.product.id}
+            productName={item.product.name}
+            baseUnit={item.product.baseUnit ?? item.unit}
+            selected={item.batch}
+            onSelect={(batch) => onUpdateLineBatch(lineKey, batch)}
+          />
+        ) : null}
         {/* Smart Pricing explanation — why this rate (only when a rule beat the default). */}
         {!item.manualRate && !item.isCustom && item.pricing && item.pricing.appliedRuleType !== "DEFAULT_PRICE" ? (
           <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[10px] leading-tight" data-testid={`price-why-${item.product.id}`}>

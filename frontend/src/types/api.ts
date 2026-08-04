@@ -421,6 +421,11 @@ export interface BillPayment {
 
 export interface BillInputItem {
   productId?: string;
+  /**
+   * The batch to dispense from. Omitted means FEFO picks. Set, it fixes both the
+   * stock consumed and the MRP ceiling the line is checked against.
+   */
+  inventoryLotId?: string;
   sellingUnitId?: string;
   sellingUnitCode?: string;
   sellingUnitLabel?: string;

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BillInputBillType, type Customer } from "@/lib/api/client";
+import type { SellableBatch } from "@/features/core/inventory/inventory-lots-api";
 import {
   CheckCircle,
   Award,
@@ -117,6 +118,7 @@ interface BillingSummaryProps {
   onUpdateUnit: (productId: string, unit: string) => void;
   onUpdateLineDiscount: (lineKey: string, amount: number) => void;
   onUpdateLineNote: (lineKey: string, note: string) => void;
+  onUpdateLineBatch: (lineKey: string, batch?: SellableBatch) => void;
   onReadScale: (lineKey: string, billingUnit: string) => void;
   scaleReadingLineKey: string | null;
   onRemoveItem: (productId: string) => void;
@@ -243,6 +245,7 @@ export function BillingSummary({
   onUpdateUnit,
   onUpdateLineDiscount,
   onUpdateLineNote,
+  onUpdateLineBatch,
   onReadScale,
   scaleReadingLineKey,
   onRemoveItem,
@@ -497,6 +500,7 @@ export function BillingSummary({
               onUpdateUnit={onUpdateUnit}
               onUpdateLineDiscount={onUpdateLineDiscount}
               onUpdateLineNote={onUpdateLineNote}
+              onUpdateLineBatch={onUpdateLineBatch}
               onReadScale={onReadScale}
               scaleReadingLineKey={scaleReadingLineKey}
               onRemoveItem={onRemoveItem}
