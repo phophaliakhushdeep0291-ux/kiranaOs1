@@ -3,7 +3,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
-const translationsDir = join(scriptDir, "..", "src", "features", "settings", "translations");
+// Moved under features/core when the tree split into core/ and verticals/. The
+// old path made this guard exit with ENOENT instead of checking anything, so
+// every placeholder mismatch below went unnoticed while the gate looked "red for
+// an unrelated reason".
+const translationsDir = join(scriptDir, "..", "src", "features", "core", "settings", "translations");
 
 // The `Record<keyof typeof xEn, string>` signature on each Hindi module already
 // makes a MISSING key a typecheck failure. What it cannot see is the inside of

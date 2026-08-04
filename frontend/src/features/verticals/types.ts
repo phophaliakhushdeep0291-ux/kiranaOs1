@@ -1,5 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import type { BusinessType } from "@/features/core/settings/business-type-store";
+// The capability vocabulary is platform-wide and lives in core, because core
+// screens are the ones that ask. A pack only declares which ones it holds.
+import type { Capability } from "@/features/core/settings/capabilities";
 import type { FeatureName } from "@/features/core/subscription/plans";
 
 /**
@@ -81,4 +84,13 @@ export interface VerticalPack {
   paths: string[];
   routes: VerticalRoute[];
   nav: VerticalNavEntry[];
+  /**
+   * What this trade can do. Declared on the client rather than only read from
+   * the server bootstrap because the POS has to answer "does this shop sell
+   * loose?" on first paint and while offline — and because the backend derives
+   * these from the business type too, so there is nothing per-shop to fetch.
+   */
+  capabilities: readonly Capability[];
 }
+
+export type { Capability };

@@ -4,7 +4,7 @@ import {
   useBusinessTypeKey,
   type BusinessType,
 } from "@/features/core/settings/business-type-store";
-import type { VerticalId, VerticalPack } from "./types";
+import type { Capability, VerticalId, VerticalPack } from "./types";
 import { kiranaPack } from "./kirana/pack";
 import { clothingPack } from "./clothing/pack";
 import { footwearPack } from "./footwear/pack";
@@ -17,7 +17,7 @@ import { cosmeticsPack } from "./beauty-cosmetics/pack";
 import { restaurantPack } from "./restaurant/pack";
 import { customPack } from "./custom/pack";
 
-export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId } from "./types";
+export type { VerticalId, VerticalPack, VerticalRoute, VerticalNavEntry, VerticalPageId, Capability } from "./types";
 
 /** Every shop type owns exactly one explicit pack, even before it has exclusive screens. */
 export const VERTICAL_PACKS: readonly VerticalPack[] = [
@@ -55,6 +55,17 @@ export function getActiveVerticalPack(): VerticalPack {
 export function useActiveVerticalPack(): VerticalPack {
   const businessType = useBusinessTypeKey();
   return useMemo(() => packForBusinessType(businessType), [businessType]);
+}
+
+/**
+ * What the trade behind a business type can do.
+ *
+ * Installed into core at startup (see `components/layout/index.ts`) so core
+ * screens can ask "does this shop sell loose?" without importing a pack —
+ * `useShopCapability` in `core/settings/capabilities` is what they call.
+ */
+export function capabilitiesForBusinessType(businessType: BusinessType): readonly Capability[] {
+  return packForBusinessType(businessType).capabilities;
 }
 
 function cleanPath(path: string) {
