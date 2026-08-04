@@ -43,7 +43,12 @@ describe("general store (kirana) reachability", () => {
   });
 
   it("opens every screen the phone offers a general store", () => {
-    const blocked = mobileNavHrefs().filter(
+    const hrefs = mobileNavHrefs();
+    // Guards the reader above: an empty list would make the check below pass
+    // while proving nothing at all.
+    expect(hrefs.length).toBeGreaterThan(25);
+
+    const blocked = hrefs.filter(
       (href) => !isPathEnabled(href) || !isPathInBusinessProfile(href, KIRANA_NAVIGATION),
     );
 
