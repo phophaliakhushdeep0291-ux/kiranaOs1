@@ -176,6 +176,45 @@ function ProtectedRoute({ component: Component, featureName, capability }: { com
   );
 }
 
+/**
+ * The catch-all. A mistyped or stale URL used to render the bare card with no
+ * app shell at all, which on a phone meant losing the tab bar and top bar — the
+ * only way out of a wrong link was the one button on the card. It also skipped
+ * `RouteTransition`, so the tab kept the previous screen's `document.title` and
+ * screen readers were never told the page had changed.
+ *
+ * Signed in, the card now sits inside the normal shell. The business-profile
+ * gate is deliberately left off: an unknown path is genuinely missing, not a
+ * screen this shop is not entitled to, and that gate would mislabel it.
+ */
+function NotFoundRoute() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return <LoadingScreen />;
+
+  // Signed out there is no shell to sit in, so the bare card stays — but it
+  // still goes through LazyPage for the title and the route announcement.
+  if (!isAuthenticated) {
+    return (
+      <ErrorBoundary>
+        <LazyPage component={NotFound} />
+      </ErrorBoundary>
+    );
+  }
+
+  return (
+    <SessionLockGate>
+      <Suspense fallback={<LoadingScreen />}>
+        <AppLayout pageTitle="Page not found">
+          <ErrorBoundary>
+            <LazyPage component={NotFound} />
+          </ErrorBoundary>
+        </AppLayout>
+      </Suspense>
+    </SessionLockGate>
+  );
+}
+
 function PublicRoute({ component: Component }: { component: ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
   if (isLoading) return <LoadingScreen />;
@@ -471,7 +510,7 @@ export function AppRoutes() {
           <ProtectedRoute component={VERTICAL_PAGES[route.page]} featureName={route.featureName} />
         </Route>
       ))}
-      <Route component={NotFound} />
+      <Route component={NotFoundRoute} />
     </Switch>
   );
 }

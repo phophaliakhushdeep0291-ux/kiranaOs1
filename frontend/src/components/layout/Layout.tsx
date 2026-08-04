@@ -232,9 +232,16 @@ function initials(name: string) {
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 
-export function Layout({ children }: { children: ReactNode }) {
+/**
+ * `pageTitle` overrides the title derived from the URL. Only the catch-all route
+ * passes it: an unmatched path has no page to name, and titlecasing its last
+ * segment would announce "Also Bogus page loaded" for a screen that does not
+ * exist. Every real route leaves it unset and stays URL-driven.
+ */
+export function Layout({ children, pageTitle }: { children: ReactNode; pageTitle?: string }) {
   const { user, logout, shop } = useAuth();
   const [loc] = useLocation();
+  const resolvedPageTitle = pageTitle ?? getPageTitle(loc);
   const { isOnline, backendStatus, pendingCount, failedCount, conflictCount, isSyncing } = useOfflineStatus();
   const { snapshot } = useSubscriptionSnapshot();
   const { def: btDef } = useBusinessType();
@@ -592,7 +599,7 @@ export function Layout({ children }: { children: ReactNode }) {
             <Menu size={19} aria-hidden="true" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="app-topbar-title">{getPageTitle(loc)}</h1>
+            <h1 className="app-topbar-title">{resolvedPageTitle}</h1>
             {getPageSubtitle(loc) && (
               <p className="app-topbar-subtitle">{getPageSubtitle(loc)}</p>
             )}
@@ -679,7 +686,7 @@ export function Layout({ children }: { children: ReactNode }) {
         </header>
 
         <MobileTopBar
-          pageTitle={getPageTitle(loc)}
+          pageTitle={resolvedPageTitle}
           storeName={storeName}
           storeLocation={mobileStoreLocation}
           connectionLabel={connectionLabel}
