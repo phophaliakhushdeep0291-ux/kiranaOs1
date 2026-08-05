@@ -396,7 +396,7 @@ export default function Login() {
                 id="mobile"
                 data-testid="input-mobile"
                 className="mt-1 h-11 rounded-lg"
-                placeholder="9876543210 or owner@gmail.com"
+                placeholder="Enter mobile number or email"
                 {...form.register("identifier")}
               />
               {form.formState.errors.identifier && (
@@ -411,6 +411,7 @@ export default function Login() {
                 data-testid="input-password"
                 type="password"
                 className="mt-1 h-11 rounded-lg"
+                placeholder="Enter your password"
                 {...form.register("password")}
               />
               {form.formState.errors.password && (
