@@ -105,6 +105,9 @@ model Shop {
   rentalBookings                RentalBooking[]
   prescriptions                 Prescription[]
   productUnits                  ProductUnit[]
+  partFitments                  PartFitment[]
+  partCrossReferences           PartCrossReference[]
+  footwearSizeProfiles          FootwearSizeProfile[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -3136,4 +3139,123 @@ model ProductUnit {
   @@index([shopId, customerPhone])
   // "What cover is about to run out?"
   @@index([shopId, warrantyUntil])
+}
+
+// ── Auto parts: vehicle fitment and cross-references ─────────────────────────
+// The question this trade lives on is "does this fit?", and nothing in the
+// shared catalogue can answer it: a part number means nothing to a customer who
+// says "Swift, 2015, diesel". Today the advice is to type that into the product
+// notes, which no query can read.
+//
+// A fitment is a claim that one product fits one vehicle over a range of years.
+// A part has many, and a vehicle takes many parts, so this is deliberately its
+// own table rather than a column on Product.
+
+model PartFitment {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Deliberately NOT a foreign key, and the name is copied. The claim is
+  // reference data the shop built up over years; it must survive a product
+  // being renamed or repurchased under a new row.
+  productId   String
+  productName String
+
+  make    String // Maruti Suzuki
+  model   String // Swift
+  variant String? // "Diesel 1.3 DDiS", "VXi" — null means every variant
+
+  // An open-ended range. yearFrom null = "since forever", yearTo null = "still
+  // current", which is the common case for a part in production.
+  yearFrom Int?
+  yearTo   Int?
+
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  // The counter query: "what fits a Swift?" — make and model together, because
+  // a model name alone is not unique across makers.
+  @@index([shopId, make, model])
+  // "What does this part fit?", read from the product side.
+  @@index([shopId, productId])
+  @@index([shopId, make])
+}
+
+// What else will do when the part the customer wants is not on the shelf.
+//
+// The other side may be a product in this catalogue or just a number the shop
+// knows about — an OEM code they have never stocked. Both are worth recording,
+// because "we don't have it but this one fits" is a sale either way.
+model PartCrossReference {
+  id     String @id @default(cuid())
+  shopId String
+
+  productId   String
+  productName String
+
+  // Set only when the alternative is something the shop actually stocks.
+  alternateProductId String?
+  // Always set: the number written on the box, whether or not it is stocked.
+  partNumber String
+  brand      String?
+  // oem            — the manufacturer's own number for this part
+  // alternative    — a different brand that does the same job
+  // supersedes     — this part replaces the referenced one
+  // superseded_by  — this part has been replaced by the referenced one
+  kind String @default("alternative")
+
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, productId])
+  // "Someone read me a number off a box" — the lookup that does not start from
+  // a product at all.
+  @@index([shopId, partNumber])
+}
+
+// ── Footwear: which size system a style is sold in ───────────────────────────
+// A shoe is sold by the pair in a size *system*, and "8" means three different
+// shoes in UK, EU and US. The size run itself is ordinary variant machinery —
+// a Size axis on the Product, one ProductSellingUnit per size holding its own
+// stock — so nothing here duplicates that. What cannot be derived is which
+// scale the numbers on those variants are written in, and that is all this
+// table records.
+//
+// One row per style, not per size. A style is sold in one system.
+
+model FootwearSizeProfile {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Deliberately NOT a foreign key, and the name is copied — consistent with the
+  // other trade registers, so the profile survives a catalogue row being renamed.
+  productId   String
+  productName String
+
+  // uk | us | eu | cm. India uses UK numbering, so it is not a separate system.
+  sizeSystem String @default("uk")
+  // mens | womens | kids | unisex — the conversion between systems differs by
+  // last, so a UK 6 women's is not a UK 6 men's.
+  gender String @default("unisex")
+  // "D", "2E", "Narrow" — recorded for the shops that stock width fittings and
+  // ignored by everyone else.
+  widthFit String?
+
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, productId])
+  @@index([shopId, deletedAt])
 }

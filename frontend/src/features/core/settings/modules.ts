@@ -17,6 +17,8 @@ export type ModuleId =
   | "returns"
   | "rentals"
   | "prescriptions"
+  | "serial_units"
+  | "part_fitment"
   | "customers"
   | "products"
   | "inventory"
@@ -89,6 +91,26 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     // The register a chemist has to produce on inspection; other verticals can
     // switch it on if they dispense against prescriptions too.
     defaultForBusinessTypes: ["pharmacy"],
+  },
+  {
+    id: "serial_units",
+    group: "Sell",
+    label: "IMEI & serial register",
+    description: "Track each handset or appliance by its own number, with warranty cover",
+    paths: ["/serial-units"],
+    // Naming each piece of stock is an electronics trade; other verticals can
+    // switch it on if they sell serialised goods too.
+    defaultForBusinessTypes: ["electronics"],
+  },
+  {
+    id: "part_fitment",
+    group: "Sell",
+    label: "Part finder",
+    description: "Look up which parts fit a customer's vehicle, and what else will do",
+    paths: ["/fitment"],
+    // "Does this fit?" is an auto-parts question; a hardware shop runs the same
+    // pack without it, and can switch it on if it starts stocking for vehicles.
+    defaultForBusinessTypes: ["auto_parts"],
   },
   {
     id: "customers",
