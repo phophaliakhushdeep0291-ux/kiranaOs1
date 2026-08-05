@@ -172,45 +172,44 @@ export default function Register() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <Label htmlFor="shopName">Shop Name</Label>
-                  <Input id="shopName" data-testid="input-shopName" className="mt-1 h-11" placeholder="Sharma General Store" {...form.register("shopName")} />
+                  <Input id="shopName" data-testid="input-shopName" className="mt-1 h-11" placeholder="Enter shop name" {...form.register("shopName")} />
                   {form.formState.errors.shopName && <p className="mt-1 text-xs text-destructive">{form.formState.errors.shopName.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="ownerName">Owner Name</Label>
-                  <Input id="ownerName" data-testid="input-ownerName" className="mt-1 h-11" placeholder="Ramesh Sharma" {...form.register("ownerName")} />
+                  <Input id="ownerName" data-testid="input-ownerName" className="mt-1 h-11" placeholder="Enter owner name" {...form.register("ownerName")} />
                   {form.formState.errors.ownerName && <p className="mt-1 text-xs text-destructive">{form.formState.errors.ownerName.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="city">City</Label>
-                  <Input id="city" data-testid="input-city" className="mt-1 h-11" placeholder="Mumbai" {...form.register("city")} />
+                  <Input id="city" data-testid="input-city" className="mt-1 h-11" placeholder="Enter city" {...form.register("city")} />
                   {form.formState.errors.city && <p className="mt-1 text-xs text-destructive">{form.formState.errors.city.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="mobile">Mobile</Label>
-                  <Input id="mobile" data-testid="input-mobile" className="mt-1 h-11" placeholder="9876543210" {...form.register("mobile")} />
+                  <Input id="mobile" data-testid="input-mobile" className="mt-1 h-11" placeholder="Enter 10-digit mobile number" {...form.register("mobile")} />
                   {form.formState.errors.mobile && <p className="mt-1 text-xs text-destructive">{form.formState.errors.mobile.message}</p>}
                 </div>
               </div>
               <div>
                 <Label htmlFor="email">Gmail / Email for recovery</Label>
-                <Input id="email" data-testid="input-email" type="email" className="mt-1 h-11" placeholder="owner@gmail.com" {...form.register("email")} />
+                <Input id="email" data-testid="input-email" type="email" className="mt-1 h-11" placeholder="Enter email address" {...form.register("email")} />
                 <p className="mt-1 text-xs text-muted-foreground">Used to verify your account and recover your password.</p>
                 {form.formState.errors.email && <p className="mt-1 text-xs text-destructive">{form.formState.errors.email.message}</p>}
               </div>
               <div>
                 <Label htmlFor="address">Address</Label>
-                <Input id="address" data-testid="input-address" className="mt-1 h-11" placeholder="Shop No. 12, Main Market" {...form.register("address")} />
+                <Input id="address" data-testid="input-address" className="mt-1 h-11" placeholder="Enter shop address" {...form.register("address")} />
                 {form.formState.errors.address && <p className="mt-1 text-xs text-destructive">{form.formState.errors.address.message}</p>}
               </div>
               <div>
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" data-testid="input-password" type="password" className="mt-1 h-11" {...form.register("password")} />
-                <p className="mt-1 text-xs text-muted-foreground">At least 6 characters.</p>
+                <Input id="password" data-testid="input-password" type="password" className="mt-1 h-11" placeholder="Min. 6 characters" {...form.register("password")} />
                 {form.formState.errors.password && <p className="mt-1 text-xs text-destructive">{form.formState.errors.password.message}</p>}
               </div>
               <div>
                 <Label htmlFor="ownerPin">4-Digit Owner PIN</Label>
-                <Input id="ownerPin" data-testid="input-ownerPin" type="password" inputMode="numeric" maxLength={4} className="mt-1 h-11" {...form.register("ownerPin")} />
+                <Input id="ownerPin" data-testid="input-ownerPin" type="password" inputMode="numeric" maxLength={4} className="mt-1 h-11" placeholder="e.g. 1234" {...form.register("ownerPin")} />
                 <p className="mt-1 text-xs text-muted-foreground">Used to authorise discounts, cancellations, and sensitive settings.</p>
                 {form.formState.errors.ownerPin && <p className="mt-1 text-xs text-destructive">{form.formState.errors.ownerPin.message}</p>}
               </div>
