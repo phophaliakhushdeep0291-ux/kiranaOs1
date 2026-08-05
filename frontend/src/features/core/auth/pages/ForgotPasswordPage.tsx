@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
                 id="identifier"
                 data-testid="input-recovery-identifier"
                 className="mt-1 h-11 rounded-xl"
-                placeholder="Enter mobile number or email"
+                placeholder="Enter mobile or email"
                 {...form.register("identifier")}
               />
               {form.formState.errors.identifier && (

@@ -187,7 +187,7 @@ export default function Register() {
                 </div>
                 <div>
                   <Label htmlFor="mobile">Mobile</Label>
-                  <Input id="mobile" data-testid="input-mobile" className="mt-1 h-11" placeholder="Enter 10-digit mobile number" {...form.register("mobile")} />
+                  <Input id="mobile" data-testid="input-mobile" className="mt-1 h-11" placeholder="Enter 10-digit number" {...form.register("mobile")} />
                   {form.formState.errors.mobile && <p className="mt-1 text-xs text-destructive">{form.formState.errors.mobile.message}</p>}
                 </div>
               </div>
