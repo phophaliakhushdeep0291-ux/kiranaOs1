@@ -21,6 +21,8 @@ export type ModuleId =
   | "part_fitment"
   | "book_lists"
   | "size_runs"
+  | "furniture_orders"
+  | "testers"
   | "customers"
   | "products"
   | "inventory"
@@ -124,6 +126,16 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     defaultForBusinessTypes: ["stationery"],
   },
   {
+    id: "furniture_orders",
+    group: "Sell",
+    label: "Order book",
+    description: "Quotes, advances and deliveries for goods that leave the shop later",
+    paths: ["/orders"],
+    // Selling before the goods leave the floor is a showroom trade; any shop
+    // that quotes and delivers later can switch it on.
+    defaultForBusinessTypes: ["furniture"],
+  },
+  {
     id: "customers",
     group: "Sell",
     label: "Customers & udhar",
@@ -138,6 +150,16 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     label: "Products & categories",
     description: "Product catalogue, pricing and categories",
     paths: ["/products", "/categories"],
+  },
+  {
+    id: "testers",
+    group: "Stock & buying",
+    label: "Tester stock",
+    description: "Track what is open on the counter, and what testers are costing you",
+    paths: ["/testers"],
+    // Putting stock out for customers to try is a beauty-counter trade; any shop
+    // that does it can switch it on.
+    defaultForBusinessTypes: ["cosmetics"],
   },
   {
     id: "size_runs",

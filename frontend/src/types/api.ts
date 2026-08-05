@@ -1437,3 +1437,182 @@ export interface BookListSummary {
   unitsToOrder: number;
   schools: number;
 }
+
+/* ── Furniture: sales orders ──────────────────────────────────────────────── */
+
+export type FurnitureOrderStatus =
+  | "quote" | "confirmed" | "in_production" | "ready" | "delivered" | "installed" | "cancelled";
+export type FurniturePaymentMode = "cash" | "upi" | "bank" | "card" | "other";
+
+export interface FurnitureOrderItem {
+  id?: string;
+  /** Null for a made-to-order piece not in the catalogue. */
+  productId?: string | null;
+  name: string;
+  /** "Teak, 6ft, walnut finish" — the spec a carpenter works from. */
+  variant?: string | null;
+  qty: number;
+  rate: number;
+  amount: number;
+  /** Whether this line holds a piece off the showroom floor while the order is open. */
+  reserveStock: boolean;
+  notes?: string | null;
+}
+
+export interface FurnitureOrderPayment {
+  id: string;
+  amount: number;
+  mode: FurniturePaymentMode;
+  paidOn: string;
+  reference?: string | null;
+  notes?: string | null;
+  createdAt?: string;
+}
+
+export interface FurnitureOrder {
+  id: string;
+  orderNumber: string;
+  customerId?: string | null;
+  customerName: string;
+  customerPhone: string;
+  deliveryAddress: string;
+  status: FurnitureOrderStatus;
+  statusLabel: string;
+  itemsTotal: number;
+  discount: number;
+  deliveryCharge: number;
+  installCharge: number;
+  grandTotal: number;
+  quotedOn: string;
+  quotedOnKey?: string | null;
+  promisedOn?: string | null;
+  promisedOnKey?: string | null;
+  deliveredAt?: string | null;
+  deliveredAtKey?: string | null;
+  installedAt?: string | null;
+  installedAtKey?: string | null;
+  isCustom: boolean;
+  billId?: string | null;
+  billNumber?: string | null;
+  notes?: string | null;
+  items: FurnitureOrderItem[];
+  payments: FurnitureOrderPayment[];
+  /** Sum of payments, computed server-side. */
+  paidTotal: number;
+  balanceDue: number;
+  /** More taken than the order is worth — a refund waiting to happen. */
+  isOverpaid: boolean;
+  advancePercent: number;
+  isOpen: boolean;
+  isOverdue: boolean;
+  isDueSoon: boolean;
+  daysToPromised?: number | null;
+  /** What this order may legally become next. */
+  nextStatuses: FurnitureOrderStatus[];
+  canCancel: boolean;
+  isPaidUp: boolean;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface FurnitureOrderInput {
+  customerId?: string | null;
+  customerName: string;
+  customerPhone?: string | null;
+  deliveryAddress?: string | null;
+  status?: "quote" | "confirmed";
+  items: Array<Omit<FurnitureOrderItem, "id" | "amount"> & { amount?: number }>;
+  discount?: number;
+  deliveryCharge?: number;
+  installCharge?: number;
+  quotedOn?: string;
+  promisedOn?: string | null;
+  isCustom?: boolean;
+  notes?: string | null;
+}
+
+export interface FurnitureOrderSummary {
+  today: string;
+  openOrders: number;
+  quotes: number;
+  inProduction: number;
+  readyToDeliver: number;
+  overdue: number;
+  dueSoon: number;
+  /** Money taken against work not yet delivered — held, not earned. */
+  advancesHeld: number;
+  pendingCollection: number;
+  orderBookValue: number;
+  reservedProducts: number;
+}
+
+/* ── Cosmetics: tester stock ──────────────────────────────────────────────── */
+
+export type TesterStatus = "in_use" | "replaced" | "discarded";
+
+export interface TesterUnit {
+  id: string;
+  productId: string;
+  productName: string;
+  /** The shade — a tester is opened per shade, not per product. */
+  variant?: string | null;
+  status: TesterStatus;
+  openedOn: string;
+  openedOnKey?: string | null;
+  expectedDays: number;
+  closedOn?: string | null;
+  closedOnKey?: string | null;
+  dueOnKey?: string | null;
+  /** Snapshotted at opening so a later price change cannot rewrite it. */
+  costValue: number;
+  /** The stock movement this tester came out of, when one was made. */
+  stockLedgerId?: string | null;
+  ageDays: number;
+  daysLeft?: number | null;
+  isOpen: boolean;
+  isDue: boolean;
+  isDueSoon: boolean;
+  notes?: string | null;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OpenTesterInput {
+  productId: string;
+  variant?: string | null;
+  expectedDays?: number;
+  costValue?: number | null;
+  openedOn?: string;
+  sellingUnitId?: string | null;
+  locationId?: string | null;
+  /** False when the shop already took the unit off the shelf by hand. */
+  moveStock?: boolean;
+  notes?: string | null;
+}
+
+export interface TesterCostLine {
+  productId: string;
+  productName: string;
+  opened: number;
+  cost: number;
+}
+
+export interface TesterCost {
+  totalOpened: number;
+  totalCost: number;
+  byProduct: TesterCostLine[];
+}
+
+export interface TesterSummary {
+  today: string;
+  openTesters: number;
+  dueNow: number;
+  dueSoon: number;
+  /** Money sitting on the counter as stock that will never be sold. */
+  valueOnCounter: number;
+  openedThisMonth: number;
+  costThisMonth: number;
+  dueSoonDays: number;
+}

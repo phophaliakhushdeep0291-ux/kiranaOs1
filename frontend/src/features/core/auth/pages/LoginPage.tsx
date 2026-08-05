@@ -396,7 +396,7 @@ export default function Login() {
                 id="mobile"
                 data-testid="input-mobile"
                 className="mt-1 h-11 rounded-lg"
-                placeholder="Enter mobile number or email"
+                placeholder="Enter mobile or email"
                 {...form.register("identifier")}
               />
               {form.formState.errors.identifier && (

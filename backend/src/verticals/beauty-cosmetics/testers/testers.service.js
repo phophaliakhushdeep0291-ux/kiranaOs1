@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import db from "../../../db.js";
 import { AppError } from "../../../middleware/error.js";
 import { round2 } from "../../../utils/money.js";
@@ -157,7 +158,12 @@ export async function openTester(shopId, data, identity = {}) {
 
   let stockLedgerId = null;
   if (moveStock) {
-    const movement = await recordDamage(
+    // The key does two jobs. It makes a retried open idempotent — a double tap
+    // on a slow connection must not decrement the shelf twice — and it is the
+    // only way to find the row afterwards, because `recordDamage` returns the
+    // resulting balances rather than the ledger entry's id.
+    const idempotencyKey = `tester:${randomUUID()}`;
+    await recordDamage(
       shopId,
       {
         productId: product.id,
@@ -167,9 +173,10 @@ export async function openTester(shopId, data, identity = {}) {
         note: `Tester opened${data.variant ? `: ${String(data.variant).trim()}` : ""}`,
         locationId: data.locationId ?? null,
       },
-      identity,
+      { ...identity, idempotencyKey },
     );
-    stockLedgerId = movement?.id ?? movement?.ledgerId ?? null;
+    const ledger = await db.stockLedger.findFirst({ where: { shopId, idempotencyKey }, select: { id: true } });
+    stockLedgerId = ledger?.id ?? null;
   }
 
   const tester = await db.testerUnit.create({
