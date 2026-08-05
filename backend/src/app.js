@@ -38,6 +38,7 @@ import prescriptionRoutes from "./verticals/pharmacy/prescriptions/prescriptions
 import productUnitRoutes from "./verticals/electronics/units/units.routes.js";
 import fitmentRoutes from "./verticals/auto-parts/fitment/fitment.routes.js";
 import sizeRunRoutes from "./verticals/footwear/sizes/sizes.routes.js";
+import bookListRoutes from "./verticals/stationery-books/book-lists/book-lists.routes.js";
 import integrationRoutes from "./modules/integrations/integrations.routes.js";
 import { taxRoutes as complianceRoutes } from "./core/taxes/index.js";
 import loyaltyRoutes from "./modules/loyalty/loyalty.routes.js";
@@ -250,6 +251,7 @@ app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/product-units", productUnitRoutes);
 app.use("/api/fitment", fitmentRoutes);
 app.use("/api/size-runs", sizeRunRoutes);
+app.use("/api/book-lists", bookListRoutes);
 app.use("/api/integrations", integrationRoutes);
 app.use("/api/stores", storeRoutes);
 app.use("/api/compliance", complianceRoutes);

@@ -19,6 +19,7 @@ export type ModuleId =
   | "prescriptions"
   | "serial_units"
   | "part_fitment"
+  | "book_lists"
   | "size_runs"
   | "customers"
   | "products"
@@ -112,6 +113,15 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     // "Does this fit?" is an auto-parts question; a hardware shop runs the same
     // pack without it, and can switch it on if it starts stocking for vehicles.
     defaultForBusinessTypes: ["auto_parts"],
+  },
+  {
+    id: "book_lists",
+    group: "Sell",
+    label: "Class book lists",
+    description: "A school class's whole set on one bill, and what you are short of before term",
+    paths: ["/book-lists"],
+    // A book shop's trade, but a general store next to a school sells sets too.
+    defaultForBusinessTypes: ["stationery"],
   },
   {
     id: "customers",

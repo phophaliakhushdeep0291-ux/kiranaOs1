@@ -1346,3 +1346,94 @@ export interface SizeRunSummary {
   unprofiledStyles: number;
   missingSizes: number;
 }
+
+/* ── Stationery: class book lists ─────────────────────────────────────────── */
+
+export interface BookListItem {
+  id?: string;
+  productId?: string | null;
+  name: string;
+  qty: number;
+  unit: string;
+  /** On the list, but not counted as a shortfall when it is out. */
+  isOptional: boolean;
+  notes?: string | null;
+  sortOrder?: number;
+  /** Filled in when the list is read against the live catalogue. */
+  inCatalogue?: boolean;
+  productName?: string;
+  sku?: string | null;
+  price?: number;
+  available?: number;
+  shortBy?: number;
+  isReady?: boolean;
+}
+
+export interface BookListMissingItem {
+  productId?: string | null;
+  name: string;
+  needed: number;
+  available: number;
+  shortBy: number;
+  inCatalogue: boolean;
+}
+
+export interface BookList {
+  id: string;
+  schoolName: string;
+  className: string;
+  academicYear: string;
+  /** Empty rather than null — a nullable label would defeat the unique index. */
+  name: string;
+  /** "Class 6 · DPS — Science stream" */
+  label: string;
+  notes?: string | null;
+  isActive: boolean;
+  items: BookListItem[];
+  itemCount: number;
+  requiredCount: number;
+  readyCount: number;
+  shortCount: number;
+  /** Every required line is on the shelf. */
+  isComplete: boolean;
+  missing: BookListMissingItem[];
+  estimatedTotal: number;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BookListInput {
+  schoolName: string;
+  className: string;
+  academicYear: string;
+  name?: string | null;
+  notes?: string | null;
+  isActive?: boolean;
+  items?: Array<Omit<BookListItem, "id" | "inCatalogue" | "productName" | "sku" | "price" | "available" | "shortBy" | "isReady">>;
+}
+
+export interface BookListOptions {
+  schools: string[];
+  classes: string[];
+  years: string[];
+}
+
+/** One line of the reorder sheet: what to buy, and which classes are waiting on it. */
+export interface BookListShortfall {
+  productId?: string | null;
+  name: string;
+  inCatalogue: boolean;
+  available: number;
+  shortBy: number;
+  lists: string[];
+}
+
+export interface BookListSummary {
+  lists: number;
+  completeLists: number;
+  shortLists: number;
+  itemsToOrder: number;
+  unitsToOrder: number;
+  schools: number;
+}

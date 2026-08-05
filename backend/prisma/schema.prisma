@@ -108,6 +108,7 @@ model Shop {
   partFitments                  PartFitment[]
   partCrossReferences           PartCrossReference[]
   footwearSizeProfiles          FootwearSizeProfile[]
+  bookLists                     BookList[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -3258,4 +3259,76 @@ model FootwearSizeProfile {
 
   @@unique([shopId, productId])
   @@index([shopId, deletedAt])
+}
+
+// ── Stationery: class book lists ─────────────────────────────────────────────
+// A book shop's whole year turns on one document: the school publishes the Class
+// 6 list, a parent walks in and says "Class 6, DPS", and the counter assembles
+// eleven books, four notebooks and a geometry box from a sheet taped to the wall.
+// Nothing in the app can hold that today, so the list lives on paper and the
+// shop finds out what it is short of when a parent is already standing there.
+//
+// A list is a recipe, not stock and not an order: it names what a class needs,
+// and readiness is computed against the live catalogue every time it is read.
+
+model BookList {
+  id     String @id @default(cuid())
+  shopId String
+
+  schoolName   String
+  className    String
+  // "2026-27" — Indian academic years straddle two calendar years, so a single
+  // year number would be ambiguous every April.
+  academicYear String
+  // Optional label for the case one class has two lists ("Science stream").
+  // Empty rather than null on purpose: NULLs are DISTINCT in a unique index on
+  // both SQLite and PostgreSQL, so a nullable column here would let the same
+  // class be entered twice — the exact duplicate the index exists to stop.
+  name String @default("")
+
+  notes String?
+  // Last year's list stays on the books for reference but should not be offered
+  // at the counter, which is what this separates.
+  isActive Boolean @default(true)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop  Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items BookListItem[]
+
+  @@unique([shopId, schoolName, className, academicYear, name])
+  @@index([shopId, deletedAt])
+  // The counter lookup: "Class 6, DPS".
+  @@index([shopId, schoolName, className])
+  @@index([shopId, academicYear])
+}
+
+model BookListItem {
+  id     String @id @default(cuid())
+  listId String
+
+  // Deliberately NOT a foreign key, and the name is copied. A list is a document
+  // the school published: it has to keep naming the book even after the shop
+  // stops stocking it, and a null productId is exactly how "we don't carry this"
+  // is recorded rather than a missing row.
+  productId String?
+  name      String
+
+  qty  Float  @default(1)
+  unit String @default("piece")
+  // Drawing books and the second geometry box are on many lists as optional;
+  // counting them as shortfalls would make every list look unfulfillable.
+  isOptional Boolean @default(false)
+
+  notes String?
+  // Lists are read aloud in order — subject by subject — so the order the school
+  // published them in is part of the document.
+  sortOrder Int @default(0)
+
+  list BookList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId])
+  @@index([productId])
 }

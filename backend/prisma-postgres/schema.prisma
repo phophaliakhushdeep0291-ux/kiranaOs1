@@ -103,6 +103,7 @@ model Shop {
   partFitments                PartFitment[]
   partCrossReferences         PartCrossReference[]
   footwearSizeProfiles        FootwearSizeProfile[]
+  bookLists                   BookList[]
   auditRules                  AuditRule[]
   auditRuns                   AuditRun[]
   auditEvaluations            AuditEvaluation[]
@@ -3125,4 +3126,58 @@ model FootwearSizeProfile {
 
   @@unique([shopId, productId])
   @@index([shopId, deletedAt])
+}
+
+// Class book lists: "Class 6, DPS" -> eleven books, four notebooks and a
+// geometry box. A list is a recipe, not stock and not an order — readiness is
+// computed against the live catalogue every time it is read.
+
+model BookList {
+  id     String @id @default(cuid())
+  shopId String
+
+  schoolName   String
+  className    String
+  academicYear String // "2026-27" — Indian academic years straddle two calendar years
+  // Empty rather than null: NULLs are DISTINCT in a unique index, so a
+  // nullable column would let the same class be entered twice.
+  name         String  @default("")
+
+  notes    String?
+  isActive Boolean @default(true)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop  Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items BookListItem[]
+
+  @@unique([shopId, schoolName, className, academicYear, name])
+  @@index([shopId, deletedAt])
+  @@index([shopId, schoolName, className])
+  @@index([shopId, academicYear])
+}
+
+model BookListItem {
+  id     String @id @default(cuid())
+  listId String
+
+  // Not a foreign key, and the name is copied — the list keeps naming the book
+  // even after the shop stops stocking it, and a null productId is how
+  // "we don't carry this" is recorded.
+  productId String?
+  name      String
+
+  qty        Float   @default(1)
+  unit       String  @default("piece")
+  isOptional Boolean @default(false)
+
+  notes     String?
+  sortOrder Int     @default(0)
+
+  list BookList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId])
+  @@index([productId])
 }

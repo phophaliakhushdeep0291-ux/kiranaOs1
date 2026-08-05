@@ -57,6 +57,7 @@ export type VerticalPageId =
   | "electronics/units"
   | "footwear/size-runs"
   | "pharmacy/prescriptions"
+  | "stationery/book-lists"
   | "restaurant/tables"
   | "restaurant/kitchen";
 

@@ -101,6 +101,7 @@ const VERTICAL_PAGES: Record<VerticalPageId, ComponentType> = {
   "electronics/units": lazy(() => import("@/features/verticals/electronics/units/pages/ProductUnitsPage")),
   "footwear/size-runs": lazy(() => import("@/features/verticals/footwear/sizes/pages/SizeRunsPage")),
   "pharmacy/prescriptions": lazy(() => import("@/features/verticals/pharmacy/prescriptions/pages/PrescriptionsPage")),
+  "stationery/book-lists": lazy(() => import("@/features/verticals/stationery-books/book-lists/pages/BookListsPage")),
   "restaurant/tables": lazy(() => import("@/features/verticals/restaurant/pages/TablesPage")),
   "restaurant/kitchen": lazy(() => import("@/features/verticals/restaurant/pages/KitchenPage")),
 };
