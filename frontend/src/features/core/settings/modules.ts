@@ -19,6 +19,7 @@ export type ModuleId =
   | "prescriptions"
   | "serial_units"
   | "part_fitment"
+  | "size_runs"
   | "customers"
   | "products"
   | "inventory"
@@ -127,6 +128,16 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     label: "Products & categories",
     description: "Product catalogue, pricing and categories",
     paths: ["/products", "/categories"],
+  },
+  {
+    id: "size_runs",
+    group: "Stock & buying",
+    label: "Size runs",
+    description: "See the gaps in each style's size run, and find stock by a customer's own size",
+    paths: ["/size-runs"],
+    // Selling by the pair in a size system is a footwear trade; a sports shop
+    // stocking shoes alongside other goods can switch it on.
+    defaultForBusinessTypes: ["footwear"],
   },
   {
     id: "inventory",

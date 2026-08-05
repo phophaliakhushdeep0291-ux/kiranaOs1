@@ -1262,3 +1262,87 @@ export interface FitmentSummary {
   unmappedParts: number;
   makes: number;
 }
+
+/* ── Footwear: size runs ──────────────────────────────────────────────────── */
+
+export type ShoeSizeSystem = "uk" | "us" | "eu" | "cm";
+export type ShoeSizeGender = "mens" | "womens" | "kids" | "unisex";
+
+/** The same physical shoe on every scale. Null when the size is off the chart. */
+export interface ShoeSizeEquivalents {
+  gender: ShoeSizeGender;
+  uk: string;
+  us: string;
+  eu: string;
+  cm: string;
+}
+
+export interface SizeRunCell {
+  size: string;
+  colour: string | null;
+  pairs: number;
+  inStock: boolean;
+  equivalents: ShoeSizeEquivalents | null;
+}
+
+export interface SizeRun {
+  productId: string;
+  productName: string;
+  brand?: string | null;
+  imageUrl?: string | null;
+  sizeSystem: ShoeSizeSystem;
+  gender: ShoeSizeGender;
+  widthFit?: string | null;
+  /** False until the shop says which scale these numbers are on. */
+  isProfiled: boolean;
+  /** Kids sizing has no dependable chart, so equivalents are absent by design. */
+  canConvert: boolean;
+  sizeAxisName: string;
+  otherAxisName: string | null;
+  sizes: string[];
+  colours: string[];
+  cells: SizeRunCell[];
+  totalPairs: number;
+  sizesInStock: number;
+  sizesTotal: number;
+  gaps: Array<{ size: string; colour: string | null }>;
+  /** On the shelf, but with holes — not sellable to everyone who walks in. */
+  isBroken: boolean;
+  /** Nothing left at all, which is a different problem from a broken run. */
+  isEmpty: boolean;
+}
+
+export interface SizeProfileInput {
+  sizeSystem: ShoeSizeSystem;
+  gender?: ShoeSizeGender;
+  widthFit?: string | null;
+  notes?: string | null;
+}
+
+export interface SizeLookupMatch {
+  productId: string;
+  productName: string;
+  brand?: string | null;
+  sizeSystem: ShoeSizeSystem;
+  gender: ShoeSizeGender;
+  /** The size as that style numbers it, which may differ from what was asked. */
+  sizeInStyleSystem: string;
+  pairs: number;
+  colours: string[];
+}
+
+export interface SizeLookup {
+  asked: { system: ShoeSizeSystem; value: string; gender: ShoeSizeGender };
+  equivalents: ShoeSizeEquivalents | null;
+  ladder: string[];
+  matches: SizeLookupMatch[];
+}
+
+export interface SizeRunSummary {
+  styles: number;
+  totalPairs: number;
+  brokenRuns: number;
+  emptyRuns: number;
+  unprofiledStyles: number;
+  missingSizes: number;
+}
