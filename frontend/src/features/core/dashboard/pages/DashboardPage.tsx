@@ -1,6 +1,7 @@
 import { roundMoney } from "@/lib/money";
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
+import { NearExpiryAlert } from "@/features/core/inventory/components/NearExpiryAlert";
 import { format } from "date-fns";
 import {
   ShoppingCart, AlertTriangle, TrendingUp, Minus,
@@ -924,6 +925,9 @@ function GeneralLayout({ businessType, dashboard, ownerReport, isLoading, lowSto
 
         <PaymentModeBreakdown rows={paymentBreakdown} total={periodSales} period={period} onPeriodChange={setPeriod} />
         <LowStockAlerts items={lowStockItems} packs={lowStockPacks} productsById={productsById} />
+        {/* Renders nothing when no batch is near expiry, and nothing at all for a
+            shop without batch tracking — the endpoint is capability-gated. */}
+        <NearExpiryAlert />
 
       </div>
 

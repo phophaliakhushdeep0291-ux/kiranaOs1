@@ -245,6 +245,9 @@ function rowToFormData(values: Record<string, string>): ProductFormData {
     stockQuantity: numberValue("stockQuantity"),
     lowStockAlert: numberValue("lowStockAlert"),
     batchTrackingEnabled: false,
+    // A bulk import never classifies a controlled drug — that is a decision
+    // someone makes per medicine, not a column to be trusted from a CSV.
+    drugSchedule: null,
     reorderLevel: numberValue("reorderLevel"),
     description: (values.description ?? "").trim() || undefined,
     imageUrl: "",

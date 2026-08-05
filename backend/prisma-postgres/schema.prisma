@@ -98,6 +98,14 @@ model Shop {
   activityEvents              ActivityEvent[]
   activityAggregates          ActivityAggregate[]
   rentalBookings              RentalBooking[]
+  prescriptions               Prescription[]
+  productUnits                ProductUnit[]
+  partFitments                PartFitment[]
+  partCrossReferences         PartCrossReference[]
+  footwearSizeProfiles        FootwearSizeProfile[]
+  bookLists                   BookList[]
+  furnitureOrders             FurnitureOrder[]
+  testerUnits                 TesterUnit[]
   auditRules                  AuditRule[]
   auditRuns                   AuditRun[]
   auditEvaluations            AuditEvaluation[]
@@ -463,6 +471,13 @@ model Product {
   // "per_pack" or every size would share one stock number.
   variantAxesJson              String    @default("[]")
   batchTrackingEnabled         Boolean   @default(false)
+  // Which drug schedule this medicine falls under: h | h1 | x | otc, or null for
+  // anything that is not a scheduled drug (including every non-pharmacy product).
+  //
+  // Null is what makes this safe to add: enforcement is driven by the data, so a
+  // catalogue nobody has classified behaves exactly as it does today. Marking a
+  // product IS the act of opting it into the prescription requirement.
+  drugSchedule                 String?
   clientProductId              String? // stable client-generated id, for offline-create idempotency
   idempotencyKey               String? // durable create idempotency key (survives retries/pull echoes)
   sourceDeviceId               String? // device that created the product offline
@@ -2893,4 +2908,421 @@ model RentalBookingItem {
 
   @@index([bookingId])
   @@index([productId])
+}
+
+// The statutory register a chemist produces on inspection: who prescribed it,
+// for whom, what was actually dispensed, and against which bill. Online-first —
+// written once at the counter, so it is not mirrored to devices.
+
+model Prescription {
+  id             String @id @default(cuid())
+  shopId         String
+  registerNumber String
+
+  doctorName   String
+  doctorRegNo  String?
+  doctorClinic String?
+
+  // The patient is captured here, not only through a Customer row: most are
+  // one-off walk-ins, and the register must outlive any linked customer edit.
+  customerId     String?
+  patientName    String
+  patientPhone   String  @default("")
+  patientAge     String? // free text — paediatric entries read "6 months"
+  patientGender  String? // male | female | other
+  patientAddress String  @default("")
+
+  scheduleType String    @default("h") // h | h1 | x | otc | other
+  prescribedOn DateTime
+  dispensedAt  DateTime?
+  status       String    @default("pending") // pending | dispensed | cancelled
+
+  // Not foreign keys — the register entry is the legal record and survives the
+  // bill being cancelled or purged.
+  billId     String?
+  billNumber String?
+
+  refillsAllowed Int @default(0)
+  refillsUsed    Int @default(0)
+
+  imageUrl        String?
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop  Shop               @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items PrescriptionItem[]
+
+  @@unique([shopId, registerNumber])
+  @@index([shopId, deletedAt])
+  @@index([shopId, prescribedOn])
+  @@index([shopId, status, prescribedOn])
+  @@index([shopId, scheduleType, prescribedOn])
+  @@index([shopId, patientPhone])
+  @@index([shopId, billId])
+}
+
+model PrescriptionItem {
+  id             String @id @default(cuid())
+  prescriptionId String
+  // Deliberately not a foreign key — the line records what was physically
+  // dispensed and must outlive the product row.
+  productId String?
+
+  name           String
+  strength       String?
+  dosage         String?
+  qty            Float   @default(1)
+  unit           String  @default("strip")
+  batchNumber    String?
+  substitutedFor String?
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@index([productId])
+}
+
+// Serialised electronics stock: the shop sells THAT handset, and a return or
+// warranty claim has to find the same physical unit again. Online-first —
+// written when the box is opened, read by lookup, not mirrored to devices.
+
+model ProductUnit {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Not a foreign key, and the name is copied — the unit records a physical
+  // thing that left the shop and must outlive the catalogue row.
+  productId   String
+  productName String
+
+  // At least one identifier is required; a unit nobody can identify is just stock.
+  imei         String?
+  imei2        String?
+  serialNumber String?
+
+  status    String @default("in_stock") // in_stock | sold | returned | rma | lost | scrapped
+  condition String @default("new") // new | open_box | refurbished
+
+  purchaseBillId String?
+  supplierId     String?
+  costPrice      Float    @default(0)
+  receivedAt     DateTime @default(now())
+
+  billId        String?
+  billNumber    String?
+  customerId    String?
+  customerName  String?
+  customerPhone String    @default("")
+  soldAt        DateTime?
+  sellingPrice  Float     @default(0)
+
+  // An absolute end date, not only a duration: shop policy can change, this
+  // unit's cover cannot.
+  warrantyMonths Int       @default(0)
+  warrantyUntil  DateTime?
+
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  // NULLs are distinct, so units without an IMEI do not collide with each other.
+  @@unique([shopId, imei])
+  @@unique([shopId, serialNumber])
+  @@index([shopId, imei2])
+  @@index([shopId, status])
+  @@index([shopId, productId, status])
+  @@index([shopId, billId])
+  @@index([shopId, customerPhone])
+  @@index([shopId, warrantyUntil])
+}
+
+// Auto parts: "does this fit?" is the trade's whole question, and nothing in the
+// shared catalogue can answer it. A fitment is a claim that one product fits one
+// vehicle over a range of years; a part has many, and a vehicle takes many parts.
+
+model PartFitment {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Not a foreign key, and the name is copied — the claim is reference data the
+  // shop built up and must survive a product being renamed or replaced.
+  productId   String
+  productName String
+
+  make    String
+  model   String
+  variant String? // null means every variant
+
+  // Open-ended: yearFrom null = "since forever", yearTo null = "still current".
+  yearFrom Int?
+  yearTo   Int?
+
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, make, model])
+  @@index([shopId, productId])
+  @@index([shopId, make])
+}
+
+// What else will do when the wanted part is not on the shelf. The other side may
+// be a stocked product or just a number the shop knows about.
+model PartCrossReference {
+  id     String @id @default(cuid())
+  shopId String
+
+  productId   String
+  productName String
+
+  alternateProductId String?
+  partNumber         String
+  brand              String?
+  // oem | alternative | supersedes | superseded_by
+  kind String @default("alternative")
+
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, productId])
+  @@index([shopId, partNumber])
+}
+
+// Which size system a footwear style is sold in. The size run itself is ordinary
+// variant machinery (a Size axis, one selling unit per size); what cannot be
+// derived is whether "8" means UK, EU or US, and that is all this records.
+
+model FootwearSizeProfile {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Not a foreign key, and the name is copied — consistent with the other trade
+  // registers, so the profile survives a catalogue row being renamed.
+  productId   String
+  productName String
+
+  sizeSystem String  @default("uk") // uk | us | eu | cm (India uses UK numbering)
+  gender     String  @default("unisex") // mens | womens | kids | unisex
+  widthFit   String?
+
+  notes     String?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, productId])
+  @@index([shopId, deletedAt])
+}
+
+// Class book lists: "Class 6, DPS" -> eleven books, four notebooks and a
+// geometry box. A list is a recipe, not stock and not an order — readiness is
+// computed against the live catalogue every time it is read.
+
+model BookList {
+  id     String @id @default(cuid())
+  shopId String
+
+  schoolName   String
+  className    String
+  academicYear String // "2026-27" — Indian academic years straddle two calendar years
+  // Empty rather than null: NULLs are DISTINCT in a unique index, so a
+  // nullable column would let the same class be entered twice.
+  name         String  @default("")
+
+  notes    String?
+  isActive Boolean @default(true)
+
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  shop  Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items BookListItem[]
+
+  @@unique([shopId, schoolName, className, academicYear, name])
+  @@index([shopId, deletedAt])
+  @@index([shopId, schoolName, className])
+  @@index([shopId, academicYear])
+}
+
+model BookListItem {
+  id     String @id @default(cuid())
+  listId String
+
+  // Not a foreign key, and the name is copied — the list keeps naming the book
+  // even after the shop stops stocking it, and a null productId is how
+  // "we don't carry this" is recorded.
+  productId String?
+  name      String
+
+  qty        Float   @default(1)
+  unit       String  @default("piece")
+  isOptional Boolean @default(false)
+
+  notes     String?
+  sortOrder Int     @default(0)
+
+  list BookList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId])
+  @@index([productId])
+}
+
+// The furniture sales order: the trade where the sale happens before the goods
+// leave the floor. Quote, advance, made-to-order, reserve, deliver, install —
+// for that whole stretch the money and the goods are in different places, which
+// a bill cannot express. The order is NOT a bill; it settles nothing and links
+// to the bill raised when the goods finally go out.
+
+model FurnitureOrder {
+  id          String @id @default(cuid())
+  shopId      String
+  orderNumber String
+
+  // Captured on the order itself: a showroom sale is often a one-off, and the
+  // delivery address must keep saying where THIS wardrobe went.
+  customerId      String?
+  customerName    String
+  customerPhone   String  @default("")
+  deliveryAddress String  @default("")
+
+  // quote | confirmed | in_production | ready | delivered | installed | cancelled
+  status String @default("quote")
+
+  // grandTotal is computed server-side so a client cannot disagree with the
+  // arithmetic it will later be billed on.
+  itemsTotal     Float @default(0)
+  discount       Float @default(0)
+  deliveryCharge Float @default(0)
+  installCharge  Float @default(0)
+  grandTotal     Float @default(0)
+
+  quotedOn    DateTime
+  promisedOn  DateTime? // what the customer was told
+  deliveredAt DateTime?
+  installedAt DateTime?
+
+  isCustom Boolean @default(false)
+
+  // Not a foreign key: the order records the promise and outlives a cancelled bill.
+  billId     String?
+  billNumber String?
+
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop     Shop                    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items    FurnitureOrderItem[]
+  payments FurnitureOrderPayment[]
+
+  @@unique([shopId, orderNumber])
+  @@index([shopId, deletedAt])
+  @@index([shopId, status, promisedOn])
+  @@index([shopId, customerPhone])
+  @@index([shopId, quotedOn])
+}
+
+model FurnitureOrderItem {
+  id      String @id @default(cuid())
+  orderId String
+
+  // Null for a made-to-order piece not in the catalogue, which is most of what
+  // this trade sells to order.
+  productId String?
+  name      String
+  variant   String? // "Teak, 6ft, walnut finish"
+
+  qty    Float @default(1)
+  rate   Float @default(0)
+  amount Float @default(0)
+
+  // Whether this line holds a piece off the floor while the order is open.
+  reserveStock Boolean @default(true)
+
+  notes String?
+
+  order FurnitureOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// Advances against an order. Several are normal, so this is a child table rather
+// than one column that could only ever hold the last one.
+model FurnitureOrderPayment {
+  id      String @id @default(cuid())
+  orderId String
+
+  amount    Float    @default(0)
+  mode      String   @default("cash")
+  paidOn    DateTime
+  reference String?
+  notes     String?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  order FurnitureOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// Tester stock: a unit opened for customers to try, which will never be sold.
+// Counted as sellable it makes the shelf wrong, surfaces later as shrinkage that
+// looks like theft, and hides what testers cost. Opening one moves stock out
+// through the ordinary inventory path; this records where it went.
+
+model TesterUnit {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Not a foreign key, and the name is copied — the record survives a catalogue
+  // row being renamed.
+  productId   String
+  productName String
+  // The shade: a tester is opened per shade, not per product.
+  variant String?
+
+  status       String    @default("in_use") // in_use | replaced | discarded
+  openedOn     DateTime
+  expectedDays Int       @default(90)
+  closedOn     DateTime?
+
+  // Snapshotted at opening: a later price change must not rewrite last
+  // quarter's tester cost.
+  costValue Float @default(0)
+
+  // The stock movement this tester came out of, when one was made.
+  stockLedgerId String?
+
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, deletedAt])
+  @@index([shopId, status, openedOn])
+  @@index([shopId, productId, status])
 }

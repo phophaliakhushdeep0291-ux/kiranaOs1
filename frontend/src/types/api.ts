@@ -119,6 +119,9 @@ export interface Product {
   isLooseItem?: boolean;
   lowStockThreshold?: number;
   batchTrackingEnabled?: boolean;
+  /** h | h1 | x | otc, or null for anything that is not a scheduled drug.
+   *  Setting h/h1/x is what makes billing demand a prescription for it. */
+  drugSchedule?: "h" | "h1" | "x" | "otc" | null;
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;
@@ -172,6 +175,9 @@ export interface ProductInput {
   isLooseItem?: boolean;
   lowStockThreshold?: number;
   batchTrackingEnabled?: boolean;
+  /** h | h1 | x | otc, or null for anything that is not a scheduled drug.
+   *  Setting h/h1/x is what makes billing demand a prescription for it. */
+  drugSchedule?: "h" | "h1" | "x" | "otc" | null;
   lowStockAlert?: number;
   isActive?: boolean;
   status?: "active" | "inactive" | string;
@@ -451,6 +457,9 @@ export interface BillInputItem {
 }
 
 export interface BillInput {
+  /** The register entry authorising this sale. Required only when the bill holds
+   *  a Schedule H, H1 or X medicine; every other sale ignores it. */
+  prescriptionId?: string;
   /**
    * Stable client identity for this bill so server-side creates are idempotent.
    * Vital on the ONLINE path (coupons/loyalty/gift cards): a retry after a lost
@@ -961,4 +970,470 @@ export interface RentalSummary {
   activeToday: number;
   depositHeld: number;
   pendingCollection: number;
+}
+
+/* ── Pharmacy prescription register ───────────────────────────────────────── */
+
+export type PrescriptionStatus = "pending" | "dispensed" | "cancelled";
+/** Which schedule the strictest drug on the slip falls under. h/h1/x are the regulated ones. */
+export type PrescriptionScheduleType = "h" | "h1" | "x" | "otc" | "other";
+export type PrescriptionGender = "male" | "female" | "other";
+
+export interface PrescriptionItem {
+  id?: string;
+  productId?: string | null;
+  name: string;
+  strength?: string | null;
+  /** As written on the slip: "1-0-1 for 5 days". */
+  dosage?: string | null;
+  qty: number;
+  unit: string;
+  batchNumber?: string | null;
+  /** Set when a generic went out against a brand written on the slip. */
+  substitutedFor?: string | null;
+}
+
+export interface Prescription {
+  id: string;
+  registerNumber: string;
+  doctorName: string;
+  doctorRegNo?: string | null;
+  doctorClinic?: string | null;
+  customerId?: string | null;
+  patientName: string;
+  patientPhone: string;
+  patientAge?: string | null;
+  patientGender?: PrescriptionGender | null;
+  patientAddress: string;
+  scheduleType: PrescriptionScheduleType;
+  prescribedOn: string;
+  /** Day-only forms (YYYY-MM-DD), already in the shop's timezone. */
+  prescribedOnKey: string;
+  dispensedAt?: string | null;
+  dispensedAtKey?: string | null;
+  status: PrescriptionStatus;
+  billId?: string | null;
+  billNumber?: string | null;
+  refillsAllowed: number;
+  refillsUsed: number;
+  /** Repeats still available, computed server-side. */
+  refillsLeft: number;
+  /** Whole days since the date on the slip. */
+  ageDays: number;
+  /** Still waiting to be dispensed and older than the freshness window. Advisory only. */
+  isStale: boolean;
+  /** Pending, or dispensed with repeats left. */
+  canDispense: boolean;
+  /** Schedule H, H1 or X — the ones the retention and inspection rules bite on. */
+  isRegulated: boolean;
+  imageUrl?: string | null;
+  notes?: string | null;
+  items: PrescriptionItem[];
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PrescriptionInput {
+  doctorName: string;
+  doctorRegNo?: string | null;
+  doctorClinic?: string | null;
+  customerId?: string | null;
+  patientName: string;
+  patientPhone?: string | null;
+  patientAge?: string | null;
+  patientGender?: PrescriptionGender | null;
+  patientAddress?: string | null;
+  scheduleType?: PrescriptionScheduleType;
+  /** YYYY-MM-DD */
+  prescribedOn: string;
+  items: Array<Omit<PrescriptionItem, "id">>;
+  billId?: string | null;
+  billNumber?: string | null;
+  refillsAllowed?: number;
+  imageUrl?: string | null;
+  notes?: string | null;
+  /** Record and hand over in one step, for the usual counter case. */
+  dispenseNow?: boolean;
+}
+
+export interface PrescriptionSummary {
+  today: string;
+  pending: number;
+  dispensedToday: number;
+  thisMonth: number;
+  /** Schedule H/H1/X entries this month — what an inspection actually counts. */
+  regulatedThisMonth: number;
+  refillable: number;
+  stale: number;
+  staleAfterDays: number;
+}
+
+/* ── Electronics: serialised units ────────────────────────────────────────── */
+
+export type ProductUnitStatus = "in_stock" | "sold" | "returned" | "rma" | "lost" | "scrapped";
+export type ProductUnitCondition = "new" | "open_box" | "refurbished";
+
+export interface ProductUnit {
+  id: string;
+  productId: string;
+  productName: string;
+  imei?: string | null;
+  imei2?: string | null;
+  serialNumber?: string | null;
+  status: ProductUnitStatus;
+  condition: ProductUnitCondition;
+  purchaseBillId?: string | null;
+  supplierId?: string | null;
+  costPrice: number;
+  receivedAt: string;
+  receivedAtKey?: string | null;
+  billId?: string | null;
+  billNumber?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone: string;
+  soldAt?: string | null;
+  soldAtKey?: string | null;
+  sellingPrice: number;
+  warrantyMonths: number;
+  warrantyUntil?: string | null;
+  warrantyUntilKey?: string | null;
+  /** Days until cover ends; negative once it has lapsed, null when never sold. */
+  warrantyDaysLeft?: number | null;
+  isUnderWarranty: boolean;
+  isWarrantyExpiringSoon: boolean;
+  /** Still physically on the shop's shelf or bench. */
+  isHeld: boolean;
+  canSell: boolean;
+  notes?: string | null;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProductUnitIdentityInput {
+  imei?: string | null;
+  imei2?: string | null;
+  serialNumber?: string | null;
+  condition?: ProductUnitCondition;
+  costPrice?: number;
+  notes?: string | null;
+}
+
+export interface ReceiveProductUnitsInput {
+  productId: string;
+  purchaseBillId?: string | null;
+  supplierId?: string | null;
+  costPrice?: number;
+  warrantyMonths?: number;
+  units: ProductUnitIdentityInput[];
+}
+
+export interface SellProductUnitInput {
+  billId?: string | null;
+  billNumber?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  sellingPrice?: number;
+  warrantyMonths?: number | null;
+  /** YYYY-MM-DD. Defaults to today; backdating catches up a missed entry. */
+  soldOn?: string | null;
+  notes?: string | null;
+}
+
+export interface ProductUnitSummary {
+  today: string;
+  inStock: number;
+  openBox: number;
+  soldToday: number;
+  soldThisMonth: number;
+  atService: number;
+  warrantyExpiringSoon: number;
+  warrantySoonDays: number;
+}
+
+/* ── Auto parts: vehicle fitment ──────────────────────────────────────────── */
+
+export type PartCrossReferenceKind = "oem" | "alternative" | "supersedes" | "superseded_by";
+
+export interface PartFitment {
+  id: string;
+  productId: string;
+  productName: string;
+  make: string;
+  model: string;
+  /** Null means the part fits every variant of the model. */
+  variant?: string | null;
+  /** Null bounds are open: "since forever" and "still current". */
+  yearFrom?: number | null;
+  yearTo?: number | null;
+  /** "2015–2020", "2015 onwards", "up to 2012", "all years". */
+  yearLabel: string;
+  /** "Maruti Suzuki Swift · Diesel 1.3 DDiS" */
+  vehicleLabel: string;
+  notes?: string | null;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PartFitmentInput {
+  productId: string;
+  make: string;
+  model: string;
+  variant?: string | null;
+  yearFrom?: number | null;
+  yearTo?: number | null;
+  notes?: string | null;
+}
+
+export interface BulkPartFitmentInput {
+  productId: string;
+  fitments: Array<Omit<PartFitmentInput, "productId">>;
+}
+
+/** A part that fits the vehicle being asked about, with what the shop holds of it. */
+export interface FittingPart {
+  productId: string;
+  productName: string;
+  /** False when the fitment outlived the product it was recorded against. */
+  inCatalogue: boolean;
+  sku?: string | null;
+  brand?: string | null;
+  stockQty: number;
+  unit: string;
+  price: number;
+  fitments: PartFitment[];
+}
+
+export interface PartCrossReference {
+  id: string;
+  productId: string;
+  productName: string;
+  /** Set only when the alternative is something this shop stocks. */
+  alternateProductId?: string | null;
+  partNumber: string;
+  brand?: string | null;
+  kind: PartCrossReferenceKind;
+  /** Whether the shop can actually hand the alternative over. */
+  isStocked: boolean;
+  notes?: string | null;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PartCrossReferenceInput {
+  productId: string;
+  alternateProductId?: string | null;
+  partNumber: string;
+  brand?: string | null;
+  kind?: PartCrossReferenceKind;
+  notes?: string | null;
+}
+
+export interface VehicleOptions {
+  makes: string[];
+  models: string[];
+  variants: string[];
+}
+
+export interface PartNumberLookup {
+  partNumber: string;
+  products: Array<{
+    productId: string;
+    productName: string;
+    sku?: string | null;
+    brand?: string | null;
+    stockQty: number;
+    price: number;
+  }>;
+  references: PartCrossReference[];
+}
+
+export interface FitmentSummary {
+  fitments: number;
+  references: number;
+  mappedParts: number;
+  catalogueSize: number;
+  /** Parts still invisible to a "does this fit?" search. */
+  unmappedParts: number;
+  makes: number;
+}
+
+/* ── Footwear: size runs ──────────────────────────────────────────────────── */
+
+export type ShoeSizeSystem = "uk" | "us" | "eu" | "cm";
+export type ShoeSizeGender = "mens" | "womens" | "kids" | "unisex";
+
+/** The same physical shoe on every scale. Null when the size is off the chart. */
+export interface ShoeSizeEquivalents {
+  gender: ShoeSizeGender;
+  uk: string;
+  us: string;
+  eu: string;
+  cm: string;
+}
+
+export interface SizeRunCell {
+  size: string;
+  colour: string | null;
+  pairs: number;
+  inStock: boolean;
+  equivalents: ShoeSizeEquivalents | null;
+}
+
+export interface SizeRun {
+  productId: string;
+  productName: string;
+  brand?: string | null;
+  imageUrl?: string | null;
+  sizeSystem: ShoeSizeSystem;
+  gender: ShoeSizeGender;
+  widthFit?: string | null;
+  /** False until the shop says which scale these numbers are on. */
+  isProfiled: boolean;
+  /** Kids sizing has no dependable chart, so equivalents are absent by design. */
+  canConvert: boolean;
+  sizeAxisName: string;
+  otherAxisName: string | null;
+  sizes: string[];
+  colours: string[];
+  cells: SizeRunCell[];
+  totalPairs: number;
+  sizesInStock: number;
+  sizesTotal: number;
+  gaps: Array<{ size: string; colour: string | null }>;
+  /** On the shelf, but with holes — not sellable to everyone who walks in. */
+  isBroken: boolean;
+  /** Nothing left at all, which is a different problem from a broken run. */
+  isEmpty: boolean;
+}
+
+export interface SizeProfileInput {
+  sizeSystem: ShoeSizeSystem;
+  gender?: ShoeSizeGender;
+  widthFit?: string | null;
+  notes?: string | null;
+}
+
+export interface SizeLookupMatch {
+  productId: string;
+  productName: string;
+  brand?: string | null;
+  sizeSystem: ShoeSizeSystem;
+  gender: ShoeSizeGender;
+  /** The size as that style numbers it, which may differ from what was asked. */
+  sizeInStyleSystem: string;
+  pairs: number;
+  colours: string[];
+}
+
+export interface SizeLookup {
+  asked: { system: ShoeSizeSystem; value: string; gender: ShoeSizeGender };
+  equivalents: ShoeSizeEquivalents | null;
+  ladder: string[];
+  matches: SizeLookupMatch[];
+}
+
+export interface SizeRunSummary {
+  styles: number;
+  totalPairs: number;
+  brokenRuns: number;
+  emptyRuns: number;
+  unprofiledStyles: number;
+  missingSizes: number;
+}
+
+/* ── Stationery: class book lists ─────────────────────────────────────────── */
+
+export interface BookListItem {
+  id?: string;
+  productId?: string | null;
+  name: string;
+  qty: number;
+  unit: string;
+  /** On the list, but not counted as a shortfall when it is out. */
+  isOptional: boolean;
+  notes?: string | null;
+  sortOrder?: number;
+  /** Filled in when the list is read against the live catalogue. */
+  inCatalogue?: boolean;
+  productName?: string;
+  sku?: string | null;
+  price?: number;
+  available?: number;
+  shortBy?: number;
+  isReady?: boolean;
+}
+
+export interface BookListMissingItem {
+  productId?: string | null;
+  name: string;
+  needed: number;
+  available: number;
+  shortBy: number;
+  inCatalogue: boolean;
+}
+
+export interface BookList {
+  id: string;
+  schoolName: string;
+  className: string;
+  academicYear: string;
+  /** Empty rather than null — a nullable label would defeat the unique index. */
+  name: string;
+  /** "Class 6 · DPS — Science stream" */
+  label: string;
+  notes?: string | null;
+  isActive: boolean;
+  items: BookListItem[];
+  itemCount: number;
+  requiredCount: number;
+  readyCount: number;
+  shortCount: number;
+  /** Every required line is on the shelf. */
+  isComplete: boolean;
+  missing: BookListMissingItem[];
+  estimatedTotal: number;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BookListInput {
+  schoolName: string;
+  className: string;
+  academicYear: string;
+  name?: string | null;
+  notes?: string | null;
+  isActive?: boolean;
+  items?: Array<Omit<BookListItem, "id" | "inCatalogue" | "productName" | "sku" | "price" | "available" | "shortBy" | "isReady">>;
+}
+
+export interface BookListOptions {
+  schools: string[];
+  classes: string[];
+  years: string[];
+}
+
+/** One line of the reorder sheet: what to buy, and which classes are waiting on it. */
+export interface BookListShortfall {
+  productId?: string | null;
+  name: string;
+  inCatalogue: boolean;
+  available: number;
+  shortBy: number;
+  lists: string[];
+}
+
+export interface BookListSummary {
+  lists: number;
+  completeLists: number;
+  shortLists: number;
+  itemsToOrder: number;
+  unitsToOrder: number;
+  schools: number;
 }

@@ -5,6 +5,12 @@ import { createAuditLog } from "../audit/audit.service.js";
 export async function list(req, res, next) {
   try { res.json({ success: true, data: await service.listInventoryLots(req.shopId, { ...req.query, locationId: requestLocationId(req) }) }); } catch (error) { next(error); }
 }
+export async function expiryAlerts(req, res, next) {
+  try {
+    const data = await service.nearExpiryAlerts(req.shopId, { ...req.query, locationId: requestLocationId(req) });
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+}
 export async function sellable(req, res, next) {
   try {
     const data = await service.listSellableBatches(req.shopId, { locationId: requestLocationId(req), productId: req.params.productId });

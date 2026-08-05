@@ -54,6 +54,9 @@ export const confirmBillSchema = z.object({
   gstMode: z.enum(["inclusive", "exclusive", "none"]).default("inclusive"),
   customerId: z.string().optional(),
   customerName: z.string().default("Walk-in"),
+  // The register entry authorising this sale. Required only when the bill holds a
+  // Schedule H, H1 or X medicine; every other sale ignores it entirely.
+  prescriptionId: z.string().optional(),
   items: z.array(billItemSchema).min(1, "At least one item required"),
   discount: moneyAmount().default(0),
   // Optional free-text reason for the bill-level discount (discounts report).

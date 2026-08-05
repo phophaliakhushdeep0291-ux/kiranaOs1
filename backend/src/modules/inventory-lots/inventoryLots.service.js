@@ -1,7 +1,9 @@
 import db from "../../db.js";
 import { AppError } from "../../middleware/error.js";
 import { moneyShadows, round2 } from "../../utils/money.js";
+import { baseQtyToRateQty } from "../../utils/units.js";
 import { requireFeatureAccess } from "../feature-gates/featureGate.service.js";
+import { NEAR_EXPIRY_CRITICAL_DAYS, NEAR_EXPIRY_WARNING_DAYS, summariseNearExpiry } from "./nearExpiryAlert.js";
 
 function parseDay(value, field) {
   if (!value) return null;
@@ -24,6 +26,51 @@ export async function listInventoryLots(shopId, { locationId, productId, status 
     orderBy: [{ expiresOn: "asc" }, { createdAt: "asc" }],
     take: Math.min(Math.max(Number(limit) || 200, 1), 500),
   });
+}
+
+/**
+ * What is about to expire, and what it is worth.
+ *
+ * Only `active` batches. A quarantined or recalled batch is already blocked and
+ * already surfaced as such — counting it here would double-report the same
+ * problem under a second heading. An EXPIRED active batch does belong here even
+ * though the allocator already refuses to sell it: nothing else tells anyone to
+ * physically pull it off the shelf or claim it back from the supplier.
+ *
+ * Value is costed, not priced. What the shop stands to lose when a batch is
+ * written off is what it paid, and `costPerRateUnit` is per rate unit while
+ * stock is held in base units — hence the conversion rather than a raw multiply.
+ */
+export async function nearExpiryAlerts(shopId, { locationId, criticalDays = NEAR_EXPIRY_CRITICAL_DAYS, warningDays = NEAR_EXPIRY_WARNING_DAYS } = {}) {
+  const horizon = new Date(Date.now() + Number(warningDays) * 86_400_000);
+  const lots = await db.inventoryLot.findMany({
+    where: {
+      shopId,
+      ...(locationId && { locationId }),
+      status: "active",
+      availableBaseQty: { gt: 0 },
+      expiresOn: { lte: horizon },
+    },
+    include: {
+      product: { select: { id: true, name: true, baseUnit: true, rateUnit: true } },
+      location: { select: { id: true, name: true, code: true } },
+    },
+    orderBy: [{ expiresOn: "asc" }],
+    take: 500,
+  });
+
+  const priced = lots.map((lot) => ({
+    id: lot.id,
+    batchNumber: lot.batchNumber,
+    expiresOn: lot.expiresOn,
+    availableBaseQty: Number(lot.availableBaseQty),
+    mrp: lot.mrp === null || lot.mrp === undefined ? null : Number(lot.mrp),
+    product: lot.product,
+    location: lot.location,
+    valueAtRisk: round2(baseQtyToRateQty(Number(lot.availableBaseQty), lot.product.rateUnit, lot.product.baseUnit) * Number(lot.costPerRateUnit || 0)),
+  }));
+
+  return summariseNearExpiry(priced, { criticalDays: Number(criticalDays), warningDays: Number(warningDays) });
 }
 
 export async function setProductBatchTracking(shopId, productId, enabled) {

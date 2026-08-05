@@ -48,6 +48,11 @@ const PATH_NAVIGATION_KEYS: Array<[RegExp, string[]]> = [
   [/^\/money-statement(?:\/|$)/, ["cash-payments"]],
   [/^\/expenses(?:\/|$)/, ["expenses"]],
   [/^\/rentals(?:\/|$)/, ["rentals"]],
+  [/^\/prescriptions(?:\/|$)/, ["prescriptions"]],
+  [/^\/serial-units(?:\/|$)/, ["serial-numbers", "warranty"]],
+  [/^\/fitment(?:\/|$)/, ["part-compatibility"]],
+  [/^\/size-runs(?:\/|$)/, ["variants"]],
+  [/^\/book-lists(?:\/|$)/, ["book-sets", "schools-classes"]],
   [/^\/tables(?:\/|$)/, ["tables"]],
   [/^\/kitchen(?:\/|$)/, ["kitchen-kot"]],
 ];

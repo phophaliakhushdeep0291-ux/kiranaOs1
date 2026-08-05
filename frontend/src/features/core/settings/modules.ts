@@ -16,6 +16,11 @@ export type ModuleId =
   | "sales_history"
   | "returns"
   | "rentals"
+  | "prescriptions"
+  | "serial_units"
+  | "part_fitment"
+  | "book_lists"
+  | "size_runs"
   | "customers"
   | "products"
   | "inventory"
@@ -80,6 +85,45 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     defaultForBusinessTypes: ["clothing"],
   },
   {
+    id: "prescriptions",
+    group: "Sell",
+    label: "Prescription register",
+    description: "Record who prescribed a medicine, for whom, and what was dispensed",
+    paths: ["/prescriptions"],
+    // The register a chemist has to produce on inspection; other verticals can
+    // switch it on if they dispense against prescriptions too.
+    defaultForBusinessTypes: ["pharmacy"],
+  },
+  {
+    id: "serial_units",
+    group: "Sell",
+    label: "IMEI & serial register",
+    description: "Track each handset or appliance by its own number, with warranty cover",
+    paths: ["/serial-units"],
+    // Naming each piece of stock is an electronics trade; other verticals can
+    // switch it on if they sell serialised goods too.
+    defaultForBusinessTypes: ["electronics"],
+  },
+  {
+    id: "part_fitment",
+    group: "Sell",
+    label: "Part finder",
+    description: "Look up which parts fit a customer's vehicle, and what else will do",
+    paths: ["/fitment"],
+    // "Does this fit?" is an auto-parts question; a hardware shop runs the same
+    // pack without it, and can switch it on if it starts stocking for vehicles.
+    defaultForBusinessTypes: ["auto_parts"],
+  },
+  {
+    id: "book_lists",
+    group: "Sell",
+    label: "Class book lists",
+    description: "A school class's whole set on one bill, and what you are short of before term",
+    paths: ["/book-lists"],
+    // A book shop's trade, but a general store next to a school sells sets too.
+    defaultForBusinessTypes: ["stationery"],
+  },
+  {
     id: "customers",
     group: "Sell",
     label: "Customers & udhar",
@@ -94,6 +138,16 @@ export const MODULE_DEFS: ModuleDefinition[] = [
     label: "Products & categories",
     description: "Product catalogue, pricing and categories",
     paths: ["/products", "/categories"],
+  },
+  {
+    id: "size_runs",
+    group: "Stock & buying",
+    label: "Size runs",
+    description: "See the gaps in each style's size run, and find stock by a customer's own size",
+    paths: ["/size-runs"],
+    // Selling by the pair in a size system is a footwear trade; a sports shop
+    // stocking shoes alongside other goods can switch it on.
+    defaultForBusinessTypes: ["footwear"],
   },
   {
     id: "inventory",

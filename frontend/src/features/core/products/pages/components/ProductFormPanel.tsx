@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { getStoredBusinessType } from "@/features/core/settings/business-type-store";
 import type { UseFormReturn } from "react-hook-form";
 import { PanelResizeHandle } from "@/hooks/use-panel-resize";
 import type { Product } from "@/lib/api/client";
@@ -120,6 +121,9 @@ export function ProductFormPanel({
   const isLoose = !!form.watch("isLooseItem");
   const selectedUnit = form.watch("unit");
   const sellsLoose = hasCapability("LOOSE_ITEMS");
+  // Drug schedules exist only in a pharmacy. Showing the selector to a kirana
+  // shop would invite classifying biscuits as Schedule H.
+  const isPharmacy = getStoredBusinessType() === "pharmacy";
   const packMeasureUnits = packMeasureUnitsFor(def.primaryUnits);
   // An existing loose product keeps its controls even where the trade has since
   // stopped selling loose, so nothing already saved becomes uneditable.
@@ -809,6 +813,31 @@ export function ProductFormPanel({
                 onCheckedChange={(checked) => form.setValue("batchTrackingEnabled", checked, { shouldDirty: true })}
                 aria-label={t("products.form.batchExpiry")}
               />
+            </div>
+            ) : null}
+
+            {/* Drug schedule. Only meaningful for a pharmacy, and only ever
+                restrictive once set: leaving it "Not scheduled" is what every
+                product already is, and what every non-medicine stays. */}
+            {isPharmacy ? (
+            <div className="mt-3 rounded-[12px] border border-[#e6ecf4] bg-white p-3">
+              <p className="text-[12px] font-black text-[#13274d]">Drug schedule</p>
+              <p className="mt-1 text-[10.5px] font-semibold leading-4 text-[#65748f]">
+                Schedule H, H1 and X cannot be billed without a prescription. Setting this is what turns that check on for this medicine.
+              </p>
+              <select
+                data-testid="product-drug-schedule"
+                value={form.watch("drugSchedule") ?? ""}
+                onChange={(event) => form.setValue("drugSchedule", (event.target.value || null) as ProductFormData["drugSchedule"], { shouldDirty: true })}
+                aria-label="Drug schedule"
+                className="mt-2 h-9 w-full rounded-md border border-[#e6ecf4] bg-white px-2 text-[12px] font-semibold text-[#13274d]"
+              >
+                <option value="">Not scheduled — sell freely</option>
+                <option value="otc">Over the counter (OTC)</option>
+                <option value="h">Schedule H — prescription required</option>
+                <option value="h1">Schedule H1 — prescription required, 3-year register</option>
+                <option value="x">Schedule X — prescription required</option>
+              </select>
             </div>
             ) : null}
           </Section>

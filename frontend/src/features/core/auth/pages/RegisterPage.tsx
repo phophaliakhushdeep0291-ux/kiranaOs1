@@ -204,12 +204,13 @@ export default function Register() {
               </div>
               <div>
                 <Label htmlFor="password">Password</Label>
-                <Input id="password" data-testid="input-password" type="password" className="mt-1 h-11" placeholder="Min. 6 characters" {...form.register("password")} />
+                <Input id="password" data-testid="input-password" type="password" className="mt-1 h-11" {...form.register("password")} />
+                <p className="mt-1 text-xs text-muted-foreground">At least 6 characters.</p>
                 {form.formState.errors.password && <p className="mt-1 text-xs text-destructive">{form.formState.errors.password.message}</p>}
               </div>
               <div>
                 <Label htmlFor="ownerPin">4-Digit Owner PIN</Label>
-                <Input id="ownerPin" data-testid="input-ownerPin" type="password" inputMode="numeric" maxLength={4} className="mt-1 h-11" placeholder="e.g. 1234" {...form.register("ownerPin")} />
+                <Input id="ownerPin" data-testid="input-ownerPin" type="password" inputMode="numeric" maxLength={4} className="mt-1 h-11" {...form.register("ownerPin")} />
                 <p className="mt-1 text-xs text-muted-foreground">Used to authorise discounts, cancellations, and sensitive settings.</p>
                 {form.formState.errors.ownerPin && <p className="mt-1 text-xs text-destructive">{form.formState.errors.ownerPin.message}</p>}
               </div>

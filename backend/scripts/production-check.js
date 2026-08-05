@@ -616,9 +616,41 @@ function parsePrismaModelFields(schemaText) {
   return models;
 }
 
+/**
+ * Drops `-- …` line comments, leaving anything inside a quoted literal alone.
+ *
+ * The CREATE TABLE matcher below delimits a block with `[^;]+`, so a semicolon
+ * anywhere inside it ends the block early — and a semicolon in ordinary English
+ * prose is not rare. ActivityEvent's block carries the comment "Client-generated;
+ * the UNIQUE index below is what makes a retried offline batch idempotent",
+ * which truncated its column list after the first field. Removing comments
+ * before matching is what makes the parse depend on the SQL alone.
+ */
+function stripSqlLineComments(sql) {
+  let out = "";
+  let quote = null;
+  for (let i = 0; i < sql.length; i += 1) {
+    const char = sql[i];
+    if (quote) {
+      out += char;
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') { quote = char; out += char; continue; }
+    if (char === "-" && sql[i + 1] === "-") {
+      const newline = sql.indexOf("\n", i);
+      if (newline === -1) break;
+      i = newline - 1;
+      continue;
+    }
+    out += char;
+  }
+  return out;
+}
+
 function extractMigrationTableColumns(migrationText, tableName) {
   // Returns Set of column names found inside CREATE TABLE "TableName" (...)
-  const blockMatch = migrationText.match(
+  const blockMatch = stripSqlLineComments(migrationText).match(
     new RegExp(`CREATE TABLE(?: IF NOT EXISTS)? "${tableName}"\\s*\\(([^;]+)\\);`, "s")
   );
   if (!blockMatch) return null;
@@ -699,6 +731,19 @@ if (exists("prisma-postgres/schema.prisma") && migrationFiles.length) {
   const allMigrationSql = migrationFiles
     .map((file) => read(path.join("prisma-postgres", "migrations", file)))
     .join("\n");
+
+  // Every model must at least have a table. Column drift is only checked for the
+  // critical models below, but a model with no CREATE TABLE at all is the more
+  // dangerous failure and is not confined to them: the clothing rentals feature
+  // shipped with RentalBooking/RentalBookingItem in the schema and no migration,
+  // so it worked on SQLite locally and 500ed on every call in production. A
+  // hardcoded list can only catch the drift someone remembered to list, so this
+  // sweep is derived from the schema instead.
+  for (const model of Object.keys(pgModels)) {
+    if (!extractMigrationTableColumns(allMigrationSql, model)) {
+      errors.push(`PostgreSQL migration is missing CREATE TABLE for "${model}" — the model exists in prisma-postgres/schema.prisma but no migration creates its table`);
+    }
+  }
 
   // These are the critical models where column drift would be dangerous
   const criticalModels = [

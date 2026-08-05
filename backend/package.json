@@ -20,7 +20,7 @@
     "prisma:migrate": "node node_modules/prisma/build/index.js migrate dev",
     "prisma:deploy": "node node_modules/prisma/build/index.js migrate deploy",
     "db:generate": "node node_modules/prisma/build/index.js generate",
-    "test": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment && npm run test:report-documents && npm run test:event-bus && npm run test:event-bus-redis && npm run test:activity && npm run test:rentals && npm run test:verticals && npm run test:batch-mrp",
+    "test": "npm run test:billing && node tests/procurement-reconciliation.examples.js && npm run test:compliance && npm run test:loyalty && npm run test:atomic-offers && npm run test:ai-safety && npm run test:retail-payment && npm run test:report-documents && npm run test:event-bus && npm run test:event-bus-redis && npm run test:activity && npm run test:rentals && npm run test:prescriptions && npm run test:serial-units && npm run test:fitment && npm run test:size-runs && npm run test:book-lists && npm run test:verticals && npm run test:batch-mrp && npm run test:near-expiry && npm run test:schedule-h",
     "test:compliance": "node tests/compliance-tax.examples.js",
     "test:loyalty": "node tests/loyalty-maturity.examples.js",
     "test:atomic-offers": "node tests/offer-bill-atomicity.examples.js",
@@ -88,8 +88,15 @@
     "test:rentals": "node tests/rental-availability.examples.js",
     "test:verticals": "node tests/business-vertical-architecture.examples.js",
     "test:batch-mrp": "node tests/batch-mrp.examples.js",
+    "test:near-expiry": "node tests/near-expiry-alerts.examples.js",
+    "test:schedule-h": "node tests/schedule-h-enforcement.examples.js && node tests/sale-guards.examples.js && node tests/prescription-register.examples.js",
     "test:variants": "node tests/product-variants.examples.js && node tests/per-pack-stock.examples.js",
-    "test:event-bus-redis": "node tests/event-bus-redis.examples.js"
+    "test:event-bus-redis": "node tests/event-bus-redis.examples.js",
+    "test:prescriptions": "node tests/prescription-register.examples.js",
+    "test:serial-units": "node tests/product-unit-register.examples.js",
+    "test:fitment": "node tests/part-fitment.examples.js",
+    "test:size-runs": "node tests/footwear-size-runs.examples.js",
+    "test:book-lists": "node tests/book-lists.examples.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
