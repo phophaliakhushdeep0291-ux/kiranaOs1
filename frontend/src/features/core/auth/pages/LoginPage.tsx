@@ -411,7 +411,6 @@ export default function Login() {
                 data-testid="input-password"
                 type="password"
                 className="mt-1 h-11 rounded-lg"
-                placeholder="Enter your password"
                 {...form.register("password")}
               />
               {form.formState.errors.password && (

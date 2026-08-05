@@ -109,6 +109,8 @@ model Shop {
   partCrossReferences           PartCrossReference[]
   footwearSizeProfiles          FootwearSizeProfile[]
   bookLists                     BookList[]
+  furnitureOrders               FurnitureOrder[]
+  testerUnits                   TesterUnit[]
   auditRules                    AuditRule[]
   auditRuns                     AuditRun[]
   auditEvaluations              AuditEvaluation[]
@@ -3331,4 +3333,179 @@ model BookListItem {
 
   @@index([listId])
   @@index([productId])
+}
+
+// ── Furniture: the sales order ───────────────────────────────────────────────
+// The only trade in the app where the sale usually happens before the goods
+// exist or leave the floor. A showroom quotes, takes an advance, has the piece
+// made or reserved, delivers it weeks later and installs it — and for that whole
+// stretch the money and the goods are in different places. A bill cannot hold
+// that, because a bill is the moment both change hands at once.
+//
+// The order is NOT a bill. It carries no tax treatment and settles nothing; when
+// the piece finally goes out the shop rings an ordinary bill and links it here.
+// What this holds is the promise: what was agreed, what has been paid against
+// it, and when it was said to arrive.
+
+model FurnitureOrder {
+  id          String @id @default(cuid())
+  shopId      String
+  orderNumber String
+
+  // The buyer is captured on the order itself, like a rental's renter: a
+  // showroom sale is often a one-off, and the delivery address must keep saying
+  // where THIS wardrobe went even if the customer record is later edited.
+  customerId      String?
+  customerName    String
+  customerPhone   String  @default("")
+  deliveryAddress String  @default("")
+
+  // quote → confirmed → in_production → ready → delivered → installed.
+  // cancelled is terminal from any open state. Transitions are enforced in the
+  // service; a showroom that does not install simply stops at delivered.
+  status String @default("quote")
+
+  // Money. grandTotal is computed from the lines and charges server-side, so a
+  // client cannot disagree with the arithmetic it will later be billed on.
+  itemsTotal     Float @default(0)
+  discount       Float @default(0)
+  deliveryCharge Float @default(0)
+  installCharge  Float @default(0)
+  grandTotal     Float @default(0)
+
+  quotedOn    DateTime
+  // What the customer was told. The single most chased number in this trade.
+  promisedOn  DateTime?
+  deliveredAt DateTime?
+  installedAt DateTime?
+
+  // Made to order rather than sold off the floor — nothing to reserve, and the
+  // lead time is real production time.
+  isCustom Boolean @default(false)
+
+  // The bill raised when the goods finally went out. Not a foreign key: the
+  // order is the record of the promise and outlives a cancelled bill.
+  billId     String?
+  billNumber String?
+
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop     Shop                    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items    FurnitureOrderItem[]
+  payments FurnitureOrderPayment[]
+
+  @@unique([shopId, orderNumber])
+  @@index([shopId, deletedAt])
+  // "What is open, and what is due?" — the two questions a showroom asks daily.
+  @@index([shopId, status, promisedOn])
+  @@index([shopId, customerPhone])
+  @@index([shopId, quotedOn])
+}
+
+model FurnitureOrderItem {
+  id      String @id @default(cuid())
+  orderId String
+
+  // Null for a made-to-order piece that is not in the catalogue at all — which
+  // is most of what this trade sells to order.
+  productId String?
+  name      String
+  // "Teak, 6ft, walnut finish" — the spec a carpenter works from.
+  variant   String?
+
+  qty    Float @default(1)
+  rate   Float @default(0)
+  amount Float @default(0)
+
+  // Whether this line holds a piece off the floor while the order is open. False
+  // for anything being made: there is nothing on the floor to hold.
+  reserveStock Boolean @default(true)
+
+  notes String?
+
+  order FurnitureOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// Advances against an order. Several are normal — a booking amount, a second
+// instalment when production starts, the balance on delivery — so this is a
+// child table rather than one "advancePaid" column that could only ever hold
+// the last one.
+model FurnitureOrderPayment {
+  id      String @id @default(cuid())
+  orderId String
+
+  amount    Float    @default(0)
+  mode      String   @default("cash") // cash | upi | bank | card | other
+  paidOn    DateTime
+  reference String? // UPI ref, cheque number
+  notes     String?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  order FurnitureOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+// ── Cosmetics: tester stock ──────────────────────────────────────────────────
+// A tester is a unit opened for customers to try, and it will never be sold.
+// Counted as sellable it makes the shelf wrong in three ways at once: the shop
+// thinks it has stock it cannot sell, the missing units surface later as
+// shrinkage that looks like theft, and nobody ever finds out what testers cost —
+// which in this trade is a real line of expenditure hidden inside "loss".
+//
+// Opening a tester therefore moves stock out through the ordinary inventory
+// path, and this table is the record of where it went and when it is due to be
+// replaced.
+
+model TesterUnit {
+  id     String @id @default(cuid())
+  shopId String
+
+  // Deliberately NOT a foreign key, and the name is copied — consistent with the
+  // other trade registers, so the record survives a catalogue row being renamed.
+  productId   String
+  productName String
+  // The shade. A tester is opened per shade, not per product: "Matte Lipstick"
+  // has twelve of them on the counter and they wear out at different rates.
+  variant String?
+
+  // in_use → replaced (a fresh one went out) or discarded (thrown away, none
+  // put back). Both are terminal; a new tester is a new row.
+  status   String   @default("in_use")
+  openedOn DateTime
+  // How long this tester is expected to last on the counter before it is grubby,
+  // dried out or empty. Per tester, because a mascara and a lipstick differ.
+  expectedDays Int      @default(90)
+  closedOn     DateTime?
+
+  // What the unit cost the shop. Snapshotted at opening rather than read live,
+  // because the point of the figure is what testers cost over a period, and a
+  // later price change must not rewrite last quarter's number.
+  costValue Float @default(0)
+
+  // The stock movement this tester came out of, when one was made. Null when the
+  // shop recorded a tester it had already taken off the shelf by hand.
+  stockLedgerId String?
+
+  notes           String?
+  createdByUserId String?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, deletedAt])
+  // "What is on the counter, and what needs replacing?"
+  @@index([shopId, status, openedOn])
+  @@index([shopId, productId, status])
 }
